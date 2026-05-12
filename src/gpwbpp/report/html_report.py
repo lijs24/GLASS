@@ -21,11 +21,13 @@ def write_html_report(
     manifest: dict[str, Any] | None = None,
     plan: dict[str, Any] | None = None,
     quality: dict[str, Any] | None = None,
+    registration: dict[str, Any] | None = None,
     title: str = "GPWBPP Report",
 ) -> None:
     frames = (manifest or {}).get("frames", [])
     light_plans = (plan or {}).get("light_plans", [])
     frame_quality = (quality or {}).get("frame_quality", [])
+    registration_results = (registration or {}).get("registration_results", [])
     warnings = []
     warnings.extend((manifest or {}).get("warnings", []))
     warnings.extend((plan or {}).get("global_warnings", []))
@@ -58,7 +60,7 @@ def write_html_report(
   {_table(frame_quality)}
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
   <h2>Registration table</h2>
-  <p>Pending until registration stage runs.</p>
+  {_table(registration_results)}
   <h2>Local normalization summary</h2>
   <p>Pending or disabled.</p>
   <h2>Integration summary</h2>

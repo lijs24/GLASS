@@ -8,6 +8,7 @@ from rich.console import Console
 from gpwbpp.capabilities import capability_report
 from gpwbpp.engine.pipeline import initialize_run, run_calibration_stages
 from gpwbpp.engine.quality import measure_calibrated_quality
+from gpwbpp.engine.registration import register_calibrated_frames
 from gpwbpp.engine.resume import resume_summary
 from gpwbpp.engine.state import write_run_state
 from gpwbpp.io.json_io import read_json, write_json
@@ -45,8 +46,10 @@ def cmd_report(args: argparse.Namespace) -> int:
     manifest = read_json(manifest_path) if manifest_path.exists() else None
     plan = read_json(plan_path) if plan_path.exists() else None
     quality_path = run / "frame_quality.json"
+    registration_path = run / "registration_results.json"
     quality = read_json(quality_path) if quality_path.exists() else None
-    write_html_report(args.out, manifest=manifest, plan=plan, quality=quality)
+    registration = read_json(registration_path) if registration_path.exists() else None
+    write_html_report(args.out, manifest=manifest, plan=plan, quality=quality, registration=registration)
     console.print(f"Wrote report: {args.out}")
     return 0
 
@@ -76,21 +79,31 @@ def cmd_run(args: argparse.Namespace) -> int:
     capabilities = capability_report()
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
-    implemented_stages = {"master_calibration", "light_calibration", "calibration", "quality"}
+    implemented_stages = {
+        "master_calibration",
+        "light_calibration",
+        "calibration",
+        "quality",
+        "registration",
+    }
     if args.until_stage not in implemented_stages:
         if args.allow_partial:
             console.print("Only calibration stages are implemented; initializing partial run state.")
         else:
             raise SystemExit(
-                "Current gated runner supports --until-stage calibration or quality only. "
+                "Current gated runner supports --until-stage calibration, quality, or registration only. "
                 "Use --allow-partial to write a diagnostic run_state without executing later stages."
             )
     if args.until_stage in implemented_stages:
         state = run_calibration_stages(args.plan, args.out, backend=args.backend, tile_size=args.tile_size)
-        if args.until_stage == "quality":
+        if args.until_stage in {"quality", "registration"}:
             measure_calibrated_quality(args.out)
             state.completed_stages.append("quality")
             state.current_stage = "quality"
+        if args.until_stage == "registration":
+            register_calibrated_frames(args.out)
+            state.completed_stages.append("registration")
+            state.current_stage = "registration"
         write_run_state(args.out, state)
         console.print(f"Run complete through {state.current_stage}: {args.out}")
         return 0

@@ -108,3 +108,35 @@ def test_pipeline_fixture_run_quality_and_report(tmp_path: Path):
     text = report.read_text(encoding="utf-8")
     assert "Frame quality table" in text
     assert "Reference frame" in text
+
+
+def test_pipeline_fixture_run_registration(tmp_path: Path):
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    report = tmp_path / "report.html"
+    generate_synthetic_dataset(data, frames=4, width=40, height=40, known_shift=True)
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(run),
+                "--backend",
+                "auto",
+                "--until-stage",
+                "registration",
+                "--tile-size",
+                "10",
+            ]
+        )
+        == 0
+    )
+    assert (run / "registration_results.json").exists()
+    assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
+    text = report.read_text(encoding="utf-8")
+    assert "Registration table" in text
+    assert "phase_correlation" in (run / "registration_results.json").read_text(encoding="utf-8")
