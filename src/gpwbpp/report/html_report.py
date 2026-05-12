@@ -23,6 +23,7 @@ def write_html_report(
     quality: dict[str, Any] | None = None,
     registration: dict[str, Any] | None = None,
     local_norm: dict[str, Any] | None = None,
+    integration: dict[str, Any] | None = None,
     title: str = "GPWBPP Report",
 ) -> None:
     frames = (manifest or {}).get("frames", [])
@@ -30,6 +31,7 @@ def write_html_report(
     frame_quality = (quality or {}).get("frame_quality", [])
     registration_results = (registration or {}).get("registration_results", [])
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
+    integration_outputs = (integration or {}).get("outputs", [])
     warnings = []
     warnings.extend((manifest or {}).get("warnings", []))
     warnings.extend((plan or {}).get("global_warnings", []))
@@ -68,7 +70,10 @@ def write_html_report(
   Reference frame: <code>{escape(str((local_norm or {}).get("reference_frame_id", "pending")))}</code>.</p>
   {_table(local_norm_results)}
   <h2>Integration summary</h2>
-  <p>Pending until integration stage runs.</p>
+  <p>Combine: <code>{escape(str((integration or {}).get("combine", "pending")))}</code>.
+  Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
+  Rejection: <code>{escape(str((integration or {}).get("rejection", "pending")))}</code>.</p>
+  {_table(integration_outputs)}
   <h2>Output artifacts</h2>
   <p>See adjacent JSON files in the run directory.</p>
   <h2>Memory usage summary</h2>

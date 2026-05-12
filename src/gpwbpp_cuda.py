@@ -166,6 +166,12 @@ def integrate_accumulate_mean_tile_f32(
     sum_tile: Any,
     weight_sum_tile: Any,
 ) -> tuple[np.ndarray, np.ndarray]:
+    native = _native()
+    if native is not None and hasattr(native, "integrate_accumulate_mean_tile_f32"):
+        sums, weight_sums = native.integrate_accumulate_mean_tile_f32(
+            frame_tile, weight_tile, sum_tile, weight_sum_tile
+        )
+        return np.asarray(sums, dtype=np.float32), np.asarray(weight_sums, dtype=np.float32)
     frame = np.asarray(frame_tile, dtype=np.float32)
     weight = np.asarray(weight_tile, dtype=np.float32)
     sums = np.asarray(sum_tile, dtype=np.float32).copy()

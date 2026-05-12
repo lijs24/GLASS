@@ -39,6 +39,8 @@ void gpwbpp_warp_translation_f32_launch(
     float fill);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
+void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
+    const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
 
 namespace {
 
@@ -429,6 +431,67 @@ py::array_t<float> local_norm_apply_f32(
   return output;
 }
 
+py::tuple integrate_accumulate_mean_tile_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> frame_tile,
+    py::array_t<float, py::array::c_style | py::array::forcecast> weight_tile,
+    py::array_t<float, py::array::c_style | py::array::forcecast> sum_tile,
+    py::array_t<float, py::array::c_style | py::array::forcecast> weight_sum_tile) {
+  const py::buffer_info frame_info = frame_tile.request();
+  const py::buffer_info weight_info = weight_tile.request();
+  const py::buffer_info sum_info = sum_tile.request();
+  const py::buffer_info weight_sum_info = weight_sum_tile.request();
+  if (frame_info.ndim != 2 || weight_info.ndim != 2 || sum_info.ndim != 2 || weight_sum_info.ndim != 2) {
+    throw std::invalid_argument("integration tiles must have shape (height, width)");
+  }
+  if (frame_info.shape != weight_info.shape || frame_info.shape != sum_info.shape ||
+      frame_info.shape != weight_sum_info.shape) {
+    throw std::invalid_argument("integration tile shapes must match");
+  }
+  const std::size_t n = static_cast<std::size_t>(frame_info.shape[0]) *
+      static_cast<std::size_t>(frame_info.shape[1]);
+  py::array_t<float> out_sum({frame_info.shape[0], frame_info.shape[1]});
+  py::array_t<float> out_weight({frame_info.shape[0], frame_info.shape[1]});
+  const py::buffer_info out_sum_info = out_sum.request();
+  const py::buffer_info out_weight_info = out_weight.request();
+
+  float* d_frame = nullptr;
+  float* d_weight = nullptr;
+  float* d_sum = nullptr;
+  float* d_weight_sum = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_frame, n * sizeof(float)), "cudaMalloc(integration frame)");
+    check_cuda(cudaMalloc(&d_weight, n * sizeof(float)), "cudaMalloc(integration weight)");
+    check_cuda(cudaMalloc(&d_sum, n * sizeof(float)), "cudaMalloc(integration sum)");
+    check_cuda(cudaMalloc(&d_weight_sum, n * sizeof(float)), "cudaMalloc(integration weight sum)");
+    check_cuda(cudaMemcpy(d_frame, frame_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(frame)");
+    check_cuda(cudaMemcpy(d_weight, weight_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(weight)");
+    check_cuda(cudaMemcpy(d_sum, sum_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(sum)");
+    check_cuda(
+        cudaMemcpy(d_weight_sum, weight_sum_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(weight sum)");
+    gpwbpp_integrate_accumulate_mean_tile_f32_launch(d_frame, d_weight, d_sum, d_weight_sum, n);
+    check_cuda(cudaGetLastError(), "integrate_accumulate_mean_tile_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "integrate_accumulate_mean_tile_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(out_sum_info.ptr, d_sum, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(out sum)");
+    check_cuda(
+        cudaMemcpy(out_weight_info.ptr, d_weight_sum, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(out weight sum)");
+  } catch (...) {
+    cudaFree(d_frame);
+    cudaFree(d_weight);
+    cudaFree(d_sum);
+    cudaFree(d_weight_sum);
+    throw;
+  }
+  cudaFree(d_frame);
+  cudaFree(d_weight);
+  cudaFree(d_sum);
+  cudaFree(d_weight_sum);
+  return py::make_tuple(out_sum, out_weight);
+}
+
 PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.doc() = "Native CUDA backend for GPWBPP";
   m.def("cuda_available", &cuda_available);
@@ -440,4 +503,5 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("mean_stack_tiles_f32", &mean_stack_tiles_f32);
   m.def("warp_translation_f32", &warp_translation_f32);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
+  m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
 }
