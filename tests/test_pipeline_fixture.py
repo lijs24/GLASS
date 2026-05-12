@@ -44,6 +44,11 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert (run / "calibration_artifacts.json").exists()
     assert len(list((run / "calib_cache" / "masters").glob("*.fits"))) >= 3
     assert len(list((run / "calib_cache" / "calibrated").glob("*.fits"))) == 3
+    import json
+
+    artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
+    assert all(master["streaming"] for master in artifacts["masters"].values())
+    assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
 
 
 def test_pipeline_fixture_run_calibration_cuda_streaming(tmp_path: Path):
