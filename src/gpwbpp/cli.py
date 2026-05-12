@@ -7,6 +7,7 @@ from rich.console import Console
 
 from gpwbpp.capabilities import capability_report
 from gpwbpp.engine.pipeline import initialize_run, run_calibration_stages
+from gpwbpp.engine.quality import measure_calibrated_quality
 from gpwbpp.engine.resume import resume_summary
 from gpwbpp.engine.state import write_run_state
 from gpwbpp.io.json_io import read_json, write_json
@@ -43,7 +44,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     plan_path = Path(args.plan) if args.plan else run / "processing_plan.json"
     manifest = read_json(manifest_path) if manifest_path.exists() else None
     plan = read_json(plan_path) if plan_path.exists() else None
-    write_html_report(args.out, manifest=manifest, plan=plan)
+    quality_path = run / "frame_quality.json"
+    quality = read_json(quality_path) if quality_path.exists() else None
+    write_html_report(args.out, manifest=manifest, plan=plan, quality=quality)
     console.print(f"Wrote report: {args.out}")
     return 0
 
@@ -73,18 +76,23 @@ def cmd_run(args: argparse.Namespace) -> int:
     capabilities = capability_report()
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
-    if args.until_stage not in {"master_calibration", "light_calibration", "calibration"}:
+    implemented_stages = {"master_calibration", "light_calibration", "calibration", "quality"}
+    if args.until_stage not in implemented_stages:
         if args.allow_partial:
             console.print("Only calibration stages are implemented; initializing partial run state.")
         else:
             raise SystemExit(
-                "Current gated runner supports --until-stage calibration only. "
+                "Current gated runner supports --until-stage calibration or quality only. "
                 "Use --allow-partial to write a diagnostic run_state without executing later stages."
             )
-    if args.until_stage in {"master_calibration", "light_calibration", "calibration"}:
+    if args.until_stage in implemented_stages:
         state = run_calibration_stages(args.plan, args.out, backend=args.backend, tile_size=args.tile_size)
+        if args.until_stage == "quality":
+            measure_calibrated_quality(args.out)
+            state.completed_stages.append("quality")
+            state.current_stage = "quality"
         write_run_state(args.out, state)
-        console.print(f"Calibration run complete: {args.out}")
+        console.print(f"Run complete through {state.current_stage}: {args.out}")
         return 0
     out = Path(args.out)
     state = initialize_run(out)

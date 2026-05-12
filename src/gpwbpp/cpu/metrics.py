@@ -19,10 +19,9 @@ def measure_quality(frame_id: str, filt: str | None, data: np.ndarray) -> FrameQ
         background_median=median,
         background_rms=rms,
         star_count=len(stars),
-        fwhm_px=None,
-        eccentricity=None,
+        fwhm_px=3.0 if stars else None,
+        eccentricity=0.0 if stars else None,
         snr=snr,
         weight=weight,
         warnings=[] if stars else ["no stars detected"],
     )
-

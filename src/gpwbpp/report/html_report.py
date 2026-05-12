@@ -20,10 +20,12 @@ def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
     plan: dict[str, Any] | None = None,
+    quality: dict[str, Any] | None = None,
     title: str = "GPWBPP Report",
 ) -> None:
     frames = (manifest or {}).get("frames", [])
     light_plans = (plan or {}).get("light_plans", [])
+    frame_quality = (quality or {}).get("frame_quality", [])
     warnings = []
     warnings.extend((manifest or {}).get("warnings", []))
     warnings.extend((plan or {}).get("global_warnings", []))
@@ -53,7 +55,8 @@ def write_html_report(
   <h2>Master frame statistics</h2>
   <p>Pending until calibration stages run.</p>
   <h2>Frame quality table</h2>
-  <p>Pending until quality stage runs.</p>
+  {_table(frame_quality)}
+  <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
   <h2>Registration table</h2>
   <p>Pending until registration stage runs.</p>
   <h2>Local normalization summary</h2>
@@ -80,4 +83,3 @@ def write_html_report(
     target = Path(out_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(html, encoding="utf-8")
-

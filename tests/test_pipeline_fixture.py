@@ -76,3 +76,35 @@ def test_pipeline_fixture_run_calibration_cuda_streaming(tmp_path: Path):
     assert artifacts["calibrated_lights"]
     assert all(item["backend"] == "cuda" for item in artifacts["calibrated_lights"])
     assert all(item["tile_count"] > 1 for item in artifacts["calibrated_lights"])
+
+
+def test_pipeline_fixture_run_quality_and_report(tmp_path: Path):
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    report = tmp_path / "report.html"
+    generate_synthetic_dataset(data, frames=3, width=32, height=32, known_shift=True)
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(run),
+                "--backend",
+                "auto",
+                "--until-stage",
+                "quality",
+                "--tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+    assert (run / "frame_quality.json").exists()
+    assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
+    text = report.read_text(encoding="utf-8")
+    assert "Frame quality table" in text
+    assert "Reference frame" in text
