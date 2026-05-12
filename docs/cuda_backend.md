@@ -85,6 +85,9 @@ Resident CUDA integration now supports:
 - Resident GPU NCC supports an optional sampling stride. A stride greater than
   one scores a regular pixel grid while frames remain in VRAM, reducing
   full-frame registration cost for high-resolution timing experiments.
+- Resident GPU NCC can optionally fall back to full stride `1` when the sampled
+  subpixel NCC score is below a configured threshold, recording the fallback in
+  per-frame registration warnings.
 - Resident frame-to-frame NCC and subpixel NCC estimation, so calibrated frames
   already stored in `ResidentCalibratedStack` can be registered and warped
   without re-uploading the two images through standalone wrappers.

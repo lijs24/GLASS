@@ -351,6 +351,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_registration=args.resident_registration,
                 resident_registration_max_shift=args.resident_registration_max_shift,
                 resident_ncc_sample_stride=args.resident_ncc_sample_stride,
+                resident_ncc_fallback_score_threshold=args.resident_ncc_fallback_score_threshold,
                 resident_subpixel_radius_steps=args.resident_subpixel_radius_steps,
                 resident_subpixel_step=args.resident_subpixel_step,
                 resident_star_threshold=args.resident_star_threshold,
@@ -613,6 +614,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="sample every Nth pixel in resident GPU NCC registration; 1 keeps full-resolution scoring",
+    )
+    run.add_argument(
+        "--resident-ncc-fallback-score-threshold",
+        type=float,
+        default=0.0,
+        help=(
+            "when resident NCC sample stride is greater than 1, rerun low-score frames at full stride 1; "
+            "0 disables fallback"
+        ),
     )
     run.add_argument("--resident-subpixel-radius-steps", type=int, default=4)
     run.add_argument("--resident-subpixel-step", type=float, default=0.25)

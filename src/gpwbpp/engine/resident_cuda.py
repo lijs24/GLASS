@@ -298,6 +298,7 @@ def run_resident_calibration_integration(
     resident_registration: str = "off",
     resident_registration_max_shift: int = 128,
     resident_ncc_sample_stride: int = 1,
+    resident_ncc_fallback_score_threshold: float = 0.0,
     resident_subpixel_radius_steps: int = 4,
     resident_subpixel_step: float = 0.25,
     resident_star_threshold: float = 30.0,
@@ -331,6 +332,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_registration_max_shift must be non-negative")
     if resident_ncc_sample_stride <= 0:
         raise ValueError("resident_ncc_sample_stride must be positive")
+    if resident_ncc_fallback_score_threshold < 0.0 or resident_ncc_fallback_score_threshold > 1.0:
+        raise ValueError("resident_ncc_fallback_score_threshold must be in [0, 1]")
     if resident_subpixel_radius_steps < 0:
         raise ValueError("resident_subpixel_radius_steps must be non-negative")
     if resident_subpixel_step <= 0:
@@ -541,6 +544,31 @@ def run_resident_calibration_integration(
                                 resident_subpixel_step,
                                 resident_ncc_sample_stride,
                             )
+                            fallback_used = False
+                            original_refined = refined
+                            original_score = float(refined["score"])
+                            if (
+                                resident_ncc_sample_stride > 1
+                                and resident_ncc_fallback_score_threshold > 0.0
+                                and original_score <= resident_ncc_fallback_score_threshold
+                            ):
+                                coarse = stack.estimate_translation_to_reference(
+                                    reference_index,
+                                    index,
+                                    resident_registration_max_shift,
+                                    resident_registration_max_shift,
+                                    1,
+                                )
+                                refined = stack.estimate_translation_subpixel_to_reference(
+                                    reference_index,
+                                    index,
+                                    float(coarse["dx"]),
+                                    float(coarse["dy"]),
+                                    resident_subpixel_radius_steps,
+                                    resident_subpixel_step,
+                                    1,
+                                )
+                                fallback_used = True
                             dx = float(refined["dx"])
                             dy = float(refined["dy"])
                             score = float(refined["score"])
@@ -554,6 +582,23 @@ def run_resident_calibration_integration(
                                     f"ncc_sample_stride={resident_ncc_sample_stride}",
                                 ]
                             )
+                            if fallback_used:
+                                warnings.extend(
+                                    [
+                                        "ncc_fallback_stride=1",
+                                        (
+                                            "ncc_fallback_reason="
+                                            f"score_below_{resident_ncc_fallback_score_threshold:.6g}"
+                                        ),
+                                        f"ncc_original_dx={float(original_refined['dx']):.6g}",
+                                        f"ncc_original_dy={float(original_refined['dy']):.6g}",
+                                        f"ncc_original_score={original_score:.6g}",
+                                        f"ncc_fallback_coarse_dx={int(coarse['dx'])}",
+                                        f"ncc_fallback_coarse_dy={int(coarse['dy'])}",
+                                        f"ncc_fallback_coarse_score={float(coarse['score']):.6g}",
+                                        f"ncc_fallback_subpixel_score={score:.6g}",
+                                    ]
+                                )
                     except Exception as exc:
                         status = "failed"
                         frame_weight_values[index] = 0.0
@@ -878,6 +923,7 @@ def run_resident_calibration_integration(
                         "preview_scale": preview_scale,
                         "max_shift": resident_registration_max_shift,
                         "ncc_sample_stride": resident_ncc_sample_stride,
+                        "ncc_fallback_score_threshold": resident_ncc_fallback_score_threshold,
                         "subpixel_radius_steps": resident_subpixel_radius_steps,
                         "subpixel_step": resident_subpixel_step,
                         "star_threshold": resident_star_threshold,

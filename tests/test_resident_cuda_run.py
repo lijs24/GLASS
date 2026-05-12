@@ -125,13 +125,14 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0
 
 
-def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_dataset, tmp_path: Path):
+def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
     manifest = tmp_path / "manifest.json"
     plan = tmp_path / "processing_plan.json"
     run = tmp_path / "resident_run_ncc"
 
-    assert main(["scan", "--root", str(small_fits_dataset), "--out", str(manifest)]) == 0
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
     assert main(
         [
@@ -158,6 +159,8 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_datase
             "4",
             "--resident-ncc-sample-stride",
             "2",
+            "--resident-ncc-fallback-score-threshold",
+            "1.0",
             "--resident-subpixel-radius-steps",
             "2",
             "--resident-subpixel-step",
@@ -183,8 +186,10 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_datase
     assert resident["artifacts"][0]["resident_local_normalization"]["mode"] == "resident_global_mean_std"
     assert resident_registration["max_shift"] == 4
     assert resident_registration["ncc_sample_stride"] == 2
+    assert resident_registration["ncc_fallback_score_threshold"] == 1.0
     assert resident_registration["subpixel_radius_steps"] == 2
     assert resident_registration["subpixel_step"] == 0.5
+    assert any("ncc_fallback_stride=1" == item for item in registration["results"][1]["warnings"])
 
 
 def test_cli_resident_cuda_run_star_catalog_registration_smoke(small_fits_dataset, tmp_path: Path):

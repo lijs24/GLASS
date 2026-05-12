@@ -92,6 +92,12 @@ the GPU to reduce registration cost on large frames. This is a speed/accuracy
 control for the current translation-only model, not a substitute for future
 star-descriptor similarity/affine registration.
 
+`--resident-ncc-fallback-score-threshold` can be used with a sampling stride
+greater than one. When the sampled NCC subpixel score is at or below the
+threshold, the frame is re-estimated with full stride `1` and the fallback is
+recorded in the registration warnings. The default `0` disables fallback and
+preserves the exact requested stride behavior.
+
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
 moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,
