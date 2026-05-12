@@ -188,6 +188,149 @@ __global__ void catalog_offset_best_kernel(
   *best_inliers = best_score;
 }
 
+__global__ void catalog_moving_best_reference_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const float* best_dx,
+    const float* best_dy,
+    int* moving_best_reference,
+    int reference_count,
+    int moving_count,
+    float tolerance_px) {
+  const int moving_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (moving_index >= moving_count) {
+    return;
+  }
+  const float transformed_x = moving_x[moving_index] + *best_dx;
+  const float transformed_y = moving_y[moving_index] + *best_dy;
+  const float tolerance2 = tolerance_px * tolerance_px;
+  float best_distance2 = tolerance2;
+  int best_reference = -1;
+  for (int reference_index = 0; reference_index < reference_count; ++reference_index) {
+    const float dx = reference_x[reference_index] - transformed_x;
+    const float dy = reference_y[reference_index] - transformed_y;
+    const float distance2 = dx * dx + dy * dy;
+    if (distance2 <= best_distance2) {
+      best_distance2 = distance2;
+      best_reference = reference_index;
+    }
+  }
+  moving_best_reference[moving_index] = best_reference;
+}
+
+__global__ void catalog_reference_best_moving_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const float* best_dx,
+    const float* best_dy,
+    int* reference_best_moving,
+    int reference_count,
+    int moving_count,
+    float tolerance_px) {
+  const int reference_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (reference_index >= reference_count) {
+    return;
+  }
+  const float tolerance2 = tolerance_px * tolerance_px;
+  float best_distance2 = tolerance2;
+  int best_moving = -1;
+  for (int moving_index = 0; moving_index < moving_count; ++moving_index) {
+    const float transformed_x = moving_x[moving_index] + *best_dx;
+    const float transformed_y = moving_y[moving_index] + *best_dy;
+    const float dx = reference_x[reference_index] - transformed_x;
+    const float dy = reference_y[reference_index] - transformed_y;
+    const float distance2 = dx * dx + dy * dy;
+    if (distance2 <= best_distance2) {
+      best_distance2 = distance2;
+      best_moving = moving_index;
+    }
+  }
+  reference_best_moving[reference_index] = best_moving;
+}
+
+__global__ void catalog_mutual_refine_sums_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const int* moving_best_reference,
+    const int* reference_best_moving,
+    float* sums,
+    int* mutual_inliers,
+    int moving_count) {
+  const int moving_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (moving_index >= moving_count) {
+    return;
+  }
+  const int reference_index = moving_best_reference[moving_index];
+  if (reference_index < 0 || reference_best_moving[reference_index] != moving_index) {
+    return;
+  }
+  atomicAdd(sums + 0, reference_x[reference_index] - moving_x[moving_index]);
+  atomicAdd(sums + 1, reference_y[reference_index] - moving_y[moving_index]);
+  atomicAdd(mutual_inliers, 1);
+}
+
+__global__ void catalog_finalize_refinement_kernel(
+    const float* best_dx,
+    const float* best_dy,
+    const float* sums,
+    const int* mutual_inliers,
+    float* refined_dx,
+    float* refined_dy) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  const int count = *mutual_inliers;
+  if (count <= 0) {
+    *refined_dx = *best_dx;
+    *refined_dy = *best_dy;
+    return;
+  }
+  const float scale = 1.0f / static_cast<float>(count);
+  *refined_dx = sums[0] * scale;
+  *refined_dy = sums[1] * scale;
+}
+
+__global__ void catalog_mutual_rms_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const int* moving_best_reference,
+    const int* reference_best_moving,
+    const float* refined_dx,
+    const float* refined_dy,
+    float* sums,
+    int moving_count) {
+  const int moving_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (moving_index >= moving_count) {
+    return;
+  }
+  const int reference_index = moving_best_reference[moving_index];
+  if (reference_index < 0 || reference_best_moving[reference_index] != moving_index) {
+    return;
+  }
+  const float dx = reference_x[reference_index] - (moving_x[moving_index] + *refined_dx);
+  const float dy = reference_y[reference_index] - (moving_y[moving_index] + *refined_dy);
+  atomicAdd(sums + 2, dx * dx + dy * dy);
+}
+
+__global__ void catalog_finalize_rms_kernel(
+    const float* sums,
+    const int* mutual_inliers,
+    float* rms_px) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  const int count = *mutual_inliers;
+  *rms_px = count > 0 ? sqrtf(sums[2] / static_cast<float>(count)) : NAN;
+}
+
 }  // namespace
 
 void gpwbpp_estimate_translation_search_f32_launch(
@@ -221,12 +364,21 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     float* best_dx,
     float* best_dy,
     int* best_inliers,
+    int* moving_best_reference,
+    int* reference_best_moving,
+    float* refine_sums,
+    int* mutual_inliers,
+    float* refined_dx,
+    float* refined_dy,
+    float* rms_px,
     int reference_count,
     int moving_count,
     float tolerance_px) {
   constexpr int threads = 256;
   const int pair_count = reference_count * moving_count;
   const int blocks = (pair_count + threads - 1) / threads;
+  const int reference_blocks = (reference_count + threads - 1) / threads;
+  const int moving_blocks = (moving_count + threads - 1) / threads;
   catalog_pair_offsets_kernel<<<blocks, threads>>>(
       reference_x,
       reference_y,
@@ -239,4 +391,53 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
       pair_count);
   catalog_offset_score_kernel<<<blocks, threads>>>(candidate_dx, candidate_dy, scores, pair_count, tolerance_px);
   catalog_offset_best_kernel<<<1, 1>>>(candidate_dx, candidate_dy, scores, best_dx, best_dy, best_inliers, pair_count);
+  cudaMemset(moving_best_reference, 0xff, static_cast<std::size_t>(moving_count) * sizeof(int));
+  cudaMemset(reference_best_moving, 0xff, static_cast<std::size_t>(reference_count) * sizeof(int));
+  cudaMemset(refine_sums, 0, 3 * sizeof(float));
+  cudaMemset(mutual_inliers, 0, sizeof(int));
+  catalog_moving_best_reference_kernel<<<moving_blocks, threads>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      best_dx,
+      best_dy,
+      moving_best_reference,
+      reference_count,
+      moving_count,
+      tolerance_px);
+  catalog_reference_best_moving_kernel<<<reference_blocks, threads>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      best_dx,
+      best_dy,
+      reference_best_moving,
+      reference_count,
+      moving_count,
+      tolerance_px);
+  catalog_mutual_refine_sums_kernel<<<moving_blocks, threads>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      moving_best_reference,
+      reference_best_moving,
+      refine_sums,
+      mutual_inliers,
+      moving_count);
+  catalog_finalize_refinement_kernel<<<1, 1>>>(best_dx, best_dy, refine_sums, mutual_inliers, refined_dx, refined_dy);
+  catalog_mutual_rms_kernel<<<moving_blocks, threads>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      moving_best_reference,
+      reference_best_moving,
+      refined_dx,
+      refined_dy,
+      refine_sums,
+      moving_count);
+  catalog_finalize_rms_kernel<<<1, 1>>>(refine_sums, mutual_inliers, rms_px);
 }

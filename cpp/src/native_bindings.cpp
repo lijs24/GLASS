@@ -60,6 +60,13 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     float* best_dx,
     float* best_dy,
     int* best_inliers,
+    int* moving_best_reference,
+    int* reference_best_moving,
+    float* refine_sums,
+    int* mutual_inliers,
+    float* refined_dx,
+    float* refined_dy,
+    float* rms_px,
     int reference_count,
     int moving_count,
     float tolerance_px);
@@ -1153,9 +1160,20 @@ py::dict estimate_translation_from_catalogs_f32(
   float* d_best_dx = nullptr;
   float* d_best_dy = nullptr;
   int* d_best_inliers = nullptr;
+  int* d_moving_best_reference = nullptr;
+  int* d_reference_best_moving = nullptr;
+  float* d_refine_sums = nullptr;
+  int* d_mutual_inliers = nullptr;
+  float* d_refined_dx = nullptr;
+  float* d_refined_dy = nullptr;
+  float* d_rms_px = nullptr;
   float best_dx = 0.0f;
   float best_dy = 0.0f;
   int best_inliers = 0;
+  int mutual_inliers = 0;
+  float refined_dx = 0.0f;
+  float refined_dy = 0.0f;
+  float rms_px = 0.0f;
   try {
     check_cuda(
         cudaMalloc(&d_reference_x, static_cast<std::size_t>(reference_count) * sizeof(float)),
@@ -1179,6 +1197,17 @@ py::dict estimate_translation_from_catalogs_f32(
     check_cuda(cudaMalloc(&d_best_dx, sizeof(float)), "cudaMalloc(catalog best dx)");
     check_cuda(cudaMalloc(&d_best_dy, sizeof(float)), "cudaMalloc(catalog best dy)");
     check_cuda(cudaMalloc(&d_best_inliers, sizeof(int)), "cudaMalloc(catalog best inliers)");
+    check_cuda(
+        cudaMalloc(&d_moving_best_reference, static_cast<std::size_t>(moving_count) * sizeof(int)),
+        "cudaMalloc(catalog moving best reference)");
+    check_cuda(
+        cudaMalloc(&d_reference_best_moving, static_cast<std::size_t>(reference_count) * sizeof(int)),
+        "cudaMalloc(catalog reference best moving)");
+    check_cuda(cudaMalloc(&d_refine_sums, 3 * sizeof(float)), "cudaMalloc(catalog refine sums)");
+    check_cuda(cudaMalloc(&d_mutual_inliers, sizeof(int)), "cudaMalloc(catalog mutual inliers)");
+    check_cuda(cudaMalloc(&d_refined_dx, sizeof(float)), "cudaMalloc(catalog refined dx)");
+    check_cuda(cudaMalloc(&d_refined_dy, sizeof(float)), "cudaMalloc(catalog refined dy)");
+    check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(catalog rms)");
     check_cuda(
         cudaMemcpy(
             d_reference_x,
@@ -1218,6 +1247,13 @@ py::dict estimate_translation_from_catalogs_f32(
         d_best_dx,
         d_best_dy,
         d_best_inliers,
+        d_moving_best_reference,
+        d_reference_best_moving,
+        d_refine_sums,
+        d_mutual_inliers,
+        d_refined_dx,
+        d_refined_dy,
+        d_rms_px,
         reference_count,
         moving_count,
         tolerance_px);
@@ -1228,6 +1264,16 @@ py::dict estimate_translation_from_catalogs_f32(
     check_cuda(
         cudaMemcpy(&best_inliers, d_best_inliers, sizeof(int), cudaMemcpyDeviceToHost),
         "cudaMemcpy(catalog best inliers)");
+    check_cuda(
+        cudaMemcpy(&mutual_inliers, d_mutual_inliers, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(catalog mutual inliers)");
+    check_cuda(
+        cudaMemcpy(&refined_dx, d_refined_dx, sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(catalog refined dx)");
+    check_cuda(
+        cudaMemcpy(&refined_dy, d_refined_dy, sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(catalog refined dy)");
+    check_cuda(cudaMemcpy(&rms_px, d_rms_px, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(catalog rms)");
   } catch (...) {
     cudaFree(d_reference_x);
     cudaFree(d_reference_y);
@@ -1239,6 +1285,13 @@ py::dict estimate_translation_from_catalogs_f32(
     cudaFree(d_best_dx);
     cudaFree(d_best_dy);
     cudaFree(d_best_inliers);
+    cudaFree(d_moving_best_reference);
+    cudaFree(d_reference_best_moving);
+    cudaFree(d_refine_sums);
+    cudaFree(d_mutual_inliers);
+    cudaFree(d_refined_dx);
+    cudaFree(d_refined_dy);
+    cudaFree(d_rms_px);
     throw;
   }
   cudaFree(d_reference_x);
@@ -1251,11 +1304,22 @@ py::dict estimate_translation_from_catalogs_f32(
   cudaFree(d_best_dx);
   cudaFree(d_best_dy);
   cudaFree(d_best_inliers);
+  cudaFree(d_moving_best_reference);
+  cudaFree(d_reference_best_moving);
+  cudaFree(d_refine_sums);
+  cudaFree(d_mutual_inliers);
+  cudaFree(d_refined_dx);
+  cudaFree(d_refined_dy);
+  cudaFree(d_rms_px);
 
   py::dict result;
   result["dx"] = best_dx;
   result["dy"] = best_dy;
   result["inliers"] = best_inliers;
+  result["refined_dx"] = refined_dx;
+  result["refined_dy"] = refined_dy;
+  result["mutual_inliers"] = mutual_inliers;
+  result["rms_px"] = rms_px;
   result["candidate_count"] = pair_count;
   result["reference_count"] = reference_count;
   result["moving_count"] = moving_count;

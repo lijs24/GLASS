@@ -60,6 +60,8 @@ Resident CUDA integration now supports:
   followed by device-side best-shift selection and CUDA translation warp.
 - GPU star-catalog pair-offset voting for translation estimation from bounded
   top-N catalogs.
+- GPU mutual-nearest refinement for catalog translations, returning
+  `refined_dx`, `refined_dy`, `mutual_inliers`, and `rms_px`.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight

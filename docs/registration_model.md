@@ -39,7 +39,11 @@ moving_y, tolerance_px)`. It consumes bounded star catalogs, forms all pair
 offsets on the GPU, scores offset clusters on the GPU, and returns the
 highest-vote translation. This is the first device-side star-catalog transform
 scorer; it is still translation-only and does not yet perform one-to-one
-assignment or subpixel centroid refinement.
+assignment as the primary score. A follow-up refinement pass now applies
+mutual-nearest matching around that highest-vote translation, reports
+`mutual_inliers`, averages matched catalog deltas into `refined_dx/refined_dy`,
+and computes `rms_px`. It still depends on the input catalog coordinates; true
+subpixel centroid measurement is not yet implemented on the GPU.
 
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an

@@ -89,6 +89,10 @@ def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():
     assert result["dx"] == 3.0
     assert result["dy"] == -2.0
     assert result["inliers"] >= len(reference)
+    assert result["refined_dx"] == 3.0
+    assert result["refined_dy"] == -2.0
+    assert result["mutual_inliers"] == len(reference)
+    assert result["rms_px"] == 0.0
     assert result["candidate_count"] == len(reference) * len(moving)
 
 
@@ -110,3 +114,48 @@ def test_gpu_catalog_translation_from_top_star_candidates():
     assert result["dx"] == -4.0
     assert result["dy"] == 3.0
     assert result["inliers"] >= 6
+    assert abs(result["refined_dx"] + 4.0) < 1.0e-5
+    assert abs(result["refined_dy"] - 3.0) < 1.0e-5
+    assert result["mutual_inliers"] >= 6
+    assert result["rms_px"] == 0.0
+
+
+def test_gpu_catalog_translation_refines_mutual_inliers():
+    module = cuda_module_or_skip()
+    reference = np.array(
+        [
+            (11.0, 9.0),
+            (25.0, 14.0),
+            (18.0, 34.0),
+            (41.0, 37.0),
+            (53.0, 21.0),
+            (63.0, 45.0),
+        ],
+        dtype=np.float32,
+    )
+    jitter = np.array(
+        [
+            (0.02, -0.01),
+            (-0.03, 0.01),
+            (0.01, 0.02),
+            (-0.02, -0.02),
+            (0.00, 0.03),
+            (0.03, -0.03),
+        ],
+        dtype=np.float32,
+    )
+    true_delta = np.array([3.25, -1.75], dtype=np.float32)
+    moving = reference - true_delta + jitter
+
+    result = module.estimate_translation_from_catalogs_f32(
+        reference[:, 0],
+        reference[:, 1],
+        moving[:, 0],
+        moving[:, 1],
+        0.4,
+    )
+
+    assert result["mutual_inliers"] == len(reference)
+    assert abs(result["refined_dx"] - float(true_delta[0])) < 0.03
+    assert abs(result["refined_dy"] - float(true_delta[1])) < 0.03
+    assert result["rms_px"] < 0.05

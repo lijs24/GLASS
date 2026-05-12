@@ -341,15 +341,73 @@ def _catalog_translation_vote(
         if score > best_score:
             best_index = i
             best_score = score
+    refined = _refine_catalog_translation(ref_x, ref_y, mov_x, mov_y, float(dx[best_index]), float(dy[best_index]), tolerance_px)
     return {
         "dx": float(dx[best_index]),
         "dy": float(dy[best_index]),
         "inliers": int(best_score),
+        **refined,
         "candidate_count": int(len(dx)),
         "reference_count": int(len(ref_x)),
         "moving_count": int(len(mov_x)),
         "tolerance_px": float(tolerance_px),
         "model": "catalog_pair_offset_translation_cpu_fallback",
+    }
+
+
+def _refine_catalog_translation(
+    reference_x: np.ndarray,
+    reference_y: np.ndarray,
+    moving_x: np.ndarray,
+    moving_y: np.ndarray,
+    dx: float,
+    dy: float,
+    tolerance_px: float,
+) -> dict[str, Any]:
+    tolerance2 = float(tolerance_px) * float(tolerance_px)
+    moving_best_reference: list[int] = []
+    for mx, my in zip(moving_x, moving_y, strict=True):
+        tx = float(mx) + dx
+        ty = float(my) + dy
+        distances = (reference_x - tx) ** 2 + (reference_y - ty) ** 2
+        index = int(np.argmin(distances))
+        moving_best_reference.append(index if float(distances[index]) <= tolerance2 else -1)
+
+    reference_best_moving: list[int] = []
+    for rx, ry in zip(reference_x, reference_y, strict=True):
+        tx = moving_x + np.float32(dx)
+        ty = moving_y + np.float32(dy)
+        distances = (tx - rx) ** 2 + (ty - ry) ** 2
+        index = int(np.argmin(distances))
+        reference_best_moving.append(index if float(distances[index]) <= tolerance2 else -1)
+
+    deltas: list[tuple[float, float]] = []
+    for moving_index, reference_index in enumerate(moving_best_reference):
+        if reference_index < 0 or reference_best_moving[reference_index] != moving_index:
+            continue
+        deltas.append(
+            (
+                float(reference_x[reference_index] - moving_x[moving_index]),
+                float(reference_y[reference_index] - moving_y[moving_index]),
+            )
+        )
+    if not deltas:
+        return {
+            "refined_dx": float(dx),
+            "refined_dy": float(dy),
+            "mutual_inliers": 0,
+            "rms_px": float("nan"),
+        }
+    delta_array = np.asarray(deltas, dtype=np.float32)
+    refined_dx = float(np.mean(delta_array[:, 0]))
+    refined_dy = float(np.mean(delta_array[:, 1]))
+    residuals = delta_array - np.asarray([refined_dx, refined_dy], dtype=np.float32)
+    rms_px = float(np.sqrt(np.mean(np.sum(residuals * residuals, axis=1))))
+    return {
+        "refined_dx": refined_dx,
+        "refined_dy": refined_dy,
+        "mutual_inliers": len(deltas),
+        "rms_px": rms_px,
     }
 
 
@@ -381,6 +439,10 @@ def estimate_translation_from_catalogs_f32(
             "dx": float(result["dx"]),
             "dy": float(result["dy"]),
             "inliers": int(result["inliers"]),
+            "refined_dx": float(result["refined_dx"]),
+            "refined_dy": float(result["refined_dy"]),
+            "mutual_inliers": int(result["mutual_inliers"]),
+            "rms_px": float(result["rms_px"]),
             "candidate_count": int(result["candidate_count"]),
             "reference_count": int(result["reference_count"]),
             "moving_count": int(result["moving_count"]),
