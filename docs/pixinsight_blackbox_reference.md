@@ -32,6 +32,12 @@ systems:
 5. Record input frame count, image dimensions, backend, selected WBPP settings,
    output master paths, elapsed seconds, and difference metrics.
 
+`gpwbpp compare` can record timing fields directly:
+
+```powershell
+gpwbpp compare --gpwbpp runs/gpwbpp/integration/master_Lum.fits --reference P:\WBPP\master_Lum.fits --out runs/compare.html --gpwbpp-time-seconds 64.061 --reference-time-seconds 180 --reference-label "PixInsight WBPP"
+```
+
 Allowed PixInsight evidence remains limited to user-generated WBPP logs,
 user-generated WBPP outputs, user-exported process settings, and measured
 runtime. Official WBPP/PJSR source remains off limits.

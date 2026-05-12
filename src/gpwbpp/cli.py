@@ -268,7 +268,14 @@ def cmd_resume(args: argparse.Namespace) -> int:
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
-    comparison = compare_fits(args.gpwbpp, args.reference)
+    comparison = compare_fits(
+        args.gpwbpp,
+        args.reference,
+        gpwbpp_time_seconds=args.gpwbpp_time_seconds,
+        reference_time_seconds=args.reference_time_seconds,
+        gpwbpp_label=args.gpwbpp_label,
+        reference_label=args.reference_label,
+    )
     write_json(Path(args.out).with_suffix(".json"), comparison)
     write_compare_report(args.out, comparison)
     console.print(f"Wrote compare report: {args.out}")
@@ -350,6 +357,10 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--gpwbpp", required=True)
     compare.add_argument("--reference", required=True)
     compare.add_argument("--out", required=True)
+    compare.add_argument("--gpwbpp-time-seconds", type=float)
+    compare.add_argument("--reference-time-seconds", type=float)
+    compare.add_argument("--gpwbpp-label", default="GPWBPP")
+    compare.add_argument("--reference-label", default="reference")
     compare.set_defaults(func=cmd_compare)
 
     synthetic = sub.add_parser("synthetic", help="generate synthetic FITS data")

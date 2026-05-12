@@ -10,6 +10,7 @@
 - Recorded GPWBPP elapsed time for the real subset.
 - Verified `gpwbpp compare` works for CPU/CUDA synthetic masters in Gate 12.
 - Documented the black-box timing protocol in `docs/pixinsight_blackbox_reference.md`.
+- Added `gpwbpp compare` timing fields for GPWBPP/reference elapsed seconds and speedup reporting.
 
 ## Blocker
 
@@ -23,6 +24,7 @@ produce a valid WBPP timing or numerical comparison.
 ```powershell
 Get-Command PixInsight.exe -ErrorAction SilentlyContinue
 Get-ChildItem -Path 'C:\Program Files','C:\Program Files (x86)' -Filter PixInsight.exe -Recurse -ErrorAction SilentlyContinue
+.\.venv\Scripts\python -m pytest -q tests/test_compare_report.py
 ```
 
 ## Next Step
