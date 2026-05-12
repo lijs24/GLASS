@@ -119,6 +119,75 @@ __global__ void translation_search_best_kernel(
   *best_score = best;
 }
 
+__global__ void catalog_pair_offsets_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    float* candidate_dx,
+    float* candidate_dy,
+    int reference_count,
+    int moving_count,
+    int pair_count) {
+  const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= pair_count) {
+    return;
+  }
+  const int reference_index = i / moving_count;
+  const int moving_index = i % moving_count;
+  candidate_dx[i] = reference_x[reference_index] - moving_x[moving_index];
+  candidate_dy[i] = reference_y[reference_index] - moving_y[moving_index];
+}
+
+__global__ void catalog_offset_score_kernel(
+    const float* candidate_dx,
+    const float* candidate_dy,
+    int* scores,
+    int pair_count,
+    float tolerance_px) {
+  const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= pair_count) {
+    return;
+  }
+  const float dx = candidate_dx[i];
+  const float dy = candidate_dy[i];
+  const float tolerance2 = tolerance_px * tolerance_px;
+  int score = 0;
+  for (int j = 0; j < pair_count; ++j) {
+    const float ddx = candidate_dx[j] - dx;
+    const float ddy = candidate_dy[j] - dy;
+    if (ddx * ddx + ddy * ddy <= tolerance2) {
+      ++score;
+    }
+  }
+  scores[i] = score;
+}
+
+__global__ void catalog_offset_best_kernel(
+    const float* candidate_dx,
+    const float* candidate_dy,
+    const int* scores,
+    float* best_dx,
+    float* best_dy,
+    int* best_inliers,
+    int pair_count) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  int best_index = 0;
+  int best_score = scores[0];
+  for (int i = 1; i < pair_count; ++i) {
+    const int score = scores[i];
+    if (score > best_score) {
+      best_score = score;
+      best_index = i;
+    }
+  }
+  *best_dx = candidate_dx[best_index];
+  *best_dy = candidate_dy[best_index];
+  *best_inliers = best_score;
+}
+
 }  // namespace
 
 void gpwbpp_estimate_translation_search_f32_launch(
@@ -139,4 +208,35 @@ void gpwbpp_estimate_translation_search_f32_launch(
       reference, moving, scores, width, height, max_shift_x, max_shift_y);
   translation_search_best_kernel<<<1, 1>>>(
       scores, best_dx, best_dy, best_score, max_shift_x, max_shift_y, shift_count);
+}
+
+void gpwbpp_estimate_translation_from_catalogs_f32_launch(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    float* candidate_dx,
+    float* candidate_dy,
+    int* scores,
+    float* best_dx,
+    float* best_dy,
+    int* best_inliers,
+    int reference_count,
+    int moving_count,
+    float tolerance_px) {
+  constexpr int threads = 256;
+  const int pair_count = reference_count * moving_count;
+  const int blocks = (pair_count + threads - 1) / threads;
+  catalog_pair_offsets_kernel<<<blocks, threads>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      candidate_dx,
+      candidate_dy,
+      reference_count,
+      moving_count,
+      pair_count);
+  catalog_offset_score_kernel<<<blocks, threads>>>(candidate_dx, candidate_dy, scores, pair_count, tolerance_px);
+  catalog_offset_best_kernel<<<1, 1>>>(candidate_dx, candidate_dy, scores, best_dx, best_dy, best_inliers, pair_count);
 }

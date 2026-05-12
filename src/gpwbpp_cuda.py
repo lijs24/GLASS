@@ -314,6 +314,89 @@ def estimate_translation_search_f32(
     }
 
 
+def _catalog_translation_vote(
+    reference_x: np.ndarray,
+    reference_y: np.ndarray,
+    moving_x: np.ndarray,
+    moving_y: np.ndarray,
+    tolerance_px: float,
+) -> dict[str, Any]:
+    ref_x = np.asarray(reference_x, dtype=np.float32).reshape(-1)
+    ref_y = np.asarray(reference_y, dtype=np.float32).reshape(-1)
+    mov_x = np.asarray(moving_x, dtype=np.float32).reshape(-1)
+    mov_y = np.asarray(moving_y, dtype=np.float32).reshape(-1)
+    if ref_x.shape != ref_y.shape or mov_x.shape != mov_y.shape:
+        raise ValueError("catalog x/y coordinate arrays must have matching shapes")
+    if len(ref_x) == 0 or len(mov_x) == 0:
+        raise ValueError("catalogs must be non-empty")
+    dx = (ref_x[:, None] - mov_x[None, :]).reshape(-1)
+    dy = (ref_y[:, None] - mov_y[None, :]).reshape(-1)
+    tolerance2 = np.float32(tolerance_px) * np.float32(tolerance_px)
+    best_index = 0
+    best_score = -1
+    for i, (candidate_dx, candidate_dy) in enumerate(zip(dx, dy, strict=True)):
+        ddx = dx - candidate_dx
+        ddy = dy - candidate_dy
+        score = int(np.sum((ddx * ddx + ddy * ddy) <= tolerance2))
+        if score > best_score:
+            best_index = i
+            best_score = score
+    return {
+        "dx": float(dx[best_index]),
+        "dy": float(dy[best_index]),
+        "inliers": int(best_score),
+        "candidate_count": int(len(dx)),
+        "reference_count": int(len(ref_x)),
+        "moving_count": int(len(mov_x)),
+        "tolerance_px": float(tolerance_px),
+        "model": "catalog_pair_offset_translation_cpu_fallback",
+    }
+
+
+def estimate_translation_from_catalogs_f32(
+    reference_x: Any,
+    reference_y: Any,
+    moving_x: Any,
+    moving_y: Any,
+    tolerance_px: float = 1.0,
+) -> dict[str, Any]:
+    """Estimate translation from two star coordinate catalogs.
+
+    The CUDA path forms all reference/moving pair offsets, scores each offset
+    by nearby pair-offset votes, and returns the highest-vote translation.
+    """
+
+    native = _native()
+    if native is not None and hasattr(native, "estimate_translation_from_catalogs_f32"):
+        result = dict(
+            native.estimate_translation_from_catalogs_f32(
+                np.ascontiguousarray(np.asarray(reference_x, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(reference_y, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(moving_x, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(moving_y, dtype=np.float32).reshape(-1)),
+                float(tolerance_px),
+            )
+        )
+        return {
+            "dx": float(result["dx"]),
+            "dy": float(result["dy"]),
+            "inliers": int(result["inliers"]),
+            "candidate_count": int(result["candidate_count"]),
+            "reference_count": int(result["reference_count"]),
+            "moving_count": int(result["moving_count"]),
+            "tolerance_px": float(result["tolerance_px"]),
+            "model": str(result.get("model", "catalog_pair_offset_translation")),
+        }
+
+    return _catalog_translation_vote(
+        np.asarray(reference_x, dtype=np.float32),
+        np.asarray(reference_y, dtype=np.float32),
+        np.asarray(moving_x, dtype=np.float32),
+        np.asarray(moving_y, dtype=np.float32),
+        tolerance_px,
+    )
+
+
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     native = _native()
     if native is not None and hasattr(native, "local_norm_apply_f32"):

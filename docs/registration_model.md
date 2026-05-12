@@ -33,6 +33,14 @@ and high-VRAM resident timing, but it is intentionally labeled as
 `translation_integer_ncc`; it does not yet replace star-asterism matching,
 subpixel refinement, similarity/affine transforms, or higher-order interpolation.
 
+The next CUDA registration primitive is
+`estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
+moving_y, tolerance_px)`. It consumes bounded star catalogs, forms all pair
+offsets on the GPU, scores offset clusters on the GPU, and returns the
+highest-vote translation. This is the first device-side star-catalog transform
+scorer; it is still translation-only and does not yet perform one-to-one
+assignment or subpixel centroid refinement.
+
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
 open-source external reference, not as GPWBPP runtime logic.

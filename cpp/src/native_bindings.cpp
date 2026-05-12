@@ -49,6 +49,20 @@ void gpwbpp_estimate_translation_search_f32_launch(
     int height,
     int max_shift_x,
     int max_shift_y);
+void gpwbpp_estimate_translation_from_catalogs_f32_launch(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    float* candidate_dx,
+    float* candidate_dy,
+    int* scores,
+    float* best_dx,
+    float* best_dy,
+    int* best_inliers,
+    int reference_count,
+    int moving_count,
+    float tolerance_px);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
 void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
@@ -1103,6 +1117,153 @@ py::dict estimate_translation_search_f32(
   return result;
 }
 
+py::dict estimate_translation_from_catalogs_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference_x,
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference_y,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving_x,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving_y,
+    float tolerance_px) {
+  const py::buffer_info reference_x_info = reference_x.request();
+  const py::buffer_info reference_y_info = reference_y.request();
+  const py::buffer_info moving_x_info = moving_x.request();
+  const py::buffer_info moving_y_info = moving_y.request();
+  if (reference_x_info.ndim != 1 || reference_y_info.ndim != 1 ||
+      moving_x_info.ndim != 1 || moving_y_info.ndim != 1) {
+    throw std::invalid_argument("catalog coordinate arrays must be one-dimensional");
+  }
+  require_same_shape(reference_x_info, reference_y_info);
+  require_same_shape(moving_x_info, moving_y_info);
+  const int reference_count = static_cast<int>(reference_x_info.shape[0]);
+  const int moving_count = static_cast<int>(moving_x_info.shape[0]);
+  if (reference_count <= 0 || moving_count <= 0) {
+    throw std::invalid_argument("catalogs must be non-empty");
+  }
+  if (tolerance_px < 0.0f) {
+    throw std::invalid_argument("tolerance_px must be non-negative");
+  }
+  const int pair_count = reference_count * moving_count;
+
+  float* d_reference_x = nullptr;
+  float* d_reference_y = nullptr;
+  float* d_moving_x = nullptr;
+  float* d_moving_y = nullptr;
+  float* d_candidate_dx = nullptr;
+  float* d_candidate_dy = nullptr;
+  int* d_scores = nullptr;
+  float* d_best_dx = nullptr;
+  float* d_best_dy = nullptr;
+  int* d_best_inliers = nullptr;
+  float best_dx = 0.0f;
+  float best_dy = 0.0f;
+  int best_inliers = 0;
+  try {
+    check_cuda(
+        cudaMalloc(&d_reference_x, static_cast<std::size_t>(reference_count) * sizeof(float)),
+        "cudaMalloc(catalog reference x)");
+    check_cuda(
+        cudaMalloc(&d_reference_y, static_cast<std::size_t>(reference_count) * sizeof(float)),
+        "cudaMalloc(catalog reference y)");
+    check_cuda(
+        cudaMalloc(&d_moving_x, static_cast<std::size_t>(moving_count) * sizeof(float)),
+        "cudaMalloc(catalog moving x)");
+    check_cuda(
+        cudaMalloc(&d_moving_y, static_cast<std::size_t>(moving_count) * sizeof(float)),
+        "cudaMalloc(catalog moving y)");
+    check_cuda(
+        cudaMalloc(&d_candidate_dx, static_cast<std::size_t>(pair_count) * sizeof(float)),
+        "cudaMalloc(catalog candidate dx)");
+    check_cuda(
+        cudaMalloc(&d_candidate_dy, static_cast<std::size_t>(pair_count) * sizeof(float)),
+        "cudaMalloc(catalog candidate dy)");
+    check_cuda(cudaMalloc(&d_scores, static_cast<std::size_t>(pair_count) * sizeof(int)), "cudaMalloc(catalog scores)");
+    check_cuda(cudaMalloc(&d_best_dx, sizeof(float)), "cudaMalloc(catalog best dx)");
+    check_cuda(cudaMalloc(&d_best_dy, sizeof(float)), "cudaMalloc(catalog best dy)");
+    check_cuda(cudaMalloc(&d_best_inliers, sizeof(int)), "cudaMalloc(catalog best inliers)");
+    check_cuda(
+        cudaMemcpy(
+            d_reference_x,
+            reference_x_info.ptr,
+            static_cast<std::size_t>(reference_count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(catalog reference x)");
+    check_cuda(
+        cudaMemcpy(
+            d_reference_y,
+            reference_y_info.ptr,
+            static_cast<std::size_t>(reference_count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(catalog reference y)");
+    check_cuda(
+        cudaMemcpy(
+            d_moving_x,
+            moving_x_info.ptr,
+            static_cast<std::size_t>(moving_count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(catalog moving x)");
+    check_cuda(
+        cudaMemcpy(
+            d_moving_y,
+            moving_y_info.ptr,
+            static_cast<std::size_t>(moving_count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(catalog moving y)");
+    gpwbpp_estimate_translation_from_catalogs_f32_launch(
+        d_reference_x,
+        d_reference_y,
+        d_moving_x,
+        d_moving_y,
+        d_candidate_dx,
+        d_candidate_dy,
+        d_scores,
+        d_best_dx,
+        d_best_dy,
+        d_best_inliers,
+        reference_count,
+        moving_count,
+        tolerance_px);
+    check_cuda(cudaGetLastError(), "estimate_translation_from_catalogs_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "estimate_translation_from_catalogs_f32 synchronize");
+    check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(catalog best dx)");
+    check_cuda(cudaMemcpy(&best_dy, d_best_dy, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(catalog best dy)");
+    check_cuda(
+        cudaMemcpy(&best_inliers, d_best_inliers, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(catalog best inliers)");
+  } catch (...) {
+    cudaFree(d_reference_x);
+    cudaFree(d_reference_y);
+    cudaFree(d_moving_x);
+    cudaFree(d_moving_y);
+    cudaFree(d_candidate_dx);
+    cudaFree(d_candidate_dy);
+    cudaFree(d_scores);
+    cudaFree(d_best_dx);
+    cudaFree(d_best_dy);
+    cudaFree(d_best_inliers);
+    throw;
+  }
+  cudaFree(d_reference_x);
+  cudaFree(d_reference_y);
+  cudaFree(d_moving_x);
+  cudaFree(d_moving_y);
+  cudaFree(d_candidate_dx);
+  cudaFree(d_candidate_dy);
+  cudaFree(d_scores);
+  cudaFree(d_best_dx);
+  cudaFree(d_best_dy);
+  cudaFree(d_best_inliers);
+
+  py::dict result;
+  result["dx"] = best_dx;
+  result["dy"] = best_dy;
+  result["inliers"] = best_inliers;
+  result["candidate_count"] = pair_count;
+  result["reference_count"] = reference_count;
+  result["moving_count"] = moving_count;
+  result["tolerance_px"] = tolerance_px;
+  result["model"] = "catalog_pair_offset_translation";
+  return result;
+}
+
 py::array_t<float> local_norm_apply_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> input,
     float scale,
@@ -1384,6 +1545,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("mean_stack_tiles_f32", &mean_stack_tiles_f32);
   m.def("warp_translation_f32", &warp_translation_f32);
   m.def("estimate_translation_search_f32", &estimate_translation_search_f32);
+  m.def("estimate_translation_from_catalogs_f32", &estimate_translation_from_catalogs_f32);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);

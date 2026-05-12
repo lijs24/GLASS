@@ -18,6 +18,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `calibrate_tile_f32(...)`
 - `integrate_accumulate_mean_tile_f32(...)`
 - `estimate_translation_search_f32(reference, moving, max_shift_x, max_shift_y)`
+- `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px)`
 - `star_local_max_mask_f32(tile, threshold)`
 - `star_candidates_f32(tile, threshold, max_candidates)`
 - `star_top_candidates_f32(tile, threshold, max_candidates)`
@@ -57,6 +58,8 @@ Resident CUDA integration now supports:
   available on standalone tiles and directly on resident calibrated frames.
 - GPU integer-translation search with per-shift normalized cross-correlation,
   followed by device-side best-shift selection and CUDA translation warp.
+- GPU star-catalog pair-offset voting for translation estimation from bounded
+  top-N catalogs.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight
