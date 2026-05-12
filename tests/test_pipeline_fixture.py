@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from gpwbpp.cli import main
-from gpwbpp.engine.pipeline import _exact_median_scratch
+from gpwbpp.engine.pipeline import _exact_median_scratch, _mean_stack_tile
 from gpwbpp.io.fits_io import write_fits_data
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
 
@@ -70,6 +70,32 @@ def test_streaming_exact_median_scratch_matches_numpy(tmp_path: Path):
 
     assert _exact_median_scratch(path, tile_size=2, scratch_path=scratch) == float(np.nanmedian(data))
     assert not scratch.exists()
+
+
+def test_mean_stack_tile_uses_streaming_accumulator(monkeypatch):
+    import numpy as np
+    from types import SimpleNamespace
+
+    class Reader:
+        def __init__(self, data):
+            self.data = np.asarray(data, dtype=np.float32)
+
+        def read_tile(self, y0, y1, x0, x1):
+            return self.data[y0:y1, x0:x1]
+
+    tile = SimpleNamespace(y0=0, y1=2, x0=0, x1=2)
+    readers = [
+        Reader([[1, 2], [3, 4]]),
+        Reader([[5, 6], [7, 8]]),
+        Reader([[9, 10], [11, 12]]),
+    ]
+    expected = np.array([[5, 6], [7, 8]], dtype=np.float32)
+
+    def fail_stack(*args, **kwargs):
+        raise AssertionError("tile stacking should use an accumulator, not np.stack")
+
+    monkeypatch.setattr(np, "stack", fail_stack)
+    assert np.allclose(_mean_stack_tile(readers, tile), expected)
 
 
 def test_pipeline_fixture_run_calibration_cuda_streaming(tmp_path: Path):

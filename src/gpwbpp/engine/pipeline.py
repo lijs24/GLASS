@@ -112,8 +112,19 @@ class _StreamingStats:
 def _mean_stack_tile(readers: list[FitsImageReader], tile) -> Any:
     import numpy as np
 
-    stack = [reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1) for reader in readers]
-    return np.mean(np.stack(stack, axis=0), axis=0).astype(np.float32)
+    acc = None
+    count = 0
+    for reader in readers:
+        data = reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+        if acc is None:
+            acc = np.zeros_like(data, dtype=np.float64)
+        if data.shape != acc.shape:
+            raise ValueError(f"shape mismatch while stacking tile: {data.shape} != {acc.shape}")
+        acc += data
+        count += 1
+    if acc is None or count == 0:
+        raise ValueError("cannot stack an empty frame list")
+    return (acc / count).astype(np.float32)
 
 
 def _stream_mean_master(
@@ -337,6 +348,7 @@ def run_calibration_stages(
                 "stats": stats,
                 "type": "bias",
                 "streaming": True,
+                "tile_stack_mode": "streaming_accumulator",
                 "tile_size": tile_size,
             }
 
@@ -367,6 +379,7 @@ def run_calibration_stages(
                 "bias_group": bias_group,
                 "bias_subtracted_from_source": bias_path is not None,
                 "streaming": True,
+                "tile_stack_mode": "streaming_accumulator",
                 "tile_size": tile_size,
             }
 
@@ -410,6 +423,7 @@ def run_calibration_stages(
                 "normalization_method": norm_method,
                 "flat_floor": policy.flat_floor,
                 "streaming": True,
+                "tile_stack_mode": "streaming_accumulator",
                 "tile_size": tile_size,
             }
 
