@@ -160,6 +160,10 @@ def test_cli_resident_cuda_run_star_catalog_registration_smoke(small_fits_datase
             "16",
             "--resident-star-tolerance-px",
             "0.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
         ]
     ) == 0
 
@@ -173,6 +177,8 @@ def test_cli_resident_cuda_run_star_catalog_registration_smoke(small_fits_datase
     assert resident_registration["star_threshold"] == 30.0
     assert resident_registration["star_max_candidates"] == 16
     assert resident_registration["star_tolerance_px"] == 0.5
+    assert resident_registration["star_grid_cols"] == 4
+    assert resident_registration["star_grid_rows"] == 4
 
 
 def test_resident_frame_exclusion_matches_id_name_or_stem():

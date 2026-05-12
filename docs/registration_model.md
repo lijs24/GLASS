@@ -62,6 +62,15 @@ It is still translation-only, but unlike NCC mode its `matched_stars`,
 placeholders. This is the first resident bridge from the astroalign-style idea
 of star matching toward a GPWBPP-owned GPU implementation.
 
+`translation_star_catalog` can use either global top-N flux candidates or a
+grid-distributed brightest-per-cell catalog. The grid mode is controlled by
+`--resident-star-grid-cols` and `--resident-star-grid-rows`. On the calibrated
+M38 pair used for the astroalign/NCC comparison, a 16x8 grid with a p99.9-like
+threshold returned `dx=9.0`, `dy=0.6875`, close to astroalign's center
+displacement `dx=8.887`, `dy=0.715`, with the resident device-side estimate
+taking about 0.0021 s. This is diagnostic evidence, not a complete replacement
+for similarity/affine matching.
+
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
 moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,

@@ -823,7 +823,9 @@ class ResidentCalibratedStack {
       float max_abs_dy,
       float prior_dx,
       float prior_dy,
-      float prior_radius_px) const {
+      float prior_radius_px,
+      int grid_cols,
+      int grid_rows) const {
     require_loaded(reference_index, "resident star-catalog reference registration");
     require_loaded(moving_index, "resident star-catalog moving registration");
     if (max_candidates <= 0) {
@@ -841,6 +843,11 @@ class ResidentCalibratedStack {
     if (prior_radius_px < 0.0f) {
       prior_radius_px = -1.0f;
     }
+    const bool use_grid_candidates = grid_cols > 0 || grid_rows > 0;
+    if (use_grid_candidates && (grid_cols <= 0 || grid_rows <= 0)) {
+      throw std::invalid_argument("resident star grid dimensions must both be positive");
+    }
+    const int catalog_capacity = use_grid_candidates ? grid_cols * grid_rows : max_candidates;
 
     float* d_reference_x = nullptr;
     float* d_reference_y = nullptr;
@@ -876,7 +883,7 @@ class ResidentCalibratedStack {
     float rms_px = 0.0f;
 
     try {
-      const std::size_t catalog_bytes = static_cast<std::size_t>(max_candidates) * sizeof(float);
+      const std::size_t catalog_bytes = static_cast<std::size_t>(catalog_capacity) * sizeof(float);
       check_cuda(cudaMalloc(&d_reference_x, catalog_bytes), "cudaMalloc(resident reference star xs)");
       check_cuda(cudaMalloc(&d_reference_y, catalog_bytes), "cudaMalloc(resident reference star ys)");
       check_cuda(cudaMalloc(&d_reference_flux, catalog_bytes), "cudaMalloc(resident reference star flux)");
@@ -885,30 +892,58 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_moving_flux, catalog_bytes), "cudaMalloc(resident moving star flux)");
       check_cuda(cudaMalloc(&d_reference_count, sizeof(int)), "cudaMalloc(resident reference star count)");
       check_cuda(cudaMalloc(&d_moving_count, sizeof(int)), "cudaMalloc(resident moving star count)");
-      check_cuda(cudaMalloc(&d_reference_lock, sizeof(int)), "cudaMalloc(resident reference star lock)");
-      check_cuda(cudaMalloc(&d_moving_lock, sizeof(int)), "cudaMalloc(resident moving star lock)");
-      gpwbpp_star_top_candidates_f32_launch(
-          d_stack_ + reference_index * pixels_per_frame_,
-          d_reference_x,
-          d_reference_y,
-          d_reference_flux,
-          d_reference_count,
-          d_reference_lock,
-          static_cast<int>(width_),
-          static_cast<int>(height_),
-          threshold,
-          max_candidates);
-      gpwbpp_star_top_candidates_f32_launch(
-          d_stack_ + moving_index * pixels_per_frame_,
-          d_moving_x,
-          d_moving_y,
-          d_moving_flux,
-          d_moving_count,
-          d_moving_lock,
-          static_cast<int>(width_),
-          static_cast<int>(height_),
-          threshold,
-          max_candidates);
+      const std::size_t lock_count = use_grid_candidates ? static_cast<std::size_t>(catalog_capacity) : 1ULL;
+      check_cuda(cudaMalloc(&d_reference_lock, lock_count * sizeof(int)), "cudaMalloc(resident reference star locks)");
+      check_cuda(cudaMalloc(&d_moving_lock, lock_count * sizeof(int)), "cudaMalloc(resident moving star locks)");
+      if (use_grid_candidates) {
+        gpwbpp_star_grid_candidates_f32_launch(
+            d_stack_ + reference_index * pixels_per_frame_,
+            d_reference_x,
+            d_reference_y,
+            d_reference_flux,
+            d_reference_count,
+            d_reference_lock,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            threshold,
+            grid_cols,
+            grid_rows);
+        gpwbpp_star_grid_candidates_f32_launch(
+            d_stack_ + moving_index * pixels_per_frame_,
+            d_moving_x,
+            d_moving_y,
+            d_moving_flux,
+            d_moving_count,
+            d_moving_lock,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            threshold,
+            grid_cols,
+            grid_rows);
+      } else {
+        gpwbpp_star_top_candidates_f32_launch(
+            d_stack_ + reference_index * pixels_per_frame_,
+            d_reference_x,
+            d_reference_y,
+            d_reference_flux,
+            d_reference_count,
+            d_reference_lock,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            threshold,
+            max_candidates);
+        gpwbpp_star_top_candidates_f32_launch(
+            d_stack_ + moving_index * pixels_per_frame_,
+            d_moving_x,
+            d_moving_y,
+            d_moving_flux,
+            d_moving_count,
+            d_moving_lock,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            threshold,
+            max_candidates);
+      }
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star-catalog detection kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star-catalog detection synchronize");
       check_cuda(
@@ -917,8 +952,8 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(&moving_total_count, d_moving_count, sizeof(int), cudaMemcpyDeviceToHost),
           "cudaMemcpy(resident moving star count)");
-      const int reference_count = std::min(reference_total_count, max_candidates);
-      const int moving_count = std::min(moving_total_count, max_candidates);
+      const int reference_count = std::min(reference_total_count, catalog_capacity);
+      const int moving_count = std::min(moving_total_count, catalog_capacity);
       if (reference_count <= 0 || moving_count <= 0) {
         throw std::runtime_error("resident star-catalog registration found no stars");
       }
@@ -1035,8 +1070,8 @@ class ResidentCalibratedStack {
     cudaFree(d_refined_dy);
     cudaFree(d_rms_px);
 
-    const int reference_count = std::min(reference_total_count, max_candidates);
-    const int moving_count = std::min(moving_total_count, max_candidates);
+    const int reference_count = std::min(reference_total_count, catalog_capacity);
+    const int moving_count = std::min(moving_total_count, catalog_capacity);
     py::dict result;
     result["dx"] = best_dx;
     result["dy"] = best_dy;
@@ -1052,6 +1087,10 @@ class ResidentCalibratedStack {
     result["moving_total_count"] = moving_total_count;
     result["threshold"] = threshold;
     result["max_candidates"] = max_candidates;
+    result["catalog_capacity"] = catalog_capacity;
+    result["candidate_selection"] = use_grid_candidates ? "grid_brightest_per_cell" : "top_flux";
+    result["grid_cols"] = grid_cols;
+    result["grid_rows"] = grid_rows;
     result["tolerance_px"] = tolerance_px;
     result["max_abs_dx"] = max_abs_dx;
     result["max_abs_dy"] = max_abs_dy;
@@ -2563,7 +2602,9 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("max_abs_dy"),
           py::arg("prior_dx") = 0.0f,
           py::arg("prior_dy") = 0.0f,
-          py::arg("prior_radius_px") = -1.0f)
+          py::arg("prior_radius_px") = -1.0f,
+          py::arg("grid_cols") = 0,
+          py::arg("grid_rows") = 0)
       .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none())
       .def(
           "integrate_sigma_clip",

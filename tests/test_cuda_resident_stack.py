@@ -254,6 +254,35 @@ def test_resident_stack_star_catalog_registration_stays_on_device():
     assert rms < 1.0e-4
 
 
+def test_resident_stack_star_catalog_registration_can_use_grid_candidates():
+    module = cuda_module_or_skip()
+    reference = _resident_star_field()
+    moving = _shift_image(reference, 4, -3)
+    stack = module.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+
+    result = stack.estimate_translation_from_stars_to_reference(
+        0,
+        1,
+        30.0,
+        16,
+        0.25,
+        8.0,
+        8.0,
+        grid_cols=4,
+        grid_rows=4,
+    )
+
+    assert result["candidate_selection"] == "grid_brightest_per_cell"
+    assert result["catalog_capacity"] == 16
+    assert result["grid_cols"] == 4
+    assert result["grid_rows"] == 4
+    assert abs(result["refined_dx"] + 4.0) < 1.0e-5
+    assert abs(result["refined_dy"] - 3.0) < 1.0e-5
+    assert result["mutual_inliers"] >= 6
+
+
 def test_resident_stack_weighted_mean_skips_zero_weight_and_nan_frames():
     module = cuda_module_or_skip()
     frames = [

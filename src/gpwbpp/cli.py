@@ -355,6 +355,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_threshold=args.resident_star_threshold,
                 resident_star_max_candidates=args.resident_star_max_candidates,
                 resident_star_tolerance_px=args.resident_star_tolerance_px,
+                resident_star_grid_cols=args.resident_star_grid_cols,
+                resident_star_grid_rows=args.resident_star_grid_rows,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
@@ -608,6 +610,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resident-star-threshold", type=float, default=30.0)
     run.add_argument("--resident-star-max-candidates", type=int, default=64)
     run.add_argument("--resident-star-tolerance-px", type=float, default=1.0)
+    run.add_argument("--resident-star-grid-cols", type=int, default=0)
+    run.add_argument("--resident-star-grid-rows", type=int, default=0)
     run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for resident registration",

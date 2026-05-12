@@ -252,6 +252,8 @@ def run_resident_calibration_integration(
     resident_star_threshold: float = 30.0,
     resident_star_max_candidates: int = 64,
     resident_star_tolerance_px: float = 1.0,
+    resident_star_grid_cols: int = 0,
+    resident_star_grid_rows: int = 0,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
@@ -282,6 +284,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_star_max_candidates must be positive")
     if resident_star_tolerance_px < 0:
         raise ValueError("resident_star_tolerance_px must be non-negative")
+    if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
+        resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
+    ):
+        raise ValueError("resident star grid dimensions must both be positive")
 
     cuda_module = _cuda_module_required()
     plan = read_json(plan_path)
@@ -541,6 +547,11 @@ def run_resident_calibration_integration(
                                 resident_star_tolerance_px,
                                 float(resident_registration_max_shift),
                                 float(resident_registration_max_shift),
+                                0.0,
+                                0.0,
+                                -1.0,
+                                resident_star_grid_cols,
+                                resident_star_grid_rows,
                             )
                             dx = float(result["refined_dx"])
                             dy = float(result["refined_dy"])
@@ -559,6 +570,7 @@ def run_resident_calibration_integration(
                                     f"reference_stars={int(result['reference_count'])}",
                                     f"moving_stars={int(result['moving_count'])}",
                                     f"candidate_count={int(result['candidate_count'])}",
+                                    f"candidate_selection={result['candidate_selection']}",
                                     f"raw_dx={float(result['dx']):.6g}",
                                     f"raw_dy={float(result['dy']):.6g}",
                                 ]
@@ -748,6 +760,8 @@ def run_resident_calibration_integration(
                         "star_threshold": resident_star_threshold,
                         "star_max_candidates": resident_star_max_candidates,
                         "star_tolerance_px": resident_star_tolerance_px,
+                        "star_grid_cols": resident_star_grid_cols,
+                        "star_grid_rows": resident_star_grid_rows,
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                         "excluded_frame_tokens": sorted(excluded_tokens),
                     },

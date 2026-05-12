@@ -997,6 +997,8 @@ class ResidentCalibratedStack:
         prior_dx: float = 0.0,
         prior_dy: float = 0.0,
         prior_radius_px: float = -1.0,
+        grid_cols: int = 0,
+        grid_rows: int = 0,
     ) -> dict[str, Any]:
         if not hasattr(self._impl, "estimate_translation_from_stars_to_reference"):
             raise RuntimeError(
@@ -1016,6 +1018,8 @@ class ResidentCalibratedStack:
                 float(prior_dx),
                 float(prior_dy),
                 float(prior_radius_px),
+                int(grid_cols),
+                int(grid_rows),
             )
         )
         return {
@@ -1033,6 +1037,10 @@ class ResidentCalibratedStack:
             "moving_total_count": int(result["moving_total_count"]),
             "threshold": float(result["threshold"]),
             "max_candidates": int(result["max_candidates"]),
+            "catalog_capacity": int(result["catalog_capacity"]),
+            "candidate_selection": str(result["candidate_selection"]),
+            "grid_cols": int(result["grid_cols"]),
+            "grid_rows": int(result["grid_rows"]),
             "tolerance_px": float(result["tolerance_px"]),
             "max_abs_dx": float(result["max_abs_dx"]),
             "max_abs_dy": float(result["max_abs_dy"]),

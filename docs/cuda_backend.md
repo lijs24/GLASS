@@ -96,6 +96,9 @@ Resident CUDA integration now supports:
   top-N stars for the reference and moving frames on the GPU, scores pair-offset
   translations and mutual-nearest refinement on the GPU, then returns compact
   diagnostics before applying the translation warp in place.
+- Resident star-catalog registration can optionally use the same grid-distributed
+  brightest-per-cell selector, which improves real-frame evidence when global
+  top-N candidates are dominated by bright outliers or clustered structure.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight
