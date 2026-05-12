@@ -56,6 +56,14 @@ def _smooth_star_field() -> np.ndarray:
     return image.astype(np.float32)
 
 
+def _render_catalog_field(shape: tuple[int, int], stars: np.ndarray) -> np.ndarray:
+    image = np.full(shape, 8.0, dtype=np.float32)
+    yy, xx = np.indices(shape, dtype=np.float32)
+    for x, y, flux in stars:
+        image += float(flux) * np.exp(-(((xx - float(x)) ** 2 + (yy - float(y)) ** 2) / (2.0 * 1.15**2)))
+    return image.astype(np.float32)
+
+
 def test_gpu_estimate_translation_search_aligns_shifted_pair():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_search_f32"):
@@ -459,3 +467,61 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
     assert result["rms_px"] < 1.0e-3
     assert np.allclose(matrix[:2, :2], linear, atol=1.0e-4)
     assert np.allclose(matrix[:2, 2], translation, atol=1.0e-3)
+
+
+def test_gpu_similarity_catalog_registration_aligns_synthetic_images():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_similarity_from_catalogs_f32"):
+        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from gpwbpp_cuda")
+    from gpwbpp.gpu.registration import register_similarity_from_star_catalogs_f32
+
+    reference_stars = np.array(
+        [
+            (18.0, 20.0, 180.0),
+            (35.0, 24.0, 260.0),
+            (62.0, 18.0, 220.0),
+            (26.0, 55.0, 210.0),
+            (51.0, 48.0, 300.0),
+            (78.0, 61.0, 240.0),
+            (88.0, 30.0, 190.0),
+            (44.0, 78.0, 230.0),
+        ],
+        dtype=np.float32,
+    )
+    angle = np.deg2rad(3.0)
+    scale = 1.015
+    linear = scale * np.array(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+        dtype=np.float32,
+    )
+    translation = np.array([2.0, -1.5], dtype=np.float32)
+    moving_xy = (reference_stars[:, :2] - translation) @ np.linalg.inv(linear).T
+    moving_stars = np.column_stack([moving_xy, reference_stars[:, 2]]).astype(np.float32)
+
+    reference = _render_catalog_field((104, 112), reference_stars)
+    moving = _render_catalog_field((104, 112), moving_stars)
+    aligned, coverage, diagnostics = register_similarity_from_star_catalogs_f32(
+        reference,
+        moving,
+        threshold=50.0,
+        max_candidates=12,
+        tolerance_px=1.5,
+        min_pair_distance=8.0,
+    )
+
+    matrix = np.asarray(diagnostics["matrix"], dtype=np.float32)
+    valid = coverage > 0.0
+    yy, xx = np.indices(reference.shape)
+    valid &= (xx >= 8) & (xx < reference.shape[1] - 8) & (yy >= 8) & (yy < reference.shape[0] - 8)
+    before = float(np.sqrt(np.mean((moving[valid] - reference[valid]) ** 2)))
+    after = float(np.sqrt(np.mean((aligned[valid] - reference[valid]) ** 2)))
+
+    assert diagnostics["status"] == "ok"
+    assert diagnostics["similarity"]["model"] == "catalog_pair_similarity_cuda"
+    assert diagnostics["reference_stored"] >= len(reference_stars)
+    assert diagnostics["moving_stored"] >= len(reference_stars)
+    assert diagnostics["similarity"]["inliers"] >= len(reference_stars)
+    assert diagnostics["coverage_pixels"] > 0
+    assert after < before * 0.6
+    assert np.allclose(matrix[:2, :2], linear, atol=0.04)
+    assert np.allclose(matrix[:2, 2], translation, atol=2.0)

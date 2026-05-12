@@ -90,6 +90,10 @@ Resident CUDA integration now supports:
   reference catalog, and returns the highest-inlier matrix with RMS diagnostics.
   This is intentionally scoped to compact catalogs and is not yet a full robust
   descriptor/RANSAC implementation.
+- `gpwbpp.gpu.registration.register_similarity_from_star_catalogs_f32(...)`
+  provides a Python orchestration helper for controlled tests: it extracts GPU
+  star catalogs from two images, estimates the similarity seed on the GPU, and
+  applies the resulting matrix with the CUDA bilinear warp.
 - GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
   a bounded fractional-offset grid with bilinear sampling and normalized
   cross-correlation, returning `dx`, `dy`, `score`, and candidate-count

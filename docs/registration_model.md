@@ -169,6 +169,12 @@ returns the highest-inlier matrix with RMS diagnostics. The validated scope is
 small bounded catalogs with outliers; it is a stepping stone toward descriptor
 matching and robust RANSAC, not yet the final high-resolution registration
 model.
+`gpwbpp.gpu.registration.register_similarity_from_star_catalogs_f32` wires this
+into the first controlled image-registration loop: GPU star-catalog extraction,
+GPU catalog similarity seed, then GPU matrix warp. The synthetic test covers a
+rotated/scaled star field and verifies that the closed loop improves image RMS
+and recovers the expected similarity matrix within subpixel/catalog-detection
+limits.
 
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
