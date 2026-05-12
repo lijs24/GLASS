@@ -71,6 +71,14 @@ displacement `dx=8.887`, `dy=0.715`, with the resident device-side estimate
 taking about 0.0021 s. This is diagnostic evidence, not a complete replacement
 for similarity/affine matching.
 
+For resident star-catalog runs, `--resident-star-threshold 0` enables an
+auto-threshold mode. The pipeline reads compact GPU global mean/std statistics
+for the reference and moving frames, derives several mean-plus-sigma threshold
+trials, scores each resulting catalog alignment on the GPU, and selects the
+trial with the most mutual inliers and lowest RMS. This avoids hand-tuning a
+single threshold for every real dataset while keeping full-frame pixels resident
+on the device.
+
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
 moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,

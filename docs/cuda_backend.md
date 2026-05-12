@@ -99,6 +99,10 @@ Resident CUDA integration now supports:
 - Resident star-catalog registration can optionally use the same grid-distributed
   brightest-per-cell selector, which improves real-frame evidence when global
   top-N candidates are dominated by bright outliers or clustered structure.
+- Resident star-catalog registration can also run auto-threshold trials. Passing
+  `--resident-star-threshold 0` derives several mean-plus-sigma thresholds from
+  GPU global frame statistics, scores each candidate on the GPU, and keeps the
+  result with the strongest mutual-inlier support.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight

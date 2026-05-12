@@ -15,6 +15,9 @@ from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
 
 
+_AUTO_STAR_THRESHOLD_SIGMAS = (0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
+
+
 def _cuda_module_required():
     import gpwbpp_cuda
 
@@ -175,6 +178,53 @@ def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) 
         },
         "clipping_probe": clipping,
     }
+
+
+def _resident_star_threshold_candidates(
+    stack: Any,
+    reference_index: int,
+    moving_index: int,
+    fixed_threshold: float,
+) -> tuple[list[float], str]:
+    if fixed_threshold > 0.0:
+        return [float(fixed_threshold)], "fixed"
+    if not hasattr(stack, "frame_global_stats"):
+        raise RuntimeError("resident star auto-threshold requires frame_global_stats")
+
+    reference_stats = stack.frame_global_stats(reference_index)
+    moving_stats = stack.frame_global_stats(moving_index)
+    candidates: list[float] = []
+    for sigma in _AUTO_STAR_THRESHOLD_SIGMAS:
+        frame_thresholds: list[float] = []
+        for stats in (reference_stats, moving_stats):
+            if int(stats.get("valid_pixels", 0)) <= 0:
+                continue
+            mean = float(stats["mean"])
+            std = float(stats["std"])
+            if np.isfinite(mean) and np.isfinite(std) and std > 0.0:
+                frame_thresholds.append(max(0.0, mean + float(sigma) * std))
+        if frame_thresholds:
+            candidates.append(min(frame_thresholds))
+    if not candidates:
+        candidates.append(30.0)
+
+    unique: list[float] = []
+    seen: set[float] = set()
+    for threshold in candidates:
+        rounded = round(float(threshold), 6)
+        if rounded in seen:
+            continue
+        seen.add(rounded)
+        unique.append(float(threshold))
+    return unique, "auto_mean_std"
+
+
+def _resident_star_registration_score(result: dict[str, Any]) -> tuple[int, float, int]:
+    inliers = int(result.get("mutual_inliers", 0))
+    rms = float(result.get("rms_px", float("nan")))
+    finite_rms = rms if np.isfinite(rms) else float("inf")
+    support = min(int(result.get("reference_count", 0)), int(result.get("moving_count", 0)))
+    return inliers, -finite_rms, support
 
 
 def _load_or_build_aggregate_masters(
@@ -539,20 +589,36 @@ def run_resident_calibration_integration(
                             inliers = 1
                             rms_px = 0.0
                         else:
-                            result = stack.estimate_translation_from_stars_to_reference(
+                            threshold_candidates, threshold_mode = _resident_star_threshold_candidates(
+                                stack,
                                 reference_index,
                                 index,
                                 resident_star_threshold,
-                                resident_star_max_candidates,
-                                resident_star_tolerance_px,
-                                float(resident_registration_max_shift),
-                                float(resident_registration_max_shift),
-                                0.0,
-                                0.0,
-                                -1.0,
-                                resident_star_grid_cols,
-                                resident_star_grid_rows,
                             )
+                            trial_results = []
+                            result = None
+                            for threshold in threshold_candidates:
+                                trial = stack.estimate_translation_from_stars_to_reference(
+                                    reference_index,
+                                    index,
+                                    threshold,
+                                    resident_star_max_candidates,
+                                    resident_star_tolerance_px,
+                                    float(resident_registration_max_shift),
+                                    float(resident_registration_max_shift),
+                                    0.0,
+                                    0.0,
+                                    -1.0,
+                                    resident_star_grid_cols,
+                                    resident_star_grid_rows,
+                                )
+                                trial_results.append(trial)
+                                if result is None or _resident_star_registration_score(
+                                    trial
+                                ) > _resident_star_registration_score(result):
+                                    result = trial
+                            if result is None:
+                                raise RuntimeError("resident star-catalog registration produced no threshold trials")
                             dx = float(result["refined_dx"])
                             dy = float(result["refined_dy"])
                             inliers = int(result["mutual_inliers"])
@@ -566,7 +632,10 @@ def run_resident_calibration_integration(
                                 stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
                             warnings.extend(
                                 [
-                                    f"star_threshold={resident_star_threshold}",
+                                    f"star_threshold_mode={threshold_mode}",
+                                    f"selected_star_threshold={float(result['threshold']):.6g}",
+                                    "star_threshold_candidates="
+                                    + ",".join(f"{float(item):.6g}" for item in threshold_candidates),
                                     f"reference_stars={int(result['reference_count'])}",
                                     f"moving_stars={int(result['moving_count'])}",
                                     f"candidate_count={int(result['candidate_count'])}",
@@ -758,6 +827,10 @@ def run_resident_calibration_integration(
                         "subpixel_radius_steps": resident_subpixel_radius_steps,
                         "subpixel_step": resident_subpixel_step,
                         "star_threshold": resident_star_threshold,
+                        "star_threshold_mode": "fixed"
+                        if resident_star_threshold > 0.0
+                        else "auto_mean_std",
+                        "star_threshold_auto_sigmas": list(_AUTO_STAR_THRESHOLD_SIGMAS),
                         "star_max_candidates": resident_star_max_candidates,
                         "star_tolerance_px": resident_star_tolerance_px,
                         "star_grid_cols": resident_star_grid_cols,

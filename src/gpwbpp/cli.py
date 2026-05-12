@@ -607,7 +607,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resident-registration-max-shift", type=int, default=128)
     run.add_argument("--resident-subpixel-radius-steps", type=int, default=4)
     run.add_argument("--resident-subpixel-step", type=float, default=0.25)
-    run.add_argument("--resident-star-threshold", type=float, default=30.0)
+    run.add_argument(
+        "--resident-star-threshold",
+        type=float,
+        default=30.0,
+        help="fixed resident star threshold; use 0 or a negative value for GPU mean/std auto-threshold trials",
+    )
     run.add_argument("--resident-star-max-candidates", type=int, default=64)
     run.add_argument("--resident-star-tolerance-px", type=float, default=1.0)
     run.add_argument("--resident-star-grid-cols", type=int, default=0)
