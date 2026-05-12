@@ -938,6 +938,24 @@ class ResidentCalibratedStack:
             "model": str(result["model"]),
         }
 
+    def frame_global_stats(self, index: int) -> dict[str, Any]:
+        if not hasattr(self._impl, "frame_global_stats"):
+            raise RuntimeError("native ResidentCalibratedStack.frame_global_stats is not available")
+        result = dict(self._impl.frame_global_stats(int(index)))
+        return {
+            "mean": float(result["mean"]),
+            "std": float(result["std"]),
+            "valid_pixels": int(result["valid_pixels"]),
+            "total_pixels": int(result["total_pixels"]),
+            "nonfinite_pixels": int(result["nonfinite_pixels"]),
+            "model": str(result["model"]),
+        }
+
+    def apply_global_normalization_frame(self, index: int, scale: float, offset: float) -> None:
+        if not hasattr(self._impl, "apply_global_normalization_frame"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_global_normalization_frame is not available")
+        self._impl.apply_global_normalization_frame(int(index), float(scale), float(offset))
+
     def star_local_max_mask(self, index: int, threshold: float) -> np.ndarray:
         if not hasattr(self._impl, "star_local_max_mask"):
             raise RuntimeError("native ResidentCalibratedStack.star_local_max_mask is not available")

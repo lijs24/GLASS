@@ -88,7 +88,7 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_datase
             "--until-stage",
             "integration",
             "--local-normalization",
-            "off",
+            "on",
             "--integration-rejection",
             "none",
             "--integration-weighting",
@@ -106,12 +106,20 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_datase
 
     integration = read_json(run / "integration_results.json")
     registration = read_json(run / "registration_results.json")
+    local_norm = read_json(run / "local_norm_results.json")
     resident = read_json(run / "resident_artifacts.json")
     resident_registration = resident["artifacts"][0]["resident_registration"]
     assert integration["outputs"][0]["resident_registration"] == "translation_ncc_subpixel"
+    assert integration["outputs"][0]["resident_local_normalization"] == "resident_global_mean_std"
     assert registration["transform_model"] == "translation_ncc_subpixel"
+    assert local_norm["source_stage"] == "resident_calibrated_stack"
+    assert local_norm["enabled"] is True
+    assert local_norm["mode"] == "resident_global_mean_std"
+    assert local_norm["groups"][0]["frame_results"][0]["status"] == "reference"
     assert registration["results"][0]["status"] == "reference"
     assert resident_registration["mode"] == "translation_ncc_subpixel"
+    assert resident["artifacts"][0]["resident_local_normalization"]["enabled"] is True
+    assert resident["artifacts"][0]["resident_local_normalization"]["mode"] == "resident_global_mean_std"
     assert resident_registration["max_shift"] == 4
     assert resident_registration["subpixel_radius_steps"] == 2
     assert resident_registration["subpixel_step"] == 0.5

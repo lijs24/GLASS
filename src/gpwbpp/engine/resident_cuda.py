@@ -251,6 +251,7 @@ def run_resident_calibration_integration(
     resident_subpixel_step: float = 0.25,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
+    local_normalization: str = "off",
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -258,6 +259,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident CUDA mode currently supports integration weighting=none only")
     if resident_registration not in {"off", "translation_preview", "translation_ncc_subpixel"}:
         raise ValueError("resident_registration must be off, translation_preview, or translation_ncc_subpixel")
+    if local_normalization not in {"auto", "on", "off"}:
+        raise ValueError("local_normalization must be auto, on, or off")
     if resident_registration_max_shift < 0:
         raise ValueError("resident_registration_max_shift must be non-negative")
     if resident_subpixel_radius_steps < 0:
@@ -289,6 +292,7 @@ def run_resident_calibration_integration(
     outputs: list[dict[str, Any]] = []
     frame_weights: dict[str, float] = {}
     registration_results: list[RegistrationResult] = []
+    local_norm_groups: list[dict[str, Any]] = []
 
     try:
         all_lights = _frames_by_type(plan, "light")
@@ -345,6 +349,9 @@ def run_resident_calibration_integration(
 
             registration_start = perf_counter()
             reference_frame = _find_reference_frame(light_frames, reference_frame_id)
+            reference_index = next(
+                index for index, frame in enumerate(light_frames) if frame["id"] == reference_frame["id"]
+            )
             reference_preview = None
             preview_scale = 1
             if resident_registration == "translation_preview":
@@ -423,9 +430,6 @@ def run_resident_calibration_integration(
             load_calibrate_elapsed = perf_counter() - load_calibrate_start
 
             if resident_registration == "translation_ncc_subpixel":
-                reference_index = next(
-                    index for index, frame in enumerate(light_frames) if frame["id"] == reference_frame["id"]
-                )
                 for index, frame in enumerate(light_frames):
                     registration_frame_start = perf_counter()
                     warnings = []
@@ -493,6 +497,89 @@ def run_resident_calibration_integration(
                         )
                     )
 
+            local_norm_start = perf_counter()
+            local_norm_policy = plan.get("local_normalization_policy", {})
+            local_norm_enabled = local_normalization == "on" or (
+                local_normalization == "auto" and bool(local_norm_policy.get("enabled", False))
+            )
+            local_norm_mode = "resident_global_mean_std" if local_norm_enabled else "off"
+            local_norm_frame_results: list[dict[str, Any]] = []
+            local_norm_warnings: list[str] = []
+            if local_norm_enabled:
+                if not hasattr(stack, "frame_global_stats") or not hasattr(stack, "apply_global_normalization_frame"):
+                    raise RuntimeError("resident CUDA backend does not expose global local normalization")
+                reference_stats = stack.frame_global_stats(reference_index)
+                reference_mean = float(reference_stats["mean"])
+                reference_std = float(reference_stats["std"])
+                eps = 1.0e-6
+                local_norm_warnings.append(
+                    "resident CUDA local normalization currently uses one global mean/std model per frame; "
+                    "full tile/window LN remains a later gate"
+                )
+                for index, frame in enumerate(light_frames):
+                    status = "ok"
+                    warnings: list[str] = []
+                    scale = 1.0
+                    offset = 0.0
+                    source_stats: dict[str, Any] | None = None
+                    if frame_weight_values[index] <= 0.0:
+                        status = "skipped_zero_weight"
+                        warnings.append("frame was excluded or failed registration before local normalization")
+                    elif index == reference_index:
+                        status = "reference"
+                        source_stats = reference_stats
+                    else:
+                        source_stats = stack.frame_global_stats(index)
+                        source_mean = float(source_stats["mean"])
+                        source_std = float(source_stats["std"])
+                        if int(source_stats["valid_pixels"]) == 0:
+                            status = "empty"
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("frame had no finite pixels for resident global LN")
+                        elif source_std <= eps or reference_std <= eps:
+                            status = "offset_only"
+                            scale = 1.0
+                            offset = reference_mean - source_mean
+                            stack.apply_global_normalization_frame(index, scale, offset)
+                        else:
+                            scale = reference_std / source_std
+                            offset = reference_mean - source_mean * scale
+                            stack.apply_global_normalization_frame(index, scale, offset)
+                    local_norm_frame_results.append(
+                        {
+                            "frame_id": str(frame["id"]),
+                            "reference_frame_id": str(reference_frame["id"]),
+                            "scale": float(scale),
+                            "offset": float(offset),
+                            "source_mean": None if source_stats is None else float(source_stats["mean"]),
+                            "source_std": None if source_stats is None else float(source_stats["std"]),
+                            "reference_mean": reference_mean,
+                            "reference_std": reference_std,
+                            "valid_pixels": None if source_stats is None else int(source_stats["valid_pixels"]),
+                            "status": status,
+                            "warnings": warnings,
+                        }
+                    )
+            else:
+                local_norm_warnings.append(
+                    "resident CUDA local normalization disabled; use --local-normalization on for global LN"
+                )
+            local_norm_elapsed = perf_counter() - local_norm_start
+            local_norm_groups.append(
+                {
+                    "filter": filter_name,
+                    "enabled": local_norm_enabled,
+                    "mode": local_norm_mode,
+                    "reference_frame_id": str(reference_frame["id"]),
+                    "reference_index": reference_index,
+                    "crop_box": None,
+                    "frame_results": local_norm_frame_results,
+                    "timing_s": local_norm_elapsed,
+                    "warnings": local_norm_warnings,
+                }
+            )
+
             integrate_start = perf_counter()
             coverage_map = None
             low_rejection_map = None
@@ -549,6 +636,7 @@ def run_resident_calibration_integration(
                         "resident_allocate_and_master_upload": allocate_elapsed,
                         "registration_preview_setup": registration_setup_elapsed,
                         "light_read_upload_calibrate": load_calibrate_elapsed,
+                        "resident_local_normalization": local_norm_elapsed,
                         "resident_integration": integrate_elapsed,
                         "output_write": write_elapsed,
                         "per_frame_mean": float(np.mean(per_frame_s)) if per_frame_s else 0.0,
@@ -568,6 +656,12 @@ def run_resident_calibration_integration(
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                         "excluded_frame_tokens": sorted(excluded_tokens),
                     },
+                    "resident_local_normalization": {
+                        "enabled": local_norm_enabled,
+                        "mode": local_norm_mode,
+                        "reference_frame_id": str(reference_frame["id"]),
+                        "warning_count": len(local_norm_warnings),
+                    },
                     "integration_rejection": {
                         "mode": rejection_mode,
                         "low_sigma": low_sigma,
@@ -584,7 +678,11 @@ def run_resident_calibration_integration(
                         "Raw light frames are uploaded one at a time into a reusable device buffer.",
                         "Calibrated frames remain resident in VRAM until integration completes.",
                         "Resident registration is optional and currently limited to translation.",
-                        "Local normalization is not included in the resident path in the current gate.",
+                        (
+                            "Resident local normalization uses a global mean/std model per frame."
+                            if local_norm_enabled
+                            else "Local normalization was disabled for this resident run."
+                        ),
                     ],
                 }
             )
@@ -602,6 +700,7 @@ def run_resident_calibration_integration(
                     "rejection": rejection_mode,
                     "weighting": "none",
                     "resident_registration": resident_registration,
+                    "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,
                     "output_diagnostics": output_diagnostics,
@@ -638,6 +737,30 @@ def run_resident_calibration_integration(
                     ],
                 },
             )
+        local_norm_path = run / "local_norm_results.json"
+        write_json(
+            local_norm_path,
+            {
+                "schema_version": 1,
+                "source_stage": "resident_calibrated_stack",
+                "mode": "resident_global_mean_std"
+                if any(group["enabled"] for group in local_norm_groups)
+                else "off",
+                "enabled": any(group["enabled"] for group in local_norm_groups),
+                "crop_box": None,
+                "groups": local_norm_groups,
+                "warnings": [
+                    "resident global LN is an early high-VRAM capability; full tile/window LN is not claimed here"
+                ],
+            },
+        )
+        integration_warnings = [
+            "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation",
+        ]
+        if any(group["enabled"] for group in local_norm_groups):
+            integration_warnings.append("resident CUDA used global mean/std local normalization before integration")
+        else:
+            integration_warnings.append("resident CUDA mode skipped local normalization")
         write_json(
             run / "integration_results.json",
             {
@@ -651,10 +774,7 @@ def run_resident_calibration_integration(
                 "frame_weights": frame_weights,
                 "outputs": outputs,
                 "excluded_frame_tokens": sorted(excluded_tokens),
-                "warnings": [
-                    "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation",
-                    "resident CUDA mode currently skips local normalization",
-                ],
+                "warnings": integration_warnings,
             },
         )
         state.artifacts.append(
@@ -666,18 +786,28 @@ def run_resident_calibration_integration(
                 source_frames=list(frames.keys()),
             )
         )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_local_normalization",
+                path=str(local_norm_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
         state.completed_stages.extend(
             [
                 "master_calibration",
                 "resident_light_calibration",
                 *(["resident_registration"] if resident_registration != "off" else []),
+                *(["resident_local_normalization"] if any(group["enabled"] for group in local_norm_groups) else []),
                 "resident_integration",
             ]
         )
         state.current_stage = "integration"
         state.warnings.append(
             "resident CUDA mode is a high-VRAM calibration plus integration path; "
-            "registration is translation only and LN is not yet included"
+            "registration is translation only and local normalization is global mean/std when enabled"
         )
         return state
     except Exception as exc:

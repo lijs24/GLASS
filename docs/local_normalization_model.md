@@ -53,6 +53,20 @@ estimated per-tile coefficients. Statistics remain on the CPU in Gate 10. This
 keeps the implementation auditable and gives a CPU baseline for later GPU
 reductions.
 
+The high-VRAM resident CUDA path also exposes an explicit
+`resident_global_mean_std` mode. In this mode calibrated/registered frames stay
+in VRAM, the backend computes one finite-pixel mean/std pair per frame on the
+device, and each non-reference frame is normalized with:
+
+```text
+normalized = source * (reference_std / source_std)
+           + reference_mean - source_mean * (reference_std / source_std)
+```
+
+If either standard deviation is too small, resident mode falls back to a global
+offset-only correction. This mode is a useful high-throughput diagnostic
+capability, but it is not the full tile/window local normalization model.
+
 ## Artifact
 
 `local_norm_results.json` records:

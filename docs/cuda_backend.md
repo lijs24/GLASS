@@ -30,6 +30,8 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `ResidentCalibratedStack.apply_translation_bilinear_frame(...)`
 - `ResidentCalibratedStack.estimate_translation_to_reference(...)`
 - `ResidentCalibratedStack.estimate_translation_subpixel_to_reference(...)`
+- `ResidentCalibratedStack.frame_global_stats(index)`
+- `ResidentCalibratedStack.apply_global_normalization_frame(index, scale, offset)`
 - `ResidentCalibratedStack.star_local_max_mask(index, threshold)`
 - `ResidentCalibratedStack.star_candidates(index, threshold, max_candidates)`
 - `ResidentCalibratedStack.star_top_candidates(index, threshold, max_candidates)`
@@ -82,6 +84,10 @@ Resident CUDA integration now supports:
 - Resident frame-to-frame NCC and subpixel NCC estimation, so calibrated frames
   already stored in `ResidentCalibratedStack` can be registered and warped
   without re-uploading the two images through standalone wrappers.
+- Resident global mean/std local-normalization diagnostics and apply kernels,
+  allowing high-VRAM runs to normalize calibrated/registered frames before
+  integration without downloading full frames to the host. This is a global
+  baseline, not the full tile/window LN model.
 - GPU bilinear subpixel translation warp, returning a warped frame and
   coverage mask. This is the first CUDA warp primitive that can consume the
   refined floating-point catalog translation directly.

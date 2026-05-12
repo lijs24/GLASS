@@ -80,6 +80,41 @@ def test_resident_stack_weighted_mean_matches_cpu():
     assert np.allclose(weight_map, np.full((3, 3), np.sum(weights), dtype=np.float32))
 
 
+def test_resident_stack_global_stats_ignore_nonfinite_pixels():
+    module = cuda_module_or_skip()
+    frame = np.array([[1, 2, np.nan], [4, np.inf, 6]], dtype=np.float32)
+    finite = frame[np.isfinite(frame)]
+
+    stack = module.ResidentCalibratedStack(1, 2, 3)
+    stack.upload_calibrated_frame(0, frame)
+    stats = stack.frame_global_stats(0)
+
+    assert stats["model"] == "resident_global_mean_std"
+    assert stats["valid_pixels"] == int(finite.size)
+    assert stats["nonfinite_pixels"] == 2
+    assert np.isclose(stats["mean"], float(np.mean(finite)))
+    assert np.isclose(stats["std"], float(np.std(finite)))
+
+
+def test_resident_stack_global_normalization_matches_reference_stats():
+    module = cuda_module_or_skip()
+    reference = np.array([[10, 20], [30, 40]], dtype=np.float32)
+    moving = reference * np.float32(2.0) + np.float32(5.0)
+
+    stack = module.ResidentCalibratedStack(2, 2, 2)
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    ref_stats = stack.frame_global_stats(0)
+    mov_stats = stack.frame_global_stats(1)
+    scale = ref_stats["std"] / mov_stats["std"]
+    offset = ref_stats["mean"] - mov_stats["mean"] * scale
+    stack.apply_global_normalization_frame(1, scale, offset)
+    normalized, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
+
+    assert np.allclose(normalized, reference, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.ones_like(reference, dtype=np.float32))
+
+
 def test_resident_stack_translation_warp_uses_nan_coverage():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_translation_frame"):

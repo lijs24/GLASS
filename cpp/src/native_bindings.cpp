@@ -9,6 +9,7 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include <algorithm>
 
 namespace py = pybind11;
 
@@ -99,6 +100,13 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     float prior_radius_px);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
+void gpwbpp_frame_sum_stats_f32_launch(
+    const float* input,
+    double* partial_sum,
+    double* partial_sum2,
+    unsigned long long* partial_count,
+    std::size_t n,
+    int blocks);
 void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
 void gpwbpp_integrate_resident_weighted_mean_f32_launch(
@@ -546,6 +554,101 @@ class ResidentCalibratedStack {
     result["moving_index"] = moving_index;
     result["model"] = "resident_translation_subpixel_ncc";
     return result;
+  }
+
+  py::dict frame_global_stats(std::size_t index) const {
+    require_loaded(index, "global frame statistics");
+    constexpr int threads = 256;
+    const int blocks = std::min<int>(
+        4096,
+        static_cast<int>((pixels_per_frame_ + static_cast<std::size_t>(threads) - 1) / threads));
+    double* d_partial_sum = nullptr;
+    double* d_partial_sum2 = nullptr;
+    unsigned long long* d_partial_count = nullptr;
+    std::vector<double> partial_sum(static_cast<std::size_t>(blocks), 0.0);
+    std::vector<double> partial_sum2(static_cast<std::size_t>(blocks), 0.0);
+    std::vector<unsigned long long> partial_count(static_cast<std::size_t>(blocks), 0);
+    try {
+      check_cuda(cudaMalloc(&d_partial_sum, partial_sum.size() * sizeof(double)), "cudaMalloc(resident stats sum)");
+      check_cuda(cudaMalloc(&d_partial_sum2, partial_sum2.size() * sizeof(double)), "cudaMalloc(resident stats sum2)");
+      check_cuda(
+          cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
+          "cudaMalloc(resident stats count)");
+      gpwbpp_frame_sum_stats_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_partial_sum,
+          d_partial_sum2,
+          d_partial_count,
+          pixels_per_frame_,
+          blocks);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.frame_global_stats kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.frame_global_stats synchronize");
+      check_cuda(
+          cudaMemcpy(partial_sum.data(), d_partial_sum, partial_sum.size() * sizeof(double), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident stats sum)");
+      check_cuda(
+          cudaMemcpy(partial_sum2.data(), d_partial_sum2, partial_sum2.size() * sizeof(double), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident stats sum2)");
+      check_cuda(
+          cudaMemcpy(
+              partial_count.data(),
+              d_partial_count,
+              partial_count.size() * sizeof(unsigned long long),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident stats count)");
+    } catch (...) {
+      cudaFree(d_partial_sum);
+      cudaFree(d_partial_sum2);
+      cudaFree(d_partial_count);
+      throw;
+    }
+    cudaFree(d_partial_sum);
+    cudaFree(d_partial_sum2);
+    cudaFree(d_partial_count);
+
+    double sum = 0.0;
+    double sum2 = 0.0;
+    unsigned long long count = 0;
+    for (int i = 0; i < blocks; ++i) {
+      sum += partial_sum[static_cast<std::size_t>(i)];
+      sum2 += partial_sum2[static_cast<std::size_t>(i)];
+      count += partial_count[static_cast<std::size_t>(i)];
+    }
+    const double mean = count > 0 ? sum / static_cast<double>(count) : 0.0;
+    double variance = 0.0;
+    if (count > 0) {
+      variance = sum2 / static_cast<double>(count) - mean * mean;
+      if (variance < 0.0) {
+        variance = 0.0;
+      }
+    }
+    py::dict result;
+    result["mean"] = mean;
+    result["std"] = std::sqrt(variance);
+    result["valid_pixels"] = count;
+    result["total_pixels"] = pixels_per_frame_;
+    result["nonfinite_pixels"] = pixels_per_frame_ - static_cast<std::size_t>(count);
+    result["model"] = "resident_global_mean_std";
+    return result;
+  }
+
+  void apply_global_normalization_frame(std::size_t index, float scale, float offset) {
+    require_loaded(index, "global local normalization");
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    float* d_output = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident global normalization output)");
+      gpwbpp_local_norm_apply_f32_launch(d_stack_ + index * pixels_per_frame_, d_output, pixels_per_frame_, scale, offset);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_global_normalization_frame kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_global_normalization_frame synchronize");
+      check_cuda(
+          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
+          "cudaMemcpy(resident global normalized frame)");
+    } catch (...) {
+      cudaFree(d_output);
+      throw;
+    }
+    cudaFree(d_output);
   }
 
   py::array_t<unsigned char> star_local_max_mask(std::size_t index, float threshold) const {
@@ -2187,6 +2290,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("center_dy"),
           py::arg("radius_steps"),
           py::arg("step"))
+      .def("frame_global_stats", &ResidentCalibratedStack::frame_global_stats)
+      .def(
+          "apply_global_normalization_frame",
+          &ResidentCalibratedStack::apply_global_normalization_frame,
+          py::arg("index"),
+          py::arg("scale"),
+          py::arg("offset"))
       .def("star_local_max_mask", &ResidentCalibratedStack::star_local_max_mask)
       .def("star_candidates", &ResidentCalibratedStack::star_candidates)
       .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)

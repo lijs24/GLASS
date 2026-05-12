@@ -328,8 +328,6 @@ def cmd_run(args: argparse.Namespace) -> int:
             raise SystemExit("Resident memory mode currently requires --backend cuda.")
         if args.until_stage != "integration":
             raise SystemExit("Resident memory mode currently supports --until-stage integration only.")
-        if args.local_normalization == "on":
-            raise SystemExit("Resident memory mode does not include materialized local normalization yet.")
         if args.integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
             raise SystemExit(
                 "Resident memory mode currently supports --integration-rejection none, "
@@ -356,6 +354,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_subpixel_step=args.resident_subpixel_step,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
+                local_normalization=args.local_normalization,
             ),
         )
         write_run_state(args.out, state)
