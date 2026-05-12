@@ -42,6 +42,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     resident = read_json(run / "resident_artifacts.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
+    assert integration["outputs"][0]["output_diagnostics"]["normalization_probe"]["method"]
     assert state["current_stage"] == "integration"
     assert "resident_integration" in state["completed_stages"]
     assert resident["backend"] == "cuda_resident_stack"
+    assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0

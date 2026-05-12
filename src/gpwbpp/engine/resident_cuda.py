@@ -71,6 +71,84 @@ def _memory_estimate(frame_count: int, height: int, width: int, master_count: in
     }
 
 
+def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) -> dict[str, Any]:
+    values = np.asarray(data, dtype=np.float32)
+    total_pixels = int(values.size)
+    finite_mask = np.isfinite(values)
+    finite = values[finite_mask]
+    nonfinite_count = total_pixels - int(finite.size)
+    if finite.size == 0:
+        return {
+            "total_pixels": total_pixels,
+            "finite_pixels": 0,
+            "nonfinite_pixels": nonfinite_count,
+            "statistics": None,
+            "normalization_probe": None,
+            "clipping_probe": {
+                "lt_0_count": 0,
+                "gt_1_count": 0,
+                "gt_65535_count": 0,
+                "nonfinite_count": nonfinite_count,
+            },
+        }
+
+    percentiles = {
+        "p001": float(np.percentile(finite, 0.01)),
+        "p01": float(np.percentile(finite, 0.1)),
+        "p1": float(np.percentile(finite, 1.0)),
+        "p50": float(np.percentile(finite, 50.0)),
+        "p99": float(np.percentile(finite, 99.0)),
+        "p999": float(np.percentile(finite, 99.9)),
+        "p9999": float(np.percentile(finite, 99.99)),
+    }
+    minimum = float(np.min(finite))
+    maximum = float(np.max(finite))
+    robust_low = percentiles["p01"]
+    robust_high = percentiles["p999"]
+    robust_span = robust_high - robust_low
+    positive_weight_count = None
+    zero_weight_count = None
+    if weight_map is not None:
+        weights = np.asarray(weight_map, dtype=np.float32)
+        positive_weight_count = int(np.count_nonzero(weights > 0))
+        zero_weight_count = int(weights.size - positive_weight_count)
+    clipping = {
+        "lt_0_count": int(np.count_nonzero(finite < 0.0)),
+        "lt_0_fraction": float(np.mean(finite < 0.0)),
+        "gt_1_count": int(np.count_nonzero(finite > 1.0)),
+        "gt_1_fraction": float(np.mean(finite > 1.0)),
+        "gt_65535_count": int(np.count_nonzero(finite > 65535.0)),
+        "gt_65535_fraction": float(np.mean(finite > 65535.0)),
+        "nonfinite_count": nonfinite_count,
+        "positive_weight_pixels": positive_weight_count,
+        "zero_weight_pixels": zero_weight_count,
+    }
+    return {
+        "total_pixels": total_pixels,
+        "finite_pixels": int(finite.size),
+        "nonfinite_pixels": nonfinite_count,
+        "statistics": {
+            "min": minimum,
+            "max": maximum,
+            "mean": float(np.mean(finite)),
+            "std": float(np.std(finite)),
+            **percentiles,
+        },
+        "normalization_probe": {
+            "method": "diagnostic_only_p0_1_to_p99_9",
+            "black": robust_low,
+            "white": robust_high,
+            "scale": float(1.0 / robust_span) if robust_span > 0 else 1.0,
+            "offset": float(-robust_low),
+            "would_clip_low_count": int(np.count_nonzero(finite < robust_low)),
+            "would_clip_high_count": int(np.count_nonzero(finite > robust_high)),
+            "would_clip_low_fraction": float(np.mean(finite < robust_low)),
+            "would_clip_high_fraction": float(np.mean(finite > robust_high)),
+        },
+        "clipping_probe": clipping,
+    }
+
+
 def _load_or_build_aggregate_masters(
     run: Path,
     filter_name: str | None,
@@ -234,6 +312,7 @@ def run_resident_calibration_integration(
             integrate_start = perf_counter()
             master, weight_map = stack.integrate_mean()
             integrate_elapsed = perf_counter() - integrate_start
+            output_diagnostics = _output_diagnostics(master, weight_map)
             master_path = output_dir / f"resident_master_{filt}.fits"
             weight_path = output_dir / f"resident_weight_map_{filt}.fits"
             write_start = perf_counter()
@@ -248,6 +327,7 @@ def run_resident_calibration_integration(
                     "frame_ids": [str(frame["id"]) for frame in light_frames],
                     "shape": {"height": height, "width": width},
                     "master_stats": master_stats,
+                    "output_diagnostics": output_diagnostics,
                     "memory_estimate": memory_estimate,
                     "resident_bytes_allocated_after_master_upload": stack.bytes_allocated,
                     "timing_s": {
@@ -282,6 +362,7 @@ def run_resident_calibration_integration(
                     "weighting": "none",
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,
+                    "output_diagnostics": output_diagnostics,
                 }
             )
             del stack, master, weight_map

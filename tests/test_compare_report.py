@@ -54,3 +54,37 @@ def test_compare_cli_writes_timing_json(tmp_path: Path):
     payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
     assert payload["timing"]["reference_label"] == "PixInsight WBPP"
     assert payload["timing"]["speedup_vs_reference"] == 3.0
+
+
+def test_compare_cli_records_candidate_transform(tmp_path: Path):
+    gp = tmp_path / "gp.fits"
+    ref = tmp_path / "ref.fits"
+    out = tmp_path / "compare.html"
+    _write(gp, 1000.0)
+    _write(ref, 1.0)
+    assert (
+        main(
+            [
+                "compare",
+                "--gpwbpp",
+                str(gp),
+                "--reference",
+                str(ref),
+                "--out",
+                str(out),
+                "--gpwbpp-scale",
+                "0.001",
+                "--gpwbpp-offset",
+                "0",
+                "--clip-low",
+                "0",
+                "--clip-high",
+                "1",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert payload["candidate_transform"]["applied"] is True
+    assert payload["candidate_transform"]["scale"] == 0.001
+    assert payload["rms_diff"] == 0.0

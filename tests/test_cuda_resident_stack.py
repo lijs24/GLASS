@@ -5,8 +5,27 @@ from dataclasses import asdict
 import numpy as np
 
 from gpwbpp.cpu.calibration import calibrate_light
+from gpwbpp.engine.resident_cuda import _output_diagnostics
 from gpwbpp.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
+
+
+def test_resident_output_diagnostics_reports_range_and_clipping():
+    data = np.array([[-1.0, 0.0, 0.5], [1.5, 70000.0, np.nan]], dtype=np.float32)
+    weight = np.array([[1, 1, 1], [1, 1, 0]], dtype=np.float32)
+
+    diagnostics = _output_diagnostics(data, weight)
+
+    assert diagnostics["total_pixels"] == 6
+    assert diagnostics["finite_pixels"] == 5
+    assert diagnostics["nonfinite_pixels"] == 1
+    assert diagnostics["statistics"]["min"] == -1.0
+    assert diagnostics["statistics"]["max"] == 70000.0
+    assert diagnostics["normalization_probe"]["method"] == "diagnostic_only_p0_1_to_p99_9"
+    assert diagnostics["clipping_probe"]["lt_0_count"] == 1
+    assert diagnostics["clipping_probe"]["gt_1_count"] == 2
+    assert diagnostics["clipping_probe"]["gt_65535_count"] == 1
+    assert diagnostics["clipping_probe"]["zero_weight_pixels"] == 1
 
 
 def test_resident_stack_calibrates_and_integrates_like_cpu():

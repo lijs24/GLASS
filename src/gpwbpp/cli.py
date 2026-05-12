@@ -469,6 +469,10 @@ def cmd_compare(args: argparse.Namespace) -> int:
         reference_time_seconds=args.reference_time_seconds,
         gpwbpp_label=args.gpwbpp_label,
         reference_label=args.reference_label,
+        gpwbpp_scale=args.gpwbpp_scale,
+        gpwbpp_offset=args.gpwbpp_offset,
+        clip_low=args.clip_low,
+        clip_high=args.clip_high,
     )
     write_json(Path(args.out).with_suffix(".json"), comparison)
     write_compare_report(args.out, comparison)
@@ -595,6 +599,10 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--reference-time-seconds", type=float)
     compare.add_argument("--gpwbpp-label", default="GPWBPP")
     compare.add_argument("--reference-label", default="reference")
+    compare.add_argument("--gpwbpp-scale", type=float, help="scale GPWBPP pixels before comparison")
+    compare.add_argument("--gpwbpp-offset", type=float, help="offset GPWBPP pixels before comparison")
+    compare.add_argument("--clip-low", type=float, help="clip transformed GPWBPP pixels to this lower bound")
+    compare.add_argument("--clip-high", type=float, help="clip transformed GPWBPP pixels to this upper bound")
     compare.set_defaults(func=cmd_compare)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")

@@ -44,27 +44,63 @@ runtime. Official WBPP/PJSR source remains off limits.
 
 ## Current local status
 
-On this workstation, `PixInsight.exe` was not found in PATH or common
-`Program Files` locations during Gate 13 preparation. GPWBPP real-data timing
-was completed on a small M5/Lum subset, but the PixInsight/WBPP black-box timing
-comparison is blocked until a local PixInsight executable or a user-generated
-WBPP output/log for the same subset is available.
-
-The current real-data handoff package is:
+A clean-room PixInsight/WBPP black-box run has been completed on the workstation
+for the M38 H dataset staged under:
 
 ```text
-runs/real_m5_lum_subset/wbpp_blackbox_handoff/
+C:\gpwbpp_runs\final_m38_h_200\input
 ```
 
-It contains the frame CSV, manual clean-room WBPP instructions, timing template,
-and a compare command template with GPWBPP's measured 64.061 s runtime filled in.
+The selected dataset contains 200 light frames and 20 each of bias, dark, and
+flat frames. Input, temporary, and output data were placed on the internal
+`C:` SSD for this timing run.
 
-After the WBPP master path and elapsed seconds have been added to
-`timing_template.json`, finalize the comparison with:
+Black-box WBPP output:
 
-```powershell
-gpwbpp blackbox-finalize --timing runs/real_m5_lum_subset/wbpp_blackbox_handoff/timing_template.json --out runs/real_m5_lum_subset/wbpp_blackbox_handoff/final
+```text
+C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox
 ```
 
-If the reference fields are still missing, the command writes a blocked summary
-with concrete missing items and exits nonzero.
+Timing summary:
+
+- WBPP elapsed time: 1092.541 s.
+- WBPP log line: `* WeightedBatchPreprocessing: 18:03.17`.
+- GPWBPP resident CUDA calibration plus mean integration elapsed time:
+  58.9810051000095 s.
+- Raw timing speedup for the current GPWBPP resident path: 18.52x.
+
+WBPP fast-integration settings observed from user-generated logs:
+
+- Inputs: calibrated `Light` XISF files, Float32.
+- Reference frame: `LIGHT_H_0136_c.xisf`.
+- Full alignment: enabled.
+- Pixel interpolation: Lanczos3.
+- Weighting: disabled.
+- Rejection: enabled, Winsorized Sigma Clipping, sigma low/high 3.0.
+- Rejection maps: enabled.
+- Output: 193 of 200 light frames integrated.
+- Autocrop was also generated as a separate master.
+
+Stage comparison status:
+
+- GPWBPP and WBPP master bias/dark/flat agree closely after the expected FITS
+  integer-to-Float32 scale is accounted for.
+- A single calibrated light agrees in the central 98%+ of pixels after applying
+  the WBPP calibrated-light pedestal/normalization convention.
+- Remaining full-image differences are dominated by low-flat/out-of-range
+  pixels, WBPP cosmetic correction, WBPP fast-integration alignment, rejection,
+  and the seven frames not integrated by WBPP.
+
+Current artifacts:
+
+```text
+C:\gpwbpp_runs\final_m38_h_200\stage_compare_light_0001_v2.json
+C:\gpwbpp_runs\final_m38_h_200\resident_vs_wbpp_pedestal_scaled_compare.json
+C:\gpwbpp_runs\final_m38_h_200\resident_vs_wbpp_pedestal_scaled_compare.html
+```
+
+The current result proves a high-VRAM GPWBPP calibration/integration speed
+advantage for this dataset, but it does not yet prove full WBPP-equivalent final
+master parity. Full parity requires implementing or matching WBPP's
+fast-integration alignment, rejection, cosmetic correction, output
+normalization, and failed-frame policy.

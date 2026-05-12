@@ -16,6 +16,32 @@ def _read_image_data(path: str | Path) -> np.ndarray:
     return read_fits_data(path)
 
 
+def _apply_candidate_transform(
+    values: np.ndarray,
+    scale: float | None = None,
+    offset: float | None = None,
+    clip_low: float | None = None,
+    clip_high: float | None = None,
+) -> tuple[np.ndarray, dict[str, float | bool | None]]:
+    transform = {
+        "applied": any(value is not None for value in (scale, offset, clip_low, clip_high)),
+        "scale": 1.0 if scale is None else float(scale),
+        "offset": 0.0 if offset is None else float(offset),
+        "clip_low": None if clip_low is None else float(clip_low),
+        "clip_high": None if clip_high is None else float(clip_high),
+    }
+    if not transform["applied"]:
+        return values, transform
+    out = np.asarray(values, dtype=np.float32) * float(transform["scale"]) + float(transform["offset"])
+    if clip_low is not None or clip_high is not None:
+        out = np.clip(
+            out,
+            -np.inf if clip_low is None else float(clip_low),
+            np.inf if clip_high is None else float(clip_high),
+        )
+    return np.asarray(out, dtype=np.float32), transform
+
+
 def _diff_stats(candidate: np.ndarray, reference: np.ndarray) -> dict[str, float]:
     mask = np.isfinite(candidate) & np.isfinite(reference)
     if not np.any(mask):
@@ -103,8 +129,13 @@ def compare_fits(
     reference_time_seconds: float | None = None,
     gpwbpp_label: str = "GPWBPP",
     reference_label: str = "reference",
+    gpwbpp_scale: float | None = None,
+    gpwbpp_offset: float | None = None,
+    clip_low: float | None = None,
+    clip_high: float | None = None,
 ) -> dict[str, object]:
-    gp = _read_image_data(gpwbpp_path)
+    gp_raw = _read_image_data(gpwbpp_path)
+    gp, transform = _apply_candidate_transform(gp_raw, gpwbpp_scale, gpwbpp_offset, clip_low, clip_high)
     ref = _read_image_data(reference_path)
     timing: dict[str, object] = {
         "gpwbpp_label": gpwbpp_label,
@@ -121,11 +152,13 @@ def compare_fits(
             "gpwbpp_shape": gp.shape,
             "reference_shape": ref.shape,
             "timing": timing,
+            "candidate_transform": transform,
         }
     return {
         "shape_match": True,
         "gpwbpp_format": Path(gpwbpp_path).suffix.lower().lstrip("."),
         "reference_format": Path(reference_path).suffix.lower().lstrip("."),
+        "candidate_transform": transform,
         **_diff_stats(gp, ref),
         "linear_fit_to_reference": _linear_fit_to_reference(gp, ref),
         "robust_linear_fit_to_reference": _robust_linear_fit_to_reference(gp, ref),
