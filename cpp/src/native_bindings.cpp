@@ -37,6 +37,8 @@ void gpwbpp_warp_translation_f32_launch(
     int dx,
     int dy,
     float fill);
+void gpwbpp_local_norm_apply_f32_launch(
+    const float* input, float* output, std::size_t n, float scale, float offset);
 
 namespace {
 
@@ -391,6 +393,42 @@ py::tuple warp_translation_f32(
   return py::make_tuple(output, coverage);
 }
 
+py::array_t<float> local_norm_apply_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    float scale,
+    float offset) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  const std::size_t n = static_cast<std::size_t>(info.shape[0]) * static_cast<std::size_t>(info.shape[1]);
+  py::array_t<float> output({info.shape[0], info.shape[1]});
+  const py::buffer_info output_info = output.request();
+
+  float* d_input = nullptr;
+  float* d_output = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(local_norm input)");
+    check_cuda(cudaMalloc(&d_output, n * sizeof(float)), "cudaMalloc(local_norm output)");
+    check_cuda(
+        cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(local_norm input)");
+    gpwbpp_local_norm_apply_f32_launch(d_input, d_output, n, scale, offset);
+    check_cuda(cudaGetLastError(), "local_norm_apply_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "local_norm_apply_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(output_info.ptr, d_output, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(local_norm output)");
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_output);
+    throw;
+  }
+  cudaFree(d_input);
+  cudaFree(d_output);
+  return output;
+}
+
 PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.doc() = "Native CUDA backend for GPWBPP";
   m.def("cuda_available", &cuda_available);
@@ -401,4 +439,5 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("calibrate_tile_f32", &calibrate_tile_f32);
   m.def("mean_stack_tiles_f32", &mean_stack_tiles_f32);
   m.def("warp_translation_f32", &warp_translation_f32);
+  m.def("local_norm_apply_f32", &local_norm_apply_f32);
 }

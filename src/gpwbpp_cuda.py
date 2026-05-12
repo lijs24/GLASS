@@ -205,3 +205,11 @@ def warp_translation_f32(data: Any, dx: float, dy: float, fill: float = 0.0) -> 
         out[dst_y0:dst_y1, dst_x0:dst_x1] = image[src_y0:src_y1, src_x0:src_x1]
         coverage[dst_y0:dst_y1, dst_x0:dst_x1] = 1.0
     return out, coverage
+
+
+def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
+    native = _native()
+    if native is not None and hasattr(native, "local_norm_apply_f32"):
+        return np.asarray(native.local_norm_apply_f32(data, float(scale), float(offset)), dtype=np.float32)
+    image = np.asarray(data, dtype=np.float32)
+    return (image * np.float32(scale) + np.float32(offset)).astype(np.float32)

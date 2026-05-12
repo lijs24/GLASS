@@ -169,3 +169,51 @@ def test_pipeline_fixture_run_warp(tmp_path: Path):
     assert (run / "warp_results.json").exists()
     assert list((run / "registered_cache").glob("registered_*.fits"))
     assert list((run / "coverage_cache").glob("coverage_*.fits"))
+
+
+def test_pipeline_fixture_run_local_normalization(tmp_path: Path):
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    report = tmp_path / "report.html"
+    generate_synthetic_dataset(data, frames=3, width=32, height=32, known_shift=True)
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(run),
+                "--backend",
+                "auto",
+                "--until-stage",
+                "local_normalization",
+                "--local-normalization",
+                "on",
+                "--tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+    assert (run / "local_norm_results.json").exists()
+    assert list((run / "local_norm_cache").glob("local_norm_*.fits"))
+    assert (
+        main(
+            [
+                "report",
+                "--run",
+                str(run),
+                "--manifest",
+                str(audit / "manifest.json"),
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(report),
+            ]
+        )
+        == 0
+    )
+    assert "Local normalization summary" in report.read_text(encoding="utf-8")

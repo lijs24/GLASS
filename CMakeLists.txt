@@ -26,6 +26,7 @@ if(GPWBPP_BUILD_PYTHON_CUDA)
     cpp/cuda/calibration_kernels.cu
     cpp/cuda/master_frame_kernels.cu
     cpp/cuda/warp_kernels.cu
+    cpp/cuda/local_norm_kernels.cu
   )
   target_include_directories(_gpwbpp_cuda_native PRIVATE cpp/include)
   target_link_libraries(_gpwbpp_cuda_native PRIVATE CUDA::cudart)

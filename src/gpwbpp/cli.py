@@ -6,6 +6,7 @@ from pathlib import Path
 from rich.console import Console
 
 from gpwbpp.capabilities import capability_report
+from gpwbpp.engine.local_norm import local_normalize_registered_frames
 from gpwbpp.engine.pipeline import initialize_run, run_calibration_stages
 from gpwbpp.engine.quality import measure_calibrated_quality
 from gpwbpp.engine.registration import register_calibrated_frames
@@ -48,9 +49,18 @@ def cmd_report(args: argparse.Namespace) -> int:
     plan = read_json(plan_path) if plan_path.exists() else None
     quality_path = run / "frame_quality.json"
     registration_path = run / "registration_results.json"
+    local_norm_path = run / "local_norm_results.json"
     quality = read_json(quality_path) if quality_path.exists() else None
     registration = read_json(registration_path) if registration_path.exists() else None
-    write_html_report(args.out, manifest=manifest, plan=plan, quality=quality, registration=registration)
+    local_norm = read_json(local_norm_path) if local_norm_path.exists() else None
+    write_html_report(
+        args.out,
+        manifest=manifest,
+        plan=plan,
+        quality=quality,
+        registration=registration,
+        local_norm=local_norm,
+    )
     console.print(f"Wrote report: {args.out}")
     return 0
 
@@ -87,29 +97,46 @@ def cmd_run(args: argparse.Namespace) -> int:
         "quality",
         "registration",
         "warp",
+        "local_normalization",
     }
     if args.until_stage not in implemented_stages:
         if args.allow_partial:
             console.print("Only calibration stages are implemented; initializing partial run state.")
         else:
             raise SystemExit(
-                "Current gated runner supports --until-stage calibration, quality, registration, or warp only. "
+                "Current gated runner supports --until-stage calibration, quality, registration, warp, "
+                "or local_normalization only. "
                 "Use --allow-partial to write a diagnostic run_state without executing later stages."
             )
     if args.until_stage in implemented_stages:
         state = run_calibration_stages(args.plan, args.out, backend=args.backend, tile_size=args.tile_size)
-        if args.until_stage in {"quality", "registration", "warp"}:
+        if args.until_stage in {"quality", "registration", "warp", "local_normalization"}:
             measure_calibrated_quality(args.out)
             state.completed_stages.append("quality")
             state.current_stage = "quality"
-        if args.until_stage in {"registration", "warp"}:
+        if args.until_stage in {"registration", "warp", "local_normalization"}:
             register_calibrated_frames(args.out)
             state.completed_stages.append("registration")
             state.current_stage = "registration"
-        if args.until_stage == "warp":
+        if args.until_stage in {"warp", "local_normalization"}:
             warp_registered_frames(args.out, tile_size=args.tile_size)
             state.completed_stages.append("warp")
             state.current_stage = "warp"
+        if args.until_stage == "local_normalization":
+            enabled_override = None
+            if args.local_normalization == "on":
+                enabled_override = True
+            elif args.local_normalization == "off":
+                enabled_override = False
+            local_normalize_registered_frames(
+                args.out,
+                plan_path=args.plan,
+                backend=args.backend,
+                tile_size=args.tile_size,
+                enabled_override=enabled_override,
+            )
+            state.completed_stages.append("local_normalization")
+            state.current_stage = "local_normalization"
         write_run_state(args.out, state)
         console.print(f"Run complete through {state.current_stage}: {args.out}")
         return 0
@@ -171,6 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--ram-budget-gb", type=float)
     run.add_argument("--until-stage")
     run.add_argument("--tile-size", type=int, default=512)
+    run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument("--allow-partial", action="store_true")
     run.set_defaults(func=cmd_run)
 
