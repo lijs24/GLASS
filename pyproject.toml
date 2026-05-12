@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpwbpp"
+version = "0.1.0"
+description = "Clean-room GPU Weighted Batch Preprocessing for astronomical images."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "GPWBPP contributors" }]
+dependencies = [
+  "astropy>=6",
+  "numpy>=1.26",
+  "rich>=13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+report = ["jinja2>=3.1"]
+gpu = ["pybind11>=2.12", "scikit-build-core>=0.10"]
+zarr = ["zarr>=2.17"]
+
+[project.scripts]
+gpwbpp = "gpwbpp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+

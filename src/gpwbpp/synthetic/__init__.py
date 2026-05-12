@@ -1,0 +1,2 @@
+"""Synthetic astronomical FITS fixtures."""
+
