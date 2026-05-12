@@ -140,3 +140,32 @@ def test_pipeline_fixture_run_registration(tmp_path: Path):
     text = report.read_text(encoding="utf-8")
     assert "Registration table" in text
     assert "phase_correlation" in (run / "registration_results.json").read_text(encoding="utf-8")
+
+
+def test_pipeline_fixture_run_warp(tmp_path: Path):
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    generate_synthetic_dataset(data, frames=3, width=32, height=32, known_shift=True)
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(run),
+                "--backend",
+                "auto",
+                "--until-stage",
+                "warp",
+                "--tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+    assert (run / "warp_results.json").exists()
+    assert list((run / "registered_cache").glob("registered_*.fits"))
+    assert list((run / "coverage_cache").glob("coverage_*.fits"))

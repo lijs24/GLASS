@@ -9,6 +9,7 @@ from gpwbpp.capabilities import capability_report
 from gpwbpp.engine.pipeline import initialize_run, run_calibration_stages
 from gpwbpp.engine.quality import measure_calibrated_quality
 from gpwbpp.engine.registration import register_calibrated_frames
+from gpwbpp.engine.warp import warp_registered_frames
 from gpwbpp.engine.resume import resume_summary
 from gpwbpp.engine.state import write_run_state
 from gpwbpp.io.json_io import read_json, write_json
@@ -85,25 +86,30 @@ def cmd_run(args: argparse.Namespace) -> int:
         "calibration",
         "quality",
         "registration",
+        "warp",
     }
     if args.until_stage not in implemented_stages:
         if args.allow_partial:
             console.print("Only calibration stages are implemented; initializing partial run state.")
         else:
             raise SystemExit(
-                "Current gated runner supports --until-stage calibration, quality, or registration only. "
+                "Current gated runner supports --until-stage calibration, quality, registration, or warp only. "
                 "Use --allow-partial to write a diagnostic run_state without executing later stages."
             )
     if args.until_stage in implemented_stages:
         state = run_calibration_stages(args.plan, args.out, backend=args.backend, tile_size=args.tile_size)
-        if args.until_stage in {"quality", "registration"}:
+        if args.until_stage in {"quality", "registration", "warp"}:
             measure_calibrated_quality(args.out)
             state.completed_stages.append("quality")
             state.current_stage = "quality"
-        if args.until_stage == "registration":
+        if args.until_stage in {"registration", "warp"}:
             register_calibrated_frames(args.out)
             state.completed_stages.append("registration")
             state.current_stage = "registration"
+        if args.until_stage == "warp":
+            warp_registered_frames(args.out, tile_size=args.tile_size)
+            state.completed_stages.append("warp")
+            state.current_stage = "warp"
         write_run_state(args.out, state)
         console.print(f"Run complete through {state.current_stage}: {args.out}")
         return 0

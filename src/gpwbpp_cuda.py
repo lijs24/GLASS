@@ -180,3 +180,28 @@ def mean_stack_tiles_f32(stack: Any) -> np.ndarray:
     if native is not None:
         return np.asarray(native.mean_stack_tiles_f32(stack), dtype=np.float32)
     return np.mean(np.asarray(stack, dtype=np.float32), axis=0).astype(np.float32)
+
+
+def warp_translation_f32(data: Any, dx: float, dy: float, fill: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    native = _native()
+    if native is not None:
+        warped, coverage = native.warp_translation_f32(data, dx, dy, fill)
+        return np.asarray(warped, dtype=np.float32), np.asarray(coverage, dtype=np.float32)
+    image = np.asarray(data, dtype=np.float32)
+    out = np.full_like(image, fill, dtype=np.float32)
+    coverage = np.zeros_like(image, dtype=np.float32)
+    ix = int(round(dx))
+    iy = int(round(dy))
+    h, w = image.shape
+    src_x0 = max(0, -ix)
+    src_x1 = min(w, w - ix)
+    dst_x0 = max(0, ix)
+    dst_x1 = min(w, w + ix)
+    src_y0 = max(0, -iy)
+    src_y1 = min(h, h - iy)
+    dst_y0 = max(0, iy)
+    dst_y1 = min(h, h + iy)
+    if src_x0 < src_x1 and src_y0 < src_y1:
+        out[dst_y0:dst_y1, dst_x0:dst_x1] = image[src_y0:src_y1, src_x0:src_x1]
+        coverage[dst_y0:dst_y1, dst_x0:dst_x1] = 1.0
+    return out, coverage
