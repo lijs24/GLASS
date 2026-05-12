@@ -17,6 +17,7 @@ from gpwbpp.engine.state import write_run_state
 from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.metadata.scanner import scan_tree
 from gpwbpp.planner.plan_builder import build_processing_plan
+from gpwbpp.planner.subset import build_subset_manifest
 from gpwbpp.report.blackbox_package import create_blackbox_package
 from gpwbpp.report.compare_report import compare_fits, write_compare_report
 from gpwbpp.report.html_report import write_html_report
@@ -105,6 +106,30 @@ def cmd_plan(args: argparse.Namespace) -> int:
     write_json(args.out, plan)
     console.print(f"Wrote processing plan: {args.out}")
     console.print({"executable": plan.executable, "warnings": len(plan.global_warnings)})
+    return 0
+
+
+def cmd_subset(args: argparse.Namespace) -> int:
+    manifest = read_json(args.manifest)
+    subset = build_subset_manifest(
+        manifest,
+        object_name=args.object,
+        filter_name=args.filter,
+        exposure_s=args.exposure_s,
+        light_limit=args.light_limit,
+        bias_limit=args.bias_limit,
+        dark_limit=args.dark_limit,
+        flat_limit=args.flat_limit,
+    )
+    write_json(args.out, subset)
+    summary = subset["summary"]
+    console.print(f"Wrote subset manifest: {args.out}")
+    console.print(summary)
+    if args.plan_out:
+        plan = build_processing_plan(subset, args.out)
+        write_json(args.plan_out, plan)
+        console.print(f"Wrote subset processing plan: {args.plan_out}")
+        console.print({"executable": plan.executable, "warnings": len(plan.global_warnings)})
     return 0
 
 
@@ -324,6 +349,19 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--manifest", required=True)
     plan.add_argument("--out", required=True)
     plan.set_defaults(func=cmd_plan)
+
+    subset = sub.add_parser("subset", help="select a small executable subset from a manifest")
+    subset.add_argument("--manifest", required=True)
+    subset.add_argument("--out", required=True)
+    subset.add_argument("--plan-out")
+    subset.add_argument("--object")
+    subset.add_argument("--filter")
+    subset.add_argument("--exposure-s", type=float)
+    subset.add_argument("--light-limit", type=int, default=2)
+    subset.add_argument("--bias-limit", type=int, default=1)
+    subset.add_argument("--dark-limit", type=int, default=1)
+    subset.add_argument("--flat-limit", type=int, default=1)
+    subset.set_defaults(func=cmd_subset)
 
     run = sub.add_parser("run", help="execute the gated pipeline")
     run.add_argument("--plan", required=True)

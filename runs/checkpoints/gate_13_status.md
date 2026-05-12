@@ -13,6 +13,8 @@
 - Added `gpwbpp compare` timing fields for GPWBPP/reference elapsed seconds and speedup reporting.
 - Added `gpwbpp blackbox-package` to export a clean-room WBPP handoff package.
 - Generated a real M5/Lum handoff package with the measured GPWBPP runtime filled in.
+- Added `gpwbpp subset` to select a small same-target/same-filter manifest without copying or modifying original files.
+- Verified `gpwbpp subset` can recreate an executable real M5/Lum subset from the 240430 manifest.
 
 ## Blocker
 
@@ -34,6 +36,8 @@ Get-ChildItem -LiteralPath 'E:\摄影素材\天协远程台原始素材' -Recurs
 .\.venv\Scripts\python -m pytest -q tests/test_blackbox_package.py
 .\.venv\Scripts\python -m pytest -q
 .\.venv\Scripts\gpwbpp blackbox-package --manifest runs\real_m5_lum_subset\manifest.json --plan runs\real_m5_lum_subset\processing_plan.json --gpwbpp-run runs\real_m5_lum_subset\gpwbpp_cuda_v2 --gpwbpp-time-seconds 64.061 --out runs\real_m5_lum_subset\wbpp_blackbox_handoff --reference-label "PixInsight WBPP"
+.\.venv\Scripts\gpwbpp subset --manifest runs\local_audit_240430\manifest.json --out runs\real_m5_lum_subset\subset_cli_manifest.json --plan-out runs\real_m5_lum_subset\subset_cli_processing_plan.json --object M5 --filter Lum --light-limit 2 --bias-limit 1 --dark-limit 1 --flat-limit 1
+.\.venv\Scripts\python -m pytest -q tests/test_subset.py
 ```
 
 ## Handoff Artifacts
@@ -42,6 +46,8 @@ Get-ChildItem -LiteralPath 'E:\摄影素材\天协远程台原始素材' -Recurs
 - `runs\real_m5_lum_subset\wbpp_blackbox_handoff\wbpp_manual_run.md`
 - `runs\real_m5_lum_subset\wbpp_blackbox_handoff\timing_template.json`
 - `runs\real_m5_lum_subset\wbpp_blackbox_handoff\compare_command.ps1`
+- `runs\real_m5_lum_subset\subset_cli_manifest.json`
+- `runs\real_m5_lum_subset\subset_cli_processing_plan.json`
 
 ## Next Step
 

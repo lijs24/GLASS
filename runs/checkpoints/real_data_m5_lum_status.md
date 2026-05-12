@@ -26,6 +26,7 @@
 ## Result
 
 - Processing plan executable: true.
+- `gpwbpp subset` reproduced an executable 5-frame M5/Lum manifest from the full 240430 manifest.
 - GPWBPP CUDA elapsed time: 64.061 seconds.
 - Integration backend: cuda.
 - Integration tiles: 70.
