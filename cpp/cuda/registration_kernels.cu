@@ -119,6 +119,139 @@ __global__ void translation_search_best_kernel(
   *best_score = best;
 }
 
+__global__ void translation_subpixel_score_kernel(
+    const float* reference,
+    const float* moving,
+    float* scores,
+    int width,
+    int height,
+    float center_dx,
+    float center_dy,
+    int radius_steps,
+    float step) {
+  extern __shared__ float scratch[];
+  float* sum_ref = scratch;
+  float* sum_mov = scratch + blockDim.x;
+  float* sum_ref2 = scratch + 2 * blockDim.x;
+  float* sum_mov2 = scratch + 3 * blockDim.x;
+  float* sum_cross = scratch + 4 * blockDim.x;
+  float* sum_count = scratch + 5 * blockDim.x;
+
+  const int candidate_width = 2 * radius_steps + 1;
+  const int candidate_index = static_cast<int>(blockIdx.x);
+  const int offset_x = candidate_index % candidate_width - radius_steps;
+  const int offset_y = candidate_index / candidate_width - radius_steps;
+  const float dx = center_dx + static_cast<float>(offset_x) * step;
+  const float dy = center_dy + static_cast<float>(offset_y) * step;
+  const int n = width * height;
+
+  float local_ref = 0.0f;
+  float local_mov = 0.0f;
+  float local_ref2 = 0.0f;
+  float local_mov2 = 0.0f;
+  float local_cross = 0.0f;
+  float local_count = 0.0f;
+
+  for (int i = static_cast<int>(threadIdx.x); i < n; i += static_cast<int>(blockDim.x)) {
+    const int x = i % width;
+    const int y = i / width;
+    const float sx = static_cast<float>(x) - dx;
+    const float sy = static_cast<float>(y) - dy;
+    if (sx < 0.0f || sx > static_cast<float>(width - 1) ||
+        sy < 0.0f || sy > static_cast<float>(height - 1)) {
+      continue;
+    }
+    const int x0 = static_cast<int>(floorf(sx));
+    const int y0 = static_cast<int>(floorf(sy));
+    const int x1 = x0 + 1 < width ? x0 + 1 : x0;
+    const int y1 = y0 + 1 < height ? y0 + 1 : y0;
+    const float tx = sx - static_cast<float>(x0);
+    const float ty = sy - static_cast<float>(y0);
+    const float v00 = moving[y0 * width + x0];
+    const float v10 = moving[y0 * width + x1];
+    const float v01 = moving[y1 * width + x0];
+    const float v11 = moving[y1 * width + x1];
+    const float top = v00 * (1.0f - tx) + v10 * tx;
+    const float bottom = v01 * (1.0f - tx) + v11 * tx;
+    const float m = top * (1.0f - ty) + bottom * ty;
+    const float r = reference[i];
+    if (!isfinite(r) || !isfinite(m)) {
+      continue;
+    }
+    local_ref += r;
+    local_mov += m;
+    local_ref2 += r * r;
+    local_mov2 += m * m;
+    local_cross += r * m;
+    local_count += 1.0f;
+  }
+
+  const int lane = static_cast<int>(threadIdx.x);
+  sum_ref[lane] = local_ref;
+  sum_mov[lane] = local_mov;
+  sum_ref2[lane] = local_ref2;
+  sum_mov2[lane] = local_mov2;
+  sum_cross[lane] = local_cross;
+  sum_count[lane] = local_count;
+  __syncthreads();
+
+  for (int stride = static_cast<int>(blockDim.x) / 2; stride > 0; stride >>= 1) {
+    if (lane < stride) {
+      sum_ref[lane] += sum_ref[lane + stride];
+      sum_mov[lane] += sum_mov[lane + stride];
+      sum_ref2[lane] += sum_ref2[lane + stride];
+      sum_mov2[lane] += sum_mov2[lane + stride];
+      sum_cross[lane] += sum_cross[lane + stride];
+      sum_count[lane] += sum_count[lane + stride];
+    }
+    __syncthreads();
+  }
+
+  if (lane != 0) {
+    return;
+  }
+  const float count = sum_count[0];
+  if (count <= 1.0f) {
+    scores[candidate_index] = -3.402823466e+38F;
+    return;
+  }
+  const float numerator = sum_cross[0] - (sum_ref[0] * sum_mov[0] / count);
+  const float ref_var = fmaxf(sum_ref2[0] - (sum_ref[0] * sum_ref[0] / count), 0.0f);
+  const float mov_var = fmaxf(sum_mov2[0] - (sum_mov[0] * sum_mov[0] / count), 0.0f);
+  const float denominator = sqrtf(ref_var * mov_var);
+  scores[candidate_index] = denominator > 0.0f ? numerator / denominator : -3.402823466e+38F;
+}
+
+__global__ void translation_subpixel_best_kernel(
+    const float* scores,
+    float* best_dx,
+    float* best_dy,
+    float* best_score,
+    float center_dx,
+    float center_dy,
+    int radius_steps,
+    float step,
+    int candidate_count) {
+  if (threadIdx.x != 0 || blockIdx.x != 0) {
+    return;
+  }
+  int best_index = 0;
+  float best = scores[0];
+  for (int i = 1; i < candidate_count; ++i) {
+    const float score = scores[i];
+    if (score > best) {
+      best = score;
+      best_index = i;
+    }
+  }
+  const int candidate_width = 2 * radius_steps + 1;
+  const int offset_x = best_index % candidate_width - radius_steps;
+  const int offset_y = best_index / candidate_width - radius_steps;
+  *best_dx = center_dx + static_cast<float>(offset_x) * step;
+  *best_dy = center_dy + static_cast<float>(offset_y) * step;
+  *best_score = best;
+}
+
 __global__ void catalog_pair_offsets_kernel(
     const float* reference_x,
     const float* reference_y,
@@ -386,6 +519,28 @@ void gpwbpp_estimate_translation_search_f32_launch(
       reference, moving, scores, width, height, max_shift_x, max_shift_y);
   translation_search_best_kernel<<<1, 1>>>(
       scores, best_dx, best_dy, best_score, max_shift_x, max_shift_y, shift_count);
+}
+
+void gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
+    const float* reference,
+    const float* moving,
+    float* scores,
+    float* best_dx,
+    float* best_dy,
+    float* best_score,
+    int width,
+    int height,
+    float center_dx,
+    float center_dy,
+    int radius_steps,
+    float step) {
+  constexpr int threads = 256;
+  const int candidate_count = (2 * radius_steps + 1) * (2 * radius_steps + 1);
+  const std::size_t shared_bytes = 6 * threads * sizeof(float);
+  translation_subpixel_score_kernel<<<candidate_count, threads, shared_bytes>>>(
+      reference, moving, scores, width, height, center_dx, center_dy, radius_steps, step);
+  translation_subpixel_best_kernel<<<1, 1>>>(
+      scores, best_dx, best_dy, best_score, center_dx, center_dy, radius_steps, step, candidate_count);
 }
 
 void gpwbpp_estimate_translation_from_catalogs_f32_launch(

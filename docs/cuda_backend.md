@@ -18,6 +18,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `calibrate_tile_f32(...)`
 - `integrate_accumulate_mean_tile_f32(...)`
 - `estimate_translation_search_f32(reference, moving, max_shift_x, max_shift_y)`
+- `estimate_translation_subpixel_ncc_f32(reference, moving, center_dx, center_dy, radius_steps, step)`
 - `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None, prior_dy=None, prior_radius_px=None)`
 - `warp_translation_bilinear_f32(data, dx, dy, fill)`
 - `star_local_max_mask_f32(tile, threshold)`
@@ -71,6 +72,10 @@ Resident CUDA integration now supports:
   registration search window.
 - Optional NCC-prior catalog windowing so catalog votes can be restricted to a
   radius around a coarse GPU translation estimate before subpixel refinement.
+- GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
+  a bounded fractional-offset grid with bilinear sampling and normalized
+  cross-correlation, returning `dx`, `dy`, `score`, and candidate-count
+  diagnostics.
 - GPU bilinear subpixel translation warp, returning a warped frame and
   coverage mask. This is the first CUDA warp primitive that can consume the
   refined floating-point catalog translation directly.
@@ -81,7 +86,6 @@ FastIntegration's robust rejection and alignment internals. The resident
 translation path is useful for diagnosis and high-VRAM timing, but it does not
 replace the star-based registration/Lanczos warp gates.
 
-For registration, the next CUDA step is to run asterism matching, subpixel
-refinement, similarity/affine scoring, and transform application on the device
-from bounded star catalogs. CPU should only orchestrate and receive compact
-diagnostics.
+For registration, the next CUDA step is to run asterism matching,
+similarity/affine scoring, and transform application on the device from bounded
+star catalogs. CPU should only orchestrate and receive compact diagnostics.

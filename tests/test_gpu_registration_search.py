@@ -39,6 +39,23 @@ def _star_field() -> np.ndarray:
     return image.astype(np.float32)
 
 
+def _smooth_star_field() -> np.ndarray:
+    image = np.zeros((64, 64), dtype=np.float32)
+    stars = [
+        (12.25, 14.50, 150.0),
+        (24.00, 20.75, 230.0),
+        (41.50, 18.25, 180.0),
+        (16.75, 42.00, 130.0),
+        (49.25, 45.50, 210.0),
+        (35.50, 33.25, 170.0),
+    ]
+    yy, xx = np.indices(image.shape, dtype=np.float32)
+    for x, y, flux in stars:
+        image += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 1.2**2)))
+    image += 10.0 + 0.01 * xx + 0.02 * yy
+    return image.astype(np.float32)
+
+
 def test_gpu_estimate_translation_search_aligns_shifted_pair():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_search_f32"):
@@ -57,6 +74,39 @@ def test_gpu_estimate_translation_search_aligns_shifted_pair():
     assert result["dy"] == 4
     assert result["score"] > 0.99
     assert rms < 1.0e-4
+
+
+def test_gpu_estimate_translation_subpixel_ncc_refines_integer_shift():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_translation_subpixel_ncc_f32"):
+        raise AssertionError("estimate_translation_subpixel_ncc_f32 is missing from gpwbpp_cuda")
+
+    reference = _smooth_star_field()
+    true_delta = np.array([2.25, -1.5], dtype=np.float32)
+    moving, _coverage = module.warp_translation_bilinear_f32(
+        reference,
+        -float(true_delta[0]),
+        -float(true_delta[1]),
+        0.0,
+    )
+
+    result = module.estimate_translation_subpixel_ncc_f32(reference, moving, 2.0, -2.0, 3, 0.25)
+    aligned, coverage = module.warp_translation_bilinear_f32(moving, result["dx"], result["dy"], 0.0)
+    center_aligned, center_coverage = module.warp_translation_bilinear_f32(moving, 2.0, -2.0, 0.0)
+    valid = coverage > 0.0
+    yy, xx = np.indices(reference.shape)
+    valid &= (xx >= 8) & (xx < reference.shape[1] - 8) & (yy >= 8) & (yy < reference.shape[0] - 8)
+    rms = float(np.sqrt(np.mean((aligned[valid] - reference[valid]) ** 2)))
+    center_valid = center_coverage > 0.0
+    center_valid &= (xx >= 8) & (xx < reference.shape[1] - 8) & (yy >= 8) & (yy < reference.shape[0] - 8)
+    center_rms = float(np.sqrt(np.mean((center_aligned[center_valid] - reference[center_valid]) ** 2)))
+
+    assert abs(result["dx"] - float(true_delta[0])) <= 0.25
+    assert abs(result["dy"] - float(true_delta[1])) <= 0.25
+    assert result["candidate_count"] == 49
+    assert result["score"] > 0.98
+    assert rms < center_rms
+    assert rms < 4.0
 
 
 def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():

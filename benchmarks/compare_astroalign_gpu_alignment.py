@@ -120,6 +120,41 @@ def _gpu_run(reference: np.ndarray, moving: np.ndarray, max_shift: int) -> dict[
     }
 
 
+def _gpu_subpixel_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    coarse: dict[str, Any],
+    radius_steps: int,
+    step: float,
+) -> dict[str, Any]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    t0 = time.perf_counter()
+    estimate = gpwbpp_cuda.estimate_translation_subpixel_ncc_f32(
+        reference,
+        moving,
+        float(coarse["dx"]),
+        float(coarse["dy"]),
+        radius_steps,
+        step,
+    )
+    aligned, coverage = gpwbpp_cuda.warp_translation_bilinear_f32(moving, estimate["dx"], estimate["dy"], 0.0)
+    elapsed = time.perf_counter() - t0
+    return {
+        "elapsed_s": elapsed,
+        "dx": float(estimate["dx"]),
+        "dy": float(estimate["dy"]),
+        "score": float(estimate["score"]),
+        "candidate_count": int(estimate["candidate_count"]),
+        "center_dx": float(estimate["center_dx"]),
+        "center_dy": float(estimate["center_dy"]),
+        "radius_steps": int(estimate["radius_steps"]),
+        "step": float(estimate["step"]),
+        "model": str(estimate["model"]),
+        "rms": _rms(reference, aligned, coverage > 0.0),
+    }
+
+
 def _gpu_catalog_run(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -223,6 +258,8 @@ def main() -> int:
     parser.add_argument("--catalog-grid-cols", type=int)
     parser.add_argument("--catalog-grid-rows", type=int)
     parser.add_argument("--catalog-prior-radius", type=float)
+    parser.add_argument("--subpixel-radius-steps", type=int, default=4)
+    parser.add_argument("--subpixel-step", type=float, default=0.25)
     args = parser.parse_args()
     if (args.catalog_grid_cols is None) != (args.catalog_grid_rows is None):
         raise ValueError("--catalog-grid-cols and --catalog-grid-rows must be provided together")
@@ -242,6 +279,23 @@ def main() -> int:
 
     astroalign_result = _astroalign_run(reference, moving)
     gpu_result = _gpu_run(reference, moving, args.max_shift)
+    gpu_subpixel_result = _gpu_subpixel_run(
+        reference,
+        moving,
+        gpu_result,
+        args.subpixel_radius_steps,
+        args.subpixel_step,
+    )
+    gpu_ncc_subpixel_result = {
+        **gpu_subpixel_result,
+        "elapsed_s": float(gpu_result["elapsed_s"] + gpu_subpixel_result["elapsed_s"]),
+        "coarse_elapsed_s": float(gpu_result["elapsed_s"]),
+        "refinement_elapsed_s": float(gpu_subpixel_result["elapsed_s"]),
+        "coarse_dx": int(gpu_result["dx"]),
+        "coarse_dy": int(gpu_result["dy"]),
+        "coarse_score": float(gpu_result["score"]),
+        "model": "translation_integer_ncc_then_subpixel_ncc",
+    }
     catalog_max_shift = args.max_shift if args.catalog_max_shift is None else args.catalog_max_shift
     prior_dx = float(gpu_result["dx"]) if args.catalog_prior_radius is not None else None
     prior_dy = float(gpu_result["dy"]) if args.catalog_prior_radius is not None else None
@@ -275,12 +329,20 @@ def main() -> int:
         "truth": truth,
         "astroalign": astroalign_result,
         "gpwbpp_cuda": gpu_result,
+        "gpwbpp_cuda_subpixel": gpu_subpixel_result,
+        "gpwbpp_cuda_ncc_subpixel": gpu_ncc_subpixel_result,
         "gpwbpp_cuda_catalog": gpu_catalog_result,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
         else None,
         "catalog_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_catalog_result["elapsed_s"]
         if gpu_catalog_result["elapsed_s"] > 0.0
+        else None,
+        "subpixel_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_subpixel_result["elapsed_s"]
+        if gpu_subpixel_result["elapsed_s"] > 0.0
+        else None,
+        "ncc_subpixel_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_ncc_subpixel_result["elapsed_s"]
+        if gpu_ncc_subpixel_result["elapsed_s"] > 0.0
         else None,
         "cuda_devices": devices,
     }

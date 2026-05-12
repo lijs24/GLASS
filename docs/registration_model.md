@@ -31,7 +31,16 @@ best shift on the device. The returned shift is directly compatible with
 `warp_translation_f32`. This path is useful for controlled tests, diagnostics,
 and high-VRAM resident timing, but it is intentionally labeled as
 `translation_integer_ncc`; it does not yet replace star-asterism matching,
-subpixel refinement, similarity/affine transforms, or higher-order interpolation.
+similarity/affine transforms, or higher-order interpolation.
+
+`estimate_translation_subpixel_ncc_f32(reference, moving, center_dx, center_dy,
+radius_steps, step)` refines a coarse translation on the GPU by scoring a
+bounded fractional-offset grid with bilinear sampling and normalized
+cross-correlation. The benchmark records both the refinement-only timing and the
+fair end-to-end `translation_integer_ncc_then_subpixel_ncc` timing, which is the
+integer NCC search plus the subpixel refinement. On a 1024x1024 M38 crop pair,
+that combined path measured about 0.131 s versus astroalign's 0.310 s, with
+pixel RMS 63.80 versus astroalign's 72.35 for this translation-only diagnostic.
 
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
@@ -57,6 +66,7 @@ grid-distributed GPU star selector can keep one bright local maximum per image
 cell for diagnostics. Real-data M38 tests with an NCC prior can improve pixel
 RMS, but the inlier evidence is still too weak to replace the fallback without
 descriptor-level matching.
+
 Similarity, affine, homography, Lanczos/resampling choices, and fully resident
 frame-to-frame transform application remain future warp gates.
 

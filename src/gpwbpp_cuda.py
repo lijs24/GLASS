@@ -345,6 +345,110 @@ def estimate_translation_search_f32(
     }
 
 
+def _translation_bilinear_ncc_score(reference: np.ndarray, moving: np.ndarray, dx: float, dy: float) -> float:
+    h, w = reference.shape
+    ref_values: list[float] = []
+    mov_values: list[float] = []
+    for y in range(h):
+        sy = float(y) - float(dy)
+        if sy < 0.0 or sy > float(h - 1):
+            continue
+        y0 = int(np.floor(sy))
+        y1 = min(y0 + 1, h - 1)
+        ty = np.float32(sy - y0)
+        for x in range(w):
+            sx = float(x) - float(dx)
+            if sx < 0.0 or sx > float(w - 1):
+                continue
+            x0 = int(np.floor(sx))
+            x1 = min(x0 + 1, w - 1)
+            tx = np.float32(sx - x0)
+            top = moving[y0, x0] * (1.0 - tx) + moving[y0, x1] * tx
+            bottom = moving[y1, x0] * (1.0 - tx) + moving[y1, x1] * tx
+            r = float(reference[y, x])
+            m = float(top * (1.0 - ty) + bottom * ty)
+            if np.isfinite(r) and np.isfinite(m):
+                ref_values.append(r)
+                mov_values.append(m)
+    if len(ref_values) <= 1:
+        return float("-inf")
+    ref = np.asarray(ref_values, dtype=np.float64)
+    mov = np.asarray(mov_values, dtype=np.float64)
+    ref = ref - float(np.mean(ref))
+    mov = mov - float(np.mean(mov))
+    denom = float(np.sqrt(np.sum(ref * ref) * np.sum(mov * mov)))
+    if denom <= 0.0:
+        return float("-inf")
+    return float(np.sum(ref * mov) / denom)
+
+
+def estimate_translation_subpixel_ncc_f32(
+    reference: Any,
+    moving: Any,
+    center_dx: float,
+    center_dy: float,
+    radius_steps: int,
+    step: float,
+) -> dict[str, Any]:
+    native = _native()
+    if native is not None and hasattr(native, "estimate_translation_subpixel_ncc_f32"):
+        result = dict(
+            native.estimate_translation_subpixel_ncc_f32(
+                reference,
+                moving,
+                float(center_dx),
+                float(center_dy),
+                int(radius_steps),
+                float(step),
+            )
+        )
+        return {
+            "dx": float(result["dx"]),
+            "dy": float(result["dy"]),
+            "score": float(result["score"]),
+            "candidate_count": int(result["candidate_count"]),
+            "center_dx": float(result["center_dx"]),
+            "center_dy": float(result["center_dy"]),
+            "radius_steps": int(result["radius_steps"]),
+            "step": float(result["step"]),
+            "model": str(result.get("model", "translation_subpixel_ncc")),
+        }
+
+    if radius_steps < 0:
+        raise ValueError("radius_steps must be non-negative")
+    if step <= 0.0:
+        raise ValueError("step must be positive")
+    ref = np.asarray(reference, dtype=np.float32)
+    mov = np.asarray(moving, dtype=np.float32)
+    if ref.shape != mov.shape:
+        raise ValueError(f"shape mismatch for registration: {ref.shape} != {mov.shape}")
+    best_dx = float(center_dx)
+    best_dy = float(center_dy)
+    best_score = float("-inf")
+    candidate_count = 0
+    for oy in range(-int(radius_steps), int(radius_steps) + 1):
+        for ox in range(-int(radius_steps), int(radius_steps) + 1):
+            dx = float(center_dx) + ox * float(step)
+            dy = float(center_dy) + oy * float(step)
+            score = _translation_bilinear_ncc_score(ref, mov, dx, dy)
+            candidate_count += 1
+            if score > best_score:
+                best_dx = dx
+                best_dy = dy
+                best_score = score
+    return {
+        "dx": best_dx,
+        "dy": best_dy,
+        "score": best_score,
+        "candidate_count": candidate_count,
+        "center_dx": float(center_dx),
+        "center_dy": float(center_dy),
+        "radius_steps": int(radius_steps),
+        "step": float(step),
+        "model": "translation_subpixel_ncc_cpu_fallback",
+    }
+
+
 def _catalog_translation_vote(
     reference_x: np.ndarray,
     reference_y: np.ndarray,
