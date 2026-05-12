@@ -57,6 +57,16 @@ void gpwbpp_warp_matrix_bilinear_f32_launch(
     int width,
     int height,
     float fill);
+void gpwbpp_matrix_alignment_metrics_f32_launch(
+    const float* reference,
+    const float* moving,
+    const float* inverse,
+    double* partial_stats,
+    unsigned long long* partial_count,
+    int width,
+    int height,
+    int sample_stride,
+    int blocks);
 void gpwbpp_estimate_translation_search_f32_launch(
     const float* reference,
     const float* moving,
@@ -1963,6 +1973,141 @@ py::tuple warp_matrix_bilinear_f32(
   return py::make_tuple(output, coverage);
 }
 
+py::dict matrix_alignment_metrics_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving,
+    py::object matrix_obj,
+    int sample_stride) {
+  const py::buffer_info reference_info = reference.request();
+  const py::buffer_info moving_info = moving.request();
+  if (reference_info.ndim != 2 || moving_info.ndim != 2) {
+    throw std::invalid_argument("reference and moving must have shape (height, width)");
+  }
+  require_same_shape(reference_info, moving_info);
+  if (sample_stride <= 0) {
+    throw std::invalid_argument("sample_stride must be positive");
+  }
+  const int height = static_cast<int>(reference_info.shape[0]);
+  const int width = static_cast<int>(reference_info.shape[1]);
+  const int stride = sample_stride > 1 ? sample_stride : 1;
+  const int sample_width = (width + stride - 1) / stride;
+  const int sample_height = (height + stride - 1) / stride;
+  const int sampled_pixels = sample_width * sample_height;
+  const int blocks = std::max(1, std::min(1024, (sampled_pixels + 255) / 256));
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  const auto inverse = invert_matrix3x3(parse_matrix3x3(matrix_obj));
+  std::vector<double> partial_stats(static_cast<std::size_t>(blocks) * 7, 0.0);
+  std::vector<unsigned long long> partial_count(static_cast<std::size_t>(blocks), 0);
+
+  float* d_reference = nullptr;
+  float* d_moving = nullptr;
+  float* d_inverse = nullptr;
+  double* d_partial_stats = nullptr;
+  unsigned long long* d_partial_count = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_reference, n * sizeof(float)), "cudaMalloc(matrix metrics reference)");
+    check_cuda(cudaMalloc(&d_moving, n * sizeof(float)), "cudaMalloc(matrix metrics moving)");
+    check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(matrix metrics inverse)");
+    check_cuda(
+        cudaMalloc(&d_partial_stats, partial_stats.size() * sizeof(double)),
+        "cudaMalloc(matrix metrics partial stats)");
+    check_cuda(
+        cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
+        "cudaMalloc(matrix metrics partial count)");
+    check_cuda(
+        cudaMemcpy(d_reference, reference_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix metrics reference)");
+    check_cuda(
+        cudaMemcpy(d_moving, moving_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix metrics moving)");
+    check_cuda(
+        cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix metrics inverse)");
+    gpwbpp_matrix_alignment_metrics_f32_launch(
+        d_reference,
+        d_moving,
+        d_inverse,
+        d_partial_stats,
+        d_partial_count,
+        width,
+        height,
+        stride,
+        blocks);
+    check_cuda(cudaGetLastError(), "matrix_alignment_metrics_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "matrix_alignment_metrics_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(partial_stats.data(), d_partial_stats, partial_stats.size() * sizeof(double), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix metrics partial stats)");
+    check_cuda(
+        cudaMemcpy(
+            partial_count.data(),
+            d_partial_count,
+            partial_count.size() * sizeof(unsigned long long),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix metrics partial count)");
+  } catch (...) {
+    cudaFree(d_reference);
+    cudaFree(d_moving);
+    cudaFree(d_inverse);
+    cudaFree(d_partial_stats);
+    cudaFree(d_partial_count);
+    throw;
+  }
+  cudaFree(d_reference);
+  cudaFree(d_moving);
+  cudaFree(d_inverse);
+  cudaFree(d_partial_stats);
+  cudaFree(d_partial_count);
+
+  double sum_ref = 0.0;
+  double sum_mov = 0.0;
+  double sum_ref2 = 0.0;
+  double sum_mov2 = 0.0;
+  double sum_cross = 0.0;
+  double sum_diff2 = 0.0;
+  double sum_abs_diff = 0.0;
+  unsigned long long valid_pixels = 0ULL;
+  for (int block = 0; block < blocks; ++block) {
+    const std::size_t offset = static_cast<std::size_t>(block) * 7;
+    sum_ref += partial_stats[offset + 0];
+    sum_mov += partial_stats[offset + 1];
+    sum_ref2 += partial_stats[offset + 2];
+    sum_mov2 += partial_stats[offset + 3];
+    sum_cross += partial_stats[offset + 4];
+    sum_diff2 += partial_stats[offset + 5];
+    sum_abs_diff += partial_stats[offset + 6];
+    valid_pixels += partial_count[static_cast<std::size_t>(block)];
+  }
+
+  const double count = static_cast<double>(valid_pixels);
+  double rms = std::numeric_limits<double>::quiet_NaN();
+  double mean_abs_diff = std::numeric_limits<double>::quiet_NaN();
+  double ncc = std::numeric_limits<double>::quiet_NaN();
+  if (valid_pixels > 0ULL) {
+    rms = std::sqrt(sum_diff2 / count);
+    mean_abs_diff = sum_abs_diff / count;
+  }
+  if (valid_pixels > 1ULL) {
+    const double numerator = sum_cross - (sum_ref * sum_mov / count);
+    const double ref_var = std::max(sum_ref2 - (sum_ref * sum_ref / count), 0.0);
+    const double mov_var = std::max(sum_mov2 - (sum_mov * sum_mov / count), 0.0);
+    const double denominator = std::sqrt(ref_var * mov_var);
+    if (denominator > 0.0) {
+      ncc = numerator / denominator;
+    }
+  }
+
+  py::dict result;
+  result["valid_pixels"] = valid_pixels;
+  result["sampled_pixels"] = sampled_pixels;
+  result["sample_stride"] = stride;
+  result["rms"] = rms;
+  result["mean_abs_diff"] = mean_abs_diff;
+  result["ncc"] = ncc;
+  result["model"] = "matrix_alignment_metrics_cuda";
+  return result;
+}
+
 py::dict estimate_translation_search_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference,
     py::array_t<float, py::array::c_style | py::array::forcecast> moving,
@@ -3614,6 +3759,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("warp_translation_f32", &warp_translation_f32);
   m.def("warp_translation_bilinear_f32", &warp_translation_bilinear_f32);
   m.def("warp_matrix_bilinear_f32", &warp_matrix_bilinear_f32);
+  m.def(
+      "matrix_alignment_metrics_f32",
+      &matrix_alignment_metrics_f32,
+      py::arg("reference"),
+      py::arg("moving"),
+      py::arg("matrix"),
+      py::arg("sample_stride") = 1);
   m.def(
       "estimate_translation_search_f32",
       &estimate_translation_search_f32,

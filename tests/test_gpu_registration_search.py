@@ -157,6 +157,47 @@ def test_gpu_estimate_translation_subpixel_ncc_supports_sample_stride():
     assert result["score"] > 0.98
 
 
+def test_gpu_matrix_alignment_metrics_matches_matrix_warp_rms():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "matrix_alignment_metrics_f32"):
+        raise AssertionError("matrix_alignment_metrics_f32 is missing from gpwbpp_cuda")
+
+    reference = _smooth_star_field()
+    matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
+    moving, _ = module.warp_matrix_bilinear_f32(reference, np.linalg.inv(matrix).astype(np.float32), 0.0)
+    aligned, coverage = module.warp_matrix_bilinear_f32(moving, matrix, 0.0)
+    metrics = module.matrix_alignment_metrics_f32(reference, moving, matrix, sample_stride=1)
+
+    valid = coverage > 0.0
+    expected_rms = float(np.sqrt(np.mean((aligned[valid] - reference[valid]) ** 2)))
+    expected_mean_abs = float(np.mean(np.abs(aligned[valid] - reference[valid])))
+
+    assert metrics["model"] == "matrix_alignment_metrics_cuda"
+    assert metrics["valid_pixels"] == int(np.sum(valid))
+    assert metrics["sampled_pixels"] == reference.size
+    assert abs(metrics["rms"] - expected_rms) < 1.0e-4
+    assert abs(metrics["mean_abs_diff"] - expected_mean_abs) < 1.0e-4
+    assert metrics["ncc"] > 0.98
+
+
+def test_gpu_matrix_alignment_metrics_distinguishes_bad_transform():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "matrix_alignment_metrics_f32"):
+        raise AssertionError("matrix_alignment_metrics_f32 is missing from gpwbpp_cuda")
+
+    reference = _smooth_star_field()
+    good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
+    bad_matrix = np.asarray([[1.0, 0.0, -1.0], [0.0, 1.0, 2.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+    moving, _ = module.warp_matrix_bilinear_f32(reference, np.linalg.inv(good_matrix).astype(np.float32), 0.0)
+
+    good = module.matrix_alignment_metrics_f32(reference, moving, good_matrix, sample_stride=2)
+    bad = module.matrix_alignment_metrics_f32(reference, moving, bad_matrix, sample_stride=2)
+
+    assert good["sample_stride"] == 2
+    assert good["rms"] < bad["rms"] * 0.5
+    assert good["ncc"] > bad["ncc"]
+
+
 def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_from_catalogs_f32"):

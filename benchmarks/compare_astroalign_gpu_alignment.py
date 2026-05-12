@@ -328,6 +328,18 @@ def _gpu_similarity_fit_from_pairs_run(
     return result, np.asarray(aligned, dtype=np.float32), valid
 
 
+def _gpu_matrix_metrics_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    matrix: Any,
+    sample_stride: int,
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    metrics = gpwbpp_cuda.matrix_alignment_metrics_f32(reference, moving, matrix, sample_stride)
+    elapsed = time.perf_counter() - t0
+    return {**metrics, "elapsed_s": elapsed}
+
+
 def _gpu_resident_ncc_subpixel_run(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -665,11 +677,14 @@ def main() -> int:
     parser.add_argument("--catalog-similarity-max-rotation-rad", type=float, default=0.02)
     parser.add_argument("--subpixel-radius-steps", type=int, default=4)
     parser.add_argument("--subpixel-step", type=float, default=0.25)
+    parser.add_argument("--matrix-metric-sample-stride", type=int, default=1)
     args = parser.parse_args()
     if (args.catalog_grid_cols is None) != (args.catalog_grid_rows is None):
         raise ValueError("--catalog-grid-cols and --catalog-grid-rows must be provided together")
     if (args.catalog_grid_top_cols is None) != (args.catalog_grid_top_rows is None):
         raise ValueError("--catalog-grid-top-cols and --catalog-grid-top-rows must be provided together")
+    if args.matrix_metric_sample_stride <= 0:
+        raise ValueError("--matrix-metric-sample-stride must be positive")
 
     if args.reference and args.moving:
         reference = _center_crop(_read_fits(args.reference), args.center_crop)
@@ -729,6 +744,12 @@ def main() -> int:
         args.subpixel_step,
     )
     gpu_resident_matrix_result = _gpu_resident_matrix_warp_run(reference, moving, astroalign_matrix)
+    gpu_matrix_metrics = _gpu_matrix_metrics_run(
+        reference,
+        moving,
+        astroalign_matrix,
+        args.matrix_metric_sample_stride,
+    )
     catalog_max_shift = args.max_shift if args.catalog_max_shift is None else args.catalog_max_shift
     prior_dx = float(gpu_result["dx"]) if args.catalog_prior_radius is not None else None
     prior_dy = float(gpu_result["dy"]) if args.catalog_prior_radius is not None else None
@@ -812,6 +833,12 @@ def main() -> int:
         astroalign_matrix,
         gpu_catalog_similarity_diff,
     )
+    gpu_catalog_similarity_matrix_metrics = _gpu_matrix_metrics_run(
+        reference,
+        moving,
+        np.asarray(gpu_catalog_similarity_result["matrix"], dtype=np.float64),
+        args.matrix_metric_sample_stride,
+    )
     if not catalog_similarity_agreement["passed"]:
         gpu_catalog_similarity_result["accepted"] = False
         gpu_catalog_similarity_result["warnings"].append(
@@ -824,6 +851,7 @@ def main() -> int:
         "truth": truth,
         "astroalign": astroalign_result,
         "gpwbpp_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
+        "gpwbpp_cuda_matrix_metrics_from_astroalign": gpu_matrix_metrics,
         "gpwbpp_cuda_similarity_fit_from_astroalign_matches": gpu_similarity_result,
         "direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels": gpu_matrix_diff,
         "direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels": gpu_similarity_diff,
@@ -854,6 +882,7 @@ def main() -> int:
         "gpwbpp_cuda_resident_matrix_warp_from_astroalign": gpu_resident_matrix_result,
         "gpwbpp_cuda_catalog": gpu_catalog_result,
         "gpwbpp_cuda_catalog_similarity": gpu_catalog_similarity_result,
+        "gpwbpp_cuda_catalog_similarity_matrix_metrics": gpu_catalog_similarity_matrix_metrics,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
         else None,

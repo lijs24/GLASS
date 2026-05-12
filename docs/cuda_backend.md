@@ -133,6 +133,11 @@ Resident CUDA integration now supports:
   invertible 3x3 source-to-destination transform matrix. Resident stacks expose
   the same primitive as an in-place frame warp, which is the first CUDA bridge
   toward consuming similarity/affine registration matrices.
+- `matrix_alignment_metrics_f32(reference, moving, matrix, sample_stride=1)`
+  scores a moving-to-reference matrix directly on the GPU without downloading a
+  full warped image. It returns valid-pixel count, RMS, mean absolute difference,
+  and normalized cross-correlation. This is the first pixel-metric validation
+  primitive for rejecting fast but incorrect catalog transforms.
 - Resident runs can consume a prior `registration_results.json` with
   `--resident-registration external_matrix` and
   `--resident-registration-results`. Accepted translation matrices keep the

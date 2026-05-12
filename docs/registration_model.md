@@ -219,14 +219,21 @@ It also records a direct common-valid-pixel difference between astroalign's
 alignment timing claim tied to a numeric image-consistency check in the same
 JSON artifact. In the full calibrated M38 pair
 `S000061`/`S000062`, the refreshed artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v14_gridtop_acceptance.json`
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v15_matrix_metrics.json`
 measured standalone CUDA matrix warp at about 0.141 s versus astroalign apply at
-about 2.824 s, and resident device-only matrix warp at about 0.0070 s. On the
+about 2.930 s, and resident device-only matrix warp at about 0.0071 s. On the
 61,632,460 common valid pixels, the CUDA matrix output versus astroalign apply
 had median absolute difference about 3.98 ADU and RMS difference about 12.02 ADU.
 The same artifact also records `catalog_similarity_agreement_vs_astroalign` so a
 fast owned-GPU matcher cannot be marked accepted unless its matrix and output
 image agree with the open-source reference.
+
+The benchmark also records `matrix_alignment_metrics_f32` results. For the
+astroalign matrix, GPU matrix metrics reported RMS 76.35 ADU and NCC 0.9767 in
+about 0.042 s, matching the full CUDA warp RMS without downloading the warped
+image. For the current grid-top catalog-similarity matrix, the same metric
+reported RMS 97.07 ADU and NCC 0.9623, which is enough evidence to reject that
+fast candidate before it enters integration.
 
 Resident runs can also use `--resident-registration external_matrix` together
 with `--resident-registration-results <registration_results.json>`. That mode

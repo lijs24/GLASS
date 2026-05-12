@@ -92,7 +92,9 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     ]
     valid_pixels = payload["valid_pixels"]
     fit = payload["gpwbpp_cuda_similarity_fit_from_astroalign_matches"]
+    matrix_metrics = payload["gpwbpp_cuda_matrix_metrics_from_astroalign"]
     catalog_similarity = payload["gpwbpp_cuda_catalog_similarity"]
+    catalog_similarity_matrix_metrics = payload["gpwbpp_cuda_catalog_similarity_matrix_metrics"]
     catalog_similarity_agreement = payload["catalog_similarity_agreement_vs_astroalign"]
 
     assert payload["astroalign"]["matched_control_points"] > 0
@@ -102,6 +104,10 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     assert fit["valid_pairs"] == payload["astroalign"]["matched_control_points"]
     assert fit["fit_rms_px"] < 0.1
     assert fit["coverage_pixels"] > 0
+    assert matrix_metrics["model"] == "matrix_alignment_metrics_cuda"
+    assert matrix_metrics["valid_pixels"] > 0
+    assert matrix_metrics["rms"] is not None
+    assert matrix_metrics["ncc"] is not None
     assert valid_pixels["common"] == diff["valid_pixels"]
     assert valid_pixels["common_similarity_fit"] == fit_diff["valid_pixels"]
     assert valid_pixels["common_catalog_similarity"] == catalog_similarity_diff["valid_pixels"]
@@ -119,6 +125,9 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     assert catalog_similarity["fit_model"] == "catalog_pair_similarity_cuda"
     assert catalog_similarity["fit_status"] == "ok"
     assert catalog_similarity["accepted"]
+    assert catalog_similarity_matrix_metrics["model"] == "matrix_alignment_metrics_cuda"
+    assert catalog_similarity_matrix_metrics["valid_pixels"] > 0
+    assert catalog_similarity_matrix_metrics["rms"] is not None
     assert catalog_similarity_agreement["passed"]
     assert catalog_similarity_agreement["translation_delta_px"] <= catalog_similarity_agreement["criteria"][
         "translation_delta_px_max"

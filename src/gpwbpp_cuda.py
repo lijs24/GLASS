@@ -296,6 +296,69 @@ def warp_matrix_bilinear_f32(data: Any, matrix: Any, fill: float = 0.0) -> tuple
     return out, coverage
 
 
+def matrix_alignment_metrics_f32(
+    reference: Any,
+    moving: Any,
+    matrix: Any,
+    sample_stride: int = 1,
+) -> dict[str, Any]:
+    """Score a moving-to-reference transform with GPU pixel metrics when available."""
+
+    if sample_stride <= 0:
+        raise ValueError("sample_stride must be positive")
+    native = _native()
+    if native is not None and hasattr(native, "matrix_alignment_metrics_f32"):
+        result = dict(native.matrix_alignment_metrics_f32(reference, moving, matrix, int(sample_stride)))
+        return {
+            "valid_pixels": int(result["valid_pixels"]),
+            "sampled_pixels": int(result["sampled_pixels"]),
+            "sample_stride": int(result["sample_stride"]),
+            "rms": float(result["rms"]),
+            "mean_abs_diff": float(result["mean_abs_diff"]),
+            "ncc": float(result["ncc"]),
+            "model": str(result.get("model", "matrix_alignment_metrics_cuda")),
+        }
+
+    ref = np.asarray(reference, dtype=np.float32)
+    mov = np.asarray(moving, dtype=np.float32)
+    if ref.shape != mov.shape:
+        raise ValueError("reference and moving must have the same shape")
+    warped, coverage = warp_matrix_bilinear_f32(mov, matrix, 0.0)
+    stride = max(1, int(sample_stride))
+    ref_sample = ref[::stride, ::stride].astype(np.float64, copy=False)
+    warped_sample = warped[::stride, ::stride].astype(np.float64, copy=False)
+    coverage_sample = coverage[::stride, ::stride] > 0.0
+    valid = coverage_sample & np.isfinite(ref_sample) & np.isfinite(warped_sample)
+    valid_pixels = int(np.sum(valid))
+    sampled_pixels = int(ref_sample.size)
+    if valid_pixels == 0:
+        rms = float("nan")
+        mean_abs_diff = float("nan")
+        ncc = float("nan")
+    else:
+        ref_valid = ref_sample[valid]
+        warped_valid = warped_sample[valid]
+        diff = warped_valid - ref_valid
+        rms = float(np.sqrt(np.mean(diff * diff)))
+        mean_abs_diff = float(np.mean(np.abs(diff)))
+        if valid_pixels <= 1:
+            ncc = float("nan")
+        else:
+            ref_centered = ref_valid - float(np.mean(ref_valid))
+            warped_centered = warped_valid - float(np.mean(warped_valid))
+            denom = float(np.sqrt(np.sum(ref_centered * ref_centered) * np.sum(warped_centered * warped_centered)))
+            ncc = float(np.sum(ref_centered * warped_centered) / denom) if denom > 0.0 else float("nan")
+    return {
+        "valid_pixels": valid_pixels,
+        "sampled_pixels": sampled_pixels,
+        "sample_stride": stride,
+        "rms": rms,
+        "mean_abs_diff": mean_abs_diff,
+        "ncc": ncc,
+        "model": "matrix_alignment_metrics_cpu_fallback",
+    }
+
+
 def _translation_ncc_score(
     reference: np.ndarray,
     moving: np.ndarray,
