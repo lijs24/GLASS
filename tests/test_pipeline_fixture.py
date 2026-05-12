@@ -231,13 +231,16 @@ def test_pipeline_fixture_run_registration(tmp_path: Path):
     import json
 
     registration = json.loads((run / "registration_results.json").read_text(encoding="utf-8"))
-    assert registration["registration_image_source"] == "streaming_preview"
+    assert registration["registration_image_source"] == "streaming_star_detector"
+    assert registration["method"] == "auto"
     assert registration["tile_size"] == 10
     assert all(item["registration_image_source"] == "streaming_preview" for item in registration["registration_results"])
+    assert all(item["matched_stars"] >= 1 for item in registration["registration_results"])
+    assert all(item["status"] in {"reference", "ok"} for item in registration["registration_results"])
     assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
     assert "Registration table" in text
-    assert "phase_correlation" in (run / "registration_results.json").read_text(encoding="utf-8")
+    assert "star-based clean-room registration" in (run / "registration_results.json").read_text(encoding="utf-8")
 
 
 def test_pipeline_fixture_run_warp(tmp_path: Path):

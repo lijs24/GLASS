@@ -5,10 +5,11 @@ from typing import Any
 
 import numpy as np
 
-from gpwbpp.cpu.registration import estimate_translation_phase_correlation, translation_matrix
+from gpwbpp.cpu.registration import estimate_star_transform, estimate_translation_phase_correlation, translation_matrix
 from gpwbpp.gpu.tile_scheduler import iter_tiles
 from gpwbpp.io.fits_io import FitsImageReader
 from gpwbpp.io.json_io import read_json, write_json
+from gpwbpp.engine.quality import detect_stars_streaming
 from gpwbpp.models import RegistrationResult, to_jsonable
 
 
@@ -50,10 +51,18 @@ def register_calibrated_frames(
     out_path: str | Path | None = None,
     tile_size: int = 512,
     preview_max_dimension: int = 1024,
+    method: str = "auto",
 ) -> dict[str, Any]:
     run = Path(run_dir)
     artifacts = read_json(run / "calibration_artifacts.json")
     quality = read_json(run / "frame_quality.json")
+    plan = read_json(run / "processing_plan.json") if (run / "processing_plan.json").exists() else {}
+    registration_policy = plan.get("registration_policy", {})
+    transform_model = str(registration_policy.get("transform_model") or "translation")
+    min_inliers = int(registration_policy.get("min_inliers") or 6)
+    max_rms_px = float(registration_policy.get("max_rms_px") or 2.0)
+    if transform_model not in {"translation", "similarity", "affine"}:
+        transform_model = "translation"
     reference_id = quality.get("reference_frame_id")
     calibrated = {item["frame_id"]: item for item in artifacts.get("calibrated_lights", [])}
     if reference_id not in calibrated:
@@ -64,15 +73,26 @@ def register_calibrated_frames(
         max_dimension=preview_max_dimension,
     )
     quality_by_id = {item["frame_id"]: item for item in quality.get("frame_quality", [])}
+    reference_quality = quality_by_id.get(reference_id, {})
+    reference_stars = detect_stars_streaming(
+        calibrated[reference_id]["path"],
+        float(reference_quality.get("background_median") or 0.0),
+        float(reference_quality.get("background_rms") or 0.0),
+        tile_size=tile_size,
+    )
 
     results = []
     for frame_id, item in calibrated.items():
         warnings: list[str] = []
         tile_count = reference_tile_count
+        row_source = "streaming_star_detector"
         if frame_id == reference_id:
             dx, dy = 0.0, 0.0
             status = "reference"
             rms = 0.0
+            matrix = translation_matrix(dx, dy)
+            matched = len(reference_stars)
+            inliers = len(reference_stars)
             preview_scale = reference_scale
             preview_shape = list(reference_preview.shape)
         else:
@@ -87,26 +107,60 @@ def register_calibrated_frames(
                 )
             if moving_scale != reference_scale:
                 raise ValueError(f"registration preview scale mismatch: {moving_scale} != {reference_scale}")
-            preview_dx, preview_dy = estimate_translation_phase_correlation(reference_preview, moving_preview)
-            dx, dy = preview_dx * reference_scale, preview_dy * reference_scale
-            status = "ok"
-            rms = 0.0
+            matrix = None
+            matched = 0
+            inliers = 0
+            rms = float("nan")
+            status = "failed"
+            if method in {"star", "auto"}:
+                moving_quality = quality_by_id.get(frame_id, {})
+                moving_stars = detect_stars_streaming(
+                    item["path"],
+                    float(moving_quality.get("background_median") or 0.0),
+                    float(moving_quality.get("background_rms") or 0.0),
+                    tile_size=tile_size,
+                )
+                star_result = estimate_star_transform(
+                    reference_stars,
+                    moving_stars,
+                    transform_model=transform_model,
+                    min_inliers=min_inliers,
+                    tolerance_px=max(max_rms_px * 1.5, 3.0),
+                )
+                matrix = star_result.matrix
+                matched = star_result.matched_stars
+                inliers = star_result.inliers
+                rms = star_result.rms_px
+                status = star_result.status
+                warnings.extend(star_result.warnings)
+                warnings.append("star-based clean-room registration")
+            if status != "ok" and method == "auto":
+                preview_dx, preview_dy = estimate_translation_phase_correlation(reference_preview, moving_preview)
+                dx, dy = preview_dx * reference_scale, preview_dy * reference_scale
+                matrix = translation_matrix(dx, dy)
+                matched = min(
+                    int(quality_by_id.get(frame_id, {}).get("star_count") or 0),
+                    int(quality_by_id.get(reference_id, {}).get("star_count") or 0),
+                )
+                inliers = matched
+                rms = 0.0
+                status = "ok"
+                warnings.append("fell back to phase-correlation preview registration")
+                row_source = "streaming_preview_fallback"
+            if matrix is None:
+                matrix = translation_matrix(0.0, 0.0)
             preview_scale = moving_scale
             preview_shape = list(moving_preview.shape)
-        matched = min(
-            int(quality_by_id.get(frame_id, {}).get("star_count") or 0),
-            int(quality_by_id.get(reference_id, {}).get("star_count") or 0),
-        )
         if status == "ok" and matched == 0:
             warnings.append("registration estimated by phase correlation without detected star matches")
         row = to_jsonable(
             RegistrationResult(
                 frame_id=frame_id,
                 reference_frame_id=reference_id,
-                transform_model="translation",
-                matrix=translation_matrix(dx, dy),
+                transform_model=transform_model,
+                matrix=matrix,
                 matched_stars=matched,
-                inliers=matched,
+                inliers=inliers,
                 rms_px=rms,
                 status=status,
                 warnings=warnings,
@@ -115,6 +169,7 @@ def register_calibrated_frames(
         row.update(
             {
                 "registration_image_source": "streaming_preview",
+                "registration_solution_source": row_source,
                 "preview_scale": preview_scale,
                 "preview_shape": preview_shape,
                 "tile_size": tile_size,
@@ -126,9 +181,11 @@ def register_calibrated_frames(
     payload = {
         "schema_version": 1,
         "reference_frame_id": reference_id,
-        "transform_model": "translation",
-        "method": "phase_correlation_streaming_preview",
-        "registration_image_source": "streaming_preview",
+        "transform_model": transform_model,
+        "method": method,
+        "registration_image_source": "streaming_star_detector",
+        "min_inliers": min_inliers,
+        "max_rms_px": max_rms_px,
         "preview_max_dimension": preview_max_dimension,
         "tile_size": tile_size,
         "registration_results": results,

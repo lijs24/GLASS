@@ -125,6 +125,24 @@ def _detect_stars_streaming(
     return stars[:max_stars]
 
 
+def detect_stars_streaming(
+    path: str | Path,
+    median: float,
+    rms: float,
+    tile_size: int = 512,
+    threshold_sigma: float = 5.0,
+    max_stars: int = 500,
+) -> list[Star]:
+    return _detect_stars_streaming(
+        path,
+        median,
+        rms,
+        tile_size=tile_size,
+        threshold_sigma=threshold_sigma,
+        max_stars=max_stars,
+    )
+
+
 def measure_quality_streaming(
     frame_id: str,
     filt: str | None,

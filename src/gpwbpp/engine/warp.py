@@ -45,8 +45,20 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
     registered_dir.mkdir(parents=True, exist_ok=True)
     coverage_dir.mkdir(parents=True, exist_ok=True)
     outputs = []
+    skipped = []
     for result in registration.get("registration_results", []):
         frame_id = result["frame_id"]
+        status = str(result.get("status") or "unknown")
+        if status not in {"ok", "reference"}:
+            skipped.append(
+                {
+                    "frame_id": frame_id,
+                    "status": status,
+                    "reason": "registration did not produce an accepted transform",
+                    "warnings": result.get("warnings", []),
+                }
+            )
+            continue
         source = calibrated[frame_id]["path"]
         dx, dy = _translation_from_matrix(result["matrix"])
         with FitsImageReader(source) as reader:
@@ -77,6 +89,7 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                 "frame_id": frame_id,
                 "registered_path": str(registered_path),
                 "coverage_path": str(coverage_path),
+                "registration_status": status,
                 "dx": dx,
                 "dy": dy,
                 "tile_size": tile_size,
@@ -84,6 +97,8 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                 "valid_pixels": valid_pixels,
             }
         )
-    payload = {"schema_version": 1, "warp_results": outputs}
+    if not outputs:
+        raise ValueError("registration produced no accepted frames for warp")
+    payload = {"schema_version": 1, "warp_results": outputs, "skipped_frames": skipped}
     write_json(run / "warp_results.json", payload)
     return payload

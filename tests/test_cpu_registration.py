@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.cpu.registration import estimate_translation, estimate_translation_phase_correlation
+from gpwbpp.cpu.registration import (
+    estimate_star_transform,
+    estimate_translation,
+    estimate_translation_phase_correlation,
+)
 from gpwbpp.cpu.star_detect import Star
 from gpwbpp.engine.registration import _registration_preview
 from gpwbpp.io.fits_io import write_fits_data
@@ -14,6 +18,56 @@ def test_estimate_translation_from_star_lists():
     dx, dy = estimate_translation(reference, moving)
     assert dx == 2.0
     assert dy == -3.0
+
+
+def test_estimate_star_transform_translation_with_outliers():
+    reference = [
+        Star(10, 10, 100),
+        Star(20, 10, 90),
+        Star(10, 25, 80),
+        Star(30, 30, 70),
+        Star(5, 35, 60),
+        Star(35, 5, 50),
+        Star(25, 18, 40),
+        Star(14, 32, 30),
+    ]
+    moving = [Star(star.x - 3, star.y + 2, star.flux) for star in reference]
+    moving.append(Star(100, 100, 10))
+
+    result = estimate_star_transform(reference, moving, "translation", min_inliers=6, tolerance_px=0.5)
+
+    assert result.status == "ok"
+    assert result.inliers == 8
+    assert result.rms_px == 0.0
+    assert abs(result.matrix[0][2] - 3.0) < 1.0e-6
+    assert abs(result.matrix[1][2] + 2.0) < 1.0e-6
+
+
+def test_estimate_star_transform_similarity():
+    import math
+
+    points = np.array(
+        [(10, 10), (20, 10), (10, 25), (30, 30), (5, 35), (35, 5), (25, 18), (14, 32)],
+        dtype=np.float64,
+    )
+    reference = [Star(float(x), float(y), 1000.0 - i) for i, (x, y) in enumerate(points)]
+    angle = math.radians(5.0)
+    scale = 1.02
+    linear = scale * np.array(
+        [[math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)]],
+        dtype=np.float64,
+    )
+    translation = np.array([3.0, -2.0], dtype=np.float64)
+    moving_points = (points - translation) @ np.linalg.inv(linear).T
+    moving = [Star(float(x), float(y), 1000.0 - i) for i, (x, y) in enumerate(moving_points)]
+
+    result = estimate_star_transform(reference, moving, "similarity", min_inliers=6, tolerance_px=0.5)
+
+    assert result.status == "ok"
+    assert result.inliers == 8
+    assert result.rms_px < 1.0e-5
+    assert np.allclose(np.asarray(result.matrix)[:2, :2], linear, atol=1.0e-6)
+    assert np.allclose(np.asarray(result.matrix)[:2, 2], translation, atol=1.0e-6)
 
 
 def test_phase_correlation_translation():
