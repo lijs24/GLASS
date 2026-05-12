@@ -151,6 +151,14 @@ with finite-pair filtering and returns the 3x3 matrix, scale, rotation, valid
 pair count, and RMS. This is deliberately a lower-level building block: the
 remaining hard problem is GPU descriptor matching and robust inlier selection,
 not the closed-form similarity fit once trustworthy pairs exist.
+The astroalign comparison benchmark now exercises this bridge by using
+astroalign only for matched control points, then fitting the similarity matrix
+with `estimate_similarity_from_pairs_f32` and applying it with CUDA matrix warp.
+On the full calibrated M38 `S000061`/`S000062` pair, that path fit 50 matched
+pairs with 0.134 px fit RMS; GPU fit plus standalone CUDA warp took about
+0.092 s versus astroalign's 2.865 s apply stage, while the resulting image had
+about 3.98 ADU median absolute difference and 12.00 ADU RMS difference against
+astroalign apply on common valid pixels.
 
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
@@ -173,9 +181,9 @@ It also records a direct common-valid-pixel difference between astroalign's
 alignment timing claim tied to a numeric image-consistency check in the same
 JSON artifact. In the full calibrated M38 pair
 `S000061`/`S000062`, the refreshed artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v2.json`
-measured standalone CUDA matrix warp at about 0.143 s versus astroalign apply at
-about 2.809 s, and resident device-only matrix warp at about 0.0071 s. On the
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v3.json`
+measured standalone CUDA matrix warp at about 0.169 s versus astroalign apply at
+about 2.865 s, and resident device-only matrix warp at about 0.0071 s. On the
 61,632,460 common valid pixels, the CUDA matrix output versus astroalign apply
 had median absolute difference about 3.98 ADU and RMS difference about 12.02 ADU.
 

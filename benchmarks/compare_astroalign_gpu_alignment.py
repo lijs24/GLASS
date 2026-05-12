@@ -121,7 +121,7 @@ def _diff_on_common_valid_pixels(
 def _astroalign_run_with_output(
     reference: np.ndarray,
     moving: np.ndarray,
-) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+) -> tuple[dict[str, Any], np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     import astroalign as aa
 
     t0 = time.perf_counter()
@@ -131,6 +131,10 @@ def _astroalign_run_with_output(
     aligned, footprint = aa.apply_transform(transform, moving, reference, fill_value=0.0)
     apply_elapsed = time.perf_counter() - t1
     params = np.asarray(transform.params, dtype=np.float64)
+    moving_points = np.asarray(control_points[0], dtype=np.float32) if control_points else np.empty((0, 2), dtype=np.float32)
+    reference_points = (
+        np.asarray(control_points[1], dtype=np.float32) if control_points else np.empty((0, 2), dtype=np.float32)
+    )
     invalid = np.asarray(footprint, dtype=bool)
     aligned_f32 = np.asarray(aligned, dtype=np.float32)
     valid = ~invalid if invalid.shape == reference.shape else np.isfinite(aligned_f32)
@@ -144,7 +148,7 @@ def _astroalign_run_with_output(
         "rms": _rms(reference, aligned_f32, valid),
         "matched_control_points": int(len(control_points[0])) if control_points else 0,
     }
-    return result, aligned_f32, valid
+    return result, aligned_f32, valid, moving_points, reference_points
 
 
 def _astroalign_run(reference: np.ndarray, moving: np.ndarray) -> dict[str, Any]:
@@ -227,6 +231,51 @@ def _gpu_matrix_warp_run_with_output(
 
 def _gpu_matrix_warp_run(reference: np.ndarray, moving: np.ndarray, matrix: Any) -> dict[str, Any]:
     return _gpu_matrix_warp_run_with_output(reference, moving, matrix)[0]
+
+
+def _gpu_similarity_fit_from_pairs_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    moving_points: np.ndarray,
+    reference_points: np.ndarray,
+) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    if not hasattr(gpwbpp_cuda, "estimate_similarity_from_pairs_f32"):
+        raise RuntimeError("native CUDA backend lacks estimate_similarity_from_pairs_f32")
+    if len(moving_points) == 0 or len(reference_points) == 0:
+        raise RuntimeError("cannot fit GPU similarity transform without matched control points")
+
+    t0 = time.perf_counter()
+    fit = gpwbpp_cuda.estimate_similarity_from_pairs_f32(
+        reference_points[:, 0],
+        reference_points[:, 1],
+        moving_points[:, 0],
+        moving_points[:, 1],
+    )
+    fit_elapsed = time.perf_counter() - t0
+    matrix = np.asarray(fit["matrix"], dtype=np.float64)
+    t1 = time.perf_counter()
+    aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
+    warp_elapsed = time.perf_counter() - t1
+    valid = coverage > 0.0
+    result = {
+        "elapsed_s": fit_elapsed + warp_elapsed,
+        "fit_elapsed_s": fit_elapsed,
+        "warp_elapsed_s": warp_elapsed,
+        "matrix": matrix.tolist(),
+        "scale": float(fit["scale"]),
+        "rotation_rad": float(fit["rotation_rad"]),
+        "fit_rms_px": float(fit["rms_px"]),
+        "valid_pairs": int(fit["valid_pairs"]),
+        "input_pairs": int(fit["input_pairs"]),
+        "fit_status": str(fit["status"]),
+        "fit_model": str(fit["model"]),
+        "coverage_pixels": int(np.sum(valid)),
+        "model": "cuda_similarity_fit_from_astroalign_matches_then_matrix_warp",
+        "rms": _rms(reference, aligned, valid),
+    }
+    return result, np.asarray(aligned, dtype=np.float32), valid
 
 
 def _gpu_resident_ncc_subpixel_run(
@@ -437,12 +486,24 @@ def main() -> int:
     if reference.shape != moving.shape:
         raise ValueError(f"shape mismatch: reference={reference.shape}, moving={moving.shape}")
 
-    astroalign_result, astroalign_aligned, astroalign_valid = _astroalign_run_with_output(reference, moving)
+    (
+        astroalign_result,
+        astroalign_aligned,
+        astroalign_valid,
+        astroalign_moving_points,
+        astroalign_reference_points,
+    ) = _astroalign_run_with_output(reference, moving)
     astroalign_matrix = np.asarray(astroalign_result["matrix"], dtype=np.float64)
     gpu_matrix_result, gpu_matrix_aligned, gpu_matrix_valid = _gpu_matrix_warp_run_with_output(
         reference,
         moving,
         astroalign_matrix,
+    )
+    gpu_similarity_result, gpu_similarity_aligned, gpu_similarity_valid = _gpu_similarity_fit_from_pairs_run(
+        reference,
+        moving,
+        astroalign_moving_points,
+        astroalign_reference_points,
     )
     gpu_result = _gpu_run(reference, moving, args.max_shift)
     gpu_subpixel_result = _gpu_subpixel_run(
@@ -503,16 +564,27 @@ def main() -> int:
         "truth": truth,
         "astroalign": astroalign_result,
         "gpwbpp_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
+        "gpwbpp_cuda_similarity_fit_from_astroalign_matches": gpu_similarity_result,
         "direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels": _diff_on_common_valid_pixels(
             gpu_matrix_aligned,
             gpu_matrix_valid,
             astroalign_aligned,
             astroalign_valid,
         ),
+        "direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels": _diff_on_common_valid_pixels(
+            gpu_similarity_aligned,
+            gpu_similarity_valid,
+            astroalign_aligned,
+            astroalign_valid,
+        ),
         "valid_pixels": {
             "astroalign": int(np.sum(astroalign_valid)),
             "gpwbpp_cuda_matrix": int(np.sum(gpu_matrix_valid)),
+            "gpwbpp_cuda_similarity_fit": int(np.sum(gpu_similarity_valid)),
             "common": int(np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_matrix_valid, dtype=bool))),
+            "common_similarity_fit": int(
+                np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_similarity_valid, dtype=bool))
+            ),
         },
         "gpwbpp_cuda": gpu_result,
         "gpwbpp_cuda_subpixel": gpu_subpixel_result,
@@ -533,6 +605,13 @@ def main() -> int:
         / (astroalign_result["find_elapsed_s"] + gpu_matrix_result["elapsed_s"])
         if (astroalign_result["find_elapsed_s"] + gpu_matrix_result["elapsed_s"]) > 0.0
         else None,
+        "gpu_similarity_fit_plus_warp_speedup_vs_astroalign_apply_transform": astroalign_result["apply_elapsed_s"]
+        / gpu_similarity_result["elapsed_s"]
+        if gpu_similarity_result["elapsed_s"] > 0.0
+        else None,
+        "gpu_similarity_matrix_max_abs_delta_vs_astroalign": float(
+            np.max(np.abs(np.asarray(gpu_similarity_result["matrix"], dtype=np.float64) - astroalign_matrix))
+        ),
         "catalog_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_catalog_result["elapsed_s"]
         if gpu_catalog_result["elapsed_s"] > 0.0
         else None,

@@ -84,12 +84,25 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
 
     payload = json.loads(out.read_text(encoding="utf-8"))
     diff = payload["direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels"]
+    fit_diff = payload["direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels"]
     valid_pixels = payload["valid_pixels"]
+    fit = payload["gpwbpp_cuda_similarity_fit_from_astroalign_matches"]
 
     assert payload["astroalign"]["matched_control_points"] > 0
     assert payload["gpwbpp_cuda_matrix_warp_from_astroalign"]["coverage_pixels"] > 0
+    assert fit["fit_model"] == "matched_pair_similarity_cuda"
+    assert fit["fit_status"] == "ok"
+    assert fit["valid_pairs"] == payload["astroalign"]["matched_control_points"]
+    assert fit["fit_rms_px"] < 0.1
+    assert fit["coverage_pixels"] > 0
     assert valid_pixels["common"] == diff["valid_pixels"]
+    assert valid_pixels["common_similarity_fit"] == fit_diff["valid_pixels"]
     assert diff["valid_pixels"] > 0
+    assert fit_diff["valid_pixels"] > 0
     assert diff["median_abs_diff"] is not None
+    assert fit_diff["median_abs_diff"] is not None
     assert diff["rms_diff"] is not None
+    assert fit_diff["rms_diff"] is not None
+    assert payload["gpu_similarity_fit_plus_warp_speedup_vs_astroalign_apply_transform"] is not None
+    assert payload["gpu_similarity_matrix_max_abs_delta_vs_astroalign"] < 0.02
     assert payload["resident_matrix_device_speedup_vs_astroalign_apply_transform"] is not None
