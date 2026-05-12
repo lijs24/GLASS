@@ -1,15 +1,52 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from gpwbpp.cpu.registration import (
+    estimate_astroalign_transform,
     estimate_star_transform,
     estimate_translation,
     estimate_translation_phase_correlation,
 )
 from gpwbpp.cpu.star_detect import Star
 from gpwbpp.engine.registration import _registration_preview
+from gpwbpp.engine.registration import register_calibrated_frames
 from gpwbpp.io.fits_io import write_fits_data
+from gpwbpp.io.json_io import write_json
+
+
+def _star_field(shape: tuple[int, int] = (96, 112)) -> np.ndarray:
+    image = np.full(shape, 10.0, dtype=np.float32)
+    yy, xx = np.indices(shape, dtype=np.float32)
+    for x, y, flux in [
+        (12, 17, 100.0),
+        (30, 42, 220.0),
+        (71, 15, 160.0),
+        (88, 63, 180.0),
+        (45, 79, 250.0),
+        (19, 86, 130.0),
+        (101, 33, 145.0),
+        (53, 55, 190.0),
+    ]:
+        image += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 1.4**2)))
+    return image.astype(np.float32)
+
+
+def _shift_image(data: np.ndarray, dx: int, dy: int) -> np.ndarray:
+    output = np.zeros_like(data, dtype=np.float32)
+    h, w = data.shape
+    src_x0 = max(0, -dx)
+    src_x1 = min(w, w - dx)
+    dst_x0 = max(0, dx)
+    dst_x1 = min(w, w + dx)
+    src_y0 = max(0, -dy)
+    src_y1 = min(h, h - dy)
+    dst_y0 = max(0, dy)
+    dst_y1 = min(h, h + dy)
+    if src_x0 < src_x1 and src_y0 < src_y1:
+        output[dst_y0:dst_y1, dst_x0:dst_x1] = data[src_y0:src_y1, src_x0:src_x1]
+    return output
 
 
 def test_estimate_translation_from_star_lists():
@@ -68,6 +105,79 @@ def test_estimate_star_transform_similarity():
     assert result.rms_px < 1.0e-5
     assert np.allclose(np.asarray(result.matrix)[:2, :2], linear, atol=1.0e-6)
     assert np.allclose(np.asarray(result.matrix)[:2, 2], translation, atol=1.0e-6)
+
+
+def test_estimate_astroalign_transform_translation_like_similarity():
+    pytest.importorskip("astroalign")
+    reference = _star_field()
+    moving = _shift_image(reference, 4, -3)
+
+    result = estimate_astroalign_transform(reference, moving, max_control_points=50, detection_sigma=3, min_area=3)
+
+    assert result.status == "ok"
+    assert result.transform_model == "similarity"
+    assert result.inliers >= 6
+    assert result.rms_px < 0.1
+    assert abs(result.matrix[0][2] + 4.0) < 0.1
+    assert abs(result.matrix[1][2] - 3.0) < 0.1
+    assert any("astroalign" in warning for warning in result.warnings)
+
+
+def test_register_calibrated_frames_can_use_astroalign_backend(tmp_path):
+    pytest.importorskip("astroalign")
+    reference = _star_field()
+    moving = _shift_image(reference, 4, -3)
+    run = tmp_path / "run"
+    cache = run / "calibrated_cache"
+    cache.mkdir(parents=True)
+    ref_path = cache / "ref.fits"
+    moving_path = cache / "moving.fits"
+    write_fits_data(ref_path, reference)
+    write_fits_data(moving_path, moving)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "schema_version": 1,
+            "calibrated_lights": [
+                {"frame_id": "ref", "path": str(ref_path)},
+                {"frame_id": "moving", "path": str(moving_path)},
+            ],
+        },
+    )
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "ref",
+            "frame_quality": [
+                {"frame_id": "ref", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+                {"frame_id": "moving", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+            ],
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {
+            "schema_version": 1,
+            "registration_policy": {
+                "transform_model": "similarity",
+                "astroalign_detection_sigma": 3,
+                "astroalign_min_area": 3,
+            },
+        },
+    )
+
+    payload = register_calibrated_frames(run, tile_size=64, preview_max_dimension=256, method="astroalign")
+    moving_result = next(item for item in payload["registration_results"] if item["frame_id"] == "moving")
+
+    assert payload["method"] == "astroalign"
+    assert payload["transform_model"] == "similarity"
+    assert payload["astroalign"]["license"] == "MIT"
+    assert moving_result["status"] == "ok"
+    assert moving_result["registration_solution_source"] == "open_source_astroalign_preview"
+    assert abs(moving_result["matrix"][0][2] + 4.0) < 0.1
+    assert abs(moving_result["matrix"][1][2] - 3.0) < 0.1
+    assert any("astroalign" in warning for warning in moving_result["warnings"])
 
 
 def test_phase_correlation_translation():

@@ -5,7 +5,12 @@ from typing import Any
 
 import numpy as np
 
-from gpwbpp.cpu.registration import estimate_star_transform, estimate_translation_phase_correlation, translation_matrix
+from gpwbpp.cpu.registration import (
+    estimate_astroalign_transform,
+    estimate_star_transform,
+    estimate_translation_phase_correlation,
+    translation_matrix,
+)
 from gpwbpp.gpu.tile_scheduler import iter_tiles
 from gpwbpp.io.fits_io import FitsImageReader
 from gpwbpp.io.json_io import read_json, write_json
@@ -61,8 +66,15 @@ def register_calibrated_frames(
     transform_model = str(registration_policy.get("transform_model") or "translation")
     min_inliers = int(registration_policy.get("min_inliers") or 6)
     max_rms_px = float(registration_policy.get("max_rms_px") or 2.0)
+    astroalign_max_control_points = int(registration_policy.get("astroalign_max_control_points") or 50)
+    astroalign_detection_sigma = float(registration_policy.get("astroalign_detection_sigma") or 5.0)
+    astroalign_min_area = int(registration_policy.get("astroalign_min_area") or 5)
     if transform_model not in {"translation", "similarity", "affine"}:
         transform_model = "translation"
+    if method == "astroalign":
+        transform_model = "similarity"
+    if method not in {"auto", "star", "astroalign"}:
+        raise ValueError("registration method must be auto, star, or astroalign")
     reference_id = quality.get("reference_frame_id")
     calibrated = {item["frame_id"]: item for item in artifacts.get("calibrated_lights", [])}
     if reference_id not in calibrated:
@@ -112,6 +124,25 @@ def register_calibrated_frames(
             inliers = 0
             rms = float("nan")
             status = "failed"
+            if method == "astroalign":
+                astroalign_result = estimate_astroalign_transform(
+                    reference_preview,
+                    moving_preview,
+                    max_control_points=astroalign_max_control_points,
+                    detection_sigma=astroalign_detection_sigma,
+                    min_area=astroalign_min_area,
+                )
+                matrix_array = np.asarray(astroalign_result.matrix, dtype=np.float64)
+                matrix_array[0, 2] *= reference_scale
+                matrix_array[1, 2] *= reference_scale
+                matrix = [[float(value) for value in row] for row in matrix_array]
+                matched = astroalign_result.matched_stars
+                inliers = astroalign_result.inliers
+                rms = float(astroalign_result.rms_px) * reference_scale
+                status = astroalign_result.status
+                warnings.extend(astroalign_result.warnings)
+                warnings.append("astroalign transform estimated on streaming preview")
+                row_source = "open_source_astroalign_preview"
             if method in {"star", "auto"}:
                 moving_quality = quality_by_id.get(frame_id, {})
                 moving_stars = detect_stars_streaming(
@@ -184,6 +215,13 @@ def register_calibrated_frames(
         "transform_model": transform_model,
         "method": method,
         "registration_image_source": "streaming_star_detector",
+        "astroalign": {
+            "available": method == "astroalign",
+            "max_control_points": astroalign_max_control_points,
+            "detection_sigma": astroalign_detection_sigma,
+            "min_area": astroalign_min_area,
+            "license": "MIT",
+        },
         "min_inliers": min_inliers,
         "max_rms_px": max_rms_px,
         "preview_max_dimension": preview_max_dimension,

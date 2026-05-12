@@ -20,6 +20,16 @@ means, records `preview_scale`, `preview_shape`, `tile_size`, and `tile_count`,
 and multiplies preview translations back to source-image pixels. Small images
 stay at `preview_scale=1` for synthetic baseline tests.
 
+Tile-mode registration can also use the optional open-source `astroalign`
+backend with `gpwbpp run --registration-method astroalign`. This path calls
+`astroalign.find_transform` on the same streaming preview images and records the
+resulting similarity matrix, matched control-point count, preview-scale RMS, and
+MIT-license provenance in `registration_results.json`. It is the current
+open-source CPU correctness baseline for star/asterism matching and a bridge
+toward GPWBPP-owned GPU descriptor registration. The existing tile warp stage
+still applies only matrix translation terms, so non-translation similarity terms
+are recorded for audit but not yet fully consumed by integration.
+
 Warp skips non-reference frames with failed registration status and writes them
 to `warp_results.json` under `skipped_frames`; they do not enter local
 normalization or integration.
@@ -128,4 +138,5 @@ frame-to-frame transform application remain future warp gates.
 
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
-open-source external reference, not as GPWBPP runtime logic.
+open-source external reference and, when `gpwbpp[align]` is installed, as an
+optional tile-mode registration backend.

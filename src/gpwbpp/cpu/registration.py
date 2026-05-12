@@ -51,6 +51,53 @@ def _apply_matrix(points: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     return np.divide(transformed[:, :2], w, out=transformed[:, :2].copy(), where=np.abs(w) > 1.0e-12)
 
 
+def estimate_astroalign_transform(
+    reference_image: np.ndarray,
+    moving_image: np.ndarray,
+    max_control_points: int = 50,
+    detection_sigma: float = 5.0,
+    min_area: int = 5,
+) -> StarRegistration:
+    try:
+        import astroalign
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("astroalign registration requires installing gpwbpp[align]") from exc
+
+    reference = np.nan_to_num(np.asarray(reference_image, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    moving = np.nan_to_num(np.asarray(moving_image, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    if reference.shape != moving.shape:
+        raise ValueError(f"shape mismatch for astroalign registration: {reference.shape} != {moving.shape}")
+
+    transform, matched = astroalign.find_transform(
+        moving,
+        reference,
+        max_control_points=max_control_points,
+        detection_sigma=detection_sigma,
+        min_area=min_area,
+    )
+    matrix = np.asarray(transform.params, dtype=np.float64)
+    moving_points = np.asarray(matched[0], dtype=np.float64)
+    reference_points = np.asarray(matched[1], dtype=np.float64)
+    transformed = _apply_matrix(moving_points, matrix)
+    residuals = transformed - reference_points
+    rms = float(np.sqrt(np.mean(np.sum(residuals * residuals, axis=1)))) if len(residuals) else float("nan")
+    matched_count = int(len(moving_points))
+    status = "ok" if matched_count > 0 and np.isfinite(rms) else "failed"
+    warnings = ["open-source astroalign similarity registration"]
+    if status != "ok":
+        warnings.append("astroalign did not return matched control points")
+    return StarRegistration(
+        transform_model="similarity",
+        matrix=_matrix_to_list(matrix),
+        matched_stars=matched_count,
+        inliers=matched_count,
+        rms_px=rms,
+        status=status,
+        warnings=warnings,
+        pairs=[],
+    )
+
+
 def _fit_translation_matrix(moving: np.ndarray, reference: np.ndarray) -> np.ndarray:
     delta = np.median(reference - moving, axis=0)
     return np.asarray([[1.0, 0.0, delta[0]], [0.0, 1.0, delta[1]], [0.0, 0.0, 1.0]], dtype=np.float64)

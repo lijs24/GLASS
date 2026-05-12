@@ -109,6 +109,7 @@ def _run_full_pipeline(
     local_normalization: str,
     integration_weighting: str,
     integration_rejection: str,
+    registration_method: str = "auto",
     timing: dict | None = None,
 ):
     timing = timing or _new_timing("run", backend, tile_size)
@@ -121,7 +122,12 @@ def _run_full_pipeline(
     _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(out, tile_size=tile_size))
     state.completed_stages.append("quality")
     state.current_stage = "quality"
-    _timed_stage(out, timing, "registration", lambda: register_calibrated_frames(out, tile_size=tile_size))
+    _timed_stage(
+        out,
+        timing,
+        "registration",
+        lambda: register_calibrated_frames(out, tile_size=tile_size, method=registration_method),
+    )
     state.completed_stages.append("registration")
     state.current_stage = "registration"
     _timed_stage(out, timing, "warp", lambda: warp_registered_frames(out, tile_size=tile_size))
@@ -166,7 +172,7 @@ def _resume_pipeline(plan_path: Path, out: Path, backend: str = "auto", tile_siz
         state.completed_stages.extend(["master_calibration", "light_calibration"])
         state.current_stage = "calibration"
     else:
-        return _run_full_pipeline(plan_path, out, backend, tile_size, "auto", "auto", "auto", timing)
+        return _run_full_pipeline(plan_path, out, backend, tile_size, "auto", "auto", "auto", "auto", timing)
 
     if not (out / "frame_quality.json").exists():
         _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(out, tile_size=tile_size))
@@ -303,7 +309,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
             args.local_normalization,
             args.integration_weighting,
             args.integration_rejection,
-            timing,
+            timing=timing,
         )
     else:
         state = initialize_run(out)
@@ -402,7 +408,16 @@ def cmd_run(args: argparse.Namespace) -> int:
             state.completed_stages.append("quality")
             state.current_stage = "quality"
         if args.until_stage in {"registration", "warp", "local_normalization", "integration"}:
-            _timed_stage(out, timing, "registration", lambda: register_calibrated_frames(args.out, tile_size=args.tile_size))
+            _timed_stage(
+                out,
+                timing,
+                "registration",
+                lambda: register_calibrated_frames(
+                    args.out,
+                    tile_size=args.tile_size,
+                    method=args.registration_method,
+                ),
+            )
             state.completed_stages.append("registration")
             state.current_stage = "registration"
         if args.until_stage in {"warp", "local_normalization", "integration"}:
@@ -583,6 +598,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--ram-budget-gb", type=float)
     run.add_argument("--until-stage")
     run.add_argument("--tile-size", type=int, default=512)
+    run.add_argument(
+        "--registration-method",
+        choices=["auto", "star", "astroalign"],
+        default="auto",
+        help="tile-mode registration method; astroalign uses the optional open-source gpwbpp[align] backend",
+    )
     run.add_argument(
         "--memory-mode",
         choices=["tile", "resident"],
