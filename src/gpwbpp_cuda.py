@@ -257,6 +257,32 @@ def star_local_max_mask_f32(data: Any, threshold: float) -> np.ndarray:
     return mask
 
 
+def star_candidates_f32(data: Any, threshold: float, max_candidates: int = 4096) -> dict[str, Any]:
+    native = _native()
+    if native is not None and hasattr(native, "star_candidates_f32"):
+        result = dict(native.star_candidates_f32(data, float(threshold), int(max_candidates)))
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
+    mask = star_local_max_mask_f32(data, threshold)
+    ys, xs = np.nonzero(mask)
+    image = np.asarray(data, dtype=np.float32)
+    flux = image[ys, xs].astype(np.float32)
+    order = np.argsort(-flux, kind="stable")
+    stored = order[: int(max_candidates)]
+    return {
+        "count": int(len(xs)),
+        "stored_count": int(len(stored)),
+        "x": xs[stored].astype(np.float32),
+        "y": ys[stored].astype(np.float32),
+        "flux": flux[stored].astype(np.float32),
+    }
+
+
 class ResidentCalibratedStack:
     """VRAM-resident calibrated-frame stack for high-memory benchmark paths.
 
@@ -335,6 +361,18 @@ class ResidentCalibratedStack:
         if not hasattr(self._impl, "star_local_max_mask"):
             raise RuntimeError("native ResidentCalibratedStack.star_local_max_mask is not available")
         return np.asarray(self._impl.star_local_max_mask(int(index), float(threshold)), dtype=np.uint8)
+
+    def star_candidates(self, index: int, threshold: float, max_candidates: int = 4096) -> dict[str, Any]:
+        if not hasattr(self._impl, "star_candidates"):
+            raise RuntimeError("native ResidentCalibratedStack.star_candidates is not available")
+        result = dict(self._impl.star_candidates(int(index), float(threshold), int(max_candidates)))
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
 
     def integrate_mean(self, weights: Any | None = None) -> tuple[np.ndarray, np.ndarray]:
         master, weight_map = self._impl.integrate_mean(

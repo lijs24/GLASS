@@ -58,3 +58,38 @@ def test_resident_stack_star_local_max_mask_uses_device_frame():
 
     assert np.array_equal(gpu, expected)
     assert int(np.sum(gpu)) == 2
+
+
+def test_gpu_star_candidates_compacts_local_maxima():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_candidates_f32"):
+        raise AssertionError("star_candidates_f32 is missing from gpwbpp_cuda")
+
+    image = np.zeros((7, 8), dtype=np.float32)
+    image[2, 2] = 11.0
+    image[4, 5] = 20.0
+    image[1, 6] = 9.0
+
+    result = module.star_candidates_f32(image, 5.0, 8)
+    coords = {(int(x), int(y), float(f)) for x, y, f in zip(result["x"], result["y"], result["flux"], strict=True)}
+
+    assert result["count"] == 3
+    assert result["stored_count"] == 3
+    assert coords == {(2, 2, 11.0), (5, 4, 20.0), (6, 1, 9.0)}
+
+
+def test_resident_stack_star_candidates_from_device_frame():
+    module = cuda_module_or_skip()
+    image = np.zeros((7, 8), dtype=np.float32)
+    image[2, 2] = 11.0
+    image[4, 5] = 20.0
+    image[1, 6] = 9.0
+    stack = module.ResidentCalibratedStack(1, 7, 8)
+    stack.upload_calibrated_frame(0, image)
+
+    result = stack.star_candidates(0, 5.0, 2)
+    coords = {(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)}
+
+    assert result["count"] == 3
+    assert result["stored_count"] == 2
+    assert coords.issubset({(2, 2), (5, 4), (6, 1)})

@@ -18,9 +18,11 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `calibrate_tile_f32(...)`
 - `integrate_accumulate_mean_tile_f32(...)`
 - `star_local_max_mask_f32(tile, threshold)`
+- `star_candidates_f32(tile, threshold, max_candidates)`
 - `ResidentCalibratedStack.integrate_sigma_clip(...)`
 - `ResidentCalibratedStack.apply_translation_frame(...)`
 - `ResidentCalibratedStack.star_local_max_mask(index, threshold)`
+- `ResidentCalibratedStack.star_candidates(index, threshold, max_candidates)`
 
 Every CUDA operation will have a CPU reference test. If CUDA is not available,
 CUDA tests skip rather than failing the whole project. Kernel launch failures
@@ -46,6 +48,8 @@ Resident CUDA integration now supports:
   integer-pixel CUDA warp with NaN edge fill.
 - GPU local-maximum star candidate masking on standalone tiles and directly on
   resident calibrated frames.
+- GPU compaction of local maxima into bounded `(x, y, flux)` star catalogs on
+  standalone tiles and directly on resident calibrated frames.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight
@@ -53,7 +57,6 @@ FastIntegration's robust rejection and alignment internals. The resident
 translation path is useful for diagnosis and high-VRAM timing, but it does not
 replace the star-based registration/Lanczos warp gates.
 
-For registration, the next CUDA step is to compact the resident local-maximum
-mask into a bounded GPU star catalog with centroid/flux, then run asterism
-matching and transform scoring on the device. CPU should only orchestrate and
-receive compact diagnostics.
+For registration, the next CUDA step is to run asterism matching and transform
+scoring on the device from these bounded star catalogs. CPU should only
+orchestrate and receive compact diagnostics.
