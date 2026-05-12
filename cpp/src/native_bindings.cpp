@@ -11,6 +11,7 @@
 #include <limits>
 #include <algorithm>
 #include <array>
+#include <utility>
 
 namespace py = pybind11;
 
@@ -67,6 +68,16 @@ void gpwbpp_matrix_alignment_metrics_f32_launch(
     int height,
     int sample_stride,
     int blocks);
+void gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
+    const float* reference,
+    const float* moving,
+    const float* inverses,
+    double* partial_stats,
+    unsigned long long* partial_count,
+    int width,
+    int height,
+    int sample_stride,
+    int candidate_count);
 void gpwbpp_estimate_translation_search_f32_launch(
     const float* reference,
     const float* moving,
@@ -387,6 +398,106 @@ std::array<float, 9> invert_matrix3x3(const std::array<float, 9>& m) {
       static_cast<float>(c02 * inv_det),
       static_cast<float>(c12 * inv_det),
       static_cast<float>(c22 * inv_det)};
+}
+
+struct MatrixCandidateMetrics {
+  float dx = 0.0f;
+  float dy = 0.0f;
+  std::array<float, 9> matrix{};
+  unsigned long long valid_pixels = 0ULL;
+  int sampled_pixels = 0;
+  int sample_stride = 1;
+  double rms = std::numeric_limits<double>::quiet_NaN();
+  double mean_abs_diff = std::numeric_limits<double>::quiet_NaN();
+  double ncc = std::numeric_limits<double>::quiet_NaN();
+};
+
+std::vector<std::pair<float, float>> translation_offsets(
+    float center_dx,
+    float center_dy,
+    float radius,
+    float step) {
+  if (radius < 0.0f) {
+    throw std::invalid_argument("search radius must be non-negative");
+  }
+  if (step <= 0.0f) {
+    throw std::invalid_argument("search step must be positive");
+  }
+  std::vector<std::pair<float, float>> offsets;
+  for (float dx = center_dx - radius; dx <= center_dx + radius + step * 0.5f; dx += step) {
+    for (float dy = center_dy - radius; dy <= center_dy + radius + step * 0.5f; dy += step) {
+      offsets.emplace_back(dx, dy);
+    }
+  }
+  if (offsets.empty()) {
+    offsets.emplace_back(center_dx, center_dy);
+  }
+  return offsets;
+}
+
+MatrixCandidateMetrics metrics_from_sums(
+    const std::array<float, 9>& matrix,
+    float dx,
+    float dy,
+    const double* sums,
+    unsigned long long valid_pixels,
+    int sampled_pixels,
+    int sample_stride) {
+  MatrixCandidateMetrics metrics;
+  metrics.dx = dx;
+  metrics.dy = dy;
+  metrics.matrix = matrix;
+  metrics.valid_pixels = valid_pixels;
+  metrics.sampled_pixels = sampled_pixels;
+  metrics.sample_stride = sample_stride;
+  if (valid_pixels == 0ULL) {
+    return metrics;
+  }
+  const double count = static_cast<double>(valid_pixels);
+  metrics.rms = std::sqrt(sums[5] / count);
+  metrics.mean_abs_diff = sums[6] / count;
+  if (valid_pixels > 1ULL) {
+    const double numerator = sums[4] - (sums[0] * sums[1] / count);
+    const double ref_var = std::max(sums[2] - (sums[0] * sums[0] / count), 0.0);
+    const double mov_var = std::max(sums[3] - (sums[1] * sums[1] / count), 0.0);
+    const double denominator = std::sqrt(ref_var * mov_var);
+    if (denominator > 0.0) {
+      metrics.ncc = numerator / denominator;
+    }
+  }
+  return metrics;
+}
+
+bool better_matrix_metric(const MatrixCandidateMetrics& candidate, const MatrixCandidateMetrics& current) {
+  const bool candidate_rms_finite = std::isfinite(candidate.rms);
+  const bool current_rms_finite = std::isfinite(current.rms);
+  if (candidate_rms_finite != current_rms_finite) {
+    return candidate_rms_finite;
+  }
+  if (candidate_rms_finite && std::abs(candidate.rms - current.rms) > 1.0e-12) {
+    return candidate.rms < current.rms;
+  }
+  const bool candidate_ncc_finite = std::isfinite(candidate.ncc);
+  const bool current_ncc_finite = std::isfinite(current.ncc);
+  if (candidate_ncc_finite != current_ncc_finite) {
+    return candidate_ncc_finite;
+  }
+  if (candidate_ncc_finite && std::abs(candidate.ncc - current.ncc) > 1.0e-12) {
+    return candidate.ncc > current.ncc;
+  }
+  return candidate.valid_pixels > current.valid_pixels;
+}
+
+py::dict matrix_candidate_to_dict(const MatrixCandidateMetrics& metrics, const char* model) {
+  py::dict result;
+  result["valid_pixels"] = metrics.valid_pixels;
+  result["sampled_pixels"] = metrics.sampled_pixels;
+  result["sample_stride"] = metrics.sample_stride;
+  result["rms"] = metrics.rms;
+  result["mean_abs_diff"] = metrics.mean_abs_diff;
+  result["ncc"] = metrics.ncc;
+  result["model"] = model;
+  return result;
 }
 
 py::dict device_info_dict(int device_id) {
@@ -2234,6 +2345,219 @@ py::dict matrix_alignment_metrics_f32(
   return result;
 }
 
+MatrixCandidateMetrics score_matrix_translation_candidates_f32(
+    const float* d_reference,
+    const float* d_moving,
+    const std::array<float, 9>& base_matrix,
+    const std::vector<std::pair<float, float>>& offsets,
+    int width,
+    int height,
+    int sample_stride) {
+  if (offsets.empty()) {
+    throw std::invalid_argument("candidate offsets must be non-empty");
+  }
+  const int stride = sample_stride > 1 ? sample_stride : 1;
+  const int sample_width = (width + stride - 1) / stride;
+  const int sample_height = (height + stride - 1) / stride;
+  const int sampled_pixels = sample_width * sample_height;
+  const int candidate_count = static_cast<int>(offsets.size());
+
+  std::vector<std::array<float, 9>> matrices(offsets.size());
+  std::vector<float> inverses(static_cast<std::size_t>(candidate_count) * 9, 0.0f);
+  for (int i = 0; i < candidate_count; ++i) {
+    auto matrix = base_matrix;
+    matrix[2] += offsets[static_cast<std::size_t>(i)].first;
+    matrix[5] += offsets[static_cast<std::size_t>(i)].second;
+    matrices[static_cast<std::size_t>(i)] = matrix;
+    const auto inverse = invert_matrix3x3(matrix);
+    std::copy(inverse.begin(), inverse.end(), inverses.begin() + static_cast<std::size_t>(i) * 9);
+  }
+
+  std::vector<double> partial_stats(static_cast<std::size_t>(candidate_count) * 7, 0.0);
+  std::vector<unsigned long long> partial_count(static_cast<std::size_t>(candidate_count), 0ULL);
+  float* d_inverses = nullptr;
+  double* d_partial_stats = nullptr;
+  unsigned long long* d_partial_count = nullptr;
+  try {
+    check_cuda(
+        cudaMalloc(&d_inverses, inverses.size() * sizeof(float)),
+        "cudaMalloc(matrix refine candidate inverses)");
+    check_cuda(
+        cudaMalloc(&d_partial_stats, partial_stats.size() * sizeof(double)),
+        "cudaMalloc(matrix refine partial stats)");
+    check_cuda(
+        cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
+        "cudaMalloc(matrix refine partial count)");
+    check_cuda(
+        cudaMemcpy(d_inverses, inverses.data(), inverses.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix refine candidate inverses)");
+    gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
+        d_reference,
+        d_moving,
+        d_inverses,
+        d_partial_stats,
+        d_partial_count,
+        width,
+        height,
+        stride,
+        candidate_count);
+    check_cuda(cudaGetLastError(), "matrix translation refine candidate kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "matrix translation refine candidate synchronize");
+    check_cuda(
+        cudaMemcpy(partial_stats.data(), d_partial_stats, partial_stats.size() * sizeof(double), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix refine partial stats)");
+    check_cuda(
+        cudaMemcpy(
+            partial_count.data(),
+            d_partial_count,
+            partial_count.size() * sizeof(unsigned long long),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix refine partial count)");
+  } catch (...) {
+    cudaFree(d_inverses);
+    cudaFree(d_partial_stats);
+    cudaFree(d_partial_count);
+    throw;
+  }
+  cudaFree(d_inverses);
+  cudaFree(d_partial_stats);
+  cudaFree(d_partial_count);
+
+  MatrixCandidateMetrics best;
+  bool have_best = false;
+  for (int i = 0; i < candidate_count; ++i) {
+    const std::size_t offset = static_cast<std::size_t>(i) * 7;
+    const auto metrics = metrics_from_sums(
+        matrices[static_cast<std::size_t>(i)],
+        offsets[static_cast<std::size_t>(i)].first,
+        offsets[static_cast<std::size_t>(i)].second,
+        partial_stats.data() + offset,
+        partial_count[static_cast<std::size_t>(i)],
+        sampled_pixels,
+        stride);
+    if (!have_best || better_matrix_metric(metrics, best)) {
+      best = metrics;
+      have_best = true;
+    }
+  }
+  return best;
+}
+
+py::dict refine_matrix_translation_with_metrics_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving,
+    py::object matrix_obj,
+    float search_radius_px,
+    float coarse_step_px,
+    float fine_radius_px,
+    float fine_step_px,
+    int coarse_sample_stride,
+    int final_sample_stride) {
+  const py::buffer_info reference_info = reference.request();
+  const py::buffer_info moving_info = moving.request();
+  if (reference_info.ndim != 2 || moving_info.ndim != 2) {
+    throw std::invalid_argument("reference and moving must have shape (height, width)");
+  }
+  require_same_shape(reference_info, moving_info);
+  if (search_radius_px < 0.0f || fine_radius_px < 0.0f) {
+    throw std::invalid_argument("search radii must be non-negative");
+  }
+  if (coarse_step_px <= 0.0f || fine_step_px <= 0.0f) {
+    throw std::invalid_argument("search steps must be positive");
+  }
+  if (coarse_sample_stride <= 0 || final_sample_stride <= 0) {
+    throw std::invalid_argument("sample strides must be positive");
+  }
+
+  const int height = static_cast<int>(reference_info.shape[0]);
+  const int width = static_cast<int>(reference_info.shape[1]);
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  const auto base_matrix = parse_matrix3x3(matrix_obj);
+
+  float* d_reference = nullptr;
+  float* d_moving = nullptr;
+  MatrixCandidateMetrics coarse_best;
+  MatrixCandidateMetrics best;
+  int coarse_candidates = 0;
+  int fine_candidates = 0;
+  try {
+    check_cuda(cudaMalloc(&d_reference, n * sizeof(float)), "cudaMalloc(matrix refine reference)");
+    check_cuda(cudaMalloc(&d_moving, n * sizeof(float)), "cudaMalloc(matrix refine moving)");
+    check_cuda(
+        cudaMemcpy(d_reference, reference_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix refine reference)");
+    check_cuda(
+        cudaMemcpy(d_moving, moving_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix refine moving)");
+
+    const auto coarse_offsets = translation_offsets(0.0f, 0.0f, search_radius_px, coarse_step_px);
+    coarse_candidates = static_cast<int>(coarse_offsets.size());
+    coarse_best = score_matrix_translation_candidates_f32(
+        d_reference,
+        d_moving,
+        base_matrix,
+        coarse_offsets,
+        width,
+        height,
+        coarse_sample_stride);
+    best = coarse_best;
+
+    if (fine_radius_px > 0.0f) {
+      const auto fine_offsets = translation_offsets(coarse_best.dx, coarse_best.dy, fine_radius_px, fine_step_px);
+      fine_candidates = static_cast<int>(fine_offsets.size());
+      best = score_matrix_translation_candidates_f32(
+          d_reference,
+          d_moving,
+          base_matrix,
+          fine_offsets,
+          width,
+          height,
+          final_sample_stride);
+    } else if (final_sample_stride != coarse_sample_stride) {
+      const std::vector<std::pair<float, float>> final_offsets{{coarse_best.dx, coarse_best.dy}};
+      best = score_matrix_translation_candidates_f32(
+          d_reference,
+          d_moving,
+          base_matrix,
+          final_offsets,
+          width,
+          height,
+          final_sample_stride);
+    }
+  } catch (...) {
+    cudaFree(d_reference);
+    cudaFree(d_moving);
+    throw;
+  }
+  cudaFree(d_reference);
+  cudaFree(d_moving);
+
+  py::list matrix_rows;
+  for (int row = 0; row < 3; ++row) {
+    py::list values;
+    for (int col = 0; col < 3; ++col) {
+      values.append(best.matrix[static_cast<std::size_t>(row * 3 + col)]);
+    }
+    matrix_rows.append(values);
+  }
+
+  py::dict result;
+  result["matrix"] = matrix_rows;
+  result["dx_correction"] = best.dx;
+  result["dy_correction"] = best.dy;
+  result["metrics"] = matrix_candidate_to_dict(best, "matrix_alignment_metrics_cuda_candidate_grid");
+  result["coarse_candidates"] = coarse_candidates;
+  result["fine_candidates"] = fine_candidates;
+  result["search_radius_px"] = search_radius_px;
+  result["coarse_step_px"] = coarse_step_px;
+  result["fine_radius_px"] = fine_radius_px;
+  result["fine_step_px"] = fine_step_px;
+  result["coarse_sample_stride"] = coarse_sample_stride;
+  result["final_sample_stride"] = final_sample_stride;
+  result["model"] = "cuda_matrix_metric_translation_refine_grid";
+  return result;
+}
+
 py::dict estimate_translation_search_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference,
     py::array_t<float, py::array::c_style | py::array::forcecast> moving,
@@ -3970,6 +4294,18 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("moving"),
       py::arg("matrix"),
       py::arg("sample_stride") = 1);
+  m.def(
+      "refine_matrix_translation_with_metrics_f32",
+      &refine_matrix_translation_with_metrics_f32,
+      py::arg("reference"),
+      py::arg("moving"),
+      py::arg("matrix"),
+      py::arg("search_radius_px") = 1.0f,
+      py::arg("coarse_step_px") = 0.25f,
+      py::arg("fine_radius_px") = 0.25f,
+      py::arg("fine_step_px") = 0.0625f,
+      py::arg("coarse_sample_stride") = 4,
+      py::arg("final_sample_stride") = 1);
   m.def(
       "estimate_translation_search_f32",
       &estimate_translation_search_f32,

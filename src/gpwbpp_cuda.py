@@ -359,6 +359,138 @@ def matrix_alignment_metrics_f32(
     }
 
 
+def refine_matrix_translation_with_metrics_f32(
+    reference: Any,
+    moving: Any,
+    matrix: Any,
+    search_radius_px: float = 1.0,
+    coarse_step_px: float = 0.25,
+    fine_radius_px: float = 0.25,
+    fine_step_px: float = 0.0625,
+    coarse_sample_stride: int = 4,
+    final_sample_stride: int = 1,
+) -> dict[str, Any]:
+    """Refine matrix translation terms with a native CUDA candidate grid when available."""
+
+    if search_radius_px < 0.0:
+        raise ValueError("search_radius_px must be non-negative")
+    if coarse_step_px <= 0.0:
+        raise ValueError("coarse_step_px must be positive")
+    if fine_radius_px < 0.0:
+        raise ValueError("fine_radius_px must be non-negative")
+    if fine_step_px <= 0.0:
+        raise ValueError("fine_step_px must be positive")
+    if coarse_sample_stride <= 0 or final_sample_stride <= 0:
+        raise ValueError("sample strides must be positive")
+
+    native = _native()
+    if native is not None and hasattr(native, "refine_matrix_translation_with_metrics_f32"):
+        result = dict(
+            native.refine_matrix_translation_with_metrics_f32(
+                reference,
+                moving,
+                matrix,
+                float(search_radius_px),
+                float(coarse_step_px),
+                float(fine_radius_px),
+                float(fine_step_px),
+                int(coarse_sample_stride),
+                int(final_sample_stride),
+            )
+        )
+        result["matrix"] = np.asarray(result["matrix"], dtype=np.float32).tolist()
+        result["dx_correction"] = float(result["dx_correction"])
+        result["dy_correction"] = float(result["dy_correction"])
+        result["metrics"] = dict(result["metrics"])
+        result["coarse_candidates"] = int(result["coarse_candidates"])
+        result["fine_candidates"] = int(result["fine_candidates"])
+        result["search_radius_px"] = float(result["search_radius_px"])
+        result["coarse_step_px"] = float(result["coarse_step_px"])
+        result["fine_radius_px"] = float(result["fine_radius_px"])
+        result["fine_step_px"] = float(result["fine_step_px"])
+        result["coarse_sample_stride"] = int(result["coarse_sample_stride"])
+        result["final_sample_stride"] = int(result["final_sample_stride"])
+        result["model"] = str(result.get("model", "cuda_matrix_metric_translation_refine_grid"))
+        return result
+
+    base = np.asarray(matrix, dtype=np.float32).reshape(3, 3)
+
+    def score(dx: float, dy: float, stride: int) -> tuple[tuple[float, float], dict[str, Any], np.ndarray]:
+        candidate = np.array(base, copy=True)
+        candidate[0, 2] += np.float32(dx)
+        candidate[1, 2] += np.float32(dy)
+        metrics = matrix_alignment_metrics_f32(reference, moving, candidate, sample_stride=int(stride))
+        return (float(metrics["rms"]), -float(metrics["ncc"])), metrics, candidate
+
+    coarse_offsets = np.arange(
+        -float(search_radius_px),
+        float(search_radius_px) + float(coarse_step_px) * 0.5,
+        float(coarse_step_px),
+        dtype=np.float32,
+    )
+    best_key: tuple[float, float] | None = None
+    best_dx = 0.0
+    best_dy = 0.0
+    best_metrics: dict[str, Any] | None = None
+    best_matrix = np.array(base, copy=True)
+    coarse_candidates = 0
+    for dx in coarse_offsets:
+        for dy in coarse_offsets:
+            key, metrics, candidate = score(float(dx), float(dy), coarse_sample_stride)
+            coarse_candidates += 1
+            if best_key is None or key < best_key:
+                best_key = key
+                best_dx = float(dx)
+                best_dy = float(dy)
+                best_metrics = metrics
+                best_matrix = candidate
+
+    fine_candidates = 0
+    if fine_radius_px > 0.0:
+        fine_x = np.arange(
+            best_dx - float(fine_radius_px),
+            best_dx + float(fine_radius_px) + float(fine_step_px) * 0.5,
+            float(fine_step_px),
+            dtype=np.float32,
+        )
+        fine_y = np.arange(
+            best_dy - float(fine_radius_px),
+            best_dy + float(fine_radius_px) + float(fine_step_px) * 0.5,
+            float(fine_step_px),
+            dtype=np.float32,
+        )
+        best_key = None
+        for dx in fine_x:
+            for dy in fine_y:
+                key, metrics, candidate = score(float(dx), float(dy), final_sample_stride)
+                fine_candidates += 1
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best_dx = float(dx)
+                    best_dy = float(dy)
+                    best_metrics = metrics
+                    best_matrix = candidate
+    elif final_sample_stride != coarse_sample_stride:
+        _key, best_metrics, best_matrix = score(best_dx, best_dy, final_sample_stride)
+
+    assert best_metrics is not None
+    return {
+        "matrix": best_matrix.astype(np.float32).tolist(),
+        "dx_correction": best_dx,
+        "dy_correction": best_dy,
+        "metrics": best_metrics,
+        "coarse_candidates": coarse_candidates,
+        "fine_candidates": fine_candidates,
+        "search_radius_px": float(search_radius_px),
+        "coarse_step_px": float(coarse_step_px),
+        "fine_radius_px": float(fine_radius_px),
+        "fine_step_px": float(fine_step_px),
+        "coarse_sample_stride": int(coarse_sample_stride),
+        "final_sample_stride": int(final_sample_stride),
+        "model": "cuda_matrix_metric_translation_refine_loop_fallback",
+    }
+
+
 def _translation_ncc_score(
     reference: np.ndarray,
     moving: np.ndarray,

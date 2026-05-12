@@ -121,8 +121,10 @@ Resident CUDA integration now supports:
 - `gpwbpp.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`
   uses CUDA matrix metrics to search a small translation correction around an
   existing matrix. It is a diagnostic bridge toward pixel-evidence transform
-  scoring; the current implementation launches multiple GPU metric kernels from
-  Python rather than a fused CUDA search kernel.
+  scoring. The native implementation now batches a whole coarse or fine
+  candidate grid into one CUDA launch after uploading the reference/moving
+  images once; CPU fallback keeps the per-candidate metric loop only when the
+  native extension is unavailable.
 - GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
   a bounded fractional-offset grid with bilinear sampling and normalized
   cross-correlation, returning `dx`, `dy`, `score`, and candidate-count

@@ -222,8 +222,10 @@ enough.
 `refine_matrix_translation_with_metrics_f32(...)` adds a CUDA pixel-metric
 translation refinement for an existing similarity/affine matrix. It scores a
 small translation grid with `matrix_alignment_metrics_f32` and returns the
-matrix with the lowest RMS/highest NCC. This is still a CPU-orchestrated loop
-over GPU metric kernels, but it downloads only compact diagnostics. On the M38
+matrix with the lowest RMS/highest NCC. The native backend now batches each
+coarse or fine candidate grid into a single CUDA launch after uploading the
+two images once; CPU fallback keeps the older per-candidate loop for
+installations without the native primitive. On the M38
 grid-top benchmark artifact
 `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json`,
 pixel refinement improved the catalog-similarity output RMS difference versus
@@ -240,9 +242,15 @@ M38 pair and grid-top parameters, artifact
 records the first accepted clean-room GPU catalog path for this pair:
 `catalog_similarity_pixel_refined_agreement_vs_astroalign.passed=true`,
 translation delta about 0.482 px, output RMS difference about 38.53 ADU, and
-elapsed time about 6.42 s versus astroalign's 9.70 s total. This still is not a
-full astroalign replacement: the pixel-refine loop is CPU-orchestrated and the
-agreement is validated on one real pair, not the full 200-frame stack.
+elapsed time about 6.42 s versus astroalign's 9.70 s total. After the fused
+candidate-grid refine primitive, artifact
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v23_fused_pixel_refine.json`
+reduced the pixel-refine search itself to about 0.235 s and the catalog
+similarity plus refine plus warp path to about 0.328 s. That v23 run did not
+pass the strict astroalign matrix-agreement threshold because the upstream
+catalog seed selected a different near-solution, so the speed primitive is
+validated but the robust catalog matcher still needs work before the full
+200-frame benchmark.
 
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive

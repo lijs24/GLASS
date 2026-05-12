@@ -230,6 +230,8 @@ def test_gpu_matrix_metric_translation_refine_improves_offset_matrix():
 
     assert after["rms"] < before["rms"] * 0.6
     assert after["ncc"] > before["ncc"]
+    assert refined["model"] == "cuda_matrix_metric_translation_refine_grid"
+    assert after["model"] == "matrix_alignment_metrics_cuda_candidate_grid"
     assert abs(matrix[0, 2] - good_matrix[0, 2]) <= 0.125
     assert abs(matrix[1, 2] - good_matrix[1, 2]) <= 0.125
     assert refined["coarse_candidates"] > 0
