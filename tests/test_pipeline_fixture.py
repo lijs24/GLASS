@@ -51,6 +51,8 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
                 "calibration",
                 "--tile-size",
                 "9",
+                "--flat-floor",
+                "0.05",
             ]
         )
         == 0
@@ -61,6 +63,7 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     import json
 
     artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
+    assert artifacts["policy"]["flat_floor"] == 0.05
     assert all(master["streaming"] for master in artifacts["masters"].values())
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
 

@@ -156,8 +156,6 @@ def _stream_mean_master(
 
 
 def _normalization_scalar(path: Path, normalization: str, tile_size: int) -> tuple[float, str]:
-    import numpy as np
-
     with FitsImageReader(path) as reader:
         if normalization == "median":
             return _exact_median_scratch(path, tile_size), "median_scratch_memmap"
@@ -310,7 +308,11 @@ def _calibrate_light_to_cache_streaming(
 
 
 def run_calibration_stages(
-    plan_path: str | Path, run_dir: str | Path, backend: str = "auto", tile_size: int = 512
+    plan_path: str | Path,
+    run_dir: str | Path,
+    backend: str = "auto",
+    tile_size: int = 512,
+    flat_floor: float | None = None,
 ) -> RunState:
     plan = read_json(plan_path)
     out = Path(run_dir)
@@ -321,6 +323,10 @@ def run_calibration_stages(
     frames = _frame_map(plan)
     groups = _group_map(plan)
     policy = _policy_from_plan(plan)
+    if flat_floor is not None:
+        if flat_floor <= 0:
+            raise ValueError("flat_floor override must be positive")
+        policy.flat_floor = float(flat_floor)
     master_dir = out / "calib_cache" / "masters"
     calibrated_dir = out / "calib_cache" / "calibrated"
     master_dir.mkdir(parents=True, exist_ok=True)

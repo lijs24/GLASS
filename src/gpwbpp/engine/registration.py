@@ -51,12 +51,36 @@ def _registration_preview(
     return preview, scale, tile_count
 
 
+def _frame_reference_tokens(frame_id: str, path: str | Path) -> set[str]:
+    frame_path = Path(path)
+    return {str(frame_id), frame_path.name, frame_path.stem}
+
+
+def _select_reference_id(
+    calibrated: dict[str, dict[str, Any]],
+    quality_reference_id: str | None,
+    requested_reference: str | None,
+    plan_frames: dict[str, dict[str, Any]] | None = None,
+) -> str | None:
+    if requested_reference:
+        for frame_id, item in calibrated.items():
+            if str(requested_reference) in _frame_reference_tokens(frame_id, item["path"]):
+                return str(frame_id)
+            if plan_frames is not None and frame_id in plan_frames:
+                plan_frame = plan_frames[frame_id]
+                if str(requested_reference) in _frame_reference_tokens(frame_id, plan_frame["path"]):
+                    return str(frame_id)
+        raise ValueError(f"registration reference frame was not found: {requested_reference}")
+    return quality_reference_id
+
+
 def register_calibrated_frames(
     run_dir: str | Path,
     out_path: str | Path | None = None,
     tile_size: int = 512,
     preview_max_dimension: int = 1024,
     method: str = "auto",
+    reference_frame_id: str | None = None,
 ) -> dict[str, Any]:
     if preview_max_dimension <= 0:
         raise ValueError("preview_max_dimension must be positive")
@@ -77,8 +101,14 @@ def register_calibrated_frames(
         transform_model = "similarity"
     if method not in {"auto", "star", "astroalign"}:
         raise ValueError("registration method must be auto, star, or astroalign")
-    reference_id = quality.get("reference_frame_id")
     calibrated = {item["frame_id"]: item for item in artifacts.get("calibrated_lights", [])}
+    plan_frames = {frame["id"]: frame for frame in plan.get("frames", [])}
+    reference_id = _select_reference_id(
+        calibrated,
+        quality.get("reference_frame_id"),
+        reference_frame_id,
+        plan_frames,
+    )
     if reference_id not in calibrated:
         raise ValueError("reference frame is missing from calibrated cache")
     reference_preview, reference_scale, reference_tile_count = _registration_preview(
@@ -236,6 +266,8 @@ def register_calibrated_frames(
         "min_inliers": min_inliers,
         "max_rms_px": max_rms_px,
         "preview_max_dimension": preview_max_dimension,
+        "quality_reference_frame_id": quality.get("reference_frame_id"),
+        "requested_reference_frame_id": reference_frame_id,
         "tile_size": tile_size,
         "registration_results": results,
     }

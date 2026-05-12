@@ -20,6 +20,15 @@ means, records `preview_scale`, `preview_shape`, `tile_size`, and `tile_count`,
 and multiplies preview translations back to source-image pixels. Small images
 stay at `preview_scale=1` for synthetic baseline tests.
 
+Tile-mode registration accepts `--reference-frame-id`, matching a frame id,
+calibrated-cache file name/stem, or the original frame file name/stem from the
+processing plan. This makes real-data comparisons reproducible when the quality
+reference differs from the desired black-box or pairwise diagnostic reference.
+`--registration-preview-max-dimension` controls the streaming preview scale.
+When `--registration-method astroalign` is selected, a per-frame astroalign
+failure is recorded as `status=failed` instead of aborting the whole registration
+stage.
+
 Tile-mode registration can also use the optional open-source `astroalign`
 backend with `gpwbpp run --registration-method astroalign`. This path calls
 `astroalign.find_transform` on the same streaming preview images and records the

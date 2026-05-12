@@ -180,6 +180,71 @@ def test_register_calibrated_frames_can_use_astroalign_backend(tmp_path):
     assert any("astroalign" in warning for warning in moving_result["warnings"])
 
 
+def test_register_calibrated_frames_can_override_reference_by_stem(tmp_path):
+    reference = _star_field()
+    moving = _shift_image(reference, 4, -3)
+    run = tmp_path / "run"
+    cache = run / "calibrated_cache"
+    cache.mkdir(parents=True)
+    auto_ref_path = cache / "auto_ref.fits"
+    user_ref_path = cache / "user_ref.fits"
+    moving_path = cache / "moving.fits"
+    write_fits_data(auto_ref_path, moving)
+    write_fits_data(user_ref_path, reference)
+    write_fits_data(moving_path, moving)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "schema_version": 1,
+            "calibrated_lights": [
+                {"frame_id": "auto_ref", "path": str(auto_ref_path)},
+                {"frame_id": "user_ref", "path": str(user_ref_path)},
+                {"frame_id": "moving", "path": str(moving_path)},
+            ],
+        },
+    )
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "auto_ref",
+            "frame_quality": [
+                {"frame_id": "auto_ref", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+                {"frame_id": "user_ref", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+                {"frame_id": "moving", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+            ],
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {
+            "schema_version": 1,
+            "registration_policy": {},
+            "frames": [
+                {"id": "auto_ref", "path": str(auto_ref_path)},
+                {"id": "user_ref", "path": str(tmp_path / "originals" / "LIGHT_H_USER_REF.fits")},
+                {"id": "moving", "path": str(moving_path)},
+            ],
+        },
+    )
+
+    payload = register_calibrated_frames(
+        run,
+        tile_size=64,
+        preview_max_dimension=256,
+        method="auto",
+        reference_frame_id="LIGHT_H_USER_REF",
+    )
+
+    assert payload["reference_frame_id"] == "user_ref"
+    assert payload["quality_reference_frame_id"] == "auto_ref"
+    assert payload["requested_reference_frame_id"] == "LIGHT_H_USER_REF"
+    user_ref = next(item for item in payload["registration_results"] if item["frame_id"] == "user_ref")
+    moving_result = next(item for item in payload["registration_results"] if item["frame_id"] == "moving")
+    assert user_ref["status"] == "reference"
+    assert moving_result["status"] == "ok"
+
+
 def test_register_calibrated_frames_records_astroalign_failure(tmp_path, monkeypatch):
     import gpwbpp.engine.registration as registration_module
 

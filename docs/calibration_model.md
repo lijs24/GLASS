@@ -13,6 +13,11 @@ state, and report artifacts.
 
 Master flat is calibrated by subtracting either bias or flat-dark data, then
 normalizing by median or mean. A `flat_floor` avoids division by zero.
+Both tile-mode and resident-mode `gpwbpp run` honor `--flat-floor`, and the
+effective value is written into `calibration_artifacts.json` or
+`resident_artifacts.json`. This is scientifically important for real flat
+fields with dust shadows or clipped pixels because too small a floor can create
+extreme calibrated values that break downstream star matching.
 
 Light calibration:
 
@@ -34,4 +39,3 @@ calibrated = (light - master_bias - scaled_dark) / normalized_flat
 
 Dark scaling is controlled by policy and can be disabled. Pedestal is applied
 after flat division.
-

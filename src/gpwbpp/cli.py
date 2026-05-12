@@ -402,7 +402,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             out,
             timing,
             "calibration",
-            lambda: run_calibration_stages(args.plan, args.out, backend=args.backend, tile_size=args.tile_size),
+            lambda: run_calibration_stages(
+                args.plan,
+                args.out,
+                backend=args.backend,
+                tile_size=args.tile_size,
+                flat_floor=args.flat_floor,
+            ),
         )
         if args.until_stage in {"quality", "registration", "warp", "local_normalization", "integration"}:
             _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(args.out, tile_size=args.tile_size))
@@ -418,6 +424,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                     tile_size=args.tile_size,
                     preview_max_dimension=args.registration_preview_max_dimension,
                     method=args.registration_method,
+                    reference_frame_id=args.reference_frame_id,
                 ),
             )
             state.completed_stages.append("registration")
@@ -685,7 +692,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resident-star-prior-radius-px", type=float, default=4.0)
     run.add_argument(
         "--reference-frame-id",
-        help="reference frame id, file name, or stem for resident registration",
+        help="reference frame id, file name, or stem for registration",
     )
     run.add_argument(
         "--exclude-frame-id",
