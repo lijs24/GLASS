@@ -42,6 +42,17 @@ integer NCC search plus the subpixel refinement. On a 1024x1024 M38 crop pair,
 that combined path measured about 0.131 s versus astroalign's 0.310 s, with
 pixel RMS 63.80 versus astroalign's 72.35 for this translation-only diagnostic.
 
+The resident high-VRAM path now exposes the same integer NCC plus subpixel NCC
+operations as `ResidentCalibratedStack.estimate_translation_to_reference(...)`
+and `ResidentCalibratedStack.estimate_translation_subpixel_to_reference(...)`.
+`ResidentCalibratedStack.apply_translation_bilinear_frame(...)` then applies
+the floating-point translation in place on the resident frame. In the same M38
+1024x1024 crop comparison, the resident device-only path measured about 0.070 s
+with the same 63.80 pixel RMS; including one-time upload of the two crop frames
+measured about 0.071 s. This is the timing model closest to the planned
+96GB-VRAM resident pipeline, where calibrated frames remain on the GPU between
+calibration, registration, warp, and integration.
+
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
 moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,

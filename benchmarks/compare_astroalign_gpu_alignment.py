@@ -155,6 +155,60 @@ def _gpu_subpixel_run(
     }
 
 
+def _gpu_resident_ncc_subpixel_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    max_shift: int,
+    radius_steps: int,
+    step: float,
+) -> dict[str, Any]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+        raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
+    t0 = time.perf_counter()
+    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    upload_elapsed = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    coarse = stack.estimate_translation_to_reference(0, 1, max_shift, max_shift)
+    refined = stack.estimate_translation_subpixel_to_reference(
+        0,
+        1,
+        float(coarse["dx"]),
+        float(coarse["dy"]),
+        radius_steps,
+        step,
+    )
+    stack.apply_translation_bilinear_frame(1, refined["dx"], refined["dy"], np.nan)
+    device_elapsed = time.perf_counter() - t1
+
+    t2 = time.perf_counter()
+    aligned, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
+    inspection_elapsed = time.perf_counter() - t2
+    return {
+        "elapsed_s": device_elapsed,
+        "upload_elapsed_s": upload_elapsed,
+        "inspection_download_elapsed_s": inspection_elapsed,
+        "upload_plus_device_elapsed_s": upload_elapsed + device_elapsed,
+        "dx": float(refined["dx"]),
+        "dy": float(refined["dy"]),
+        "score": float(refined["score"]),
+        "candidate_count": int(refined["candidate_count"]),
+        "coarse_dx": int(coarse["dx"]),
+        "coarse_dy": int(coarse["dy"]),
+        "coarse_score": float(coarse["score"]),
+        "coarse_search_count": int(coarse["search_count"]),
+        "radius_steps": int(refined["radius_steps"]),
+        "step": float(refined["step"]),
+        "bytes_allocated": int(stack.bytes_allocated),
+        "model": "resident_translation_integer_ncc_then_subpixel_ncc",
+        "rms": _rms(reference, aligned, weight_map > 0.0),
+    }
+
+
 def _gpu_catalog_run(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -296,6 +350,13 @@ def main() -> int:
         "coarse_score": float(gpu_result["score"]),
         "model": "translation_integer_ncc_then_subpixel_ncc",
     }
+    gpu_resident_result = _gpu_resident_ncc_subpixel_run(
+        reference,
+        moving,
+        args.max_shift,
+        args.subpixel_radius_steps,
+        args.subpixel_step,
+    )
     catalog_max_shift = args.max_shift if args.catalog_max_shift is None else args.catalog_max_shift
     prior_dx = float(gpu_result["dx"]) if args.catalog_prior_radius is not None else None
     prior_dy = float(gpu_result["dy"]) if args.catalog_prior_radius is not None else None
@@ -331,6 +392,7 @@ def main() -> int:
         "gpwbpp_cuda": gpu_result,
         "gpwbpp_cuda_subpixel": gpu_subpixel_result,
         "gpwbpp_cuda_ncc_subpixel": gpu_ncc_subpixel_result,
+        "gpwbpp_cuda_resident_ncc_subpixel": gpu_resident_result,
         "gpwbpp_cuda_catalog": gpu_catalog_result,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
@@ -343,6 +405,13 @@ def main() -> int:
         else None,
         "ncc_subpixel_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_ncc_subpixel_result["elapsed_s"]
         if gpu_ncc_subpixel_result["elapsed_s"] > 0.0
+        else None,
+        "resident_device_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_resident_result["elapsed_s"]
+        if gpu_resident_result["elapsed_s"] > 0.0
+        else None,
+        "resident_upload_plus_device_speedup_vs_astroalign": astroalign_result["elapsed_s"]
+        / gpu_resident_result["upload_plus_device_elapsed_s"]
+        if gpu_resident_result["upload_plus_device_elapsed_s"] > 0.0
         else None,
         "cuda_devices": devices,
     }

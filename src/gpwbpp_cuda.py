@@ -869,6 +869,75 @@ class ResidentCalibratedStack:
             raise RuntimeError("native ResidentCalibratedStack.apply_translation_frame is not available")
         self._impl.apply_translation_frame(int(index), int(dx), int(dy), float(fill))
 
+    def apply_translation_bilinear_frame(self, index: int, dx: float, dy: float, fill: float = np.nan) -> None:
+        if not hasattr(self._impl, "apply_translation_bilinear_frame"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_translation_bilinear_frame is not available")
+        self._impl.apply_translation_bilinear_frame(int(index), float(dx), float(dy), float(fill))
+
+    def estimate_translation_to_reference(
+        self,
+        reference_index: int,
+        moving_index: int,
+        max_shift_x: int,
+        max_shift_y: int | None = None,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "estimate_translation_to_reference"):
+            raise RuntimeError("native ResidentCalibratedStack.estimate_translation_to_reference is not available")
+        result = dict(
+            self._impl.estimate_translation_to_reference(
+                int(reference_index),
+                int(moving_index),
+                int(max_shift_x),
+                int(max_shift_x if max_shift_y is None else max_shift_y),
+            )
+        )
+        return {
+            "dx": int(result["dx"]),
+            "dy": int(result["dy"]),
+            "score": float(result["score"]),
+            "search_count": int(result["search_count"]),
+            "reference_index": int(result["reference_index"]),
+            "moving_index": int(result["moving_index"]),
+            "model": str(result["model"]),
+        }
+
+    def estimate_translation_subpixel_to_reference(
+        self,
+        reference_index: int,
+        moving_index: int,
+        center_dx: float,
+        center_dy: float,
+        radius_steps: int,
+        step: float,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "estimate_translation_subpixel_to_reference"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.estimate_translation_subpixel_to_reference is not available"
+            )
+        result = dict(
+            self._impl.estimate_translation_subpixel_to_reference(
+                int(reference_index),
+                int(moving_index),
+                float(center_dx),
+                float(center_dy),
+                int(radius_steps),
+                float(step),
+            )
+        )
+        return {
+            "dx": float(result["dx"]),
+            "dy": float(result["dy"]),
+            "score": float(result["score"]),
+            "candidate_count": int(result["candidate_count"]),
+            "center_dx": float(result["center_dx"]),
+            "center_dy": float(result["center_dy"]),
+            "radius_steps": int(result["radius_steps"]),
+            "step": float(result["step"]),
+            "reference_index": int(result["reference_index"]),
+            "moving_index": int(result["moving_index"]),
+            "model": str(result["model"]),
+        }
+
     def star_local_max_mask(self, index: int, threshold: float) -> np.ndarray:
         if not hasattr(self._impl, "star_local_max_mask"):
             raise RuntimeError("native ResidentCalibratedStack.star_local_max_mask is not available")

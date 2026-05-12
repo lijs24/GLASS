@@ -98,6 +98,66 @@ def test_resident_stack_translation_warp_uses_nan_coverage():
     assert np.allclose(weight_map, valid.astype(np.float32))
 
 
+def test_resident_stack_estimates_and_warps_subpixel_translation_on_device():
+    module = cuda_module_or_skip()
+    required = [
+        "estimate_translation_to_reference",
+        "estimate_translation_subpixel_to_reference",
+        "apply_translation_bilinear_frame",
+    ]
+    missing = [name for name in required if not hasattr(module.ResidentCalibratedStack, name)]
+    if missing:
+        raise AssertionError(f"ResidentCalibratedStack is missing {missing}")
+
+    image = np.zeros((64, 64), dtype=np.float32)
+    yy, xx = np.indices(image.shape, dtype=np.float32)
+    for x, y, flux in [
+        (12.25, 14.50, 150.0),
+        (24.00, 20.75, 230.0),
+        (41.50, 18.25, 180.0),
+        (16.75, 42.00, 130.0),
+        (49.25, 45.50, 210.0),
+        (35.50, 33.25, 170.0),
+    ]:
+        image += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 1.2**2)))
+    reference = (image + 10.0 + 0.01 * xx + 0.02 * yy).astype(np.float32)
+    true_delta = np.array([2.25, -1.5], dtype=np.float32)
+    moving, _coverage = module.warp_translation_bilinear_f32(
+        reference,
+        -float(true_delta[0]),
+        -float(true_delta[1]),
+        0.0,
+    )
+
+    stack = module.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+
+    coarse = stack.estimate_translation_to_reference(0, 1, 4, 4)
+    refined = stack.estimate_translation_subpixel_to_reference(
+        0,
+        1,
+        float(coarse["dx"]),
+        float(coarse["dy"]),
+        3,
+        0.25,
+    )
+    stack.apply_translation_bilinear_frame(1, refined["dx"], refined["dy"], np.nan)
+    aligned, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
+
+    valid = weight_map > 0.0
+    valid &= (xx >= 8) & (xx < reference.shape[1] - 8) & (yy >= 8) & (yy < reference.shape[0] - 8)
+    rms = float(np.sqrt(np.mean((aligned[valid] - reference[valid]) ** 2)))
+
+    assert coarse["model"] == "resident_translation_integer_ncc"
+    assert refined["model"] == "resident_translation_subpixel_ncc"
+    assert abs(refined["dx"] - float(true_delta[0])) <= 0.25
+    assert abs(refined["dy"] - float(true_delta[1])) <= 0.25
+    assert refined["candidate_count"] == 49
+    assert refined["score"] > 0.98
+    assert rms < 4.0
+
+
 def test_resident_stack_weighted_mean_skips_zero_weight_and_nan_frames():
     module = cuda_module_or_skip()
     frames = [

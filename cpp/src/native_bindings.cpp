@@ -378,6 +378,176 @@ class ResidentCalibratedStack {
     cudaFree(d_coverage);
   }
 
+  void apply_translation_bilinear_frame(std::size_t index, float dx, float dy, float fill) {
+    require_loaded(index, "bilinear translation warp");
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    float* d_output = nullptr;
+    float* d_coverage = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident bilinear translation output)");
+      check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident bilinear translation coverage)");
+      gpwbpp_warp_translation_bilinear_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_output,
+          d_coverage,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          dx,
+          dy,
+          fill);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_translation_bilinear_frame kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_translation_bilinear_frame synchronize");
+      check_cuda(
+          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
+          "cudaMemcpy(resident bilinear translated frame)");
+    } catch (...) {
+      cudaFree(d_output);
+      cudaFree(d_coverage);
+      throw;
+    }
+    cudaFree(d_output);
+    cudaFree(d_coverage);
+  }
+
+  py::dict estimate_translation_to_reference(
+      std::size_t reference_index,
+      std::size_t moving_index,
+      int max_shift_x,
+      int max_shift_y) const {
+    require_loaded(reference_index, "resident translation search");
+    require_loaded(moving_index, "resident translation search");
+    if (max_shift_x < 0 || max_shift_y < 0) {
+      throw std::invalid_argument("max shifts must be non-negative");
+    }
+    const int shift_count = (2 * max_shift_x + 1) * (2 * max_shift_y + 1);
+    float* d_scores = nullptr;
+    int* d_best_dx = nullptr;
+    int* d_best_dy = nullptr;
+    float* d_best_score = nullptr;
+    int best_dx = 0;
+    int best_dy = 0;
+    float best_score = 0.0f;
+    try {
+      check_cuda(cudaMalloc(&d_scores, static_cast<std::size_t>(shift_count) * sizeof(float)), "cudaMalloc(resident translation scores)");
+      check_cuda(cudaMalloc(&d_best_dx, sizeof(int)), "cudaMalloc(resident translation best dx)");
+      check_cuda(cudaMalloc(&d_best_dy, sizeof(int)), "cudaMalloc(resident translation best dy)");
+      check_cuda(cudaMalloc(&d_best_score, sizeof(float)), "cudaMalloc(resident translation best score)");
+      gpwbpp_estimate_translation_search_f32_launch(
+          d_stack_ + reference_index * pixels_per_frame_,
+          d_stack_ + moving_index * pixels_per_frame_,
+          d_scores,
+          d_best_dx,
+          d_best_dy,
+          d_best_score,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          max_shift_x,
+          max_shift_y);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.estimate_translation_to_reference kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.estimate_translation_to_reference synchronize");
+      check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(resident best dx)");
+      check_cuda(cudaMemcpy(&best_dy, d_best_dy, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(resident best dy)");
+      check_cuda(
+          cudaMemcpy(&best_score, d_best_score, sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident best score)");
+    } catch (...) {
+      cudaFree(d_scores);
+      cudaFree(d_best_dx);
+      cudaFree(d_best_dy);
+      cudaFree(d_best_score);
+      throw;
+    }
+    cudaFree(d_scores);
+    cudaFree(d_best_dx);
+    cudaFree(d_best_dy);
+    cudaFree(d_best_score);
+
+    py::dict result;
+    result["dx"] = best_dx;
+    result["dy"] = best_dy;
+    result["score"] = best_score;
+    result["search_count"] = shift_count;
+    result["reference_index"] = reference_index;
+    result["moving_index"] = moving_index;
+    result["model"] = "resident_translation_integer_ncc";
+    return result;
+  }
+
+  py::dict estimate_translation_subpixel_to_reference(
+      std::size_t reference_index,
+      std::size_t moving_index,
+      float center_dx,
+      float center_dy,
+      int radius_steps,
+      float step) const {
+    require_loaded(reference_index, "resident subpixel translation search");
+    require_loaded(moving_index, "resident subpixel translation search");
+    if (radius_steps < 0) {
+      throw std::invalid_argument("radius_steps must be non-negative");
+    }
+    if (step <= 0.0f) {
+      throw std::invalid_argument("step must be positive");
+    }
+    const int candidate_count = (2 * radius_steps + 1) * (2 * radius_steps + 1);
+    float* d_scores = nullptr;
+    float* d_best_dx = nullptr;
+    float* d_best_dy = nullptr;
+    float* d_best_score = nullptr;
+    float best_dx = 0.0f;
+    float best_dy = 0.0f;
+    float best_score = 0.0f;
+    try {
+      check_cuda(cudaMalloc(&d_scores, static_cast<std::size_t>(candidate_count) * sizeof(float)), "cudaMalloc(resident subpixel scores)");
+      check_cuda(cudaMalloc(&d_best_dx, sizeof(float)), "cudaMalloc(resident subpixel best dx)");
+      check_cuda(cudaMalloc(&d_best_dy, sizeof(float)), "cudaMalloc(resident subpixel best dy)");
+      check_cuda(cudaMalloc(&d_best_score, sizeof(float)), "cudaMalloc(resident subpixel best score)");
+      gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
+          d_stack_ + reference_index * pixels_per_frame_,
+          d_stack_ + moving_index * pixels_per_frame_,
+          d_scores,
+          d_best_dx,
+          d_best_dy,
+          d_best_score,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          center_dx,
+          center_dy,
+          radius_steps,
+          step);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.estimate_translation_subpixel_to_reference kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.estimate_translation_subpixel_to_reference synchronize");
+      check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident subpixel best dx)");
+      check_cuda(cudaMemcpy(&best_dy, d_best_dy, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident subpixel best dy)");
+      check_cuda(
+          cudaMemcpy(&best_score, d_best_score, sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident subpixel best score)");
+    } catch (...) {
+      cudaFree(d_scores);
+      cudaFree(d_best_dx);
+      cudaFree(d_best_dy);
+      cudaFree(d_best_score);
+      throw;
+    }
+    cudaFree(d_scores);
+    cudaFree(d_best_dx);
+    cudaFree(d_best_dy);
+    cudaFree(d_best_score);
+
+    py::dict result;
+    result["dx"] = best_dx;
+    result["dy"] = best_dy;
+    result["score"] = best_score;
+    result["candidate_count"] = candidate_count;
+    result["center_dx"] = center_dx;
+    result["center_dy"] = center_dy;
+    result["radius_steps"] = radius_steps;
+    result["step"] = step;
+    result["reference_index"] = reference_index;
+    result["moving_index"] = moving_index;
+    result["model"] = "resident_translation_subpixel_ncc";
+    return result;
+  }
+
   py::array_t<unsigned char> star_local_max_mask(std::size_t index, float threshold) const {
     require_index(index);
     if (!loaded_[index]) {
@@ -730,6 +900,13 @@ class ResidentCalibratedStack {
   void require_index(std::size_t index) const {
     if (index >= frame_count_) {
       throw std::out_of_range("resident frame index is out of range");
+    }
+  }
+
+  void require_loaded(std::size_t index, const char* operation) const {
+    require_index(index);
+    if (!loaded_[index]) {
+      throw std::runtime_error(std::string("resident frame must be loaded before ") + operation);
     }
   }
 
@@ -1987,6 +2164,29 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("dx"),
           py::arg("dy"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+      .def(
+          "apply_translation_bilinear_frame",
+          &ResidentCalibratedStack::apply_translation_bilinear_frame,
+          py::arg("index"),
+          py::arg("dx"),
+          py::arg("dy"),
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+      .def(
+          "estimate_translation_to_reference",
+          &ResidentCalibratedStack::estimate_translation_to_reference,
+          py::arg("reference_index"),
+          py::arg("moving_index"),
+          py::arg("max_shift_x"),
+          py::arg("max_shift_y"))
+      .def(
+          "estimate_translation_subpixel_to_reference",
+          &ResidentCalibratedStack::estimate_translation_subpixel_to_reference,
+          py::arg("reference_index"),
+          py::arg("moving_index"),
+          py::arg("center_dx"),
+          py::arg("center_dy"),
+          py::arg("radius_steps"),
+          py::arg("step"))
       .def("star_local_max_mask", &ResidentCalibratedStack::star_local_max_mask)
       .def("star_candidates", &ResidentCalibratedStack::star_candidates)
       .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)
