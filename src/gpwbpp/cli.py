@@ -17,6 +17,7 @@ from gpwbpp.engine.state import write_run_state
 from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.metadata.scanner import scan_tree
 from gpwbpp.planner.plan_builder import build_processing_plan
+from gpwbpp.report.blackbox_package import create_blackbox_package
 from gpwbpp.report.compare_report import compare_fits, write_compare_report
 from gpwbpp.report.html_report import write_html_report
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
@@ -282,6 +283,20 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_blackbox_package(args: argparse.Namespace) -> int:
+    payload = create_blackbox_package(
+        args.manifest,
+        args.plan,
+        args.out,
+        gpwbpp_run=args.gpwbpp_run,
+        gpwbpp_time_seconds=args.gpwbpp_time_seconds,
+        reference_label=args.reference_label,
+    )
+    console.print(f"Wrote black-box package: {args.out}")
+    console.print(payload)
+    return 0
+
+
 def cmd_synthetic(args: argparse.Namespace) -> int:
     generate_synthetic_dataset(
         args.out,
@@ -362,6 +377,15 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--gpwbpp-label", default="GPWBPP")
     compare.add_argument("--reference-label", default="reference")
     compare.set_defaults(func=cmd_compare)
+
+    blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")
+    blackbox.add_argument("--manifest", required=True)
+    blackbox.add_argument("--out", required=True)
+    blackbox.add_argument("--plan")
+    blackbox.add_argument("--gpwbpp-run")
+    blackbox.add_argument("--gpwbpp-time-seconds", type=float)
+    blackbox.add_argument("--reference-label", default="PixInsight WBPP")
+    blackbox.set_defaults(func=cmd_blackbox_package)
 
     synthetic = sub.add_parser("synthetic", help="generate synthetic FITS data")
     synthetic.add_argument("--out", required=True)

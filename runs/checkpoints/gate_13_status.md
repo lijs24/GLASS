@@ -11,6 +11,8 @@
 - Verified `gpwbpp compare` works for CPU/CUDA synthetic masters in Gate 12.
 - Documented the black-box timing protocol in `docs/pixinsight_blackbox_reference.md`.
 - Added `gpwbpp compare` timing fields for GPWBPP/reference elapsed seconds and speedup reporting.
+- Added `gpwbpp blackbox-package` to export a clean-room WBPP handoff package.
+- Generated a real M5/Lum handoff package with the measured GPWBPP runtime filled in.
 
 ## Blocker
 
@@ -29,7 +31,17 @@ Get-ChildItem -Path 'C:\Program Files','C:\Program Files (x86)' -Filter PixInsig
 Get-PSDrive -PSProvider FileSystem | ForEach-Object { Get-ChildItem -LiteralPath $_.Root -Filter PixInsight.exe -Recurse -ErrorAction SilentlyContinue }
 Get-ChildItem -LiteralPath 'E:\摄影素材\天协远程台原始素材' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'WBPP|WeightedBatch|BatchPreprocessing|PixInsight' }
 .\.venv\Scripts\python -m pytest -q tests/test_compare_report.py
+.\.venv\Scripts\python -m pytest -q tests/test_blackbox_package.py
+.\.venv\Scripts\python -m pytest -q
+.\.venv\Scripts\gpwbpp blackbox-package --manifest runs\real_m5_lum_subset\manifest.json --plan runs\real_m5_lum_subset\processing_plan.json --gpwbpp-run runs\real_m5_lum_subset\gpwbpp_cuda_v2 --gpwbpp-time-seconds 64.061 --out runs\real_m5_lum_subset\wbpp_blackbox_handoff --reference-label "PixInsight WBPP"
 ```
+
+## Handoff Artifacts
+
+- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\input_frames.csv`
+- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\wbpp_manual_run.md`
+- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\timing_template.json`
+- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\compare_command.ps1`
 
 ## Next Step
 

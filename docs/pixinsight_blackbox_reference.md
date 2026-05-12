@@ -49,3 +49,12 @@ On this workstation, `PixInsight.exe` was not found in PATH or common
 was completed on a small M5/Lum subset, but the PixInsight/WBPP black-box timing
 comparison is blocked until a local PixInsight executable or a user-generated
 WBPP output/log for the same subset is available.
+
+The current real-data handoff package is:
+
+```text
+runs/real_m5_lum_subset/wbpp_blackbox_handoff/
+```
+
+It contains the frame CSV, manual clean-room WBPP instructions, timing template,
+and a compare command template with GPWBPP's measured 64.061 s runtime filled in.
