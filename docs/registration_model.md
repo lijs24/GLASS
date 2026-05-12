@@ -23,3 +23,16 @@ stay at `preview_scale=1` for synthetic baseline tests.
 Warp skips non-reference frames with failed registration status and writes them
 to `warp_results.json` under `skipped_frames`; they do not enter local
 normalization or integration.
+
+CUDA registration now has a narrow pure-GPU translation baseline:
+`estimate_translation_search_f32(reference, moving, max_shift_x, max_shift_y)`
+scores every integer shift with normalized cross-correlation and selects the
+best shift on the device. The returned shift is directly compatible with
+`warp_translation_f32`. This path is useful for controlled tests, diagnostics,
+and high-VRAM resident timing, but it is intentionally labeled as
+`translation_integer_ncc`; it does not yet replace star-asterism matching,
+subpixel refinement, similarity/affine transforms, or higher-order interpolation.
+
+The clean-room astroalign comparison benchmark lives in
+`benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
+open-source external reference, not as GPWBPP runtime logic.

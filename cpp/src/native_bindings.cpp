@@ -38,6 +38,17 @@ void gpwbpp_warp_translation_f32_launch(
     int dx,
     int dy,
     float fill);
+void gpwbpp_estimate_translation_search_f32_launch(
+    const float* reference,
+    const float* moving,
+    float* scores,
+    int* best_dx,
+    int* best_dy,
+    float* best_score,
+    int width,
+    int height,
+    int max_shift_x,
+    int max_shift_y);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
 void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
@@ -923,6 +934,95 @@ py::tuple warp_translation_f32(
   return py::make_tuple(output, coverage);
 }
 
+py::dict estimate_translation_search_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving,
+    int max_shift_x,
+    int max_shift_y) {
+  const py::buffer_info reference_info = reference.request();
+  const py::buffer_info moving_info = moving.request();
+  if (reference_info.ndim != 2 || moving_info.ndim != 2) {
+    throw std::invalid_argument("reference and moving must have shape (height, width)");
+  }
+  require_same_shape(reference_info, moving_info);
+  if (max_shift_x < 0 || max_shift_y < 0) {
+    throw std::invalid_argument("max_shift values must be non-negative");
+  }
+  const int height = static_cast<int>(reference_info.shape[0]);
+  const int width = static_cast<int>(reference_info.shape[1]);
+  if (height <= 0 || width <= 0) {
+    throw std::invalid_argument("reference and moving images must be non-empty");
+  }
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  const int shift_count = (2 * max_shift_x + 1) * (2 * max_shift_y + 1);
+
+  float* d_reference = nullptr;
+  float* d_moving = nullptr;
+  float* d_scores = nullptr;
+  int* d_best_dx = nullptr;
+  int* d_best_dy = nullptr;
+  float* d_best_score = nullptr;
+  int best_dx = 0;
+  int best_dy = 0;
+  float best_score = 0.0f;
+  try {
+    check_cuda(cudaMalloc(&d_reference, n * sizeof(float)), "cudaMalloc(registration reference)");
+    check_cuda(cudaMalloc(&d_moving, n * sizeof(float)), "cudaMalloc(registration moving)");
+    check_cuda(
+        cudaMalloc(&d_scores, static_cast<std::size_t>(shift_count) * sizeof(float)),
+        "cudaMalloc(registration scores)");
+    check_cuda(cudaMalloc(&d_best_dx, sizeof(int)), "cudaMalloc(registration best dx)");
+    check_cuda(cudaMalloc(&d_best_dy, sizeof(int)), "cudaMalloc(registration best dy)");
+    check_cuda(cudaMalloc(&d_best_score, sizeof(float)), "cudaMalloc(registration best score)");
+    check_cuda(
+        cudaMemcpy(d_reference, reference_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(registration reference)");
+    check_cuda(
+        cudaMemcpy(d_moving, moving_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(registration moving)");
+    gpwbpp_estimate_translation_search_f32_launch(
+        d_reference,
+        d_moving,
+        d_scores,
+        d_best_dx,
+        d_best_dy,
+        d_best_score,
+        width,
+        height,
+        max_shift_x,
+        max_shift_y);
+    check_cuda(cudaGetLastError(), "estimate_translation_search_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "estimate_translation_search_f32 synchronize");
+    check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(best dx)");
+    check_cuda(cudaMemcpy(&best_dy, d_best_dy, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(best dy)");
+    check_cuda(
+        cudaMemcpy(&best_score, d_best_score, sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(best score)");
+  } catch (...) {
+    cudaFree(d_reference);
+    cudaFree(d_moving);
+    cudaFree(d_scores);
+    cudaFree(d_best_dx);
+    cudaFree(d_best_dy);
+    cudaFree(d_best_score);
+    throw;
+  }
+  cudaFree(d_reference);
+  cudaFree(d_moving);
+  cudaFree(d_scores);
+  cudaFree(d_best_dx);
+  cudaFree(d_best_dy);
+  cudaFree(d_best_score);
+
+  py::dict result;
+  result["dx"] = best_dx;
+  result["dy"] = best_dy;
+  result["score"] = best_score;
+  result["search_count"] = shift_count;
+  result["model"] = "translation_integer_ncc";
+  return result;
+}
+
 py::array_t<float> local_norm_apply_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> input,
     float scale,
@@ -1132,6 +1232,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("calibrate_tile_f32", &calibrate_tile_f32);
   m.def("mean_stack_tiles_f32", &mean_stack_tiles_f32);
   m.def("warp_translation_f32", &warp_translation_f32);
+  m.def("estimate_translation_search_f32", &estimate_translation_search_f32);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);

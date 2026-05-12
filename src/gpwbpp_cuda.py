@@ -229,6 +229,91 @@ def warp_translation_f32(data: Any, dx: float, dy: float, fill: float = 0.0) -> 
     return out, coverage
 
 
+def _translation_ncc_score(reference: np.ndarray, moving: np.ndarray, dx: int, dy: int) -> float:
+    h, w = reference.shape
+    src_x0 = max(0, -dx)
+    src_x1 = min(w, w - dx)
+    dst_x0 = max(0, dx)
+    dst_x1 = min(w, w + dx)
+    src_y0 = max(0, -dy)
+    src_y1 = min(h, h - dy)
+    dst_y0 = max(0, dy)
+    dst_y1 = min(h, h + dy)
+    if src_x0 >= src_x1 or src_y0 >= src_y1:
+        return float("-inf")
+    ref = reference[dst_y0:dst_y1, dst_x0:dst_x1].astype(np.float64, copy=False)
+    mov = moving[src_y0:src_y1, src_x0:src_x1].astype(np.float64, copy=False)
+    valid = np.isfinite(ref) & np.isfinite(mov)
+    if int(np.sum(valid)) <= 1:
+        return float("-inf")
+    ref = ref[valid]
+    mov = mov[valid]
+    ref = ref - float(np.mean(ref))
+    mov = mov - float(np.mean(mov))
+    denom = float(np.sqrt(np.sum(ref * ref) * np.sum(mov * mov)))
+    if denom <= 0.0:
+        return float("-inf")
+    return float(np.sum(ref * mov) / denom)
+
+
+def estimate_translation_search_f32(
+    reference: Any,
+    moving: Any,
+    max_shift_x: int,
+    max_shift_y: int | None = None,
+) -> dict[str, Any]:
+    """Estimate an integer translation that warps ``moving`` onto ``reference``.
+
+    The native CUDA path scores every integer shift with normalized cross-correlation
+    and selects the best candidate on device. The CPU fallback is intentionally small
+    and exists only to keep the API importable on CPU-only machines.
+    """
+
+    if max_shift_y is None:
+        max_shift_y = max_shift_x
+    native = _native()
+    if native is not None and hasattr(native, "estimate_translation_search_f32"):
+        result = dict(
+            native.estimate_translation_search_f32(
+                reference,
+                moving,
+                int(max_shift_x),
+                int(max_shift_y),
+            )
+        )
+        return {
+            "dx": int(result["dx"]),
+            "dy": int(result["dy"]),
+            "score": float(result["score"]),
+            "search_count": int(result["search_count"]),
+            "model": str(result.get("model", "translation_integer_ncc")),
+        }
+
+    ref = np.asarray(reference, dtype=np.float32)
+    mov = np.asarray(moving, dtype=np.float32)
+    if ref.shape != mov.shape:
+        raise ValueError(f"shape mismatch for registration: {ref.shape} != {mov.shape}")
+    best_dx = 0
+    best_dy = 0
+    best_score = float("-inf")
+    search_count = 0
+    for dy in range(-int(max_shift_y), int(max_shift_y) + 1):
+        for dx in range(-int(max_shift_x), int(max_shift_x) + 1):
+            score = _translation_ncc_score(ref, mov, dx, dy)
+            search_count += 1
+            if score > best_score:
+                best_dx = dx
+                best_dy = dy
+                best_score = score
+    return {
+        "dx": best_dx,
+        "dy": best_dy,
+        "score": best_score,
+        "search_count": search_count,
+        "model": "translation_integer_ncc_cpu_fallback",
+    }
+
+
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     native = _native()
     if native is not None and hasattr(native, "local_norm_apply_f32"):
