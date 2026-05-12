@@ -21,6 +21,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `estimate_translation_subpixel_ncc_f32(reference, moving, center_dx, center_dy, radius_steps, step)`
 - `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None, prior_dy=None, prior_radius_px=None)`
 - `estimate_similarity_from_pairs_f32(reference_x, reference_y, moving_x, moving_y)`
+- `estimate_similarity_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px=2.0, min_pair_distance=2.0)`
 - `warp_translation_bilinear_f32(data, dx, dy, fill)`
 - `star_local_max_mask_f32(tile, threshold)`
 - `star_candidates_f32(tile, threshold, max_candidates)`
@@ -83,6 +84,12 @@ Resident CUDA integration now supports:
   the moving-to-reference scale, rotation, translation matrix, valid-pair count,
   and RMS on the device. It is a building block for the planned pure-GPU
   descriptor matcher; it does not by itself solve star matching.
+- GPU bounded-catalog similarity seed matching. The primitive forms ordered
+  two-star pair candidates from compact reference and moving catalogs, fits a
+  candidate similarity transform, scores transformed moving stars against the
+  reference catalog, and returns the highest-inlier matrix with RMS diagnostics.
+  This is intentionally scoped to compact catalogs and is not yet a full robust
+  descriptor/RANSAC implementation.
 - GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
   a bounded fractional-offset grid with bilinear sampling and normalized
   cross-correlation, returning `dx`, `dy`, `score`, and candidate-count

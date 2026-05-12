@@ -160,6 +160,16 @@ pairs with 0.134 px fit RMS; GPU fit plus standalone CUDA warp took about
 about 3.98 ADU median absolute difference and 12.00 ADU RMS difference against
 astroalign apply on common valid pixels.
 
+`estimate_similarity_from_catalogs_f32(reference_x, reference_y, moving_x,
+moving_y, tolerance_px, min_pair_distance)` is the first pure-GPU seed matcher
+for similarity transforms from compact catalogs. It forms ordered two-star pair
+candidates directly on the device, fits a similarity transform for each
+candidate, scores transformed moving stars against the reference catalog, and
+returns the highest-inlier matrix with RMS diagnostics. The validated scope is
+small bounded catalogs with outliers; it is a stepping stone toward descriptor
+matching and robust RANSAC, not yet the final high-resolution registration
+model.
+
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
 needed to apply similarity and affine matrices without falling back to CPU pixel

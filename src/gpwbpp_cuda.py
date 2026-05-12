@@ -845,6 +845,176 @@ def estimate_similarity_from_pairs_f32(
     return _similarity_from_pairs_cpu(reference_x, reference_y, moving_x, moving_y)
 
 
+def _similarity_matrix_from_two_pairs(
+    reference_a: np.ndarray,
+    reference_b: np.ndarray,
+    moving_a: np.ndarray,
+    moving_b: np.ndarray,
+    min_pair_distance: float,
+) -> np.ndarray | None:
+    moving_vector = moving_b - moving_a
+    reference_vector = reference_b - reference_a
+    moving_distance2 = float(np.dot(moving_vector, moving_vector))
+    reference_distance2 = float(np.dot(reference_vector, reference_vector))
+    minimum = float(min_pair_distance) * float(min_pair_distance)
+    if moving_distance2 <= minimum or reference_distance2 <= minimum:
+        return None
+    a = float(np.dot(moving_vector, reference_vector) / moving_distance2)
+    b = float((moving_vector[0] * reference_vector[1] - moving_vector[1] * reference_vector[0]) / moving_distance2)
+    tx = float(reference_a[0] - (a * moving_a[0] - b * moving_a[1]))
+    ty = float(reference_a[1] - (b * moving_a[0] + a * moving_a[1]))
+    return np.asarray([[a, -b, tx], [b, a, ty], [0.0, 0.0, 1.0]], dtype=np.float32)
+
+
+def _score_similarity_catalog_matrix(
+    matrix: np.ndarray,
+    reference: np.ndarray,
+    moving: np.ndarray,
+    tolerance_px: float,
+) -> tuple[int, float]:
+    tolerance2 = float(tolerance_px) * float(tolerance_px)
+    inliers = 0
+    residual_sum = 0.0
+    for point in moving:
+        if not np.all(np.isfinite(point)):
+            continue
+        transformed = np.asarray(
+            [
+                matrix[0, 0] * point[0] + matrix[0, 1] * point[1] + matrix[0, 2],
+                matrix[1, 0] * point[0] + matrix[1, 1] * point[1] + matrix[1, 2],
+            ],
+            dtype=np.float32,
+        )
+        finite_reference = reference[np.all(np.isfinite(reference), axis=1)]
+        if finite_reference.size == 0:
+            continue
+        distances = np.sum((finite_reference - transformed) ** 2, axis=1)
+        best = float(np.min(distances))
+        if best <= tolerance2:
+            inliers += 1
+            residual_sum += best
+    rms = float(np.sqrt(residual_sum / inliers)) if inliers else float("nan")
+    return inliers, rms
+
+
+def _similarity_from_catalogs_cpu(
+    reference_x: Any,
+    reference_y: Any,
+    moving_x: Any,
+    moving_y: Any,
+    tolerance_px: float,
+    min_pair_distance: float,
+) -> dict[str, Any]:
+    reference = np.column_stack(
+        [np.asarray(reference_x, dtype=np.float32).reshape(-1), np.asarray(reference_y, dtype=np.float32).reshape(-1)]
+    )
+    moving = np.column_stack(
+        [np.asarray(moving_x, dtype=np.float32).reshape(-1), np.asarray(moving_y, dtype=np.float32).reshape(-1)]
+    )
+    if len(reference) < 2 or len(moving) < 2:
+        raise ValueError("similarity catalog estimation requires at least two stars per catalog")
+    best_matrix = np.eye(3, dtype=np.float32)
+    best_inliers = -1
+    best_rms = float("inf")
+    best_index = -1
+    candidate_count = 0
+    for reference_a_index, reference_a in enumerate(reference):
+        for reference_b_index, reference_b in enumerate(reference):
+            if reference_a_index == reference_b_index:
+                continue
+            for moving_a_index, moving_a in enumerate(moving):
+                for moving_b_index, moving_b in enumerate(moving):
+                    if moving_a_index == moving_b_index:
+                        continue
+                    candidate_count += 1
+                    matrix = _similarity_matrix_from_two_pairs(
+                        reference_a,
+                        reference_b,
+                        moving_a,
+                        moving_b,
+                        min_pair_distance,
+                    )
+                    if matrix is None:
+                        continue
+                    inliers, rms = _score_similarity_catalog_matrix(matrix, reference, moving, tolerance_px)
+                    if inliers > best_inliers or (inliers == best_inliers and rms < best_rms):
+                        best_matrix = matrix
+                        best_inliers = inliers
+                        best_rms = rms
+                        best_index = candidate_count - 1
+    a = float(best_matrix[0, 0])
+    b = float(best_matrix[1, 0])
+    return {
+        "matrix": best_matrix.tolist(),
+        "scale": float(np.sqrt(a * a + b * b)),
+        "rotation_rad": float(np.arctan2(b, a)),
+        "rms_px": best_rms if np.isfinite(best_rms) else float("nan"),
+        "inliers": max(0, int(best_inliers)),
+        "best_candidate_index": int(best_index),
+        "candidate_count": int(candidate_count),
+        "reference_count": int(len(reference)),
+        "moving_count": int(len(moving)),
+        "tolerance_px": float(tolerance_px),
+        "min_pair_distance": float(min_pair_distance),
+        "status": "ok" if best_inliers > 0 else "failed",
+        "model": "catalog_pair_similarity_cpu_fallback",
+    }
+
+
+def estimate_similarity_from_catalogs_f32(
+    reference_x: Any,
+    reference_y: Any,
+    moving_x: Any,
+    moving_y: Any,
+    tolerance_px: float = 2.0,
+    min_pair_distance: float = 2.0,
+) -> dict[str, Any]:
+    """Estimate a similarity transform directly from two bounded star catalogs.
+
+    This is a clean-room, bounded brute-force seed matcher: it forms ordered
+    two-star pair correspondences, fits a candidate similarity transform, scores
+    transformed moving stars against the reference catalog, and returns the
+    highest-inlier matrix. It is intended for compact GPU catalogs, not
+    unbounded all-star lists.
+    """
+
+    native = _native()
+    if native is not None and hasattr(native, "estimate_similarity_from_catalogs_f32"):
+        result = dict(
+            native.estimate_similarity_from_catalogs_f32(
+                np.ascontiguousarray(np.asarray(reference_x, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(reference_y, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(moving_x, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(moving_y, dtype=np.float32).reshape(-1)),
+                float(tolerance_px),
+                float(min_pair_distance),
+            )
+        )
+        return {
+            "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
+            "scale": float(result["scale"]),
+            "rotation_rad": float(result["rotation_rad"]),
+            "rms_px": float(result["rms_px"]),
+            "inliers": int(result["inliers"]),
+            "best_candidate_index": int(result["best_candidate_index"]),
+            "candidate_count": int(result["candidate_count"]),
+            "reference_count": int(result["reference_count"]),
+            "moving_count": int(result["moving_count"]),
+            "tolerance_px": float(result["tolerance_px"]),
+            "min_pair_distance": float(result["min_pair_distance"]),
+            "status": str(result["status"]),
+            "model": str(result.get("model", "catalog_pair_similarity_cuda")),
+        }
+    return _similarity_from_catalogs_cpu(
+        reference_x,
+        reference_y,
+        moving_x,
+        moving_y,
+        tolerance_px,
+        min_pair_distance,
+    )
+
+
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     native = _native()
     if native is not None and hasattr(native, "local_norm_apply_f32"):

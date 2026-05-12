@@ -407,3 +407,55 @@ def test_gpu_estimate_similarity_from_matched_pairs():
     assert result["rms_px"] < 1.0e-4
     assert np.allclose(matrix[:2, :2], linear, atol=1.0e-5)
     assert np.allclose(matrix[:2, 2], translation, atol=1.0e-4)
+
+
+def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_similarity_from_catalogs_f32"):
+        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from gpwbpp_cuda")
+
+    moving = np.array(
+        [
+            (10.0, 11.0),
+            (25.0, 14.0),
+            (18.0, 34.0),
+            (41.0, 37.0),
+            (53.0, 21.0),
+            (63.0, 45.0),
+            (31.0, 58.0),
+            (72.0, 18.0),
+        ],
+        dtype=np.float32,
+    )
+    angle = np.deg2rad(-4.0)
+    scale = 0.985
+    linear = scale * np.array(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+        dtype=np.float32,
+    )
+    translation = np.array([-1.75, 4.5], dtype=np.float32)
+    reference = moving @ linear.T + translation
+    moving_catalog = np.vstack([moving, np.array([[90.0, 90.0], [5.0, 70.0]], dtype=np.float32)])
+    reference_catalog = np.vstack([reference, np.array([[4.0, 4.0], [80.0, 8.0]], dtype=np.float32)])
+
+    result = module.estimate_similarity_from_catalogs_f32(
+        reference_catalog[:, 0],
+        reference_catalog[:, 1],
+        moving_catalog[:, 0],
+        moving_catalog[:, 1],
+        tolerance_px=0.15,
+        min_pair_distance=3.0,
+    )
+    matrix = np.asarray(result["matrix"], dtype=np.float32)
+
+    assert result["status"] == "ok"
+    assert result["model"] == "catalog_pair_similarity_cuda"
+    assert result["inliers"] >= len(moving)
+    assert result["candidate_count"] == len(reference_catalog) * (len(reference_catalog) - 1) * len(
+        moving_catalog
+    ) * (len(moving_catalog) - 1)
+    assert abs(result["scale"] - scale) < 1.0e-4
+    assert abs(result["rotation_rad"] - angle) < 1.0e-4
+    assert result["rms_px"] < 1.0e-3
+    assert np.allclose(matrix[:2, :2], linear, atol=1.0e-4)
+    assert np.allclose(matrix[:2, 2], translation, atol=1.0e-3)

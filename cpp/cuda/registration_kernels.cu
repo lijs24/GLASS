@@ -743,6 +743,181 @@ __global__ void similarity_finalize_rms_kernel(
   *rms_px = static_cast<float>(sqrt(residual_sum / static_cast<double>(*valid_count)));
 }
 
+__device__ int ordered_pair_first(int pair_index, int count) {
+  return pair_index / (count - 1);
+}
+
+__device__ int ordered_pair_second(int pair_index, int count, int first) {
+  const int second_offset = pair_index % (count - 1);
+  return second_offset >= first ? second_offset + 1 : second_offset;
+}
+
+__global__ void catalog_similarity_score_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    float* candidate_params,
+    int* candidate_scores,
+    float* candidate_rms,
+    int reference_count,
+    int moving_count,
+    int candidate_count,
+    float tolerance_px,
+    float min_pair_distance) {
+  const int candidate_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (candidate_index >= candidate_count) {
+    return;
+  }
+  const int moving_pair_count = moving_count * (moving_count - 1);
+  const int reference_pair_index = candidate_index / moving_pair_count;
+  const int moving_pair_index = candidate_index % moving_pair_count;
+  const int reference_a = ordered_pair_first(reference_pair_index, reference_count);
+  const int reference_b = ordered_pair_second(reference_pair_index, reference_count, reference_a);
+  const int moving_a = ordered_pair_first(moving_pair_index, moving_count);
+  const int moving_b = ordered_pair_second(moving_pair_index, moving_count, moving_a);
+
+  const float rax = reference_x[reference_a];
+  const float ray = reference_y[reference_a];
+  const float rbx = reference_x[reference_b];
+  const float rby = reference_y[reference_b];
+  const float max = moving_x[moving_a];
+  const float may = moving_y[moving_a];
+  const float mbx = moving_x[moving_b];
+  const float mby = moving_y[moving_b];
+  const int param_offset = candidate_index * 4;
+  candidate_params[param_offset + 0] = 1.0f;
+  candidate_params[param_offset + 1] = 0.0f;
+  candidate_params[param_offset + 2] = 0.0f;
+  candidate_params[param_offset + 3] = 0.0f;
+  candidate_scores[candidate_index] = -1;
+  candidate_rms[candidate_index] = NAN;
+
+  if (!isfinite(rax) || !isfinite(ray) || !isfinite(rbx) || !isfinite(rby) ||
+      !isfinite(max) || !isfinite(may) || !isfinite(mbx) || !isfinite(mby)) {
+    return;
+  }
+  const float mvx = mbx - max;
+  const float mvy = mby - may;
+  const float rvx = rbx - rax;
+  const float rvy = rby - ray;
+  const float moving_distance2 = mvx * mvx + mvy * mvy;
+  const float reference_distance2 = rvx * rvx + rvy * rvy;
+  const float min_pair_distance2 = min_pair_distance * min_pair_distance;
+  if (moving_distance2 <= min_pair_distance2 || reference_distance2 <= min_pair_distance2) {
+    return;
+  }
+
+  const float a = (mvx * rvx + mvy * rvy) / moving_distance2;
+  const float b = (mvx * rvy - mvy * rvx) / moving_distance2;
+  const float tx = rax - (a * max - b * may);
+  const float ty = ray - (b * max + a * may);
+  candidate_params[param_offset + 0] = a;
+  candidate_params[param_offset + 1] = b;
+  candidate_params[param_offset + 2] = tx;
+  candidate_params[param_offset + 3] = ty;
+
+  const float tolerance2 = tolerance_px * tolerance_px;
+  int inliers = 0;
+  float residual_sum = 0.0f;
+  for (int moving_index = 0; moving_index < moving_count; ++moving_index) {
+    const float mx = moving_x[moving_index];
+    const float my = moving_y[moving_index];
+    if (!isfinite(mx) || !isfinite(my)) {
+      continue;
+    }
+    const float transformed_x = a * mx - b * my + tx;
+    const float transformed_y = b * mx + a * my + ty;
+    float best_distance2 = tolerance2;
+    bool matched = false;
+    for (int reference_index = 0; reference_index < reference_count; ++reference_index) {
+      const float rx = reference_x[reference_index];
+      const float ry = reference_y[reference_index];
+      if (!isfinite(rx) || !isfinite(ry)) {
+        continue;
+      }
+      const float dx = transformed_x - rx;
+      const float dy = transformed_y - ry;
+      const float distance2 = dx * dx + dy * dy;
+      if (distance2 <= best_distance2) {
+        best_distance2 = distance2;
+        matched = true;
+      }
+    }
+    if (matched) {
+      ++inliers;
+      residual_sum += best_distance2;
+    }
+  }
+  candidate_scores[candidate_index] = inliers;
+  candidate_rms[candidate_index] =
+      inliers > 0 ? sqrtf(residual_sum / static_cast<float>(inliers)) : NAN;
+}
+
+__global__ void catalog_similarity_best_kernel(
+    const float* candidate_params,
+    const int* candidate_scores,
+    const float* candidate_rms,
+    float* matrix,
+    float* scale,
+    float* rotation_rad,
+    float* rms_px,
+    int* best_inliers,
+    int* best_index,
+    int candidate_count) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  int selected_index = -1;
+  int selected_inliers = -1;
+  float selected_rms = 3.402823466e+38F;
+  for (int i = 0; i < candidate_count; ++i) {
+    const int score = candidate_scores[i];
+    const float rms = candidate_rms[i];
+    if (score < 0 || !isfinite(rms)) {
+      continue;
+    }
+    if (score > selected_inliers || (score == selected_inliers && rms < selected_rms)) {
+      selected_index = i;
+      selected_inliers = score;
+      selected_rms = rms;
+    }
+  }
+
+  matrix[0] = 1.0f;
+  matrix[1] = 0.0f;
+  matrix[2] = 0.0f;
+  matrix[3] = 0.0f;
+  matrix[4] = 1.0f;
+  matrix[5] = 0.0f;
+  matrix[6] = 0.0f;
+  matrix[7] = 0.0f;
+  matrix[8] = 1.0f;
+  *scale = 1.0f;
+  *rotation_rad = 0.0f;
+  *rms_px = NAN;
+  *best_inliers = selected_inliers > 0 ? selected_inliers : 0;
+  *best_index = selected_index;
+  if (selected_index < 0 || selected_inliers <= 0) {
+    return;
+  }
+
+  const int param_offset = selected_index * 4;
+  const float a = candidate_params[param_offset + 0];
+  const float b = candidate_params[param_offset + 1];
+  const float tx = candidate_params[param_offset + 2];
+  const float ty = candidate_params[param_offset + 3];
+  matrix[0] = a;
+  matrix[1] = -b;
+  matrix[2] = tx;
+  matrix[3] = b;
+  matrix[4] = a;
+  matrix[5] = ty;
+  *scale = sqrtf(a * a + b * b);
+  *rotation_rad = atan2f(b, a);
+  *rms_px = selected_rms;
+}
+
 }  // namespace
 
 void gpwbpp_estimate_translation_search_f32_launch(
@@ -939,4 +1114,51 @@ void gpwbpp_estimate_similarity_from_pairs_f32_launch(
       status,
       rms_px,
       blocks);
+}
+
+void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    float* candidate_params,
+    int* candidate_scores,
+    float* candidate_rms,
+    float* matrix,
+    float* scale,
+    float* rotation_rad,
+    float* rms_px,
+    int* best_inliers,
+    int* best_index,
+    int reference_count,
+    int moving_count,
+    int candidate_count,
+    float tolerance_px,
+    float min_pair_distance) {
+  constexpr int threads = 256;
+  const int blocks = (candidate_count + threads - 1) / threads;
+  catalog_similarity_score_kernel<<<blocks, threads>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      candidate_params,
+      candidate_scores,
+      candidate_rms,
+      reference_count,
+      moving_count,
+      candidate_count,
+      tolerance_px,
+      min_pair_distance);
+  catalog_similarity_best_kernel<<<1, 1>>>(
+      candidate_params,
+      candidate_scores,
+      candidate_rms,
+      matrix,
+      scale,
+      rotation_rad,
+      rms_px,
+      best_inliers,
+      best_index,
+      candidate_count);
 }
