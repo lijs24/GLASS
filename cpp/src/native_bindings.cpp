@@ -616,6 +616,122 @@ class ResidentCalibratedStack {
     cudaFree(d_inverse);
   }
 
+  py::dict matrix_alignment_metrics_to_reference(
+      std::size_t reference_index,
+      std::size_t moving_index,
+      py::object matrix_obj,
+      int sample_stride) const {
+    require_loaded(reference_index, "resident matrix alignment metrics");
+    require_loaded(moving_index, "resident matrix alignment metrics");
+    if (sample_stride <= 0) {
+      throw std::invalid_argument("sample_stride must be positive");
+    }
+    const int stride = sample_stride > 1 ? sample_stride : 1;
+    const int sample_width = static_cast<int>((width_ + static_cast<std::size_t>(stride) - 1) / static_cast<std::size_t>(stride));
+    const int sample_height = static_cast<int>((height_ + static_cast<std::size_t>(stride) - 1) / static_cast<std::size_t>(stride));
+    const int sampled_pixels = sample_width * sample_height;
+    constexpr int threads = 256;
+    const int blocks = std::max(1, std::min(1024, (sampled_pixels + threads - 1) / threads));
+    const auto inverse = invert_matrix3x3(parse_matrix3x3(matrix_obj));
+    std::vector<double> partial_stats(static_cast<std::size_t>(blocks) * 7, 0.0);
+    std::vector<unsigned long long> partial_count(static_cast<std::size_t>(blocks), 0);
+    float* d_inverse = nullptr;
+    double* d_partial_stats = nullptr;
+    unsigned long long* d_partial_count = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(resident matrix metrics inverse)");
+      check_cuda(
+          cudaMalloc(&d_partial_stats, partial_stats.size() * sizeof(double)),
+          "cudaMalloc(resident matrix metrics partial stats)");
+      check_cuda(
+          cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
+          "cudaMalloc(resident matrix metrics partial count)");
+      check_cuda(
+          cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident matrix metrics inverse)");
+      gpwbpp_matrix_alignment_metrics_f32_launch(
+          d_stack_ + reference_index * pixels_per_frame_,
+          d_stack_ + moving_index * pixels_per_frame_,
+          d_inverse,
+          d_partial_stats,
+          d_partial_count,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          stride,
+          blocks);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.matrix_alignment_metrics_to_reference kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.matrix_alignment_metrics_to_reference synchronize");
+      check_cuda(
+          cudaMemcpy(partial_stats.data(), d_partial_stats, partial_stats.size() * sizeof(double), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident matrix metrics partial stats)");
+      check_cuda(
+          cudaMemcpy(
+              partial_count.data(),
+              d_partial_count,
+              partial_count.size() * sizeof(unsigned long long),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident matrix metrics partial count)");
+    } catch (...) {
+      cudaFree(d_inverse);
+      cudaFree(d_partial_stats);
+      cudaFree(d_partial_count);
+      throw;
+    }
+    cudaFree(d_inverse);
+    cudaFree(d_partial_stats);
+    cudaFree(d_partial_count);
+
+    double sum_ref = 0.0;
+    double sum_mov = 0.0;
+    double sum_ref2 = 0.0;
+    double sum_mov2 = 0.0;
+    double sum_cross = 0.0;
+    double sum_diff2 = 0.0;
+    double sum_abs_diff = 0.0;
+    unsigned long long valid_pixels = 0ULL;
+    for (int block = 0; block < blocks; ++block) {
+      const std::size_t offset = static_cast<std::size_t>(block) * 7;
+      sum_ref += partial_stats[offset + 0];
+      sum_mov += partial_stats[offset + 1];
+      sum_ref2 += partial_stats[offset + 2];
+      sum_mov2 += partial_stats[offset + 3];
+      sum_cross += partial_stats[offset + 4];
+      sum_diff2 += partial_stats[offset + 5];
+      sum_abs_diff += partial_stats[offset + 6];
+      valid_pixels += partial_count[static_cast<std::size_t>(block)];
+    }
+
+    const double count = static_cast<double>(valid_pixels);
+    double rms = std::numeric_limits<double>::quiet_NaN();
+    double mean_abs_diff = std::numeric_limits<double>::quiet_NaN();
+    double ncc = std::numeric_limits<double>::quiet_NaN();
+    if (valid_pixels > 0ULL) {
+      rms = std::sqrt(sum_diff2 / count);
+      mean_abs_diff = sum_abs_diff / count;
+    }
+    if (valid_pixels > 1ULL) {
+      const double numerator = sum_cross - (sum_ref * sum_mov / count);
+      const double ref_var = std::max(sum_ref2 - (sum_ref * sum_ref / count), 0.0);
+      const double mov_var = std::max(sum_mov2 - (sum_mov * sum_mov / count), 0.0);
+      const double denominator = std::sqrt(ref_var * mov_var);
+      if (denominator > 0.0) {
+        ncc = numerator / denominator;
+      }
+    }
+
+    py::dict result;
+    result["valid_pixels"] = valid_pixels;
+    result["sampled_pixels"] = sampled_pixels;
+    result["sample_stride"] = stride;
+    result["rms"] = rms;
+    result["mean_abs_diff"] = mean_abs_diff;
+    result["ncc"] = ncc;
+    result["reference_index"] = reference_index;
+    result["moving_index"] = moving_index;
+    result["model"] = "resident_matrix_alignment_metrics_cuda";
+    return result;
+  }
+
   py::dict estimate_translation_to_reference(
       std::size_t reference_index,
       std::size_t moving_index,
@@ -3887,6 +4003,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("index"),
           py::arg("matrix"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+      .def(
+          "matrix_alignment_metrics_to_reference",
+          &ResidentCalibratedStack::matrix_alignment_metrics_to_reference,
+          py::arg("reference_index"),
+          py::arg("moving_index"),
+          py::arg("matrix"),
+          py::arg("sample_stride") = 1)
       .def(
           "estimate_translation_to_reference",
           &ResidentCalibratedStack::estimate_translation_to_reference,

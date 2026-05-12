@@ -226,6 +226,40 @@ def test_resident_stack_estimates_and_warps_subpixel_translation_on_device():
     assert rms < 4.0
 
 
+def test_resident_stack_matrix_alignment_metrics_match_standalone_cuda():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "matrix_alignment_metrics_to_reference"):
+        raise AssertionError("ResidentCalibratedStack.matrix_alignment_metrics_to_reference is missing")
+
+    reference = _resident_star_field()
+    matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
+    moving, _ = module.warp_matrix_bilinear_f32(reference, np.linalg.inv(matrix).astype(np.float32), 0.0)
+    stack = module.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+
+    resident = stack.matrix_alignment_metrics_to_reference(0, 1, matrix, sample_stride=2)
+    standalone = module.matrix_alignment_metrics_f32(reference, moving, matrix, sample_stride=2)
+    bad = stack.matrix_alignment_metrics_to_reference(
+        0,
+        1,
+        np.asarray([[1.0, 0.0, -1.0], [0.0, 1.0, 2.0], [0.0, 0.0, 1.0]], dtype=np.float32),
+        sample_stride=2,
+    )
+
+    assert resident["model"] == "resident_matrix_alignment_metrics_cuda"
+    assert resident["reference_index"] == 0
+    assert resident["moving_index"] == 1
+    assert resident["valid_pixels"] == standalone["valid_pixels"]
+    assert resident["sampled_pixels"] == standalone["sampled_pixels"]
+    assert resident["sample_stride"] == 2
+    assert abs(resident["rms"] - standalone["rms"]) < 1.0e-5
+    assert abs(resident["mean_abs_diff"] - standalone["mean_abs_diff"]) < 1.0e-5
+    assert abs(resident["ncc"] - standalone["ncc"]) < 1.0e-6
+    assert resident["rms"] < bad["rms"] * 0.5
+    assert resident["ncc"] > bad["ncc"]
+
+
 def test_resident_stack_star_catalog_registration_stays_on_device():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "estimate_translation_from_stars_to_reference"):

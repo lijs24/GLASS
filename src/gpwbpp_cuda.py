@@ -1583,6 +1583,39 @@ class ResidentCalibratedStack:
             raise RuntimeError("native ResidentCalibratedStack.apply_matrix_bilinear_frame is not available")
         self._impl.apply_matrix_bilinear_frame(int(index), np.asarray(matrix, dtype=np.float32), float(fill))
 
+    def matrix_alignment_metrics_to_reference(
+        self,
+        reference_index: int,
+        moving_index: int,
+        matrix: Any,
+        sample_stride: int = 1,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "matrix_alignment_metrics_to_reference"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.matrix_alignment_metrics_to_reference is not available"
+            )
+        if sample_stride <= 0:
+            raise ValueError("sample_stride must be positive")
+        result = dict(
+            self._impl.matrix_alignment_metrics_to_reference(
+                int(reference_index),
+                int(moving_index),
+                np.asarray(matrix, dtype=np.float32),
+                int(sample_stride),
+            )
+        )
+        return {
+            "valid_pixels": int(result["valid_pixels"]),
+            "sampled_pixels": int(result["sampled_pixels"]),
+            "sample_stride": int(result["sample_stride"]),
+            "rms": float(result["rms"]),
+            "mean_abs_diff": float(result["mean_abs_diff"]),
+            "ncc": float(result["ncc"]),
+            "reference_index": int(result["reference_index"]),
+            "moving_index": int(result["moving_index"]),
+            "model": str(result.get("model", "resident_matrix_alignment_metrics_cuda")),
+        }
+
     def estimate_translation_to_reference(
         self,
         reference_index: int,

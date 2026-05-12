@@ -426,6 +426,34 @@ def _gpu_resident_matrix_warp_run(reference: np.ndarray, moving: np.ndarray, mat
     }
 
 
+def _gpu_resident_matrix_metrics_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    matrix: Any,
+    sample_stride: int,
+) -> dict[str, Any]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+        raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
+    t0 = time.perf_counter()
+    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    upload_elapsed = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    metrics = stack.matrix_alignment_metrics_to_reference(0, 1, matrix, sample_stride)
+    device_elapsed = time.perf_counter() - t1
+    return {
+        **metrics,
+        "elapsed_s": device_elapsed,
+        "upload_elapsed_s": upload_elapsed,
+        "upload_plus_device_elapsed_s": upload_elapsed + device_elapsed,
+        "bytes_allocated": int(stack.bytes_allocated),
+    }
+
+
 def _gpu_catalog_run(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -744,6 +772,12 @@ def main() -> int:
         args.subpixel_step,
     )
     gpu_resident_matrix_result = _gpu_resident_matrix_warp_run(reference, moving, astroalign_matrix)
+    gpu_resident_matrix_metrics = _gpu_resident_matrix_metrics_run(
+        reference,
+        moving,
+        astroalign_matrix,
+        args.matrix_metric_sample_stride,
+    )
     gpu_matrix_metrics = _gpu_matrix_metrics_run(
         reference,
         moving,
@@ -852,6 +886,7 @@ def main() -> int:
         "astroalign": astroalign_result,
         "gpwbpp_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
         "gpwbpp_cuda_matrix_metrics_from_astroalign": gpu_matrix_metrics,
+        "gpwbpp_cuda_resident_matrix_metrics_from_astroalign": gpu_resident_matrix_metrics,
         "gpwbpp_cuda_similarity_fit_from_astroalign_matches": gpu_similarity_result,
         "direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels": gpu_matrix_diff,
         "direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels": gpu_similarity_diff,
@@ -932,6 +967,16 @@ def main() -> int:
         ]
         / gpu_resident_matrix_result["upload_plus_device_elapsed_s"]
         if gpu_resident_matrix_result["upload_plus_device_elapsed_s"] > 0.0
+        else None,
+        "resident_matrix_metrics_device_speedup_vs_astroalign_apply_transform": astroalign_result["apply_elapsed_s"]
+        / gpu_resident_matrix_metrics["elapsed_s"]
+        if gpu_resident_matrix_metrics["elapsed_s"] > 0.0
+        else None,
+        "resident_matrix_metrics_upload_plus_device_speedup_vs_astroalign_apply_transform": astroalign_result[
+            "apply_elapsed_s"
+        ]
+        / gpu_resident_matrix_metrics["upload_plus_device_elapsed_s"]
+        if gpu_resident_matrix_metrics["upload_plus_device_elapsed_s"] > 0.0
         else None,
         "cuda_devices": devices,
     }

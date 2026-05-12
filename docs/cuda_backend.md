@@ -30,6 +30,8 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `ResidentCalibratedStack.integrate_sigma_clip(...)`
 - `ResidentCalibratedStack.apply_translation_frame(...)`
 - `ResidentCalibratedStack.apply_translation_bilinear_frame(...)`
+- `ResidentCalibratedStack.apply_matrix_bilinear_frame(...)`
+- `ResidentCalibratedStack.matrix_alignment_metrics_to_reference(...)`
 - `ResidentCalibratedStack.estimate_translation_to_reference(...)`
 - `ResidentCalibratedStack.estimate_translation_subpixel_to_reference(...)`
 - `ResidentCalibratedStack.frame_global_stats(index)`
@@ -138,6 +140,11 @@ Resident CUDA integration now supports:
   full warped image. It returns valid-pixel count, RMS, mean absolute difference,
   and normalized cross-correlation. This is the first pixel-metric validation
   primitive for rejecting fast but incorrect catalog transforms.
+- `ResidentCalibratedStack.matrix_alignment_metrics_to_reference(...)` runs the
+  same matrix score directly between two already-loaded resident frames. It
+  downloads only compact metric totals, so high-VRAM alignment experiments can
+  validate candidate matrices without re-uploading or materializing a warped
+  image on the host.
 - Resident runs can consume a prior `registration_results.json` with
   `--resident-registration external_matrix` and
   `--resident-registration-results`. Accepted translation matrices keep the
