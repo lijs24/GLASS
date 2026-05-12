@@ -53,8 +53,9 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | Resume from partial run | `runs/checkpoints/resume_status.md`, pipeline fixture test | covered with artifact-presence skip |
 | Real-data GPWBPP run | `runs/checkpoints/real_data_m5_lum_status.md` | covered small subset |
 | Benchmarks | `benchmarks/*.py`, `runs/checkpoints/benchmark_status.md` | covered baseline |
+| Install and CLI smoke validation | `runs/checkpoints/validation_status.md` | covered |
 | HTML report | report tests and run artifacts | covered baseline |
-| PixInsight/WBPP numerical comparison | `gpwbpp compare`, black-box handoff | blocked pending WBPP output |
+| PixInsight/WBPP numerical comparison | `gpwbpp compare`, black-box handoff, `gpwbpp blackbox-finalize` | blocked pending WBPP output |
 | PixInsight/WBPP timing comparison | timing fields, handoff package, finalize command | blocked pending WBPP run/log |
 | Observed speedup over WBPP | none | not achieved |
 
@@ -80,4 +81,8 @@ Then fill in:
 runs/real_m5_lum_subset/wbpp_blackbox_handoff/timing_template.json
 ```
 
-and run the generated compare command.
+and run:
+
+```powershell
+gpwbpp blackbox-finalize --timing runs/real_m5_lum_subset/wbpp_blackbox_handoff/timing_template.json --out runs/real_m5_lum_subset/wbpp_blackbox_handoff/final
+```
