@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from gpwbpp.cli import main
-from gpwbpp.engine.pipeline import _exact_median_scratch, _mean_stack_tile
+from gpwbpp.engine.pipeline import _exact_median_scratch, _mean_stack_tile, _normalization_scalar
 from gpwbpp.io.fits_io import write_fits_data
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
 
@@ -75,6 +75,23 @@ def test_streaming_exact_median_scratch_matches_numpy(tmp_path: Path):
 
     assert _exact_median_scratch(path, tile_size=2, scratch_path=scratch) == float(np.nanmedian(data))
     assert not scratch.exists()
+
+
+def test_flat_normalization_scalar_uses_scratch_for_small_images(tmp_path: Path, monkeypatch):
+    import numpy as np
+    from gpwbpp.engine.pipeline import FitsImageReader
+
+    path = tmp_path / "flat.fits"
+    data = np.arange(25, dtype=np.float32).reshape(5, 5)
+    write_fits_data(path, data)
+
+    def fail_read_full(self, dtype=np.float32):
+        raise AssertionError("flat normalization should use scratch median, not read_full")
+
+    monkeypatch.setattr(FitsImageReader, "read_full", fail_read_full)
+    norm, method = _normalization_scalar(path, "median", tile_size=3)
+    assert norm == float(np.median(data))
+    assert method == "median_scratch_memmap"
 
 
 def test_mean_stack_tile_uses_streaming_accumulator(monkeypatch):

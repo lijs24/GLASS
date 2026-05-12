@@ -21,8 +21,6 @@ def _registration_preview(
         scale = max(1, int(np.ceil(max(reader.width, reader.height) / max_dimension)))
         preview_height = int(np.ceil(reader.height / scale))
         preview_width = int(np.ceil(reader.width / scale))
-        if scale == 1:
-            return reader.read_full(), scale, 1
         sums = np.zeros((preview_height, preview_width), dtype=np.float64)
         counts = np.zeros((preview_height, preview_width), dtype=np.float32)
         tile_count = 0

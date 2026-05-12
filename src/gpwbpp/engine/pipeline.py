@@ -159,9 +159,6 @@ def _normalization_scalar(path: Path, normalization: str, tile_size: int) -> tup
     import numpy as np
 
     with FitsImageReader(path) as reader:
-        pixels = reader.width * reader.height
-        if normalization == "median" and pixels <= 32_000_000:
-            return float(np.nanmedian(reader.read_full())), "median"
         if normalization == "median":
             return _exact_median_scratch(path, tile_size), "median_scratch_memmap"
         stats = _StreamingStats()

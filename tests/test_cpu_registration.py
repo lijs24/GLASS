@@ -36,3 +36,20 @@ def test_registration_preview_streams_block_means(tmp_path):
     assert scale == 2
     assert tile_count > 1
     assert np.allclose(preview, expected)
+
+
+def test_registration_preview_uses_tiles_for_scale_one(tmp_path, monkeypatch):
+    from gpwbpp.engine.registration import FitsImageReader
+
+    data = np.arange(16, dtype=np.float32).reshape(4, 4)
+    path = tmp_path / "preview_scale_one.fits"
+    write_fits_data(path, data)
+
+    def fail_read_full(self, dtype=np.float32):
+        raise AssertionError("registration preview should use tile reads, not read_full")
+
+    monkeypatch.setattr(FitsImageReader, "read_full", fail_read_full)
+    preview, scale, tile_count = _registration_preview(path, tile_size=3, max_dimension=8)
+    assert scale == 1
+    assert tile_count == 4
+    assert np.allclose(preview, data)

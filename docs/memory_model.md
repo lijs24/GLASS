@@ -12,7 +12,8 @@ stacking uses a fixed-size float64 accumulator instead of a 3D tile stack, so
 host memory does not scale with calibration-frame count. Large
 median-normalized flats use a temporary float32 `memmap` scratch file and an
 in-place partition to compute an exact median without keeping the full image in
-process memory.
+process memory, including small flat images where a full-frame read would be
+convenient but unnecessary.
 
 The standalone `gpwbpp.gpu.master_frames` helpers use the same bounded input
 pattern: FITS tile reads plus per-tile accumulators. When the native CUDA module
@@ -31,7 +32,8 @@ halo around each tile.
 
 Registration uses tile reads to build a bounded preview image before running the
 CPU phase-correlation baseline. The preview scale, shape, tile size, and tile
-count are recorded in `registration_results.json`.
+count are recorded in `registration_results.json`. Even `preview_scale=1`
+previews are filled by tile reads instead of a full-frame load.
 
 The memory model has four levels:
 
