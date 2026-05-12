@@ -72,7 +72,7 @@ def _run_full_pipeline(
     measure_calibrated_quality(out, tile_size=tile_size)
     state.completed_stages.append("quality")
     state.current_stage = "quality"
-    register_calibrated_frames(out)
+    register_calibrated_frames(out, tile_size=tile_size)
     state.completed_stages.append("registration")
     state.current_stage = "registration"
     warp_registered_frames(out, tile_size=tile_size)
@@ -114,7 +114,7 @@ def _resume_pipeline(plan_path: Path, out: Path, backend: str = "auto", tile_siz
     state.current_stage = "quality"
 
     if not (out / "registration_results.json").exists():
-        register_calibrated_frames(out)
+        register_calibrated_frames(out, tile_size=tile_size)
     state.completed_stages.append("registration")
     state.current_stage = "registration"
 
@@ -270,7 +270,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             state.completed_stages.append("quality")
             state.current_stage = "quality"
         if args.until_stage in {"registration", "warp", "local_normalization", "integration"}:
-            register_calibrated_frames(args.out)
+            register_calibrated_frames(args.out, tile_size=args.tile_size)
             state.completed_stages.append("registration")
             state.current_stage = "registration"
         if args.until_stage in {"warp", "local_normalization", "integration"}:

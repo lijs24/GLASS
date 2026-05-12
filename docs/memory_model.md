@@ -24,6 +24,10 @@ backgrounds through a temporary `memmap` scratch file, computes mean/std in the
 same tile pass, and performs star detection in a second tile pass with a 1-pixel
 halo around each tile.
 
+Registration uses tile reads to build a bounded preview image before running the
+CPU phase-correlation baseline. The preview scale, shape, tile size, and tile
+count are recorded in `registration_results.json`.
+
 The memory model has four levels:
 
 - Source files: immutable FITS/XISF input images.

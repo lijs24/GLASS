@@ -203,6 +203,12 @@ def test_pipeline_fixture_run_registration(tmp_path: Path):
         == 0
     )
     assert (run / "registration_results.json").exists()
+    import json
+
+    registration = json.loads((run / "registration_results.json").read_text(encoding="utf-8"))
+    assert registration["registration_image_source"] == "streaming_preview"
+    assert registration["tile_size"] == 10
+    assert all(item["registration_image_source"] == "streaming_preview" for item in registration["registration_results"])
     assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
     assert "Registration table" in text
