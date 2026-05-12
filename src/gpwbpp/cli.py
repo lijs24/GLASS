@@ -12,6 +12,7 @@ from gpwbpp.engine.local_norm import local_normalize_registered_frames
 from gpwbpp.engine.pipeline import initialize_run, run_calibration_stages
 from gpwbpp.engine.quality import measure_calibrated_quality
 from gpwbpp.engine.registration import register_calibrated_frames
+from gpwbpp.engine.resident_cuda import run_resident_calibration_integration
 from gpwbpp.engine.warp import warp_registered_frames
 from gpwbpp.engine.resume import resume_summary
 from gpwbpp.engine.state import write_run_state
@@ -316,6 +317,34 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
     _seed_run_inputs(Path(args.out), args.plan)
+    if args.memory_mode == "resident":
+        if args.backend != "cuda":
+            raise SystemExit("Resident memory mode currently requires --backend cuda.")
+        if args.until_stage != "integration":
+            raise SystemExit("Resident memory mode currently supports --until-stage integration only.")
+        if args.local_normalization == "on":
+            raise SystemExit("Resident memory mode does not include materialized local normalization yet.")
+        if args.integration_rejection not in {"auto", "none"}:
+            raise SystemExit("Resident memory mode currently supports --integration-rejection none only.")
+        if args.integration_weighting not in {"auto", "none"}:
+            raise SystemExit("Resident memory mode currently supports --integration-weighting none only.")
+        out = Path(args.out)
+        timing = _new_timing("run", args.backend, None)
+        timing["memory_mode"] = "resident"
+        state = _timed_stage(
+            out,
+            timing,
+            "resident_calibration_integration",
+            lambda: run_resident_calibration_integration(
+                args.plan,
+                args.out,
+                integration_weighting=args.integration_weighting,
+                integration_rejection=args.integration_rejection,
+            ),
+        )
+        write_run_state(args.out, state)
+        console.print(f"Resident CUDA run complete through {state.current_stage}: {args.out}")
+        return 0
     implemented_stages = {
         "master_calibration",
         "light_calibration",
@@ -513,6 +542,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--ram-budget-gb", type=float)
     run.add_argument("--until-stage")
     run.add_argument("--tile-size", type=int, default=512)
+    run.add_argument(
+        "--memory-mode",
+        choices=["tile", "resident"],
+        default="tile",
+        help="execution memory strategy; resident currently covers CUDA calibration plus mean integration",
+    )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
     run.add_argument(
