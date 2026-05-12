@@ -53,6 +53,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | End-to-end audit | Gate 12 checkpoint, synthetic CUDA/CPU compare | covered on synthetic |
 | Resume from partial run | `runs/checkpoints/resume_status.md`, pipeline fixture test | covered with artifact-presence skip |
 | Real-data GPWBPP run | `runs/checkpoints/real_data_m5_lum_status.md` | covered small subset |
+| GPWBPP structured runtime timing | `runs/checkpoints/run_timing_status.md`, `runs/real_m5_lum_subset/gpwbpp_cuda_timed_run/run_timing.json` | covered for run/audit/resume stage timings |
 | Benchmarks | `benchmarks/*.py`, `runs/checkpoints/benchmark_status.md` | covered baseline |
 | Install and CLI smoke validation | `runs/checkpoints/validation_status.md` | covered |
 | HTML report | report tests and run artifacts | covered baseline |

@@ -16,7 +16,14 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     generate_synthetic_dataset(data, frames=3, width=24, height=24)
     assert main(["audit", "--root", str(data), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
     assert (run / "run_state.json").exists()
+    assert (run / "run_timing.json").exists()
     assert (run / "integration_results.json").exists()
+    timing = json.loads((run / "run_timing.json").read_text(encoding="utf-8"))
+    assert timing["command"] == "audit"
+    assert timing["total_elapsed_s"] > 0
+    assert {"scan", "plan", "calibration", "quality", "registration", "warp", "local_normalization", "integration"}.issubset(
+        {item["stage"] for item in timing["stages"]}
+    )
     integration = json.loads((run / "integration_results.json").read_text(encoding="utf-8"))
     assert integration["rejection"] == "none"
     assert all(output["tile_stack_mode"] == "streaming_accumulator" for output in integration["outputs"])
@@ -192,6 +199,7 @@ def test_pipeline_fixture_run_quality_and_report(tmp_path: Path):
     text = report.read_text(encoding="utf-8")
     assert "Frame quality table" in text
     assert "Reference frame" in text
+    assert "Runtime summary" in text
 
 
 def test_pipeline_fixture_run_registration(tmp_path: Path):

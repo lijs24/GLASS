@@ -24,6 +24,7 @@ def write_html_report(
     registration: dict[str, Any] | None = None,
     local_norm: dict[str, Any] | None = None,
     integration: dict[str, Any] | None = None,
+    timing: dict[str, Any] | None = None,
     title: str = "GPWBPP Report",
 ) -> None:
     frames = (manifest or {}).get("frames", [])
@@ -32,6 +33,7 @@ def write_html_report(
     registration_results = (registration or {}).get("registration_results", [])
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
     integration_outputs = (integration or {}).get("outputs", [])
+    timing_rows = (timing or {}).get("stages", [])
     warnings = []
     warnings.extend((manifest or {}).get("warnings", []))
     warnings.extend((plan or {}).get("global_warnings", []))
@@ -79,7 +81,8 @@ def write_html_report(
   <h2>Memory usage summary</h2>
   <p>Tile/slab streaming is the required execution model for heavy stages.</p>
   <h2>Runtime summary</h2>
-  <p>Runtime timings are added by later gates.</p>
+  <p>Total elapsed seconds: <code>{escape(str((timing or {}).get("total_elapsed_s", "pending")))}</code>.</p>
+  {_table(timing_rows)}
   <h2>Warnings/errors</h2>
   <pre>{escape(str(warnings))}</pre>
   <h2>PixInsight comparison if available</h2>
