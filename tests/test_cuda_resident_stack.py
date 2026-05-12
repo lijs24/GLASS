@@ -132,21 +132,26 @@ def _mean_std_sigma_reference(
     safe_count = np.where(count > 0, count, 1)
     mean = np.sum(np.where(stats_valid, stack, 0.0), axis=0) / safe_count
     std = np.sqrt(np.sum(np.where(stats_valid, (stack - mean[None, :, :]) ** 2, 0.0), axis=0) / safe_count)
-    low_threshold = mean - np.float32(low_sigma) * std
-    high_threshold = mean + np.float32(high_sigma) * std
-    low = stack < low_threshold[None, :, :]
-    high = stack > high_threshold[None, :, :]
     if winsorize:
-        working = np.where(low, low_threshold[None, :, :], stack)
-        working = np.where(high, high_threshold[None, :, :], working)
-        valid = stats_valid
+        first_low = mean - np.float32(low_sigma) * std
+        first_high = mean + np.float32(high_sigma) * std
+        winsorized = np.where(stats_valid, np.clip(stack, first_low[None, :, :], first_high[None, :, :]), 0.0)
+        winsor_mean = np.sum(np.where(stats_valid, winsorized, 0.0), axis=0) / safe_count
+        winsor_std = np.sqrt(
+            np.sum(np.where(stats_valid, (winsorized - winsor_mean[None, :, :]) ** 2, 0.0), axis=0) / safe_count
+        )
+        low_threshold = winsor_mean - np.float32(low_sigma) * winsor_std
+        high_threshold = winsor_mean + np.float32(high_sigma) * winsor_std
     else:
-        working = stack
-        valid = stats_valid & ~(low | high)
+        low_threshold = mean - np.float32(low_sigma) * std
+        high_threshold = mean + np.float32(high_sigma) * std
+    low = stats_valid & (stack < low_threshold[None, :, :])
+    high = stats_valid & (stack > high_threshold[None, :, :])
+    valid = stats_valid & ~(low | high)
     weight_cube = frame_weights[:, None, None]
     weight_sum = np.sum(np.where(valid, weight_cube, 0.0), axis=0)
     master = np.divide(
-        np.sum(np.where(valid, working * weight_cube, 0.0), axis=0),
+        np.sum(np.where(valid, stack * weight_cube, 0.0), axis=0),
         weight_sum,
         out=np.zeros_like(mean, dtype=np.float32),
         where=weight_sum > 0,
@@ -235,7 +240,7 @@ def test_resident_stack_winsorized_sigma_matches_cpu_reference():
     )
 
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
-    assert np.allclose(weight_map, np.full((2, 2), len(frames), dtype=np.float32))
+    assert np.allclose(weight_map, expected_coverage, rtol=1e-5, atol=1e-5)
     assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
     assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
     assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)

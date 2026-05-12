@@ -35,8 +35,9 @@ Supported modes:
 
 - `none`: weighted mean over valid coverage pixels.
 - `sigma_clip`: excludes pixels outside median +/- sigma thresholds.
-- `winsorized_sigma`: counts low/high outliers and clamps them to the sigma
-  thresholds before weighted averaging.
+- `winsorized_sigma`: estimates a more stable mean/std by clamping extreme
+  samples for the statistics pass, then rejects original samples outside the
+  derived sigma thresholds before weighted averaging.
 
 The rejection maps count low and high outliers per output pixel.
 
@@ -45,8 +46,9 @@ resident CUDA path uses a separate high-VRAM engineering baseline:
 
 - `sigma_clip`: two-pass mean/std thresholds over finite, positive-weight
   resident samples.
-- `winsorized_sigma`: two-pass mean/std thresholds, then clamps rejected samples
-  to those thresholds before accumulation.
+- `winsorized_sigma`: first-pass mean/std thresholds, winsorized mean/std
+  re-estimation, then final rejection of original samples outside those
+  thresholds.
 
 This resident `winsorized_sigma` mode is deliberately labeled as an
 approximation. It is useful for speed and diagnostic map development, but it is

@@ -38,7 +38,7 @@ Resident CUDA integration now supports:
 
 - weighted mean for already resident calibrated frames;
 - two-pass mean/std sigma clipping;
-- two-pass mean/std winsorized sigma clipping approximation;
+- two-stage winsorized mean/std sigma rejection approximation;
 - output weight, coverage, low rejection, and high rejection maps.
 - optional preview-scale phase-correlation translation registration followed by
   integer-pixel CUDA warp with NaN edge fill.

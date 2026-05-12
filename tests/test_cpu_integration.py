@@ -43,8 +43,8 @@ def test_weighted_integrate_stack_with_coverage():
 def test_winsorized_sigma_outputs_rejection_maps():
     stack = np.stack([np.ones((4, 4), dtype=np.float32) for _ in range(4)] + [np.ones((4, 4), dtype=np.float32) * 9])
     master, weight, cov, low, high = weighted_integrate_stack(stack, rejection="winsorized_sigma", high_sigma=1.0)
-    assert np.all(master < 9)
-    assert np.all(weight == 5)
-    assert np.all(cov == 5)
+    assert np.allclose(master, 1)
+    assert np.all(weight == 4)
+    assert np.all(cov == 4)
     assert np.sum(low) == 0
     assert np.sum(high) > 0

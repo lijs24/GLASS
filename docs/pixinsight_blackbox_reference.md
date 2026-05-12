@@ -77,6 +77,12 @@ Timing summary:
   `LIGHT_H_0136` (`F000196`) and found zero integer-pixel shifts for all 200
   inputs, so this run mainly confirms that this dataset is already coarsely
   aligned at the current preview resolution.
+- After correcting the resident `winsorized_sigma` semantics to estimate
+  winsorized mean/std and then reject original outliers, the same translation
+  preview run elapsed time was 78.78527250001207 s, a raw timing speedup of
+  13.87x. The compare metrics improved slightly in the core distribution:
+  median absolute difference 0.00011119607370346785, p90 0.00030821096152067184,
+  p99 0.005503315764944989, RMS 0.013263855091108735.
 
 WBPP fast-integration settings observed from user-generated logs:
 
@@ -115,6 +121,9 @@ C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_cli_scaled_resident_vs_wb
 C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_align_preview_run
 C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.json
 C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.html
+C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_wsc_reject_flatfloor005_align_preview_run
+C:\gpwbpp_runs\final_m38_h_200\wsc_reject_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.json
+C:\gpwbpp_runs\final_m38_h_200\wsc_reject_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.html
 ```
 
 The current result proves a high-VRAM GPWBPP calibration/integration speed

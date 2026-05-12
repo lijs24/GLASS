@@ -131,8 +131,53 @@ __global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
     }
   }
   const float stddev = sqrtf(variance / count);
-  const float low_threshold = mean - low_sigma * stddev;
-  const float high_threshold = mean + high_sigma * stddev;
+  float center = mean;
+  float scale = stddev;
+  float low_threshold = center - low_sigma * scale;
+  float high_threshold = center + high_sigma * scale;
+  if (winsorize) {
+    float winsor_mean = 0.0f;
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        value = low_threshold;
+      } else if (value > high_threshold) {
+        value = high_threshold;
+      }
+      winsor_mean += value;
+    }
+    winsor_mean /= count;
+
+    float winsor_variance = 0.0f;
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        value = low_threshold;
+      } else if (value > high_threshold) {
+        value = high_threshold;
+      }
+      const float delta = value - winsor_mean;
+      winsor_variance += delta * delta;
+    }
+    center = winsor_mean;
+    scale = sqrtf(winsor_variance / count);
+    low_threshold = center - low_sigma * scale;
+    high_threshold = center + high_sigma * scale;
+  }
 
   float sum = 0.0f;
   float weight_sum = 0.0f;
@@ -152,17 +197,11 @@ __global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
     if (value < low_threshold) {
       low_reject += 1.0f;
       rejected = true;
-      if (winsorize) {
-        value = low_threshold;
-      }
     } else if (value > high_threshold) {
       high_reject += 1.0f;
       rejected = true;
-      if (winsorize) {
-        value = high_threshold;
-      }
     }
-    if (rejected && !winsorize) {
+    if (rejected) {
       continue;
     }
     sum += value * weight;

@@ -478,7 +478,7 @@ def run_resident_calibration_integration(
                         "low_sigma": low_sigma,
                         "high_sigma": high_sigma,
                         "algorithm": (
-                            "two_pass_mean_std_winsorized_approximation"
+                            "two_stage_winsorized_mean_std_rejection_approximation"
                             if rejection_mode == "winsorized_sigma"
                             else "two_pass_mean_std_clip"
                             if rejection_mode == "sigma_clip"

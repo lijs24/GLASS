@@ -44,6 +44,12 @@ def weighted_integrate_stack(
     if frames.ndim != 3:
         raise ValueError("stack must have shape (frame_count, height, width)")
     frame_count, height, width = frames.shape
+    if weights is None:
+        frame_weights = np.ones(frame_count, dtype=np.float32)
+    else:
+        frame_weights = np.asarray(weights, dtype=np.float32)
+        if frame_weights.shape != (frame_count,):
+            raise ValueError("weights must have shape (frame_count,)")
     if coverage is None:
         valid = np.isfinite(frames)
     else:
@@ -51,33 +57,35 @@ def weighted_integrate_stack(
         if cov.shape != frames.shape:
             raise ValueError("coverage must have the same shape as stack")
         valid = (cov > 0.5) & np.isfinite(frames)
-    if weights is None:
-        frame_weights = np.ones(frame_count, dtype=np.float32)
-    else:
-        frame_weights = np.asarray(weights, dtype=np.float32)
-        if frame_weights.shape != (frame_count,):
-            raise ValueError("weights must have shape (frame_count,)")
+    valid = valid & np.isfinite(frame_weights)[:, None, None] & (frame_weights[:, None, None] > 0)
     low_reject = np.zeros((height, width), dtype=np.float32)
     high_reject = np.zeros((height, width), dtype=np.float32)
     working = frames.copy()
 
     if rejection in {"sigma_clip", "winsorized_sigma"}:
         masked = np.where(valid, frames, np.nan)
-        median = np.nanmedian(masked, axis=0)
-        std = np.nanstd(masked, axis=0)
-        median = np.where(np.isfinite(median), median, 0.0).astype(np.float32)
+        if rejection == "winsorized_sigma":
+            center = np.nanmean(masked, axis=0)
+            std = np.nanstd(masked, axis=0)
+            center = np.where(np.isfinite(center), center, 0.0).astype(np.float32)
+            std = np.where(np.isfinite(std), std, 0.0).astype(np.float32)
+            first_low = center - np.float32(low_sigma) * std
+            first_high = center + np.float32(high_sigma) * std
+            winsorized = np.where(valid, np.clip(frames, first_low[None, :, :], first_high[None, :, :]), np.nan)
+            center = np.nanmean(winsorized, axis=0)
+            std = np.nanstd(winsorized, axis=0)
+        else:
+            center = np.nanmedian(masked, axis=0)
+            std = np.nanstd(masked, axis=0)
+        center = np.where(np.isfinite(center), center, 0.0).astype(np.float32)
         std = np.where(np.isfinite(std), std, 0.0).astype(np.float32)
-        low_threshold = median - np.float32(low_sigma) * std
-        high_threshold = median + np.float32(high_sigma) * std
+        low_threshold = center - np.float32(low_sigma) * std
+        high_threshold = center + np.float32(high_sigma) * std
         low = valid & (frames < low_threshold[None, :, :])
         high = valid & (frames > high_threshold[None, :, :])
         low_reject = np.sum(low, axis=0).astype(np.float32)
         high_reject = np.sum(high, axis=0).astype(np.float32)
-        if rejection == "winsorized_sigma":
-            working = np.where(low, low_threshold[None, :, :], working)
-            working = np.where(high, high_threshold[None, :, :], working)
-        else:
-            valid = valid & ~(low | high)
+        valid = valid & ~(low | high)
     elif rejection != "none":
         raise ValueError(f"unsupported rejection mode: {rejection}")
 
