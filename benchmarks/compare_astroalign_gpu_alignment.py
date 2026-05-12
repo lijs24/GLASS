@@ -459,6 +459,7 @@ def _gpu_catalog_similarity_pixel_refine_run(
     reference: np.ndarray,
     moving: np.ndarray,
     matrix: Any,
+    seed_candidates: list[dict[str, Any]] | None,
     search_radius_px: float,
     coarse_step_px: float,
     fine_radius_px: float,
@@ -466,27 +467,85 @@ def _gpu_catalog_similarity_pixel_refine_run(
     coarse_sample_stride: int,
     final_sample_stride: int,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+    seeds: list[dict[str, Any]] = [
+        {
+            "seed_rank": 0,
+            "seed_source": "catalog_similarity_refit",
+            "candidate_index": None,
+            "inliers": None,
+            "rms_px": None,
+            "matrix": np.asarray(matrix, dtype=np.float64).tolist(),
+        }
+    ]
+    for rank, candidate in enumerate(seed_candidates or [], start=1):
+        seeds.append(
+            {
+                "seed_rank": rank,
+                "seed_source": "catalog_similarity_top_candidate",
+                "candidate_index": int(candidate["candidate_index"]),
+                "inliers": int(candidate["inliers"]),
+                "rms_px": float(candidate["rms_px"]),
+                "matrix": np.asarray(candidate["matrix"], dtype=np.float64).tolist(),
+            }
+        )
+
+    best_key: tuple[float, float] | None = None
+    best_refinement: dict[str, Any] | None = None
+    seed_metrics: list[dict[str, Any]] = []
     t0 = time.perf_counter()
-    refinement = refine_matrix_translation_with_metrics_f32(
-        reference,
-        moving,
-        matrix,
-        search_radius_px=search_radius_px,
-        coarse_step_px=coarse_step_px,
-        fine_radius_px=fine_radius_px,
-        fine_step_px=fine_step_px,
-        coarse_sample_stride=coarse_sample_stride,
-        final_sample_stride=final_sample_stride,
-    )
+    for seed in seeds:
+        seed_t0 = time.perf_counter()
+        refinement = refine_matrix_translation_with_metrics_f32(
+            reference,
+            moving,
+            seed["matrix"],
+            search_radius_px=search_radius_px,
+            coarse_step_px=coarse_step_px,
+            fine_radius_px=fine_radius_px,
+            fine_step_px=fine_step_px,
+            coarse_sample_stride=coarse_sample_stride,
+            final_sample_stride=final_sample_stride,
+        )
+        seed_elapsed = time.perf_counter() - seed_t0
+        metrics = dict(refinement["metrics"])
+        rms = float(metrics.get("rms", float("inf")))
+        ncc = float(metrics.get("ncc", float("-inf")))
+        key = (rms if np.isfinite(rms) else float("inf"), -ncc if np.isfinite(ncc) else float("inf"))
+        seed_record = {
+            "seed_rank": int(seed["seed_rank"]),
+            "seed_source": str(seed["seed_source"]),
+            "candidate_index": seed["candidate_index"],
+            "seed_inliers": seed["inliers"],
+            "seed_rms_px": seed["rms_px"],
+            "refine_elapsed_s": seed_elapsed,
+            "dx_correction": float(refinement["dx_correction"]),
+            "dy_correction": float(refinement["dy_correction"]),
+            "metrics": metrics,
+            "matrix": np.asarray(refinement["matrix"], dtype=np.float64).tolist(),
+        }
+        seed_metrics.append(seed_record)
+        if best_key is None or key < best_key:
+            best_key = key
+            best_refinement = {**refinement, "selected_seed": seed_record}
     refine_elapsed = time.perf_counter() - t0
+    if best_refinement is None:
+        raise RuntimeError("catalog similarity pixel refinement produced no candidates")
     t1 = time.perf_counter()
-    aligned, valid = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, refinement["matrix"], 0.0)
+    aligned, valid = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, best_refinement["matrix"], 0.0)
     warp_elapsed = time.perf_counter() - t1
     result = {
-        **refinement,
+        **best_refinement,
         "elapsed_s": refine_elapsed + warp_elapsed,
         "refine_elapsed_s": refine_elapsed,
         "warp_elapsed_s": warp_elapsed,
+        "seed_selection_model": "catalog_topk_fused_pixel_metric",
+        "seed_count": len(seeds),
+        "selected_seed_rank": int(best_refinement["selected_seed"]["seed_rank"]),
+        "selected_seed_source": str(best_refinement["selected_seed"]["seed_source"]),
+        "selected_seed_candidate_index": best_refinement["selected_seed"]["candidate_index"],
+        "selected_seed_inliers": best_refinement["selected_seed"]["seed_inliers"],
+        "selected_seed_rms_px": best_refinement["selected_seed"]["seed_rms_px"],
+        "seed_metrics": seed_metrics,
         "coverage_pixels": int(np.sum(valid > 0.0)),
         "rms": _rms(reference, aligned, valid > 0.0),
     }
@@ -598,6 +657,7 @@ def _gpu_catalog_similarity_run(
     min_scale: float | None,
     max_scale: float | None,
     max_abs_rotation_rad: float | None,
+    top_k: int,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
     if not gpwbpp_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
@@ -663,6 +723,7 @@ def _gpu_catalog_similarity_run(
         min_scale=min_scale,
         max_scale=max_scale,
         max_abs_rotation_rad=max_abs_rotation_rad,
+        top_k=top_k,
     )
     matrix = np.asarray(fit["matrix"], dtype=np.float64)
     aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
@@ -706,6 +767,8 @@ def _gpu_catalog_similarity_run(
         "min_scale": min_scale,
         "max_scale": max_scale,
         "max_abs_rotation_rad": max_abs_rotation_rad,
+        "top_k": int(fit.get("top_k", top_k)),
+        "top_candidates": list(fit.get("top_candidates", [])),
         "coverage_pixels": int(np.sum(valid)),
         "accepted": accepted,
         "warnings": warnings,
@@ -745,6 +808,12 @@ def main() -> int:
     parser.add_argument("--catalog-similarity-min-scale", type=float, default=0.98)
     parser.add_argument("--catalog-similarity-max-scale", type=float, default=1.02)
     parser.add_argument("--catalog-similarity-max-rotation-rad", type=float, default=0.02)
+    parser.add_argument(
+        "--catalog-similarity-top-k",
+        type=int,
+        default=0,
+        help="Return and pixel-score this many catalog similarity seed candidates in addition to the refit.",
+    )
     parser.add_argument("--catalog-pixel-refine-radius", type=float, default=1.0)
     parser.add_argument("--catalog-pixel-refine-coarse-step", type=float, default=0.25)
     parser.add_argument("--catalog-pixel-refine-fine-radius", type=float, default=0.25)
@@ -763,6 +832,8 @@ def main() -> int:
         raise ValueError("--matrix-metric-sample-stride must be positive")
     if args.catalog_pixel_refine_coarse_stride <= 0 or args.catalog_pixel_refine_final_stride <= 0:
         raise ValueError("catalog pixel-refine strides must be positive")
+    if args.catalog_similarity_top_k < 0:
+        raise ValueError("--catalog-similarity-top-k must be non-negative")
 
     if args.reference and args.moving:
         reference = _center_crop(_read_fits(args.reference), args.center_crop)
@@ -873,6 +944,7 @@ def main() -> int:
             args.catalog_similarity_min_scale,
             args.catalog_similarity_max_scale,
             args.catalog_similarity_max_rotation_rad,
+            args.catalog_similarity_top_k,
         )
     )
     (
@@ -883,6 +955,7 @@ def main() -> int:
         reference,
         moving,
         gpu_catalog_similarity_result["matrix"],
+        gpu_catalog_similarity_result["top_candidates"],
         args.catalog_pixel_refine_radius,
         args.catalog_pixel_refine_coarse_step,
         args.catalog_pixel_refine_fine_radius,

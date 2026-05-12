@@ -540,6 +540,7 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
         min_scale=0.95,
         max_scale=1.05,
         max_abs_rotation_rad=0.2,
+        top_k=4,
     )
     matrix = np.asarray(result["matrix"], dtype=np.float32)
 
@@ -548,6 +549,10 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
     assert result["inliers"] >= len(moving)
     assert result["refined_inliers"] >= len(moving)
     assert result["refit_status"] in {"ok", "rejected"}
+    assert result["top_k"] == 4
+    assert len(result["top_candidates"]) == 4
+    assert result["top_candidates"][0]["inliers"] >= result["top_candidates"][-1]["inliers"]
+    assert np.asarray(result["top_candidates"][0]["matrix"], dtype=np.float32).shape == (3, 3)
     assert result["candidate_count"] == len(reference_catalog) * (len(reference_catalog) - 1) * len(
         moving_catalog
     ) * (len(moving_catalog) - 1)

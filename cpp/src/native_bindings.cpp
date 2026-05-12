@@ -3179,7 +3179,8 @@ py::dict estimate_similarity_from_catalogs_f32(
     float prior_radius_px,
     float min_scale,
     float max_scale,
-    float max_abs_rotation_rad) {
+    float max_abs_rotation_rad,
+    int top_k) {
   const py::buffer_info reference_x_info = reference_x.request();
   const py::buffer_info reference_y_info = reference_y.request();
   const py::buffer_info moving_x_info = moving_x.request();
@@ -3210,6 +3211,9 @@ py::dict estimate_similarity_from_catalogs_f32(
   }
   if (max_abs_rotation_rad < 0.0f) {
     max_abs_rotation_rad = -1.0f;
+  }
+  if (top_k < 0) {
+    throw std::invalid_argument("top_k must be non-negative");
   }
   const int candidate_count =
       reference_count * (reference_count - 1) * moving_count * (moving_count - 1);
@@ -3245,6 +3249,7 @@ py::dict estimate_similarity_from_catalogs_f32(
   int refit_inliers = 0;
   int refit_status = 0;
   float refit_rms_px = std::numeric_limits<float>::quiet_NaN();
+  py::list top_candidates;
   constexpr int refit_threads = 256;
   const int refit_blocks = std::max(1, (moving_count + refit_threads - 1) / refit_threads);
   try {
@@ -3384,6 +3389,108 @@ py::dict estimate_similarity_from_catalogs_f32(
     check_cuda(
         cudaMemcpy(&refit_rms_px, d_refit_rms_px, sizeof(float), cudaMemcpyDeviceToHost),
         "cudaMemcpy(similarity catalog refit rms)");
+    if (top_k > 0) {
+      std::vector<float> candidate_params(static_cast<std::size_t>(candidate_count) * 4, 0.0f);
+      std::vector<int> candidate_scores(static_cast<std::size_t>(candidate_count), -1);
+      std::vector<float> candidate_rms(static_cast<std::size_t>(candidate_count), std::numeric_limits<float>::quiet_NaN());
+      check_cuda(
+          cudaMemcpy(
+              candidate_params.data(),
+              d_candidate_params,
+              candidate_params.size() * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(similarity catalog candidate params)");
+      check_cuda(
+          cudaMemcpy(
+              candidate_scores.data(),
+              d_candidate_scores,
+              candidate_scores.size() * sizeof(int),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(similarity catalog candidate scores)");
+      check_cuda(
+          cudaMemcpy(
+              candidate_rms.data(),
+              d_candidate_rms,
+              candidate_rms.size() * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(similarity catalog candidate rms)");
+      std::vector<int> selected;
+      selected.reserve(static_cast<std::size_t>(std::min(top_k, candidate_count)));
+      for (int i = 0; i < candidate_count; ++i) {
+        const int score = candidate_scores[static_cast<std::size_t>(i)];
+        const float rms = candidate_rms[static_cast<std::size_t>(i)];
+        if (score < 0 || !std::isfinite(rms)) {
+          continue;
+        }
+        if (static_cast<int>(selected.size()) < top_k) {
+          selected.push_back(i);
+        } else {
+          int worst_pos = 0;
+          for (int pos = 1; pos < static_cast<int>(selected.size()); ++pos) {
+            const int current = selected[static_cast<std::size_t>(pos)];
+            const int worst = selected[static_cast<std::size_t>(worst_pos)];
+            const int current_score = candidate_scores[static_cast<std::size_t>(current)];
+            const int worst_score = candidate_scores[static_cast<std::size_t>(worst)];
+            const float current_rms = candidate_rms[static_cast<std::size_t>(current)];
+            const float worst_rms = candidate_rms[static_cast<std::size_t>(worst)];
+            if (current_score < worst_score ||
+                (current_score == worst_score && current_rms > worst_rms)) {
+              worst_pos = pos;
+            }
+          }
+          const int worst = selected[static_cast<std::size_t>(worst_pos)];
+          const int worst_score = candidate_scores[static_cast<std::size_t>(worst)];
+          const float worst_rms = candidate_rms[static_cast<std::size_t>(worst)];
+          if (score > worst_score || (score == worst_score && rms < worst_rms)) {
+            selected[static_cast<std::size_t>(worst_pos)] = i;
+          }
+        }
+      }
+      std::sort(selected.begin(), selected.end(), [&](int left, int right) {
+        const int left_score = candidate_scores[static_cast<std::size_t>(left)];
+        const int right_score = candidate_scores[static_cast<std::size_t>(right)];
+        if (left_score != right_score) {
+          return left_score > right_score;
+        }
+        const float left_rms = candidate_rms[static_cast<std::size_t>(left)];
+        const float right_rms = candidate_rms[static_cast<std::size_t>(right)];
+        if (left_rms != right_rms) {
+          return left_rms < right_rms;
+        }
+        return left < right;
+      });
+      for (const int candidate_index : selected) {
+        const std::size_t param_offset = static_cast<std::size_t>(candidate_index) * 4;
+        const float a = candidate_params[param_offset + 0];
+        const float b = candidate_params[param_offset + 1];
+        const float tx = candidate_params[param_offset + 2];
+        const float ty = candidate_params[param_offset + 3];
+        py::list matrix_rows_candidate;
+        py::list row0;
+        row0.append(a);
+        row0.append(-b);
+        row0.append(tx);
+        py::list row1;
+        row1.append(b);
+        row1.append(a);
+        row1.append(ty);
+        py::list row2;
+        row2.append(0.0f);
+        row2.append(0.0f);
+        row2.append(1.0f);
+        matrix_rows_candidate.append(row0);
+        matrix_rows_candidate.append(row1);
+        matrix_rows_candidate.append(row2);
+        py::dict candidate;
+        candidate["candidate_index"] = candidate_index;
+        candidate["inliers"] = candidate_scores[static_cast<std::size_t>(candidate_index)];
+        candidate["rms_px"] = candidate_rms[static_cast<std::size_t>(candidate_index)];
+        candidate["matrix"] = matrix_rows_candidate;
+        candidate["scale"] = std::sqrt(a * a + b * b);
+        candidate["rotation_rad"] = std::atan2(b, a);
+        top_candidates.append(candidate);
+      }
+    }
   } catch (...) {
     cudaFree(d_reference_x);
     cudaFree(d_reference_y);
@@ -3462,6 +3569,8 @@ py::dict estimate_similarity_from_catalogs_f32(
   result["min_scale"] = min_scale;
   result["max_scale"] = max_scale;
   result["max_abs_rotation_rad"] = max_abs_rotation_rad;
+  result["top_k"] = top_k;
+  result["top_candidates"] = top_candidates;
   result["status"] = best_inliers > 0 ? "ok" : "failed";
   result["model"] = "catalog_pair_similarity_cuda";
   return result;
@@ -4358,7 +4467,8 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("prior_radius_px") = -1.0f,
       py::arg("min_scale") = 0.0f,
       py::arg("max_scale") = std::numeric_limits<float>::max(),
-      py::arg("max_abs_rotation_rad") = -1.0f);
+      py::arg("max_abs_rotation_rad") = -1.0f,
+      py::arg("top_k") = 0);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("local_norm_pair_stats_f32", &local_norm_pair_stats_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);

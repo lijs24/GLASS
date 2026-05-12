@@ -82,6 +82,8 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
         "4",
         "--catalog-min-inliers",
         "4",
+        "--catalog-similarity-top-k",
+        "4",
     )
 
     payload = json.loads(out.read_text(encoding="utf-8"))
@@ -96,6 +98,7 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     catalog_similarity = payload["gpwbpp_cuda_catalog_similarity"]
     catalog_similarity_matrix_metrics = payload["gpwbpp_cuda_catalog_similarity_matrix_metrics"]
     catalog_similarity_agreement = payload["catalog_similarity_agreement_vs_astroalign"]
+    catalog_similarity_pixel_refined = payload["gpwbpp_cuda_catalog_similarity_pixel_refined"]
 
     assert payload["astroalign"]["matched_control_points"] > 0
     assert payload["gpwbpp_cuda_matrix_warp_from_astroalign"]["coverage_pixels"] > 0
@@ -125,6 +128,12 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     assert catalog_similarity["fit_model"] == "catalog_pair_similarity_cuda"
     assert catalog_similarity["fit_status"] == "ok"
     assert catalog_similarity["accepted"]
+    assert catalog_similarity["top_k"] == 4
+    assert len(catalog_similarity["top_candidates"]) == 4
+    assert catalog_similarity_pixel_refined["seed_selection_model"] == "catalog_topk_fused_pixel_metric"
+    assert catalog_similarity_pixel_refined["seed_count"] == 5
+    assert len(catalog_similarity_pixel_refined["seed_metrics"]) == 5
+    assert catalog_similarity_pixel_refined["selected_seed_rank"] >= 0
     assert catalog_similarity_matrix_metrics["model"] == "matrix_alignment_metrics_cuda"
     assert catalog_similarity_matrix_metrics["valid_pixels"] > 0
     assert catalog_similarity_matrix_metrics["rms"] is not None

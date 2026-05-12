@@ -1200,6 +1200,7 @@ def estimate_similarity_from_catalogs_f32(
     min_scale: float | None = None,
     max_scale: float | None = None,
     max_abs_rotation_rad: float | None = None,
+    top_k: int = 0,
 ) -> dict[str, Any]:
     """Estimate a similarity transform directly from two bounded star catalogs.
 
@@ -1226,8 +1227,20 @@ def estimate_similarity_from_catalogs_f32(
                 float(0.0 if min_scale is None else min_scale),
                 float(np.finfo(np.float32).max if max_scale is None else max_scale),
                 float(-1.0 if max_abs_rotation_rad is None else max_abs_rotation_rad),
+                int(top_k),
             )
         )
+        top_candidates = [
+            {
+                "candidate_index": int(candidate["candidate_index"]),
+                "inliers": int(candidate["inliers"]),
+                "rms_px": float(candidate["rms_px"]),
+                "matrix": np.asarray(candidate["matrix"], dtype=np.float32).tolist(),
+                "scale": float(candidate["scale"]),
+                "rotation_rad": float(candidate["rotation_rad"]),
+            }
+            for candidate in list(result.get("top_candidates", []))
+        ]
         return {
             "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
             "scale": float(result["scale"]),
@@ -1250,10 +1263,12 @@ def estimate_similarity_from_catalogs_f32(
             "min_scale": float(result["min_scale"]),
             "max_scale": float(result["max_scale"]),
             "max_abs_rotation_rad": float(result["max_abs_rotation_rad"]),
+            "top_k": int(result.get("top_k", top_k)),
+            "top_candidates": top_candidates,
             "status": str(result["status"]),
             "model": str(result.get("model", "catalog_pair_similarity_cuda")),
         }
-    return _similarity_from_catalogs_cpu(
+    result = _similarity_from_catalogs_cpu(
         reference_x,
         reference_y,
         moving_x,
@@ -1267,6 +1282,18 @@ def estimate_similarity_from_catalogs_f32(
         max_scale,
         max_abs_rotation_rad,
     )
+    result["top_k"] = int(top_k)
+    result["top_candidates"] = [
+        {
+            "candidate_index": int(result.get("best_candidate_index", 0)),
+            "inliers": int(result.get("inliers", 0)),
+            "rms_px": float(result.get("rms_px", float("nan"))),
+            "matrix": result["matrix"],
+            "scale": float(result.get("scale", float("nan"))),
+            "rotation_rad": float(result.get("rotation_rad", float("nan"))),
+        }
+    ] if int(top_k) > 0 and result.get("status") == "ok" else []
+    return result
 
 
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
