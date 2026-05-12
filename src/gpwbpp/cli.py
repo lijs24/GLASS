@@ -350,6 +350,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 flat_floor=args.flat_floor,
                 resident_registration=args.resident_registration,
                 resident_registration_max_shift=args.resident_registration_max_shift,
+                resident_ncc_sample_stride=args.resident_ncc_sample_stride,
                 resident_subpixel_radius_steps=args.resident_subpixel_radius_steps,
                 resident_subpixel_step=args.resident_subpixel_step,
                 resident_star_threshold=args.resident_star_threshold,
@@ -607,6 +608,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument("--resident-registration-max-shift", type=int, default=128)
+    run.add_argument(
+        "--resident-ncc-sample-stride",
+        type=int,
+        default=1,
+        help="sample every Nth pixel in resident GPU NCC registration; 1 keeps full-resolution scoring",
+    )
     run.add_argument("--resident-subpixel-radius-steps", type=int, default=4)
     run.add_argument("--resident-subpixel-step", type=float, default=0.25)
     run.add_argument(

@@ -86,6 +86,12 @@ radius around that prior. This reduces false zero-shift catalog clusters in
 repeated star fields while still using the catalog inlier/RMS result as the
 registration diagnostic.
 
+Resident NCC registration accepts `--resident-ncc-sample-stride`. The default
+`1` preserves full-frame scoring; larger values score a regular pixel grid on
+the GPU to reduce registration cost on large frames. This is a speed/accuracy
+control for the current translation-only model, not a substitute for future
+star-descriptor similarity/affine registration.
+
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
 moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,

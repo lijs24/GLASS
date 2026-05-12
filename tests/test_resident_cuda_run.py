@@ -156,6 +156,8 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_datase
             "translation_ncc_subpixel",
             "--resident-registration-max-shift",
             "4",
+            "--resident-ncc-sample-stride",
+            "2",
             "--resident-subpixel-radius-steps",
             "2",
             "--resident-subpixel-step",
@@ -180,6 +182,7 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_datase
     assert resident["artifacts"][0]["resident_local_normalization"]["enabled"] is True
     assert resident["artifacts"][0]["resident_local_normalization"]["mode"] == "resident_global_mean_std"
     assert resident_registration["max_shift"] == 4
+    assert resident_registration["ncc_sample_stride"] == 2
     assert resident_registration["subpixel_radius_steps"] == 2
     assert resident_registration["subpixel_step"] == 0.5
 

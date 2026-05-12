@@ -260,7 +260,13 @@ def warp_translation_bilinear_f32(data: Any, dx: float, dy: float, fill: float =
     return out, coverage
 
 
-def _translation_ncc_score(reference: np.ndarray, moving: np.ndarray, dx: int, dy: int) -> float:
+def _translation_ncc_score(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    dx: int,
+    dy: int,
+    sample_stride: int = 1,
+) -> float:
     h, w = reference.shape
     src_x0 = max(0, -dx)
     src_x1 = min(w, w - dx)
@@ -274,6 +280,10 @@ def _translation_ncc_score(reference: np.ndarray, moving: np.ndarray, dx: int, d
         return float("-inf")
     ref = reference[dst_y0:dst_y1, dst_x0:dst_x1].astype(np.float64, copy=False)
     mov = moving[src_y0:src_y1, src_x0:src_x1].astype(np.float64, copy=False)
+    stride = max(1, int(sample_stride))
+    if stride > 1:
+        ref = ref[::stride, ::stride]
+        mov = mov[::stride, ::stride]
     valid = np.isfinite(ref) & np.isfinite(mov)
     if int(np.sum(valid)) <= 1:
         return float("-inf")
@@ -292,6 +302,7 @@ def estimate_translation_search_f32(
     moving: Any,
     max_shift_x: int,
     max_shift_y: int | None = None,
+    sample_stride: int = 1,
 ) -> dict[str, Any]:
     """Estimate an integer translation that warps ``moving`` onto ``reference``.
 
@@ -302,6 +313,8 @@ def estimate_translation_search_f32(
 
     if max_shift_y is None:
         max_shift_y = max_shift_x
+    if sample_stride <= 0:
+        raise ValueError("sample_stride must be positive")
     native = _native()
     if native is not None and hasattr(native, "estimate_translation_search_f32"):
         result = dict(
@@ -310,6 +323,7 @@ def estimate_translation_search_f32(
                 moving,
                 int(max_shift_x),
                 int(max_shift_y),
+                int(sample_stride),
             )
         )
         return {
@@ -317,6 +331,7 @@ def estimate_translation_search_f32(
             "dy": int(result["dy"]),
             "score": float(result["score"]),
             "search_count": int(result["search_count"]),
+            "sample_stride": int(result.get("sample_stride", sample_stride)),
             "model": str(result.get("model", "translation_integer_ncc")),
         }
 
@@ -330,7 +345,7 @@ def estimate_translation_search_f32(
     search_count = 0
     for dy in range(-int(max_shift_y), int(max_shift_y) + 1):
         for dx in range(-int(max_shift_x), int(max_shift_x) + 1):
-            score = _translation_ncc_score(ref, mov, dx, dy)
+            score = _translation_ncc_score(ref, mov, dx, dy, sample_stride)
             search_count += 1
             if score > best_score:
                 best_dx = dx
@@ -341,22 +356,30 @@ def estimate_translation_search_f32(
         "dy": best_dy,
         "score": best_score,
         "search_count": search_count,
+        "sample_stride": int(sample_stride),
         "model": "translation_integer_ncc_cpu_fallback",
     }
 
 
-def _translation_bilinear_ncc_score(reference: np.ndarray, moving: np.ndarray, dx: float, dy: float) -> float:
+def _translation_bilinear_ncc_score(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    dx: float,
+    dy: float,
+    sample_stride: int = 1,
+) -> float:
     h, w = reference.shape
     ref_values: list[float] = []
     mov_values: list[float] = []
-    for y in range(h):
+    stride = max(1, int(sample_stride))
+    for y in range(0, h, stride):
         sy = float(y) - float(dy)
         if sy < 0.0 or sy > float(h - 1):
             continue
         y0 = int(np.floor(sy))
         y1 = min(y0 + 1, h - 1)
         ty = np.float32(sy - y0)
-        for x in range(w):
+        for x in range(0, w, stride):
             sx = float(x) - float(dx)
             if sx < 0.0 or sx > float(w - 1):
                 continue
@@ -389,7 +412,10 @@ def estimate_translation_subpixel_ncc_f32(
     center_dy: float,
     radius_steps: int,
     step: float,
+    sample_stride: int = 1,
 ) -> dict[str, Any]:
+    if sample_stride <= 0:
+        raise ValueError("sample_stride must be positive")
     native = _native()
     if native is not None and hasattr(native, "estimate_translation_subpixel_ncc_f32"):
         result = dict(
@@ -400,6 +426,7 @@ def estimate_translation_subpixel_ncc_f32(
                 float(center_dy),
                 int(radius_steps),
                 float(step),
+                int(sample_stride),
             )
         )
         return {
@@ -411,6 +438,7 @@ def estimate_translation_subpixel_ncc_f32(
             "center_dy": float(result["center_dy"]),
             "radius_steps": int(result["radius_steps"]),
             "step": float(result["step"]),
+            "sample_stride": int(result.get("sample_stride", sample_stride)),
             "model": str(result.get("model", "translation_subpixel_ncc")),
         }
 
@@ -430,7 +458,7 @@ def estimate_translation_subpixel_ncc_f32(
         for ox in range(-int(radius_steps), int(radius_steps) + 1):
             dx = float(center_dx) + ox * float(step)
             dy = float(center_dy) + oy * float(step)
-            score = _translation_bilinear_ncc_score(ref, mov, dx, dy)
+            score = _translation_bilinear_ncc_score(ref, mov, dx, dy, sample_stride)
             candidate_count += 1
             if score > best_score:
                 best_dx = dx
@@ -445,6 +473,7 @@ def estimate_translation_subpixel_ncc_f32(
         "center_dy": float(center_dy),
         "radius_steps": int(radius_steps),
         "step": float(step),
+        "sample_stride": int(sample_stride),
         "model": "translation_subpixel_ncc_cpu_fallback",
     }
 
@@ -880,15 +909,19 @@ class ResidentCalibratedStack:
         moving_index: int,
         max_shift_x: int,
         max_shift_y: int | None = None,
+        sample_stride: int = 1,
     ) -> dict[str, Any]:
         if not hasattr(self._impl, "estimate_translation_to_reference"):
             raise RuntimeError("native ResidentCalibratedStack.estimate_translation_to_reference is not available")
+        if sample_stride <= 0:
+            raise ValueError("sample_stride must be positive")
         result = dict(
             self._impl.estimate_translation_to_reference(
                 int(reference_index),
                 int(moving_index),
                 int(max_shift_x),
                 int(max_shift_x if max_shift_y is None else max_shift_y),
+                int(sample_stride),
             )
         )
         return {
@@ -896,6 +929,7 @@ class ResidentCalibratedStack:
             "dy": int(result["dy"]),
             "score": float(result["score"]),
             "search_count": int(result["search_count"]),
+            "sample_stride": int(result.get("sample_stride", sample_stride)),
             "reference_index": int(result["reference_index"]),
             "moving_index": int(result["moving_index"]),
             "model": str(result["model"]),
@@ -909,11 +943,14 @@ class ResidentCalibratedStack:
         center_dy: float,
         radius_steps: int,
         step: float,
+        sample_stride: int = 1,
     ) -> dict[str, Any]:
         if not hasattr(self._impl, "estimate_translation_subpixel_to_reference"):
             raise RuntimeError(
                 "native ResidentCalibratedStack.estimate_translation_subpixel_to_reference is not available"
             )
+        if sample_stride <= 0:
+            raise ValueError("sample_stride must be positive")
         result = dict(
             self._impl.estimate_translation_subpixel_to_reference(
                 int(reference_index),
@@ -922,6 +959,7 @@ class ResidentCalibratedStack:
                 float(center_dy),
                 int(radius_steps),
                 float(step),
+                int(sample_stride),
             )
         )
         return {
@@ -933,6 +971,7 @@ class ResidentCalibratedStack:
             "center_dy": float(result["center_dy"]),
             "radius_steps": int(result["radius_steps"]),
             "step": float(result["step"]),
+            "sample_stride": int(result.get("sample_stride", sample_stride)),
             "reference_index": int(result["reference_index"]),
             "moving_index": int(result["moving_index"]),
             "model": str(result["model"]),

@@ -297,6 +297,7 @@ def run_resident_calibration_integration(
     flat_floor: float | None = None,
     resident_registration: str = "off",
     resident_registration_max_shift: int = 128,
+    resident_ncc_sample_stride: int = 1,
     resident_subpixel_radius_steps: int = 4,
     resident_subpixel_step: float = 0.25,
     resident_star_threshold: float = 30.0,
@@ -328,6 +329,8 @@ def run_resident_calibration_integration(
         raise ValueError("local_normalization must be auto, on, or off")
     if resident_registration_max_shift < 0:
         raise ValueError("resident_registration_max_shift must be non-negative")
+    if resident_ncc_sample_stride <= 0:
+        raise ValueError("resident_ncc_sample_stride must be positive")
     if resident_subpixel_radius_steps < 0:
         raise ValueError("resident_subpixel_radius_steps must be non-negative")
     if resident_subpixel_step <= 0:
@@ -527,6 +530,7 @@ def run_resident_calibration_integration(
                                 index,
                                 resident_registration_max_shift,
                                 resident_registration_max_shift,
+                                resident_ncc_sample_stride,
                             )
                             refined = stack.estimate_translation_subpixel_to_reference(
                                 reference_index,
@@ -535,6 +539,7 @@ def run_resident_calibration_integration(
                                 float(coarse["dy"]),
                                 resident_subpixel_radius_steps,
                                 resident_subpixel_step,
+                                resident_ncc_sample_stride,
                             )
                             dx = float(refined["dx"])
                             dy = float(refined["dy"])
@@ -546,6 +551,7 @@ def run_resident_calibration_integration(
                                     f"coarse_dy={int(coarse['dy'])}",
                                     f"coarse_score={float(coarse['score']):.6g}",
                                     f"subpixel_score={score:.6g}",
+                                    f"ncc_sample_stride={resident_ncc_sample_stride}",
                                 ]
                             )
                     except Exception as exc:
@@ -610,6 +616,7 @@ def run_resident_calibration_integration(
                                     index,
                                     resident_registration_max_shift,
                                     resident_registration_max_shift,
+                                    resident_ncc_sample_stride,
                                 )
                                 refined_prior = stack.estimate_translation_subpixel_to_reference(
                                     reference_index,
@@ -618,6 +625,7 @@ def run_resident_calibration_integration(
                                     float(coarse["dy"]),
                                     resident_subpixel_radius_steps,
                                     resident_subpixel_step,
+                                    resident_ncc_sample_stride,
                                 )
                                 prior_dx = float(refined_prior["dx"])
                                 prior_dy = float(refined_prior["dy"])
@@ -630,6 +638,7 @@ def run_resident_calibration_integration(
                                         f"star_prior_radius_px={prior_radius:.6g}",
                                         f"star_prior_coarse_score={float(coarse['score']):.6g}",
                                         f"star_prior_subpixel_score={float(refined_prior['score']):.6g}",
+                                        f"star_prior_ncc_sample_stride={resident_ncc_sample_stride}",
                                     ]
                                 )
                             threshold_candidates, threshold_mode = _resident_star_threshold_candidates(
@@ -868,6 +877,7 @@ def run_resident_calibration_integration(
                         "reference_frame_id": str(reference_frame["id"]),
                         "preview_scale": preview_scale,
                         "max_shift": resident_registration_max_shift,
+                        "ncc_sample_stride": resident_ncc_sample_stride,
                         "subpixel_radius_steps": resident_subpixel_radius_steps,
                         "subpixel_step": resident_subpixel_step,
                         "star_threshold": resident_star_threshold,

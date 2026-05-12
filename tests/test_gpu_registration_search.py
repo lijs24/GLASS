@@ -76,6 +76,19 @@ def test_gpu_estimate_translation_search_aligns_shifted_pair():
     assert rms < 1.0e-4
 
 
+def test_gpu_estimate_translation_search_supports_sample_stride():
+    module = cuda_module_or_skip()
+    reference = _star_field()
+    moving = _shift_image(reference, 5, -4)
+
+    result = module.estimate_translation_search_f32(reference, moving, 8, 8, sample_stride=2)
+
+    assert result["dx"] == -5
+    assert result["dy"] == 4
+    assert result["sample_stride"] == 2
+    assert result["score"] > 0.99
+
+
 def test_gpu_estimate_translation_subpixel_ncc_refines_integer_shift():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_subpixel_ncc_f32"):
@@ -107,6 +120,33 @@ def test_gpu_estimate_translation_subpixel_ncc_refines_integer_shift():
     assert result["score"] > 0.98
     assert rms < center_rms
     assert rms < 4.0
+
+
+def test_gpu_estimate_translation_subpixel_ncc_supports_sample_stride():
+    module = cuda_module_or_skip()
+    reference = _smooth_star_field()
+    true_delta = np.array([2.25, -1.5], dtype=np.float32)
+    moving, _coverage = module.warp_translation_bilinear_f32(
+        reference,
+        -float(true_delta[0]),
+        -float(true_delta[1]),
+        0.0,
+    )
+
+    result = module.estimate_translation_subpixel_ncc_f32(
+        reference,
+        moving,
+        2.0,
+        -2.0,
+        3,
+        0.25,
+        sample_stride=2,
+    )
+
+    assert abs(result["dx"] - float(true_delta[0])) <= 0.25
+    assert abs(result["dy"] - float(true_delta[1])) <= 0.25
+    assert result["sample_stride"] == 2
+    assert result["score"] > 0.98
 
 
 def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():

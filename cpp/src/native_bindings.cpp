@@ -58,7 +58,8 @@ void gpwbpp_estimate_translation_search_f32_launch(
     int width,
     int height,
     int max_shift_x,
-    int max_shift_y);
+    int max_shift_y,
+    int sample_stride);
 void gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
     const float* reference,
     const float* moving,
@@ -71,7 +72,8 @@ void gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
     float center_dx,
     float center_dy,
     int radius_steps,
-    float step);
+    float step,
+    int sample_stride);
 void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     const float* reference_x,
     const float* reference_y,
@@ -421,11 +423,15 @@ class ResidentCalibratedStack {
       std::size_t reference_index,
       std::size_t moving_index,
       int max_shift_x,
-      int max_shift_y) const {
+      int max_shift_y,
+      int sample_stride) const {
     require_loaded(reference_index, "resident translation search");
     require_loaded(moving_index, "resident translation search");
     if (max_shift_x < 0 || max_shift_y < 0) {
       throw std::invalid_argument("max shifts must be non-negative");
+    }
+    if (sample_stride <= 0) {
+      throw std::invalid_argument("sample_stride must be positive");
     }
     const int shift_count = (2 * max_shift_x + 1) * (2 * max_shift_y + 1);
     float* d_scores = nullptr;
@@ -450,7 +456,8 @@ class ResidentCalibratedStack {
           static_cast<int>(width_),
           static_cast<int>(height_),
           max_shift_x,
-          max_shift_y);
+          max_shift_y,
+          sample_stride);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.estimate_translation_to_reference kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.estimate_translation_to_reference synchronize");
       check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(resident best dx)");
@@ -475,6 +482,7 @@ class ResidentCalibratedStack {
     result["dy"] = best_dy;
     result["score"] = best_score;
     result["search_count"] = shift_count;
+    result["sample_stride"] = sample_stride;
     result["reference_index"] = reference_index;
     result["moving_index"] = moving_index;
     result["model"] = "resident_translation_integer_ncc";
@@ -487,7 +495,8 @@ class ResidentCalibratedStack {
       float center_dx,
       float center_dy,
       int radius_steps,
-      float step) const {
+      float step,
+      int sample_stride) const {
     require_loaded(reference_index, "resident subpixel translation search");
     require_loaded(moving_index, "resident subpixel translation search");
     if (radius_steps < 0) {
@@ -495,6 +504,9 @@ class ResidentCalibratedStack {
     }
     if (step <= 0.0f) {
       throw std::invalid_argument("step must be positive");
+    }
+    if (sample_stride <= 0) {
+      throw std::invalid_argument("sample_stride must be positive");
     }
     const int candidate_count = (2 * radius_steps + 1) * (2 * radius_steps + 1);
     float* d_scores = nullptr;
@@ -521,7 +533,8 @@ class ResidentCalibratedStack {
           center_dx,
           center_dy,
           radius_steps,
-          step);
+          step,
+          sample_stride);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.estimate_translation_subpixel_to_reference kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.estimate_translation_subpixel_to_reference synchronize");
       check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident subpixel best dx)");
@@ -550,6 +563,7 @@ class ResidentCalibratedStack {
     result["center_dy"] = center_dy;
     result["radius_steps"] = radius_steps;
     result["step"] = step;
+    result["sample_stride"] = sample_stride;
     result["reference_index"] = reference_index;
     result["moving_index"] = moving_index;
     result["model"] = "resident_translation_subpixel_ncc";
@@ -1704,7 +1718,8 @@ py::dict estimate_translation_search_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference,
     py::array_t<float, py::array::c_style | py::array::forcecast> moving,
     int max_shift_x,
-    int max_shift_y) {
+    int max_shift_y,
+    int sample_stride) {
   const py::buffer_info reference_info = reference.request();
   const py::buffer_info moving_info = moving.request();
   if (reference_info.ndim != 2 || moving_info.ndim != 2) {
@@ -1713,6 +1728,9 @@ py::dict estimate_translation_search_f32(
   require_same_shape(reference_info, moving_info);
   if (max_shift_x < 0 || max_shift_y < 0) {
     throw std::invalid_argument("max_shift values must be non-negative");
+  }
+  if (sample_stride <= 0) {
+    throw std::invalid_argument("sample_stride must be positive");
   }
   const int height = static_cast<int>(reference_info.shape[0]);
   const int width = static_cast<int>(reference_info.shape[1]);
@@ -1756,7 +1774,8 @@ py::dict estimate_translation_search_f32(
         width,
         height,
         max_shift_x,
-        max_shift_y);
+        max_shift_y,
+        sample_stride);
     check_cuda(cudaGetLastError(), "estimate_translation_search_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "estimate_translation_search_f32 synchronize");
     check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(best dx)");
@@ -1785,6 +1804,7 @@ py::dict estimate_translation_search_f32(
   result["dy"] = best_dy;
   result["score"] = best_score;
   result["search_count"] = shift_count;
+  result["sample_stride"] = sample_stride;
   result["model"] = "translation_integer_ncc";
   return result;
 }
@@ -1795,7 +1815,8 @@ py::dict estimate_translation_subpixel_ncc_f32(
     float center_dx,
     float center_dy,
     int radius_steps,
-    float step) {
+    float step,
+    int sample_stride) {
   const py::buffer_info reference_info = reference.request();
   const py::buffer_info moving_info = moving.request();
   if (reference_info.ndim != 2 || moving_info.ndim != 2) {
@@ -1807,6 +1828,9 @@ py::dict estimate_translation_subpixel_ncc_f32(
   }
   if (step <= 0.0f) {
     throw std::invalid_argument("step must be positive");
+  }
+  if (sample_stride <= 0) {
+    throw std::invalid_argument("sample_stride must be positive");
   }
   const int height = static_cast<int>(reference_info.shape[0]);
   const int width = static_cast<int>(reference_info.shape[1]);
@@ -1852,7 +1876,8 @@ py::dict estimate_translation_subpixel_ncc_f32(
         center_dx,
         center_dy,
         radius_steps,
-        step);
+        step,
+        sample_stride);
     check_cuda(cudaGetLastError(), "estimate_translation_subpixel_ncc_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "estimate_translation_subpixel_ncc_f32 synchronize");
     check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(subpixel best dx)");
@@ -1885,6 +1910,7 @@ py::dict estimate_translation_subpixel_ncc_f32(
   result["center_dy"] = center_dy;
   result["radius_steps"] = radius_steps;
   result["step"] = step;
+  result["sample_stride"] = sample_stride;
   result["model"] = "translation_subpixel_ncc";
   return result;
 }
@@ -2498,7 +2524,14 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("mean_stack_tiles_f32", &mean_stack_tiles_f32);
   m.def("warp_translation_f32", &warp_translation_f32);
   m.def("warp_translation_bilinear_f32", &warp_translation_bilinear_f32);
-  m.def("estimate_translation_search_f32", &estimate_translation_search_f32);
+  m.def(
+      "estimate_translation_search_f32",
+      &estimate_translation_search_f32,
+      py::arg("reference"),
+      py::arg("moving"),
+      py::arg("max_shift_x"),
+      py::arg("max_shift_y"),
+      py::arg("sample_stride") = 1);
   m.def(
       "estimate_translation_subpixel_ncc_f32",
       &estimate_translation_subpixel_ncc_f32,
@@ -2507,7 +2540,8 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("center_dx"),
       py::arg("center_dy"),
       py::arg("radius_steps"),
-      py::arg("step"));
+      py::arg("step"),
+      py::arg("sample_stride") = 1);
   m.def(
       "estimate_translation_from_catalogs_f32",
       &estimate_translation_from_catalogs_f32,
@@ -2570,7 +2604,8 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("reference_index"),
           py::arg("moving_index"),
           py::arg("max_shift_x"),
-          py::arg("max_shift_y"))
+          py::arg("max_shift_y"),
+          py::arg("sample_stride") = 1)
       .def(
           "estimate_translation_subpixel_to_reference",
           &ResidentCalibratedStack::estimate_translation_subpixel_to_reference,
@@ -2579,7 +2614,8 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("center_dx"),
           py::arg("center_dy"),
           py::arg("radius_steps"),
-          py::arg("step"))
+          py::arg("step"),
+          py::arg("sample_stride") = 1)
       .def("frame_global_stats", &ResidentCalibratedStack::frame_global_stats)
       .def(
           "apply_global_normalization_frame",
