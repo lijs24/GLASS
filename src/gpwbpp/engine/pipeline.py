@@ -151,13 +151,51 @@ def _normalization_scalar(path: Path, normalization: str, tile_size: int) -> tup
         pixels = reader.width * reader.height
         if normalization == "median" and pixels <= 32_000_000:
             return float(np.nanmedian(reader.read_full())), "median"
+        if normalization == "median":
+            return _exact_median_scratch(path, tile_size), "median_scratch_memmap"
         stats = _StreamingStats()
         for tile in iter_tiles(width=reader.width, height=reader.height, tile_size=tile_size):
             stats.update(reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
     values = stats.as_dict()
-    if normalization == "median":
-        return float(values["median"]), "tile_median_approx"
     return float(values["mean"]), "mean"
+
+
+def _exact_median_scratch(path: Path, tile_size: int, scratch_path: Path | None = None) -> float:
+    import gc
+    import numpy as np
+
+    scratch_target = scratch_path or Path(str(path) + ".median_scratch.bin")
+    scratch_target.parent.mkdir(parents=True, exist_ok=True)
+    scratch = None
+    work = None
+    try:
+        with FitsImageReader(path) as reader:
+            total_pixels = reader.width * reader.height
+            scratch = np.memmap(scratch_target, dtype=np.float32, mode="w+", shape=(total_pixels,))
+            finite_count = 0
+            for tile in iter_tiles(width=reader.width, height=reader.height, tile_size=tile_size):
+                values = reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1).ravel()
+                finite = values[np.isfinite(values)]
+                count = int(finite.size)
+                if count:
+                    scratch[finite_count : finite_count + count] = finite
+                    finite_count += count
+        if finite_count == 0:
+            raise ValueError("cannot compute median: no finite pixels")
+        work = scratch[:finite_count]
+        mid = finite_count // 2
+        work.partition(mid)
+        upper = float(work[mid])
+        if finite_count % 2 == 1:
+            return upper
+        return (float(np.max(work[:mid])) + upper) / 2.0
+    finally:
+        if scratch is not None:
+            scratch.flush()
+        del work
+        del scratch
+        gc.collect()
+        scratch_target.unlink(missing_ok=True)
 
 
 def _normalize_flat_master(

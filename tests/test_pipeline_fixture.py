@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from gpwbpp.cli import main
+from gpwbpp.engine.pipeline import _exact_median_scratch
+from gpwbpp.io.fits_io import write_fits_data
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
 
 
@@ -49,6 +51,25 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
     assert all(master["streaming"] for master in artifacts["masters"].values())
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
+
+
+def test_streaming_exact_median_scratch_matches_numpy(tmp_path: Path):
+    import numpy as np
+
+    path = tmp_path / "source.fits"
+    scratch = tmp_path / "median.bin"
+    data = np.array(
+        [
+            [9.0, 1.0, np.nan, 4.0],
+            [2.0, 7.0, 6.0, 3.0],
+            [8.0, 5.0, 11.0, 10.0],
+        ],
+        dtype=np.float32,
+    )
+    write_fits_data(path, data)
+
+    assert _exact_median_scratch(path, tile_size=2, scratch_path=scratch) == float(np.nanmedian(data))
+    assert not scratch.exists()
 
 
 def test_pipeline_fixture_run_calibration_cuda_streaming(tmp_path: Path):

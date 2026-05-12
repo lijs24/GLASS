@@ -6,8 +6,10 @@ read only headers. Pixel stages use bounded tile or slab iteration.
 `FitsImageReader` performs raw memmapped FITS tile reads and applies
 `BSCALE`/`BZERO` per tile for scaled integer FITS. This avoids the Astropy
 scaled-image `memmap=False` fallback in the light calibration, warp, local
-normalization, and integration paths. Current master frame construction still
-has a known full-frame CPU-array limitation in the high-level pipeline.
+normalization, and integration paths. Master bias, dark, and flat construction
+also uses tile streaming in the high-level pipeline. Large median-normalized
+flats use a temporary float32 `memmap` scratch file and an in-place partition to
+compute an exact median without keeping the full image in process memory.
 
 The memory model has four levels:
 
