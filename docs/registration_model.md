@@ -219,6 +219,18 @@ gate (`translation_delta_px=1.25`, limit 0.5; output RMS limit 55). The result
 is therefore useful progress, not a completed replacement for astroalign's
 asterism matcher.
 
+The similarity seed scorer now counts mutual nearest-neighbor star matches
+rather than one-way nearest-reference hits. This suppresses duplicate matches
+from repeated or clustered stars before the guarded refit runs. With the same
+M38 pair and grid-top parameters, artifact
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v22_mutual_score_pixel_refine_accept.json`
+records the first accepted clean-room GPU catalog path for this pair:
+`catalog_similarity_pixel_refined_agreement_vs_astroalign.passed=true`,
+translation delta about 0.482 px, output RMS difference about 38.53 ADU, and
+elapsed time about 6.42 s versus astroalign's 9.70 s total. This still is not a
+full astroalign replacement: the pixel-refine loop is CPU-orchestrated and the
+agreement is validated on one real pair, not the full 200-frame stack.
+
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
 needed to apply similarity and affine matrices without falling back to CPU pixel

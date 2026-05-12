@@ -748,7 +748,7 @@ def main() -> int:
     parser.add_argument("--catalog-pixel-refine-radius", type=float, default=1.0)
     parser.add_argument("--catalog-pixel-refine-coarse-step", type=float, default=0.25)
     parser.add_argument("--catalog-pixel-refine-fine-radius", type=float, default=0.25)
-    parser.add_argument("--catalog-pixel-refine-fine-step", type=float, default=0.125)
+    parser.add_argument("--catalog-pixel-refine-fine-step", type=float, default=0.0625)
     parser.add_argument("--catalog-pixel-refine-coarse-stride", type=int, default=4)
     parser.add_argument("--catalog-pixel-refine-final-stride", type=int, default=1)
     parser.add_argument("--subpixel-radius-steps", type=int, default=4)

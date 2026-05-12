@@ -851,7 +851,7 @@ __global__ void catalog_similarity_score_kernel(
     const float transformed_x = a * mx - b * my + tx;
     const float transformed_y = b * mx + a * my + ty;
     float best_distance2 = tolerance2;
-    bool matched = false;
+    int best_reference = -1;
     for (int reference_index = 0; reference_index < reference_count; ++reference_index) {
       const float rx = reference_x[reference_index];
       const float ry = reference_y[reference_index];
@@ -863,10 +863,33 @@ __global__ void catalog_similarity_score_kernel(
       const float distance2 = dx * dx + dy * dy;
       if (distance2 <= best_distance2) {
         best_distance2 = distance2;
-        matched = true;
+        best_reference = reference_index;
       }
     }
-    if (matched) {
+    if (best_reference < 0) {
+      continue;
+    }
+    const float best_rx = reference_x[best_reference];
+    const float best_ry = reference_y[best_reference];
+    float reverse_best_distance2 = tolerance2;
+    int reverse_best_moving = -1;
+    for (int other_moving_index = 0; other_moving_index < moving_count; ++other_moving_index) {
+      const float other_mx = moving_x[other_moving_index];
+      const float other_my = moving_y[other_moving_index];
+      if (!isfinite(other_mx) || !isfinite(other_my)) {
+        continue;
+      }
+      const float other_x = a * other_mx - b * other_my + tx;
+      const float other_y = b * other_mx + a * other_my + ty;
+      const float rdx = other_x - best_rx;
+      const float rdy = other_y - best_ry;
+      const float reverse_distance2 = rdx * rdx + rdy * rdy;
+      if (reverse_distance2 <= reverse_best_distance2) {
+        reverse_best_distance2 = reverse_distance2;
+        reverse_best_moving = other_moving_index;
+      }
+    }
+    if (reverse_best_moving == moving_index) {
       ++inliers;
       residual_sum += best_distance2;
     }

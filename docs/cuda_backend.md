@@ -115,6 +115,9 @@ Resident CUDA integration now supports:
   nearest-neighbor star inliers. The refit is applied only if its star-catalog
   residual does not worsen; diagnostics report `refined_inliers`,
   `refit_status`, and `refit_rms_px`.
+- Catalog similarity seed scoring now uses mutual nearest-neighbor star matches
+  under the candidate transform instead of one-way nearest-reference hits. This
+  reduces duplicate-match false positives in compact catalogs.
 - `gpwbpp.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`
   uses CUDA matrix metrics to search a small translation correction around an
   existing matrix. It is a diagnostic bridge toward pixel-evidence transform
