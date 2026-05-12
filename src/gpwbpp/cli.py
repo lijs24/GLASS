@@ -352,6 +352,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_registration_max_shift=args.resident_registration_max_shift,
                 resident_subpixel_radius_steps=args.resident_subpixel_radius_steps,
                 resident_subpixel_step=args.resident_subpixel_step,
+                resident_star_threshold=args.resident_star_threshold,
+                resident_star_max_candidates=args.resident_star_max_candidates,
+                resident_star_tolerance_px=args.resident_star_tolerance_px,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
@@ -591,16 +594,20 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--flat-floor", type=float, help="override calibration flat floor for this run")
     run.add_argument(
         "--resident-registration",
-        choices=["off", "translation_preview", "translation_ncc_subpixel"],
+        choices=["off", "translation_preview", "translation_ncc_subpixel", "translation_star_catalog"],
         default="off",
         help=(
             "resident CUDA registration mode; translation_preview uses downsampled phase correlation, "
-            "translation_ncc_subpixel uses resident GPU NCC plus subpixel refinement"
+            "translation_ncc_subpixel uses resident GPU NCC plus subpixel refinement, "
+            "translation_star_catalog uses GPU star candidates plus pair-offset voting"
         ),
     )
     run.add_argument("--resident-registration-max-shift", type=int, default=128)
     run.add_argument("--resident-subpixel-radius-steps", type=int, default=4)
     run.add_argument("--resident-subpixel-step", type=float, default=0.25)
+    run.add_argument("--resident-star-threshold", type=float, default=30.0)
+    run.add_argument("--resident-star-max-candidates", type=int, default=64)
+    run.add_argument("--resident-star-tolerance-px", type=float, default=1.0)
     run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for resident registration",

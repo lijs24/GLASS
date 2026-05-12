@@ -985,6 +985,65 @@ class ResidentCalibratedStack:
             "flux": np.asarray(result["flux"], dtype=np.float32),
         }
 
+    def estimate_translation_from_stars_to_reference(
+        self,
+        reference_index: int,
+        moving_index: int,
+        threshold: float,
+        max_candidates: int = 64,
+        tolerance_px: float = 1.0,
+        max_abs_dx: float = -1.0,
+        max_abs_dy: float | None = None,
+        prior_dx: float = 0.0,
+        prior_dy: float = 0.0,
+        prior_radius_px: float = -1.0,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "estimate_translation_from_stars_to_reference"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.estimate_translation_from_stars_to_reference is not available"
+            )
+        if max_abs_dy is None:
+            max_abs_dy = max_abs_dx
+        result = dict(
+            self._impl.estimate_translation_from_stars_to_reference(
+                int(reference_index),
+                int(moving_index),
+                float(threshold),
+                int(max_candidates),
+                float(tolerance_px),
+                float(max_abs_dx),
+                float(max_abs_dy),
+                float(prior_dx),
+                float(prior_dy),
+                float(prior_radius_px),
+            )
+        )
+        return {
+            "dx": float(result["dx"]),
+            "dy": float(result["dy"]),
+            "inliers": int(result["inliers"]),
+            "refined_dx": float(result["refined_dx"]),
+            "refined_dy": float(result["refined_dy"]),
+            "mutual_inliers": int(result["mutual_inliers"]),
+            "rms_px": float(result["rms_px"]),
+            "candidate_count": int(result["candidate_count"]),
+            "reference_count": int(result["reference_count"]),
+            "moving_count": int(result["moving_count"]),
+            "reference_total_count": int(result["reference_total_count"]),
+            "moving_total_count": int(result["moving_total_count"]),
+            "threshold": float(result["threshold"]),
+            "max_candidates": int(result["max_candidates"]),
+            "tolerance_px": float(result["tolerance_px"]),
+            "max_abs_dx": float(result["max_abs_dx"]),
+            "max_abs_dy": float(result["max_abs_dy"]),
+            "prior_dx": float(result["prior_dx"]),
+            "prior_dy": float(result["prior_dy"]),
+            "prior_radius_px": float(result["prior_radius_px"]),
+            "reference_index": int(result["reference_index"]),
+            "moving_index": int(result["moving_index"]),
+            "model": str(result["model"]),
+        }
+
     def integrate_mean(self, weights: Any | None = None) -> tuple[np.ndarray, np.ndarray]:
         master, weight_map = self._impl.integrate_mean(
             None if weights is None else _as_f32_c(weights).reshape((self.frame_count,))

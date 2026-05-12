@@ -53,6 +53,15 @@ measured about 0.071 s. This is the timing model closest to the planned
 96GB-VRAM resident pipeline, where calibrated frames remain on the GPU between
 calibration, registration, warp, and integration.
 
+Resident mode also exposes `translation_star_catalog`. This path runs top-N
+star candidate selection for the reference and moving resident frames on the
+GPU, keeps the compact catalogs on device for pair-offset voting and
+mutual-nearest refinement, then downloads only the final translation diagnostics.
+It is still translation-only, but unlike NCC mode its `matched_stars`,
+`inliers`, and `rms_px` fields come from GPU star-catalog evidence rather than
+placeholders. This is the first resident bridge from the astroalign-style idea
+of star matching toward a GPWBPP-owned GPU implementation.
+
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
 moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,

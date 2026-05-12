@@ -813,6 +813,257 @@ class ResidentCalibratedStack {
     }
   }
 
+  py::dict estimate_translation_from_stars_to_reference(
+      std::size_t reference_index,
+      std::size_t moving_index,
+      float threshold,
+      int max_candidates,
+      float tolerance_px,
+      float max_abs_dx,
+      float max_abs_dy,
+      float prior_dx,
+      float prior_dy,
+      float prior_radius_px) const {
+    require_loaded(reference_index, "resident star-catalog reference registration");
+    require_loaded(moving_index, "resident star-catalog moving registration");
+    if (max_candidates <= 0) {
+      throw std::invalid_argument("max_candidates must be positive");
+    }
+    if (tolerance_px < 0.0f) {
+      throw std::invalid_argument("tolerance_px must be non-negative");
+    }
+    if (max_abs_dx < 0.0f) {
+      max_abs_dx = -1.0f;
+    }
+    if (max_abs_dy < 0.0f) {
+      max_abs_dy = max_abs_dx;
+    }
+    if (prior_radius_px < 0.0f) {
+      prior_radius_px = -1.0f;
+    }
+
+    float* d_reference_x = nullptr;
+    float* d_reference_y = nullptr;
+    float* d_reference_flux = nullptr;
+    float* d_moving_x = nullptr;
+    float* d_moving_y = nullptr;
+    float* d_moving_flux = nullptr;
+    int* d_reference_count = nullptr;
+    int* d_moving_count = nullptr;
+    int* d_reference_lock = nullptr;
+    int* d_moving_lock = nullptr;
+    float* d_candidate_dx = nullptr;
+    float* d_candidate_dy = nullptr;
+    int* d_scores = nullptr;
+    float* d_best_dx = nullptr;
+    float* d_best_dy = nullptr;
+    int* d_best_inliers = nullptr;
+    int* d_moving_best_reference = nullptr;
+    int* d_reference_best_moving = nullptr;
+    float* d_refine_sums = nullptr;
+    int* d_mutual_inliers = nullptr;
+    float* d_refined_dx = nullptr;
+    float* d_refined_dy = nullptr;
+    float* d_rms_px = nullptr;
+    int reference_total_count = 0;
+    int moving_total_count = 0;
+    float best_dx = 0.0f;
+    float best_dy = 0.0f;
+    int best_inliers = 0;
+    int mutual_inliers = 0;
+    float refined_dx = 0.0f;
+    float refined_dy = 0.0f;
+    float rms_px = 0.0f;
+
+    try {
+      const std::size_t catalog_bytes = static_cast<std::size_t>(max_candidates) * sizeof(float);
+      check_cuda(cudaMalloc(&d_reference_x, catalog_bytes), "cudaMalloc(resident reference star xs)");
+      check_cuda(cudaMalloc(&d_reference_y, catalog_bytes), "cudaMalloc(resident reference star ys)");
+      check_cuda(cudaMalloc(&d_reference_flux, catalog_bytes), "cudaMalloc(resident reference star flux)");
+      check_cuda(cudaMalloc(&d_moving_x, catalog_bytes), "cudaMalloc(resident moving star xs)");
+      check_cuda(cudaMalloc(&d_moving_y, catalog_bytes), "cudaMalloc(resident moving star ys)");
+      check_cuda(cudaMalloc(&d_moving_flux, catalog_bytes), "cudaMalloc(resident moving star flux)");
+      check_cuda(cudaMalloc(&d_reference_count, sizeof(int)), "cudaMalloc(resident reference star count)");
+      check_cuda(cudaMalloc(&d_moving_count, sizeof(int)), "cudaMalloc(resident moving star count)");
+      check_cuda(cudaMalloc(&d_reference_lock, sizeof(int)), "cudaMalloc(resident reference star lock)");
+      check_cuda(cudaMalloc(&d_moving_lock, sizeof(int)), "cudaMalloc(resident moving star lock)");
+      gpwbpp_star_top_candidates_f32_launch(
+          d_stack_ + reference_index * pixels_per_frame_,
+          d_reference_x,
+          d_reference_y,
+          d_reference_flux,
+          d_reference_count,
+          d_reference_lock,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          threshold,
+          max_candidates);
+      gpwbpp_star_top_candidates_f32_launch(
+          d_stack_ + moving_index * pixels_per_frame_,
+          d_moving_x,
+          d_moving_y,
+          d_moving_flux,
+          d_moving_count,
+          d_moving_lock,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          threshold,
+          max_candidates);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star-catalog detection kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star-catalog detection synchronize");
+      check_cuda(
+          cudaMemcpy(&reference_total_count, d_reference_count, sizeof(int), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident reference star count)");
+      check_cuda(
+          cudaMemcpy(&moving_total_count, d_moving_count, sizeof(int), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident moving star count)");
+      const int reference_count = std::min(reference_total_count, max_candidates);
+      const int moving_count = std::min(moving_total_count, max_candidates);
+      if (reference_count <= 0 || moving_count <= 0) {
+        throw std::runtime_error("resident star-catalog registration found no stars");
+      }
+      const int pair_count = reference_count * moving_count;
+      check_cuda(
+          cudaMalloc(&d_candidate_dx, static_cast<std::size_t>(pair_count) * sizeof(float)),
+          "cudaMalloc(resident catalog candidate dx)");
+      check_cuda(
+          cudaMalloc(&d_candidate_dy, static_cast<std::size_t>(pair_count) * sizeof(float)),
+          "cudaMalloc(resident catalog candidate dy)");
+      check_cuda(
+          cudaMalloc(&d_scores, static_cast<std::size_t>(pair_count) * sizeof(int)),
+          "cudaMalloc(resident catalog scores)");
+      check_cuda(cudaMalloc(&d_best_dx, sizeof(float)), "cudaMalloc(resident catalog best dx)");
+      check_cuda(cudaMalloc(&d_best_dy, sizeof(float)), "cudaMalloc(resident catalog best dy)");
+      check_cuda(cudaMalloc(&d_best_inliers, sizeof(int)), "cudaMalloc(resident catalog best inliers)");
+      check_cuda(
+          cudaMalloc(&d_moving_best_reference, static_cast<std::size_t>(moving_count) * sizeof(int)),
+          "cudaMalloc(resident catalog moving best reference)");
+      check_cuda(
+          cudaMalloc(&d_reference_best_moving, static_cast<std::size_t>(reference_count) * sizeof(int)),
+          "cudaMalloc(resident catalog reference best moving)");
+      check_cuda(cudaMalloc(&d_refine_sums, 3 * sizeof(float)), "cudaMalloc(resident catalog refine sums)");
+      check_cuda(cudaMalloc(&d_mutual_inliers, sizeof(int)), "cudaMalloc(resident catalog mutual inliers)");
+      check_cuda(cudaMalloc(&d_refined_dx, sizeof(float)), "cudaMalloc(resident catalog refined dx)");
+      check_cuda(cudaMalloc(&d_refined_dy, sizeof(float)), "cudaMalloc(resident catalog refined dy)");
+      check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(resident catalog rms)");
+      gpwbpp_estimate_translation_from_catalogs_f32_launch(
+          d_reference_x,
+          d_reference_y,
+          d_moving_x,
+          d_moving_y,
+          d_candidate_dx,
+          d_candidate_dy,
+          d_scores,
+          d_best_dx,
+          d_best_dy,
+          d_best_inliers,
+          d_moving_best_reference,
+          d_reference_best_moving,
+          d_refine_sums,
+          d_mutual_inliers,
+          d_refined_dx,
+          d_refined_dy,
+          d_rms_px,
+          reference_count,
+          moving_count,
+          tolerance_px,
+          max_abs_dx,
+          max_abs_dy,
+          prior_dx,
+          prior_dy,
+          prior_radius_px);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star-catalog translation kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star-catalog translation synchronize");
+      check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident catalog best dx)");
+      check_cuda(cudaMemcpy(&best_dy, d_best_dy, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident catalog best dy)");
+      check_cuda(
+          cudaMemcpy(&best_inliers, d_best_inliers, sizeof(int), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident catalog best inliers)");
+      check_cuda(
+          cudaMemcpy(&mutual_inliers, d_mutual_inliers, sizeof(int), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident catalog mutual inliers)");
+      check_cuda(cudaMemcpy(&refined_dx, d_refined_dx, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident catalog refined dx)");
+      check_cuda(cudaMemcpy(&refined_dy, d_refined_dy, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident catalog refined dy)");
+      check_cuda(cudaMemcpy(&rms_px, d_rms_px, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(resident catalog rms)");
+    } catch (...) {
+      cudaFree(d_reference_x);
+      cudaFree(d_reference_y);
+      cudaFree(d_reference_flux);
+      cudaFree(d_moving_x);
+      cudaFree(d_moving_y);
+      cudaFree(d_moving_flux);
+      cudaFree(d_reference_count);
+      cudaFree(d_moving_count);
+      cudaFree(d_reference_lock);
+      cudaFree(d_moving_lock);
+      cudaFree(d_candidate_dx);
+      cudaFree(d_candidate_dy);
+      cudaFree(d_scores);
+      cudaFree(d_best_dx);
+      cudaFree(d_best_dy);
+      cudaFree(d_best_inliers);
+      cudaFree(d_moving_best_reference);
+      cudaFree(d_reference_best_moving);
+      cudaFree(d_refine_sums);
+      cudaFree(d_mutual_inliers);
+      cudaFree(d_refined_dx);
+      cudaFree(d_refined_dy);
+      cudaFree(d_rms_px);
+      throw;
+    }
+    cudaFree(d_reference_x);
+    cudaFree(d_reference_y);
+    cudaFree(d_reference_flux);
+    cudaFree(d_moving_x);
+    cudaFree(d_moving_y);
+    cudaFree(d_moving_flux);
+    cudaFree(d_reference_count);
+    cudaFree(d_moving_count);
+    cudaFree(d_reference_lock);
+    cudaFree(d_moving_lock);
+    cudaFree(d_candidate_dx);
+    cudaFree(d_candidate_dy);
+    cudaFree(d_scores);
+    cudaFree(d_best_dx);
+    cudaFree(d_best_dy);
+    cudaFree(d_best_inliers);
+    cudaFree(d_moving_best_reference);
+    cudaFree(d_reference_best_moving);
+    cudaFree(d_refine_sums);
+    cudaFree(d_mutual_inliers);
+    cudaFree(d_refined_dx);
+    cudaFree(d_refined_dy);
+    cudaFree(d_rms_px);
+
+    const int reference_count = std::min(reference_total_count, max_candidates);
+    const int moving_count = std::min(moving_total_count, max_candidates);
+    py::dict result;
+    result["dx"] = best_dx;
+    result["dy"] = best_dy;
+    result["inliers"] = best_inliers;
+    result["refined_dx"] = refined_dx;
+    result["refined_dy"] = refined_dy;
+    result["mutual_inliers"] = mutual_inliers;
+    result["rms_px"] = rms_px;
+    result["candidate_count"] = reference_count * moving_count;
+    result["reference_count"] = reference_count;
+    result["moving_count"] = moving_count;
+    result["reference_total_count"] = reference_total_count;
+    result["moving_total_count"] = moving_total_count;
+    result["threshold"] = threshold;
+    result["max_candidates"] = max_candidates;
+    result["tolerance_px"] = tolerance_px;
+    result["max_abs_dx"] = max_abs_dx;
+    result["max_abs_dy"] = max_abs_dy;
+    result["prior_dx"] = prior_dx;
+    result["prior_dy"] = prior_dy;
+    result["prior_radius_px"] = prior_radius_px;
+    result["reference_index"] = reference_index;
+    result["moving_index"] = moving_index;
+    result["model"] = "resident_star_catalog_pair_offset_translation";
+    return result;
+  }
+
   py::tuple integrate_mean(py::object weights_obj) const {
     if (loaded_count_ != frame_count_) {
       throw std::runtime_error("all resident frames must be loaded before integration");
@@ -2300,6 +2551,19 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       .def("star_local_max_mask", &ResidentCalibratedStack::star_local_max_mask)
       .def("star_candidates", &ResidentCalibratedStack::star_candidates)
       .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)
+      .def(
+          "estimate_translation_from_stars_to_reference",
+          &ResidentCalibratedStack::estimate_translation_from_stars_to_reference,
+          py::arg("reference_index"),
+          py::arg("moving_index"),
+          py::arg("threshold"),
+          py::arg("max_candidates"),
+          py::arg("tolerance_px"),
+          py::arg("max_abs_dx"),
+          py::arg("max_abs_dy"),
+          py::arg("prior_dx") = 0.0f,
+          py::arg("prior_dy") = 0.0f,
+          py::arg("prior_radius_px") = -1.0f)
       .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none())
       .def(
           "integrate_sigma_clip",

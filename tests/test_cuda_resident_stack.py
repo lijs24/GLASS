@@ -11,6 +11,39 @@ from gpwbpp.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
 
 
+def _shift_image(data: np.ndarray, dx: int, dy: int) -> np.ndarray:
+    output = np.zeros_like(data, dtype=np.float32)
+    h, w = data.shape
+    src_x0 = max(0, -dx)
+    src_x1 = min(w, w - dx)
+    dst_x0 = max(0, dx)
+    dst_x1 = min(w, w + dx)
+    src_y0 = max(0, -dy)
+    src_y1 = min(h, h - dy)
+    dst_y0 = max(0, dy)
+    dst_y1 = min(h, h + dy)
+    if src_x0 < src_x1 and src_y0 < src_y1:
+        output[dst_y0:dst_y1, dst_x0:dst_x1] = data[src_y0:src_y1, src_x0:src_x1]
+    return output
+
+
+def _resident_star_field() -> np.ndarray:
+    image = np.zeros((96, 112), dtype=np.float32)
+    yy, xx = np.indices(image.shape, dtype=np.float32)
+    for x, y, flux in [
+        (12, 17, 100.0),
+        (30, 42, 220.0),
+        (71, 15, 160.0),
+        (88, 63, 180.0),
+        (45, 79, 250.0),
+        (19, 86, 130.0),
+        (101, 33, 145.0),
+    ]:
+        image += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 1.4**2)))
+    image += 10.0 + 0.01 * xx + 0.02 * yy
+    return image.astype(np.float32)
+
+
 def test_resident_output_diagnostics_reports_range_and_clipping():
     data = np.array([[-1.0, 0.0, 0.5], [1.5, 70000.0, np.nan]], dtype=np.float32)
     weight = np.array([[1, 1, 1], [1, 1, 0]], dtype=np.float32)
@@ -191,6 +224,34 @@ def test_resident_stack_estimates_and_warps_subpixel_translation_on_device():
     assert refined["candidate_count"] == 49
     assert refined["score"] > 0.98
     assert rms < 4.0
+
+
+def test_resident_stack_star_catalog_registration_stays_on_device():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "estimate_translation_from_stars_to_reference"):
+        raise AssertionError("ResidentCalibratedStack.estimate_translation_from_stars_to_reference is missing")
+
+    reference = _resident_star_field()
+    moving = _shift_image(reference, 4, -3)
+    stack = module.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+
+    result = stack.estimate_translation_from_stars_to_reference(0, 1, 30.0, 16, 0.25, 8.0, 8.0)
+    stack.apply_translation_bilinear_frame(1, result["refined_dx"], result["refined_dy"], np.nan)
+    aligned, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
+
+    valid = weight_map > 0.0
+    rms = float(np.sqrt(np.mean((aligned[valid] - reference[valid]) ** 2)))
+
+    assert result["model"] == "resident_star_catalog_pair_offset_translation"
+    assert result["dx"] == -4.0
+    assert result["dy"] == 3.0
+    assert abs(result["refined_dx"] + 4.0) < 1.0e-5
+    assert abs(result["refined_dy"] - 3.0) < 1.0e-5
+    assert result["mutual_inliers"] >= 6
+    assert result["rms_px"] == 0.0
+    assert rms < 1.0e-4
 
 
 def test_resident_stack_weighted_mean_skips_zero_weight_and_nan_frames():

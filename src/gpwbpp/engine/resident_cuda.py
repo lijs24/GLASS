@@ -249,6 +249,9 @@ def run_resident_calibration_integration(
     resident_registration_max_shift: int = 128,
     resident_subpixel_radius_steps: int = 4,
     resident_subpixel_step: float = 0.25,
+    resident_star_threshold: float = 30.0,
+    resident_star_max_candidates: int = 64,
+    resident_star_tolerance_px: float = 1.0,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
@@ -257,8 +260,16 @@ def run_resident_calibration_integration(
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
     if integration_weighting not in {"auto", "none"}:
         raise ValueError("resident CUDA mode currently supports integration weighting=none only")
-    if resident_registration not in {"off", "translation_preview", "translation_ncc_subpixel"}:
-        raise ValueError("resident_registration must be off, translation_preview, or translation_ncc_subpixel")
+    if resident_registration not in {
+        "off",
+        "translation_preview",
+        "translation_ncc_subpixel",
+        "translation_star_catalog",
+    }:
+        raise ValueError(
+            "resident_registration must be off, translation_preview, translation_ncc_subpixel, "
+            "or translation_star_catalog"
+        )
     if local_normalization not in {"auto", "on", "off"}:
         raise ValueError("local_normalization must be auto, on, or off")
     if resident_registration_max_shift < 0:
@@ -267,6 +278,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_subpixel_radius_steps must be non-negative")
     if resident_subpixel_step <= 0:
         raise ValueError("resident_subpixel_step must be positive")
+    if resident_star_max_candidates <= 0:
+        raise ValueError("resident_star_max_candidates must be positive")
+    if resident_star_tolerance_px < 0:
+        raise ValueError("resident_star_tolerance_px must be non-negative")
 
     cuda_module = _cuda_module_required()
     plan = read_json(plan_path)
@@ -497,6 +512,83 @@ def run_resident_calibration_integration(
                         )
                     )
 
+            if resident_registration == "translation_star_catalog":
+                if not hasattr(stack, "estimate_translation_from_stars_to_reference"):
+                    raise RuntimeError("resident CUDA backend does not expose star-catalog registration")
+                for index, frame in enumerate(light_frames):
+                    registration_frame_start = perf_counter()
+                    warnings = []
+                    status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
+                    dx = 0.0
+                    dy = 0.0
+                    inliers = 0
+                    rms_px = float("nan")
+                    try:
+                        if status == "excluded":
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("excluded by resident frame mask")
+                        elif frame["id"] == reference_frame["id"]:
+                            status = "reference"
+                            inliers = 1
+                            rms_px = 0.0
+                        else:
+                            result = stack.estimate_translation_from_stars_to_reference(
+                                reference_index,
+                                index,
+                                resident_star_threshold,
+                                resident_star_max_candidates,
+                                resident_star_tolerance_px,
+                                float(resident_registration_max_shift),
+                                float(resident_registration_max_shift),
+                            )
+                            dx = float(result["refined_dx"])
+                            dy = float(result["refined_dy"])
+                            inliers = int(result["mutual_inliers"])
+                            rms_px = float(result["rms_px"])
+                            if inliers <= 0:
+                                status = "failed"
+                                frame_weight_values[index] = 0.0
+                                frame_weights[frame["id"]] = 0.0
+                                warnings.append("resident star-catalog registration found no mutual inliers")
+                            else:
+                                stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
+                            warnings.extend(
+                                [
+                                    f"star_threshold={resident_star_threshold}",
+                                    f"reference_stars={int(result['reference_count'])}",
+                                    f"moving_stars={int(result['moving_count'])}",
+                                    f"candidate_count={int(result['candidate_count'])}",
+                                    f"raw_dx={float(result['dx']):.6g}",
+                                    f"raw_dy={float(result['dy']):.6g}",
+                                ]
+                            )
+                    except Exception as exc:
+                        status = "failed"
+                        frame_weight_values[index] = 0.0
+                        frame_weights[frame["id"]] = 0.0
+                        warnings.append(str(exc))
+                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_results.append(
+                        RegistrationResult(
+                            frame_id=str(frame["id"]),
+                            reference_frame_id=str(reference_frame["id"]),
+                            transform_model="translation_star_catalog",
+                            matrix=translation_matrix(dx, dy),
+                            matched_stars=inliers,
+                            inliers=inliers,
+                            rms_px=rms_px,
+                            status=status,
+                            warnings=warnings
+                            + [
+                                f"max_shift={resident_registration_max_shift}",
+                                f"star_max_candidates={resident_star_max_candidates}",
+                                f"star_tolerance_px={resident_star_tolerance_px}",
+                                "resident GPU star-catalog translation; similarity/affine not yet implemented",
+                            ],
+                        )
+                    )
+
             local_norm_start = perf_counter()
             local_norm_policy = plan.get("local_normalization_policy", {})
             local_norm_enabled = local_normalization == "on" or (
@@ -653,6 +745,9 @@ def run_resident_calibration_integration(
                         "max_shift": resident_registration_max_shift,
                         "subpixel_radius_steps": resident_subpixel_radius_steps,
                         "subpixel_step": resident_subpixel_step,
+                        "star_threshold": resident_star_threshold,
+                        "star_max_candidates": resident_star_max_candidates,
+                        "star_tolerance_px": resident_star_tolerance_px,
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                         "excluded_frame_tokens": sorted(excluded_tokens),
                     },
@@ -733,7 +828,12 @@ def run_resident_calibration_integration(
                     "results": registration_results,
                     "warnings": [
                         "resident registration is translation-only in the current gate",
-                        "matched_stars/inliers/rms are placeholders until star-based registration is wired in",
+                        (
+                            "star-catalog mode records GPU mutual-inlier diagnostics; preview/NCC modes still use "
+                            "placeholder matched_stars/inliers/rms"
+                            if resident_registration == "translation_star_catalog"
+                            else "matched_stars/inliers/rms are placeholders until star-based registration is wired in"
+                        ),
                     ],
                 },
             )

@@ -125,6 +125,56 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_datase
     assert resident_registration["subpixel_step"] == 0.5
 
 
+def test_cli_resident_cuda_run_star_catalog_registration_smoke(small_fits_dataset, tmp_path: Path):
+    cuda_module_or_skip()
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_star_catalog"
+
+    assert main(["scan", "--root", str(small_fits_dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "translation_star_catalog",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "0.5",
+        ]
+    ) == 0
+
+    registration = read_json(run / "registration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+
+    assert registration["transform_model"] == "translation_star_catalog"
+    assert registration["results"][0]["status"] == "reference"
+    assert resident_registration["mode"] == "translation_star_catalog"
+    assert resident_registration["star_threshold"] == 30.0
+    assert resident_registration["star_max_candidates"] == 16
+    assert resident_registration["star_tolerance_px"] == 0.5
+
+
 def test_resident_frame_exclusion_matches_id_name_or_stem():
     frame = {
         "id": "F000196",

@@ -35,6 +35,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `ResidentCalibratedStack.star_local_max_mask(index, threshold)`
 - `ResidentCalibratedStack.star_candidates(index, threshold, max_candidates)`
 - `ResidentCalibratedStack.star_top_candidates(index, threshold, max_candidates)`
+- `ResidentCalibratedStack.estimate_translation_from_stars_to_reference(...)`
 
 Every CUDA operation will have a CPU reference test. If CUDA is not available,
 CUDA tests skip rather than failing the whole project. Kernel launch failures
@@ -91,6 +92,10 @@ Resident CUDA integration now supports:
 - GPU bilinear subpixel translation warp, returning a warped frame and
   coverage mask. This is the first CUDA warp primitive that can consume the
   refined floating-point catalog translation directly.
+- Resident star-catalog translation registration. The resident stack detects
+  top-N stars for the reference and moving frames on the GPU, scores pair-offset
+  translations and mutual-nearest refinement on the GPU, then returns compact
+  diagnostics before applying the translation warp in place.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight
