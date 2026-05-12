@@ -159,6 +159,16 @@ timings separately, then applies the same astroalign similarity matrix with
 GPWBPP's standalone CUDA matrix warp and resident in-place CUDA matrix warp.
 This isolates star/asterism matching cost from pixel resampling cost while the
 owned GPU matcher is still catching up.
+It also records a direct common-valid-pixel difference between astroalign's
+`apply_transform` output and GPWBPP's CUDA matrix-warp output. This keeps the
+alignment timing claim tied to a numeric image-consistency check in the same
+JSON artifact. In the full calibrated M38 pair
+`S000061`/`S000062`, the refreshed artifact
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v2.json`
+measured standalone CUDA matrix warp at about 0.143 s versus astroalign apply at
+about 2.809 s, and resident device-only matrix warp at about 0.0071 s. On the
+61,632,460 common valid pixels, the CUDA matrix output versus astroalign apply
+had median absolute difference about 3.98 ADU and RMS difference about 12.02 ADU.
 
 Resident runs can also use `--resident-registration external_matrix` together
 with `--resident-registration-results <registration_results.json>`. That mode

@@ -82,7 +82,46 @@ def _adaptive_star_threshold(image: np.ndarray, sigma: float) -> float:
     return median + float(sigma) * robust_sigma
 
 
-def _astroalign_run(reference: np.ndarray, moving: np.ndarray) -> dict[str, Any]:
+def _diff_on_common_valid_pixels(
+    candidate: np.ndarray,
+    candidate_valid: np.ndarray,
+    reference: np.ndarray,
+    reference_valid: np.ndarray,
+) -> dict[str, Any]:
+    mask = (
+        np.asarray(candidate_valid, dtype=bool)
+        & np.asarray(reference_valid, dtype=bool)
+        & np.isfinite(candidate)
+        & np.isfinite(reference)
+    )
+    valid_pixels = int(np.sum(mask))
+    if valid_pixels == 0:
+        return {
+            "valid_pixels": 0,
+            "mean_diff": None,
+            "median_abs_diff": None,
+            "p95_abs_diff": None,
+            "p99_abs_diff": None,
+            "rms_diff": None,
+            "max_abs_diff": None,
+        }
+    diff = np.asarray(candidate[mask], dtype=np.float64) - np.asarray(reference[mask], dtype=np.float64)
+    abs_diff = np.abs(diff)
+    return {
+        "valid_pixels": valid_pixels,
+        "mean_diff": float(np.mean(diff)),
+        "median_abs_diff": float(np.median(abs_diff)),
+        "p95_abs_diff": float(np.percentile(abs_diff, 95)),
+        "p99_abs_diff": float(np.percentile(abs_diff, 99)),
+        "rms_diff": float(np.sqrt(np.mean(diff * diff))),
+        "max_abs_diff": float(np.max(abs_diff)),
+    }
+
+
+def _astroalign_run_with_output(
+    reference: np.ndarray,
+    moving: np.ndarray,
+) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
     import astroalign as aa
 
     t0 = time.perf_counter()
@@ -93,17 +132,23 @@ def _astroalign_run(reference: np.ndarray, moving: np.ndarray) -> dict[str, Any]
     apply_elapsed = time.perf_counter() - t1
     params = np.asarray(transform.params, dtype=np.float64)
     invalid = np.asarray(footprint, dtype=bool)
-    valid = ~invalid if invalid.shape == reference.shape else np.isfinite(aligned)
-    return {
+    aligned_f32 = np.asarray(aligned, dtype=np.float32)
+    valid = ~invalid if invalid.shape == reference.shape else np.isfinite(aligned_f32)
+    result = {
         "elapsed_s": find_elapsed + apply_elapsed,
         "find_elapsed_s": find_elapsed,
         "apply_elapsed_s": apply_elapsed,
         "dx": float(params[0, 2]),
         "dy": float(params[1, 2]),
         "matrix": params.tolist(),
-        "rms": _rms(reference, np.asarray(aligned, dtype=np.float32), valid),
+        "rms": _rms(reference, aligned_f32, valid),
         "matched_control_points": int(len(control_points[0])) if control_points else 0,
     }
+    return result, aligned_f32, valid
+
+
+def _astroalign_run(reference: np.ndarray, moving: np.ndarray) -> dict[str, Any]:
+    return _astroalign_run_with_output(reference, moving)[0]
 
 
 def _gpu_run(reference: np.ndarray, moving: np.ndarray, max_shift: int) -> dict[str, Any]:
@@ -159,20 +204,29 @@ def _gpu_subpixel_run(
     }
 
 
-def _gpu_matrix_warp_run(reference: np.ndarray, moving: np.ndarray, matrix: Any) -> dict[str, Any]:
+def _gpu_matrix_warp_run_with_output(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    matrix: Any,
+) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
     if not gpwbpp_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
     t0 = time.perf_counter()
     aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
     elapsed = time.perf_counter() - t0
     valid = coverage > 0.0
-    return {
+    result = {
         "elapsed_s": elapsed,
         "matrix": np.asarray(matrix, dtype=np.float64).tolist(),
         "coverage_pixels": int(np.sum(valid)),
         "model": "cuda_matrix_bilinear_warp_from_external_transform",
         "rms": _rms(reference, aligned, valid),
     }
+    return result, np.asarray(aligned, dtype=np.float32), valid
+
+
+def _gpu_matrix_warp_run(reference: np.ndarray, moving: np.ndarray, matrix: Any) -> dict[str, Any]:
+    return _gpu_matrix_warp_run_with_output(reference, moving, matrix)[0]
 
 
 def _gpu_resident_ncc_subpixel_run(
@@ -383,9 +437,13 @@ def main() -> int:
     if reference.shape != moving.shape:
         raise ValueError(f"shape mismatch: reference={reference.shape}, moving={moving.shape}")
 
-    astroalign_result = _astroalign_run(reference, moving)
+    astroalign_result, astroalign_aligned, astroalign_valid = _astroalign_run_with_output(reference, moving)
     astroalign_matrix = np.asarray(astroalign_result["matrix"], dtype=np.float64)
-    gpu_matrix_result = _gpu_matrix_warp_run(reference, moving, astroalign_matrix)
+    gpu_matrix_result, gpu_matrix_aligned, gpu_matrix_valid = _gpu_matrix_warp_run_with_output(
+        reference,
+        moving,
+        astroalign_matrix,
+    )
     gpu_result = _gpu_run(reference, moving, args.max_shift)
     gpu_subpixel_result = _gpu_subpixel_run(
         reference,
@@ -445,6 +503,17 @@ def main() -> int:
         "truth": truth,
         "astroalign": astroalign_result,
         "gpwbpp_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
+        "direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels": _diff_on_common_valid_pixels(
+            gpu_matrix_aligned,
+            gpu_matrix_valid,
+            astroalign_aligned,
+            astroalign_valid,
+        ),
+        "valid_pixels": {
+            "astroalign": int(np.sum(astroalign_valid)),
+            "gpwbpp_cuda_matrix": int(np.sum(gpu_matrix_valid)),
+            "common": int(np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_matrix_valid, dtype=bool))),
+        },
         "gpwbpp_cuda": gpu_result,
         "gpwbpp_cuda_subpixel": gpu_subpixel_result,
         "gpwbpp_cuda_ncc_subpixel": gpu_ncc_subpixel_result,
