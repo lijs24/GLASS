@@ -10,6 +10,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <array>
 
 namespace py = pybind11;
 
@@ -47,6 +48,14 @@ void gpwbpp_warp_translation_bilinear_f32_launch(
     int height,
     float dx,
     float dy,
+    float fill);
+void gpwbpp_warp_matrix_bilinear_f32_launch(
+    const float* input,
+    float* output,
+    float* coverage,
+    const float* inverse,
+    int width,
+    int height,
     float fill);
 void gpwbpp_estimate_translation_search_f32_launch(
     const float* reference,
@@ -216,8 +225,61 @@ void require_frame_shape(const py::buffer_info& info, std::size_t height, std::s
   }
   if (static_cast<std::size_t>(info.shape[0]) != height ||
       static_cast<std::size_t>(info.shape[1]) != width) {
-    throw std::invalid_argument("frame shape does not match the resident stack");
+      throw std::invalid_argument("frame shape does not match the resident stack");
   }
+}
+
+std::array<float, 9> parse_matrix3x3(py::object matrix_obj) {
+  auto matrix = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(matrix_obj);
+  if (!matrix) {
+    throw std::invalid_argument("matrix must be convertible to a float32 array");
+  }
+  const py::buffer_info info = matrix.request();
+  if (info.ndim != 2 || info.shape[0] != 3 || info.shape[1] != 3) {
+    throw std::invalid_argument("matrix must have shape (3, 3)");
+  }
+  const auto* values = static_cast<const float*>(info.ptr);
+  std::array<float, 9> out{};
+  for (std::size_t i = 0; i < out.size(); ++i) {
+    out[i] = values[i];
+  }
+  return out;
+}
+
+std::array<float, 9> invert_matrix3x3(const std::array<float, 9>& m) {
+  const double a = m[0];
+  const double b = m[1];
+  const double c = m[2];
+  const double d = m[3];
+  const double e = m[4];
+  const double f = m[5];
+  const double g = m[6];
+  const double h = m[7];
+  const double i = m[8];
+  const double c00 = e * i - f * h;
+  const double c01 = -(d * i - f * g);
+  const double c02 = d * h - e * g;
+  const double c10 = -(b * i - c * h);
+  const double c11 = a * i - c * g;
+  const double c12 = -(a * h - b * g);
+  const double c20 = b * f - c * e;
+  const double c21 = -(a * f - c * d);
+  const double c22 = a * e - b * d;
+  const double det = a * c00 + b * c01 + c * c02;
+  if (std::abs(det) <= 1.0e-20) {
+    throw std::invalid_argument("matrix must be invertible");
+  }
+  const double inv_det = 1.0 / det;
+  return {
+      static_cast<float>(c00 * inv_det),
+      static_cast<float>(c10 * inv_det),
+      static_cast<float>(c20 * inv_det),
+      static_cast<float>(c01 * inv_det),
+      static_cast<float>(c11 * inv_det),
+      static_cast<float>(c21 * inv_det),
+      static_cast<float>(c02 * inv_det),
+      static_cast<float>(c12 * inv_det),
+      static_cast<float>(c22 * inv_det)};
 }
 
 py::dict device_info_dict(int device_id) {
@@ -417,6 +479,44 @@ class ResidentCalibratedStack {
     }
     cudaFree(d_output);
     cudaFree(d_coverage);
+  }
+
+  void apply_matrix_bilinear_frame(std::size_t index, py::object matrix_obj, float fill) {
+    require_loaded(index, "matrix bilinear warp");
+    const auto inverse = invert_matrix3x3(parse_matrix3x3(matrix_obj));
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    float* d_output = nullptr;
+    float* d_coverage = nullptr;
+    float* d_inverse = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident matrix warp output)");
+      check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident matrix warp coverage)");
+      check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(resident matrix warp inverse)");
+      check_cuda(
+          cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident matrix warp inverse)");
+      gpwbpp_warp_matrix_bilinear_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_output,
+          d_coverage,
+          d_inverse,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          fill);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frame kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_bilinear_frame synchronize");
+      check_cuda(
+          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
+          "cudaMemcpy(resident matrix warped frame)");
+    } catch (...) {
+      cudaFree(d_output);
+      cudaFree(d_coverage);
+      cudaFree(d_inverse);
+      throw;
+    }
+    cudaFree(d_output);
+    cudaFree(d_coverage);
+    cudaFree(d_inverse);
   }
 
   py::dict estimate_translation_to_reference(
@@ -1714,6 +1814,68 @@ py::tuple warp_translation_bilinear_f32(
   return py::make_tuple(output, coverage);
 }
 
+py::tuple warp_matrix_bilinear_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    py::object matrix_obj,
+    float fill) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  const int height = static_cast<int>(info.shape[0]);
+  const int width = static_cast<int>(info.shape[1]);
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  const auto inverse = invert_matrix3x3(parse_matrix3x3(matrix_obj));
+  py::array_t<float> output({height, width});
+  py::array_t<float> coverage({height, width});
+  const py::buffer_info output_info = output.request();
+  const py::buffer_info coverage_info = coverage.request();
+
+  float* d_input = nullptr;
+  float* d_output = nullptr;
+  float* d_coverage = nullptr;
+  float* d_inverse = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(matrix warp input)");
+    check_cuda(cudaMalloc(&d_output, n * sizeof(float)), "cudaMalloc(matrix warp output)");
+    check_cuda(cudaMalloc(&d_coverage, n * sizeof(float)), "cudaMalloc(matrix warp coverage)");
+    check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(matrix warp inverse)");
+    check_cuda(
+        cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix warp input)");
+    check_cuda(
+        cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix warp inverse)");
+    gpwbpp_warp_matrix_bilinear_f32_launch(
+        d_input,
+        d_output,
+        d_coverage,
+        d_inverse,
+        width,
+        height,
+        fill);
+    check_cuda(cudaGetLastError(), "warp_matrix_bilinear_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "warp_matrix_bilinear_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(output_info.ptr, d_output, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix warp output)");
+    check_cuda(
+        cudaMemcpy(coverage_info.ptr, d_coverage, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix warp coverage)");
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_output);
+    cudaFree(d_coverage);
+    cudaFree(d_inverse);
+    throw;
+  }
+  cudaFree(d_input);
+  cudaFree(d_output);
+  cudaFree(d_coverage);
+  cudaFree(d_inverse);
+  return py::make_tuple(output, coverage);
+}
+
 py::dict estimate_translation_search_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference,
     py::array_t<float, py::array::c_style | py::array::forcecast> moving,
@@ -2524,6 +2686,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("mean_stack_tiles_f32", &mean_stack_tiles_f32);
   m.def("warp_translation_f32", &warp_translation_f32);
   m.def("warp_translation_bilinear_f32", &warp_translation_bilinear_f32);
+  m.def("warp_matrix_bilinear_f32", &warp_matrix_bilinear_f32);
   m.def(
       "estimate_translation_search_f32",
       &estimate_translation_search_f32,
@@ -2597,6 +2760,12 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("index"),
           py::arg("dx"),
           py::arg("dy"),
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+      .def(
+          "apply_matrix_bilinear_frame",
+          &ResidentCalibratedStack::apply_matrix_bilinear_frame,
+          py::arg("index"),
+          py::arg("matrix"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
       .def(
           "estimate_translation_to_reference",

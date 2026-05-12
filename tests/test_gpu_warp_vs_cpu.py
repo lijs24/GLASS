@@ -32,6 +32,38 @@ def _warp_translation_bilinear_cpu(data: np.ndarray, dx: float, dy: float, fill:
     return output, coverage
 
 
+def _warp_matrix_bilinear_cpu(
+    data: np.ndarray,
+    matrix: np.ndarray,
+    fill: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    image = np.asarray(data, dtype=np.float32)
+    h, w = image.shape
+    output = np.full_like(image, fill, dtype=np.float32)
+    coverage = np.zeros_like(image, dtype=np.float32)
+    inverse = np.linalg.inv(np.asarray(matrix, dtype=np.float64))
+    for y in range(h):
+        for x in range(w):
+            source = inverse @ np.asarray([x, y, 1.0], dtype=np.float64)
+            if abs(float(source[2])) <= 1.0e-12:
+                continue
+            sx = float(source[0] / source[2])
+            sy = float(source[1] / source[2])
+            if sx < 0.0 or sx > float(w - 1) or sy < 0.0 or sy > float(h - 1):
+                continue
+            x0 = int(np.floor(sx))
+            y0 = int(np.floor(sy))
+            x1 = min(x0 + 1, w - 1)
+            y1 = min(y0 + 1, h - 1)
+            tx = np.float32(sx - x0)
+            ty = np.float32(sy - y0)
+            top = image[y0, x0] * (1.0 - tx) + image[y0, x1] * tx
+            bottom = image[y1, x0] * (1.0 - tx) + image[y1, x1] * tx
+            output[y, x] = top * (1.0 - ty) + bottom * ty
+            coverage[y, x] = 1.0
+    return output, coverage
+
+
 def test_gpu_warp_translation_matches_cpu():
     module = cuda_module_or_skip()
     data = np.arange(25, dtype=np.float32).reshape(5, 5)
@@ -53,6 +85,47 @@ def test_gpu_warp_translation_bilinear_matches_cpu_reference():
 
     assert np.allclose(gpu, expected, atol=1.0e-6)
     assert np.array_equal(gpu_coverage, expected_coverage)
+
+
+def test_gpu_warp_matrix_bilinear_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "warp_matrix_bilinear_f32"):
+        raise AssertionError("warp_matrix_bilinear_f32 is missing from gpwbpp_cuda")
+
+    data = np.arange(49, dtype=np.float32).reshape(7, 7)
+    angle = np.deg2rad(3.0)
+    matrix = np.array(
+        [
+            [np.cos(angle), -np.sin(angle), 1.2],
+            [np.sin(angle), np.cos(angle), -0.4],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    gpu, gpu_coverage = module.warp_matrix_bilinear_f32(data, matrix, -1.0)
+    expected, expected_coverage = _warp_matrix_bilinear_cpu(data, matrix, -1.0)
+
+    assert np.allclose(gpu, expected, atol=1.0e-5)
+    assert np.array_equal(gpu_coverage, expected_coverage)
+
+
+def test_resident_stack_matrix_bilinear_warp_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_bilinear_frame"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_bilinear_frame is missing")
+
+    data = np.arange(36, dtype=np.float32).reshape(6, 6)
+    matrix = np.array([[1.0, 0.0, 1.25], [0.0, 1.0, -0.5], [0.0, 0.0, 1.0]], dtype=np.float32)
+    stack = module.ResidentCalibratedStack(1, data.shape[0], data.shape[1])
+    stack.upload_calibrated_frame(0, data)
+    stack.apply_matrix_bilinear_frame(0, matrix, np.nan)
+    warped, weight_map = stack.integrate_mean()
+    expected, expected_coverage = _warp_matrix_bilinear_cpu(data, matrix, np.nan)
+    valid = expected_coverage > 0
+
+    assert np.allclose(warped[valid], expected[valid], atol=1.0e-5)
+    assert np.all(warped[~valid] == 0.0)
+    assert np.array_equal(weight_map, expected_coverage)
 
 
 def test_gpu_catalog_refined_translation_drives_bilinear_warp():

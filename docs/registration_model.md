@@ -134,9 +134,12 @@ cell for diagnostics. Real-data M38 tests with an NCC prior can improve pixel
 RMS, but the inlier evidence is still too weak to replace the fallback without
 descriptor-level matching.
 
-GPU similarity/affine warp, homography, Lanczos/resampling choices, and fully
-resident frame-to-frame non-translation transform application remain future warp
-gates.
+GPU matrix bilinear warp is now available as both a standalone array function
+and an in-place resident-frame operation. This validates the CUDA primitive
+needed to apply similarity and affine matrices without falling back to CPU pixel
+warping. Automatic resident pipeline wiring for non-translation registration
+matrices, homography, Lanczos/resampling choices, and higher-level acceptance
+policy remain future warp gates.
 
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an

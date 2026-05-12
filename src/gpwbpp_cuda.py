@@ -260,6 +260,42 @@ def warp_translation_bilinear_f32(data: Any, dx: float, dy: float, fill: float =
     return out, coverage
 
 
+def warp_matrix_bilinear_f32(data: Any, matrix: Any, fill: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    native = _native()
+    if native is not None and hasattr(native, "warp_matrix_bilinear_f32"):
+        warped, coverage = native.warp_matrix_bilinear_f32(data, matrix, float(fill))
+        return np.asarray(warped, dtype=np.float32), np.asarray(coverage, dtype=np.float32)
+
+    image = np.asarray(data, dtype=np.float32)
+    transform = np.asarray(matrix, dtype=np.float64)
+    if transform.shape != (3, 3):
+        raise ValueError(f"matrix must have shape (3, 3), got {transform.shape}")
+    inverse = np.linalg.inv(transform)
+    h, w = image.shape
+    out = np.full_like(image, fill, dtype=np.float32)
+    coverage = np.zeros_like(image, dtype=np.float32)
+    for y in range(h):
+        for x in range(w):
+            source = inverse @ np.asarray([x, y, 1.0], dtype=np.float64)
+            if abs(float(source[2])) <= 1.0e-12:
+                continue
+            sx = float(source[0] / source[2])
+            sy = float(source[1] / source[2])
+            if sx < 0.0 or sx > float(w - 1) or sy < 0.0 or sy > float(h - 1):
+                continue
+            x0 = int(np.floor(sx))
+            y0 = int(np.floor(sy))
+            x1 = min(x0 + 1, w - 1)
+            y1 = min(y0 + 1, h - 1)
+            tx = np.float32(sx - x0)
+            ty = np.float32(sy - y0)
+            top = image[y0, x0] * (1.0 - tx) + image[y0, x1] * tx
+            bottom = image[y1, x0] * (1.0 - tx) + image[y1, x1] * tx
+            out[y, x] = top * (1.0 - ty) + bottom * ty
+            coverage[y, x] = 1.0
+    return out, coverage
+
+
 def _translation_ncc_score(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -902,6 +938,11 @@ class ResidentCalibratedStack:
         if not hasattr(self._impl, "apply_translation_bilinear_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_translation_bilinear_frame is not available")
         self._impl.apply_translation_bilinear_frame(int(index), float(dx), float(dy), float(fill))
+
+    def apply_matrix_bilinear_frame(self, index: int, matrix: Any, fill: float = np.nan) -> None:
+        if not hasattr(self._impl, "apply_matrix_bilinear_frame"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_matrix_bilinear_frame is not available")
+        self._impl.apply_matrix_bilinear_frame(int(index), np.asarray(matrix, dtype=np.float32), float(fill))
 
     def estimate_translation_to_reference(
         self,
