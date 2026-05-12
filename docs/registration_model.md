@@ -145,3 +145,8 @@ The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
 open-source external reference and, when `gpwbpp[align]` is installed, as an
 optional tile-mode registration backend.
+The benchmark now records astroalign's transform search and pixel application
+timings separately, then applies the same astroalign similarity matrix with
+GPWBPP's standalone CUDA matrix warp and resident in-place CUDA matrix warp.
+This isolates star/asterism matching cost from pixel resampling cost while the
+owned GPU matcher is still catching up.

@@ -87,13 +87,17 @@ def _astroalign_run(reference: np.ndarray, moving: np.ndarray) -> dict[str, Any]
 
     t0 = time.perf_counter()
     transform, control_points = aa.find_transform(moving, reference)
+    find_elapsed = time.perf_counter() - t0
+    t1 = time.perf_counter()
     aligned, footprint = aa.apply_transform(transform, moving, reference, fill_value=0.0)
-    elapsed = time.perf_counter() - t0
+    apply_elapsed = time.perf_counter() - t1
     params = np.asarray(transform.params, dtype=np.float64)
     invalid = np.asarray(footprint, dtype=bool)
     valid = ~invalid if invalid.shape == reference.shape else np.isfinite(aligned)
     return {
-        "elapsed_s": elapsed,
+        "elapsed_s": find_elapsed + apply_elapsed,
+        "find_elapsed_s": find_elapsed,
+        "apply_elapsed_s": apply_elapsed,
         "dx": float(params[0, 2]),
         "dy": float(params[1, 2]),
         "matrix": params.tolist(),
@@ -155,6 +159,22 @@ def _gpu_subpixel_run(
     }
 
 
+def _gpu_matrix_warp_run(reference: np.ndarray, moving: np.ndarray, matrix: Any) -> dict[str, Any]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    t0 = time.perf_counter()
+    aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
+    elapsed = time.perf_counter() - t0
+    valid = coverage > 0.0
+    return {
+        "elapsed_s": elapsed,
+        "matrix": np.asarray(matrix, dtype=np.float64).tolist(),
+        "coverage_pixels": int(np.sum(valid)),
+        "model": "cuda_matrix_bilinear_warp_from_external_transform",
+        "rms": _rms(reference, aligned, valid),
+    }
+
+
 def _gpu_resident_ncc_subpixel_run(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -206,6 +226,38 @@ def _gpu_resident_ncc_subpixel_run(
         "bytes_allocated": int(stack.bytes_allocated),
         "model": "resident_translation_integer_ncc_then_subpixel_ncc",
         "rms": _rms(reference, aligned, weight_map > 0.0),
+    }
+
+
+def _gpu_resident_matrix_warp_run(reference: np.ndarray, moving: np.ndarray, matrix: Any) -> dict[str, Any]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+        raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
+    t0 = time.perf_counter()
+    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    upload_elapsed = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    stack.apply_matrix_bilinear_frame(1, matrix, np.nan)
+    device_elapsed = time.perf_counter() - t1
+
+    t2 = time.perf_counter()
+    aligned, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
+    inspection_elapsed = time.perf_counter() - t2
+    valid = weight_map > 0.0
+    return {
+        "elapsed_s": device_elapsed,
+        "upload_elapsed_s": upload_elapsed,
+        "inspection_download_elapsed_s": inspection_elapsed,
+        "upload_plus_device_elapsed_s": upload_elapsed + device_elapsed,
+        "matrix": np.asarray(matrix, dtype=np.float64).tolist(),
+        "coverage_pixels": int(np.sum(valid)),
+        "bytes_allocated": int(stack.bytes_allocated),
+        "model": "resident_cuda_matrix_bilinear_warp_from_external_transform",
+        "rms": _rms(reference, aligned, valid),
     }
 
 
@@ -332,6 +384,8 @@ def main() -> int:
         raise ValueError(f"shape mismatch: reference={reference.shape}, moving={moving.shape}")
 
     astroalign_result = _astroalign_run(reference, moving)
+    astroalign_matrix = np.asarray(astroalign_result["matrix"], dtype=np.float64)
+    gpu_matrix_result = _gpu_matrix_warp_run(reference, moving, astroalign_matrix)
     gpu_result = _gpu_run(reference, moving, args.max_shift)
     gpu_subpixel_result = _gpu_subpixel_run(
         reference,
@@ -357,6 +411,7 @@ def main() -> int:
         args.subpixel_radius_steps,
         args.subpixel_step,
     )
+    gpu_resident_matrix_result = _gpu_resident_matrix_warp_run(reference, moving, astroalign_matrix)
     catalog_max_shift = args.max_shift if args.catalog_max_shift is None else args.catalog_max_shift
     prior_dx = float(gpu_result["dx"]) if args.catalog_prior_radius is not None else None
     prior_dy = float(gpu_result["dy"]) if args.catalog_prior_radius is not None else None
@@ -389,13 +444,25 @@ def main() -> int:
         "center_crop": args.center_crop,
         "truth": truth,
         "astroalign": astroalign_result,
+        "gpwbpp_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
         "gpwbpp_cuda": gpu_result,
         "gpwbpp_cuda_subpixel": gpu_subpixel_result,
         "gpwbpp_cuda_ncc_subpixel": gpu_ncc_subpixel_result,
         "gpwbpp_cuda_resident_ncc_subpixel": gpu_resident_result,
+        "gpwbpp_cuda_resident_matrix_warp_from_astroalign": gpu_resident_matrix_result,
         "gpwbpp_cuda_catalog": gpu_catalog_result,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
+        else None,
+        "matrix_warp_speedup_vs_astroalign_apply_transform": astroalign_result["apply_elapsed_s"]
+        / gpu_matrix_result["elapsed_s"]
+        if gpu_matrix_result["elapsed_s"] > 0.0
+        else None,
+        "astroalign_find_plus_gpu_matrix_warp_elapsed_s": astroalign_result["find_elapsed_s"]
+        + gpu_matrix_result["elapsed_s"],
+        "astroalign_find_plus_gpu_matrix_warp_speedup_vs_astroalign": astroalign_result["elapsed_s"]
+        / (astroalign_result["find_elapsed_s"] + gpu_matrix_result["elapsed_s"])
+        if (astroalign_result["find_elapsed_s"] + gpu_matrix_result["elapsed_s"]) > 0.0
         else None,
         "catalog_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_catalog_result["elapsed_s"]
         if gpu_catalog_result["elapsed_s"] > 0.0
@@ -412,6 +479,16 @@ def main() -> int:
         "resident_upload_plus_device_speedup_vs_astroalign": astroalign_result["elapsed_s"]
         / gpu_resident_result["upload_plus_device_elapsed_s"]
         if gpu_resident_result["upload_plus_device_elapsed_s"] > 0.0
+        else None,
+        "resident_matrix_device_speedup_vs_astroalign_apply_transform": astroalign_result["apply_elapsed_s"]
+        / gpu_resident_matrix_result["elapsed_s"]
+        if gpu_resident_matrix_result["elapsed_s"] > 0.0
+        else None,
+        "resident_matrix_upload_plus_device_speedup_vs_astroalign_apply_transform": astroalign_result[
+            "apply_elapsed_s"
+        ]
+        / gpu_resident_matrix_result["upload_plus_device_elapsed_s"]
+        if gpu_resident_matrix_result["upload_plus_device_elapsed_s"] > 0.0
         else None,
         "cuda_devices": devices,
     }
