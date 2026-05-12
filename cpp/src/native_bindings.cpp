@@ -235,6 +235,25 @@ void gpwbpp_star_top_nms_candidates_f32_launch(
     int scan_candidates,
     int max_output_candidates,
     float min_separation_px);
+void gpwbpp_star_grid_top_nms_candidates_f32_launch(
+    const float* input,
+    float* grid_xs,
+    float* grid_ys,
+    float* grid_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* locks,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell,
+    int max_output_candidates,
+    float min_separation_px);
 void gpwbpp_star_grid_candidates_f32_launch(
     const float* input,
     float* xs,
@@ -3339,6 +3358,150 @@ py::dict star_top_nms_candidates_f32(
   }
 }
 
+py::dict star_grid_top_nms_candidates_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell,
+    int max_output_candidates,
+    float min_separation_px) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  if (grid_cols <= 0 || grid_rows <= 0 || candidates_per_cell <= 0 || max_output_candidates <= 0) {
+    throw std::invalid_argument("grid dimensions and candidate counts must be positive");
+  }
+  if (min_separation_px < 0.0f) {
+    throw std::invalid_argument("min_separation_px must be non-negative");
+  }
+  const int height = static_cast<int>(info.shape[0]);
+  const int width = static_cast<int>(info.shape[1]);
+  const int cell_count = grid_cols * grid_rows;
+  const int grid_capacity = cell_count * candidates_per_cell;
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  py::array_t<float> xs({max_output_candidates});
+  py::array_t<float> ys({max_output_candidates});
+  py::array_t<float> fluxes({max_output_candidates});
+  const py::buffer_info xs_info = xs.request();
+  const py::buffer_info ys_info = ys.request();
+  const py::buffer_info flux_info = fluxes.request();
+
+  float* d_input = nullptr;
+  float* d_grid_xs = nullptr;
+  float* d_grid_ys = nullptr;
+  float* d_grid_fluxes = nullptr;
+  float* d_xs = nullptr;
+  float* d_ys = nullptr;
+  float* d_fluxes = nullptr;
+  int* d_count = nullptr;
+  int* d_locks = nullptr;
+  int* d_stored_count = nullptr;
+  int total_count = 0;
+  int stored_count = 0;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(grid top nms input)");
+    check_cuda(
+        cudaMalloc(&d_grid_xs, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+        "cudaMalloc(grid top nms grid xs)");
+    check_cuda(
+        cudaMalloc(&d_grid_ys, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+        "cudaMalloc(grid top nms grid ys)");
+    check_cuda(
+        cudaMalloc(&d_grid_fluxes, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+        "cudaMalloc(grid top nms grid fluxes)");
+    check_cuda(
+        cudaMalloc(&d_xs, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+        "cudaMalloc(grid top nms star xs)");
+    check_cuda(
+        cudaMalloc(&d_ys, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+        "cudaMalloc(grid top nms star ys)");
+    check_cuda(
+        cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+        "cudaMalloc(grid top nms star fluxes)");
+    check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(grid top nms star count)");
+    check_cuda(cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)), "cudaMalloc(grid top nms locks)");
+    check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(grid top nms stored count)");
+    check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(grid top nms input)");
+    gpwbpp_star_grid_top_nms_candidates_f32_launch(
+        d_input,
+        d_grid_xs,
+        d_grid_ys,
+        d_grid_fluxes,
+        d_xs,
+        d_ys,
+        d_fluxes,
+        d_count,
+        d_locks,
+        d_stored_count,
+        width,
+        height,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell,
+        max_output_candidates,
+        min_separation_px);
+    check_cuda(cudaGetLastError(), "star_grid_top_nms_candidates_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "star_grid_top_nms_candidates_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid top nms count)");
+    check_cuda(
+        cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid top nms stored count)");
+    check_cuda(
+        cudaMemcpy(xs_info.ptr, d_xs, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid top nms star xs)");
+    check_cuda(
+        cudaMemcpy(ys_info.ptr, d_ys, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid top nms star ys)");
+    check_cuda(
+        cudaMemcpy(
+            flux_info.ptr,
+            d_fluxes,
+            static_cast<std::size_t>(stored_count) * sizeof(float),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid top nms star fluxes)");
+    py::dict result;
+    result["count"] = total_count;
+    result["stored_count"] = stored_count;
+    result["grid_cols"] = grid_cols;
+    result["grid_rows"] = grid_rows;
+    result["candidates_per_cell"] = candidates_per_cell;
+    result["grid_capacity"] = grid_capacity;
+    result["max_output_candidates"] = max_output_candidates;
+    result["min_separation_px"] = min_separation_px;
+    result["x"] = xs[py::slice(0, stored_count, 1)];
+    result["y"] = ys[py::slice(0, stored_count, 1)];
+    result["flux"] = fluxes[py::slice(0, stored_count, 1)];
+    cudaFree(d_input);
+    cudaFree(d_grid_xs);
+    cudaFree(d_grid_ys);
+    cudaFree(d_grid_fluxes);
+    cudaFree(d_xs);
+    cudaFree(d_ys);
+    cudaFree(d_fluxes);
+    cudaFree(d_count);
+    cudaFree(d_locks);
+    cudaFree(d_stored_count);
+    return result;
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_grid_xs);
+    cudaFree(d_grid_ys);
+    cudaFree(d_grid_fluxes);
+    cudaFree(d_xs);
+    cudaFree(d_ys);
+    cudaFree(d_fluxes);
+    cudaFree(d_count);
+    cudaFree(d_locks);
+    cudaFree(d_stored_count);
+    throw;
+  }
+}
+
 py::dict star_grid_candidates_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> input,
     float threshold,
@@ -3516,6 +3679,16 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("input"),
       py::arg("threshold"),
       py::arg("scan_candidates"),
+      py::arg("max_output_candidates"),
+      py::arg("min_separation_px"));
+  m.def(
+      "star_grid_top_nms_candidates_f32",
+      &star_grid_top_nms_candidates_f32,
+      py::arg("input"),
+      py::arg("threshold"),
+      py::arg("grid_cols"),
+      py::arg("grid_rows"),
+      py::arg("candidates_per_cell"),
       py::arg("max_output_candidates"),
       py::arg("min_separation_px"));
   m.def("star_grid_candidates_f32", &star_grid_candidates_f32);

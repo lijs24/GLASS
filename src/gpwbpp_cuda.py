@@ -1301,6 +1301,95 @@ def star_top_nms_candidates_f32(
     }
 
 
+def star_grid_top_nms_candidates_f32(
+    data: Any,
+    threshold: float,
+    grid_cols: int = 16,
+    grid_rows: int = 12,
+    candidates_per_cell: int = 4,
+    max_output_candidates: int = 64,
+    min_separation_px: float = 32.0,
+) -> dict[str, Any]:
+    native = _native()
+    if native is not None and hasattr(native, "star_grid_top_nms_candidates_f32"):
+        result = dict(
+            native.star_grid_top_nms_candidates_f32(
+                data,
+                float(threshold),
+                int(grid_cols),
+                int(grid_rows),
+                int(candidates_per_cell),
+                int(max_output_candidates),
+                float(min_separation_px),
+            )
+        )
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "grid_cols": int(result["grid_cols"]),
+            "grid_rows": int(result["grid_rows"]),
+            "candidates_per_cell": int(result["candidates_per_cell"]),
+            "grid_capacity": int(result["grid_capacity"]),
+            "max_output_candidates": int(result["max_output_candidates"]),
+            "min_separation_px": float(result["min_separation_px"]),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
+
+    if grid_cols <= 0 or grid_rows <= 0 or candidates_per_cell <= 0 or max_output_candidates <= 0:
+        raise ValueError("grid dimensions and candidate counts must be positive")
+    mask = star_local_max_mask_f32(data, threshold)
+    ys, xs = np.nonzero(mask)
+    image = np.asarray(data, dtype=np.float32)
+    flux = image[ys, xs].astype(np.float32)
+    cell_count = int(grid_cols) * int(grid_rows)
+    capacity = cell_count * int(candidates_per_cell)
+    per_cell: list[list[int]] = [[] for _ in range(cell_count)]
+    h, w = image.shape
+    order = np.argsort(-flux, kind="stable")
+    for source_index in order:
+        x = int(xs[source_index])
+        y = int(ys[source_index])
+        cell_x = min((x * int(grid_cols)) // w, int(grid_cols) - 1)
+        cell_y = min((y * int(grid_rows)) // h, int(grid_rows) - 1)
+        cell_index = cell_y * int(grid_cols) + cell_x
+        if len(per_cell[cell_index]) < int(candidates_per_cell):
+            per_cell[cell_index].append(int(source_index))
+    compact_indices = [idx for cell in per_cell for idx in cell]
+    compact_indices.sort(key=lambda idx: float(flux[idx]), reverse=True)
+    selected: list[int] = []
+    min_separation2 = float(min_separation_px) * float(min_separation_px)
+    for idx in compact_indices:
+        if len(selected) >= int(max_output_candidates):
+            break
+        x = float(xs[idx])
+        y = float(ys[idx])
+        keep = True
+        for kept in selected:
+            dx = x - float(xs[kept])
+            dy = y - float(ys[kept])
+            if dx * dx + dy * dy < min_separation2:
+                keep = False
+                break
+        if keep:
+            selected.append(idx)
+    selected_array = np.asarray(selected, dtype=np.int64)
+    return {
+        "count": int(len(xs)),
+        "stored_count": int(len(selected)),
+        "grid_cols": int(grid_cols),
+        "grid_rows": int(grid_rows),
+        "candidates_per_cell": int(candidates_per_cell),
+        "grid_capacity": int(capacity),
+        "max_output_candidates": int(max_output_candidates),
+        "min_separation_px": float(min_separation_px),
+        "x": xs[selected_array].astype(np.float32),
+        "y": ys[selected_array].astype(np.float32),
+        "flux": flux[selected_array].astype(np.float32),
+    }
+
+
 def star_grid_candidates_f32(data: Any, threshold: float, grid_cols: int = 8, grid_rows: int = 8) -> dict[str, Any]:
     native = _native()
     if native is not None and hasattr(native, "star_grid_candidates_f32"):

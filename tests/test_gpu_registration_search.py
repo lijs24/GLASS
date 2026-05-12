@@ -563,3 +563,36 @@ def test_gpu_star_top_nms_candidates_suppresses_close_peaks():
     assert (11, 11) not in points
     assert (30, 30) in points
     assert (7, 40) in points
+
+
+def test_gpu_star_grid_top_nms_candidates_keeps_spatial_candidates():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_grid_top_nms_candidates_f32"):
+        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from gpwbpp_cuda")
+
+    image = np.zeros((64, 64), dtype=np.float32)
+    image[8, 8] = 100.0
+    image[10, 10] = 95.0
+    image[8, 40] = 90.0
+    image[40, 8] = 85.0
+    image[40, 40] = 80.0
+
+    result = module.star_grid_top_nms_candidates_f32(
+        image,
+        threshold=10.0,
+        grid_cols=2,
+        grid_rows=2,
+        candidates_per_cell=2,
+        max_output_candidates=8,
+        min_separation_px=4.0,
+    )
+    points = {(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)}
+
+    assert result["count"] == 5
+    assert result["stored_count"] == 4
+    assert result["grid_capacity"] == 8
+    assert (8, 8) in points
+    assert (10, 10) not in points
+    assert (40, 8) in points
+    assert (8, 40) in points
+    assert (40, 40) in points

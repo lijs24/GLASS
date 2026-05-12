@@ -97,13 +97,18 @@ Resident CUDA integration now supports:
 - `star_top_nms_candidates_f32(...)` adds a CUDA-side top-candidate selection
   plus minimum-distance suppression step. This reduces duplicated local maxima
   around saturated stars before catalog matching.
+- `star_grid_top_nms_candidates_f32(...)` keeps the top-K local maxima per image
+  grid cell on the GPU, then runs the same CUDA NMS compaction. It is a faster
+  spatially distributed catalog prefilter for large real frames.
 - `estimate_similarity_from_catalogs_f32(...)` now accepts optional priors for
   translation, scale, and rotation. The real M38 pair benchmark can run a
   fully GPWBPP-owned path (GPU star candidates -> GPU NMS catalog -> GPU
   constrained similarity seed -> GPU matrix warp) without astroalign control
-  points. The current brute-force seed path is correct on the recorded pair but
-  still slow; it needs parallel best-candidate reduction and a cheaper catalog
-  prefilter before it becomes the default production registration path.
+  points. The global top-NMS path has produced an astroalign-close matrix on the
+  recorded pair but is still slow. The new grid-top prefilter is much faster,
+  but the current seed scorer can still choose an astroalign-disagreeing
+  transform, so benchmark artifacts record both internal acceptance and external
+  agreement checks.
 - GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
   a bounded fractional-offset grid with bilinear sampling and normalized
   cross-correlation, returning `dx`, `dy`, `score`, and candidate-count

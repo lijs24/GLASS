@@ -10,6 +10,7 @@ from gpwbpp_cuda import (
     estimate_similarity_from_pairs_f32,
     estimate_translation_from_catalogs_f32,
     estimate_translation_search_f32,
+    star_grid_top_nms_candidates_f32,
     star_grid_candidates_f32,
     star_top_nms_candidates_f32,
     star_top_candidates_f32,
@@ -27,6 +28,7 @@ def register_similarity_from_star_catalogs_f32(
     fill: float = 0.0,
     grid_cols: int | None = None,
     grid_rows: int | None = None,
+    grid_top_candidates_per_cell: int | None = None,
     nms_scan_candidates: int | None = None,
     nms_min_separation_px: float | None = None,
     prior_dx: float | None = None,
@@ -47,9 +49,30 @@ def register_similarity_from_star_catalogs_f32(
     if (grid_cols is None) != (grid_rows is None):
         raise ValueError("grid_cols and grid_rows must be provided together")
     if grid_cols is not None and grid_rows is not None:
-        reference_catalog = star_grid_candidates_f32(reference, threshold, int(grid_cols), int(grid_rows))
-        moving_catalog = star_grid_candidates_f32(moving, threshold, int(grid_cols), int(grid_rows))
-        selector = "grid"
+        if grid_top_candidates_per_cell is not None or nms_min_separation_px is not None:
+            reference_catalog = star_grid_top_nms_candidates_f32(
+                reference,
+                threshold,
+                int(grid_cols),
+                int(grid_rows),
+                int(1 if grid_top_candidates_per_cell is None else grid_top_candidates_per_cell),
+                int(max_candidates),
+                float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
+            )
+            moving_catalog = star_grid_top_nms_candidates_f32(
+                moving,
+                threshold,
+                int(grid_cols),
+                int(grid_rows),
+                int(1 if grid_top_candidates_per_cell is None else grid_top_candidates_per_cell),
+                int(max_candidates),
+                float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
+            )
+            selector = "grid_top_nms"
+        else:
+            reference_catalog = star_grid_candidates_f32(reference, threshold, int(grid_cols), int(grid_rows))
+            moving_catalog = star_grid_candidates_f32(moving, threshold, int(grid_cols), int(grid_rows))
+            selector = "grid"
     else:
         if nms_scan_candidates is not None or nms_min_separation_px is not None:
             reference_catalog = star_top_nms_candidates_f32(
@@ -108,5 +131,6 @@ __all__ = [
     "estimate_translation_from_catalogs_f32",
     "estimate_translation_search_f32",
     "register_similarity_from_star_catalogs_f32",
+    "star_grid_top_nms_candidates_f32",
     "star_top_nms_candidates_f32",
 ]

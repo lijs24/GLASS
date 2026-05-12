@@ -193,6 +193,53 @@ __global__ void star_candidate_grid_kernel(
   atomicExch(locks + cell_index, 0);
 }
 
+__global__ void star_candidate_grid_topk_kernel(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int* locks,
+    int* count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell) {
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  if (x >= width || y >= height) {
+    return;
+  }
+  float center = 0.0f;
+  if (!is_local_maximum(input, x, y, width, height, threshold, &center)) {
+    return;
+  }
+  atomicAdd(count, 1);
+  const int cell_x = min((x * grid_cols) / width, grid_cols - 1);
+  const int cell_y = min((y * grid_rows) / height, grid_rows - 1);
+  const int cell_index = cell_y * grid_cols + cell_x;
+  const int base = cell_index * candidates_per_cell;
+
+  while (atomicCAS(locks + cell_index, 0, 1) != 0) {
+  }
+  int weakest_index = base;
+  float weakest_flux = fluxes[base];
+  for (int i = 1; i < candidates_per_cell; ++i) {
+    const int candidate_index = base + i;
+    if (fluxes[candidate_index] < weakest_flux) {
+      weakest_flux = fluxes[candidate_index];
+      weakest_index = candidate_index;
+    }
+  }
+  if (center > weakest_flux) {
+    xs[weakest_index] = static_cast<float>(x);
+    ys[weakest_index] = static_cast<float>(y);
+    fluxes[weakest_index] = center;
+  }
+  atomicExch(locks + cell_index, 0);
+}
+
 __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxes, int max_candidates) {
   if (blockIdx.x != 0 || threadIdx.x != 0) {
     return;
@@ -354,6 +401,64 @@ void gpwbpp_star_top_nms_candidates_f32_launch(
       out_fluxes,
       stored_count,
       scan_candidates,
+      max_output_candidates,
+      min_separation_px);
+}
+
+void gpwbpp_star_grid_top_nms_candidates_f32_launch(
+    const float* input,
+    float* grid_xs,
+    float* grid_ys,
+    float* grid_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* locks,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell,
+    int max_output_candidates,
+    float min_separation_px) {
+  cudaMemset(count, 0, sizeof(int));
+  cudaMemset(stored_count, 0, sizeof(int));
+  const int cell_count = grid_cols * grid_rows;
+  const int grid_capacity = cell_count * candidates_per_cell;
+  constexpr int init_threads = 256;
+  const int grid_init_blocks = (grid_capacity + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<grid_init_blocks, init_threads>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<out_init_blocks, init_threads>>>(out_xs, out_ys, out_fluxes, max_output_candidates);
+  cudaMemset(locks, 0, static_cast<std::size_t>(cell_count) * sizeof(int));
+  const dim3 block(16, 16);
+  const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+  star_candidate_grid_topk_kernel<<<grid, block>>>(
+      input,
+      grid_xs,
+      grid_ys,
+      grid_fluxes,
+      locks,
+      count,
+      width,
+      height,
+      threshold,
+      grid_cols,
+      grid_rows,
+      candidates_per_cell);
+  star_catalog_sort_desc_kernel<<<1, 1>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  star_catalog_nms_kernel<<<1, 1>>>(
+      grid_xs,
+      grid_ys,
+      grid_fluxes,
+      out_xs,
+      out_ys,
+      out_fluxes,
+      stored_count,
+      grid_capacity,
       max_output_candidates,
       min_separation_px);
 }

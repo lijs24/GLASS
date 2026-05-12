@@ -118,6 +118,56 @@ def _diff_on_common_valid_pixels(
     }
 
 
+def _similarity_matrix_terms(matrix: np.ndarray) -> dict[str, float]:
+    m = np.asarray(matrix, dtype=np.float64)
+    return {
+        "dx": float(m[0, 2]),
+        "dy": float(m[1, 2]),
+        "scale": float(np.sqrt(m[0, 0] * m[0, 0] + m[1, 0] * m[1, 0])),
+        "rotation_rad": float(np.arctan2(m[1, 0], m[0, 0])),
+    }
+
+
+def _agreement_vs_astroalign(
+    candidate_matrix: np.ndarray,
+    astroalign_matrix: np.ndarray,
+    output_diff: dict[str, Any],
+) -> dict[str, Any]:
+    candidate = _similarity_matrix_terms(candidate_matrix)
+    reference = _similarity_matrix_terms(astroalign_matrix)
+    translation_delta = float(
+        np.hypot(candidate["dx"] - reference["dx"], candidate["dy"] - reference["dy"])
+    )
+    scale_delta = float(abs(candidate["scale"] - reference["scale"]))
+    rotation_delta = float(abs(candidate["rotation_rad"] - reference["rotation_rad"]))
+    matrix_max_abs_delta = float(
+        np.max(np.abs(np.asarray(candidate_matrix, dtype=np.float64) - np.asarray(astroalign_matrix, dtype=np.float64)))
+    )
+    rms_diff = output_diff.get("rms_diff")
+    median_abs_diff = output_diff.get("median_abs_diff")
+    passed = (
+        translation_delta <= 0.5
+        and scale_delta <= 1.0e-3
+        and rotation_delta <= 1.0e-3
+        and (rms_diff is not None and float(rms_diff) <= 55.0)
+    )
+    return {
+        "passed": bool(passed),
+        "translation_delta_px": translation_delta,
+        "scale_delta": scale_delta,
+        "rotation_delta_rad": rotation_delta,
+        "matrix_max_abs_delta": matrix_max_abs_delta,
+        "output_median_abs_diff": median_abs_diff,
+        "output_rms_diff": rms_diff,
+        "criteria": {
+            "translation_delta_px_max": 0.5,
+            "scale_delta_max": 1.0e-3,
+            "rotation_delta_rad_max": 1.0e-3,
+            "output_rms_diff_max": 55.0,
+        },
+    }
+
+
 def _astroalign_run_with_output(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -458,6 +508,9 @@ def _gpu_catalog_similarity_run(
     min_inliers: int,
     grid_cols: int | None,
     grid_rows: int | None,
+    grid_top_cols: int | None,
+    grid_top_rows: int | None,
+    grid_top_candidates_per_cell: int,
     nms_scan_candidates: int | None,
     nms_min_separation_px: float | None,
     prior_dx: float | None,
@@ -474,7 +527,27 @@ def _gpu_catalog_similarity_run(
     t0 = time.perf_counter()
     reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
     moving_threshold = _adaptive_star_threshold(moving, threshold_sigma)
-    if grid_cols is not None and grid_rows is not None:
+    if grid_top_cols is not None and grid_top_rows is not None:
+        reference_catalog = gpwbpp_cuda.star_grid_top_nms_candidates_f32(
+            reference,
+            reference_threshold,
+            grid_top_cols,
+            grid_top_rows,
+            grid_top_candidates_per_cell,
+            max_stars,
+            32.0 if nms_min_separation_px is None else nms_min_separation_px,
+        )
+        moving_catalog = gpwbpp_cuda.star_grid_top_nms_candidates_f32(
+            moving,
+            moving_threshold,
+            grid_top_cols,
+            grid_top_rows,
+            grid_top_candidates_per_cell,
+            max_stars,
+            32.0 if nms_min_separation_px is None else nms_min_separation_px,
+        )
+        selection_model = "grid_topk_local_maximum_nms"
+    elif grid_cols is not None and grid_rows is not None:
         reference_catalog = gpwbpp_cuda.star_grid_candidates_f32(reference, reference_threshold, grid_cols, grid_rows)
         moving_catalog = gpwbpp_cuda.star_grid_candidates_f32(moving, moving_threshold, grid_cols, grid_rows)
         selection_model = "grid_brightest_local_maximum"
@@ -538,6 +611,9 @@ def _gpu_catalog_similarity_run(
         "selection_model": selection_model,
         "grid_cols": grid_cols,
         "grid_rows": grid_rows,
+        "grid_top_cols": grid_top_cols,
+        "grid_top_rows": grid_top_rows,
+        "grid_top_candidates_per_cell": grid_top_candidates_per_cell,
         "nms_scan_candidates": nms_scan_candidates,
         "nms_min_separation_px": nms_min_separation_px,
         "tolerance_px": float(tolerance_px),
@@ -577,6 +653,9 @@ def main() -> int:
     parser.add_argument("--catalog-min-inliers", type=int, default=6)
     parser.add_argument("--catalog-grid-cols", type=int)
     parser.add_argument("--catalog-grid-rows", type=int)
+    parser.add_argument("--catalog-grid-top-cols", type=int)
+    parser.add_argument("--catalog-grid-top-rows", type=int)
+    parser.add_argument("--catalog-grid-top-per-cell", type=int, default=4)
     parser.add_argument("--catalog-nms-scan-stars", type=int)
     parser.add_argument("--catalog-nms-min-separation", type=float)
     parser.add_argument("--catalog-prior-radius", type=float)
@@ -589,6 +668,8 @@ def main() -> int:
     args = parser.parse_args()
     if (args.catalog_grid_cols is None) != (args.catalog_grid_rows is None):
         raise ValueError("--catalog-grid-cols and --catalog-grid-rows must be provided together")
+    if (args.catalog_grid_top_cols is None) != (args.catalog_grid_top_rows is None):
+        raise ValueError("--catalog-grid-top-cols and --catalog-grid-top-rows must be provided together")
 
     if args.reference and args.moving:
         reference = _center_crop(_read_fits(args.reference), args.center_crop)
@@ -676,6 +757,9 @@ def main() -> int:
             args.catalog_min_inliers,
             args.catalog_grid_cols,
             args.catalog_grid_rows,
+            args.catalog_grid_top_cols,
+            args.catalog_grid_top_rows,
+            args.catalog_grid_top_per_cell,
             args.catalog_nms_scan_stars,
             args.catalog_nms_min_separation,
             prior_dx,
@@ -694,7 +778,44 @@ def main() -> int:
     ):
         gpu_catalog_result["accepted"] = False
         gpu_catalog_result["warnings"].append("catalog image RMS is worse than integer NCC by more than 5%")
+    if (
+        gpu_catalog_similarity_result["accepted"]
+        and np.isfinite(gpu_catalog_similarity_result["rms"])
+        and np.isfinite(gpu_subpixel_result["rms"])
+        and gpu_catalog_similarity_result["rms"] > gpu_subpixel_result["rms"] * 1.10
+    ):
+        gpu_catalog_similarity_result["accepted"] = False
+        gpu_catalog_similarity_result["warnings"].append(
+            "catalog similarity image RMS is worse than subpixel NCC by more than 10%"
+        )
     devices = gpwbpp_cuda.list_devices()
+    gpu_matrix_diff = _diff_on_common_valid_pixels(
+        gpu_matrix_aligned,
+        gpu_matrix_valid,
+        astroalign_aligned,
+        astroalign_valid,
+    )
+    gpu_similarity_diff = _diff_on_common_valid_pixels(
+        gpu_similarity_aligned,
+        gpu_similarity_valid,
+        astroalign_aligned,
+        astroalign_valid,
+    )
+    gpu_catalog_similarity_diff = _diff_on_common_valid_pixels(
+        gpu_catalog_similarity_aligned,
+        gpu_catalog_similarity_valid,
+        astroalign_aligned,
+        astroalign_valid,
+    )
+    catalog_similarity_agreement = _agreement_vs_astroalign(
+        np.asarray(gpu_catalog_similarity_result["matrix"], dtype=np.float64),
+        astroalign_matrix,
+        gpu_catalog_similarity_diff,
+    )
+    if not catalog_similarity_agreement["passed"]:
+        gpu_catalog_similarity_result["warnings"].append(
+            "catalog similarity benchmark agreement with astroalign failed"
+        )
     result = {
         "image_shape": list(reference.shape),
         "source_paths": source_paths,
@@ -703,24 +824,12 @@ def main() -> int:
         "astroalign": astroalign_result,
         "gpwbpp_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
         "gpwbpp_cuda_similarity_fit_from_astroalign_matches": gpu_similarity_result,
-        "direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels": _diff_on_common_valid_pixels(
-            gpu_matrix_aligned,
-            gpu_matrix_valid,
-            astroalign_aligned,
-            astroalign_valid,
+        "direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels": gpu_matrix_diff,
+        "direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels": gpu_similarity_diff,
+        "direct_output_diff_gpu_catalog_similarity_minus_astroalign_apply_on_common_valid_pixels": (
+            gpu_catalog_similarity_diff
         ),
-        "direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels": _diff_on_common_valid_pixels(
-            gpu_similarity_aligned,
-            gpu_similarity_valid,
-            astroalign_aligned,
-            astroalign_valid,
-        ),
-        "direct_output_diff_gpu_catalog_similarity_minus_astroalign_apply_on_common_valid_pixels": _diff_on_common_valid_pixels(
-            gpu_catalog_similarity_aligned,
-            gpu_catalog_similarity_valid,
-            astroalign_aligned,
-            astroalign_valid,
-        ),
+        "catalog_similarity_agreement_vs_astroalign": catalog_similarity_agreement,
         "valid_pixels": {
             "astroalign": int(np.sum(astroalign_valid)),
             "gpwbpp_cuda_matrix": int(np.sum(gpu_matrix_valid)),
