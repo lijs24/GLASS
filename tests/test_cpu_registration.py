@@ -180,6 +180,55 @@ def test_register_calibrated_frames_can_use_astroalign_backend(tmp_path):
     assert any("astroalign" in warning for warning in moving_result["warnings"])
 
 
+def test_register_calibrated_frames_records_astroalign_failure(tmp_path, monkeypatch):
+    import gpwbpp.engine.registration as registration_module
+
+    reference = _star_field()
+    moving = np.zeros_like(reference)
+    run = tmp_path / "run"
+    cache = run / "calibrated_cache"
+    cache.mkdir(parents=True)
+    ref_path = cache / "ref.fits"
+    moving_path = cache / "moving.fits"
+    write_fits_data(ref_path, reference)
+    write_fits_data(moving_path, moving)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "schema_version": 1,
+            "calibrated_lights": [
+                {"frame_id": "ref", "path": str(ref_path)},
+                {"frame_id": "moving", "path": str(moving_path)},
+            ],
+        },
+    )
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "ref",
+            "frame_quality": [
+                {"frame_id": "ref", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+                {"frame_id": "moving", "background_median": 0.0, "background_rms": 1.0, "star_count": 0},
+            ],
+        },
+    )
+    write_json(run / "processing_plan.json", {"schema_version": 1, "registration_policy": {}})
+
+    def fail_astroalign(*args, **kwargs):
+        raise RuntimeError("synthetic astroalign failure")
+
+    monkeypatch.setattr(registration_module, "estimate_astroalign_transform", fail_astroalign)
+
+    payload = register_calibrated_frames(run, tile_size=64, preview_max_dimension=256, method="astroalign")
+    moving_result = next(item for item in payload["registration_results"] if item["frame_id"] == "moving")
+
+    assert moving_result["status"] == "failed"
+    assert moving_result["registration_solution_source"] == "open_source_astroalign_preview"
+    assert moving_result["matrix"] == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    assert any("synthetic astroalign failure" in warning for warning in moving_result["warnings"])
+
+
 def test_phase_correlation_translation():
     reference = np.zeros((32, 32), dtype=np.float32)
     reference[10:13, 14:17] = 10

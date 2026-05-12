@@ -58,6 +58,8 @@ def register_calibrated_frames(
     preview_max_dimension: int = 1024,
     method: str = "auto",
 ) -> dict[str, Any]:
+    if preview_max_dimension <= 0:
+        raise ValueError("preview_max_dimension must be positive")
     run = Path(run_dir)
     artifacts = read_json(run / "calibration_artifacts.json")
     quality = read_json(run / "frame_quality.json")
@@ -125,24 +127,33 @@ def register_calibrated_frames(
             rms = float("nan")
             status = "failed"
             if method == "astroalign":
-                astroalign_result = estimate_astroalign_transform(
-                    reference_preview,
-                    moving_preview,
-                    max_control_points=astroalign_max_control_points,
-                    detection_sigma=astroalign_detection_sigma,
-                    min_area=astroalign_min_area,
-                )
-                matrix_array = np.asarray(astroalign_result.matrix, dtype=np.float64)
-                matrix_array[0, 2] *= reference_scale
-                matrix_array[1, 2] *= reference_scale
-                matrix = [[float(value) for value in row] for row in matrix_array]
-                matched = astroalign_result.matched_stars
-                inliers = astroalign_result.inliers
-                rms = float(astroalign_result.rms_px) * reference_scale
-                status = astroalign_result.status
-                warnings.extend(astroalign_result.warnings)
-                warnings.append("astroalign transform estimated on streaming preview")
-                row_source = "open_source_astroalign_preview"
+                try:
+                    astroalign_result = estimate_astroalign_transform(
+                        reference_preview,
+                        moving_preview,
+                        max_control_points=astroalign_max_control_points,
+                        detection_sigma=astroalign_detection_sigma,
+                        min_area=astroalign_min_area,
+                    )
+                    matrix_array = np.asarray(astroalign_result.matrix, dtype=np.float64)
+                    matrix_array[0, 2] *= reference_scale
+                    matrix_array[1, 2] *= reference_scale
+                    matrix = [[float(value) for value in row] for row in matrix_array]
+                    matched = astroalign_result.matched_stars
+                    inliers = astroalign_result.inliers
+                    rms = float(astroalign_result.rms_px) * reference_scale
+                    status = astroalign_result.status
+                    warnings.extend(astroalign_result.warnings)
+                    warnings.append("astroalign transform estimated on streaming preview")
+                    row_source = "open_source_astroalign_preview"
+                except Exception as exc:
+                    matrix = translation_matrix(0.0, 0.0)
+                    matched = 0
+                    inliers = 0
+                    rms = float("nan")
+                    status = "failed"
+                    warnings.append(f"astroalign registration failed: {exc}")
+                    row_source = "open_source_astroalign_preview"
             if method in {"star", "auto"}:
                 moving_quality = quality_by_id.get(frame_id, {})
                 moving_stars = detect_stars_streaming(

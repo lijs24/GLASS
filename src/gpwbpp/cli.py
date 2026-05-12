@@ -416,6 +416,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 lambda: register_calibrated_frames(
                     args.out,
                     tile_size=args.tile_size,
+                    preview_max_dimension=args.registration_preview_max_dimension,
                     method=args.registration_method,
                 ),
             )
@@ -604,6 +605,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "star", "astroalign"],
         default="auto",
         help="tile-mode registration method; astroalign uses the optional open-source gpwbpp[align] backend",
+    )
+    run.add_argument(
+        "--registration-preview-max-dimension",
+        type=int,
+        default=1024,
+        help="maximum preview width/height used by tile-mode streaming registration",
     )
     run.add_argument(
         "--memory-mode",
