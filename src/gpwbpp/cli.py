@@ -348,6 +348,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 integration_weighting=args.integration_weighting,
                 integration_rejection=args.integration_rejection,
                 flat_floor=args.flat_floor,
+                resident_registration=args.resident_registration,
+                reference_frame_id=args.reference_frame_id,
             ),
         )
         write_run_state(args.out, state)
@@ -569,6 +571,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--allow-partial", action="store_true")
     run.add_argument("--flat-floor", type=float, help="override calibration flat floor for this run")
+    run.add_argument(
+        "--resident-registration",
+        choices=["off", "translation_preview"],
+        default="off",
+        help="resident CUDA registration mode; translation_preview uses downsampled phase correlation",
+    )
+    run.add_argument(
+        "--reference-frame-id",
+        help="reference frame id, file name, or stem for resident registration",
+    )
     run.set_defaults(func=cmd_run)
 
     resume = sub.add_parser("resume", help="resume a run directory")

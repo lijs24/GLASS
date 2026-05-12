@@ -36,17 +36,27 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
             "none",
             "--flat-floor",
             "0.05",
+            "--resident-registration",
+            "translation_preview",
+            "--reference-frame-id",
+            "light_001",
         ]
     ) == 0
 
     integration = read_json(run / "integration_results.json")
+    registration = read_json(run / "registration_results.json")
     state = read_json(run / "run_state.json")
     resident = read_json(run / "resident_artifacts.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
+    assert integration["outputs"][0]["resident_registration"] == "translation_preview"
     assert integration["outputs"][0]["output_diagnostics"]["normalization_probe"]["method"]
+    assert registration["source_stage"] == "resident_calibrated_stack"
+    assert registration["results"][0]["status"] == "reference"
     assert state["current_stage"] == "integration"
+    assert "resident_registration" in state["completed_stages"]
     assert "resident_integration" in state["completed_stages"]
     assert resident["backend"] == "cuda_resident_stack"
     assert resident["policy"]["flat_floor"] == 0.05
+    assert resident["artifacts"][0]["resident_registration"]["mode"] == "translation_preview"
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0

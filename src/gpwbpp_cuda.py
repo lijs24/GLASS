@@ -306,6 +306,11 @@ class ResidentCalibratedStack:
             _policy_payload(policy),
         )
 
+    def apply_translation_frame(self, index: int, dx: int, dy: int, fill: float = np.nan) -> None:
+        if not hasattr(self._impl, "apply_translation_frame"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_translation_frame is not available")
+        self._impl.apply_translation_frame(int(index), int(dx), int(dy), float(fill))
+
     def integrate_mean(self, weights: Any | None = None) -> tuple[np.ndarray, np.ndarray]:
         master, weight_map = self._impl.integrate_mean(
             None if weights is None else _as_f32_c(weights).reshape((self.frame_count,))

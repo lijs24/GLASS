@@ -45,7 +45,14 @@ __global__ void gpwbpp_integrate_resident_weighted_mean_f32_kernel(
   float weight_sum = 0.0f;
   for (std::size_t frame = 0; frame < frame_count; ++frame) {
     const float weight = weights[frame];
-    sum += stack[frame * pixels_per_frame + pixel] * weight;
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    const float value = stack[frame * pixels_per_frame + pixel];
+    if (!isfinite(value)) {
+      continue;
+    }
+    sum += value * weight;
     weight_sum += weight;
   }
   weight_map[pixel] = weight_sum;
@@ -91,6 +98,10 @@ __global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
   float mean = 0.0f;
   float count = 0.0f;
   for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
     const float value = stack[frame * pixels_per_frame + pixel];
     if (isfinite(value)) {
       mean += value;
@@ -109,6 +120,10 @@ __global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
 
   float variance = 0.0f;
   for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
     const float value = stack[frame * pixels_per_frame + pixel];
     if (isfinite(value)) {
       const float delta = value - mean;
@@ -125,6 +140,10 @@ __global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
   float low_reject = 0.0f;
   float high_reject = 0.0f;
   for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
     float value = stack[frame * pixels_per_frame + pixel];
     if (!isfinite(value)) {
       continue;
@@ -146,7 +165,6 @@ __global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
     if (rejected && !winsorize) {
       continue;
     }
-    const float weight = weights[frame];
     sum += value * weight;
     weight_sum += weight;
     coverage += 1.0f;

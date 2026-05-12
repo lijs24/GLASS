@@ -5,6 +5,7 @@ from dataclasses import asdict
 import numpy as np
 
 from gpwbpp.cpu.calibration import calibrate_light
+from gpwbpp.cpu.warp import warp_translation
 from gpwbpp.engine.resident_cuda import _output_diagnostics
 from gpwbpp.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
@@ -79,10 +80,58 @@ def test_resident_stack_weighted_mean_matches_cpu():
     assert np.allclose(weight_map, np.full((3, 3), np.sum(weights), dtype=np.float32))
 
 
-def _mean_std_sigma_reference(frames: list[np.ndarray], low_sigma: float, high_sigma: float, winsorize: bool):
+def test_resident_stack_translation_warp_uses_nan_coverage():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_translation_frame"):
+        raise AssertionError("ResidentCalibratedStack.apply_translation_frame is missing from gpwbpp_cuda")
+
+    frame = np.arange(20, dtype=np.float32).reshape(4, 5)
+    stack = module.ResidentCalibratedStack(1, 4, 5)
+    stack.upload_calibrated_frame(0, frame)
+    stack.apply_translation_frame(0, 1, -1, np.nan)
+    master, weight_map = stack.integrate_mean()
+
+    expected = warp_translation(frame, 1, -1, fill=np.nan)
+    valid = np.isfinite(expected)
+    assert np.allclose(master[valid], expected[valid], rtol=1e-5, atol=1e-5)
+    assert np.all(master[~valid] == 0.0)
+    assert np.allclose(weight_map, valid.astype(np.float32))
+
+
+def test_resident_stack_weighted_mean_skips_zero_weight_and_nan_frames():
+    module = cuda_module_or_skip()
+    frames = [
+        np.full((2, 2), 1, dtype=np.float32),
+        np.full((2, 2), 100, dtype=np.float32),
+        np.array([[3, np.nan], [3, 3]], dtype=np.float32),
+    ]
+    weights = np.array([1, 0, 1], dtype=np.float32)
+
+    stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+    master, weight_map = stack.integrate_mean(weights)
+
+    assert np.allclose(master, np.array([[2, 1], [2, 2]], dtype=np.float32))
+    assert np.allclose(weight_map, np.array([[2, 1], [2, 2]], dtype=np.float32))
+
+
+def _mean_std_sigma_reference(
+    frames: list[np.ndarray],
+    low_sigma: float,
+    high_sigma: float,
+    winsorize: bool,
+    weights: np.ndarray | None = None,
+):
     stack = np.stack(frames, axis=0).astype(np.float32)
-    mean = np.mean(stack, axis=0)
-    std = np.std(stack, axis=0)
+    frame_weights = np.ones((stack.shape[0],), dtype=np.float32) if weights is None else weights.astype(np.float32)
+    active = frame_weights[:, None, None] > 0
+    finite = np.isfinite(stack)
+    stats_valid = active & finite
+    count = np.sum(stats_valid, axis=0)
+    safe_count = np.where(count > 0, count, 1)
+    mean = np.sum(np.where(stats_valid, stack, 0.0), axis=0) / safe_count
+    std = np.sqrt(np.sum(np.where(stats_valid, (stack - mean[None, :, :]) ** 2, 0.0), axis=0) / safe_count)
     low_threshold = mean - np.float32(low_sigma) * std
     high_threshold = mean + np.float32(high_sigma) * std
     low = stack < low_threshold[None, :, :]
@@ -90,16 +139,23 @@ def _mean_std_sigma_reference(frames: list[np.ndarray], low_sigma: float, high_s
     if winsorize:
         working = np.where(low, low_threshold[None, :, :], stack)
         working = np.where(high, high_threshold[None, :, :], working)
-        valid = np.ones_like(stack, dtype=bool)
+        valid = stats_valid
     else:
         working = stack
-        valid = ~(low | high)
-    master = np.sum(np.where(valid, working, 0.0), axis=0) / np.sum(valid, axis=0)
+        valid = stats_valid & ~(low | high)
+    weight_cube = frame_weights[:, None, None]
+    weight_sum = np.sum(np.where(valid, weight_cube, 0.0), axis=0)
+    master = np.divide(
+        np.sum(np.where(valid, working * weight_cube, 0.0), axis=0),
+        weight_sum,
+        out=np.zeros_like(mean, dtype=np.float32),
+        where=weight_sum > 0,
+    )
     return (
         master.astype(np.float32),
         np.sum(valid, axis=0).astype(np.float32),
-        np.sum(low, axis=0).astype(np.float32),
-        np.sum(high, axis=0).astype(np.float32),
+        np.sum(stats_valid & low, axis=0).astype(np.float32),
+        np.sum(stats_valid & high, axis=0).astype(np.float32),
     )
 
 
@@ -123,6 +179,30 @@ def test_resident_stack_sigma_clip_maps_match_cpu_reference():
     master, weight_map, coverage, low_reject, high_reject = stack.integrate_sigma_clip(None, 1.0, 1.0, False)
     expected_master, expected_coverage, expected_low, expected_high = _mean_std_sigma_reference(
         frames, 1.0, 1.0, False
+    )
+
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
+    assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
+
+
+def test_resident_stack_sigma_clip_ignores_zero_weight_frames():
+    module = cuda_module_or_skip()
+    frames = [
+        np.full((2, 2), 1, dtype=np.float32),
+        np.full((2, 2), 1, dtype=np.float32),
+        np.full((2, 2), 100, dtype=np.float32),
+    ]
+    weights = np.array([1, 1, 0], dtype=np.float32)
+    stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject = stack.integrate_sigma_clip(weights, 1.0, 1.0, False)
+    expected_master, expected_coverage, expected_low, expected_high = _mean_std_sigma_reference(
+        frames, 1.0, 1.0, False, weights
     )
 
     assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)

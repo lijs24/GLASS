@@ -8,10 +8,11 @@ from typing import Any
 
 import numpy as np
 
+from gpwbpp.cpu.registration import estimate_translation_phase_correlation, translation_matrix
 from gpwbpp.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
 from gpwbpp.io.fits_io import read_fits_data, write_fits_data
 from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.models import CalibrationPolicy, PipelineArtifact, RunState, now_iso
+from gpwbpp.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
 
 
 def _cuda_module_required():
@@ -69,6 +70,29 @@ def _memory_estimate(frame_count: int, height: int, width: int, master_count: in
         "estimated_peak_bytes": estimated_peak,
         "estimated_peak_gib": estimated_peak / (1024**3),
     }
+
+
+def _preview_scale(height: int, width: int, target_max_dim: int = 1024) -> int:
+    return max(1, (max(int(height), int(width)) + int(target_max_dim) - 1) // int(target_max_dim))
+
+
+def _registration_preview(image: np.ndarray, scale: int) -> np.ndarray:
+    preview = np.asarray(image, dtype=np.float32)[:: int(scale), :: int(scale)]
+    return np.ascontiguousarray(np.nan_to_num(preview, nan=0.0, posinf=0.0, neginf=0.0), dtype=np.float32)
+
+
+def _frame_reference_tokens(frame: dict[str, Any]) -> set[str]:
+    path = Path(str(frame.get("path", "")))
+    return {str(frame.get("id", "")), path.name, path.stem}
+
+
+def _find_reference_frame(light_frames: list[dict[str, Any]], reference_frame_id: str | None) -> dict[str, Any]:
+    if reference_frame_id:
+        for frame in light_frames:
+            if str(reference_frame_id) in _frame_reference_tokens(frame):
+                return frame
+        raise ValueError(f"reference frame was not found in resident light group: {reference_frame_id}")
+    return light_frames[0]
 
 
 def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) -> dict[str, Any]:
@@ -217,11 +241,15 @@ def run_resident_calibration_integration(
     integration_weighting: str = "auto",
     integration_rejection: str = "none",
     flat_floor: float | None = None,
+    resident_registration: str = "off",
+    reference_frame_id: str | None = None,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
     if integration_weighting not in {"auto", "none"}:
         raise ValueError("resident CUDA mode currently supports integration weighting=none only")
+    if resident_registration not in {"off", "translation_preview"}:
+        raise ValueError("resident_registration must be off or translation_preview")
 
     cuda_module = _cuda_module_required()
     plan = read_json(plan_path)
@@ -245,6 +273,7 @@ def run_resident_calibration_integration(
     resident_artifacts: list[dict[str, Any]] = []
     outputs: list[dict[str, Any]] = []
     frame_weights: dict[str, float] = {}
+    registration_results: list[RegistrationResult] = []
 
     try:
         all_lights = _frames_by_type(plan, "light")
@@ -299,8 +328,22 @@ def run_resident_calibration_integration(
             del master_bias, master_dark, master_flat
             gc.collect()
 
+            registration_start = perf_counter()
+            reference_frame = _find_reference_frame(light_frames, reference_frame_id)
+            reference_preview = None
+            preview_scale = 1
+            if resident_registration == "translation_preview":
+                preview_scale = _preview_scale(height, width)
+                reference_image = read_fits_data(reference_frame["path"], dtype=np.float32)
+                reference_preview = _registration_preview(reference_image, preview_scale)
+                del reference_image
+                gc.collect()
+            registration_setup_elapsed = perf_counter() - registration_start
+
             load_calibrate_start = perf_counter()
             per_frame_s = []
+            per_frame_registration_s = []
+            frame_weight_values: list[float] = []
             for index, frame in enumerate(light_frames):
                 frame_start = perf_counter()
                 light = read_fits_data(frame["path"], dtype=np.float32)
@@ -311,8 +354,49 @@ def run_resident_calibration_integration(
                     None if dark_exposure is None else float(dark_exposure),
                     asdict(policy),
                 )
+                frame_weight = 1.0
+                if resident_registration == "translation_preview":
+                    registration_frame_start = perf_counter()
+                    warnings = []
+                    status = "ok"
+                    dx = 0.0
+                    dy = 0.0
+                    try:
+                        if frame["id"] != reference_frame["id"]:
+                            preview = _registration_preview(light, preview_scale)
+                            if reference_preview is None:
+                                raise RuntimeError("reference preview is not available")
+                            preview_dx, preview_dy = estimate_translation_phase_correlation(reference_preview, preview)
+                            dx = float(preview_dx * preview_scale)
+                            dy = float(preview_dy * preview_scale)
+                            stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
+                        else:
+                            status = "reference"
+                    except Exception as exc:
+                        status = "failed"
+                        frame_weight = 0.0
+                        warnings.append(str(exc))
+                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_results.append(
+                        RegistrationResult(
+                            frame_id=str(frame["id"]),
+                            reference_frame_id=str(reference_frame["id"]),
+                            transform_model="translation_preview",
+                            matrix=translation_matrix(dx, dy),
+                            matched_stars=0,
+                            inliers=0 if status == "failed" else 1,
+                            rms_px=0.0 if status != "failed" else float("nan"),
+                            status=status,
+                            warnings=warnings
+                            + [
+                                f"preview_scale={preview_scale}",
+                                "phase-correlation preview registration; no star-model RMS yet",
+                            ],
+                        )
+                    )
                 per_frame_s.append(perf_counter() - frame_start)
-                frame_weights[frame["id"]] = 1.0
+                frame_weights[frame["id"]] = frame_weight
+                frame_weight_values.append(frame_weight)
                 del light
                 if index % 10 == 9:
                     gc.collect()
@@ -322,8 +406,10 @@ def run_resident_calibration_integration(
             coverage_map = None
             low_rejection_map = None
             high_rejection_map = None
+            weights_array = np.asarray(frame_weight_values, dtype=np.float32)
+            weights_arg = None if np.all(weights_array == 1.0) else weights_array
             if rejection_mode == "none":
-                master, weight_map = stack.integrate_mean()
+                master, weight_map = stack.integrate_mean(weights_arg)
             else:
                 if not hasattr(stack, "integrate_sigma_clip"):
                     raise RuntimeError("resident CUDA backend does not expose integrate_sigma_clip")
@@ -334,7 +420,7 @@ def run_resident_calibration_integration(
                     coverage_map,
                     low_rejection_map,
                     high_rejection_map,
-                ) = stack.integrate_sigma_clip(None, low_sigma, high_sigma, winsorize)
+                ) = stack.integrate_sigma_clip(weights_arg, low_sigma, high_sigma, winsorize)
             integrate_elapsed = perf_counter() - integrate_start
             output_diagnostics = _output_diagnostics(master, weight_map)
             master_path = output_dir / f"resident_master_{filt}.fits"
@@ -370,19 +456,29 @@ def run_resident_calibration_integration(
                     "timing_s": {
                         "master_build_or_load": master_elapsed,
                         "resident_allocate_and_master_upload": allocate_elapsed,
+                        "registration_preview_setup": registration_setup_elapsed,
                         "light_read_upload_calibrate": load_calibrate_elapsed,
                         "resident_integration": integrate_elapsed,
                         "output_write": write_elapsed,
                         "per_frame_mean": float(np.mean(per_frame_s)) if per_frame_s else 0.0,
                         "per_frame_min": float(np.min(per_frame_s)) if per_frame_s else 0.0,
                         "per_frame_max": float(np.max(per_frame_s)) if per_frame_s else 0.0,
+                        "per_frame_registration_mean": (
+                            float(np.mean(per_frame_registration_s)) if per_frame_registration_s else 0.0
+                        ),
+                    },
+                    "resident_registration": {
+                        "mode": resident_registration,
+                        "reference_frame_id": str(reference_frame["id"]),
+                        "preview_scale": preview_scale,
+                        "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                     },
                     "integration_rejection": {
                         "mode": rejection_mode,
                         "low_sigma": low_sigma,
                         "high_sigma": high_sigma,
                         "algorithm": (
-                            "two_pass_mean_std_winsorized"
+                            "two_pass_mean_std_winsorized_approximation"
                             if rejection_mode == "winsorized_sigma"
                             else "two_pass_mean_std_clip"
                             if rejection_mode == "sigma_clip"
@@ -392,7 +488,8 @@ def run_resident_calibration_integration(
                     "notes": [
                         "Raw light frames are uploaded one at a time into a reusable device buffer.",
                         "Calibrated frames remain resident in VRAM until integration completes.",
-                        "This mode intentionally skips registration and LN in the current gate.",
+                        "Resident registration is optional and currently limited to preview-scale integer translation.",
+                        "Local normalization is not included in the resident path in the current gate.",
                     ],
                 }
             )
@@ -409,6 +506,7 @@ def run_resident_calibration_integration(
                     "memory_mode": "resident",
                     "rejection": rejection_mode,
                     "weighting": "none",
+                    "resident_registration": resident_registration,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,
                     "output_diagnostics": output_diagnostics,
@@ -431,6 +529,20 @@ def run_resident_calibration_integration(
                 "device": cuda_module.get_device_info(0),
             },
         )
+        if registration_results:
+            write_json(
+                run / "registration_results.json",
+                {
+                    "schema_version": 1,
+                    "source_stage": "resident_calibrated_stack",
+                    "transform_model": "translation_preview",
+                    "results": registration_results,
+                    "warnings": [
+                        "resident registration uses downsampled phase correlation and integer-pixel CUDA warp",
+                        "matched_stars/inliers/rms are placeholders until star-based registration is wired in",
+                    ],
+                },
+            )
         write_json(
             run / "integration_results.json",
             {
@@ -444,7 +556,8 @@ def run_resident_calibration_integration(
                 "frame_weights": frame_weights,
                 "outputs": outputs,
                 "warnings": [
-                    "resident CUDA mode currently skips registration and local normalization"
+                    "resident CUDA winsorized_sigma is currently a two-pass mean/std winsorized approximation",
+                    "resident CUDA mode currently skips local normalization",
                 ],
             },
         )
@@ -458,12 +571,17 @@ def run_resident_calibration_integration(
             )
         )
         state.completed_stages.extend(
-            ["master_calibration", "resident_light_calibration", "resident_integration"]
+            [
+                "master_calibration",
+                "resident_light_calibration",
+                *(["resident_registration"] if resident_registration != "off" else []),
+                "resident_integration",
+            ]
         )
         state.current_stage = "integration"
         state.warnings.append(
             "resident CUDA mode is a high-VRAM calibration plus integration path; "
-            "registration and LN are not yet included"
+            "registration is preview-scale translation only and LN is not yet included"
         )
         return state
     except Exception as exc:

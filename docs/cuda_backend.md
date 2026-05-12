@@ -18,6 +18,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `calibrate_tile_f32(...)`
 - `integrate_accumulate_mean_tile_f32(...)`
 - `ResidentCalibratedStack.integrate_sigma_clip(...)`
+- `ResidentCalibratedStack.apply_translation_frame(...)`
 
 Every CUDA operation will have a CPU reference test. If CUDA is not available,
 CUDA tests skip rather than failing the whole project. Kernel launch failures
@@ -37,9 +38,13 @@ Resident CUDA integration now supports:
 
 - weighted mean for already resident calibrated frames;
 - two-pass mean/std sigma clipping;
-- two-pass mean/std winsorized sigma clipping;
+- two-pass mean/std winsorized sigma clipping approximation;
 - output weight, coverage, low rejection, and high rejection maps.
+- optional preview-scale phase-correlation translation registration followed by
+  integer-pixel CUDA warp with NaN edge fill.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight
-FastIntegration's robust rejection and alignment internals.
+FastIntegration's robust rejection and alignment internals. The resident
+translation path is useful for diagnosis and high-VRAM timing, but it does not
+replace the star-based registration/Lanczos warp gates.

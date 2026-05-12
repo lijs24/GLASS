@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <limits>
 
 namespace py = pybind11;
 
@@ -243,6 +244,40 @@ class ResidentCalibratedStack {
     check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame kernel launch");
     check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.calibrate_frame synchronize");
     mark_loaded(index);
+  }
+
+  void apply_translation_frame(std::size_t index, int dx, int dy, float fill) {
+    require_index(index);
+    if (!loaded_[index]) {
+      throw std::runtime_error("resident frame must be loaded before translation warp");
+    }
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    float* d_output = nullptr;
+    float* d_coverage = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident translation output)");
+      check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident translation coverage)");
+      gpwbpp_warp_translation_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_output,
+          d_coverage,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          dx,
+          dy,
+          fill);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_translation_frame kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_translation_frame synchronize");
+      check_cuda(
+          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
+          "cudaMemcpy(resident translated frame)");
+    } catch (...) {
+      cudaFree(d_output);
+      cudaFree(d_coverage);
+      throw;
+    }
+    cudaFree(d_output);
+    cudaFree(d_coverage);
   }
 
   py::tuple integrate_mean(py::object weights_obj) const {
@@ -911,6 +946,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("light_exposure_s"),
           py::arg("dark_exposure_s") = py::none(),
           py::arg("policy") = py::none())
+      .def(
+          "apply_translation_frame",
+          &ResidentCalibratedStack::apply_translation_frame,
+          py::arg("index"),
+          py::arg("dx"),
+          py::arg("dy"),
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
       .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none())
       .def(
           "integrate_sigma_clip",
