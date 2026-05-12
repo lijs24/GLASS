@@ -40,12 +40,28 @@ Supported modes:
 
 The rejection maps count low and high outliers per output pixel.
 
+The current CPU tile path uses median/std thresholds for rejection. The current
+resident CUDA path uses a separate high-VRAM engineering baseline:
+
+- `sigma_clip`: two-pass mean/std thresholds over finite, positive-weight
+  resident samples.
+- `winsorized_sigma`: two-pass mean/std thresholds, then clamps rejected samples
+  to those thresholds before accumulation.
+
+This resident `winsorized_sigma` mode is deliberately labeled as an
+approximation. It is useful for speed and diagnostic map development, but it is
+not yet a verified reproduction of PixInsight/ImageIntegration-style robust
+Winsorized Sigma Clipping. A future gate should implement robust per-pixel
+location/scale estimation, finite-sample behavior, and iteration/cutoff details
+behind the same public mode name.
+
 ## CUDA Scope
 
-CUDA currently provides `integrate_accumulate_mean_tile_f32`, a weighted mean
-accumulator used for non-rejection integration. Rejection modes remain CPU
-baseline in Gate 11 because they need robust per-pixel stack statistics first.
-This leaves a clear CPU reference for future CUDA reduction kernels.
+CUDA currently provides `integrate_accumulate_mean_tile_f32`, resident weighted
+mean integration, resident mean/std sigma clipping, and resident mean/std
+winsorized clipping. The tile-streaming CPU path remains the scientific baseline
+for correctness, while the resident path is the high-VRAM performance path for
+the M38 comparison dataset.
 
 ## Artifact
 

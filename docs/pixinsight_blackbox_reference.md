@@ -70,6 +70,13 @@ Timing summary:
 - GPWBPP resident CUDA calibration plus winsorized mean/std rejection
   integration with `--flat-floor 0.05` elapsed time: 64.39926949999062 s, a raw
   timing speedup of 16.97x.
+- GPWBPP resident CUDA calibration plus preview-scale integer translation
+  registration, winsorized mean/std rejection approximation, and
+  `--flat-floor 0.05` elapsed time: 81.22572250000667 s, a raw timing speedup
+  of 13.45x. The preview registration used WBPP's observed reference frame
+  `LIGHT_H_0136` (`F000196`) and found zero integer-pixel shifts for all 200
+  inputs, so this run mainly confirms that this dataset is already coarsely
+  aligned at the current preview resolution.
 
 WBPP fast-integration settings observed from user-generated logs:
 
@@ -105,6 +112,9 @@ C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_scaled_resident_vs_wbpp_c
 C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_cli_run
 C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_cli_scaled_resident_vs_wbpp_compare.json
 C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_cli_scaled_resident_vs_wbpp_compare.html
+C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_align_preview_run
+C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.json
+C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.html
 ```
 
 The current result proves a high-VRAM GPWBPP calibration/integration speed
