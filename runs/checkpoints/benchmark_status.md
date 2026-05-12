@@ -34,6 +34,8 @@
 ```powershell
 .\.venv\Scripts\python -m pytest -q tests/test_benchmarks.py
 .\.venv\Scripts\python benchmarks\bench_end_to_end.py --out runs\benchmarks\bench_end_to_end_cuda_v2.json --frames 4 --width 48 --height 48 --tile-size 12 --backend cuda
+.\.venv\Scripts\python benchmarks\bench_gpu_calibration.py --out runs\benchmarks\bench_gpu_calibration_cuda.json --frames 3 --width 32 --height 32 --tile-size 16
+.\.venv\Scripts\python benchmarks\bench_gpu_integration.py --out runs\benchmarks\bench_gpu_integration_cuda.json --frames 3 --width 32 --height 32 --tile-size 16
 .\.venv\Scripts\python -m pytest -q
 ```
 
@@ -44,6 +46,8 @@
 - Sample CUDA end-to-end benchmark output: `runs\benchmarks\bench_end_to_end_cuda_v2.json`.
 - Sample benchmark measured backend: cuda.
 - Sample benchmark total VRAM: 97886 MiB.
+- Sample GPU calibration benchmark output: `runs\benchmarks\bench_gpu_calibration_cuda.json`.
+- Sample GPU integration benchmark output: `runs\benchmarks\bench_gpu_integration_cuda.json`.
 
 ## Known Limitations
 
