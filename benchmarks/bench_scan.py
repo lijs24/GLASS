@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import json
+import sys
 from pathlib import Path
-from time import perf_counter
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from benchmarks.common import run_timed, write_result
 from gpwbpp.metadata.scanner import scan_tree
 
 
@@ -13,26 +15,24 @@ def main() -> int:
     parser.add_argument("--root", required=True)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
-    start = perf_counter()
-    manifest = scan_tree(args.root)
-    elapsed = perf_counter() - start
-    frames = manifest["summary"]["count"]
-    result = {
-        "frame_count": frames,
-        "image_shape": manifest["summary"].get("shape", {}),
-        "total_pixels": None,
-        "backend": "metadata",
-        "elapsed_s": elapsed,
-        "peak_ram_mb": None,
-        "peak_vram_mb": None,
-        "throughput_mpix_s": None,
-        "output_path": args.out,
-    }
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    manifest, elapsed, peak_ram = run_timed(lambda: scan_tree(args.root))
+    summary = manifest.get("summary", {})
+    shape = next(iter(summary.get("shape", {"0x0": 0})), "0x0")
+    width, height = (int(v) for v in shape.split("x")) if "x" in shape else (0, 0)
+    write_result(
+        args.out,
+        name="scan",
+        frame_count=int(summary.get("count", 0)),
+        width=width,
+        height=height,
+        backend="metadata",
+        elapsed_s=elapsed,
+        peak_ram_mb=peak_ram,
+        output_path=args.root,
+        extra={"summary": summary},
+    )
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
