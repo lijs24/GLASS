@@ -9,12 +9,17 @@ from gpwbpp.synthetic.generator import generate_synthetic_dataset
 
 
 def test_pipeline_fixture_audit(tmp_path: Path):
+    import json
+
     data = tmp_path / "data"
     run = tmp_path / "run"
     generate_synthetic_dataset(data, frames=3, width=24, height=24)
     assert main(["audit", "--root", str(data), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
     assert (run / "run_state.json").exists()
     assert (run / "integration_results.json").exists()
+    integration = json.loads((run / "integration_results.json").read_text(encoding="utf-8"))
+    assert integration["rejection"] == "none"
+    assert all(output["tile_stack_mode"] == "streaming_accumulator" for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     assert main(["resume", "--run", str(run)]) == 0
 
@@ -306,6 +311,10 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
         == 0
     )
     assert (run / "integration_results.json").exists()
+    import json
+
+    integration = json.loads((run / "integration_results.json").read_text(encoding="utf-8"))
+    assert all(output["tile_stack_mode"] == "stack_for_rejection" for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     assert list((run / "integration").glob("weight_map_*.fits"))
     assert list((run / "integration").glob("coverage_map_*.fits"))

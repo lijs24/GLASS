@@ -136,24 +136,32 @@ def integrate_registered_frames(
             high_writer = stack.enter_context(FitsTileWriter(high_path, width, height, {"IMAGETYP": "highrej"}))
             tile_count = 0
             actual_backend = "cuda" if cuda_module is not None and rejection == "none" else "cpu"
+            tile_stack_mode = "streaming_accumulator" if rejection == "none" else "stack_for_rejection"
 
             for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
-                frame_tiles = []
-                coverage_tiles = []
-                for src_reader, cov_reader in zip(source_readers, coverage_readers, strict=True):
-                    frame_tiles.append(src_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
-                    coverage_tiles.append(cov_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
-                stack_tile = np.stack(frame_tiles, axis=0)
-                coverage_tile = np.stack(coverage_tiles, axis=0)
                 weights = np.asarray([frame_weights[item["frame_id"]] for item in items], dtype=np.float32)
-                if cuda_module is not None and rejection == "none":
-                    sum_tile = np.zeros_like(frame_tiles[0], dtype=np.float32)
-                    weight_sum_tile = np.zeros_like(frame_tiles[0], dtype=np.float32)
-                    for frame_tile, cov_tile, weight in zip(frame_tiles, coverage_tiles, weights, strict=True):
+                if rejection == "none":
+                    sum_tile = None
+                    weight_sum_tile = None
+                    coverage_map = None
+                    for src_reader, cov_reader, weight in zip(source_readers, coverage_readers, weights, strict=True):
+                        frame_tile = src_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                        cov_tile = cov_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                        if sum_tile is None:
+                            sum_tile = np.zeros_like(frame_tile, dtype=np.float32)
+                            weight_sum_tile = np.zeros_like(frame_tile, dtype=np.float32)
+                            coverage_map = np.zeros_like(frame_tile, dtype=np.float32)
                         weight_tile = np.where(cov_tile > 0.5, weight, 0.0).astype(np.float32)
-                        sum_tile, weight_sum_tile = cuda_module.integrate_accumulate_mean_tile_f32(
-                            frame_tile, weight_tile, sum_tile, weight_sum_tile
-                        )
+                        if cuda_module is not None:
+                            sum_tile, weight_sum_tile = cuda_module.integrate_accumulate_mean_tile_f32(
+                                frame_tile, weight_tile, sum_tile, weight_sum_tile
+                            )
+                        else:
+                            sum_tile += frame_tile * weight_tile
+                            weight_sum_tile += weight_tile
+                        coverage_map += (cov_tile > 0.5).astype(np.float32)
+                    if sum_tile is None or weight_sum_tile is None or coverage_map is None:
+                        raise ValueError("no frames available for integration tile")
                     master = np.divide(
                         sum_tile,
                         weight_sum_tile,
@@ -161,10 +169,16 @@ def integrate_registered_frames(
                         where=weight_sum_tile > 0,
                     )
                     weight_map = weight_sum_tile.astype(np.float32)
-                    coverage_map = np.sum(coverage_tile > 0.5, axis=0).astype(np.float32)
                     low_map = np.zeros_like(master, dtype=np.float32)
                     high_map = np.zeros_like(master, dtype=np.float32)
                 else:
+                    frame_tiles = []
+                    coverage_tiles = []
+                    for src_reader, cov_reader in zip(source_readers, coverage_readers, strict=True):
+                        frame_tiles.append(src_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
+                        coverage_tiles.append(cov_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
+                    stack_tile = np.stack(frame_tiles, axis=0)
+                    coverage_tile = np.stack(coverage_tiles, axis=0)
                     master, weight_map, coverage_map, low_map, high_map = weighted_integrate_stack(
                         stack_tile,
                         coverage=coverage_tile,
@@ -191,6 +205,7 @@ def integrate_registered_frames(
                 "tile_size": tile_size,
                 "tile_count": tile_count,
                 "backend": actual_backend,
+                "tile_stack_mode": tile_stack_mode,
             }
         )
 

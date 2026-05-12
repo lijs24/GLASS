@@ -14,6 +14,11 @@ median-normalized flats use a temporary float32 `memmap` scratch file and an
 in-place partition to compute an exact median without keeping the full image in
 process memory.
 
+Integration uses tile streaming. For `rejection=none`, weighted mean
+integration uses fixed-size sum, weight-sum, and coverage accumulators instead
+of a per-tile 3D frame stack. Rejection modes still build a tile stack because
+sigma and winsorized rejection need the per-pixel frame distribution.
+
 The memory model has four levels:
 
 - Source files: immutable FITS/XISF input images.

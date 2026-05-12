@@ -49,7 +49,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | Registration | Gate 8 checkpoint, tests | translation baseline only |
 | Warp/coverage | Gate 9 checkpoint, tests | integer nearest-neighbor baseline |
 | Local normalization | Gate 10 checkpoint, tests | tile baseline only |
-| Weighted integration/rejection/maps | Gate 11 checkpoint, tests | CPU rejection, CUDA mean accumulator |
+| Weighted integration/rejection/maps | Gate 11 checkpoint, `runs/checkpoints/streaming_integration_status.md`, tests | streaming weighted mean for no-rejection path; tile stack retained for rejection modes |
 | End-to-end audit | Gate 12 checkpoint, synthetic CUDA/CPU compare | covered on synthetic |
 | Resume from partial run | `runs/checkpoints/resume_status.md`, pipeline fixture test | covered with artifact-presence skip |
 | Real-data GPWBPP run | `runs/checkpoints/real_data_m5_lum_status.md` | covered small subset |
