@@ -328,8 +328,11 @@ def cmd_run(args: argparse.Namespace) -> int:
             raise SystemExit("Resident memory mode currently supports --until-stage integration only.")
         if args.local_normalization == "on":
             raise SystemExit("Resident memory mode does not include materialized local normalization yet.")
-        if args.integration_rejection not in {"auto", "none"}:
-            raise SystemExit("Resident memory mode currently supports --integration-rejection none only.")
+        if args.integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
+            raise SystemExit(
+                "Resident memory mode currently supports --integration-rejection none, "
+                "sigma_clip, or winsorized_sigma."
+            )
         if args.integration_weighting not in {"auto", "none"}:
             raise SystemExit("Resident memory mode currently supports --integration-weighting none only.")
         out = Path(args.out)

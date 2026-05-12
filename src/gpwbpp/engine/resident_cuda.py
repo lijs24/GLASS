@@ -217,8 +217,8 @@ def run_resident_calibration_integration(
     integration_weighting: str = "auto",
     integration_rejection: str = "none",
 ) -> RunState:
-    if integration_rejection not in {"auto", "none"}:
-        raise ValueError("resident CUDA mode currently supports integration rejection=none only")
+    if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
+        raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
     if integration_weighting not in {"auto", "none"}:
         raise ValueError("resident CUDA mode currently supports integration weighting=none only")
 
@@ -230,6 +230,10 @@ def run_resident_calibration_integration(
 
     frames = _frame_map(plan)
     policy = _policy_from_plan(plan)
+    integration_policy = plan.get("integration_policy", {})
+    rejection_mode = "none" if integration_rejection == "auto" else integration_rejection
+    low_sigma = float(integration_policy.get("low_sigma", 3.0))
+    high_sigma = float(integration_policy.get("high_sigma", 3.0))
     output_dir = run / "integration"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -310,14 +314,42 @@ def run_resident_calibration_integration(
             load_calibrate_elapsed = perf_counter() - load_calibrate_start
 
             integrate_start = perf_counter()
-            master, weight_map = stack.integrate_mean()
+            coverage_map = None
+            low_rejection_map = None
+            high_rejection_map = None
+            if rejection_mode == "none":
+                master, weight_map = stack.integrate_mean()
+            else:
+                if not hasattr(stack, "integrate_sigma_clip"):
+                    raise RuntimeError("resident CUDA backend does not expose integrate_sigma_clip")
+                winsorize = rejection_mode == "winsorized_sigma"
+                (
+                    master,
+                    weight_map,
+                    coverage_map,
+                    low_rejection_map,
+                    high_rejection_map,
+                ) = stack.integrate_sigma_clip(None, low_sigma, high_sigma, winsorize)
             integrate_elapsed = perf_counter() - integrate_start
             output_diagnostics = _output_diagnostics(master, weight_map)
             master_path = output_dir / f"resident_master_{filt}.fits"
             weight_path = output_dir / f"resident_weight_map_{filt}.fits"
+            coverage_path = output_dir / f"resident_coverage_map_{filt}.fits" if coverage_map is not None else None
+            low_rejection_path = (
+                output_dir / f"resident_low_rejection_map_{filt}.fits" if low_rejection_map is not None else None
+            )
+            high_rejection_path = (
+                output_dir / f"resident_high_rejection_map_{filt}.fits" if high_rejection_map is not None else None
+            )
             write_start = perf_counter()
             write_fits_data(master_path, master, {"IMAGETYP": "master", "FILTER": filter_name})
             write_fits_data(weight_path, weight_map, {"IMAGETYP": "weight", "FILTER": filter_name})
+            if coverage_map is not None and coverage_path is not None:
+                write_fits_data(coverage_path, coverage_map, {"IMAGETYP": "coverage", "FILTER": filter_name})
+            if low_rejection_map is not None and low_rejection_path is not None:
+                write_fits_data(low_rejection_path, low_rejection_map, {"IMAGETYP": "rej_low", "FILTER": filter_name})
+            if high_rejection_map is not None and high_rejection_path is not None:
+                write_fits_data(high_rejection_path, high_rejection_map, {"IMAGETYP": "rej_high", "FILTER": filter_name})
             write_elapsed = perf_counter() - write_start
 
             memory_estimate = _memory_estimate(len(light_frames), height, width)
@@ -340,10 +372,22 @@ def run_resident_calibration_integration(
                         "per_frame_min": float(np.min(per_frame_s)) if per_frame_s else 0.0,
                         "per_frame_max": float(np.max(per_frame_s)) if per_frame_s else 0.0,
                     },
+                    "integration_rejection": {
+                        "mode": rejection_mode,
+                        "low_sigma": low_sigma,
+                        "high_sigma": high_sigma,
+                        "algorithm": (
+                            "two_pass_mean_std_winsorized"
+                            if rejection_mode == "winsorized_sigma"
+                            else "two_pass_mean_std_clip"
+                            if rejection_mode == "sigma_clip"
+                            else "none"
+                        ),
+                    },
                     "notes": [
                         "Raw light frames are uploaded one at a time into a reusable device buffer.",
-                        "Calibrated frames remain resident in VRAM until mean integration completes.",
-                        "This mode intentionally skips registration, LN, and rejection in the current gate.",
+                        "Calibrated frames remain resident in VRAM until integration completes.",
+                        "This mode intentionally skips registration and LN in the current gate.",
                     ],
                 }
             )
@@ -353,12 +397,12 @@ def run_resident_calibration_integration(
                     "frame_count": len(light_frames),
                     "master_path": str(master_path),
                     "weight_map_path": str(weight_path),
-                    "coverage_map_path": None,
-                    "low_rejection_map_path": None,
-                    "high_rejection_map_path": None,
+                    "coverage_map_path": None if coverage_path is None else str(coverage_path),
+                    "low_rejection_map_path": None if low_rejection_path is None else str(low_rejection_path),
+                    "high_rejection_map_path": None if high_rejection_path is None else str(high_rejection_path),
                     "backend": "cuda_resident_stack",
                     "memory_mode": "resident",
-                    "rejection": "none",
+                    "rejection": rejection_mode,
                     "weighting": "none",
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,
@@ -389,11 +433,13 @@ def run_resident_calibration_integration(
                 "source_stage": "resident_calibrated_stack",
                 "combine": "mean",
                 "weighting": "none",
-                "rejection": "none",
+                "rejection": rejection_mode,
+                "low_sigma": low_sigma,
+                "high_sigma": high_sigma,
                 "frame_weights": frame_weights,
                 "outputs": outputs,
                 "warnings": [
-                    "resident CUDA mode currently skips registration, local normalization, and rejection"
+                    "resident CUDA mode currently skips registration and local normalization"
                 ],
             },
         )
@@ -411,8 +457,8 @@ def run_resident_calibration_integration(
         )
         state.current_stage = "integration"
         state.warnings.append(
-            "resident CUDA mode is a high-VRAM calibration plus mean-integration path; "
-            "registration, LN, and rejection are not yet included"
+            "resident CUDA mode is a high-VRAM calibration plus integration path; "
+            "registration and LN are not yet included"
         )
         return state
     except Exception as exc:

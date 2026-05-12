@@ -48,6 +48,19 @@ void gpwbpp_integrate_resident_weighted_mean_f32_launch(
     float* weight_map,
     std::size_t frame_count,
     std::size_t pixels_per_frame);
+void gpwbpp_integrate_resident_sigma_clip_f32_launch(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma,
+    bool winsorize);
 
 namespace {
 
@@ -293,6 +306,129 @@ class ResidentCalibratedStack {
     cudaFree(d_master);
     cudaFree(d_weight_map);
     return py::make_tuple(master, weight_map);
+  }
+
+  py::tuple integrate_sigma_clip(
+      py::object weights_obj,
+      float low_sigma,
+      float high_sigma,
+      bool winsorize) const {
+    if (loaded_count_ != frame_count_) {
+      throw std::runtime_error("all resident frames must be loaded before integration");
+    }
+    if (low_sigma <= 0.0f || high_sigma <= 0.0f) {
+      throw std::invalid_argument("sigma thresholds must be positive");
+    }
+
+    std::vector<float> weights(frame_count_, 1.0f);
+    py::array_t<float, py::array::c_style | py::array::forcecast> weights_array;
+    if (!weights_obj.is_none()) {
+      weights_array = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(weights_obj);
+      const py::buffer_info weights_info = weights_array.request();
+      if (weights_info.ndim != 1 || static_cast<std::size_t>(weights_info.shape[0]) != frame_count_) {
+        throw std::invalid_argument("weights must have shape (frame_count,)");
+      }
+      const auto* ptr = static_cast<const float*>(weights_info.ptr);
+      weights.assign(ptr, ptr + frame_count_);
+    }
+
+    py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> low_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> high_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    const py::buffer_info master_info = master.request();
+    const py::buffer_info weight_map_info = weight_map.request();
+    const py::buffer_info coverage_info = coverage_map.request();
+    const py::buffer_info low_info = low_rejection_map.request();
+    const py::buffer_info high_info = high_rejection_map.request();
+
+    float* d_weights = nullptr;
+    float* d_master = nullptr;
+    float* d_weight_map = nullptr;
+    float* d_coverage_map = nullptr;
+    float* d_low_rejection_map = nullptr;
+    float* d_high_rejection_map = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident sigma weights)");
+      check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident sigma master)");
+      check_cuda(
+          cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(resident sigma weight map)");
+      check_cuda(
+          cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(resident sigma coverage map)");
+      check_cuda(
+          cudaMalloc(&d_low_rejection_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(resident sigma low rejection map)");
+      check_cuda(
+          cudaMalloc(&d_high_rejection_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(resident sigma high rejection map)");
+      check_cuda(
+          cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident sigma weights)");
+      gpwbpp_integrate_resident_sigma_clip_f32_launch(
+          d_stack_,
+          d_weights,
+          d_master,
+          d_weight_map,
+          d_coverage_map,
+          d_low_rejection_map,
+          d_high_rejection_map,
+          frame_count_,
+          pixels_per_frame_,
+          low_sigma,
+          high_sigma,
+          winsorize);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.integrate_sigma_clip kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.integrate_sigma_clip synchronize");
+      check_cuda(
+          cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident sigma master)");
+      check_cuda(
+          cudaMemcpy(
+              weight_map_info.ptr,
+              d_weight_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident sigma weight map)");
+      check_cuda(
+          cudaMemcpy(
+              coverage_info.ptr,
+              d_coverage_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident sigma coverage map)");
+      check_cuda(
+          cudaMemcpy(
+              low_info.ptr,
+              d_low_rejection_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident sigma low rejection map)");
+      check_cuda(
+          cudaMemcpy(
+              high_info.ptr,
+              d_high_rejection_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident sigma high rejection map)");
+    } catch (...) {
+      cudaFree(d_weights);
+      cudaFree(d_master);
+      cudaFree(d_weight_map);
+      cudaFree(d_coverage_map);
+      cudaFree(d_low_rejection_map);
+      cudaFree(d_high_rejection_map);
+      throw;
+    }
+    cudaFree(d_weights);
+    cudaFree(d_master);
+    cudaFree(d_weight_map);
+    cudaFree(d_coverage_map);
+    cudaFree(d_low_rejection_map);
+    cudaFree(d_high_rejection_map);
+    return py::make_tuple(master, weight_map, coverage_map, low_rejection_map, high_rejection_map);
   }
 
  private:
@@ -775,5 +911,12 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("light_exposure_s"),
           py::arg("dark_exposure_s") = py::none(),
           py::arg("policy") = py::none())
-      .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none());
+      .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none())
+      .def(
+          "integrate_sigma_clip",
+          &ResidentCalibratedStack::integrate_sigma_clip,
+          py::arg("weights") = py::none(),
+          py::arg("low_sigma") = 3.0f,
+          py::arg("high_sigma") = 3.0f,
+          py::arg("winsorize") = true);
 }

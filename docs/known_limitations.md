@@ -9,11 +9,11 @@ Current code is intentionally gated:
 - HTML reports include required sections but many stage-specific tables remain
   pending until their gates produce artifacts.
 - The resident CUDA path keeps calibrated light frames in VRAM and is fast on
-  large same-shape mono datasets, but currently performs calibration plus mean
-  integration only.
+  large same-shape mono datasets. It currently performs calibration plus mean
+  or mean/std sigma-rejection integration.
 - The resident CUDA path does not yet implement WBPP FastIntegration-equivalent
   internal alignment, Lanczos interpolation, cosmetic correction, frame rejection
-  by alignment failure, or winsorized rejection.
+  by alignment failure, or exact robust rejection.
 - No full final-master equivalence with PixInsight/WBPP is claimed yet.
 
 These limitations are capability flags, not hidden behavior. Later gates must

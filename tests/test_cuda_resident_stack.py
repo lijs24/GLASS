@@ -77,3 +77,85 @@ def test_resident_stack_weighted_mean_matches_cpu():
     expected = np.average(np.stack(frames, axis=0), axis=0, weights=weights).astype(np.float32)
     assert np.allclose(master, expected, rtol=1e-5, atol=1e-5)
     assert np.allclose(weight_map, np.full((3, 3), np.sum(weights), dtype=np.float32))
+
+
+def _mean_std_sigma_reference(frames: list[np.ndarray], low_sigma: float, high_sigma: float, winsorize: bool):
+    stack = np.stack(frames, axis=0).astype(np.float32)
+    mean = np.mean(stack, axis=0)
+    std = np.std(stack, axis=0)
+    low_threshold = mean - np.float32(low_sigma) * std
+    high_threshold = mean + np.float32(high_sigma) * std
+    low = stack < low_threshold[None, :, :]
+    high = stack > high_threshold[None, :, :]
+    if winsorize:
+        working = np.where(low, low_threshold[None, :, :], stack)
+        working = np.where(high, high_threshold[None, :, :], working)
+        valid = np.ones_like(stack, dtype=bool)
+    else:
+        working = stack
+        valid = ~(low | high)
+    master = np.sum(np.where(valid, working, 0.0), axis=0) / np.sum(valid, axis=0)
+    return (
+        master.astype(np.float32),
+        np.sum(valid, axis=0).astype(np.float32),
+        np.sum(low, axis=0).astype(np.float32),
+        np.sum(high, axis=0).astype(np.float32),
+    )
+
+
+def test_resident_stack_sigma_clip_maps_match_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_sigma_clip"
+    ):
+        raise AssertionError("ResidentCalibratedStack.integrate_sigma_clip is missing from gpwbpp_cuda")
+
+    frames = [
+        np.array([[1, 5], [10, 2]], dtype=np.float32),
+        np.array([[1, 6], [10, 2]], dtype=np.float32),
+        np.array([[1, 7], [10, 2]], dtype=np.float32),
+        np.array([[100, 8], [10, -50]], dtype=np.float32),
+    ]
+    stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject = stack.integrate_sigma_clip(None, 1.0, 1.0, False)
+    expected_master, expected_coverage, expected_low, expected_high = _mean_std_sigma_reference(
+        frames, 1.0, 1.0, False
+    )
+
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
+    assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
+
+
+def test_resident_stack_winsorized_sigma_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_sigma_clip"
+    ):
+        raise AssertionError("ResidentCalibratedStack.integrate_sigma_clip is missing from gpwbpp_cuda")
+
+    frames = [
+        np.full((2, 2), 1, dtype=np.float32),
+        np.full((2, 2), 1, dtype=np.float32),
+        np.full((2, 2), 1, dtype=np.float32),
+        np.full((2, 2), 100, dtype=np.float32),
+    ]
+    stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject = stack.integrate_sigma_clip(None, 1.0, 1.0, True)
+    expected_master, expected_coverage, expected_low, expected_high = _mean_std_sigma_reference(
+        frames, 1.0, 1.0, True
+    )
+
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.full((2, 2), len(frames), dtype=np.float32))
+    assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
+    assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)

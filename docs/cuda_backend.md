@@ -17,6 +17,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `reduce_mean_tile_f32(tile)`
 - `calibrate_tile_f32(...)`
 - `integrate_accumulate_mean_tile_f32(...)`
+- `ResidentCalibratedStack.integrate_sigma_clip(...)`
 
 Every CUDA operation will have a CPU reference test. If CUDA is not available,
 CUDA tests skip rather than failing the whole project. Kernel launch failures
@@ -31,3 +32,14 @@ cmd /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Co
 
 The command writes `_gpwbpp_cuda_native*.pyd` into `src/` for local testing. The
 binary is ignored by git; source, CMake configuration, and tests are tracked.
+
+Resident CUDA integration now supports:
+
+- weighted mean for already resident calibrated frames;
+- two-pass mean/std sigma clipping;
+- two-pass mean/std winsorized sigma clipping;
+- output weight, coverage, low rejection, and high rejection maps.
+
+The current resident rejection kernel is an engineering baseline for the
+high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight
+FastIntegration's robust rejection and alignment internals.
