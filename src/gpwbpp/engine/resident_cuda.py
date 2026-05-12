@@ -216,6 +216,7 @@ def run_resident_calibration_integration(
     run_dir: str | Path,
     integration_weighting: str = "auto",
     integration_rejection: str = "none",
+    flat_floor: float | None = None,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -230,6 +231,10 @@ def run_resident_calibration_integration(
 
     frames = _frame_map(plan)
     policy = _policy_from_plan(plan)
+    if flat_floor is not None:
+        if flat_floor <= 0:
+            raise ValueError("flat_floor override must be positive")
+        policy.flat_floor = float(flat_floor)
     integration_policy = plan.get("integration_policy", {})
     rejection_mode = "none" if integration_rejection == "auto" else integration_rejection
     low_sigma = float(integration_policy.get("low_sigma", 3.0))

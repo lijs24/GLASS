@@ -347,6 +347,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 args.out,
                 integration_weighting=args.integration_weighting,
                 integration_rejection=args.integration_rejection,
+                flat_floor=args.flat_floor,
             ),
         )
         write_run_state(args.out, state)
@@ -557,7 +558,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--memory-mode",
         choices=["tile", "resident"],
         default="tile",
-        help="execution memory strategy; resident currently covers CUDA calibration plus mean integration",
+        help="execution memory strategy; resident currently covers CUDA calibration plus integration",
     )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
@@ -567,6 +568,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
     )
     run.add_argument("--allow-partial", action="store_true")
+    run.add_argument("--flat-floor", type=float, help="override calibration flat floor for this run")
     run.set_defaults(func=cmd_run)
 
     resume = sub.add_parser("resume", help="resume a run directory")

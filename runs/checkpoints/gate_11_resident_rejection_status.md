@@ -11,6 +11,7 @@ Completed:
 - Added output weight, coverage, low rejection, and high rejection maps.
 - Wired resident CLI runs to accept `--integration-rejection sigma_clip` and
   `--integration-rejection winsorized_sigma`.
+- Added `--flat-floor` as an explicit resident-run calibration policy override.
 - Added resident CUDA unit tests against a CPU reference for sigma clipping and
   winsorized clipping.
 - Ran a 200-light M38 H resident CUDA winsorized run.
@@ -63,8 +64,8 @@ Known limitations:
   robust rejection.
 - Resident mode still lacks internal alignment/warp and failed-alignment frame
   rejection.
-- The `flat_floor=0.05` run is a diagnostic plan copy, not yet a first-class
-  CLI calibration policy override.
+- The `flat_floor=0.05` run was first proven with a diagnostic plan copy and is
+  now available as the resident-run `--flat-floor 0.05` override.
 
 Next step:
 

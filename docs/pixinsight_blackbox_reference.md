@@ -68,7 +68,7 @@ Timing summary:
 - GPWBPP resident CUDA calibration plus mean integration elapsed time:
   58.9810051000095 s, a raw timing speedup of 18.52x.
 - GPWBPP resident CUDA calibration plus winsorized mean/std rejection
-  integration with `flat_floor=0.05` elapsed time: 64.94495560001815 s, a raw
+  integration with `--flat-floor 0.05` elapsed time: 64.94495560001815 s, a raw
   timing speedup of 16.82x.
 
 WBPP fast-integration settings observed from user-generated logs:
