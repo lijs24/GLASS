@@ -3,9 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from astropy.io import fits
+
 from gpwbpp.cpu.calibration import calibrate_light
 from gpwbpp.cpu.master_frames import make_master_bias, make_master_dark, make_master_flat
-from gpwbpp.io.fits_io import read_fits_data, write_fits_data
+from gpwbpp.gpu.tile_scheduler import iter_tiles
+from gpwbpp.io.fits_io import FitsTileWriter, read_fits_data, write_fits_data
 from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.models import CalibrationPolicy, PipelineArtifact, RunState, now_iso
 
@@ -50,7 +53,94 @@ def _find_matching_bias_for_group(
     return None
 
 
-def run_calibration_stages(plan_path: str | Path, run_dir: str | Path) -> RunState:
+def _cuda_module_if_requested(backend: str):
+    if backend == "cpu":
+        return None
+    try:
+        import gpwbpp_cuda
+    except Exception:
+        return None
+    if gpwbpp_cuda.cuda_available():
+        return gpwbpp_cuda
+    if backend == "cuda":
+        raise RuntimeError("CUDA backend requested but native CUDA backend is unavailable")
+    return None
+
+
+def _calibrate_light_to_cache_streaming(
+    frame: dict[str, Any],
+    path: Path,
+    bias: Any,
+    dark: Any,
+    flat: Any,
+    dark_exposure: float | None,
+    policy: CalibrationPolicy,
+    backend: str,
+    tile_size: int,
+) -> dict[str, Any]:
+    cuda_module = _cuda_module_if_requested(backend)
+    with fits.open(frame["path"], memmap=True) as hdul:
+        light = hdul[0].data
+        if light is None:
+            raise ValueError(f"FITS file has no primary image data: {frame['path']}")
+        height, width = light.shape
+        with FitsTileWriter(
+            path,
+            width=width,
+            height=height,
+            header={
+                "IMAGETYP": "calibrated_light",
+                "FILTER": frame.get("filter"),
+                "EXPTIME": frame.get("exposure_s"),
+            },
+        ) as writer:
+            tile_count = 0
+            for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
+                light_tile = light[tile.y0 : tile.y1, tile.x0 : tile.x1]
+                bias_tile = None if bias is None else bias[tile.y0 : tile.y1, tile.x0 : tile.x1]
+                dark_tile = None if dark is None else dark[tile.y0 : tile.y1, tile.x0 : tile.x1]
+                flat_tile = None if flat is None else flat[tile.y0 : tile.y1, tile.x0 : tile.x1]
+                if cuda_module is not None:
+                    calibrated_tile = cuda_module.calibrate_tile_f32(
+                        light_tile,
+                        bias_tile,
+                        dark_tile,
+                        flat_tile,
+                        float(frame.get("exposure_s") or 0.0),
+                        dark_exposure,
+                        {
+                            "master_dark_includes_bias": policy.master_dark_includes_bias,
+                            "dark_scaling_enabled": policy.dark_scaling_enabled,
+                            "flat_floor": policy.flat_floor,
+                            "pedestal": policy.pedestal,
+                        },
+                    )
+                    actual_backend = "cuda"
+                else:
+                    calibrated_tile = calibrate_light(
+                        light_tile,
+                        bias_tile,
+                        dark_tile,
+                        flat_tile,
+                        float(frame.get("exposure_s") or 0.0),
+                        dark_exposure,
+                        policy,
+                    )
+                    actual_backend = "cpu"
+                writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, calibrated_tile)
+                tile_count += 1
+    return {
+        "frame_id": frame["id"],
+        "path": str(path),
+        "backend": actual_backend,
+        "tile_size": tile_size,
+        "tile_count": tile_count,
+    }
+
+
+def run_calibration_stages(
+    plan_path: str | Path, run_dir: str | Path, backend: str = "auto", tile_size: int = 512
+) -> RunState:
     plan = read_json(plan_path)
     out = Path(run_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -138,27 +228,20 @@ def run_calibration_stages(plan_path: str | Path, run_dir: str | Path) -> RunSta
             dark_exposure = groups.get(dark_group, {}).get("exposure_s") if dark_group else None
             for frame_id in light_plan.get("frames", []):
                 frame = frames[frame_id]
-                data = read_fits_data(frame["path"])
-                calibrated_data = calibrate_light(
-                    data,
-                    bias,
-                    dark,
-                    flat,
-                    float(frame.get("exposure_s") or 0.0),
-                    None if dark_exposure is None else float(dark_exposure),
-                    policy,
-                )
                 path = calibrated_dir / f"calibrated_{frame_id}.fits"
-                write_fits_data(
-                    path,
-                    calibrated_data,
-                    {
-                        "IMAGETYP": "calibrated_light",
-                        "FILTER": frame.get("filter"),
-                        "EXPTIME": frame.get("exposure_s"),
-                    },
+                calibrated.append(
+                    _calibrate_light_to_cache_streaming(
+                        frame,
+                        path,
+                        bias,
+                        dark,
+                        flat,
+                        None if dark_exposure is None else float(dark_exposure),
+                        policy,
+                        backend,
+                        tile_size,
+                    )
                 )
-                calibrated.append({"frame_id": frame_id, "path": str(path)})
 
         artifacts_path = out / "calibration_artifacts.json"
         write_json(
@@ -167,6 +250,8 @@ def run_calibration_stages(plan_path: str | Path, run_dir: str | Path) -> RunSta
                 "masters": master_metadata,
                 "calibrated_lights": calibrated,
                 "policy": policy,
+                "tile_size": tile_size,
+                "requested_backend": backend,
             },
         )
         state.artifacts.append(

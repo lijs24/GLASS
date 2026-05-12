@@ -32,6 +32,8 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
                 "cpu",
                 "--until-stage",
                 "calibration",
+                "--tile-size",
+                "9",
             ]
         )
         == 0
@@ -39,3 +41,38 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert (run / "calibration_artifacts.json").exists()
     assert len(list((run / "calib_cache" / "masters").glob("*.fits"))) >= 3
     assert len(list((run / "calib_cache" / "calibrated").glob("*.fits"))) == 3
+
+
+def test_pipeline_fixture_run_calibration_cuda_streaming(tmp_path: Path):
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    generate_synthetic_dataset(data, frames=2, width=20, height=18)
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    try:
+        rc = main(
+            [
+                "run",
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--until-stage",
+                "calibration",
+                "--tile-size",
+                "7",
+            ]
+        )
+    except SystemExit as exc:
+        if "unavailable" in str(exc):
+            return
+        raise
+    assert rc == 0
+    import json
+
+    artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
+    assert artifacts["calibrated_lights"]
+    assert all(item["backend"] == "cuda" for item in artifacts["calibrated_lights"])
+    assert all(item["tile_count"] > 1 for item in artifacts["calibrated_lights"])

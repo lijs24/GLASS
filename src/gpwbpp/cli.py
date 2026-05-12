@@ -82,7 +82,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "Use --allow-partial to write a diagnostic run_state without executing later stages."
             )
     if args.until_stage in {"master_calibration", "light_calibration", "calibration"}:
-        state = run_calibration_stages(args.plan, args.out)
+        state = run_calibration_stages(args.plan, args.out, backend=args.backend, tile_size=args.tile_size)
         write_run_state(args.out, state)
         console.print(f"Calibration run complete: {args.out}")
         return 0
@@ -143,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--vram-budget-gb", type=float)
     run.add_argument("--ram-budget-gb", type=float)
     run.add_argument("--until-stage")
+    run.add_argument("--tile-size", type=int, default=512)
     run.add_argument("--allow-partial", action="store_true")
     run.set_defaults(func=cmd_run)
 

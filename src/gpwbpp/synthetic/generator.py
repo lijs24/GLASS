@@ -29,8 +29,10 @@ def _write(path: Path, data: np.ndarray, header: fits.Header) -> None:
 
 def _stars(width: int, height: int, seed: int, count: int = 24) -> np.ndarray:
     rng = np.random.default_rng(seed)
-    xs = rng.uniform(10, width - 10, size=count)
-    ys = rng.uniform(10, height - 10, size=count)
+    margin_x = min(10.0, max(1.0, (width - 1) / 4.0))
+    margin_y = min(10.0, max(1.0, (height - 1) / 4.0))
+    xs = rng.uniform(margin_x, max(margin_x + 1.0, width - margin_x), size=count)
+    ys = rng.uniform(margin_y, max(margin_y + 1.0, height - margin_y), size=count)
     flux = rng.uniform(500, 2500, size=count)
     return np.stack([xs, ys, flux], axis=1)
 
