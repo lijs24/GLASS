@@ -89,6 +89,10 @@ Timing summary:
   `LIGHT_H_0156`, `LIGHT_H_0157`, and `LIGHT_H_0158`. This matches the
   black-box report of 193/200 integrated frames and is consistent with alignment
   failure or quality rejection.
+- GPWBPP now includes `gpwbpp blackbox-history` to extract that user-generated
+  FastIntegration table into JSON for diagnostics only. It is not used as a
+  registration input. The current M38 extraction was written to:
+  `C:\gpwbpp_runs\final_m38_h_200\wbpp_fastintegration_history_cli.json`.
 - A GPWBPP resident rerun using those seven frames as an explicit exclusion mask
   elapsed in 76.81677979999222 s, a raw timing speedup of 14.22x. It did not
   improve final-master parity: median absolute difference was

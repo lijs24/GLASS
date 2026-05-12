@@ -34,6 +34,7 @@ def test_cli_help_commands():
         "compare",
         "blackbox-package",
         "blackbox-finalize",
+        "blackbox-history",
         "synthetic",
     ]:
         try:

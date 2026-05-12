@@ -23,6 +23,7 @@ from gpwbpp.planner.subset import build_subset_manifest
 from gpwbpp.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from gpwbpp.report.compare_report import compare_fits, write_compare_report
 from gpwbpp.report.html_report import write_html_report
+from gpwbpp.report.wbpp_history import read_fastintegration_history
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
 from gpwbpp.models import now_iso
 
@@ -508,6 +509,14 @@ def cmd_blackbox_finalize(args: argparse.Namespace) -> int:
     return 0 if payload.get("status") == "complete" else 2
 
 
+def cmd_blackbox_history(args: argparse.Namespace) -> int:
+    payload = read_fastintegration_history(args.master, max_bytes=args.max_bytes)
+    write_json(args.out, payload)
+    console.print(f"Wrote WBPP FastIntegration history: {args.out}")
+    console.print(payload["summary"])
+    return 0
+
+
 def cmd_synthetic(args: argparse.Namespace) -> int:
     generate_synthetic_dataset(
         args.out,
@@ -642,6 +651,15 @@ def build_parser() -> argparse.ArgumentParser:
     finalize.add_argument("--timing", required=True)
     finalize.add_argument("--out")
     finalize.set_defaults(func=cmd_blackbox_finalize)
+
+    history = sub.add_parser(
+        "blackbox-history",
+        help="extract user-generated WBPP FastIntegration ProcessingHistory from a XISF master",
+    )
+    history.add_argument("--master", required=True)
+    history.add_argument("--out", required=True)
+    history.add_argument("--max-bytes", type=int, default=32 * 1024 * 1024)
+    history.set_defaults(func=cmd_blackbox_history)
 
     synthetic = sub.add_parser("synthetic", help="generate synthetic FITS data")
     synthetic.add_argument("--out", required=True)
