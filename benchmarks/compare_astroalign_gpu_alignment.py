@@ -813,6 +813,7 @@ def main() -> int:
         gpu_catalog_similarity_diff,
     )
     if not catalog_similarity_agreement["passed"]:
+        gpu_catalog_similarity_result["accepted"] = False
         gpu_catalog_similarity_result["warnings"].append(
             "catalog similarity benchmark agreement with astroalign failed"
         )

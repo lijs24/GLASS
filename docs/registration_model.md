@@ -192,11 +192,11 @@ best-candidate selection are not yet optimized.
 grid cell keeps its top-K local maxima on the GPU, then a CUDA NMS pass compacts
 the spatially distributed candidates into the bounded catalog. On the same full
 M38 `S000061`/`S000062` pair, the grid-top pure GPU catalog-similarity path took
-about 2.92 s versus astroalign's 9.57 s total, but the resulting transform did
+about 2.96 s versus astroalign's 9.57 s total, but the resulting transform did
 not pass the benchmark agreement check against astroalign
-(`translation_delta_px=1.15`, output RMS difference about 62.18 ADU). This is a
-useful speed signal for the final GPU matcher, not yet the accepted production
-registration path.
+(`translation_delta_px=1.56`, output RMS difference about 75.68 ADU), so the
+benchmark now marks it `accepted=false`. This is a useful speed signal for the
+final GPU matcher, not yet the accepted production registration path.
 
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
@@ -219,14 +219,14 @@ It also records a direct common-valid-pixel difference between astroalign's
 alignment timing claim tied to a numeric image-consistency check in the same
 JSON artifact. In the full calibrated M38 pair
 `S000061`/`S000062`, the refreshed artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v13_gridtop_agreement.json`
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v14_gridtop_acceptance.json`
 measured standalone CUDA matrix warp at about 0.141 s versus astroalign apply at
-about 2.817 s, and resident device-only matrix warp at about 0.0070 s. On the
+about 2.824 s, and resident device-only matrix warp at about 0.0070 s. On the
 61,632,460 common valid pixels, the CUDA matrix output versus astroalign apply
 had median absolute difference about 3.98 ADU and RMS difference about 12.02 ADU.
 The same artifact also records `catalog_similarity_agreement_vs_astroalign` so a
-fast owned-GPU matcher cannot be mistaken for correct unless its matrix and
-output image agree with the open-source reference.
+fast owned-GPU matcher cannot be marked accepted unless its matrix and output
+image agree with the open-source reference.
 
 Resident runs can also use `--resident-registration external_matrix` together
 with `--resident-registration-results <registration_results.json>`. That mode
