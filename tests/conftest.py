@@ -14,12 +14,12 @@ def small_fits_dataset(tmp_path: Path) -> Path:
     root = tmp_path / "dataset"
     shape = (16, 20)
     specs = [
-        ("bias", "bias_001.fits", 0.0),
-        ("dark", "dark_001.fits", 60.0),
-        ("flat", "flat_001.fits", 60.0),
-        ("light", "light_001.fits", 60.0),
+        ("bias", "bias_001.fits", 0.0, 100.0),
+        ("dark", "dark_001.fits", 60.0, 110.0),
+        ("flat", "flat_001.fits", 60.0, 1000.0),
+        ("light", "light_001.fits", 60.0, 1200.0),
     ]
-    for frame_type, name, exposure in specs:
+    for frame_type, name, exposure, value in specs:
         header = fits.Header()
         header["IMAGETYP"] = frame_type
         header["FILTER"] = "H"
@@ -31,7 +31,7 @@ def small_fits_dataset(tmp_path: Path) -> Path:
         header["YBINNING"] = 1
         path = root / frame_type / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        fits.PrimaryHDU(np.ones(shape, dtype=np.float32), header=header).writeto(path)
+        fits.PrimaryHDU(np.ones(shape, dtype=np.float32) * value, header=header).writeto(path)
     return root
 
 

@@ -24,6 +24,71 @@ from gpwbpp.synthetic.generator import generate_synthetic_dataset
 console = Console()
 
 
+def _read_json_if_exists(path: Path):
+    return read_json(path) if path.exists() else None
+
+
+def _local_norm_override_from_arg(value: str) -> bool | None:
+    if value == "on":
+        return True
+    if value == "off":
+        return False
+    return None
+
+
+def _write_run_report(run: Path, report_path: Path, manifest_path: Path, plan_path: Path) -> None:
+    write_html_report(
+        report_path,
+        manifest=_read_json_if_exists(manifest_path),
+        plan=_read_json_if_exists(plan_path),
+        quality=_read_json_if_exists(run / "frame_quality.json"),
+        registration=_read_json_if_exists(run / "registration_results.json"),
+        local_norm=_read_json_if_exists(run / "local_norm_results.json"),
+        integration=_read_json_if_exists(run / "integration_results.json"),
+    )
+
+
+def _run_full_pipeline(
+    plan_path: Path,
+    out: Path,
+    backend: str,
+    tile_size: int,
+    local_normalization: str,
+    integration_weighting: str,
+    integration_rejection: str,
+):
+    state = run_calibration_stages(plan_path, out, backend=backend, tile_size=tile_size)
+    measure_calibrated_quality(out)
+    state.completed_stages.append("quality")
+    state.current_stage = "quality"
+    register_calibrated_frames(out)
+    state.completed_stages.append("registration")
+    state.current_stage = "registration"
+    warp_registered_frames(out, tile_size=tile_size)
+    state.completed_stages.append("warp")
+    state.current_stage = "warp"
+    local_normalize_registered_frames(
+        out,
+        plan_path=plan_path,
+        backend=backend,
+        tile_size=tile_size,
+        enabled_override=_local_norm_override_from_arg(local_normalization),
+    )
+    state.completed_stages.append("local_normalization")
+    state.current_stage = "local_normalization"
+    integrate_registered_frames(
+        out,
+        plan_path=plan_path,
+        backend=backend,
+        tile_size=tile_size,
+        weighting_override=integration_weighting,
+        rejection_override=integration_rejection,
+    )
+    state.completed_stages.append("integration")
+    state.current_stage = "integration"
+    return state
+
+
 def cmd_scan(args: argparse.Namespace) -> int:
     manifest = scan_tree(args.root)
     write_json(args.out, manifest)
@@ -46,16 +111,16 @@ def cmd_report(args: argparse.Namespace) -> int:
     run = Path(args.run)
     manifest_path = Path(args.manifest) if args.manifest else run / "manifest.json"
     plan_path = Path(args.plan) if args.plan else run / "processing_plan.json"
-    manifest = read_json(manifest_path) if manifest_path.exists() else None
-    plan = read_json(plan_path) if plan_path.exists() else None
+    manifest = _read_json_if_exists(manifest_path)
+    plan = _read_json_if_exists(plan_path)
     quality_path = run / "frame_quality.json"
     registration_path = run / "registration_results.json"
     local_norm_path = run / "local_norm_results.json"
     integration_path = run / "integration_results.json"
-    quality = read_json(quality_path) if quality_path.exists() else None
-    registration = read_json(registration_path) if registration_path.exists() else None
-    local_norm = read_json(local_norm_path) if local_norm_path.exists() else None
-    integration = read_json(integration_path) if integration_path.exists() else None
+    quality = _read_json_if_exists(quality_path)
+    registration = _read_json_if_exists(registration_path)
+    local_norm = _read_json_if_exists(local_norm_path)
+    integration = _read_json_if_exists(integration_path)
     write_html_report(
         args.out,
         manifest=manifest,
@@ -81,11 +146,25 @@ def cmd_audit(args: argparse.Namespace) -> int:
     write_json(manifest_path, manifest)
     plan = build_processing_plan(manifest, manifest_path)
     write_json(plan_path, plan)
-    state = initialize_run(out)
-    state.completed_stages.extend(["scan", "plan", "report"])
+    if plan.executable:
+        state = _run_full_pipeline(
+            plan_path,
+            out,
+            args.backend,
+            args.tile_size,
+            args.local_normalization,
+            args.integration_weighting,
+            args.integration_rejection,
+        )
+    else:
+        state = initialize_run(out)
+        state.warnings.append("processing plan is not executable; audit stopped after scan and plan")
+    state.completed_stages.insert(0, "plan")
+    state.completed_stages.insert(0, "scan")
+    state.completed_stages.append("report")
     state.current_stage = "report"
     write_run_state(out, state)
-    write_html_report(report_path, manifest=manifest, plan=read_json(plan_path))
+    _write_run_report(out, report_path, manifest_path, plan_path)
     console.print(f"Audit complete: {out}")
     return 0
 
@@ -128,17 +207,12 @@ def cmd_run(args: argparse.Namespace) -> int:
             state.completed_stages.append("warp")
             state.current_stage = "warp"
         if args.until_stage in {"local_normalization", "integration"}:
-            enabled_override = None
-            if args.local_normalization == "on":
-                enabled_override = True
-            elif args.local_normalization == "off":
-                enabled_override = False
             local_normalize_registered_frames(
                 args.out,
                 plan_path=args.plan,
                 backend=args.backend,
                 tile_size=args.tile_size,
-                enabled_override=enabled_override,
+                enabled_override=_local_norm_override_from_arg(args.local_normalization),
             )
             state.completed_stages.append("local_normalization")
             state.current_stage = "local_normalization"
@@ -166,6 +240,29 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
+    run = Path(args.run)
+    plan_path = run / "processing_plan.json"
+    manifest_path = run / "manifest.json"
+    if (run / "integration_results.json").exists():
+        console.print(resume_summary(args.run))
+        console.print("Run already has integration_results.json; no stages repeated.")
+        return 0
+    if plan_path.exists():
+        plan = read_json(plan_path)
+        if not plan.get("executable", False):
+            console.print(resume_summary(args.run))
+            console.print("Processing plan is not executable; nothing to resume.")
+            return 0
+        state = _run_full_pipeline(plan_path, run, "auto", 512, "auto", "auto", "auto")
+        state.completed_stages.insert(0, "plan")
+        if manifest_path.exists():
+            state.completed_stages.insert(0, "scan")
+        state.completed_stages.append("report")
+        state.current_stage = "report"
+        write_run_state(run, state)
+        _write_run_report(run, run / "report.html", manifest_path, plan_path)
+        console.print(f"Resume complete: {run}")
+        return 0
     console.print(resume_summary(args.run))
     return 0
 
@@ -239,6 +336,14 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--root", required=True)
     audit.add_argument("--out", required=True)
     audit.add_argument("--backend", choices=["cpu", "cuda", "auto"], default="auto")
+    audit.add_argument("--tile-size", type=int, default=512)
+    audit.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
+    audit.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
+    audit.add_argument(
+        "--integration-rejection",
+        choices=["auto", "none", "sigma_clip", "winsorized_sigma"],
+        default="auto",
+    )
     audit.set_defaults(func=cmd_audit)
 
     compare = sub.add_parser("compare", help="compare GPWBPP output to a black-box reference")

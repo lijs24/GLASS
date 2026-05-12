@@ -10,8 +10,11 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     data = tmp_path / "data"
     run = tmp_path / "run"
     generate_synthetic_dataset(data, frames=3, width=24, height=24)
-    assert main(["audit", "--root", str(data), "--out", str(run), "--backend", "cpu"]) == 0
+    assert main(["audit", "--root", str(data), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
     assert (run / "run_state.json").exists()
+    assert (run / "integration_results.json").exists()
+    assert list((run / "integration").glob("master_*.fits"))
+    assert main(["resume", "--run", str(run)]) == 0
 
 
 def test_pipeline_fixture_run_calibration(tmp_path: Path):
