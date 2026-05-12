@@ -6,7 +6,7 @@ from pathlib import Path
 from rich.console import Console
 
 from gpwbpp.capabilities import capability_report
-from gpwbpp.engine.pipeline import initialize_run
+from gpwbpp.engine.pipeline import initialize_run, run_calibration_stages
 from gpwbpp.engine.resume import resume_summary
 from gpwbpp.engine.state import write_run_state
 from gpwbpp.io.json_io import read_json, write_json
@@ -70,6 +70,22 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    capabilities = capability_report()
+    if args.backend == "cuda" and not capabilities["cuda_available"]:
+        raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
+    if args.until_stage not in {"master_calibration", "light_calibration", "calibration"}:
+        if args.allow_partial:
+            console.print("Only calibration stages are implemented; initializing partial run state.")
+        else:
+            raise SystemExit(
+                "Current gated runner supports --until-stage calibration only. "
+                "Use --allow-partial to write a diagnostic run_state without executing later stages."
+            )
+    if args.until_stage in {"master_calibration", "light_calibration", "calibration"}:
+        state = run_calibration_stages(args.plan, args.out)
+        write_run_state(args.out, state)
+        console.print(f"Calibration run complete: {args.out}")
+        return 0
     out = Path(args.out)
     state = initialize_run(out)
     state.current_stage = args.until_stage or "created"
@@ -173,4 +189,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

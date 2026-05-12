@@ -21,3 +21,13 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 Every CUDA operation will have a CPU reference test. If CUDA is not available,
 CUDA tests skip rather than failing the whole project. Kernel launch failures
 must become clear Python exceptions.
+
+Local native build command used on Windows:
+
+```powershell
+$pybind = (& .\.venv\Scripts\python -m pybind11 --cmakedir).Trim()
+cmd /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat`" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR=`"$pybind`" -DCMAKE_MAKE_PROGRAM=`"$((Resolve-Path .\.venv\Scripts\ninja.exe))`" -DCMAKE_CUDA_COMPILER=`"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe`" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release"
+```
+
+The command writes `_gpwbpp_cuda_native*.pyd` into `src/` for local testing. The
+binary is ignored by git; source, CMake configuration, and tests are tracked.

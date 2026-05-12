@@ -10,6 +10,7 @@ testing the API surface; they are not advertised as GPU kernels.
 """
 
 from dataclasses import asdict
+import importlib
 import shutil
 import subprocess
 from typing import Any
@@ -20,12 +21,22 @@ from gpwbpp.cpu.calibration import calibrate_light
 from gpwbpp.models import CalibrationPolicy
 
 
+def _native():
+    try:
+        return importlib.import_module("_gpwbpp_cuda_native")
+    except Exception:
+        return None
+
+
 def native_extension_loaded() -> bool:
-    return False
+    return _native() is not None
 
 
 def cuda_available() -> bool:
-    return native_extension_loaded()
+    native = _native()
+    if native is None:
+        return False
+    return bool(native.cuda_available())
 
 
 def _run_nvidia_smi() -> list[str]:
@@ -46,6 +57,12 @@ def _run_nvidia_smi() -> list[str]:
 
 
 def list_devices() -> list[dict[str, Any]]:
+    native = _native()
+    if native is not None:
+        try:
+            return list(native.list_devices())
+        except Exception:
+            pass
     devices: list[dict[str, Any]] = []
     for line in _run_nvidia_smi():
         parts = [part.strip() for part in line.split(",")]
@@ -75,6 +92,9 @@ def list_devices() -> list[dict[str, Any]]:
 
 
 def get_device_info(device_id: int) -> dict[str, Any]:
+    native = _native()
+    if native is not None:
+        return dict(native.get_device_info(device_id))
     for device in list_devices():
         if device["device_id"] == device_id:
             return device
@@ -82,10 +102,16 @@ def get_device_info(device_id: int) -> dict[str, Any]:
 
 
 def smoke_add_f32(a: Any, b: Any) -> np.ndarray:
+    native = _native()
+    if native is not None:
+        return np.asarray(native.smoke_add_f32(a, b), dtype=np.float32)
     return np.asarray(a, dtype=np.float32) + np.asarray(b, dtype=np.float32)
 
 
 def reduce_mean_tile_f32(tile: Any) -> float:
+    native = _native()
+    if native is not None:
+        return float(native.reduce_mean_tile_f32(tile))
     return float(np.mean(np.asarray(tile, dtype=np.float32)))
 
 
@@ -109,6 +135,20 @@ def calibrate_tile_f32(
     dark_exposure_s: float | None,
     policy: Any | None = None,
 ) -> np.ndarray:
+    native = _native()
+    if native is not None:
+        return np.asarray(
+            native.calibrate_tile_f32(
+                light,
+                bias,
+                dark,
+                flat,
+                light_exposure_s,
+                dark_exposure_s,
+                None if policy is None else policy,
+            ),
+            dtype=np.float32,
+        )
     return calibrate_light(
         np.asarray(light, dtype=np.float32),
         None if bias is None else np.asarray(bias, dtype=np.float32),
@@ -133,4 +173,3 @@ def integrate_accumulate_mean_tile_f32(
     sums += frame * weight
     weight_sums += weight
     return sums, weight_sums
-

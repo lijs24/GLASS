@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 *.pyd
 *.so
+*.pdb
+*.ilk
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
@@ -15,4 +17,3 @@ runs/*
 !runs/.gitkeep
 !runs/checkpoints/
 !runs/checkpoints/.gitkeep
-
