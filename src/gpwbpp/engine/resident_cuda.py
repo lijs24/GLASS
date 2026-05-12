@@ -102,6 +102,49 @@ def _matches_any_token(frame: dict[str, Any], tokens: set[str]) -> bool:
     return bool(_frame_reference_tokens(frame) & tokens)
 
 
+def _registration_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = payload.get("registration_results")
+    if rows is None:
+        rows = payload.get("results", [])
+    return [dict(row) for row in rows]
+
+
+def _registration_matrix(row: dict[str, Any]) -> list[list[float]]:
+    matrix = np.asarray(row.get("matrix"), dtype=np.float64)
+    if matrix.shape != (3, 3):
+        raise ValueError(f"external registration matrix for {row.get('frame_id')} must be 3x3")
+    return [[float(value) for value in line] for line in matrix]
+
+
+def _matrix_is_translation(matrix: list[list[float]], atol: float = 1.0e-6) -> bool:
+    m = np.asarray(matrix, dtype=np.float64)
+    if m.shape != (3, 3):
+        return False
+    return bool(
+        np.allclose(m[:2, :2], np.eye(2), atol=atol)
+        and np.allclose(m[2], np.asarray([0.0, 0.0, 1.0]), atol=atol)
+    )
+
+
+def _float_or_nan(value: Any) -> float:
+    if value is None:
+        return float("nan")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def _apply_resident_registration_matrix(stack: Any, index: int, matrix: list[list[float]]) -> str:
+    if _matrix_is_translation(matrix):
+        stack.apply_translation_bilinear_frame(index, float(matrix[0][2]), float(matrix[1][2]), np.nan)
+        return "translation_bilinear"
+    if not hasattr(stack, "apply_matrix_bilinear_frame"):
+        raise RuntimeError("resident CUDA backend does not expose matrix bilinear warp")
+    stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
+    return "matrix_bilinear"
+
+
 def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) -> dict[str, Any]:
     values = np.asarray(data, dtype=np.float32)
     total_pixels = int(values.size)
@@ -308,6 +351,7 @@ def run_resident_calibration_integration(
     resident_star_grid_rows: int = 0,
     resident_star_prior: str = "none",
     resident_star_prior_radius_px: float = 4.0,
+    resident_registration_results: str | Path | None = None,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
@@ -321,10 +365,11 @@ def run_resident_calibration_integration(
         "translation_preview",
         "translation_ncc_subpixel",
         "translation_star_catalog",
+        "external_matrix",
     }:
         raise ValueError(
             "resident_registration must be off, translation_preview, translation_ncc_subpixel, "
-            "or translation_star_catalog"
+            "translation_star_catalog, or external_matrix"
         )
     if local_normalization not in {"auto", "on", "off"}:
         raise ValueError("local_normalization must be auto, on, or off")
@@ -368,6 +413,23 @@ def run_resident_calibration_integration(
     rejection_mode = "none" if integration_rejection == "auto" else integration_rejection
     low_sigma = float(integration_policy.get("low_sigma", 3.0))
     high_sigma = float(integration_policy.get("high_sigma", 3.0))
+    external_registration_path: Path | None = None
+    external_registration_by_frame: dict[str, dict[str, Any]] = {}
+    external_reference_frame_id: str | None = None
+    if resident_registration == "external_matrix":
+        external_registration_path = (
+            Path(resident_registration_results) if resident_registration_results is not None else run / "registration_results.json"
+        )
+        if not external_registration_path.exists():
+            raise ValueError(f"external resident registration results not found: {external_registration_path}")
+        external_registration_payload = read_json(external_registration_path)
+        external_registration_by_frame = {
+            str(row.get("frame_id")): row for row in _registration_rows(external_registration_payload)
+        }
+        if not external_registration_by_frame:
+            raise ValueError("external resident registration results contain no frame rows")
+        if external_registration_payload.get("reference_frame_id") is not None:
+            external_reference_frame_id = str(external_registration_payload["reference_frame_id"])
     output_dir = run / "integration"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -431,7 +493,8 @@ def run_resident_calibration_integration(
             gc.collect()
 
             registration_start = perf_counter()
-            reference_frame = _find_reference_frame(light_frames, reference_frame_id)
+            selected_reference_frame_id = reference_frame_id or external_reference_frame_id
+            reference_frame = _find_reference_frame(light_frames, selected_reference_frame_id)
             reference_index = next(
                 index for index, frame in enumerate(light_frames) if frame["id"] == reference_frame["id"]
             )
@@ -768,6 +831,72 @@ def run_resident_calibration_integration(
                         )
                     )
 
+            if resident_registration == "external_matrix":
+                for index, frame in enumerate(light_frames):
+                    registration_frame_start = perf_counter()
+                    warnings = []
+                    status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
+                    matrix = translation_matrix(0.0, 0.0)
+                    transform_model = "external_matrix"
+                    matched = 0
+                    inliers = 0
+                    rms_px = float("nan")
+                    try:
+                        row = external_registration_by_frame.get(str(frame["id"]))
+                        if status == "excluded":
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("excluded by resident frame mask")
+                        elif row is None:
+                            status = "failed"
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("missing external registration row")
+                        else:
+                            matrix = _registration_matrix(row)
+                            transform_model = str(row.get("transform_model") or "external_matrix")
+                            matched = int(row.get("matched_stars") or 0)
+                            inliers = int(row.get("inliers") or 0)
+                            rms_px = _float_or_nan(row.get("rms_px"))
+                            source_status = str(row.get("status") or "failed")
+                            warnings.extend(str(item) for item in row.get("warnings", []))
+                            if frame["id"] == reference_frame["id"] or source_status == "reference":
+                                status = "reference"
+                                rms_px = 0.0 if not np.isfinite(rms_px) else rms_px
+                            elif source_status != "ok":
+                                status = source_status
+                                frame_weight_values[index] = 0.0
+                                frame_weights[frame["id"]] = 0.0
+                                warnings.append(f"external registration status was {source_status}")
+                            else:
+                                warp_model = _apply_resident_registration_matrix(stack, index, matrix)
+                                warnings.append(f"external_registration_application={warp_model}")
+                            if external_registration_path is not None:
+                                warnings.append(f"external_registration_results={external_registration_path}")
+                    except Exception as exc:
+                        status = "failed"
+                        frame_weight_values[index] = 0.0
+                        frame_weights[frame["id"]] = 0.0
+                        warnings.append(str(exc))
+                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_results.append(
+                        RegistrationResult(
+                            frame_id=str(frame["id"]),
+                            reference_frame_id=str(reference_frame["id"]),
+                            transform_model=transform_model,
+                            matrix=matrix,
+                            matched_stars=matched,
+                            inliers=inliers,
+                            rms_px=rms_px,
+                            status=status,
+                            warnings=warnings
+                            + [
+                                "resident CUDA external matrix registration; matrices come from a prior "
+                                "registration_results.json artifact",
+                            ],
+                        )
+                    )
+
             local_norm_start = perf_counter()
             local_norm_policy = plan.get("local_normalization_policy", {})
             local_norm_enabled = local_normalization == "on" or (
@@ -937,6 +1066,9 @@ def run_resident_calibration_integration(
                         "star_grid_rows": resident_star_grid_rows,
                         "star_prior": resident_star_prior,
                         "star_prior_radius_px": resident_star_prior_radius_px,
+                        "external_registration_results_path": None
+                        if external_registration_path is None
+                        else str(external_registration_path),
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                         "excluded_frame_tokens": sorted(excluded_tokens),
                     },
@@ -961,7 +1093,12 @@ def run_resident_calibration_integration(
                     "notes": [
                         "Raw light frames are uploaded one at a time into a reusable device buffer.",
                         "Calibrated frames remain resident in VRAM until integration completes.",
-                        "Resident registration is optional and currently limited to translation.",
+                        (
+                            "Resident registration can consume external similarity/affine matrices and apply them "
+                            "with CUDA matrix bilinear warp."
+                            if resident_registration == "external_matrix"
+                            else "Resident registration is optional and currently limited to translation."
+                        ),
                         (
                             "Resident local normalization uses a global mean/std model per frame."
                             if local_norm_enabled
@@ -1016,11 +1153,18 @@ def run_resident_calibration_integration(
                     "transform_model": resident_registration,
                     "results": registration_results,
                     "warnings": [
-                        "resident registration is translation-only in the current gate",
+                        (
+                            "resident registration consumed external matrices; non-translation matrices are applied "
+                            "with CUDA matrix bilinear warp"
+                            if resident_registration == "external_matrix"
+                            else "resident registration is translation-only in the current gate"
+                        ),
                         (
                             "star-catalog mode records GPU mutual-inlier diagnostics; preview/NCC modes still use "
                             "placeholder matched_stars/inliers/rms"
                             if resident_registration == "translation_star_catalog"
+                            else "external_matrix mode preserves matched_stars/inliers/rms from the source artifact"
+                            if resident_registration == "external_matrix"
                             else "matched_stars/inliers/rms are placeholders until star-based registration is wired in"
                         ),
                     ],
@@ -1096,7 +1240,11 @@ def run_resident_calibration_integration(
         state.current_stage = "integration"
         state.warnings.append(
             "resident CUDA mode is a high-VRAM calibration plus integration path; "
-            "registration is translation only and local normalization is global mean/std when enabled"
+            + (
+                "external registration matrices are applied with CUDA matrix warp when requested"
+                if resident_registration == "external_matrix"
+                else "registration is translation only and local normalization is global mean/std when enabled"
+            )
         )
         return state
     except Exception as exc:

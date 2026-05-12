@@ -150,3 +150,12 @@ timings separately, then applies the same astroalign similarity matrix with
 GPWBPP's standalone CUDA matrix warp and resident in-place CUDA matrix warp.
 This isolates star/asterism matching cost from pixel resampling cost while the
 owned GPU matcher is still catching up.
+
+Resident runs can also use `--resident-registration external_matrix` together
+with `--resident-registration-results <registration_results.json>`. That mode
+keeps the high-VRAM calibration/integration path but consumes a prior
+registration artifact: accepted translation matrices use the resident
+translation bilinear warp, and accepted similarity/affine matrices use the
+resident CUDA matrix bilinear warp. This is intended for staged validation,
+for example running tile-mode `--registration-method astroalign` first, then
+using the resulting matrices to test pure GPU pixel resampling and integration.

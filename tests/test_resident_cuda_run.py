@@ -6,7 +6,7 @@ import numpy as np
 from astropy.io import fits
 
 from gpwbpp.cli import main
-from gpwbpp.io.json_io import read_json
+from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.engine.resident_cuda import _matches_any_token
 from tests.conftest import cuda_module_or_skip
 
@@ -316,6 +316,105 @@ def test_cli_resident_cuda_run_star_catalog_auto_threshold_aligns_shifted_pair(t
     assert abs(moving["matrix"][1][2] - 2.0) < 1.0e-5
     assert any("selected_star_threshold=" in warning for warning in moving["warnings"])
     assert any("star_prior_model=ncc" in warning for warning in moving["warnings"])
+
+
+def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    external_registration = tmp_path / "external_registration_results.json"
+    run = tmp_path / "resident_run_external_matrix"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    plan_payload = read_json(plan)
+    light_by_stem = {
+        Path(frame["path"]).stem: frame for frame in plan_payload["frames"] if frame["frame_type"] == "light"
+    }
+    reference_id = str(light_by_stem["light_001"]["id"])
+    moving_id = str(light_by_stem["light_002"]["id"])
+    similarity_matrix = [
+        [1.0, 0.001, -3.0],
+        [-0.001, 1.0, 2.0],
+        [0.0, 0.0, 1.0],
+    ]
+    write_json(
+        external_registration,
+        {
+            "schema_version": 1,
+            "reference_frame_id": reference_id,
+            "registration_results": [
+                {
+                    "frame_id": reference_id,
+                    "reference_frame_id": reference_id,
+                    "transform_model": "similarity",
+                    "matrix": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                    "matched_stars": 8,
+                    "inliers": 8,
+                    "rms_px": 0.0,
+                    "status": "reference",
+                    "warnings": [],
+                },
+                {
+                    "frame_id": moving_id,
+                    "reference_frame_id": reference_id,
+                    "transform_model": "similarity",
+                    "matrix": similarity_matrix,
+                    "matched_stars": 12,
+                    "inliers": 10,
+                    "rms_px": 0.4,
+                    "status": "ok",
+                    "warnings": ["synthetic external similarity matrix"],
+                },
+            ],
+        },
+    )
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "external_matrix",
+            "--resident-registration-results",
+            str(external_registration),
+        ]
+    ) == 0
+
+    integration = read_json(run / "integration_results.json")
+    registration = read_json(run / "registration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    moving = [item for item in registration["results"] if item["frame_id"] == moving_id][0]
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+
+    assert integration["outputs"][0]["resident_registration"] == "external_matrix"
+    assert registration["transform_model"] == "external_matrix"
+    assert registration["warnings"][0].startswith("resident registration consumed external matrices")
+    assert resident_registration["mode"] == "external_matrix"
+    assert resident_registration["external_registration_results_path"] == str(external_registration)
+    assert moving["status"] == "ok"
+    assert moving["transform_model"] == "similarity"
+    assert moving["matched_stars"] == 12
+    assert moving["inliers"] == 10
+    assert np.allclose(np.asarray(moving["matrix"], dtype=np.float32), np.asarray(similarity_matrix, dtype=np.float32))
+    assert any("external_registration_application=matrix_bilinear" == item for item in moving["warnings"])
 
 
 def test_resident_frame_exclusion_matches_id_name_or_stem():

@@ -367,6 +367,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_grid_rows=args.resident_star_grid_rows,
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
+                resident_registration_results=args.resident_registration_results,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
@@ -621,13 +622,24 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--flat-floor", type=float, help="override calibration flat floor for this run")
     run.add_argument(
         "--resident-registration",
-        choices=["off", "translation_preview", "translation_ncc_subpixel", "translation_star_catalog"],
+        choices=[
+            "off",
+            "translation_preview",
+            "translation_ncc_subpixel",
+            "translation_star_catalog",
+            "external_matrix",
+        ],
         default="off",
         help=(
             "resident CUDA registration mode; translation_preview uses downsampled phase correlation, "
             "translation_ncc_subpixel uses resident GPU NCC plus subpixel refinement, "
-            "translation_star_catalog uses GPU star candidates plus pair-offset voting"
+            "translation_star_catalog uses GPU star candidates plus pair-offset voting, "
+            "external_matrix applies matrices from a prior registration_results.json"
         ),
+    )
+    run.add_argument(
+        "--resident-registration-results",
+        help="registration_results.json to consume when --resident-registration external_matrix is selected",
     )
     run.add_argument("--resident-registration-max-shift", type=int, default=128)
     run.add_argument(

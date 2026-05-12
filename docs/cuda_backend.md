@@ -102,6 +102,12 @@ Resident CUDA integration now supports:
   invertible 3x3 source-to-destination transform matrix. Resident stacks expose
   the same primitive as an in-place frame warp, which is the first CUDA bridge
   toward consuming similarity/affine registration matrices.
+- Resident runs can consume a prior `registration_results.json` with
+  `--resident-registration external_matrix` and
+  `--resident-registration-results`. Accepted translation matrices keep the
+  resident translation bilinear path; accepted similarity/affine matrices use
+  the resident CUDA matrix bilinear warp before local normalization and
+  integration.
 - Resident star-catalog translation registration. The resident stack detects
   top-N stars for the reference and moving frames on the GPU, scores pair-offset
   translations and mutual-nearest refinement on the GPU, then returns compact
