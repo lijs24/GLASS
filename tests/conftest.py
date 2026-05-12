@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import importlib
 from pathlib import Path
 
 import numpy as np
@@ -35,11 +36,13 @@ def small_fits_dataset(tmp_path: Path) -> Path:
 
 
 def cuda_module_or_skip():
+    module = cuda_api_module()
+    if not getattr(module, "cuda_available", lambda: False)():
+        pytest.skip("CUDA native backend is not available")
+    return module
+
+
+def cuda_api_module():
     if importlib.util.find_spec("gpwbpp_cuda") is None:
         pytest.skip("gpwbpp_cuda extension is not built")
-    import gpwbpp_cuda  # type: ignore
-
-    if not getattr(gpwbpp_cuda, "cuda_available", lambda: False)():
-        pytest.skip("CUDA is not available")
-    return gpwbpp_cuda
-
+    return importlib.import_module("gpwbpp_cuda")

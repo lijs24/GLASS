@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+"""Compatibility API for the optional native CUDA backend.
+
+This module keeps the public `gpwbpp_cuda` import path stable on CPU-only
+installations. It reports visible NVIDIA devices through `nvidia-smi` when
+available, but `cuda_available()` remains false until a real native CUDA
+extension is built and loaded. Numeric helpers use CPU fallbacks only for smoke
+testing the API surface; they are not advertised as GPU kernels.
+"""
+
+from dataclasses import asdict
+import shutil
+import subprocess
+from typing import Any
+
+import numpy as np
+
+from gpwbpp.cpu.calibration import calibrate_light
+from gpwbpp.models import CalibrationPolicy
+
+
+def native_extension_loaded() -> bool:
+    return False
+
+
+def cuda_available() -> bool:
+    return native_extension_loaded()
+
+
+def _run_nvidia_smi() -> list[str]:
+    if shutil.which("nvidia-smi") is None:
+        return []
+    command = [
+        "nvidia-smi",
+        "--query-gpu=index,name,compute_cap,memory.total,driver_version",
+        "--format=csv,noheader,nounits",
+    ]
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=5)
+    except Exception:
+        return []
+    if completed.returncode != 0:
+        return []
+    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+
+def list_devices() -> list[dict[str, Any]]:
+    devices: list[dict[str, Any]] = []
+    for line in _run_nvidia_smi():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) < 5:
+            continue
+        index, name, compute_capability, memory_total_mib, driver_version = parts[:5]
+        try:
+            device_id = int(index)
+        except ValueError:
+            device_id = len(devices)
+        try:
+            memory_total = int(float(memory_total_mib))
+        except ValueError:
+            memory_total = None
+        devices.append(
+            {
+                "device_id": device_id,
+                "name": name,
+                "compute_capability": compute_capability,
+                "memory_total_mib": memory_total,
+                "driver_version": driver_version,
+                "native_backend": False,
+                "available_to_gpwbpp": False,
+            }
+        )
+    return devices
+
+
+def get_device_info(device_id: int) -> dict[str, Any]:
+    for device in list_devices():
+        if device["device_id"] == device_id:
+            return device
+    raise RuntimeError(f"CUDA device {device_id} is not visible to gpwbpp_cuda")
+
+
+def smoke_add_f32(a: Any, b: Any) -> np.ndarray:
+    return np.asarray(a, dtype=np.float32) + np.asarray(b, dtype=np.float32)
+
+
+def reduce_mean_tile_f32(tile: Any) -> float:
+    return float(np.mean(np.asarray(tile, dtype=np.float32)))
+
+
+def _policy_from_mapping(policy: Any) -> CalibrationPolicy:
+    if isinstance(policy, CalibrationPolicy):
+        return policy
+    if hasattr(policy, "__dataclass_fields__"):
+        return CalibrationPolicy(**asdict(policy))
+    if isinstance(policy, dict):
+        allowed = set(CalibrationPolicy.__dataclass_fields__.keys())
+        return CalibrationPolicy(**{key: value for key, value in policy.items() if key in allowed})
+    return CalibrationPolicy()
+
+
+def calibrate_tile_f32(
+    light: Any,
+    bias: Any | None,
+    dark: Any | None,
+    flat: Any | None,
+    light_exposure_s: float,
+    dark_exposure_s: float | None,
+    policy: Any | None = None,
+) -> np.ndarray:
+    return calibrate_light(
+        np.asarray(light, dtype=np.float32),
+        None if bias is None else np.asarray(bias, dtype=np.float32),
+        None if dark is None else np.asarray(dark, dtype=np.float32),
+        None if flat is None else np.asarray(flat, dtype=np.float32),
+        light_exposure_s,
+        dark_exposure_s,
+        _policy_from_mapping(policy),
+    )
+
+
+def integrate_accumulate_mean_tile_f32(
+    frame_tile: Any,
+    weight_tile: Any,
+    sum_tile: Any,
+    weight_sum_tile: Any,
+) -> tuple[np.ndarray, np.ndarray]:
+    frame = np.asarray(frame_tile, dtype=np.float32)
+    weight = np.asarray(weight_tile, dtype=np.float32)
+    sums = np.asarray(sum_tile, dtype=np.float32).copy()
+    weight_sums = np.asarray(weight_sum_tile, dtype=np.float32).copy()
+    sums += frame * weight
+    weight_sums += weight
+    return sums, weight_sums
+
