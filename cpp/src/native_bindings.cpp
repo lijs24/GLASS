@@ -62,6 +62,12 @@ void gpwbpp_integrate_resident_sigma_clip_f32_launch(
     float low_sigma,
     float high_sigma,
     bool winsorize);
+void gpwbpp_star_local_max_mask_f32_launch(
+    const float* input,
+    unsigned char* mask,
+    int width,
+    int height,
+    float threshold);
 
 namespace {
 
@@ -278,6 +284,35 @@ class ResidentCalibratedStack {
     }
     cudaFree(d_output);
     cudaFree(d_coverage);
+  }
+
+  py::array_t<unsigned char> star_local_max_mask(std::size_t index, float threshold) const {
+    require_index(index);
+    if (!loaded_[index]) {
+      throw std::runtime_error("resident frame must be loaded before star detection");
+    }
+    py::array_t<unsigned char> mask({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    const py::buffer_info mask_info = mask.request();
+    unsigned char* d_mask = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_mask, pixels_per_frame_ * sizeof(unsigned char)), "cudaMalloc(resident star mask)");
+      gpwbpp_star_local_max_mask_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_mask,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          threshold);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_local_max_mask kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_local_max_mask synchronize");
+      check_cuda(
+          cudaMemcpy(mask_info.ptr, d_mask, pixels_per_frame_ * sizeof(unsigned char), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident star mask)");
+    } catch (...) {
+      cudaFree(d_mask);
+      throw;
+    }
+    cudaFree(d_mask);
+    return mask;
   }
 
   py::tuple integrate_mean(py::object weights_obj) const {
@@ -911,6 +946,41 @@ py::tuple integrate_accumulate_mean_tile_f32(
   return py::make_tuple(out_sum, out_weight);
 }
 
+py::array_t<unsigned char> star_local_max_mask_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    float threshold) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  const int height = static_cast<int>(info.shape[0]);
+  const int width = static_cast<int>(info.shape[1]);
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  py::array_t<unsigned char> mask({info.shape[0], info.shape[1]});
+  const py::buffer_info mask_info = mask.request();
+
+  float* d_input = nullptr;
+  unsigned char* d_mask = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(star input)");
+    check_cuda(cudaMalloc(&d_mask, n * sizeof(unsigned char)), "cudaMalloc(star mask)");
+    check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(star input)");
+    gpwbpp_star_local_max_mask_f32_launch(d_input, d_mask, width, height, threshold);
+    check_cuda(cudaGetLastError(), "star_local_max_mask_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "star_local_max_mask_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(mask_info.ptr, d_mask, n * sizeof(unsigned char), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(star mask)");
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_mask);
+    throw;
+  }
+  cudaFree(d_input);
+  cudaFree(d_mask);
+  return mask;
+}
+
 PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.doc() = "Native CUDA backend for GPWBPP";
   m.def("cuda_available", &cuda_available);
@@ -923,6 +993,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("warp_translation_f32", &warp_translation_f32);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
+  m.def("star_local_max_mask_f32", &star_local_max_mask_f32);
   py::class_<ResidentCalibratedStack>(m, "ResidentCalibratedStack")
       .def(py::init<std::size_t, std::size_t, std::size_t>())
       .def_property_readonly("frame_count", &ResidentCalibratedStack::frame_count)
@@ -953,6 +1024,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("dx"),
           py::arg("dy"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+      .def("star_local_max_mask", &ResidentCalibratedStack::star_local_max_mask)
       .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none())
       .def(
           "integrate_sigma_clip",

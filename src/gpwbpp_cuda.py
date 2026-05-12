@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Compatibility API for the optional native CUDA backend.
 
 This module keeps the public `gpwbpp_cuda` import path stable on CPU-only
@@ -8,6 +6,8 @@ available, but `cuda_available()` remains false until a real native CUDA
 extension is built and loaded. Numeric helpers use CPU fallbacks only for smoke
 testing the API surface; they are not advertised as GPU kernels.
 """
+
+from __future__ import annotations
 
 from dataclasses import asdict
 import importlib
@@ -237,6 +237,26 @@ def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     return (image * np.float32(scale) + np.float32(offset)).astype(np.float32)
 
 
+def star_local_max_mask_f32(data: Any, threshold: float) -> np.ndarray:
+    native = _native()
+    if native is not None and hasattr(native, "star_local_max_mask_f32"):
+        return np.asarray(native.star_local_max_mask_f32(data, float(threshold)), dtype=np.uint8)
+    image = np.asarray(data, dtype=np.float32)
+    h, w = image.shape
+    mask = np.zeros((h, w), dtype=np.uint8)
+    if h < 3 or w < 3:
+        return mask
+    core = image[1:-1, 1:-1]
+    candidate = np.isfinite(core) & (core > np.float32(threshold))
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            if dx == 0 and dy == 0:
+                continue
+            candidate &= core >= image[1 + dy : h - 1 + dy, 1 + dx : w - 1 + dx]
+    mask[1:-1, 1:-1] = candidate.astype(np.uint8)
+    return mask
+
+
 class ResidentCalibratedStack:
     """VRAM-resident calibrated-frame stack for high-memory benchmark paths.
 
@@ -310,6 +330,11 @@ class ResidentCalibratedStack:
         if not hasattr(self._impl, "apply_translation_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_translation_frame is not available")
         self._impl.apply_translation_frame(int(index), int(dx), int(dy), float(fill))
+
+    def star_local_max_mask(self, index: int, threshold: float) -> np.ndarray:
+        if not hasattr(self._impl, "star_local_max_mask"):
+            raise RuntimeError("native ResidentCalibratedStack.star_local_max_mask is not available")
+        return np.asarray(self._impl.star_local_max_mask(int(index), float(threshold)), dtype=np.uint8)
 
     def integrate_mean(self, weights: Any | None = None) -> tuple[np.ndarray, np.ndarray]:
         master, weight_map = self._impl.integrate_mean(

@@ -28,6 +28,7 @@ if(GPWBPP_BUILD_PYTHON_CUDA)
     cpp/cuda/warp_kernels.cu
     cpp/cuda/local_norm_kernels.cu
     cpp/cuda/integration_kernels.cu
+    cpp/cuda/star_detect_kernels.cu
   )
   target_include_directories(_gpwbpp_cuda_native PRIVATE cpp/include)
   target_link_libraries(_gpwbpp_cuda_native PRIVATE CUDA::cudart)

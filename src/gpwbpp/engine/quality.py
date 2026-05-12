@@ -96,28 +96,46 @@ def _detect_stars_streaming(
             x0 = max(tile.x0 - 1, 0)
             x1 = min(tile.x1 + 1, reader.width)
             data = reader.read_tile(y0, y1, x0, x1)
-            for y in range(max(tile.y0, 1), min(tile.y1, reader.height - 1)):
-                local_y = y - y0
-                for x in range(max(tile.x0, 1), min(tile.x1, reader.width - 1)):
-                    local_x = x - x0
-                    value = float(data[local_y, local_x])
-                    if value <= threshold:
+            source_y0 = max(tile.y0, 1)
+            source_y1 = min(tile.y1, reader.height - 1)
+            source_x0 = max(tile.x0, 1)
+            source_x1 = min(tile.x1, reader.width - 1)
+            if source_y0 >= source_y1 or source_x0 >= source_x1:
+                continue
+            local_y0 = source_y0 - y0
+            local_y1 = source_y1 - y0
+            local_x0 = source_x0 - x0
+            local_x1 = source_x1 - x0
+            core = data[local_y0:local_y1, local_x0:local_x1]
+            mask = np.isfinite(core) & (core > threshold)
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
                         continue
-                    patch = data[local_y - 1 : local_y + 2, local_x - 1 : local_x + 2]
-                    if value < float(np.max(patch)):
-                        continue
-                    yy, xx = np.mgrid[y - 1 : y + 2, x - 1 : x + 2]
-                    weights = np.maximum(patch - median, 0.0)
-                    total = float(np.sum(weights))
-                    if total <= 0:
-                        continue
-                    stars.append(
-                        Star(
-                            x=float(np.sum(xx * weights) / total),
-                            y=float(np.sum(yy * weights) / total),
-                            flux=total,
-                        )
+                    neighbor = data[
+                        local_y0 + dy : local_y1 + dy,
+                        local_x0 + dx : local_x1 + dx,
+                    ]
+                    mask &= core >= neighbor
+            ys, xs = np.nonzero(mask)
+            for candidate_y, candidate_x in zip(ys, xs, strict=True):
+                local_y = int(local_y0 + candidate_y)
+                local_x = int(local_x0 + candidate_x)
+                y = int(y0 + local_y)
+                x = int(x0 + local_x)
+                patch = data[local_y - 1 : local_y + 2, local_x - 1 : local_x + 2]
+                yy, xx = np.mgrid[y - 1 : y + 2, x - 1 : x + 2]
+                weights = np.maximum(patch - median, 0.0)
+                total = float(np.sum(weights))
+                if total <= 0:
+                    continue
+                stars.append(
+                    Star(
+                        x=float(np.sum(xx * weights) / total),
+                        y=float(np.sum(yy * weights) / total),
+                        flux=total,
                     )
+                )
             if len(stars) > max_stars * 4:
                 stars.sort(key=lambda star: star.flux, reverse=True)
                 del stars[max_stars:]
