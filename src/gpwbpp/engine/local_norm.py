@@ -7,7 +7,7 @@ import numpy as np
 
 from gpwbpp.cpu.local_norm import apply_tile_normalization, estimate_tile_normalization
 from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import FitsTileWriter, open_fits_image
+from gpwbpp.io.fits_io import FitsImageReader, FitsTileWriter
 from gpwbpp.io.json_io import read_json, write_json
 
 
@@ -95,13 +95,9 @@ def local_normalize_registered_frames(
     cuda_module = _cuda_module_if_requested(backend)
     outputs: list[dict[str, Any]] = []
 
-    with open_fits_image(reference["registered_path"], memmap=True) as ref_hdul, open_fits_image(
-        reference["coverage_path"], memmap=True
-    ) as ref_cov_hdul:
-        reference_data = ref_hdul[0].data
-        reference_coverage = ref_cov_hdul[0].data
-        if reference_data is None or reference_coverage is None:
-            raise ValueError("local normalization reference data or coverage is missing")
+    with FitsImageReader(reference["registered_path"]) as reference_data, FitsImageReader(
+        reference["coverage_path"]
+    ) as reference_coverage:
         height, width = reference_data.shape
         for item in warp.get("warp_results", []):
             frame_id = item["frame_id"]
@@ -110,29 +106,22 @@ def local_normalize_registered_frames(
             scales: list[float] = []
             offsets: list[float] = []
             valid_counts: list[int] = []
-            with open_fits_image(item["registered_path"], memmap=True) as src_hdul, open_fits_image(
-                item["coverage_path"], memmap=True
-            ) as cov_hdul, FitsTileWriter(
+            with FitsImageReader(item["registered_path"]) as source_data, FitsImageReader(
+                item["coverage_path"]
+            ) as source_coverage, FitsTileWriter(
                 out_path,
                 width=width,
                 height=height,
                 header={"IMAGETYP": "local_norm", "FRAMEID": frame_id},
             ) as writer:
-                source_data = src_hdul[0].data
-                source_coverage = cov_hdul[0].data
-                if source_data is None or source_coverage is None:
-                    raise ValueError(f"local normalization source data or coverage is missing: {frame_id}")
                 tile_count = 0
                 actual_backend = "cuda" if cuda_module is not None else "cpu"
                 for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
-                    src_tile = np.asarray(source_data[tile.y0 : tile.y1, tile.x0 : tile.x1], dtype=np.float32)
-                    ref_tile = np.asarray(reference_data[tile.y0 : tile.y1, tile.x0 : tile.x1], dtype=np.float32)
+                    src_tile = source_data.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                    ref_tile = reference_data.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
                     valid_mask = (
-                        np.asarray(source_coverage[tile.y0 : tile.y1, tile.x0 : tile.x1], dtype=np.float32) > 0.5
-                    ) & (
-                        np.asarray(reference_coverage[tile.y0 : tile.y1, tile.x0 : tile.x1], dtype=np.float32)
-                        > 0.5
-                    )
+                        source_coverage.read_tile(tile.y0, tile.y1, tile.x0, tile.x1) > 0.5
+                    ) & (reference_coverage.read_tile(tile.y0, tile.y1, tile.x0, tile.x1) > 0.5)
                     stats = estimate_tile_normalization(src_tile, ref_tile, valid_mask)
                     if stats["status"] == "empty":
                         warnings.append(

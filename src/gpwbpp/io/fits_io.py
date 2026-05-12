@@ -21,11 +21,8 @@ def open_fits_image(path: str | Path, memmap: bool = True) -> fits.HDUList:
 
 
 def read_fits_data(path: str | Path, dtype=np.float32) -> np.ndarray:
-    with open_fits_image(path, memmap=True) as hdul:
-        data = hdul[0].data
-        if data is None:
-            raise ValueError(f"FITS file has no primary image data: {path}")
-        return np.asarray(data, dtype=dtype)
+    with FitsImageReader(path) as reader:
+        return reader.read_full(dtype=dtype)
 
 
 def read_fits_header(path: str | Path) -> dict[str, Any]:
@@ -99,3 +96,60 @@ class FitsTileWriter:
         if self._map is not None:
             self._map.flush()
         self._map = None
+
+
+class FitsImageReader:
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+        self._hdul: fits.HDUList | None = None
+        self._data: np.ndarray | None = None
+        self.header: fits.Header | None = None
+        self.width = 0
+        self.height = 0
+        self.bscale = 1.0
+        self.bzero = 0.0
+        self.blank: float | int | None = None
+        self.scaled = False
+
+    def __enter__(self) -> "FitsImageReader":
+        self._hdul = fits.open(self.path, memmap=True, do_not_scale_image_data=True)
+        hdu = self._hdul[0]
+        data = hdu.data
+        if data is None:
+            raise ValueError(f"FITS file has no primary image data: {self.path}")
+        self._data = data
+        self.header = hdu.header
+        self.height, self.width = data.shape
+        self.bscale = float(self.header.get("BSCALE", 1.0))
+        self.bzero = float(self.header.get("BZERO", 0.0))
+        self.blank = self.header.get("BLANK")
+        self.scaled = self.bscale != 1.0 or self.bzero != 0.0 or self.blank is not None
+        return self
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return self.height, self.width
+
+    def read_tile(self, y0: int, y1: int, x0: int, x1: int, dtype=np.float32) -> np.ndarray:
+        if self._data is None:
+            raise RuntimeError("FitsImageReader is not open")
+        raw = self._data[y0:y1, x0:x1]
+        out = np.asarray(raw, dtype=np.float32)
+        if self.blank is not None:
+            mask = np.asarray(raw == self.blank)
+            if np.any(mask):
+                out = out.copy()
+                out[mask] = np.nan
+        if self.bscale != 1.0 or self.bzero != 0.0:
+            out = out * np.float32(self.bscale) + np.float32(self.bzero)
+        return np.asarray(out, dtype=dtype)
+
+    def read_full(self, dtype=np.float32) -> np.ndarray:
+        return self.read_tile(0, self.height, 0, self.width, dtype=dtype)
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._hdul is not None:
+            self._hdul.close()
+        self._hdul = None
+        self._data = None
+        self.header = None

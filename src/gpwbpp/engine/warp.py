@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 
 from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import FitsTileWriter, open_fits_image
+from gpwbpp.io.fits_io import FitsImageReader, FitsTileWriter
 from gpwbpp.io.json_io import read_json, write_json
 
 
@@ -14,21 +14,24 @@ def _translation_from_matrix(matrix: list[list[float]]) -> tuple[int, int]:
     return int(round(float(matrix[0][2]))), int(round(float(matrix[1][2])))
 
 
-def _warp_tile_nearest(data: np.ndarray, tile, dx: int, dy: int) -> tuple[np.ndarray, np.ndarray]:
+def _warp_tile_nearest(reader: FitsImageReader, tile, dx: int, dy: int) -> tuple[np.ndarray, np.ndarray]:
     out_h = tile.y1 - tile.y0
     out_w = tile.x1 - tile.x0
     out = np.zeros((out_h, out_w), dtype=np.float32)
     coverage = np.zeros((out_h, out_w), dtype=np.float32)
-    height, width = data.shape
-    for oy, y in enumerate(range(tile.y0, tile.y1)):
-        sy = y - dy
-        if sy < 0 or sy >= height:
-            continue
-        for ox, x in enumerate(range(tile.x0, tile.x1)):
-            sx = x - dx
-            if 0 <= sx < width:
-                out[oy, ox] = data[sy, sx]
-                coverage[oy, ox] = 1.0
+    height, width = reader.shape
+    src_x0 = max(0, tile.x0 - dx)
+    src_x1 = min(width, tile.x1 - dx)
+    src_y0 = max(0, tile.y0 - dy)
+    src_y1 = min(height, tile.y1 - dy)
+    if src_x0 >= src_x1 or src_y0 >= src_y1:
+        return out, coverage
+    dst_x0 = src_x0 + dx - tile.x0
+    dst_x1 = src_x1 + dx - tile.x0
+    dst_y0 = src_y0 + dy - tile.y0
+    dst_y1 = src_y1 + dy - tile.y0
+    out[dst_y0:dst_y1, dst_x0:dst_x1] = reader.read_tile(src_y0, src_y1, src_x0, src_x1)
+    coverage[dst_y0:dst_y1, dst_x0:dst_x1] = 1.0
     return out, coverage
 
 
@@ -46,11 +49,8 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
         frame_id = result["frame_id"]
         source = calibrated[frame_id]["path"]
         dx, dy = _translation_from_matrix(result["matrix"])
-        with open_fits_image(source, memmap=True) as hdul:
-            data = hdul[0].data
-            if data is None:
-                raise ValueError(f"FITS file has no primary image data: {source}")
-            height, width = data.shape
+        with FitsImageReader(source) as reader:
+            height, width = reader.shape
             registered_path = registered_dir / f"registered_{frame_id}.fits"
             coverage_path = coverage_dir / f"coverage_{frame_id}.fits"
             with FitsTileWriter(
@@ -67,7 +67,7 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                 tile_count = 0
                 valid_pixels = 0
                 for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
-                    warped, coverage = _warp_tile_nearest(data, tile, dx, dy)
+                    warped, coverage = _warp_tile_nearest(reader, tile, dx, dy)
                     registered_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, warped)
                     coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage)
                     tile_count += 1

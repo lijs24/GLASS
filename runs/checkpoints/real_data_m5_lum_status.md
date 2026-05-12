@@ -28,6 +28,8 @@
 - Processing plan executable: true.
 - `gpwbpp subset` reproduced an executable 5-frame M5/Lum manifest from the full 240430 manifest.
 - GPWBPP CUDA elapsed time: 64.061 seconds.
+- GPWBPP CUDA tile-reader repeat on the same plan: 42.051 seconds.
+- Tile-reader repeat compared against the previous run with `rms_diff = 0.0` and `max_abs_diff = 0.0`.
 - Integration backend: cuda.
 - Integration tiles: 70.
 - Final master: `runs\real_m5_lum_subset\gpwbpp_cuda_v2\integration\master_Lum.fits`.
@@ -38,13 +40,13 @@
 
 The first real-data attempt failed because the input FITS files contain
 `BZERO/BSCALE/BLANK` scaling keywords. Astropy does not allow direct memmap
-access to scaled `.data`. GPWBPP now falls back from memmap to `memmap=False`
-for such files.
+access to scaled `.data`. GPWBPP first used a `memmap=False` fallback, then
+added `FitsImageReader` to apply scaling per tile for light calibration, warp,
+local normalization, and integration.
 
 ## Known Limitations
 
-- The fallback can load a scaled FITS image into RAM. A future tile reader should
-  keep raw memmap data and apply BSCALE/BZERO per tile.
+- Master calibration frame construction still uses full-frame CPU arrays.
 - This is not yet a PixInsight/WBPP timing comparison.
 - The subset is intentionally tiny and is only a real-data smoke test.
 

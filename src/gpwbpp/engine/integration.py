@@ -8,7 +8,7 @@ import numpy as np
 
 from gpwbpp.cpu.integration import weighted_integrate_stack
 from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import FitsTileWriter, open_fits_image
+from gpwbpp.io.fits_io import FitsImageReader, FitsTileWriter
 from gpwbpp.io.json_io import read_json, write_json
 
 
@@ -119,14 +119,9 @@ def integrate_registered_frames(
 
     for filt, items in by_filter.items():
         with ExitStack() as stack:
-            source_hdus = [stack.enter_context(open_fits_image(item["path"], memmap=True)) for item in items]
-            coverage_hdus = [
-                stack.enter_context(open_fits_image(item["coverage_path"], memmap=True)) for item in items
-            ]
-            first = source_hdus[0][0].data
-            if first is None:
-                raise ValueError(f"integration source has no primary image: {items[0]['path']}")
-            height, width = first.shape
+            source_readers = [stack.enter_context(FitsImageReader(item["path"])) for item in items]
+            coverage_readers = [stack.enter_context(FitsImageReader(item["coverage_path"])) for item in items]
+            height, width = source_readers[0].shape
             master_path = out_dir / f"master_{filt}.fits"
             weight_path = out_dir / f"weight_map_{filt}.fits"
             coverage_path = out_dir / f"coverage_map_{filt}.fits"
@@ -145,13 +140,9 @@ def integrate_registered_frames(
             for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
                 frame_tiles = []
                 coverage_tiles = []
-                for src_hdu, cov_hdu in zip(source_hdus, coverage_hdus, strict=True):
-                    src = src_hdu[0].data
-                    cov = cov_hdu[0].data
-                    if src is None or cov is None:
-                        raise ValueError("integration source or coverage data is missing")
-                    frame_tiles.append(np.asarray(src[tile.y0 : tile.y1, tile.x0 : tile.x1], dtype=np.float32))
-                    coverage_tiles.append(np.asarray(cov[tile.y0 : tile.y1, tile.x0 : tile.x1], dtype=np.float32))
+                for src_reader, cov_reader in zip(source_readers, coverage_readers, strict=True):
+                    frame_tiles.append(src_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
+                    coverage_tiles.append(cov_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
                 stack_tile = np.stack(frame_tiles, axis=0)
                 coverage_tile = np.stack(coverage_tiles, axis=0)
                 weights = np.asarray([frame_weights[item["frame_id"]] for item in items], dtype=np.float32)

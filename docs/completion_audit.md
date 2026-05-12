@@ -38,7 +38,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | Python package installable | `pyproject.toml`; editable install used throughout | covered |
 | Project-local virtual environment | `.venv` used for commands | covered |
 | Metadata scan and planning | `gpwbpp scan`, `gpwbpp plan`, tests | covered |
-| FITS metadata and scaled FITS handling | `src/gpwbpp/io/fits_io.py`, real-data M5/Lum status | covered with RAM fallback limitation |
+| FITS metadata and scaled FITS handling | `src/gpwbpp/io/fits_io.py`, `runs/checkpoints/out_of_core_fits_tile_reader_status.md` | covered for light/warp/LN/integration tile paths |
 | XISF metadata warning path | `src/gpwbpp/metadata/xisf_reader.py`, tests | minimal covered |
 | Synthetic data/golden truth | `src/gpwbpp/synthetic/generator.py`, tests | covered baseline |
 | CPU calibration baseline | `src/gpwbpp/cpu`, tests | covered |
