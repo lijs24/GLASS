@@ -67,6 +67,18 @@ def _two_light_star_dataset(tmp_path: Path) -> Path:
     return root
 
 
+def _two_dark_group_dataset(tmp_path: Path) -> Path:
+    root = tmp_path / "two_dark_groups"
+    shape = (24, 24)
+    _write_test_frame(root / "bias" / "bias_001.fits", "bias", np.zeros(shape, dtype=np.float32), 0.0)
+    _write_test_frame(root / "dark" / "dark_060.fits", "dark", np.full(shape, 10.0, dtype=np.float32), 60.0)
+    _write_test_frame(root / "dark" / "dark_120.fits", "dark", np.full(shape, 20.0, dtype=np.float32), 120.0)
+    _write_test_frame(root / "flat" / "flat_001.fits", "flat", np.ones(shape, dtype=np.float32), 60.0)
+    _write_test_frame(root / "light" / "light_060.fits", "light", np.full(shape, 100.0, dtype=np.float32), 60.0)
+    _write_test_frame(root / "light" / "light_120.fits", "light", np.full(shape, 200.0, dtype=np.float32), 120.0)
+    return root
+
+
 def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     cuda_module_or_skip()
     manifest = tmp_path / "manifest.json"
@@ -415,6 +427,50 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert moving["inliers"] == 10
     assert np.allclose(np.asarray(moving["matrix"], dtype=np.float32), np.asarray(similarity_matrix, dtype=np.float32))
     assert any("external_registration_application=matrix_bilinear" == item for item in moving["warnings"])
+
+
+def test_cli_resident_cuda_uses_planner_matching_master_sets(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_dark_group_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_matching_groups"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    master_stats = resident["artifacts"][0]["master_stats"]
+
+    assert master_stats["calibration_group_policy"] == "planner_matching_groups_per_light"
+    assert master_stats["set_count"] == 2
+    assert {item["dark_count"] for item in master_stats["sets"].values()} == {1}
+    assert len({item["dark_group"] for item in master_stats["sets"].values()}) == 2
 
 
 def test_resident_frame_exclusion_matches_id_name_or_stem():

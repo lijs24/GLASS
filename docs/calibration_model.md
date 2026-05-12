@@ -19,6 +19,13 @@ effective value is written into `calibration_artifacts.json` or
 fields with dust shadows or clipped pixels because too small a floor can create
 extreme calibrated values that break downstream star matching.
 
+Resident CUDA calibration now follows the planner's per-light matching groups.
+Before each light is calibrated, the resident runner loads or builds the
+matching bias/dark/flat master set from `LightPlan.matching_*_group`, uploads
+that set to the resident stack, and records the set in `resident_artifacts.json`.
+This avoids the earlier aggregate-same-shape shortcut and keeps resident output
+comparable with tile-mode calibration.
+
 Light calibration:
 
 ```text

@@ -270,6 +270,153 @@ def _resident_star_registration_score(result: dict[str, Any]) -> tuple[int, floa
     return inliers, -finite_rms, support
 
 
+def _group_map(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {str(group["group_id"]): group for group in plan.get("groups", [])}
+
+
+def _find_matching_bias_for_group(
+    target_group: dict[str, Any] | None,
+    groups: dict[str, dict[str, Any]],
+) -> str | None:
+    if target_group is None:
+        return None
+    for group_id, group in groups.items():
+        if group.get("group_type") != "bias":
+            continue
+        if (
+            group.get("gain") == target_group.get("gain")
+            and group.get("offset") == target_group.get("offset")
+            and group.get("binning") == target_group.get("binning")
+            and group.get("shape") == target_group.get("shape")
+        ):
+            return group_id
+    return None
+
+
+def _records_for_group(
+    group_id: str | None,
+    frames: dict[str, dict[str, Any]],
+    groups: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if group_id is None or group_id not in groups:
+        return []
+    return [frames[frame_id] for frame_id in groups[group_id].get("frames", []) if frame_id in frames]
+
+
+def _light_calibration_groups(plan: dict[str, Any]) -> dict[str, dict[str, str | None]]:
+    by_frame: dict[str, dict[str, str | None]] = {}
+    for light_plan in plan.get("light_plans", []):
+        for frame_id in light_plan.get("frames", []):
+            by_frame[str(frame_id)] = {
+                "bias_group": light_plan.get("matching_bias_group"),
+                "dark_group": light_plan.get("matching_dark_group"),
+                "flat_group": light_plan.get("matching_flat_group"),
+            }
+    return by_frame
+
+
+def _master_set_cache_key(
+    filter_name: str | None,
+    height: int,
+    width: int,
+    bias_group: str | None,
+    dark_group: str | None,
+    flat_group: str | None,
+) -> str:
+    return (
+        f"{_safe_filter_name(filter_name)}_{width}x{height}_"
+        f"bias-{bias_group or 'none'}_dark-{dark_group or 'none'}_flat-{flat_group or 'none'}"
+    )
+
+
+def _load_or_build_matching_masters(
+    run: Path,
+    filter_name: str | None,
+    height: int,
+    width: int,
+    frames: dict[str, dict[str, Any]],
+    groups: dict[str, dict[str, Any]],
+    bias_group: str | None,
+    dark_group: str | None,
+    flat_group: str | None,
+    policy: CalibrationPolicy,
+) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None, dict[str, Any], float | None]:
+    cache = run / "calib_cache" / "resident_masters"
+    cache.mkdir(parents=True, exist_ok=True)
+    key = _master_set_cache_key(filter_name, height, width, bias_group, dark_group, flat_group)
+    bias_path = cache / f"{key}_master_bias.npy"
+    dark_path = cache / f"{key}_master_dark.npy"
+    flat_path = cache / f"{key}_master_flat.npy"
+    stats_path = cache / f"{key}_master_stats.json"
+    if stats_path.exists():
+        stats = read_json(stats_path)
+        master_bias = np.load(bias_path) if bias_path.exists() else None
+        master_dark = np.load(dark_path) if dark_path.exists() else None
+        master_flat = np.load(flat_path) if flat_path.exists() else None
+        return master_bias, master_dark, master_flat, stats, stats.get("dark_exposure_s")
+
+    bias_records = _records_for_group(bias_group, frames, groups)
+    dark_records = _records_for_group(dark_group, frames, groups)
+    flat_records = _records_for_group(flat_group, frames, groups)
+
+    master_bias = None
+    bias_paths = _paths_for_records(bias_records)
+    if bias_paths:
+        master_bias = make_master_bias(bias_paths).data
+
+    master_dark = None
+    dark_paths = _paths_for_records(dark_records)
+    if dark_paths:
+        dark_bias = None if policy.master_dark_includes_bias else master_bias
+        master_dark = make_master_dark(dark_paths, dark_bias).data
+
+    master_flat = None
+    flat_paths = _paths_for_records(flat_records)
+    if flat_paths:
+        flat_group_record = groups.get(flat_group or "")
+        flat_bias_group = _find_matching_bias_for_group(flat_group_record, groups)
+        flat_bias = master_bias
+        if flat_bias_group != bias_group:
+            flat_bias_records = _records_for_group(flat_bias_group, frames, groups)
+            flat_bias_paths = _paths_for_records(flat_bias_records)
+            flat_bias = make_master_bias(flat_bias_paths).data if flat_bias_paths else None
+        master_flat = make_master_flat(
+            flat_paths,
+            master_bias=flat_bias,
+            normalization=policy.flat_normalization,
+            flat_floor=policy.flat_floor,
+        ).data
+
+    dark_exposures = [
+        float(frame["exposure_s"]) for frame in dark_records if frame.get("exposure_s") is not None
+    ]
+    dark_exposure = float(np.median(dark_exposures)) if dark_exposures else None
+    stats = {
+        "calibration_group_policy": "planner_matching_groups_per_light",
+        "filter": filter_name,
+        "shape": {"height": height, "width": width},
+        "bias_group": bias_group,
+        "dark_group": dark_group,
+        "flat_group": flat_group,
+        "bias_count": len(bias_paths),
+        "dark_count": len(dark_paths),
+        "flat_count": len(flat_paths),
+        "dark_exposure_s": dark_exposure,
+        "bias": None if master_bias is None else image_stats(master_bias),
+        "dark": None if master_dark is None else image_stats(master_dark),
+        "flat": None if master_flat is None else image_stats(master_flat),
+        "master_dark_includes_bias": policy.master_dark_includes_bias,
+    }
+    if master_bias is not None:
+        np.save(bias_path, master_bias)
+    if master_dark is not None:
+        np.save(dark_path, master_dark)
+    if master_flat is not None:
+        np.save(flat_path, master_flat)
+    write_json(stats_path, stats)
+    return master_bias, master_dark, master_flat, stats, dark_exposure
+
+
 def _load_or_build_aggregate_masters(
     run: Path,
     filter_name: str | None,
@@ -403,6 +550,8 @@ def run_resident_calibration_integration(
     state = RunState(run_id=run.name or "gpwbpp-run", created_at=now_iso(), current_stage="resident_calibration")
 
     frames = _frame_map(plan)
+    groups = _group_map(plan)
+    light_calibration_groups = _light_calibration_groups(plan)
     policy = _policy_from_plan(plan)
     if flat_floor is not None:
         if flat_floor <= 0:
@@ -451,46 +600,12 @@ def run_resident_calibration_integration(
             height = int(light_frames[0]["height"])
             width = int(light_frames[0]["width"])
             filt = _safe_filter_name(filter_name)
-            bias_records = [
-                frame for frame in _frames_by_type(plan, "bias") if _same_shape(frame, height, width)
-            ]
-            dark_records = [
-                frame for frame in _frames_by_type(plan, "dark") if _same_shape(frame, height, width)
-            ]
-            flat_records = [
-                frame
-                for frame in _frames_by_type(plan, "flat")
-                if _same_shape(frame, height, width)
-                and (frame.get("filter") == filter_name or frame.get("filter") in {None, ""})
-            ]
-            if not flat_records:
-                flat_records = [
-                    frame for frame in _frames_by_type(plan, "flat") if _same_shape(frame, height, width)
-                ]
-            dark_exposures = [
-                float(frame["exposure_s"]) for frame in dark_records if frame.get("exposure_s") is not None
-            ]
-            dark_exposure = float(np.median(dark_exposures)) if dark_exposures else None
-
-            master_start = perf_counter()
-            master_bias, master_dark, master_flat, master_stats = _load_or_build_aggregate_masters(
-                run,
-                filter_name,
-                height,
-                width,
-                bias_records,
-                dark_records,
-                flat_records,
-                policy,
-            )
-            master_elapsed = perf_counter() - master_start
+            master_elapsed = 0.0
+            master_stats_sets: dict[str, Any] = {}
 
             allocate_start = perf_counter()
             stack = cuda_module.ResidentCalibratedStack(len(light_frames), height, width)
-            stack.set_calibration_masters(master_bias, master_dark, master_flat)
             allocate_elapsed = perf_counter() - allocate_start
-            del master_bias, master_dark, master_flat
-            gc.collect()
 
             registration_start = perf_counter()
             selected_reference_frame_id = reference_frame_id or external_reference_frame_id
@@ -512,14 +627,49 @@ def run_resident_calibration_integration(
             per_frame_s = []
             per_frame_registration_s = []
             frame_weight_values: list[float] = []
+            current_master_key: str | None = None
+            current_dark_exposure: float | None = None
             for index, frame in enumerate(light_frames):
                 frame_start = perf_counter()
+                calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
+                bias_group = calibration_groups.get("bias_group")
+                dark_group = calibration_groups.get("dark_group")
+                flat_group = calibration_groups.get("flat_group")
+                master_key = _master_set_cache_key(
+                    filter_name,
+                    height,
+                    width,
+                    bias_group,
+                    dark_group,
+                    flat_group,
+                )
+                if master_key != current_master_key:
+                    master_set_start = perf_counter()
+                    master_bias, master_dark, master_flat, stats, dark_exposure = _load_or_build_matching_masters(
+                        run,
+                        filter_name,
+                        height,
+                        width,
+                        frames,
+                        groups,
+                        bias_group,
+                        dark_group,
+                        flat_group,
+                        policy,
+                    )
+                    stack.set_calibration_masters(master_bias, master_dark, master_flat)
+                    master_elapsed += perf_counter() - master_set_start
+                    master_stats_sets[master_key] = stats
+                    current_master_key = master_key
+                    current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
+                    del master_bias, master_dark, master_flat
+                    gc.collect()
                 light = read_fits_data(frame["path"], dtype=np.float32)
                 stack.calibrate_frame(
                     index,
                     light,
                     float(frame.get("exposure_s") or 0.0),
-                    None if dark_exposure is None else float(dark_exposure),
+                    current_dark_exposure,
                     asdict(policy),
                 )
                 frame_weight = 1.0
@@ -1021,6 +1171,15 @@ def run_resident_calibration_integration(
                 write_fits_data(high_rejection_path, high_rejection_map, {"IMAGETYP": "rej_high", "FILTER": filter_name})
             write_elapsed = perf_counter() - write_start
 
+            first_master_stats = next(iter(master_stats_sets.values()), {})
+            master_stats = {
+                "calibration_group_policy": "planner_matching_groups_per_light",
+                "set_count": len(master_stats_sets),
+                "bias_count": first_master_stats.get("bias_count"),
+                "dark_count": first_master_stats.get("dark_count"),
+                "flat_count": first_master_stats.get("flat_count"),
+                "sets": master_stats_sets,
+            }
             memory_estimate = _memory_estimate(len(light_frames), height, width)
             resident_artifacts.append(
                 {
