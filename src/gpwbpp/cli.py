@@ -350,6 +350,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 integration_rejection=args.integration_rejection,
                 flat_floor=args.flat_floor,
                 resident_registration=args.resident_registration,
+                resident_registration_max_shift=args.resident_registration_max_shift,
+                resident_subpixel_radius_steps=args.resident_subpixel_radius_steps,
+                resident_subpixel_step=args.resident_subpixel_step,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
             ),
@@ -583,10 +586,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--flat-floor", type=float, help="override calibration flat floor for this run")
     run.add_argument(
         "--resident-registration",
-        choices=["off", "translation_preview"],
+        choices=["off", "translation_preview", "translation_ncc_subpixel"],
         default="off",
-        help="resident CUDA registration mode; translation_preview uses downsampled phase correlation",
+        help=(
+            "resident CUDA registration mode; translation_preview uses downsampled phase correlation, "
+            "translation_ncc_subpixel uses resident GPU NCC plus subpixel refinement"
+        ),
     )
+    run.add_argument("--resident-registration-max-shift", type=int, default=128)
+    run.add_argument("--resident-subpixel-radius-steps", type=int, default=4)
+    run.add_argument("--resident-subpixel-step", type=float, default=0.25)
     run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for resident registration",

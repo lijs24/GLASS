@@ -246,6 +246,9 @@ def run_resident_calibration_integration(
     integration_rejection: str = "none",
     flat_floor: float | None = None,
     resident_registration: str = "off",
+    resident_registration_max_shift: int = 128,
+    resident_subpixel_radius_steps: int = 4,
+    resident_subpixel_step: float = 0.25,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
 ) -> RunState:
@@ -253,8 +256,14 @@ def run_resident_calibration_integration(
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
     if integration_weighting not in {"auto", "none"}:
         raise ValueError("resident CUDA mode currently supports integration weighting=none only")
-    if resident_registration not in {"off", "translation_preview"}:
-        raise ValueError("resident_registration must be off or translation_preview")
+    if resident_registration not in {"off", "translation_preview", "translation_ncc_subpixel"}:
+        raise ValueError("resident_registration must be off, translation_preview, or translation_ncc_subpixel")
+    if resident_registration_max_shift < 0:
+        raise ValueError("resident_registration_max_shift must be non-negative")
+    if resident_subpixel_radius_steps < 0:
+        raise ValueError("resident_subpixel_radius_steps must be non-negative")
+    if resident_subpixel_step <= 0:
+        raise ValueError("resident_subpixel_step must be positive")
 
     cuda_module = _cuda_module_required()
     plan = read_json(plan_path)
@@ -413,6 +422,77 @@ def run_resident_calibration_integration(
                     gc.collect()
             load_calibrate_elapsed = perf_counter() - load_calibrate_start
 
+            if resident_registration == "translation_ncc_subpixel":
+                reference_index = next(
+                    index for index, frame in enumerate(light_frames) if frame["id"] == reference_frame["id"]
+                )
+                for index, frame in enumerate(light_frames):
+                    registration_frame_start = perf_counter()
+                    warnings = []
+                    status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
+                    dx = 0.0
+                    dy = 0.0
+                    score = float("nan")
+                    try:
+                        if status == "excluded":
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("excluded by resident frame mask")
+                        elif frame["id"] == reference_frame["id"]:
+                            status = "reference"
+                        else:
+                            coarse = stack.estimate_translation_to_reference(
+                                reference_index,
+                                index,
+                                resident_registration_max_shift,
+                                resident_registration_max_shift,
+                            )
+                            refined = stack.estimate_translation_subpixel_to_reference(
+                                reference_index,
+                                index,
+                                float(coarse["dx"]),
+                                float(coarse["dy"]),
+                                resident_subpixel_radius_steps,
+                                resident_subpixel_step,
+                            )
+                            dx = float(refined["dx"])
+                            dy = float(refined["dy"])
+                            score = float(refined["score"])
+                            stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
+                            warnings.extend(
+                                [
+                                    f"coarse_dx={int(coarse['dx'])}",
+                                    f"coarse_dy={int(coarse['dy'])}",
+                                    f"coarse_score={float(coarse['score']):.6g}",
+                                    f"subpixel_score={score:.6g}",
+                                ]
+                            )
+                    except Exception as exc:
+                        status = "failed"
+                        frame_weight_values[index] = 0.0
+                        frame_weights[frame["id"]] = 0.0
+                        warnings.append(str(exc))
+                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_results.append(
+                        RegistrationResult(
+                            frame_id=str(frame["id"]),
+                            reference_frame_id=str(reference_frame["id"]),
+                            transform_model="translation_ncc_subpixel",
+                            matrix=translation_matrix(dx, dy),
+                            matched_stars=0,
+                            inliers=0 if status in {"failed", "excluded"} else 1,
+                            rms_px=0.0 if status not in {"failed", "excluded"} else float("nan"),
+                            status=status,
+                            warnings=warnings
+                            + [
+                                f"max_shift={resident_registration_max_shift}",
+                                f"subpixel_radius_steps={resident_subpixel_radius_steps}",
+                                f"subpixel_step={resident_subpixel_step}",
+                                "resident GPU NCC registration; no star-model RMS yet",
+                            ],
+                        )
+                    )
+
             integrate_start = perf_counter()
             coverage_map = None
             low_rejection_map = None
@@ -482,6 +562,9 @@ def run_resident_calibration_integration(
                         "mode": resident_registration,
                         "reference_frame_id": str(reference_frame["id"]),
                         "preview_scale": preview_scale,
+                        "max_shift": resident_registration_max_shift,
+                        "subpixel_radius_steps": resident_subpixel_radius_steps,
+                        "subpixel_step": resident_subpixel_step,
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                         "excluded_frame_tokens": sorted(excluded_tokens),
                     },
@@ -500,7 +583,7 @@ def run_resident_calibration_integration(
                     "notes": [
                         "Raw light frames are uploaded one at a time into a reusable device buffer.",
                         "Calibrated frames remain resident in VRAM until integration completes.",
-                        "Resident registration is optional and currently limited to preview-scale integer translation.",
+                        "Resident registration is optional and currently limited to translation.",
                         "Local normalization is not included in the resident path in the current gate.",
                     ],
                 }
@@ -547,10 +630,10 @@ def run_resident_calibration_integration(
                 {
                     "schema_version": 1,
                     "source_stage": "resident_calibrated_stack",
-                    "transform_model": "translation_preview",
+                    "transform_model": resident_registration,
                     "results": registration_results,
                     "warnings": [
-                        "resident registration uses downsampled phase correlation and integer-pixel CUDA warp",
+                        "resident registration is translation-only in the current gate",
                         "matched_stars/inliers/rms are placeholders until star-based registration is wired in",
                     ],
                 },
@@ -594,7 +677,7 @@ def run_resident_calibration_integration(
         state.current_stage = "integration"
         state.warnings.append(
             "resident CUDA mode is a high-VRAM calibration plus integration path; "
-            "registration is preview-scale translation only and LN is not yet included"
+            "registration is translation only and LN is not yet included"
         )
         return state
     except Exception as exc:

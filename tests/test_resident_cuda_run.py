@@ -66,6 +66,57 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0
 
 
+def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(small_fits_dataset, tmp_path: Path):
+    cuda_module_or_skip()
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_ncc"
+
+    assert main(["scan", "--root", str(small_fits_dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "translation_ncc_subpixel",
+            "--resident-registration-max-shift",
+            "4",
+            "--resident-subpixel-radius-steps",
+            "2",
+            "--resident-subpixel-step",
+            "0.5",
+        ]
+    ) == 0
+
+    integration = read_json(run / "integration_results.json")
+    registration = read_json(run / "registration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+    assert integration["outputs"][0]["resident_registration"] == "translation_ncc_subpixel"
+    assert registration["transform_model"] == "translation_ncc_subpixel"
+    assert registration["results"][0]["status"] == "reference"
+    assert resident_registration["mode"] == "translation_ncc_subpixel"
+    assert resident_registration["max_shift"] == 4
+    assert resident_registration["subpixel_radius_steps"] == 2
+    assert resident_registration["subpixel_step"] == 0.5
+
+
 def test_resident_frame_exclusion_matches_id_name_or_stem():
     frame = {
         "id": "F000196",
