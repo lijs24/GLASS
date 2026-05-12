@@ -58,7 +58,32 @@ def _master_paths(run_dir: Path | None) -> list[str]:
     return [str(item.get("master_path")) for item in payload.get("outputs", []) if item.get("master_path")]
 
 
-def _write_manual(path: Path, rows: list[dict[str, Any]], gpwbpp_masters: list[str]) -> None:
+def _run_timing(run_dir: Path | None) -> dict[str, Any] | None:
+    if run_dir is None:
+        return None
+    timing_path = run_dir / "run_timing.json"
+    if not timing_path.exists():
+        return None
+    timing = read_json(timing_path)
+    return timing if isinstance(timing, dict) else None
+
+
+def _resolve_gpwbpp_time(
+    run_dir: Path | None, explicit_seconds: float | None
+) -> tuple[float | None, str | None, list[dict[str, Any]]]:
+    if explicit_seconds is not None:
+        return float(explicit_seconds), "explicit_cli", []
+    timing = _run_timing(run_dir)
+    if timing is None:
+        return None, None, []
+    total = timing.get("total_elapsed_s")
+    if total is None:
+        return None, None, []
+    stages = timing.get("stages", [])
+    return float(total), "run_timing_json", stages if isinstance(stages, list) else []
+
+
+def _write_manual(path: Path, rows: list[dict[str, Any]], gpwbpp_masters: list[str], gpwbpp_time: float | None) -> None:
     counts: dict[str, int] = {}
     for row in rows:
         counts[str(row.get("frame_type"))] = counts.get(str(row.get("frame_type")), 0) + 1
@@ -83,6 +108,7 @@ def _write_manual(path: Path, rows: list[dict[str, Any]], gpwbpp_masters: list[s
             "4. Keep output in a separate WBPP directory; do not modify the original input files.",
             "5. Record wall-clock elapsed seconds and save/export the WBPP log or process settings if available.",
             "6. Put the WBPP final master path and elapsed seconds into `timing_template.json`.",
+            "   GPWBPP time is prefilled when `run_timing.json` exists in the GPWBPP run directory.",
             "7. Run the generated `compare_command.ps1` after replacing the placeholder reference path/time.",
             "",
             "## GPWBPP Masters",
@@ -93,6 +119,7 @@ def _write_manual(path: Path, rows: list[dict[str, Any]], gpwbpp_masters: list[s
         lines.extend(f"- `{value}`" for value in gpwbpp_masters)
     else:
         lines.append("- No GPWBPP integration master was found in the supplied run directory.")
+    lines.extend(["", f"GPWBPP elapsed seconds: `{gpwbpp_time}`"])
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -112,18 +139,21 @@ def create_blackbox_package(
     run = Path(gpwbpp_run) if gpwbpp_run is not None else None
     rows = _frame_rows(manifest)
     masters = _master_paths(run)
+    resolved_gpwbpp_time, timing_source, stage_timings = _resolve_gpwbpp_time(run, gpwbpp_time_seconds)
     csv_path = out / "input_frames.csv"
     manual_path = out / "wbpp_manual_run.md"
     timing_path = out / "timing_template.json"
     compare_path = out / "compare_command.ps1"
     _write_csv(csv_path, rows)
-    _write_manual(manual_path, rows, masters)
+    _write_manual(manual_path, rows, masters, resolved_gpwbpp_time)
 
     timing = {
         "manifest_path": str(manifest_path),
         "plan_path": None if plan_path is None else str(plan_path),
         "gpwbpp_run": None if run is None else str(run),
-        "gpwbpp_time_seconds": gpwbpp_time_seconds,
+        "gpwbpp_time_seconds": resolved_gpwbpp_time,
+        "gpwbpp_timing_source": timing_source,
+        "gpwbpp_stage_timings": stage_timings,
         "gpwbpp_master_paths": masters,
         "reference_label": reference_label,
         "reference_time_seconds": None,
@@ -140,7 +170,7 @@ def create_blackbox_package(
                 "$gpwbppMaster = " + repr(gp_master),
                 "$referenceMaster = '<WBPP_MASTER_FITS>'",
                 "$gpwbppSeconds = "
-                + ("<GPWBPP_SECONDS>" if gpwbpp_time_seconds is None else repr(float(gpwbpp_time_seconds))),
+                + ("<GPWBPP_SECONDS>" if resolved_gpwbpp_time is None else repr(float(resolved_gpwbpp_time))),
                 "$referenceSeconds = '<WBPP_SECONDS>'",
                 ".\\.venv\\Scripts\\gpwbpp compare --gpwbpp $gpwbppMaster --reference $referenceMaster --out "
                 + repr(str(out / "gpwbpp_vs_wbpp.html"))
@@ -175,6 +205,12 @@ def finalize_blackbox_package(timing_path: str | Path, out_dir: str | Path | Non
     gpwbpp_masters = [str(value) for value in timing.get("gpwbpp_master_paths", [])]
     reference_masters = [str(value) for value in timing.get("reference_master_paths", [])]
     reference_label = str(timing.get("reference_label") or "PixInsight WBPP")
+    if gpwbpp_time is None:
+        run = Path(timing["gpwbpp_run"]) if timing.get("gpwbpp_run") else None
+        gpwbpp_time, timing_source, stage_timings = _resolve_gpwbpp_time(run, None)
+        timing["gpwbpp_time_seconds"] = gpwbpp_time
+        timing["gpwbpp_timing_source"] = timing_source
+        timing["gpwbpp_stage_timings"] = stage_timings
 
     errors: list[str] = []
     if gpwbpp_time is None:
@@ -231,8 +267,10 @@ def finalize_blackbox_package(timing_path: str | Path, out_dir: str | Path | Non
         "gpwbpp_time_seconds": float(gpwbpp_time),
         "reference_time_seconds": float(reference_time),
         "reference_label": reference_label,
+        "gpwbpp_timing_source": timing.get("gpwbpp_timing_source"),
         "comparison_count": len(comparisons),
         "speedup_vs_reference": speedups[0] if speedups else None,
+        "speedup_observed": bool(speedups and speedups[0] > 1.0),
         "all_gpwbpp_faster": all(bool(item["gpwbpp_faster"]) for item in comparisons),
         "comparisons": comparisons,
     }

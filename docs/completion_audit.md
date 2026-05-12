@@ -58,7 +58,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | Install and CLI smoke validation | `runs/checkpoints/validation_status.md` | covered |
 | HTML report | report tests and run artifacts | covered baseline |
 | PixInsight/WBPP numerical comparison | `gpwbpp compare`, black-box handoff, `gpwbpp blackbox-finalize` | blocked pending WBPP output |
-| PixInsight/WBPP timing comparison | timing fields, handoff package, finalize command | blocked pending WBPP run/log |
+| PixInsight/WBPP timing comparison | timing fields, handoff package, finalize command, `runs/checkpoints/blackbox_timing_autofill_status.md` | GPWBPP timing source automated; blocked pending WBPP run/log |
 | Observed speedup over WBPP | none | not achieved |
 
 ## Current Blocking Items
