@@ -39,7 +39,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | Project-local virtual environment | `.venv` used for commands | covered |
 | Metadata scan and planning | `gpwbpp scan`, `gpwbpp plan`, tests | covered |
 | FITS metadata and scaled FITS handling | `src/gpwbpp/io/fits_io.py`, `runs/checkpoints/out_of_core_fits_tile_reader_status.md` | covered for light/warp/LN/integration tile paths |
-| Master calibration out-of-core path | `src/gpwbpp/engine/pipeline.py`, `runs/checkpoints/streaming_master_frames_status.md`, `runs/checkpoints/exact_flat_median_status.md`, `runs/checkpoints/bounded_master_accumulator_status.md` | covered for mean master bias/dark/flat, bounded tile accumulation, and exact median flat normalization |
+| Master calibration out-of-core path | `src/gpwbpp/engine/pipeline.py`, `src/gpwbpp/gpu/master_frames.py`, `runs/checkpoints/streaming_master_frames_status.md`, `runs/checkpoints/exact_flat_median_status.md`, `runs/checkpoints/bounded_master_accumulator_status.md`, `runs/checkpoints/gpu_master_accumulator_status.md` | covered for mean master bias/dark/flat, bounded tile accumulation, and exact median flat normalization |
 | XISF metadata warning path | `src/gpwbpp/metadata/xisf_reader.py`, tests | minimal covered |
 | Synthetic data/golden truth | `src/gpwbpp/synthetic/generator.py`, tests | covered baseline |
 | CPU calibration baseline | `src/gpwbpp/cpu`, tests | covered |

@@ -14,6 +14,11 @@ median-normalized flats use a temporary float32 `memmap` scratch file and an
 in-place partition to compute an exact median without keeping the full image in
 process memory.
 
+The standalone `gpwbpp.gpu.master_frames` helpers use the same bounded input
+pattern: FITS tile reads plus per-tile accumulators. When the native CUDA module
+is available they reuse the CUDA weighted-accumulation kernel; otherwise they
+fall back to a CPU tile accumulator instead of a full-frame stack.
+
 Integration uses tile streaming. For `rejection=none`, weighted mean
 integration uses fixed-size sum, weight-sum, and coverage accumulators instead
 of a per-tile 3D frame stack. Rejection modes still build a tile stack because

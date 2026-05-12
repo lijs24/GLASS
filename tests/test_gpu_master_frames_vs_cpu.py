@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from gpwbpp.cpu.master_frames import make_master_bias as make_master_bias_cpu
+import gpwbpp.gpu.master_frames as master_frames_module
 from gpwbpp.gpu.master_frames import (
     make_master_bias,
     make_master_dark,
@@ -13,6 +14,22 @@ from gpwbpp.gpu.master_frames import (
 )
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
 from tests.conftest import cuda_module_or_skip
+
+
+def test_mean_stack_streaming_accumulator_without_cuda_stack(tmp_path: Path, monkeypatch):
+    out = tmp_path / "synthetic"
+    generate_synthetic_dataset(out, frames=4, width=32, height=24)
+    bias_paths = sorted((out / "bias").glob("*.fits"))
+    cpu = make_master_bias_cpu(bias_paths)
+
+    monkeypatch.setattr(master_frames_module, "_native_module", lambda: None)
+
+    def fail_stack(*args, **kwargs):
+        raise AssertionError("mean stack helper should not build a 3D tile stack")
+
+    monkeypatch.setattr(np, "stack", fail_stack)
+    streaming = mean_stack_paths_tile_streaming(bias_paths, tile_size=11)
+    assert np.allclose(streaming.data, cpu.data, rtol=1e-5, atol=1e-5)
 
 
 def test_gpu_mean_stack_matches_cpu(tmp_path: Path):
