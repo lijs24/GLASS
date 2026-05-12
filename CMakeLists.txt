@@ -24,6 +24,7 @@ if(GPWBPP_BUILD_PYTHON_CUDA)
     cpp/src/native_bindings.cpp
     cpp/cuda/smoke_add_kernels.cu
     cpp/cuda/calibration_kernels.cu
+    cpp/cuda/master_frame_kernels.cu
   )
   target_include_directories(_gpwbpp_cuda_native PRIVATE cpp/include)
   target_link_libraries(_gpwbpp_cuda_native PRIVATE CUDA::cudart)

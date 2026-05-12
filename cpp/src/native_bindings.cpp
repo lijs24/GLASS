@@ -25,6 +25,8 @@ void gpwbpp_calibrate_tile_f32_launch(
     float dark_scale,
     float flat_floor,
     float pedestal);
+void gpwbpp_mean_stack_tiles_f32_launch(
+    const float* stack, float* out, std::size_t frame_count, std::size_t pixels_per_frame);
 
 namespace {
 
@@ -281,6 +283,48 @@ py::array_t<float> calibrate_tile_f32(
   return out;
 }
 
+py::array_t<float> mean_stack_tiles_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> stack) {
+  const py::buffer_info stack_info = stack.request();
+  if (stack_info.ndim != 3) {
+    throw std::invalid_argument("stack must have shape (frame_count, height, width)");
+  }
+  const auto frame_count = static_cast<std::size_t>(stack_info.shape[0]);
+  const auto height = static_cast<py::ssize_t>(stack_info.shape[1]);
+  const auto width = static_cast<py::ssize_t>(stack_info.shape[2]);
+  if (frame_count == 0 || height <= 0 || width <= 0) {
+    throw std::invalid_argument("stack dimensions must be non-empty");
+  }
+  const std::size_t pixels_per_frame = static_cast<std::size_t>(height * width);
+  const std::size_t n = frame_count * pixels_per_frame;
+  py::array_t<float> out({height, width});
+  const py::buffer_info out_info = out.request();
+
+  float* d_stack = nullptr;
+  float* d_out = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_stack, n * sizeof(float)), "cudaMalloc(stack)");
+    check_cuda(cudaMalloc(&d_out, pixels_per_frame * sizeof(float)), "cudaMalloc(out)");
+    check_cuda(
+        cudaMemcpy(d_stack, stack_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(stack)");
+    gpwbpp_mean_stack_tiles_f32_launch(d_stack, d_out, frame_count, pixels_per_frame);
+    check_cuda(cudaGetLastError(), "mean_stack_tiles_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "mean_stack_tiles_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(out_info.ptr, d_out, pixels_per_frame * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(mean tile)");
+  } catch (...) {
+    cudaFree(d_stack);
+    cudaFree(d_out);
+    throw;
+  }
+
+  cudaFree(d_stack);
+  cudaFree(d_out);
+  return out;
+}
+
 PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.doc() = "Native CUDA backend for GPWBPP";
   m.def("cuda_available", &cuda_available);
@@ -289,4 +333,5 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("smoke_add_f32", &smoke_add_f32);
   m.def("reduce_mean_tile_f32", &reduce_mean_tile_f32);
   m.def("calibrate_tile_f32", &calibrate_tile_f32);
+  m.def("mean_stack_tiles_f32", &mean_stack_tiles_f32);
 }

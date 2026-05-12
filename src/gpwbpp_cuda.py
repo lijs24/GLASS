@@ -173,3 +173,10 @@ def integrate_accumulate_mean_tile_f32(
     sums += frame * weight
     weight_sums += weight
     return sums, weight_sums
+
+
+def mean_stack_tiles_f32(stack: Any) -> np.ndarray:
+    native = _native()
+    if native is not None:
+        return np.asarray(native.mean_stack_tiles_f32(stack), dtype=np.float32)
+    return np.mean(np.asarray(stack, dtype=np.float32), axis=0).astype(np.float32)
