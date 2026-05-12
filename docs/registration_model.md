@@ -26,9 +26,10 @@ backend with `gpwbpp run --registration-method astroalign`. This path calls
 resulting similarity matrix, matched control-point count, preview-scale RMS, and
 MIT-license provenance in `registration_results.json`. It is the current
 open-source CPU correctness baseline for star/asterism matching and a bridge
-toward GPWBPP-owned GPU descriptor registration. The existing tile warp stage
-still applies only matrix translation terms, so non-translation similarity terms
-are recorded for audit but not yet fully consumed by integration.
+toward GPWBPP-owned GPU descriptor registration. The tile warp stage now uses a
+streaming bilinear matrix warp for fractional translation, similarity, and
+affine matrices, so astroalign's similarity matrix can flow into downstream
+integration without loading a full frame into memory.
 
 Warp skips non-reference frames with failed registration status and writes them
 to `warp_results.json` under `skipped_frames`; they do not enter local
@@ -133,8 +134,9 @@ cell for diagnostics. Real-data M38 tests with an NCC prior can improve pixel
 RMS, but the inlier evidence is still too weak to replace the fallback without
 descriptor-level matching.
 
-Similarity, affine, homography, Lanczos/resampling choices, and fully resident
-frame-to-frame transform application remain future warp gates.
+GPU similarity/affine warp, homography, Lanczos/resampling choices, and fully
+resident frame-to-frame non-translation transform application remain future warp
+gates.
 
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
