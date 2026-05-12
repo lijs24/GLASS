@@ -54,7 +54,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | Benchmarks | `benchmarks/*.py`, `runs/checkpoints/benchmark_status.md` | covered baseline |
 | HTML report | report tests and run artifacts | covered baseline |
 | PixInsight/WBPP numerical comparison | `gpwbpp compare`, black-box handoff | blocked pending WBPP output |
-| PixInsight/WBPP timing comparison | timing fields and handoff package | blocked pending WBPP run/log |
+| PixInsight/WBPP timing comparison | timing fields, handoff package, finalize command | blocked pending WBPP run/log |
 | Observed speedup over WBPP | none | not achieved |
 
 ## Current Blocking Items

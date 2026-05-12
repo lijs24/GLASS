@@ -58,3 +58,13 @@ runs/real_m5_lum_subset/wbpp_blackbox_handoff/
 
 It contains the frame CSV, manual clean-room WBPP instructions, timing template,
 and a compare command template with GPWBPP's measured 64.061 s runtime filled in.
+
+After the WBPP master path and elapsed seconds have been added to
+`timing_template.json`, finalize the comparison with:
+
+```powershell
+gpwbpp blackbox-finalize --timing runs/real_m5_lum_subset/wbpp_blackbox_handoff/timing_template.json --out runs/real_m5_lum_subset/wbpp_blackbox_handoff/final
+```
+
+If the reference fields are still missing, the command writes a blocked summary
+with concrete missing items and exits nonzero.

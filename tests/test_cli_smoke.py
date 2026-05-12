@@ -23,9 +23,19 @@ def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
 
 
 def test_cli_help_commands():
-    for command in ["scan", "plan", "run", "resume", "audit", "compare", "synthetic"]:
+    for command in [
+        "scan",
+        "plan",
+        "subset",
+        "run",
+        "resume",
+        "audit",
+        "compare",
+        "blackbox-package",
+        "blackbox-finalize",
+        "synthetic",
+    ]:
         try:
             main([command, "--help"])
         except SystemExit as exc:
             assert exc.code == 0
-

@@ -18,7 +18,7 @@ from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.metadata.scanner import scan_tree
 from gpwbpp.planner.plan_builder import build_processing_plan
 from gpwbpp.planner.subset import build_subset_manifest
-from gpwbpp.report.blackbox_package import create_blackbox_package
+from gpwbpp.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from gpwbpp.report.compare_report import compare_fits, write_compare_report
 from gpwbpp.report.html_report import write_html_report
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
@@ -322,6 +322,13 @@ def cmd_blackbox_package(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_blackbox_finalize(args: argparse.Namespace) -> int:
+    payload = finalize_blackbox_package(args.timing, args.out)
+    console.print(f"Wrote black-box finalize summary: {args.out or Path(args.timing).parent}")
+    console.print(payload)
+    return 0 if payload.get("status") == "complete" else 2
+
+
 def cmd_synthetic(args: argparse.Namespace) -> int:
     generate_synthetic_dataset(
         args.out,
@@ -424,6 +431,11 @@ def build_parser() -> argparse.ArgumentParser:
     blackbox.add_argument("--gpwbpp-time-seconds", type=float)
     blackbox.add_argument("--reference-label", default="PixInsight WBPP")
     blackbox.set_defaults(func=cmd_blackbox_package)
+
+    finalize = sub.add_parser("blackbox-finalize", help="finalize a PixInsight/WBPP black-box timing package")
+    finalize.add_argument("--timing", required=True)
+    finalize.add_argument("--out")
+    finalize.set_defaults(func=cmd_blackbox_finalize)
 
     synthetic = sub.add_parser("synthetic", help="generate synthetic FITS data")
     synthetic.add_argument("--out", required=True)

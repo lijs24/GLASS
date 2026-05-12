@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from gpwbpp.io.json_io import read_json, write_json
+from gpwbpp.report.compare_report import compare_fits, write_compare_report
 
 
 def _frame_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -160,4 +161,80 @@ def create_blackbox_package(
         "gpwbpp_master_count": len(masters),
     }
     write_json(out / "blackbox_package.json", payload)
+    return payload
+
+
+def finalize_blackbox_package(timing_path: str | Path, out_dir: str | Path | None = None) -> dict[str, Any]:
+    timing_file = Path(timing_path)
+    timing = read_json(timing_file)
+    out = Path(out_dir) if out_dir is not None else timing_file.parent
+    out.mkdir(parents=True, exist_ok=True)
+
+    gpwbpp_time = timing.get("gpwbpp_time_seconds")
+    reference_time = timing.get("reference_time_seconds")
+    gpwbpp_masters = [str(value) for value in timing.get("gpwbpp_master_paths", [])]
+    reference_masters = [str(value) for value in timing.get("reference_master_paths", [])]
+    reference_label = str(timing.get("reference_label") or "PixInsight WBPP")
+
+    errors: list[str] = []
+    if gpwbpp_time is None:
+        errors.append("gpwbpp_time_seconds is required")
+    if reference_time is None:
+        errors.append("reference_time_seconds is required")
+    if not gpwbpp_masters:
+        errors.append("gpwbpp_master_paths must contain at least one path")
+    if not reference_masters:
+        errors.append("reference_master_paths must contain at least one path")
+    if len(gpwbpp_masters) != len(reference_masters):
+        errors.append("gpwbpp_master_paths and reference_master_paths must have the same length")
+    for path in gpwbpp_masters + reference_masters:
+        if path and not Path(path).exists():
+            errors.append(f"missing master path: {path}")
+    if errors:
+        payload = {"status": "blocked", "errors": errors, "timing_template": str(timing_file)}
+        write_json(out / "blackbox_finalize_summary.json", payload)
+        return payload
+
+    comparisons = []
+    for index, (gp_master, ref_master) in enumerate(zip(gpwbpp_masters, reference_masters, strict=True), start=1):
+        comparison = compare_fits(
+            gp_master,
+            ref_master,
+            gpwbpp_time_seconds=float(gpwbpp_time),
+            reference_time_seconds=float(reference_time),
+            gpwbpp_label="GPWBPP",
+            reference_label=reference_label,
+        )
+        stem = f"gpwbpp_vs_wbpp_{index:02d}"
+        json_path = out / f"{stem}.json"
+        html_path = out / f"{stem}.html"
+        write_json(json_path, comparison)
+        write_compare_report(html_path, comparison)
+        comparisons.append(
+            {
+                "gpwbpp_master": gp_master,
+                "reference_master": ref_master,
+                "json": str(json_path),
+                "html": str(html_path),
+                "shape_match": comparison.get("shape_match"),
+                "rms_diff": comparison.get("rms_diff"),
+                "max_abs_diff": comparison.get("max_abs_diff"),
+                "speedup_vs_reference": comparison.get("timing", {}).get("speedup_vs_reference"),
+                "gpwbpp_faster": comparison.get("timing", {}).get("gpwbpp_faster"),
+            }
+        )
+
+    speedups = [item["speedup_vs_reference"] for item in comparisons if item["speedup_vs_reference"] is not None]
+    payload = {
+        "status": "complete",
+        "timing_template": str(timing_file),
+        "gpwbpp_time_seconds": float(gpwbpp_time),
+        "reference_time_seconds": float(reference_time),
+        "reference_label": reference_label,
+        "comparison_count": len(comparisons),
+        "speedup_vs_reference": speedups[0] if speedups else None,
+        "all_gpwbpp_faster": all(bool(item["gpwbpp_faster"]) for item in comparisons),
+        "comparisons": comparisons,
+    }
+    write_json(out / "blackbox_finalize_summary.json", payload)
     return payload

@@ -15,6 +15,9 @@
 - Generated a real M5/Lum handoff package with the measured GPWBPP runtime filled in.
 - Added `gpwbpp subset` to select a small same-target/same-filter manifest without copying or modifying original files.
 - Verified `gpwbpp subset` can recreate an executable real M5/Lum subset from the 240430 manifest.
+- Added `gpwbpp blackbox-finalize` to validate a completed timing template and generate compare reports.
+- Verified `blackbox-finalize` writes a blocked summary for the current real handoff package because WBPP reference fields are missing.
+- Verified `blackbox-finalize` dry-run completion with the GPWBPP master used as a self-check reference.
 
 ## Blocker
 
@@ -38,6 +41,9 @@ Get-ChildItem -LiteralPath 'E:\摄影素材\天协远程台原始素材' -Recurs
 .\.venv\Scripts\gpwbpp blackbox-package --manifest runs\real_m5_lum_subset\manifest.json --plan runs\real_m5_lum_subset\processing_plan.json --gpwbpp-run runs\real_m5_lum_subset\gpwbpp_cuda_v2 --gpwbpp-time-seconds 64.061 --out runs\real_m5_lum_subset\wbpp_blackbox_handoff --reference-label "PixInsight WBPP"
 .\.venv\Scripts\gpwbpp subset --manifest runs\local_audit_240430\manifest.json --out runs\real_m5_lum_subset\subset_cli_manifest.json --plan-out runs\real_m5_lum_subset\subset_cli_processing_plan.json --object M5 --filter Lum --light-limit 2 --bias-limit 1 --dark-limit 1 --flat-limit 1
 .\.venv\Scripts\python -m pytest -q tests/test_subset.py
+.\.venv\Scripts\python -m pytest -q tests/test_blackbox_finalize.py
+.\.venv\Scripts\gpwbpp blackbox-finalize --timing runs\real_m5_lum_subset\wbpp_blackbox_handoff\timing_template.json --out runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_blocked
+.\.venv\Scripts\gpwbpp blackbox-finalize --timing runs\real_m5_lum_subset\wbpp_blackbox_handoff\timing_dryrun.json --out runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_dryrun
 ```
 
 ## Handoff Artifacts
@@ -48,6 +54,8 @@ Get-ChildItem -LiteralPath 'E:\摄影素材\天协远程台原始素材' -Recurs
 - `runs\real_m5_lum_subset\wbpp_blackbox_handoff\compare_command.ps1`
 - `runs\real_m5_lum_subset\subset_cli_manifest.json`
 - `runs\real_m5_lum_subset\subset_cli_processing_plan.json`
+- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_blocked\blackbox_finalize_summary.json`
+- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_dryrun\blackbox_finalize_summary.json`
 
 ## Next Step
 
