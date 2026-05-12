@@ -4,6 +4,7 @@ from pathlib import Path
 
 from gpwbpp.cli import main
 from gpwbpp.io.json_io import read_json
+from gpwbpp.engine.resident_cuda import _matches_any_token
 from tests.conftest import cuda_module_or_skip
 
 
@@ -40,6 +41,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
             "translation_preview",
             "--reference-frame-id",
             "light_001",
+            "--exclude-frame-id",
+            "does_not_exist",
         ]
     ) == 0
 
@@ -50,6 +53,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
     assert integration["outputs"][0]["resident_registration"] == "translation_preview"
+    assert integration["excluded_frame_tokens"] == ["does_not_exist"]
     assert integration["outputs"][0]["output_diagnostics"]["normalization_probe"]["method"]
     assert registration["source_stage"] == "resident_calibrated_stack"
     assert registration["results"][0]["status"] == "reference"
@@ -60,3 +64,15 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident["policy"]["flat_floor"] == 0.05
     assert resident["artifacts"][0]["resident_registration"]["mode"] == "translation_preview"
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0
+
+
+def test_resident_frame_exclusion_matches_id_name_or_stem():
+    frame = {
+        "id": "F000196",
+        "path": r"C:\data\LIGHT_H_0136.fits",
+    }
+
+    assert _matches_any_token(frame, {"F000196"})
+    assert _matches_any_token(frame, {"LIGHT_H_0136.fits"})
+    assert _matches_any_token(frame, {"LIGHT_H_0136"})
+    assert not _matches_any_token(frame, {"LIGHT_H_0137"})

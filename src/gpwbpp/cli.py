@@ -350,6 +350,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 flat_floor=args.flat_floor,
                 resident_registration=args.resident_registration,
                 reference_frame_id=args.reference_frame_id,
+                exclude_frame_ids=args.exclude_frame_id,
             ),
         )
         write_run_state(args.out, state)
@@ -580,6 +581,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for resident registration",
+    )
+    run.add_argument(
+        "--exclude-frame-id",
+        action="append",
+        default=[],
+        help="frame id, file name, or stem to exclude from resident integration; can be repeated",
     )
     run.set_defaults(func=cmd_run)
 

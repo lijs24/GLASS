@@ -83,6 +83,19 @@ Timing summary:
   13.87x. The compare metrics improved slightly in the core distribution:
   median absolute difference 0.00011119607370346785, p90 0.00030821096152067184,
   p99 0.005503315764944989, RMS 0.013263855091108735.
+- The WBPP output XISF ProcessingHistory contains a `FastIntegration` `outputData`
+  table. Seven rows have `totalPairMatches=0` and a zero transform matrix:
+  `LIGHT_H_0100`, `LIGHT_H_0153`, `LIGHT_H_0154`, `LIGHT_H_0155`,
+  `LIGHT_H_0156`, `LIGHT_H_0157`, and `LIGHT_H_0158`. This matches the
+  black-box report of 193/200 integrated frames and is consistent with alignment
+  failure or quality rejection.
+- A GPWBPP resident rerun using those seven frames as an explicit exclusion mask
+  elapsed in 76.81677979999222 s, a raw timing speedup of 14.22x. It did not
+  improve final-master parity: median absolute difference was
+  0.00013177900109440088 and RMS was 0.013264537484375921. The current parity
+  gap is therefore more likely dominated by calibration scaling/pedestal,
+  FastIntegration transform/interpolation behavior, and exact rejection
+  semantics than by the 193/200 accepted-frame mask alone.
 
 WBPP fast-integration settings observed from user-generated logs:
 
@@ -124,6 +137,9 @@ C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_align_preview_scaled_resi
 C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_wsc_reject_flatfloor005_align_preview_run
 C:\gpwbpp_runs\final_m38_h_200\wsc_reject_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.json
 C:\gpwbpp_runs\final_m38_h_200\wsc_reject_flatfloor005_align_preview_scaled_resident_vs_wbpp_compare.html
+C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_wsc_reject_flatfloor005_wbpp_mask_run
+C:\gpwbpp_runs\final_m38_h_200\wsc_reject_flatfloor005_wbpp_mask_scaled_resident_vs_wbpp_compare.json
+C:\gpwbpp_runs\final_m38_h_200\wsc_reject_flatfloor005_wbpp_mask_scaled_resident_vs_wbpp_compare.html
 ```
 
 The current result proves a high-VRAM GPWBPP calibration/integration speed

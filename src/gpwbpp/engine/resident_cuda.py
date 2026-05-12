@@ -95,6 +95,10 @@ def _find_reference_frame(light_frames: list[dict[str, Any]], reference_frame_id
     return light_frames[0]
 
 
+def _matches_any_token(frame: dict[str, Any], tokens: set[str]) -> bool:
+    return bool(_frame_reference_tokens(frame) & tokens)
+
+
 def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) -> dict[str, Any]:
     values = np.asarray(data, dtype=np.float32)
     total_pixels = int(values.size)
@@ -243,6 +247,7 @@ def run_resident_calibration_integration(
     flat_floor: float | None = None,
     resident_registration: str = "off",
     reference_frame_id: str | None = None,
+    exclude_frame_ids: list[str] | None = None,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -264,6 +269,7 @@ def run_resident_calibration_integration(
             raise ValueError("flat_floor override must be positive")
         policy.flat_floor = float(flat_floor)
     integration_policy = plan.get("integration_policy", {})
+    excluded_tokens = {str(item) for item in (exclude_frame_ids or []) if str(item)}
     rejection_mode = "none" if integration_rejection == "auto" else integration_rejection
     low_sigma = float(integration_policy.get("low_sigma", 3.0))
     high_sigma = float(integration_policy.get("high_sigma", 3.0))
@@ -358,11 +364,14 @@ def run_resident_calibration_integration(
                 if resident_registration == "translation_preview":
                     registration_frame_start = perf_counter()
                     warnings = []
-                    status = "ok"
+                    status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
                     dx = 0.0
                     dy = 0.0
                     try:
-                        if frame["id"] != reference_frame["id"]:
+                        if status == "excluded":
+                            frame_weight = 0.0
+                            warnings.append("excluded by resident frame mask")
+                        elif frame["id"] != reference_frame["id"]:
                             preview = _registration_preview(light, preview_scale)
                             if reference_preview is None:
                                 raise RuntimeError("reference preview is not available")
@@ -384,8 +393,8 @@ def run_resident_calibration_integration(
                             transform_model="translation_preview",
                             matrix=translation_matrix(dx, dy),
                             matched_stars=0,
-                            inliers=0 if status == "failed" else 1,
-                            rms_px=0.0 if status != "failed" else float("nan"),
+                            inliers=0 if status in {"failed", "excluded"} else 1,
+                            rms_px=0.0 if status not in {"failed", "excluded"} else float("nan"),
                             status=status,
                             warnings=warnings
                             + [
@@ -395,6 +404,8 @@ def run_resident_calibration_integration(
                         )
                     )
                 per_frame_s.append(perf_counter() - frame_start)
+                if resident_registration == "off" and _matches_any_token(frame, excluded_tokens):
+                    frame_weight = 0.0
                 frame_weights[frame["id"]] = frame_weight
                 frame_weight_values.append(frame_weight)
                 del light
@@ -472,6 +483,7 @@ def run_resident_calibration_integration(
                         "reference_frame_id": str(reference_frame["id"]),
                         "preview_scale": preview_scale,
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
+                        "excluded_frame_tokens": sorted(excluded_tokens),
                     },
                     "integration_rejection": {
                         "mode": rejection_mode,
@@ -555,8 +567,9 @@ def run_resident_calibration_integration(
                 "high_sigma": high_sigma,
                 "frame_weights": frame_weights,
                 "outputs": outputs,
+                "excluded_frame_tokens": sorted(excluded_tokens),
                 "warnings": [
-                    "resident CUDA winsorized_sigma is currently a two-pass mean/std winsorized approximation",
+                    "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation",
                     "resident CUDA mode currently skips local normalization",
                 ],
             },
