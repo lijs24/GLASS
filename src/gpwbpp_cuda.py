@@ -733,6 +733,118 @@ def estimate_translation_from_catalogs_f32(
     )
 
 
+def _similarity_from_pairs_cpu(
+    reference_x: Any,
+    reference_y: Any,
+    moving_x: Any,
+    moving_y: Any,
+) -> dict[str, Any]:
+    ref_x = np.asarray(reference_x, dtype=np.float64).reshape(-1)
+    ref_y = np.asarray(reference_y, dtype=np.float64).reshape(-1)
+    mov_x = np.asarray(moving_x, dtype=np.float64).reshape(-1)
+    mov_y = np.asarray(moving_y, dtype=np.float64).reshape(-1)
+    if ref_x.shape != ref_y.shape or ref_x.shape != mov_x.shape or ref_x.shape != mov_y.shape:
+        raise ValueError("matched coordinate arrays must have matching shapes")
+    finite = np.isfinite(ref_x) & np.isfinite(ref_y) & np.isfinite(mov_x) & np.isfinite(mov_y)
+    ref_x = ref_x[finite]
+    ref_y = ref_y[finite]
+    mov_x = mov_x[finite]
+    mov_y = mov_y[finite]
+    input_pairs = int(np.asarray(reference_x).reshape(-1).size)
+    valid_pairs = int(ref_x.size)
+    identity = np.eye(3, dtype=np.float32)
+    if valid_pairs < 2:
+        return {
+            "matrix": identity.tolist(),
+            "scale": 1.0,
+            "rotation_rad": 0.0,
+            "rms_px": float("nan"),
+            "valid_pairs": valid_pairs,
+            "input_pairs": input_pairs,
+            "status": "failed",
+            "status_code": 1,
+            "model": "matched_pair_similarity_cpu_fallback",
+        }
+
+    mean_mx = float(np.mean(mov_x))
+    mean_my = float(np.mean(mov_y))
+    mean_rx = float(np.mean(ref_x))
+    mean_ry = float(np.mean(ref_y))
+    cx = mov_x - mean_mx
+    cy = mov_y - mean_my
+    ux = ref_x - mean_rx
+    uy = ref_y - mean_ry
+    denominator = float(np.sum(cx * cx + cy * cy))
+    if denominator <= 1.0e-20:
+        return {
+            "matrix": identity.tolist(),
+            "scale": 1.0,
+            "rotation_rad": 0.0,
+            "rms_px": float("nan"),
+            "valid_pairs": valid_pairs,
+            "input_pairs": input_pairs,
+            "status": "failed",
+            "status_code": 2,
+            "model": "matched_pair_similarity_cpu_fallback",
+        }
+    a = float(np.sum(cx * ux + cy * uy) / denominator)
+    b = float(np.sum(cx * uy - cy * ux) / denominator)
+    tx = mean_rx - (a * mean_mx - b * mean_my)
+    ty = mean_ry - (b * mean_mx + a * mean_my)
+    matrix = np.asarray([[a, -b, tx], [b, a, ty], [0.0, 0.0, 1.0]], dtype=np.float32)
+    transformed_x = a * mov_x - b * mov_y + tx
+    transformed_y = b * mov_x + a * mov_y + ty
+    residual = (transformed_x - ref_x) ** 2 + (transformed_y - ref_y) ** 2
+    return {
+        "matrix": matrix.tolist(),
+        "scale": float(np.sqrt(a * a + b * b)),
+        "rotation_rad": float(np.arctan2(b, a)),
+        "rms_px": float(np.sqrt(np.mean(residual))),
+        "valid_pairs": valid_pairs,
+        "input_pairs": input_pairs,
+        "status": "ok",
+        "status_code": 0,
+        "model": "matched_pair_similarity_cpu_fallback",
+    }
+
+
+def estimate_similarity_from_pairs_f32(
+    reference_x: Any,
+    reference_y: Any,
+    moving_x: Any,
+    moving_y: Any,
+) -> dict[str, Any]:
+    """Estimate a 2D similarity matrix from matched moving/reference star pairs.
+
+    This primitive assumes the matching step has already produced one-to-one
+    coordinate arrays. It fits the matrix that maps moving points onto reference
+    points and is intended as a CUDA building block for future GPU star matching.
+    """
+
+    native = _native()
+    if native is not None and hasattr(native, "estimate_similarity_from_pairs_f32"):
+        result = dict(
+            native.estimate_similarity_from_pairs_f32(
+                np.ascontiguousarray(np.asarray(reference_x, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(reference_y, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(moving_x, dtype=np.float32).reshape(-1)),
+                np.ascontiguousarray(np.asarray(moving_y, dtype=np.float32).reshape(-1)),
+            )
+        )
+        return {
+            "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
+            "scale": float(result["scale"]),
+            "rotation_rad": float(result["rotation_rad"]),
+            "rms_px": float(result["rms_px"]),
+            "valid_pairs": int(result["valid_pairs"]),
+            "input_pairs": int(result["input_pairs"]),
+            "status": str(result["status"]),
+            "status_code": int(result["status_code"]),
+            "model": str(result.get("model", "matched_pair_similarity_cuda")),
+        }
+    return _similarity_from_pairs_cpu(reference_x, reference_y, moving_x, moving_y)
+
+
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     native = _native()
     if native is not None and hasattr(native, "local_norm_apply_f32"):

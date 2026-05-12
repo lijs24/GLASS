@@ -509,6 +509,240 @@ __global__ void catalog_finalize_rms_kernel(
   *rms_px = count > 0 ? sqrtf(sums[2] / static_cast<float>(count)) : NAN;
 }
 
+__global__ void similarity_pair_stats_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    double* partial_sums,
+    unsigned long long* partial_count,
+    int count) {
+  extern __shared__ unsigned char similarity_scratch[];
+  double* sum_mx = reinterpret_cast<double*>(similarity_scratch);
+  double* sum_my = sum_mx + blockDim.x;
+  double* sum_rx = sum_my + blockDim.x;
+  double* sum_ry = sum_rx + blockDim.x;
+  double* sum_moving_power = sum_ry + blockDim.x;
+  double* sum_dot_same = sum_moving_power + blockDim.x;
+  double* sum_dot_cross = sum_dot_same + blockDim.x;
+  unsigned long long* valid_counts = reinterpret_cast<unsigned long long*>(sum_dot_cross + blockDim.x);
+
+  const int lane = static_cast<int>(threadIdx.x);
+  double local_mx = 0.0;
+  double local_my = 0.0;
+  double local_rx = 0.0;
+  double local_ry = 0.0;
+  double local_moving_power = 0.0;
+  double local_dot_same = 0.0;
+  double local_dot_cross = 0.0;
+  unsigned long long local_count = 0;
+
+  for (int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+       i < count;
+       i += static_cast<int>(gridDim.x * blockDim.x)) {
+    const float mx_f = moving_x[i];
+    const float my_f = moving_y[i];
+    const float rx_f = reference_x[i];
+    const float ry_f = reference_y[i];
+    if (!isfinite(mx_f) || !isfinite(my_f) || !isfinite(rx_f) || !isfinite(ry_f)) {
+      continue;
+    }
+    const double mx = static_cast<double>(mx_f);
+    const double my = static_cast<double>(my_f);
+    const double rx = static_cast<double>(rx_f);
+    const double ry = static_cast<double>(ry_f);
+    local_mx += mx;
+    local_my += my;
+    local_rx += rx;
+    local_ry += ry;
+    local_moving_power += mx * mx + my * my;
+    local_dot_same += mx * rx + my * ry;
+    local_dot_cross += mx * ry - my * rx;
+    ++local_count;
+  }
+
+  sum_mx[lane] = local_mx;
+  sum_my[lane] = local_my;
+  sum_rx[lane] = local_rx;
+  sum_ry[lane] = local_ry;
+  sum_moving_power[lane] = local_moving_power;
+  sum_dot_same[lane] = local_dot_same;
+  sum_dot_cross[lane] = local_dot_cross;
+  valid_counts[lane] = local_count;
+  __syncthreads();
+
+  for (int stride = static_cast<int>(blockDim.x) / 2; stride > 0; stride >>= 1) {
+    if (lane < stride) {
+      sum_mx[lane] += sum_mx[lane + stride];
+      sum_my[lane] += sum_my[lane + stride];
+      sum_rx[lane] += sum_rx[lane + stride];
+      sum_ry[lane] += sum_ry[lane + stride];
+      sum_moving_power[lane] += sum_moving_power[lane + stride];
+      sum_dot_same[lane] += sum_dot_same[lane + stride];
+      sum_dot_cross[lane] += sum_dot_cross[lane + stride];
+      valid_counts[lane] += valid_counts[lane + stride];
+    }
+    __syncthreads();
+  }
+
+  if (lane == 0) {
+    const int offset = static_cast<int>(blockIdx.x) * 7;
+    partial_sums[offset + 0] = sum_mx[0];
+    partial_sums[offset + 1] = sum_my[0];
+    partial_sums[offset + 2] = sum_rx[0];
+    partial_sums[offset + 3] = sum_ry[0];
+    partial_sums[offset + 4] = sum_moving_power[0];
+    partial_sums[offset + 5] = sum_dot_same[0];
+    partial_sums[offset + 6] = sum_dot_cross[0];
+    partial_count[blockIdx.x] = valid_counts[0];
+  }
+}
+
+__global__ void similarity_finalize_matrix_kernel(
+    const double* partial_sums,
+    const unsigned long long* partial_count,
+    float* matrix,
+    float* scale,
+    float* rotation_rad,
+    int* valid_count,
+    int* status,
+    int blocks) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  double sum_mx = 0.0;
+  double sum_my = 0.0;
+  double sum_rx = 0.0;
+  double sum_ry = 0.0;
+  double sum_moving_power = 0.0;
+  double sum_dot_same = 0.0;
+  double sum_dot_cross = 0.0;
+  unsigned long long count = 0;
+  for (int block = 0; block < blocks; ++block) {
+    const int offset = block * 7;
+    sum_mx += partial_sums[offset + 0];
+    sum_my += partial_sums[offset + 1];
+    sum_rx += partial_sums[offset + 2];
+    sum_ry += partial_sums[offset + 3];
+    sum_moving_power += partial_sums[offset + 4];
+    sum_dot_same += partial_sums[offset + 5];
+    sum_dot_cross += partial_sums[offset + 6];
+    count += partial_count[block];
+  }
+  *valid_count = static_cast<int>(count);
+  matrix[0] = 1.0f;
+  matrix[1] = 0.0f;
+  matrix[2] = 0.0f;
+  matrix[3] = 0.0f;
+  matrix[4] = 1.0f;
+  matrix[5] = 0.0f;
+  matrix[6] = 0.0f;
+  matrix[7] = 0.0f;
+  matrix[8] = 1.0f;
+  *scale = 1.0f;
+  *rotation_rad = 0.0f;
+  if (count < 2ULL) {
+    *status = 1;
+    return;
+  }
+
+  const double n = static_cast<double>(count);
+  const double mean_mx = sum_mx / n;
+  const double mean_my = sum_my / n;
+  const double mean_rx = sum_rx / n;
+  const double mean_ry = sum_ry / n;
+  const double denominator = sum_moving_power - n * (mean_mx * mean_mx + mean_my * mean_my);
+  if (denominator <= 1.0e-20) {
+    *status = 2;
+    return;
+  }
+  const double numer_a = sum_dot_same - n * (mean_mx * mean_rx + mean_my * mean_ry);
+  const double numer_b = sum_dot_cross - n * (mean_mx * mean_ry - mean_my * mean_rx);
+  const double a = numer_a / denominator;
+  const double b = numer_b / denominator;
+  const double tx = mean_rx - (a * mean_mx - b * mean_my);
+  const double ty = mean_ry - (b * mean_mx + a * mean_my);
+
+  matrix[0] = static_cast<float>(a);
+  matrix[1] = static_cast<float>(-b);
+  matrix[2] = static_cast<float>(tx);
+  matrix[3] = static_cast<float>(b);
+  matrix[4] = static_cast<float>(a);
+  matrix[5] = static_cast<float>(ty);
+  *scale = static_cast<float>(sqrt(a * a + b * b));
+  *rotation_rad = static_cast<float>(atan2(b, a));
+  *status = 0;
+}
+
+__global__ void similarity_residual_sums_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const float* matrix,
+    const int* status,
+    double* partial_residual_sums,
+    int count) {
+  extern __shared__ double residual_sums[];
+  const int lane = static_cast<int>(threadIdx.x);
+  double local_sum = 0.0;
+  if (*status == 0) {
+    const double m00 = static_cast<double>(matrix[0]);
+    const double m01 = static_cast<double>(matrix[1]);
+    const double m02 = static_cast<double>(matrix[2]);
+    const double m10 = static_cast<double>(matrix[3]);
+    const double m11 = static_cast<double>(matrix[4]);
+    const double m12 = static_cast<double>(matrix[5]);
+    for (int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+         i < count;
+         i += static_cast<int>(gridDim.x * blockDim.x)) {
+      const float mx_f = moving_x[i];
+      const float my_f = moving_y[i];
+      const float rx_f = reference_x[i];
+      const float ry_f = reference_y[i];
+      if (!isfinite(mx_f) || !isfinite(my_f) || !isfinite(rx_f) || !isfinite(ry_f)) {
+        continue;
+      }
+      const double mx = static_cast<double>(mx_f);
+      const double my = static_cast<double>(my_f);
+      const double dx = (m00 * mx + m01 * my + m02) - static_cast<double>(rx_f);
+      const double dy = (m10 * mx + m11 * my + m12) - static_cast<double>(ry_f);
+      local_sum += dx * dx + dy * dy;
+    }
+  }
+  residual_sums[lane] = local_sum;
+  __syncthreads();
+  for (int stride = static_cast<int>(blockDim.x) / 2; stride > 0; stride >>= 1) {
+    if (lane < stride) {
+      residual_sums[lane] += residual_sums[lane + stride];
+    }
+    __syncthreads();
+  }
+  if (lane == 0) {
+    partial_residual_sums[blockIdx.x] = residual_sums[0];
+  }
+}
+
+__global__ void similarity_finalize_rms_kernel(
+    const double* partial_residual_sums,
+    const int* valid_count,
+    const int* status,
+    float* rms_px,
+    int blocks) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  if (*status != 0 || *valid_count <= 0) {
+    *rms_px = NAN;
+    return;
+  }
+  double residual_sum = 0.0;
+  for (int block = 0; block < blocks; ++block) {
+    residual_sum += partial_residual_sums[block];
+  }
+  *rms_px = static_cast<float>(sqrt(residual_sum / static_cast<double>(*valid_count)));
+}
+
 }  // namespace
 
 void gpwbpp_estimate_translation_search_f32_launch(
@@ -652,4 +886,57 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
       refine_sums,
       moving_count);
   catalog_finalize_rms_kernel<<<1, 1>>>(refine_sums, mutual_inliers, rms_px);
+}
+
+void gpwbpp_estimate_similarity_from_pairs_f32_launch(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    float* matrix,
+    float* scale,
+    float* rotation_rad,
+    float* rms_px,
+    int* valid_count,
+    int* status,
+    double* partial_sums,
+    unsigned long long* partial_count,
+    double* partial_residual_sums,
+    int count,
+    int blocks) {
+  constexpr int threads = 256;
+  const std::size_t stats_shared_bytes =
+      7 * threads * sizeof(double) + threads * sizeof(unsigned long long);
+  similarity_pair_stats_kernel<<<blocks, threads, stats_shared_bytes>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      partial_sums,
+      partial_count,
+      count);
+  similarity_finalize_matrix_kernel<<<1, 1>>>(
+      partial_sums,
+      partial_count,
+      matrix,
+      scale,
+      rotation_rad,
+      valid_count,
+      status,
+      blocks);
+  similarity_residual_sums_kernel<<<blocks, threads, threads * sizeof(double)>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      matrix,
+      status,
+      partial_residual_sums,
+      count);
+  similarity_finalize_rms_kernel<<<1, 1>>>(
+      partial_residual_sums,
+      valid_count,
+      status,
+      rms_px,
+      blocks);
 }

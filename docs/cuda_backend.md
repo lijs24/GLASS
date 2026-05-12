@@ -20,6 +20,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `estimate_translation_search_f32(reference, moving, max_shift_x, max_shift_y)`
 - `estimate_translation_subpixel_ncc_f32(reference, moving, center_dx, center_dy, radius_steps, step)`
 - `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None, prior_dy=None, prior_radius_px=None)`
+- `estimate_similarity_from_pairs_f32(reference_x, reference_y, moving_x, moving_y)`
 - `warp_translation_bilinear_f32(data, dx, dy, fill)`
 - `star_local_max_mask_f32(tile, threshold)`
 - `star_candidates_f32(tile, threshold, max_candidates)`
@@ -78,6 +79,10 @@ Resident CUDA integration now supports:
   registration search window.
 - Optional NCC-prior catalog windowing so catalog votes can be restricted to a
   radius around a coarse GPU translation estimate before subpixel refinement.
+- GPU similarity fitting from already matched star pairs. The primitive computes
+  the moving-to-reference scale, rotation, translation matrix, valid-pair count,
+  and RMS on the device. It is a building block for the planned pure-GPU
+  descriptor matcher; it does not by itself solve star matching.
 - GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
   a bounded fractional-offset grid with bilinear sampling and normalized
   cross-correlation, returning `dx`, `dy`, `score`, and candidate-count

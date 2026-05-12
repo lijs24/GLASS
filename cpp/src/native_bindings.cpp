@@ -109,6 +109,22 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     float prior_dx,
     float prior_dy,
     float prior_radius_px);
+void gpwbpp_estimate_similarity_from_pairs_f32_launch(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    float* matrix,
+    float* scale,
+    float* rotation_rad,
+    float* rms_px,
+    int* valid_count,
+    int* status,
+    double* partial_sums,
+    unsigned long long* partial_count,
+    double* partial_residual_sums,
+    int count,
+    int blocks);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
 void gpwbpp_frame_sum_stats_f32_launch(
@@ -2315,6 +2331,186 @@ py::dict estimate_translation_from_catalogs_f32(
   return result;
 }
 
+py::dict estimate_similarity_from_pairs_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference_x,
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference_y,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving_x,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving_y) {
+  const py::buffer_info reference_x_info = reference_x.request();
+  const py::buffer_info reference_y_info = reference_y.request();
+  const py::buffer_info moving_x_info = moving_x.request();
+  const py::buffer_info moving_y_info = moving_y.request();
+  if (reference_x_info.ndim != 1 || reference_y_info.ndim != 1 ||
+      moving_x_info.ndim != 1 || moving_y_info.ndim != 1) {
+    throw std::invalid_argument("matched coordinate arrays must be one-dimensional");
+  }
+  require_same_shape(reference_x_info, reference_y_info);
+  require_same_shape(reference_x_info, moving_x_info);
+  require_same_shape(reference_x_info, moving_y_info);
+  const int count = static_cast<int>(reference_x_info.shape[0]);
+  if (count <= 0) {
+    throw std::invalid_argument("matched coordinate arrays must be non-empty");
+  }
+
+  constexpr int threads = 256;
+  const int blocks = std::min(4096, std::max(1, (count + threads - 1) / threads));
+  float* d_reference_x = nullptr;
+  float* d_reference_y = nullptr;
+  float* d_moving_x = nullptr;
+  float* d_moving_y = nullptr;
+  float* d_matrix = nullptr;
+  float* d_scale = nullptr;
+  float* d_rotation_rad = nullptr;
+  float* d_rms_px = nullptr;
+  int* d_valid_count = nullptr;
+  int* d_status = nullptr;
+  double* d_partial_sums = nullptr;
+  unsigned long long* d_partial_count = nullptr;
+  double* d_partial_residual_sums = nullptr;
+  std::array<float, 9> host_matrix{};
+  float scale = 1.0f;
+  float rotation_rad = 0.0f;
+  float rms_px = std::numeric_limits<float>::quiet_NaN();
+  int valid_count = 0;
+  int status = 1;
+
+  try {
+    check_cuda(
+        cudaMalloc(&d_reference_x, static_cast<std::size_t>(count) * sizeof(float)),
+        "cudaMalloc(similarity reference x)");
+    check_cuda(
+        cudaMalloc(&d_reference_y, static_cast<std::size_t>(count) * sizeof(float)),
+        "cudaMalloc(similarity reference y)");
+    check_cuda(
+        cudaMalloc(&d_moving_x, static_cast<std::size_t>(count) * sizeof(float)),
+        "cudaMalloc(similarity moving x)");
+    check_cuda(
+        cudaMalloc(&d_moving_y, static_cast<std::size_t>(count) * sizeof(float)),
+        "cudaMalloc(similarity moving y)");
+    check_cuda(cudaMalloc(&d_matrix, host_matrix.size() * sizeof(float)), "cudaMalloc(similarity matrix)");
+    check_cuda(cudaMalloc(&d_scale, sizeof(float)), "cudaMalloc(similarity scale)");
+    check_cuda(cudaMalloc(&d_rotation_rad, sizeof(float)), "cudaMalloc(similarity rotation)");
+    check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(similarity rms)");
+    check_cuda(cudaMalloc(&d_valid_count, sizeof(int)), "cudaMalloc(similarity valid count)");
+    check_cuda(cudaMalloc(&d_status, sizeof(int)), "cudaMalloc(similarity status)");
+    check_cuda(
+        cudaMalloc(&d_partial_sums, static_cast<std::size_t>(blocks) * 7 * sizeof(double)),
+        "cudaMalloc(similarity partial sums)");
+    check_cuda(
+        cudaMalloc(&d_partial_count, static_cast<std::size_t>(blocks) * sizeof(unsigned long long)),
+        "cudaMalloc(similarity partial count)");
+    check_cuda(
+        cudaMalloc(&d_partial_residual_sums, static_cast<std::size_t>(blocks) * sizeof(double)),
+        "cudaMalloc(similarity partial residual sums)");
+    check_cuda(
+        cudaMemcpy(
+            d_reference_x,
+            reference_x_info.ptr,
+            static_cast<std::size_t>(count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(similarity reference x)");
+    check_cuda(
+        cudaMemcpy(
+            d_reference_y,
+            reference_y_info.ptr,
+            static_cast<std::size_t>(count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(similarity reference y)");
+    check_cuda(
+        cudaMemcpy(
+            d_moving_x,
+            moving_x_info.ptr,
+            static_cast<std::size_t>(count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(similarity moving x)");
+    check_cuda(
+        cudaMemcpy(
+            d_moving_y,
+            moving_y_info.ptr,
+            static_cast<std::size_t>(count) * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(similarity moving y)");
+    gpwbpp_estimate_similarity_from_pairs_f32_launch(
+        d_reference_x,
+        d_reference_y,
+        d_moving_x,
+        d_moving_y,
+        d_matrix,
+        d_scale,
+        d_rotation_rad,
+        d_rms_px,
+        d_valid_count,
+        d_status,
+        d_partial_sums,
+        d_partial_count,
+        d_partial_residual_sums,
+        count,
+        blocks);
+    check_cuda(cudaGetLastError(), "estimate_similarity_from_pairs_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "estimate_similarity_from_pairs_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(host_matrix.data(), d_matrix, host_matrix.size() * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(similarity matrix)");
+    check_cuda(cudaMemcpy(&scale, d_scale, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(similarity scale)");
+    check_cuda(
+        cudaMemcpy(&rotation_rad, d_rotation_rad, sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(similarity rotation)");
+    check_cuda(cudaMemcpy(&rms_px, d_rms_px, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(similarity rms)");
+    check_cuda(
+        cudaMemcpy(&valid_count, d_valid_count, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(similarity valid count)");
+    check_cuda(cudaMemcpy(&status, d_status, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(similarity status)");
+  } catch (...) {
+    cudaFree(d_reference_x);
+    cudaFree(d_reference_y);
+    cudaFree(d_moving_x);
+    cudaFree(d_moving_y);
+    cudaFree(d_matrix);
+    cudaFree(d_scale);
+    cudaFree(d_rotation_rad);
+    cudaFree(d_rms_px);
+    cudaFree(d_valid_count);
+    cudaFree(d_status);
+    cudaFree(d_partial_sums);
+    cudaFree(d_partial_count);
+    cudaFree(d_partial_residual_sums);
+    throw;
+  }
+  cudaFree(d_reference_x);
+  cudaFree(d_reference_y);
+  cudaFree(d_moving_x);
+  cudaFree(d_moving_y);
+  cudaFree(d_matrix);
+  cudaFree(d_scale);
+  cudaFree(d_rotation_rad);
+  cudaFree(d_rms_px);
+  cudaFree(d_valid_count);
+  cudaFree(d_status);
+  cudaFree(d_partial_sums);
+  cudaFree(d_partial_count);
+  cudaFree(d_partial_residual_sums);
+
+  py::list matrix_rows;
+  for (int row = 0; row < 3; ++row) {
+    py::list matrix_row;
+    for (int col = 0; col < 3; ++col) {
+      matrix_row.append(host_matrix[static_cast<std::size_t>(row * 3 + col)]);
+    }
+    matrix_rows.append(matrix_row);
+  }
+  py::dict result;
+  result["matrix"] = matrix_rows;
+  result["scale"] = scale;
+  result["rotation_rad"] = rotation_rad;
+  result["rms_px"] = rms_px;
+  result["valid_pairs"] = valid_count;
+  result["input_pairs"] = count;
+  result["status"] = status == 0 ? "ok" : "failed";
+  result["status_code"] = status;
+  result["model"] = "matched_pair_similarity_cuda";
+  return result;
+}
+
 py::array_t<float> local_norm_apply_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> input,
     float scale,
@@ -2886,6 +3082,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("prior_dx") = 0.0f,
       py::arg("prior_dy") = 0.0f,
       py::arg("prior_radius_px") = -1.0f);
+  m.def(
+      "estimate_similarity_from_pairs_f32",
+      &estimate_similarity_from_pairs_f32,
+      py::arg("reference_x"),
+      py::arg("reference_y"),
+      py::arg("moving_x"),
+      py::arg("moving_y"));
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("local_norm_pair_stats_f32", &local_norm_pair_stats_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);

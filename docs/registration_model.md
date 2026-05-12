@@ -143,6 +143,15 @@ cell for diagnostics. Real-data M38 tests with an NCC prior can improve pixel
 RMS, but the inlier evidence is still too weak to replace the fallback without
 descriptor-level matching.
 
+`estimate_similarity_from_pairs_f32(reference_x, reference_y, moving_x,
+moving_y)` is the first CUDA transform-estimation primitive beyond pure
+translation. It assumes a one-to-one matched star catalog has already been
+produced, then fits the moving-to-reference 2D similarity transform on the GPU
+with finite-pair filtering and returns the 3x3 matrix, scale, rotation, valid
+pair count, and RMS. This is deliberately a lower-level building block: the
+remaining hard problem is GPU descriptor matching and robust inlier selection,
+not the closed-form similarity fit once trustworthy pairs exist.
+
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
 needed to apply similarity and affine matrices without falling back to CPU pixel

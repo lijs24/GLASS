@@ -359,3 +359,51 @@ def test_gpu_catalog_translation_refines_mutual_inliers():
     assert abs(result["refined_dx"] - float(true_delta[0])) < 0.03
     assert abs(result["refined_dy"] - float(true_delta[1])) < 0.03
     assert result["rms_px"] < 0.05
+
+
+def test_gpu_estimate_similarity_from_matched_pairs():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_similarity_from_pairs_f32"):
+        raise AssertionError("estimate_similarity_from_pairs_f32 is missing from gpwbpp_cuda")
+
+    moving = np.array(
+        [
+            (10.0, 11.0),
+            (25.0, 14.0),
+            (18.0, 34.0),
+            (41.0, 37.0),
+            (53.0, 21.0),
+            (63.0, 45.0),
+            (31.0, 58.0),
+            (72.0, 18.0),
+        ],
+        dtype=np.float32,
+    )
+    angle = np.deg2rad(6.0)
+    scale = 1.035
+    linear = scale * np.array(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+        dtype=np.float32,
+    )
+    translation = np.array([2.5, -3.25], dtype=np.float32)
+    reference = moving @ linear.T + translation
+    reference = np.vstack([reference, np.array([[np.nan, 1.0]], dtype=np.float32)])
+    moving_with_nan = np.vstack([moving, np.array([[4.0, np.nan]], dtype=np.float32)])
+
+    result = module.estimate_similarity_from_pairs_f32(
+        reference[:, 0],
+        reference[:, 1],
+        moving_with_nan[:, 0],
+        moving_with_nan[:, 1],
+    )
+    matrix = np.asarray(result["matrix"], dtype=np.float32)
+
+    assert result["status"] == "ok"
+    assert result["model"] == "matched_pair_similarity_cuda"
+    assert result["valid_pairs"] == len(moving)
+    assert result["input_pairs"] == len(moving) + 1
+    assert abs(result["scale"] - scale) < 1.0e-5
+    assert abs(result["rotation_rad"] - angle) < 1.0e-5
+    assert result["rms_px"] < 1.0e-4
+    assert np.allclose(matrix[:2, :2], linear, atol=1.0e-5)
+    assert np.allclose(matrix[:2, 2], translation, atol=1.0e-4)
