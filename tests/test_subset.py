@@ -23,6 +23,25 @@ def test_build_subset_manifest_keeps_matching_calibration(tmp_path: Path):
     assert plan.executable is True
 
 
+def test_build_subset_manifest_can_keep_all_compatible_calibration(tmp_path: Path):
+    data = tmp_path / "data"
+    generate_synthetic_dataset(data, frames=4, width=24, height=20, filt="H")
+    manifest = scan_tree(data)
+    manifest_summary = manifest["summary"]["frame_type"]
+    subset = build_subset_manifest(
+        manifest,
+        filter_name="H",
+        light_limit=2,
+        all_compatible_calibration=True,
+    )
+    assert subset["summary"]["frame_type"]["light"] == 2
+    assert subset["summary"]["frame_type"]["bias"] == manifest_summary["bias"]
+    assert subset["summary"]["frame_type"]["dark"] == manifest_summary["dark"]
+    assert subset["summary"]["frame_type"]["flat"] == manifest_summary["flat"]
+    plan = build_processing_plan(subset, tmp_path / "subset_manifest.json")
+    assert plan.executable is True
+
+
 def test_subset_cli_writes_plan(tmp_path: Path):
     data = tmp_path / "data"
     manifest_path = tmp_path / "manifest.json"

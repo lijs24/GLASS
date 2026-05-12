@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from pathlib import Path
 from typing import Any
 
 from gpwbpp.metadata.scanner import summarize_frames
@@ -40,6 +39,37 @@ def _take_group_frames(
     return [frame_by_id[frame_id] for frame_id in sorted(group.frames)[:limit]]
 
 
+def _same_camera_sampling(a: FrameRecord, b: FrameRecord) -> bool:
+    return (
+        a.width == b.width
+        and a.height == b.height
+        and a.binning_x == b.binning_x
+        and a.binning_y == b.binning_y
+        and a.gain == b.gain
+        and a.offset == b.offset
+    )
+
+
+def _compatible_calibration_frames(frames: list[FrameRecord], lights: list[FrameRecord]) -> list[FrameRecord]:
+    light_filters = {light.filter for light in lights if light.filter not in {None, ""}}
+    light_exposures = {float(light.exposure_s) for light in lights if light.exposure_s is not None}
+
+    def compatible(frame: FrameRecord) -> bool:
+        if not any(_same_camera_sampling(frame, light) for light in lights):
+            return False
+        if frame.frame_type == "bias":
+            return True
+        if frame.frame_type == "dark":
+            return frame.exposure_s is not None and any(
+                abs(float(frame.exposure_s) - exposure) <= 1.0e-6 for exposure in light_exposures
+            )
+        if frame.frame_type == "flat":
+            return frame.filter in light_filters
+        return False
+
+    return [frame for frame in frames if frame.frame_type in {"bias", "dark", "flat"} and compatible(frame)]
+
+
 def _renumber(frames: list[FrameRecord]) -> list[FrameRecord]:
     out: list[FrameRecord] = []
     for index, frame in enumerate(frames, start=1):
@@ -62,6 +92,7 @@ def build_subset_manifest(
     bias_limit: int = 1,
     dark_limit: int = 1,
     flat_limit: int = 1,
+    all_compatible_calibration: bool = False,
 ) -> dict[str, Any]:
     frames = [_frame_from_dict(frame) for frame in manifest.get("frames", [])]
     lights = [
@@ -85,6 +116,9 @@ def build_subset_manifest(
     def add_all(values: list[FrameRecord]) -> None:
         for value in values:
             selected_by_id[value.id] = value
+
+    if all_compatible_calibration:
+        add_all(_compatible_calibration_frames(frames, lights))
 
     for light in lights:
         bias = find_bias_group(light, groups)
@@ -123,6 +157,7 @@ def build_subset_manifest(
             "bias_limit": bias_limit,
             "dark_limit": dark_limit,
             "flat_limit": flat_limit,
+            "all_compatible_calibration": all_compatible_calibration,
         },
         "frames": [to_jsonable(frame) for frame in renumbered],
         "warnings": warnings,

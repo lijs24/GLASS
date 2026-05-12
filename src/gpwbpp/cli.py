@@ -234,6 +234,7 @@ def cmd_subset(args: argparse.Namespace) -> int:
         bias_limit=args.bias_limit,
         dark_limit=args.dark_limit,
         flat_limit=args.flat_limit,
+        all_compatible_calibration=args.all_compatible_calibration,
     )
     write_json(args.out, subset)
     summary = subset["summary"]
@@ -559,6 +560,11 @@ def build_parser() -> argparse.ArgumentParser:
     subset.add_argument("--bias-limit", type=int, default=1)
     subset.add_argument("--dark-limit", type=int, default=1)
     subset.add_argument("--flat-limit", type=int, default=1)
+    subset.add_argument(
+        "--all-compatible-calibration",
+        action="store_true",
+        help="include all compatible calibration frames, not only the planner-selected matching groups",
+    )
     subset.set_defaults(func=cmd_subset)
 
     run = sub.add_parser("run", help="execute the gated pipeline")
