@@ -351,6 +351,8 @@ def _catalog_translation_vote(
     moving_x: np.ndarray,
     moving_y: np.ndarray,
     tolerance_px: float,
+    max_abs_dx: float | None = None,
+    max_abs_dy: float | None = None,
 ) -> dict[str, Any]:
     ref_x = np.asarray(reference_x, dtype=np.float32).reshape(-1)
     ref_y = np.asarray(reference_y, dtype=np.float32).reshape(-1)
@@ -362,16 +364,46 @@ def _catalog_translation_vote(
         raise ValueError("catalogs must be non-empty")
     dx = (ref_x[:, None] - mov_x[None, :]).reshape(-1)
     dy = (ref_y[:, None] - mov_y[None, :]).reshape(-1)
+    if max_abs_dx is not None:
+        max_abs_dx = float(max_abs_dx)
+    if max_abs_dy is None:
+        max_abs_dy = max_abs_dx
+    else:
+        max_abs_dy = float(max_abs_dy)
+    valid_candidates = np.ones(dx.shape, dtype=bool)
+    if max_abs_dx is not None and max_abs_dx >= 0.0:
+        valid_candidates &= np.abs(dx) <= np.float32(max_abs_dx)
+    if max_abs_dy is not None and max_abs_dy >= 0.0:
+        valid_candidates &= np.abs(dy) <= np.float32(max_abs_dy)
     tolerance2 = np.float32(tolerance_px) * np.float32(tolerance_px)
     best_index = 0
     best_score = -1
     for i, (candidate_dx, candidate_dy) in enumerate(zip(dx, dy, strict=True)):
+        if not valid_candidates[i]:
+            continue
         ddx = dx - candidate_dx
         ddy = dy - candidate_dy
-        score = int(np.sum((ddx * ddx + ddy * ddy) <= tolerance2))
+        score = int(np.sum(valid_candidates & ((ddx * ddx + ddy * ddy) <= tolerance2)))
         if score > best_score:
             best_index = i
             best_score = score
+    if best_score < 0:
+        return {
+            "dx": 0.0,
+            "dy": 0.0,
+            "inliers": 0,
+            "refined_dx": 0.0,
+            "refined_dy": 0.0,
+            "mutual_inliers": 0,
+            "rms_px": float("nan"),
+            "candidate_count": int(len(dx)),
+            "reference_count": int(len(ref_x)),
+            "moving_count": int(len(mov_x)),
+            "tolerance_px": float(tolerance_px),
+            "max_abs_dx": None if max_abs_dx is None else float(max_abs_dx),
+            "max_abs_dy": None if max_abs_dy is None else float(max_abs_dy),
+            "model": "catalog_pair_offset_translation_cpu_fallback",
+        }
     refined = _refine_catalog_translation(ref_x, ref_y, mov_x, mov_y, float(dx[best_index]), float(dy[best_index]), tolerance_px)
     return {
         "dx": float(dx[best_index]),
@@ -382,6 +414,8 @@ def _catalog_translation_vote(
         "reference_count": int(len(ref_x)),
         "moving_count": int(len(mov_x)),
         "tolerance_px": float(tolerance_px),
+        "max_abs_dx": None if max_abs_dx is None else float(max_abs_dx),
+        "max_abs_dy": None if max_abs_dy is None else float(max_abs_dy),
         "model": "catalog_pair_offset_translation_cpu_fallback",
     }
 
@@ -448,6 +482,8 @@ def estimate_translation_from_catalogs_f32(
     moving_x: Any,
     moving_y: Any,
     tolerance_px: float = 1.0,
+    max_abs_dx: float | None = None,
+    max_abs_dy: float | None = None,
 ) -> dict[str, Any]:
     """Estimate translation from two star coordinate catalogs.
 
@@ -455,6 +491,8 @@ def estimate_translation_from_catalogs_f32(
     by nearby pair-offset votes, and returns the highest-vote translation.
     """
 
+    native_max_abs_dx = -1.0 if max_abs_dx is None else float(max_abs_dx)
+    native_max_abs_dy = -1.0 if max_abs_dy is None else float(max_abs_dy)
     native = _native()
     if native is not None and hasattr(native, "estimate_translation_from_catalogs_f32"):
         result = dict(
@@ -464,6 +502,8 @@ def estimate_translation_from_catalogs_f32(
                 np.ascontiguousarray(np.asarray(moving_x, dtype=np.float32).reshape(-1)),
                 np.ascontiguousarray(np.asarray(moving_y, dtype=np.float32).reshape(-1)),
                 float(tolerance_px),
+                native_max_abs_dx,
+                native_max_abs_dy,
             )
         )
         return {
@@ -478,6 +518,8 @@ def estimate_translation_from_catalogs_f32(
             "reference_count": int(result["reference_count"]),
             "moving_count": int(result["moving_count"]),
             "tolerance_px": float(result["tolerance_px"]),
+            "max_abs_dx": float(result["max_abs_dx"]),
+            "max_abs_dy": float(result["max_abs_dy"]),
             "model": str(result.get("model", "catalog_pair_offset_translation")),
         }
 
@@ -487,6 +529,8 @@ def estimate_translation_from_catalogs_f32(
         np.asarray(moving_x, dtype=np.float32),
         np.asarray(moving_y, dtype=np.float32),
         tolerance_px,
+        max_abs_dx,
+        max_abs_dy,
     )
 
 

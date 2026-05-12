@@ -68,6 +68,20 @@ def _rms(reference: np.ndarray, aligned: np.ndarray, valid: np.ndarray) -> float
     return float(np.sqrt(np.mean(diff * diff)))
 
 
+def _adaptive_star_threshold(image: np.ndarray, sigma: float) -> float:
+    finite = np.asarray(image[np.isfinite(image)], dtype=np.float32)
+    if finite.size == 0:
+        raise ValueError("cannot compute star threshold for an image with no finite pixels")
+    median = float(np.median(finite))
+    mad = float(np.median(np.abs(finite - median)))
+    robust_sigma = 1.4826 * mad
+    if robust_sigma <= 0.0:
+        robust_sigma = float(np.std(finite))
+    if robust_sigma <= 0.0:
+        robust_sigma = 1.0
+    return median + float(sigma) * robust_sigma
+
+
 def _astroalign_run(reference: np.ndarray, moving: np.ndarray) -> dict[str, Any]:
     import astroalign as aa
 
@@ -106,6 +120,70 @@ def _gpu_run(reference: np.ndarray, moving: np.ndarray, max_shift: int) -> dict[
     }
 
 
+def _gpu_catalog_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    max_stars: int,
+    threshold_sigma: float,
+    tolerance_px: float,
+    max_shift: int | None = None,
+    min_inliers: int = 6,
+) -> dict[str, Any]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    t0 = time.perf_counter()
+    reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
+    moving_threshold = _adaptive_star_threshold(moving, threshold_sigma)
+    reference_catalog = gpwbpp_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
+    moving_catalog = gpwbpp_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
+    if reference_catalog["stored_count"] == 0 or moving_catalog["stored_count"] == 0:
+        raise RuntimeError(
+            "GPU catalog alignment found no stars "
+            f"(reference={reference_catalog['stored_count']}, moving={moving_catalog['stored_count']})"
+        )
+    estimate = gpwbpp_cuda.estimate_translation_from_catalogs_f32(
+        reference_catalog["x"],
+        reference_catalog["y"],
+        moving_catalog["x"],
+        moving_catalog["y"],
+        tolerance_px,
+        None if max_shift is None else float(max_shift),
+        None if max_shift is None else float(max_shift),
+    )
+    dx = float(estimate["refined_dx"])
+    dy = float(estimate["refined_dy"])
+    aligned, coverage = gpwbpp_cuda.warp_translation_bilinear_f32(moving, dx, dy, 0.0)
+    elapsed = time.perf_counter() - t0
+    accepted = int(estimate["mutual_inliers"]) >= int(min_inliers)
+    warnings = [] if accepted else [f"catalog mutual inliers below {int(min_inliers)}"]
+    return {
+        "elapsed_s": elapsed,
+        "dx": dx,
+        "dy": dy,
+        "vote_dx": float(estimate["dx"]),
+        "vote_dy": float(estimate["dy"]),
+        "inliers": int(estimate["inliers"]),
+        "mutual_inliers": int(estimate["mutual_inliers"]),
+        "rms_px": float(estimate["rms_px"]),
+        "candidate_count": int(estimate["candidate_count"]),
+        "reference_count": int(estimate["reference_count"]),
+        "moving_count": int(estimate["moving_count"]),
+        "reference_detected": int(reference_catalog["count"]),
+        "moving_detected": int(moving_catalog["count"]),
+        "reference_stored": int(reference_catalog["stored_count"]),
+        "moving_stored": int(moving_catalog["stored_count"]),
+        "reference_threshold": reference_threshold,
+        "moving_threshold": moving_threshold,
+        "tolerance_px": float(tolerance_px),
+        "max_shift": None if max_shift is None else int(max_shift),
+        "min_inliers": int(min_inliers),
+        "accepted": accepted,
+        "warnings": warnings,
+        "model": "catalog_pair_offset_translation_refined_bilinear_warp",
+        "rms": _rms(reference, aligned, coverage > 0.0),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare astroalign with GPWBPP CUDA translation alignment.")
     parser.add_argument("--reference", type=Path)
@@ -117,6 +195,11 @@ def main() -> int:
     parser.add_argument("--synthetic-dx", type=int, default=7)
     parser.add_argument("--synthetic-dy", type=int, default=-5)
     parser.add_argument("--center-crop", type=int, help="Center-crop both FITS inputs to this square size.")
+    parser.add_argument("--catalog-stars", type=int, default=64)
+    parser.add_argument("--catalog-threshold-sigma", type=float, default=6.0)
+    parser.add_argument("--catalog-tolerance-px", type=float, default=3.0)
+    parser.add_argument("--catalog-max-shift", type=int)
+    parser.add_argument("--catalog-min-inliers", type=int, default=6)
     args = parser.parse_args()
 
     if args.reference and args.moving:
@@ -134,6 +217,16 @@ def main() -> int:
 
     astroalign_result = _astroalign_run(reference, moving)
     gpu_result = _gpu_run(reference, moving, args.max_shift)
+    catalog_max_shift = args.max_shift if args.catalog_max_shift is None else args.catalog_max_shift
+    gpu_catalog_result = _gpu_catalog_run(
+        reference,
+        moving,
+        args.catalog_stars,
+        args.catalog_threshold_sigma,
+        args.catalog_tolerance_px,
+        catalog_max_shift,
+        args.catalog_min_inliers,
+    )
     devices = gpwbpp_cuda.list_devices()
     result = {
         "image_shape": list(reference.shape),
@@ -142,8 +235,12 @@ def main() -> int:
         "truth": truth,
         "astroalign": astroalign_result,
         "gpwbpp_cuda": gpu_result,
+        "gpwbpp_cuda_catalog": gpu_catalog_result,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
+        else None,
+        "catalog_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_catalog_result["elapsed_s"]
+        if gpu_catalog_result["elapsed_s"] > 0.0
         else None,
         "cuda_devices": devices,
     }

@@ -128,15 +128,25 @@ __global__ void catalog_pair_offsets_kernel(
     float* candidate_dy,
     int reference_count,
     int moving_count,
-    int pair_count) {
+    int pair_count,
+    float max_abs_dx,
+    float max_abs_dy) {
   const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   if (i >= pair_count) {
     return;
   }
   const int reference_index = i / moving_count;
   const int moving_index = i % moving_count;
-  candidate_dx[i] = reference_x[reference_index] - moving_x[moving_index];
-  candidate_dy[i] = reference_y[reference_index] - moving_y[moving_index];
+  const float dx = reference_x[reference_index] - moving_x[moving_index];
+  const float dy = reference_y[reference_index] - moving_y[moving_index];
+  if ((max_abs_dx >= 0.0f && fabsf(dx) > max_abs_dx) ||
+      (max_abs_dy >= 0.0f && fabsf(dy) > max_abs_dy)) {
+    candidate_dx[i] = NAN;
+    candidate_dy[i] = NAN;
+    return;
+  }
+  candidate_dx[i] = dx;
+  candidate_dy[i] = dy;
 }
 
 __global__ void catalog_offset_score_kernel(
@@ -151,9 +161,16 @@ __global__ void catalog_offset_score_kernel(
   }
   const float dx = candidate_dx[i];
   const float dy = candidate_dy[i];
+  if (!isfinite(dx) || !isfinite(dy)) {
+    scores[i] = -1;
+    return;
+  }
   const float tolerance2 = tolerance_px * tolerance_px;
   int score = 0;
   for (int j = 0; j < pair_count; ++j) {
+    if (!isfinite(candidate_dx[j]) || !isfinite(candidate_dy[j])) {
+      continue;
+    }
     const float ddx = candidate_dx[j] - dx;
     const float ddy = candidate_dy[j] - dy;
     if (ddx * ddx + ddy * ddy <= tolerance2) {
@@ -174,14 +191,20 @@ __global__ void catalog_offset_best_kernel(
   if (blockIdx.x != 0 || threadIdx.x != 0) {
     return;
   }
-  int best_index = 0;
-  int best_score = scores[0];
-  for (int i = 1; i < pair_count; ++i) {
+  int best_index = -1;
+  int best_score = -1;
+  for (int i = 0; i < pair_count; ++i) {
     const int score = scores[i];
     if (score > best_score) {
       best_score = score;
       best_index = i;
     }
+  }
+  if (best_index < 0 || best_score < 0) {
+    *best_dx = 0.0f;
+    *best_dy = 0.0f;
+    *best_inliers = 0;
+    return;
   }
   *best_dx = candidate_dx[best_index];
   *best_dy = candidate_dy[best_index];
@@ -373,7 +396,9 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     float* rms_px,
     int reference_count,
     int moving_count,
-    float tolerance_px) {
+    float tolerance_px,
+    float max_abs_dx,
+    float max_abs_dy) {
   constexpr int threads = 256;
   const int pair_count = reference_count * moving_count;
   const int blocks = (pair_count + threads - 1) / threads;
@@ -388,7 +413,9 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
       candidate_dy,
       reference_count,
       moving_count,
-      pair_count);
+      pair_count,
+      max_abs_dx,
+      max_abs_dy);
   catalog_offset_score_kernel<<<blocks, threads>>>(candidate_dx, candidate_dy, scores, pair_count, tolerance_px);
   catalog_offset_best_kernel<<<1, 1>>>(candidate_dx, candidate_dy, scores, best_dx, best_dy, best_inliers, pair_count);
   cudaMemset(moving_best_reference, 0xff, static_cast<std::size_t>(moving_count) * sizeof(int));
