@@ -615,6 +615,52 @@ def star_top_candidates_f32(data: Any, threshold: float, max_candidates: int = 4
     }
 
 
+def star_grid_candidates_f32(data: Any, threshold: float, grid_cols: int = 8, grid_rows: int = 8) -> dict[str, Any]:
+    native = _native()
+    if native is not None and hasattr(native, "star_grid_candidates_f32"):
+        result = dict(native.star_grid_candidates_f32(data, float(threshold), int(grid_cols), int(grid_rows)))
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+            "grid_cols": int(result["grid_cols"]),
+            "grid_rows": int(result["grid_rows"]),
+        }
+
+    if grid_cols <= 0 or grid_rows <= 0:
+        raise ValueError("grid dimensions must be positive")
+    mask = star_local_max_mask_f32(data, threshold)
+    ys, xs = np.nonzero(mask)
+    image = np.asarray(data, dtype=np.float32)
+    flux = image[ys, xs].astype(np.float32)
+    cell_count = int(grid_cols) * int(grid_rows)
+    best_x = np.zeros(cell_count, dtype=np.float32)
+    best_y = np.zeros(cell_count, dtype=np.float32)
+    best_flux = np.full(cell_count, -np.inf, dtype=np.float32)
+    h, w = image.shape
+    for x, y, value in zip(xs, ys, flux, strict=True):
+        cell_x = min((int(x) * int(grid_cols)) // w, int(grid_cols) - 1)
+        cell_y = min((int(y) * int(grid_rows)) // h, int(grid_rows) - 1)
+        cell_index = cell_y * int(grid_cols) + cell_x
+        if value > best_flux[cell_index]:
+            best_x[cell_index] = np.float32(x)
+            best_y[cell_index] = np.float32(y)
+            best_flux[cell_index] = value
+    valid = np.isfinite(best_flux)
+    order = np.argsort(-best_flux[valid], kind="stable")
+    return {
+        "count": int(len(xs)),
+        "stored_count": int(np.sum(valid)),
+        "x": best_x[valid][order].astype(np.float32),
+        "y": best_y[valid][order].astype(np.float32),
+        "flux": best_flux[valid][order].astype(np.float32),
+        "grid_cols": int(grid_cols),
+        "grid_rows": int(grid_rows),
+    }
+
+
 class ResidentCalibratedStack:
     """VRAM-resident calibrated-frame stack for high-memory benchmark paths.
 

@@ -106,6 +106,17 @@ __global__ void star_catalog_init_kernel(float* xs, float* ys, float* fluxes, in
   fluxes[i] = -3.402823466e+38F;
 }
 
+__global__ void star_grid_catalog_init_kernel(float* xs, float* ys, float* fluxes, int* locks, int cell_count) {
+  const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (i >= cell_count) {
+    return;
+  }
+  xs[i] = 0.0f;
+  ys[i] = 0.0f;
+  fluxes[i] = -3.402823466e+38F;
+  locks[i] = 0;
+}
+
 __global__ void star_candidate_topn_kernel(
     const float* input,
     float* xs,
@@ -144,6 +155,42 @@ __global__ void star_candidate_topn_kernel(
     fluxes[weakest_index] = center;
   }
   atomicExch(lock, 0);
+}
+
+__global__ void star_candidate_grid_kernel(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int* locks,
+    int* count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows) {
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  if (x >= width || y >= height) {
+    return;
+  }
+  float center = 0.0f;
+  if (!is_local_maximum(input, x, y, width, height, threshold, &center)) {
+    return;
+  }
+  atomicAdd(count, 1);
+  const int cell_x = min((x * grid_cols) / width, grid_cols - 1);
+  const int cell_y = min((y * grid_rows) / height, grid_rows - 1);
+  const int cell_index = cell_y * grid_cols + cell_x;
+
+  while (atomicCAS(locks + cell_index, 0, 1) != 0) {
+  }
+  if (center > fluxes[cell_index]) {
+    xs[cell_index] = static_cast<float>(x);
+    ys[cell_index] = static_cast<float>(y);
+    fluxes[cell_index] = center;
+  }
+  atomicExch(locks + cell_index, 0);
 }
 
 __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxes, int max_candidates) {
@@ -223,4 +270,28 @@ void gpwbpp_star_top_candidates_f32_launch(
   star_candidate_topn_kernel<<<grid, block>>>(
       input, xs, ys, fluxes, count, lock, width, height, threshold, max_candidates);
   star_catalog_sort_desc_kernel<<<1, 1>>>(xs, ys, fluxes, max_candidates);
+}
+
+void gpwbpp_star_grid_candidates_f32_launch(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int* count,
+    int* locks,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows) {
+  cudaMemset(count, 0, sizeof(int));
+  const int cell_count = grid_cols * grid_rows;
+  constexpr int init_threads = 256;
+  const int init_blocks = (cell_count + init_threads - 1) / init_threads;
+  star_grid_catalog_init_kernel<<<init_blocks, init_threads>>>(xs, ys, fluxes, locks, cell_count);
+  const dim3 block(16, 16);
+  const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+  star_candidate_grid_kernel<<<grid, block>>>(
+      input, xs, ys, fluxes, locks, count, width, height, threshold, grid_cols, grid_rows);
+  star_catalog_sort_desc_kernel<<<1, 1>>>(xs, ys, fluxes, cell_count);
 }

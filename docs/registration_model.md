@@ -51,8 +51,12 @@ The refined catalog translation can now drive
 returns both the aligned image and a valid-pixel coverage mask. The current
 validated scope is translation-only. Benchmark output now marks catalog
 alignment as accepted only when the mutual-inlier count reaches the configured
-minimum. Similarity, affine, homography, Lanczos/resampling choices, and fully
-resident frame-to-frame transform application remain future warp gates.
+minimum and the pixel RMS is not worse than the integer-NCC fallback. A
+grid-distributed GPU star selector can keep one bright local maximum per image
+cell for diagnostics, but real-data M38 tests still show that descriptor-level
+matching is needed before catalog alignment should replace the fallback.
+Similarity, affine, homography, Lanczos/resampling choices, and fully resident
+frame-to-frame transform application remain future warp gates.
 
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an

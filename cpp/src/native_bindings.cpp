@@ -132,6 +132,18 @@ void gpwbpp_star_top_candidates_f32_launch(
     int height,
     float threshold,
     int max_candidates);
+void gpwbpp_star_grid_candidates_f32_launch(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int* count,
+    int* locks,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows);
 
 namespace {
 
@@ -1677,6 +1689,106 @@ py::dict star_top_candidates_f32(
   }
 }
 
+py::dict star_grid_candidates_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    float threshold,
+    int grid_cols,
+    int grid_rows) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  if (grid_cols <= 0 || grid_rows <= 0) {
+    throw std::invalid_argument("grid dimensions must be positive");
+  }
+  const int height = static_cast<int>(info.shape[0]);
+  const int width = static_cast<int>(info.shape[1]);
+  const int cell_count = grid_cols * grid_rows;
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  py::array_t<float> xs({cell_count});
+  py::array_t<float> ys({cell_count});
+  py::array_t<float> fluxes({cell_count});
+  const py::buffer_info xs_info = xs.request();
+  const py::buffer_info ys_info = ys.request();
+  const py::buffer_info flux_info = fluxes.request();
+
+  float* d_input = nullptr;
+  float* d_xs = nullptr;
+  float* d_ys = nullptr;
+  float* d_fluxes = nullptr;
+  int* d_count = nullptr;
+  int* d_locks = nullptr;
+  int total_count = 0;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(grid star input)");
+    check_cuda(cudaMalloc(&d_xs, static_cast<std::size_t>(cell_count) * sizeof(float)), "cudaMalloc(grid star xs)");
+    check_cuda(cudaMalloc(&d_ys, static_cast<std::size_t>(cell_count) * sizeof(float)), "cudaMalloc(grid star ys)");
+    check_cuda(
+        cudaMalloc(&d_fluxes, static_cast<std::size_t>(cell_count) * sizeof(float)),
+        "cudaMalloc(grid star fluxes)");
+    check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(grid star count)");
+    check_cuda(cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)), "cudaMalloc(grid star locks)");
+    check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(grid star input)");
+    gpwbpp_star_grid_candidates_f32_launch(
+        d_input,
+        d_xs,
+        d_ys,
+        d_fluxes,
+        d_count,
+        d_locks,
+        width,
+        height,
+        threshold,
+        grid_cols,
+        grid_rows);
+    check_cuda(cudaGetLastError(), "star_grid_candidates_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "star_grid_candidates_f32 synchronize");
+    check_cuda(cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(grid star count)");
+    check_cuda(
+        cudaMemcpy(xs_info.ptr, d_xs, static_cast<std::size_t>(cell_count) * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid star xs)");
+    check_cuda(
+        cudaMemcpy(ys_info.ptr, d_ys, static_cast<std::size_t>(cell_count) * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid star ys)");
+    check_cuda(
+        cudaMemcpy(
+            flux_info.ptr,
+            d_fluxes,
+            static_cast<std::size_t>(cell_count) * sizeof(float),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(grid star fluxes)");
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_xs);
+    cudaFree(d_ys);
+    cudaFree(d_fluxes);
+    cudaFree(d_count);
+    cudaFree(d_locks);
+    throw;
+  }
+  cudaFree(d_input);
+  cudaFree(d_xs);
+  cudaFree(d_ys);
+  cudaFree(d_fluxes);
+  cudaFree(d_count);
+  cudaFree(d_locks);
+
+  int stored_count = 0;
+  const auto* flux_ptr = static_cast<const float*>(flux_info.ptr);
+  while (stored_count < cell_count && flux_ptr[stored_count] > -1.0e30f) {
+    ++stored_count;
+  }
+  py::dict result;
+  result["count"] = total_count;
+  result["stored_count"] = stored_count;
+  result["x"] = xs[py::slice(0, stored_count, 1)];
+  result["y"] = ys[py::slice(0, stored_count, 1)];
+  result["flux"] = fluxes[py::slice(0, stored_count, 1)];
+  result["grid_cols"] = grid_cols;
+  result["grid_rows"] = grid_rows;
+  return result;
+}
+
 PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.doc() = "Native CUDA backend for GPWBPP";
   m.def("cuda_available", &cuda_available);
@@ -1704,6 +1816,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);
   m.def("star_candidates_f32", &star_candidates_f32);
   m.def("star_top_candidates_f32", &star_top_candidates_f32);
+  m.def("star_grid_candidates_f32", &star_grid_candidates_f32);
   py::class_<ResidentCalibratedStack>(m, "ResidentCalibratedStack")
       .def(py::init<std::size_t, std::size_t, std::size_t>())
       .def_property_readonly("frame_count", &ResidentCalibratedStack::frame_count)

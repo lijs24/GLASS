@@ -23,6 +23,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `star_local_max_mask_f32(tile, threshold)`
 - `star_candidates_f32(tile, threshold, max_candidates)`
 - `star_top_candidates_f32(tile, threshold, max_candidates)`
+- `star_grid_candidates_f32(tile, threshold, grid_cols, grid_rows)`
 - `ResidentCalibratedStack.integrate_sigma_clip(...)`
 - `ResidentCalibratedStack.apply_translation_frame(...)`
 - `ResidentCalibratedStack.star_local_max_mask(index, threshold)`
@@ -57,6 +58,8 @@ Resident CUDA integration now supports:
   standalone tiles and directly on resident calibrated frames.
 - GPU top-N selection and descending flux sorting for bounded star catalogs,
   available on standalone tiles and directly on resident calibrated frames.
+- GPU grid-distributed star selection that keeps the brightest local maximum in
+  each image grid cell, reducing global-brightness bias in diagnostic catalogs.
 - GPU integer-translation search with per-shift normalized cross-correlation,
   followed by device-side best-shift selection and CUDA translation warp.
 - GPU star-catalog pair-offset voting for translation estimation from bounded

@@ -118,6 +118,33 @@ def test_gpu_star_top_candidates_sorts_by_flux_and_caps():
     ]
 
 
+def test_gpu_star_grid_candidates_keeps_brightest_per_cell():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_grid_candidates_f32"):
+        raise AssertionError("star_grid_candidates_f32 is missing from gpwbpp_cuda")
+
+    image = np.zeros((8, 8), dtype=np.float32)
+    image[1, 1] = 9.0
+    image[3, 2] = 15.0
+    image[1, 6] = 12.0
+    image[6, 2] = 18.0
+    image[6, 6] = 7.0
+
+    result = module.star_grid_candidates_f32(image, 5.0, 2, 2)
+
+    assert result["count"] == 5
+    assert result["stored_count"] == 4
+    assert np.array_equal(result["flux"], np.array([18.0, 15.0, 12.0, 7.0], dtype=np.float32))
+    assert [(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)] == [
+        (2, 6),
+        (2, 3),
+        (6, 1),
+        (6, 6),
+    ]
+    assert result["grid_cols"] == 2
+    assert result["grid_rows"] == 2
+
+
 def test_resident_stack_star_top_candidates_from_device_frame():
     module = cuda_module_or_skip()
     image = np.zeros((9, 10), dtype=np.float32)

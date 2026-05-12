@@ -128,14 +128,22 @@ def _gpu_catalog_run(
     tolerance_px: float,
     max_shift: int | None = None,
     min_inliers: int = 6,
+    grid_cols: int | None = None,
+    grid_rows: int | None = None,
 ) -> dict[str, Any]:
     if not gpwbpp_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
     t0 = time.perf_counter()
     reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
     moving_threshold = _adaptive_star_threshold(moving, threshold_sigma)
-    reference_catalog = gpwbpp_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
-    moving_catalog = gpwbpp_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
+    if grid_cols is not None and grid_rows is not None:
+        reference_catalog = gpwbpp_cuda.star_grid_candidates_f32(reference, reference_threshold, grid_cols, grid_rows)
+        moving_catalog = gpwbpp_cuda.star_grid_candidates_f32(moving, moving_threshold, grid_cols, grid_rows)
+        selection_model = "grid_brightest_local_maximum"
+    else:
+        reference_catalog = gpwbpp_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
+        moving_catalog = gpwbpp_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
+        selection_model = "global_top_flux_local_maximum"
     if reference_catalog["stored_count"] == 0 or moving_catalog["stored_count"] == 0:
         raise RuntimeError(
             "GPU catalog alignment found no stars "
@@ -174,6 +182,9 @@ def _gpu_catalog_run(
         "moving_stored": int(moving_catalog["stored_count"]),
         "reference_threshold": reference_threshold,
         "moving_threshold": moving_threshold,
+        "selection_model": selection_model,
+        "grid_cols": grid_cols,
+        "grid_rows": grid_rows,
         "tolerance_px": float(tolerance_px),
         "max_shift": None if max_shift is None else int(max_shift),
         "min_inliers": int(min_inliers),
@@ -200,7 +211,11 @@ def main() -> int:
     parser.add_argument("--catalog-tolerance-px", type=float, default=3.0)
     parser.add_argument("--catalog-max-shift", type=int)
     parser.add_argument("--catalog-min-inliers", type=int, default=6)
+    parser.add_argument("--catalog-grid-cols", type=int)
+    parser.add_argument("--catalog-grid-rows", type=int)
     args = parser.parse_args()
+    if (args.catalog_grid_cols is None) != (args.catalog_grid_rows is None):
+        raise ValueError("--catalog-grid-cols and --catalog-grid-rows must be provided together")
 
     if args.reference and args.moving:
         reference = _center_crop(_read_fits(args.reference), args.center_crop)
@@ -226,7 +241,17 @@ def main() -> int:
         args.catalog_tolerance_px,
         catalog_max_shift,
         args.catalog_min_inliers,
+        args.catalog_grid_cols,
+        args.catalog_grid_rows,
     )
+    if (
+        gpu_catalog_result["accepted"]
+        and np.isfinite(gpu_catalog_result["rms"])
+        and np.isfinite(gpu_result["rms"])
+        and gpu_catalog_result["rms"] > gpu_result["rms"] * 1.05
+    ):
+        gpu_catalog_result["accepted"] = False
+        gpu_catalog_result["warnings"].append("catalog image RMS is worse than integer NCC by more than 5%")
     devices = gpwbpp_cuda.list_devices()
     result = {
         "image_shape": list(reference.shape),
