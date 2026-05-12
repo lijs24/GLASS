@@ -35,12 +35,13 @@ subpixel refinement, similarity/affine transforms, or higher-order interpolation
 
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
-moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None)`. It consumes bounded
-star catalogs, forms all pair offsets on the GPU, filters offsets outside the
-configured search window, scores offset clusters on the GPU, and returns the
-highest-vote translation. This is the first device-side star-catalog transform
-scorer; it is still translation-only and does not yet perform one-to-one
-assignment as the primary score. A follow-up refinement pass now applies
+moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,
+prior_dy=None, prior_radius_px=None)`. It consumes bounded star catalogs, forms
+all pair offsets on the GPU, filters offsets outside the configured search
+window and optional NCC-prior radius, scores offset clusters on the GPU, and
+returns the highest-vote translation. This is the first device-side star-catalog
+transform scorer; it is still translation-only and does not yet perform
+one-to-one assignment as the primary score. A follow-up refinement pass now applies
 mutual-nearest matching around that highest-vote translation, reports
 `mutual_inliers`, averages matched catalog deltas into `refined_dx/refined_dy`,
 and computes `rms_px`. It still depends on the input catalog coordinates; true
@@ -53,8 +54,9 @@ validated scope is translation-only. Benchmark output now marks catalog
 alignment as accepted only when the mutual-inlier count reaches the configured
 minimum and the pixel RMS is not worse than the integer-NCC fallback. A
 grid-distributed GPU star selector can keep one bright local maximum per image
-cell for diagnostics, but real-data M38 tests still show that descriptor-level
-matching is needed before catalog alignment should replace the fallback.
+cell for diagnostics. Real-data M38 tests with an NCC prior can improve pixel
+RMS, but the inlier evidence is still too weak to replace the fallback without
+descriptor-level matching.
 Similarity, affine, homography, Lanczos/resampling choices, and fully resident
 frame-to-frame transform application remain future warp gates.
 

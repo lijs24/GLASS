@@ -130,6 +130,9 @@ def _gpu_catalog_run(
     min_inliers: int = 6,
     grid_cols: int | None = None,
     grid_rows: int | None = None,
+    prior_dx: float | None = None,
+    prior_dy: float | None = None,
+    prior_radius_px: float | None = None,
 ) -> dict[str, Any]:
     if not gpwbpp_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
@@ -157,6 +160,9 @@ def _gpu_catalog_run(
         tolerance_px,
         None if max_shift is None else float(max_shift),
         None if max_shift is None else float(max_shift),
+        prior_dx,
+        prior_dy,
+        prior_radius_px,
     )
     dx = float(estimate["refined_dx"])
     dy = float(estimate["refined_dy"])
@@ -187,6 +193,9 @@ def _gpu_catalog_run(
         "grid_rows": grid_rows,
         "tolerance_px": float(tolerance_px),
         "max_shift": None if max_shift is None else int(max_shift),
+        "prior_dx": prior_dx,
+        "prior_dy": prior_dy,
+        "prior_radius_px": prior_radius_px,
         "min_inliers": int(min_inliers),
         "accepted": accepted,
         "warnings": warnings,
@@ -213,6 +222,7 @@ def main() -> int:
     parser.add_argument("--catalog-min-inliers", type=int, default=6)
     parser.add_argument("--catalog-grid-cols", type=int)
     parser.add_argument("--catalog-grid-rows", type=int)
+    parser.add_argument("--catalog-prior-radius", type=float)
     args = parser.parse_args()
     if (args.catalog_grid_cols is None) != (args.catalog_grid_rows is None):
         raise ValueError("--catalog-grid-cols and --catalog-grid-rows must be provided together")
@@ -233,6 +243,8 @@ def main() -> int:
     astroalign_result = _astroalign_run(reference, moving)
     gpu_result = _gpu_run(reference, moving, args.max_shift)
     catalog_max_shift = args.max_shift if args.catalog_max_shift is None else args.catalog_max_shift
+    prior_dx = float(gpu_result["dx"]) if args.catalog_prior_radius is not None else None
+    prior_dy = float(gpu_result["dy"]) if args.catalog_prior_radius is not None else None
     gpu_catalog_result = _gpu_catalog_run(
         reference,
         moving,
@@ -243,6 +255,9 @@ def main() -> int:
         args.catalog_min_inliers,
         args.catalog_grid_cols,
         args.catalog_grid_rows,
+        prior_dx,
+        prior_dy,
+        args.catalog_prior_radius,
     )
     if (
         gpu_catalog_result["accepted"]

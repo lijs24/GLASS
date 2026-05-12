@@ -353,6 +353,9 @@ def _catalog_translation_vote(
     tolerance_px: float,
     max_abs_dx: float | None = None,
     max_abs_dy: float | None = None,
+    prior_dx: float | None = None,
+    prior_dy: float | None = None,
+    prior_radius_px: float | None = None,
 ) -> dict[str, Any]:
     ref_x = np.asarray(reference_x, dtype=np.float32).reshape(-1)
     ref_y = np.asarray(reference_y, dtype=np.float32).reshape(-1)
@@ -375,6 +378,12 @@ def _catalog_translation_vote(
         valid_candidates &= np.abs(dx) <= np.float32(max_abs_dx)
     if max_abs_dy is not None and max_abs_dy >= 0.0:
         valid_candidates &= np.abs(dy) <= np.float32(max_abs_dy)
+    if prior_radius_px is not None and prior_radius_px >= 0.0:
+        if prior_dx is None or prior_dy is None:
+            raise ValueError("prior_dx and prior_dy are required when prior_radius_px is set")
+        valid_candidates &= (dx - np.float32(prior_dx)) ** 2 + (dy - np.float32(prior_dy)) ** 2 <= np.float32(
+            prior_radius_px
+        ) ** 2
     tolerance2 = np.float32(tolerance_px) * np.float32(tolerance_px)
     best_index = 0
     best_score = -1
@@ -402,6 +411,9 @@ def _catalog_translation_vote(
             "tolerance_px": float(tolerance_px),
             "max_abs_dx": None if max_abs_dx is None else float(max_abs_dx),
             "max_abs_dy": None if max_abs_dy is None else float(max_abs_dy),
+            "prior_dx": None if prior_dx is None else float(prior_dx),
+            "prior_dy": None if prior_dy is None else float(prior_dy),
+            "prior_radius_px": None if prior_radius_px is None else float(prior_radius_px),
             "model": "catalog_pair_offset_translation_cpu_fallback",
         }
     refined = _refine_catalog_translation(ref_x, ref_y, mov_x, mov_y, float(dx[best_index]), float(dy[best_index]), tolerance_px)
@@ -416,6 +428,9 @@ def _catalog_translation_vote(
         "tolerance_px": float(tolerance_px),
         "max_abs_dx": None if max_abs_dx is None else float(max_abs_dx),
         "max_abs_dy": None if max_abs_dy is None else float(max_abs_dy),
+        "prior_dx": None if prior_dx is None else float(prior_dx),
+        "prior_dy": None if prior_dy is None else float(prior_dy),
+        "prior_radius_px": None if prior_radius_px is None else float(prior_radius_px),
         "model": "catalog_pair_offset_translation_cpu_fallback",
     }
 
@@ -484,6 +499,9 @@ def estimate_translation_from_catalogs_f32(
     tolerance_px: float = 1.0,
     max_abs_dx: float | None = None,
     max_abs_dy: float | None = None,
+    prior_dx: float | None = None,
+    prior_dy: float | None = None,
+    prior_radius_px: float | None = None,
 ) -> dict[str, Any]:
     """Estimate translation from two star coordinate catalogs.
 
@@ -493,6 +511,9 @@ def estimate_translation_from_catalogs_f32(
 
     native_max_abs_dx = -1.0 if max_abs_dx is None else float(max_abs_dx)
     native_max_abs_dy = -1.0 if max_abs_dy is None else float(max_abs_dy)
+    native_prior_dx = 0.0 if prior_dx is None else float(prior_dx)
+    native_prior_dy = 0.0 if prior_dy is None else float(prior_dy)
+    native_prior_radius_px = -1.0 if prior_radius_px is None else float(prior_radius_px)
     native = _native()
     if native is not None and hasattr(native, "estimate_translation_from_catalogs_f32"):
         result = dict(
@@ -504,6 +525,9 @@ def estimate_translation_from_catalogs_f32(
                 float(tolerance_px),
                 native_max_abs_dx,
                 native_max_abs_dy,
+                native_prior_dx,
+                native_prior_dy,
+                native_prior_radius_px,
             )
         )
         return {
@@ -520,6 +544,9 @@ def estimate_translation_from_catalogs_f32(
             "tolerance_px": float(result["tolerance_px"]),
             "max_abs_dx": float(result["max_abs_dx"]),
             "max_abs_dy": float(result["max_abs_dy"]),
+            "prior_dx": float(result["prior_dx"]),
+            "prior_dy": float(result["prior_dy"]),
+            "prior_radius_px": float(result["prior_radius_px"]),
             "model": str(result.get("model", "catalog_pair_offset_translation")),
         }
 
@@ -531,6 +558,9 @@ def estimate_translation_from_catalogs_f32(
         tolerance_px,
         max_abs_dx,
         max_abs_dy,
+        prior_dx,
+        prior_dy,
+        prior_radius_px,
     )
 
 

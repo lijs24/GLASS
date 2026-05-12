@@ -130,7 +130,10 @@ __global__ void catalog_pair_offsets_kernel(
     int moving_count,
     int pair_count,
     float max_abs_dx,
-    float max_abs_dy) {
+    float max_abs_dy,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px) {
   const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   if (i >= pair_count) {
     return;
@@ -144,6 +147,15 @@ __global__ void catalog_pair_offsets_kernel(
     candidate_dx[i] = NAN;
     candidate_dy[i] = NAN;
     return;
+  }
+  if (prior_radius_px >= 0.0f) {
+    const float ddx = dx - prior_dx;
+    const float ddy = dy - prior_dy;
+    if (ddx * ddx + ddy * ddy > prior_radius_px * prior_radius_px) {
+      candidate_dx[i] = NAN;
+      candidate_dy[i] = NAN;
+      return;
+    }
   }
   candidate_dx[i] = dx;
   candidate_dy[i] = dy;
@@ -398,7 +410,10 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     int moving_count,
     float tolerance_px,
     float max_abs_dx,
-    float max_abs_dy) {
+    float max_abs_dy,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px) {
   constexpr int threads = 256;
   const int pair_count = reference_count * moving_count;
   const int blocks = (pair_count + threads - 1) / threads;
@@ -415,7 +430,10 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
       moving_count,
       pair_count,
       max_abs_dx,
-      max_abs_dy);
+      max_abs_dy,
+      prior_dx,
+      prior_dy,
+      prior_radius_px);
   catalog_offset_score_kernel<<<blocks, threads>>>(candidate_dx, candidate_dy, scores, pair_count, tolerance_px);
   catalog_offset_best_kernel<<<1, 1>>>(candidate_dx, candidate_dy, scores, best_dx, best_dy, best_inliers, pair_count);
   cudaMemset(moving_best_reference, 0xff, static_cast<std::size_t>(moving_count) * sizeof(int));

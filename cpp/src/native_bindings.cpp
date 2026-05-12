@@ -80,7 +80,10 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     int moving_count,
     float tolerance_px,
     float max_abs_dx,
-    float max_abs_dy);
+    float max_abs_dy,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
 void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
@@ -1210,7 +1213,10 @@ py::dict estimate_translation_from_catalogs_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> moving_y,
     float tolerance_px,
     float max_abs_dx,
-    float max_abs_dy) {
+    float max_abs_dy,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px) {
   const py::buffer_info reference_x_info = reference_x.request();
   const py::buffer_info reference_y_info = reference_y.request();
   const py::buffer_info moving_x_info = moving_x.request();
@@ -1234,6 +1240,9 @@ py::dict estimate_translation_from_catalogs_f32(
   }
   if (max_abs_dy < 0.0f) {
     max_abs_dy = max_abs_dx;
+  }
+  if (prior_radius_px < 0.0f) {
+    prior_radius_px = -1.0f;
   }
   const int pair_count = reference_count * moving_count;
 
@@ -1345,7 +1354,10 @@ py::dict estimate_translation_from_catalogs_f32(
         moving_count,
         tolerance_px,
         max_abs_dx,
-        max_abs_dy);
+        max_abs_dy,
+        prior_dx,
+        prior_dy,
+        prior_radius_px);
     check_cuda(cudaGetLastError(), "estimate_translation_from_catalogs_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "estimate_translation_from_catalogs_f32 synchronize");
     check_cuda(cudaMemcpy(&best_dx, d_best_dx, sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(catalog best dx)");
@@ -1415,6 +1427,9 @@ py::dict estimate_translation_from_catalogs_f32(
   result["tolerance_px"] = tolerance_px;
   result["max_abs_dx"] = max_abs_dx;
   result["max_abs_dy"] = max_abs_dy;
+  result["prior_dx"] = prior_dx;
+  result["prior_dy"] = prior_dy;
+  result["prior_radius_px"] = prior_radius_px;
   result["model"] = "catalog_pair_offset_translation";
   return result;
 }
@@ -1810,7 +1825,10 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("moving_y"),
       py::arg("tolerance_px") = 1.0f,
       py::arg("max_abs_dx") = -1.0f,
-      py::arg("max_abs_dy") = -1.0f);
+      py::arg("max_abs_dy") = -1.0f,
+      py::arg("prior_dx") = 0.0f,
+      py::arg("prior_dy") = 0.0f,
+      py::arg("prior_radius_px") = -1.0f);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);

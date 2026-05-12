@@ -140,6 +140,47 @@ def test_gpu_catalog_translation_respects_search_bounds():
     assert bounded["max_abs_dy"] == 10.0
 
 
+def test_gpu_catalog_translation_respects_ncc_prior_window():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_translation_from_catalogs_f32"):
+        raise AssertionError("estimate_translation_from_catalogs_f32 is missing from gpwbpp_cuda")
+
+    reference = np.array(
+        [
+            (10.0, 10.0),
+            (25.0, 12.0),
+            (18.0, 31.0),
+            (40.0, 35.0),
+            (52.0, 18.0),
+            (61.0, 44.0),
+        ],
+        dtype=np.float32,
+    )
+    true_delta = np.array([3.25, -1.75], dtype=np.float32)
+    distractor_delta = np.array([0.0, 0.0], dtype=np.float32)
+    moving = np.vstack([reference - distractor_delta, reference - true_delta])
+
+    result = module.estimate_translation_from_catalogs_f32(
+        reference[:, 0],
+        reference[:, 1],
+        moving[:, 0],
+        moving[:, 1],
+        0.4,
+        10.0,
+        10.0,
+        3.0,
+        -2.0,
+        1.0,
+    )
+
+    assert abs(result["refined_dx"] - float(true_delta[0])) < 1.0e-5
+    assert abs(result["refined_dy"] - float(true_delta[1])) < 1.0e-5
+    assert result["mutual_inliers"] == len(reference)
+    assert result["prior_dx"] == 3.0
+    assert result["prior_dy"] == -2.0
+    assert result["prior_radius_px"] == 1.0
+
+
 def test_gpu_catalog_translation_from_top_star_candidates():
     module = cuda_module_or_skip()
     reference = _star_field()

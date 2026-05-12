@@ -18,7 +18,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `calibrate_tile_f32(...)`
 - `integrate_accumulate_mean_tile_f32(...)`
 - `estimate_translation_search_f32(reference, moving, max_shift_x, max_shift_y)`
-- `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None)`
+- `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None, prior_dy=None, prior_radius_px=None)`
 - `warp_translation_bilinear_f32(data, dx, dy, fill)`
 - `star_local_max_mask_f32(tile, threshold)`
 - `star_candidates_f32(tile, threshold, max_candidates)`
@@ -69,6 +69,8 @@ Resident CUDA integration now supports:
 - Optional GPU catalog translation search bounds (`max_abs_dx/max_abs_dy`) so
   bright outliers cannot vote for physically implausible offsets outside the
   registration search window.
+- Optional NCC-prior catalog windowing so catalog votes can be restricted to a
+  radius around a coarse GPU translation estimate before subpixel refinement.
 - GPU bilinear subpixel translation warp, returning a warped frame and
   coverage mask. This is the first CUDA warp primitive that can consume the
   refined floating-point catalog translation directly.
