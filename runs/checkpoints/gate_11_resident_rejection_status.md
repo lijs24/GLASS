@@ -26,7 +26,9 @@ Commands run:
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py tests\test_gpu_integration_vs_cpu.py
 .\.venv\Scripts\python.exe -m gpwbpp.cli run --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none
 .\.venv\Scripts\python.exe -m gpwbpp.cli run --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan_flatfloor005.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none
+.\.venv\Scripts\python.exe -m gpwbpp.cli run --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_cli_run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05
 .\.venv\Scripts\python.exe -m gpwbpp.cli compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_run\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_scaled_resident_vs_wbpp_compare.html --gpwbpp-time-seconds 64.94495560001815 --reference-time-seconds 1092.541 --gpwbpp-label GPWBPP-resident-winsorized-flatfloor005-scaled --reference-label PixInsight-WBPP-fastIntegration --gpwbpp-scale 0.000015259021896696421 --clip-low 0 --clip-high 1
+.\.venv\Scripts\python.exe -m gpwbpp.cli compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_cli_run\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_cli_scaled_resident_vs_wbpp_compare.html --gpwbpp-time-seconds 64.39926949999062 --reference-time-seconds 1092.541 --gpwbpp-label GPWBPP-resident-winsorized-flatfloor005-cli-scaled --reference-label PixInsight-WBPP-fastIntegration --gpwbpp-scale 0.000015259021896696421 --clip-low 0 --clip-high 1
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -45,8 +47,10 @@ Real-data results:
 - M38 H 200-light + 20/20/20 calibration frames completed.
 - Resident winsorized run with default `flat_floor=1e-6`: 64.0809652999742 s.
 - Resident winsorized diagnostic run with `flat_floor=0.05`: 64.94495560001815 s.
+- Resident winsorized first-class CLI run with `--flat-floor 0.05`:
+  64.39926949999062 s.
 - WBPP black-box reference: 1092.541 s.
-- Speedup for the `flat_floor=0.05` diagnostic run: 16.82x.
+- Speedup for the `--flat-floor 0.05` CLI run: 16.97x.
 
 Observed image behavior:
 

@@ -68,8 +68,8 @@ Timing summary:
 - GPWBPP resident CUDA calibration plus mean integration elapsed time:
   58.9810051000095 s, a raw timing speedup of 18.52x.
 - GPWBPP resident CUDA calibration plus winsorized mean/std rejection
-  integration with `--flat-floor 0.05` elapsed time: 64.94495560001815 s, a raw
-  timing speedup of 16.82x.
+  integration with `--flat-floor 0.05` elapsed time: 64.39926949999062 s, a raw
+  timing speedup of 16.97x.
 
 WBPP fast-integration settings observed from user-generated logs:
 
@@ -102,6 +102,9 @@ C:\gpwbpp_runs\final_m38_h_200\resident_vs_wbpp_pedestal_scaled_compare.html
 C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_run
 C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_scaled_resident_vs_wbpp_compare.json
 C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_scaled_resident_vs_wbpp_compare.html
+C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_winsorized_flatfloor005_cli_run
+C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_cli_scaled_resident_vs_wbpp_compare.json
+C:\gpwbpp_runs\final_m38_h_200\winsorized_flatfloor005_cli_scaled_resident_vs_wbpp_compare.html
 ```
 
 The current result proves a high-VRAM GPWBPP calibration/integration speed
