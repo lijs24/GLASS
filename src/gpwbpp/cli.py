@@ -87,6 +87,7 @@ def _write_run_report(run: Path, report_path: Path, manifest_path: Path, plan_pa
         local_norm=_read_json_if_exists(run / "local_norm_results.json"),
         integration=_read_json_if_exists(run / "integration_results.json"),
         timing=_read_json_if_exists(run / "run_timing.json"),
+        resident=_read_json_if_exists(run / "resident_artifacts.json"),
     )
 
 
@@ -256,11 +257,13 @@ def cmd_report(args: argparse.Namespace) -> int:
     local_norm_path = run / "local_norm_results.json"
     integration_path = run / "integration_results.json"
     timing_path = run / "run_timing.json"
+    resident_path = run / "resident_artifacts.json"
     quality = _read_json_if_exists(quality_path)
     registration = _read_json_if_exists(registration_path)
     local_norm = _read_json_if_exists(local_norm_path)
     integration = _read_json_if_exists(integration_path)
     timing = _read_json_if_exists(timing_path)
+    resident = _read_json_if_exists(resident_path)
     write_html_report(
         args.out,
         manifest=manifest,
@@ -270,6 +273,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         local_norm=local_norm,
         integration=integration,
         timing=timing,
+        resident=resident,
     )
     console.print(f"Wrote report: {args.out}")
     return 0
