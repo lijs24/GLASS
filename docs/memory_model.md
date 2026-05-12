@@ -19,6 +19,11 @@ integration uses fixed-size sum, weight-sum, and coverage accumulators instead
 of a per-tile 3D frame stack. Rejection modes still build a tile stack because
 sigma and winsorized rejection need the per-pixel frame distribution.
 
+Quality measurement reads calibrated frames in tiles. It computes exact median
+backgrounds through a temporary `memmap` scratch file, computes mean/std in the
+same tile pass, and performs star detection in a second tile pass with a 1-pixel
+halo around each tile.
+
 The memory model has four levels:
 
 - Source files: immutable FITS/XISF input images.

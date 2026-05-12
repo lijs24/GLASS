@@ -164,6 +164,13 @@ def test_pipeline_fixture_run_quality_and_report(tmp_path: Path):
         == 0
     )
     assert (run / "frame_quality.json").exists()
+    import json
+
+    quality = json.loads((run / "frame_quality.json").read_text(encoding="utf-8"))
+    assert quality["metric_source"] == "streaming_tile_reader"
+    assert quality["tile_size"] == 8
+    assert all(item["metric_source"] == "streaming_tile_reader" for item in quality["frame_quality"])
+    assert not (run / "quality_scratch").exists()
     assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
     assert "Frame quality table" in text

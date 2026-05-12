@@ -45,7 +45,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | CPU calibration baseline | `src/gpwbpp/cpu`, tests | covered |
 | CUDA extension and wrappers | `cpp/cuda`, `src/gpwbpp_cuda.py`, tests | covered |
 | Tile light calibration | Gate 6 checkpoint, tests | covered |
-| Quality metrics/reference selection | Gate 7 checkpoint, tests | covered baseline |
+| Quality metrics/reference selection | Gate 7 checkpoint, `runs/checkpoints/streaming_quality_status.md`, tests | streaming tile metrics with exact scratch median and halo star detection |
 | Registration | Gate 8 checkpoint, tests | translation baseline only |
 | Warp/coverage | Gate 9 checkpoint, tests | integer nearest-neighbor baseline |
 | Local normalization | Gate 10 checkpoint, tests | tile baseline only |
