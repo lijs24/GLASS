@@ -4,10 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from astropy.io import fits
 
 from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import FitsTileWriter
+from gpwbpp.io.fits_io import FitsTileWriter, open_fits_image
 from gpwbpp.io.json_io import read_json, write_json
 
 
@@ -47,7 +46,7 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
         frame_id = result["frame_id"]
         source = calibrated[frame_id]["path"]
         dx, dy = _translation_from_matrix(result["matrix"])
-        with fits.open(source, memmap=True) as hdul:
+        with open_fits_image(source, memmap=True) as hdul:
             data = hdul[0].data
             if data is None:
                 raise ValueError(f"FITS file has no primary image data: {source}")
@@ -88,4 +87,3 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
     payload = {"schema_version": 1, "warp_results": outputs}
     write_json(run / "warp_results.json", payload)
     return payload
-

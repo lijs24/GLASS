@@ -3,12 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from astropy.io import fits
-
 from gpwbpp.cpu.calibration import calibrate_light
 from gpwbpp.cpu.master_frames import make_master_bias, make_master_dark, make_master_flat
 from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import FitsTileWriter, read_fits_data, write_fits_data
+from gpwbpp.io.fits_io import FitsTileWriter, open_fits_image, read_fits_data, write_fits_data
 from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.models import CalibrationPolicy, PipelineArtifact, RunState, now_iso
 
@@ -79,7 +77,7 @@ def _calibrate_light_to_cache_streaming(
     tile_size: int,
 ) -> dict[str, Any]:
     cuda_module = _cuda_module_if_requested(backend)
-    with fits.open(frame["path"], memmap=True) as hdul:
+    with open_fits_image(frame["path"], memmap=True) as hdul:
         light = hdul[0].data
         if light is None:
             raise ValueError(f"FITS file has no primary image data: {frame['path']}")

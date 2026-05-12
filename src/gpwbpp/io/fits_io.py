@@ -7,8 +7,21 @@ import numpy as np
 from astropy.io import fits
 
 
+def open_fits_image(path: str | Path, memmap: bool = True) -> fits.HDUList:
+    hdul = fits.open(path, memmap=memmap)
+    try:
+        _ = hdul[0].data
+    except ValueError as exc:
+        if memmap and "Cannot load a memory-mapped image" in str(exc):
+            hdul.close()
+            return fits.open(path, memmap=False)
+        hdul.close()
+        raise
+    return hdul
+
+
 def read_fits_data(path: str | Path, dtype=np.float32) -> np.ndarray:
-    with fits.open(path, memmap=True) as hdul:
+    with open_fits_image(path, memmap=True) as hdul:
         data = hdul[0].data
         if data is None:
             raise ValueError(f"FITS file has no primary image data: {path}")

@@ -4,11 +4,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from astropy.io import fits
 
 from gpwbpp.cpu.local_norm import apply_tile_normalization, estimate_tile_normalization
 from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import FitsTileWriter
+from gpwbpp.io.fits_io import FitsTileWriter, open_fits_image
 from gpwbpp.io.json_io import read_json, write_json
 
 
@@ -96,7 +95,7 @@ def local_normalize_registered_frames(
     cuda_module = _cuda_module_if_requested(backend)
     outputs: list[dict[str, Any]] = []
 
-    with fits.open(reference["registered_path"], memmap=True) as ref_hdul, fits.open(
+    with open_fits_image(reference["registered_path"], memmap=True) as ref_hdul, open_fits_image(
         reference["coverage_path"], memmap=True
     ) as ref_cov_hdul:
         reference_data = ref_hdul[0].data
@@ -111,7 +110,7 @@ def local_normalize_registered_frames(
             scales: list[float] = []
             offsets: list[float] = []
             valid_counts: list[int] = []
-            with fits.open(item["registered_path"], memmap=True) as src_hdul, fits.open(
+            with open_fits_image(item["registered_path"], memmap=True) as src_hdul, open_fits_image(
                 item["coverage_path"], memmap=True
             ) as cov_hdul, FitsTileWriter(
                 out_path,

@@ -5,11 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from astropy.io import fits
 
 from gpwbpp.cpu.integration import weighted_integrate_stack
 from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import FitsTileWriter
+from gpwbpp.io.fits_io import FitsTileWriter, open_fits_image
 from gpwbpp.io.json_io import read_json, write_json
 
 
@@ -120,8 +119,10 @@ def integrate_registered_frames(
 
     for filt, items in by_filter.items():
         with ExitStack() as stack:
-            source_hdus = [stack.enter_context(fits.open(item["path"], memmap=True)) for item in items]
-            coverage_hdus = [stack.enter_context(fits.open(item["coverage_path"], memmap=True)) for item in items]
+            source_hdus = [stack.enter_context(open_fits_image(item["path"], memmap=True)) for item in items]
+            coverage_hdus = [
+                stack.enter_context(open_fits_image(item["coverage_path"], memmap=True)) for item in items
+            ]
             first = source_hdus[0][0].data
             if first is None:
                 raise ValueError(f"integration source has no primary image: {items[0]['path']}")
