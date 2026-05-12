@@ -126,6 +126,22 @@ def _policy_from_mapping(policy: Any) -> CalibrationPolicy:
     return CalibrationPolicy()
 
 
+def _policy_payload(policy: Any | None) -> dict[str, Any] | None:
+    if policy is None:
+        return None
+    if isinstance(policy, CalibrationPolicy):
+        return asdict(policy)
+    if hasattr(policy, "__dataclass_fields__"):
+        return asdict(policy)
+    if isinstance(policy, dict):
+        return dict(policy)
+    return asdict(_policy_from_mapping(policy))
+
+
+def _as_f32_c(value: Any) -> np.ndarray:
+    return np.ascontiguousarray(np.asarray(value, dtype=np.float32))
+
+
 def calibrate_tile_f32(
     light: Any,
     bias: Any | None,
@@ -145,7 +161,7 @@ def calibrate_tile_f32(
                 flat,
                 light_exposure_s,
                 dark_exposure_s,
-                None if policy is None else policy,
+                _policy_payload(policy),
             ),
             dtype=np.float32,
         )
@@ -219,3 +235,79 @@ def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
         return np.asarray(native.local_norm_apply_f32(data, float(scale), float(offset)), dtype=np.float32)
     image = np.asarray(data, dtype=np.float32)
     return (image * np.float32(scale) + np.float32(offset)).astype(np.float32)
+
+
+class ResidentCalibratedStack:
+    """VRAM-resident calibrated-frame stack for high-memory benchmark paths.
+
+    The object keeps one reusable raw-light buffer, optional master calibration
+    frames, and a calibrated frame stack on the device. Raw inputs are uploaded
+    one at a time and are not retained after each calibration kernel completes.
+    """
+
+    def __init__(self, frame_count: int, height: int, width: int):
+        native = _native()
+        if native is None or not hasattr(native, "ResidentCalibratedStack"):
+            raise RuntimeError("native CUDA backend with ResidentCalibratedStack is not available")
+        self._impl = native.ResidentCalibratedStack(int(frame_count), int(height), int(width))
+
+    @property
+    def frame_count(self) -> int:
+        return int(self._impl.frame_count)
+
+    @property
+    def height(self) -> int:
+        return int(self._impl.height)
+
+    @property
+    def width(self) -> int:
+        return int(self._impl.width)
+
+    @property
+    def pixels_per_frame(self) -> int:
+        return int(self._impl.pixels_per_frame)
+
+    @property
+    def loaded_count(self) -> int:
+        return int(self._impl.loaded_count)
+
+    @property
+    def bytes_allocated(self) -> int:
+        return int(self._impl.bytes_allocated)
+
+    def set_calibration_masters(
+        self,
+        bias: Any | None = None,
+        dark: Any | None = None,
+        flat: Any | None = None,
+    ) -> None:
+        self._impl.set_calibration_masters(
+            None if bias is None else _as_f32_c(bias),
+            None if dark is None else _as_f32_c(dark),
+            None if flat is None else _as_f32_c(flat),
+        )
+
+    def upload_calibrated_frame(self, index: int, frame: Any) -> None:
+        self._impl.upload_calibrated_frame(int(index), _as_f32_c(frame))
+
+    def calibrate_frame(
+        self,
+        index: int,
+        light: Any,
+        light_exposure_s: float,
+        dark_exposure_s: float | None,
+        policy: Any | None = None,
+    ) -> None:
+        self._impl.calibrate_frame(
+            int(index),
+            _as_f32_c(light),
+            float(light_exposure_s),
+            None if dark_exposure_s is None else float(dark_exposure_s),
+            _policy_payload(policy),
+        )
+
+    def integrate_mean(self, weights: Any | None = None) -> tuple[np.ndarray, np.ndarray]:
+        master, weight_map = self._impl.integrate_mean(
+            None if weights is None else _as_f32_c(weights).reshape((self.frame_count,))
+        )
+        return np.asarray(master, dtype=np.float32), np.asarray(weight_map, dtype=np.float32)

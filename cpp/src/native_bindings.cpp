@@ -41,6 +41,13 @@ void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
 void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
+void gpwbpp_integrate_resident_weighted_mean_f32_launch(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame);
 
 namespace {
 
@@ -81,6 +88,16 @@ float dict_float(const py::dict& dict, const char* key, float fallback) {
   return py::cast<float>(dict[key]);
 }
 
+void require_frame_shape(const py::buffer_info& info, std::size_t height, std::size_t width) {
+  if (info.ndim != 2) {
+    throw std::invalid_argument("frame must have shape (height, width)");
+  }
+  if (static_cast<std::size_t>(info.shape[0]) != height ||
+      static_cast<std::size_t>(info.shape[1]) != width) {
+    throw std::invalid_argument("frame shape does not match the resident stack");
+  }
+}
+
 py::dict device_info_dict(int device_id) {
   cudaDeviceProp props{};
   check_cuda(cudaGetDeviceProperties(&props, device_id), "cudaGetDeviceProperties");
@@ -94,6 +111,237 @@ py::dict device_info_dict(int device_id) {
   info["available_to_gpwbpp"] = true;
   return info;
 }
+
+class ResidentCalibratedStack {
+ public:
+  ResidentCalibratedStack(std::size_t frame_count, std::size_t height, std::size_t width)
+      : frame_count_(frame_count),
+        height_(height),
+        width_(width),
+        pixels_per_frame_(height * width),
+        loaded_(frame_count, 0) {
+    if (frame_count_ == 0 || height_ == 0 || width_ == 0) {
+      throw std::invalid_argument("resident stack dimensions must be non-empty");
+    }
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    check_cuda(cudaMalloc(&d_stack_, frame_count_ * frame_bytes), "cudaMalloc(resident calibrated stack)");
+    check_cuda(cudaMalloc(&d_light_, frame_bytes), "cudaMalloc(resident raw light buffer)");
+  }
+
+  ResidentCalibratedStack(const ResidentCalibratedStack&) = delete;
+  ResidentCalibratedStack& operator=(const ResidentCalibratedStack&) = delete;
+
+  ~ResidentCalibratedStack() {
+    cudaFree(d_stack_);
+    cudaFree(d_light_);
+    cudaFree(d_bias_);
+    cudaFree(d_dark_);
+    cudaFree(d_flat_);
+  }
+
+  std::size_t frame_count() const { return frame_count_; }
+  std::size_t height() const { return height_; }
+  std::size_t width() const { return width_; }
+  std::size_t pixels_per_frame() const { return pixels_per_frame_; }
+  std::size_t loaded_count() const { return loaded_count_; }
+
+  std::size_t bytes_allocated() const {
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    std::size_t total = frame_count_ * frame_bytes + frame_bytes;
+    if (has_bias_) {
+      total += frame_bytes;
+    }
+    if (has_dark_) {
+      total += frame_bytes;
+    }
+    if (has_flat_) {
+      total += frame_bytes;
+    }
+    return total;
+  }
+
+  void set_calibration_masters(py::object bias_obj, py::object dark_obj, py::object flat_obj) {
+    upload_optional_master(bias_obj, &d_bias_, &has_bias_, "bias");
+    upload_optional_master(dark_obj, &d_dark_, &has_dark_, "dark");
+    upload_optional_master(flat_obj, &d_flat_, &has_flat_, "flat");
+  }
+
+  void upload_calibrated_frame(
+      std::size_t index,
+      py::array_t<float, py::array::c_style | py::array::forcecast> frame) {
+    require_index(index);
+    const py::buffer_info info = frame.request();
+    require_frame_shape(info, height_, width_);
+    check_cuda(
+        cudaMemcpy(
+            d_stack_ + index * pixels_per_frame_,
+            info.ptr,
+            pixels_per_frame_ * sizeof(float),
+            cudaMemcpyHostToDevice),
+        "cudaMemcpy(resident calibrated frame)");
+    mark_loaded(index);
+  }
+
+  void calibrate_frame(
+      std::size_t index,
+      py::array_t<float, py::array::c_style | py::array::forcecast> light,
+      float light_exposure_s,
+      py::object dark_exposure_obj,
+      py::object policy_obj) {
+    require_index(index);
+    const py::buffer_info light_info = light.request();
+    require_frame_shape(light_info, height_, width_);
+
+    py::dict policy;
+    if (!policy_obj.is_none()) {
+      policy = py::cast<py::dict>(policy_obj);
+    }
+    const bool master_dark_includes_bias =
+        dict_bool(policy, "master_dark_includes_bias", true);
+    const bool dark_scaling_enabled = dict_bool(policy, "dark_scaling_enabled", true);
+    const float flat_floor = dict_float(policy, "flat_floor", 1.0e-6f);
+    const float pedestal = dict_float(policy, "pedestal", 0.0f);
+
+    float dark_scale = 1.0f;
+    if (has_dark_ && dark_scaling_enabled && !dark_exposure_obj.is_none()) {
+      const float dark_exposure_s = py::cast<float>(dark_exposure_obj);
+      if (dark_exposure_s != 0.0f) {
+        dark_scale = light_exposure_s / dark_exposure_s;
+      }
+    }
+
+    check_cuda(
+        cudaMemcpy(d_light_, light_info.ptr, pixels_per_frame_ * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(resident raw light)");
+    gpwbpp_calibrate_tile_f32_launch(
+        d_light_,
+        d_bias_,
+        d_dark_,
+        d_flat_,
+        d_stack_ + index * pixels_per_frame_,
+        pixels_per_frame_,
+        has_bias_,
+        has_dark_,
+        has_flat_,
+        master_dark_includes_bias,
+        dark_scale,
+        flat_floor,
+        pedestal);
+    check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.calibrate_frame synchronize");
+    mark_loaded(index);
+  }
+
+  py::tuple integrate_mean(py::object weights_obj) const {
+    if (loaded_count_ != frame_count_) {
+      throw std::runtime_error("all resident frames must be loaded before integration");
+    }
+
+    std::vector<float> weights(frame_count_, 1.0f);
+    py::array_t<float, py::array::c_style | py::array::forcecast> weights_array;
+    if (!weights_obj.is_none()) {
+      weights_array = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(weights_obj);
+      const py::buffer_info weights_info = weights_array.request();
+      if (weights_info.ndim != 1 || static_cast<std::size_t>(weights_info.shape[0]) != frame_count_) {
+        throw std::invalid_argument("weights must have shape (frame_count,)");
+      }
+      const auto* ptr = static_cast<const float*>(weights_info.ptr);
+      weights.assign(ptr, ptr + frame_count_);
+    }
+
+    py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    const py::buffer_info master_info = master.request();
+    const py::buffer_info weight_map_info = weight_map.request();
+
+    float* d_weights = nullptr;
+    float* d_master = nullptr;
+    float* d_weight_map = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident weights)");
+      check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident master)");
+      check_cuda(cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident weight map)");
+      check_cuda(
+          cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident weights)");
+      gpwbpp_integrate_resident_weighted_mean_f32_launch(
+          d_stack_,
+          d_weights,
+          d_master,
+          d_weight_map,
+          frame_count_,
+          pixels_per_frame_);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.integrate_mean kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.integrate_mean synchronize");
+      check_cuda(
+          cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident master)");
+      check_cuda(
+          cudaMemcpy(
+              weight_map_info.ptr,
+              d_weight_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident weight map)");
+    } catch (...) {
+      cudaFree(d_weights);
+      cudaFree(d_master);
+      cudaFree(d_weight_map);
+      throw;
+    }
+    cudaFree(d_weights);
+    cudaFree(d_master);
+    cudaFree(d_weight_map);
+    return py::make_tuple(master, weight_map);
+  }
+
+ private:
+  void require_index(std::size_t index) const {
+    if (index >= frame_count_) {
+      throw std::out_of_range("resident frame index is out of range");
+    }
+  }
+
+  void mark_loaded(std::size_t index) {
+    if (!loaded_[index]) {
+      loaded_[index] = 1;
+      ++loaded_count_;
+    }
+  }
+
+  void upload_optional_master(py::object obj, float** destination, bool* present, const char* name) {
+    cudaFree(*destination);
+    *destination = nullptr;
+    *present = false;
+    if (obj.is_none()) {
+      return;
+    }
+    py::array_t<float, py::array::c_style | py::array::forcecast> array =
+        py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(obj);
+    const py::buffer_info info = array.request();
+    require_frame_shape(info, height_, width_);
+    check_cuda(cudaMalloc(destination, pixels_per_frame_ * sizeof(float)), name);
+    check_cuda(
+        cudaMemcpy(*destination, info.ptr, pixels_per_frame_ * sizeof(float), cudaMemcpyHostToDevice),
+        name);
+    *present = true;
+  }
+
+  std::size_t frame_count_;
+  std::size_t height_;
+  std::size_t width_;
+  std::size_t pixels_per_frame_;
+  std::size_t loaded_count_ = 0;
+  std::vector<unsigned char> loaded_;
+  float* d_stack_ = nullptr;
+  float* d_light_ = nullptr;
+  float* d_bias_ = nullptr;
+  float* d_dark_ = nullptr;
+  float* d_flat_ = nullptr;
+  bool has_bias_ = false;
+  bool has_dark_ = false;
+  bool has_flat_ = false;
+};
 
 }  // namespace
 
@@ -504,4 +752,28 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("warp_translation_f32", &warp_translation_f32);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
+  py::class_<ResidentCalibratedStack>(m, "ResidentCalibratedStack")
+      .def(py::init<std::size_t, std::size_t, std::size_t>())
+      .def_property_readonly("frame_count", &ResidentCalibratedStack::frame_count)
+      .def_property_readonly("height", &ResidentCalibratedStack::height)
+      .def_property_readonly("width", &ResidentCalibratedStack::width)
+      .def_property_readonly("pixels_per_frame", &ResidentCalibratedStack::pixels_per_frame)
+      .def_property_readonly("loaded_count", &ResidentCalibratedStack::loaded_count)
+      .def_property_readonly("bytes_allocated", &ResidentCalibratedStack::bytes_allocated)
+      .def(
+          "set_calibration_masters",
+          &ResidentCalibratedStack::set_calibration_masters,
+          py::arg("bias") = py::none(),
+          py::arg("dark") = py::none(),
+          py::arg("flat") = py::none())
+      .def("upload_calibrated_frame", &ResidentCalibratedStack::upload_calibrated_frame)
+      .def(
+          "calibrate_frame",
+          &ResidentCalibratedStack::calibrate_frame,
+          py::arg("index"),
+          py::arg("light"),
+          py::arg("light_exposure_s"),
+          py::arg("dark_exposure_s") = py::none(),
+          py::arg("policy") = py::none())
+      .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none());
 }
