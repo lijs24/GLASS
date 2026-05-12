@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.cpu.local_norm import apply_tile_normalization, estimate_tile_normalization
+from gpwbpp.cpu.local_norm import (
+    apply_tile_normalization,
+    estimate_tile_normalization,
+    estimate_tile_normalization_mean_std,
+)
 
 
 def test_estimate_tile_normalization_matches_reference_stats():
@@ -26,3 +30,17 @@ def test_estimate_tile_normalization_honors_valid_mask():
     assert stats["valid_pixels"] == 4
     assert np.allclose(out[mask], 9)
     assert np.allclose(out[~mask], 5)
+
+
+def test_estimate_tile_normalization_mean_std_honors_valid_mask():
+    data = np.arange(16, dtype=np.float32).reshape(4, 4)
+    reference = data * 1.5 + 8.0
+    mask = np.zeros((4, 4), dtype=bool)
+    mask[:, 1:4] = True
+    stats = estimate_tile_normalization_mean_std(data, reference, mask)
+    out = apply_tile_normalization(data, stats["scale"], stats["offset"], mask)
+    assert stats["status"] == "ok"
+    assert stats["valid_pixels"] == 12
+    assert np.allclose(np.mean(out[mask]), np.mean(reference[mask]), atol=1.0e-5)
+    assert np.allclose(np.std(out[mask]), np.std(reference[mask]), atol=1.0e-5)
+    assert np.allclose(out[~mask], data[~mask])

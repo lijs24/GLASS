@@ -66,6 +66,58 @@ def estimate_tile_normalization(
     }
 
 
+def estimate_tile_normalization_mean_std(
+    data: np.ndarray,
+    reference: np.ndarray,
+    valid_mask: np.ndarray | None = None,
+    eps: float = 1.0e-6,
+) -> dict[str, Any]:
+    src = np.asarray(data, dtype=np.float32)
+    ref = np.asarray(reference, dtype=np.float32)
+    if src.shape != ref.shape:
+        raise ValueError("data and reference tiles must have the same shape")
+    if valid_mask is None:
+        mask = np.isfinite(src) & np.isfinite(ref)
+    else:
+        mask = np.asarray(valid_mask, dtype=bool) & np.isfinite(src) & np.isfinite(ref)
+    valid = int(np.count_nonzero(mask))
+    if valid == 0:
+        return {
+            "scale": 1.0,
+            "offset": 0.0,
+            "source_mean": None,
+            "reference_mean": None,
+            "source_std": None,
+            "reference_std": None,
+            "valid_pixels": 0,
+            "status": "empty",
+        }
+    src_values = src[mask]
+    ref_values = ref[mask]
+    src_mean = float(np.mean(src_values))
+    ref_mean = float(np.mean(ref_values))
+    src_std = float(np.std(src_values))
+    ref_std = float(np.std(ref_values))
+    if src_std <= eps or ref_std <= eps:
+        scale = 1.0
+        offset = ref_mean - src_mean
+        status = "offset_only"
+    else:
+        scale = ref_std / src_std
+        offset = ref_mean - src_mean * scale
+        status = "ok"
+    return {
+        "scale": float(scale),
+        "offset": float(offset),
+        "source_mean": src_mean,
+        "reference_mean": ref_mean,
+        "source_std": src_std,
+        "reference_std": ref_std,
+        "valid_pixels": valid,
+        "status": status,
+    }
+
+
 def apply_tile_normalization(
     data: np.ndarray,
     scale: float,

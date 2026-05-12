@@ -118,6 +118,16 @@ void gpwbpp_frame_sum_stats_f32_launch(
     unsigned long long* partial_count,
     std::size_t n,
     int blocks);
+void gpwbpp_pair_sum_stats_f32_launch(
+    const float* source,
+    const float* reference,
+    double* partial_source_sum,
+    double* partial_source_sum2,
+    double* partial_reference_sum,
+    double* partial_reference_sum2,
+    unsigned long long* partial_count,
+    std::size_t n,
+    int blocks);
 void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
 void gpwbpp_integrate_resident_weighted_mean_f32_launch(
@@ -2341,6 +2351,164 @@ py::array_t<float> local_norm_apply_f32(
   return output;
 }
 
+py::dict local_norm_pair_stats_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> source,
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference) {
+  const py::buffer_info source_info = source.request();
+  const py::buffer_info reference_info = reference.request();
+  if (source_info.ndim != 2 || reference_info.ndim != 2) {
+    throw std::invalid_argument("source and reference must have shape (height, width)");
+  }
+  if (source_info.shape[0] != reference_info.shape[0] || source_info.shape[1] != reference_info.shape[1]) {
+    throw std::invalid_argument("source and reference shapes must match");
+  }
+  const std::size_t n =
+      static_cast<std::size_t>(source_info.shape[0]) * static_cast<std::size_t>(source_info.shape[1]);
+  if (n == 0) {
+    throw std::invalid_argument("cannot compute local normalization stats for an empty tile");
+  }
+
+  constexpr int threads = 256;
+  const int blocks = std::min<int>(
+      4096,
+      static_cast<int>((n + static_cast<std::size_t>(threads) - 1) / threads));
+  std::vector<double> partial_source_sum(static_cast<std::size_t>(blocks), 0.0);
+  std::vector<double> partial_source_sum2(static_cast<std::size_t>(blocks), 0.0);
+  std::vector<double> partial_reference_sum(static_cast<std::size_t>(blocks), 0.0);
+  std::vector<double> partial_reference_sum2(static_cast<std::size_t>(blocks), 0.0);
+  std::vector<unsigned long long> partial_count(static_cast<std::size_t>(blocks), 0);
+
+  float* d_source = nullptr;
+  float* d_reference = nullptr;
+  double* d_partial_source_sum = nullptr;
+  double* d_partial_source_sum2 = nullptr;
+  double* d_partial_reference_sum = nullptr;
+  double* d_partial_reference_sum2 = nullptr;
+  unsigned long long* d_partial_count = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_source, n * sizeof(float)), "cudaMalloc(local_norm source)");
+    check_cuda(cudaMalloc(&d_reference, n * sizeof(float)), "cudaMalloc(local_norm reference)");
+    check_cuda(
+        cudaMemcpy(d_source, source_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(local_norm source)");
+    check_cuda(
+        cudaMemcpy(d_reference, reference_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(local_norm reference)");
+    check_cuda(
+        cudaMalloc(&d_partial_source_sum, partial_source_sum.size() * sizeof(double)),
+        "cudaMalloc(local_norm source sum)");
+    check_cuda(
+        cudaMalloc(&d_partial_source_sum2, partial_source_sum2.size() * sizeof(double)),
+        "cudaMalloc(local_norm source sum2)");
+    check_cuda(
+        cudaMalloc(&d_partial_reference_sum, partial_reference_sum.size() * sizeof(double)),
+        "cudaMalloc(local_norm reference sum)");
+    check_cuda(
+        cudaMalloc(&d_partial_reference_sum2, partial_reference_sum2.size() * sizeof(double)),
+        "cudaMalloc(local_norm reference sum2)");
+    check_cuda(
+        cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
+        "cudaMalloc(local_norm count)");
+    gpwbpp_pair_sum_stats_f32_launch(
+        d_source,
+        d_reference,
+        d_partial_source_sum,
+        d_partial_source_sum2,
+        d_partial_reference_sum,
+        d_partial_reference_sum2,
+        d_partial_count,
+        n,
+        blocks);
+    check_cuda(cudaGetLastError(), "local_norm_pair_stats_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "local_norm_pair_stats_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(
+            partial_source_sum.data(),
+            d_partial_source_sum,
+            partial_source_sum.size() * sizeof(double),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(local_norm source sum)");
+    check_cuda(
+        cudaMemcpy(
+            partial_source_sum2.data(),
+            d_partial_source_sum2,
+            partial_source_sum2.size() * sizeof(double),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(local_norm source sum2)");
+    check_cuda(
+        cudaMemcpy(
+            partial_reference_sum.data(),
+            d_partial_reference_sum,
+            partial_reference_sum.size() * sizeof(double),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(local_norm reference sum)");
+    check_cuda(
+        cudaMemcpy(
+            partial_reference_sum2.data(),
+            d_partial_reference_sum2,
+            partial_reference_sum2.size() * sizeof(double),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(local_norm reference sum2)");
+    check_cuda(
+        cudaMemcpy(
+            partial_count.data(),
+            d_partial_count,
+            partial_count.size() * sizeof(unsigned long long),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(local_norm count)");
+  } catch (...) {
+    cudaFree(d_source);
+    cudaFree(d_reference);
+    cudaFree(d_partial_source_sum);
+    cudaFree(d_partial_source_sum2);
+    cudaFree(d_partial_reference_sum);
+    cudaFree(d_partial_reference_sum2);
+    cudaFree(d_partial_count);
+    throw;
+  }
+  cudaFree(d_source);
+  cudaFree(d_reference);
+  cudaFree(d_partial_source_sum);
+  cudaFree(d_partial_source_sum2);
+  cudaFree(d_partial_reference_sum);
+  cudaFree(d_partial_reference_sum2);
+  cudaFree(d_partial_count);
+
+  double source_sum = 0.0;
+  double source_sum2 = 0.0;
+  double reference_sum = 0.0;
+  double reference_sum2 = 0.0;
+  unsigned long long count = 0;
+  for (std::size_t i = 0; i < partial_count.size(); ++i) {
+    source_sum += partial_source_sum[i];
+    source_sum2 += partial_source_sum2[i];
+    reference_sum += partial_reference_sum[i];
+    reference_sum2 += partial_reference_sum2[i];
+    count += partial_count[i];
+  }
+  py::dict result;
+  result["valid_pixels"] = static_cast<unsigned long long>(count);
+  result["total_pixels"] = static_cast<unsigned long long>(n);
+  result["model"] = "cuda_pair_mean_std";
+  if (count == 0) {
+    result["source_mean"] = py::none();
+    result["reference_mean"] = py::none();
+    result["source_std"] = py::none();
+    result["reference_std"] = py::none();
+    return result;
+  }
+  const double inv_count = 1.0 / static_cast<double>(count);
+  const double source_mean = source_sum * inv_count;
+  const double reference_mean = reference_sum * inv_count;
+  const double source_var = std::max(0.0, source_sum2 * inv_count - source_mean * source_mean);
+  const double reference_var = std::max(0.0, reference_sum2 * inv_count - reference_mean * reference_mean);
+  result["source_mean"] = source_mean;
+  result["reference_mean"] = reference_mean;
+  result["source_std"] = std::sqrt(source_var);
+  result["reference_std"] = std::sqrt(reference_var);
+  return result;
+}
+
 py::tuple integrate_accumulate_mean_tile_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> frame_tile,
     py::array_t<float, py::array::c_style | py::array::forcecast> weight_tile,
@@ -2719,6 +2887,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("prior_dy") = 0.0f,
       py::arg("prior_radius_px") = -1.0f);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
+  m.def("local_norm_pair_stats_f32", &local_norm_pair_stats_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);
   m.def("star_candidates_f32", &star_candidates_f32);

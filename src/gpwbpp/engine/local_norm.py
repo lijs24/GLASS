@@ -122,18 +122,30 @@ def local_normalize_registered_frames(
                     valid_mask = (
                         source_coverage.read_tile(tile.y0, tile.y1, tile.x0, tile.x1) > 0.5
                     ) & (reference_coverage.read_tile(tile.y0, tile.y1, tile.x0, tile.x1) > 0.5)
-                    stats = estimate_tile_normalization(src_tile, ref_tile, valid_mask)
+                    if cuda_module is not None and hasattr(
+                        cuda_module, "local_norm_estimate_apply_mean_std_f32"
+                    ):
+                        normalized, stats = cuda_module.local_norm_estimate_apply_mean_std_f32(
+                            src_tile,
+                            ref_tile,
+                            valid_mask,
+                        )
+                        actual_backend = "cuda_mean_std"
+                    else:
+                        stats = estimate_tile_normalization(src_tile, ref_tile, valid_mask)
+                        scale = float(stats["scale"])
+                        offset = float(stats["offset"])
+                        if cuda_module is not None:
+                            normalized = cuda_module.local_norm_apply_f32(src_tile, scale, offset)
+                            normalized[~valid_mask] = src_tile[~valid_mask]
+                        else:
+                            normalized = apply_tile_normalization(src_tile, scale, offset, valid_mask)
                     if stats["status"] == "empty":
                         warnings.append(
                             f"empty normalization tile y={tile.y0}:{tile.y1} x={tile.x0}:{tile.x1}"
                         )
                     scale = float(stats["scale"])
                     offset = float(stats["offset"])
-                    if cuda_module is not None:
-                        normalized = cuda_module.local_norm_apply_f32(src_tile, scale, offset)
-                        normalized[~valid_mask] = src_tile[~valid_mask]
-                    else:
-                        normalized = apply_tile_normalization(src_tile, scale, offset, valid_mask)
                     writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, normalized)
                     tile_count += 1
                     scales.append(scale)

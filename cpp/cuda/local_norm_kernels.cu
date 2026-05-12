@@ -86,3 +86,90 @@ void gpwbpp_frame_sum_stats_f32_launch(
   gpwbpp_frame_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
       input, partial_sum, partial_sum2, partial_count, n);
 }
+
+__global__ void gpwbpp_pair_sum_stats_f32_kernel(
+    const float* source,
+    const float* reference,
+    double* partial_source_sum,
+    double* partial_source_sum2,
+    double* partial_reference_sum,
+    double* partial_reference_sum2,
+    unsigned long long* partial_count,
+    std::size_t n) {
+  extern __shared__ unsigned char scratch[];
+  double* source_sums = reinterpret_cast<double*>(scratch);
+  double* source_sums2 = source_sums + blockDim.x;
+  double* reference_sums = source_sums2 + blockDim.x;
+  double* reference_sums2 = reference_sums + blockDim.x;
+  unsigned long long* counts = reinterpret_cast<unsigned long long*>(reference_sums2 + blockDim.x);
+
+  const int lane = static_cast<int>(threadIdx.x);
+  double local_source_sum = 0.0;
+  double local_source_sum2 = 0.0;
+  double local_reference_sum = 0.0;
+  double local_reference_sum2 = 0.0;
+  unsigned long long local_count = 0;
+  for (std::size_t i = static_cast<std::size_t>(blockIdx.x * blockDim.x + lane);
+       i < n;
+       i += static_cast<std::size_t>(gridDim.x * blockDim.x)) {
+    const float source_value = source[i];
+    const float reference_value = reference[i];
+    if (isfinite(source_value) && isfinite(reference_value)) {
+      const double s = static_cast<double>(source_value);
+      const double r = static_cast<double>(reference_value);
+      local_source_sum += s;
+      local_source_sum2 += s * s;
+      local_reference_sum += r;
+      local_reference_sum2 += r * r;
+      ++local_count;
+    }
+  }
+  source_sums[lane] = local_source_sum;
+  source_sums2[lane] = local_source_sum2;
+  reference_sums[lane] = local_reference_sum;
+  reference_sums2[lane] = local_reference_sum2;
+  counts[lane] = local_count;
+  __syncthreads();
+
+  for (int stride = static_cast<int>(blockDim.x) / 2; stride > 0; stride >>= 1) {
+    if (lane < stride) {
+      source_sums[lane] += source_sums[lane + stride];
+      source_sums2[lane] += source_sums2[lane + stride];
+      reference_sums[lane] += reference_sums[lane + stride];
+      reference_sums2[lane] += reference_sums2[lane + stride];
+      counts[lane] += counts[lane + stride];
+    }
+    __syncthreads();
+  }
+  if (lane == 0) {
+    partial_source_sum[blockIdx.x] = source_sums[0];
+    partial_source_sum2[blockIdx.x] = source_sums2[0];
+    partial_reference_sum[blockIdx.x] = reference_sums[0];
+    partial_reference_sum2[blockIdx.x] = reference_sums2[0];
+    partial_count[blockIdx.x] = counts[0];
+  }
+}
+
+void gpwbpp_pair_sum_stats_f32_launch(
+    const float* source,
+    const float* reference,
+    double* partial_source_sum,
+    double* partial_source_sum2,
+    double* partial_reference_sum,
+    double* partial_reference_sum2,
+    unsigned long long* partial_count,
+    std::size_t n,
+    int blocks) {
+  constexpr int threads = 256;
+  const std::size_t shared_bytes =
+      4 * threads * sizeof(double) + threads * sizeof(unsigned long long);
+  gpwbpp_pair_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
+      source,
+      reference,
+      partial_source_sum,
+      partial_source_sum2,
+      partial_reference_sum,
+      partial_reference_sum2,
+      partial_count,
+      n);
+}

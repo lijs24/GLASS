@@ -741,6 +741,98 @@ def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     return (image * np.float32(scale) + np.float32(offset)).astype(np.float32)
 
 
+def local_norm_pair_stats_f32(data: Any, reference: Any) -> dict[str, Any]:
+    src = np.asarray(data, dtype=np.float32)
+    ref = np.asarray(reference, dtype=np.float32)
+    if src.shape != ref.shape:
+        raise ValueError(f"shape mismatch for local norm pair stats: {src.shape} != {ref.shape}")
+    native = _native()
+    if native is not None and hasattr(native, "local_norm_pair_stats_f32"):
+        result = dict(native.local_norm_pair_stats_f32(src, ref))
+        result["stats_backend"] = "cuda"
+        return result
+    mask = np.isfinite(src) & np.isfinite(ref)
+    valid = int(np.count_nonzero(mask))
+    if valid == 0:
+        return {
+            "valid_pixels": 0,
+            "total_pixels": int(src.size),
+            "source_mean": None,
+            "reference_mean": None,
+            "source_std": None,
+            "reference_std": None,
+            "model": "cpu_pair_mean_std",
+            "stats_backend": "cpu_fallback",
+        }
+    src_values = src[mask]
+    ref_values = ref[mask]
+    return {
+        "valid_pixels": valid,
+        "total_pixels": int(src.size),
+        "source_mean": float(np.mean(src_values)),
+        "reference_mean": float(np.mean(ref_values)),
+        "source_std": float(np.std(src_values)),
+        "reference_std": float(np.std(ref_values)),
+        "model": "cpu_pair_mean_std",
+        "stats_backend": "cpu_fallback",
+    }
+
+
+def local_norm_estimate_apply_mean_std_f32(
+    data: Any,
+    reference: Any,
+    valid_mask: Any | None = None,
+    eps: float = 1.0e-6,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    src = np.asarray(data, dtype=np.float32)
+    ref = np.asarray(reference, dtype=np.float32)
+    if src.shape != ref.shape:
+        raise ValueError(f"shape mismatch for local norm: {src.shape} != {ref.shape}")
+    if valid_mask is None:
+        mask = np.isfinite(src) & np.isfinite(ref)
+        stats_src = src
+        stats_ref = ref
+    else:
+        mask = np.asarray(valid_mask, dtype=bool) & np.isfinite(src) & np.isfinite(ref)
+        stats_src = src.copy()
+        stats_ref = ref.copy()
+        stats_src[~mask] = np.nan
+        stats_ref[~mask] = np.nan
+    stats = local_norm_pair_stats_f32(stats_src, stats_ref)
+    valid = int(stats["valid_pixels"])
+    if valid == 0:
+        scale = 1.0
+        offset = 0.0
+        status = "empty"
+    else:
+        source_mean = float(stats["source_mean"])
+        reference_mean = float(stats["reference_mean"])
+        source_std = float(stats["source_std"])
+        reference_std = float(stats["reference_std"])
+        if source_std <= float(eps) or reference_std <= float(eps):
+            scale = 1.0
+            offset = reference_mean - source_mean
+            status = "offset_only"
+        else:
+            scale = reference_std / source_std
+            offset = reference_mean - source_mean * scale
+            status = "ok"
+    out = local_norm_apply_f32(src, scale, offset)
+    if valid_mask is not None:
+        out = np.asarray(out, dtype=np.float32).copy()
+        out[~mask] = src[~mask]
+    stats.update(
+        {
+            "scale": float(scale),
+            "offset": float(offset),
+            "status": status,
+            "apply_backend": "cuda" if native_extension_loaded() else "cpu_fallback",
+            "model": f"{stats.get('model', 'pair_mean_std')}_apply",
+        }
+    )
+    return np.asarray(out, dtype=np.float32), stats
+
+
 def star_local_max_mask_f32(data: Any, threshold: float) -> np.ndarray:
     native = _native()
     if native is not None and hasattr(native, "star_local_max_mask_f32"):

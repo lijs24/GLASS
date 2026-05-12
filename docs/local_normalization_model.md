@@ -48,10 +48,23 @@ resume and later gates can still determine what happened.
 
 ## CUDA Scope
 
-CUDA is currently used for the pixel-wise apply kernel once CPU control logic has
-estimated per-tile coefficients. Statistics remain on the CPU in Gate 10. This
-keeps the implementation auditable and gives a CPU baseline for later GPU
-reductions.
+CUDA can now be used for a per-tile mean/std statistics primitive as well as the
+pixel-wise apply kernel. The standalone primitive computes source/reference
+finite-pixel mean and standard deviation for a tile, derives:
+
+```text
+scale = reference_std / source_std
+offset = reference_mean - source_mean * scale
+```
+
+and applies it with `local_norm_estimate_apply_mean_std_f32`. A valid mask can be
+provided by marking invalid pixels as `NaN` before the CUDA statistics pass; mask
+outside pixels are restored to the source value after apply. The CPU median/std
+baseline remains available and is still used when CUDA is unavailable.
+
+This CUDA mean/std primitive is intentionally simpler than the full future
+WBPP-like local model. It is a tested GPU building block for tile/window LN, not
+a claim of PixInsight-identical Local Normalization.
 
 The high-VRAM resident CUDA path also exposes an explicit
 `resident_global_mean_std` mode. In this mode calibrated/registered frames stay
