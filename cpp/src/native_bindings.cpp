@@ -149,6 +149,16 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
     float* rms_px,
     int* best_inliers,
     int* best_index,
+    int* refit_inliers,
+    int* refit_status,
+    float* refit_matrix,
+    float* refit_scale,
+    float* refit_rotation_rad,
+    float* refit_rms_px,
+    double* refit_partial_sums,
+    unsigned long long* refit_partial_count,
+    double* refit_partial_residual_sums,
+    int refit_blocks,
     int reference_count,
     int moving_count,
     int candidate_count,
@@ -2893,12 +2903,26 @@ py::dict estimate_similarity_from_catalogs_f32(
   float* d_rms_px = nullptr;
   int* d_best_inliers = nullptr;
   int* d_best_index = nullptr;
+  int* d_refit_inliers = nullptr;
+  int* d_refit_status = nullptr;
+  float* d_refit_matrix = nullptr;
+  float* d_refit_scale = nullptr;
+  float* d_refit_rotation_rad = nullptr;
+  float* d_refit_rms_px = nullptr;
+  double* d_refit_partial_sums = nullptr;
+  unsigned long long* d_refit_partial_count = nullptr;
+  double* d_refit_partial_residual_sums = nullptr;
   std::array<float, 9> host_matrix{};
   float scale = 1.0f;
   float rotation_rad = 0.0f;
   float rms_px = std::numeric_limits<float>::quiet_NaN();
   int best_inliers = 0;
   int best_index = -1;
+  int refit_inliers = 0;
+  int refit_status = 0;
+  float refit_rms_px = std::numeric_limits<float>::quiet_NaN();
+  constexpr int refit_threads = 256;
+  const int refit_blocks = std::max(1, (moving_count + refit_threads - 1) / refit_threads);
   try {
     check_cuda(
         cudaMalloc(&d_reference_x, static_cast<std::size_t>(reference_count) * sizeof(float)),
@@ -2927,6 +2951,29 @@ py::dict estimate_similarity_from_catalogs_f32(
     check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(similarity catalog rms)");
     check_cuda(cudaMalloc(&d_best_inliers, sizeof(int)), "cudaMalloc(similarity catalog best inliers)");
     check_cuda(cudaMalloc(&d_best_index, sizeof(int)), "cudaMalloc(similarity catalog best index)");
+    check_cuda(cudaMalloc(&d_refit_inliers, sizeof(int)), "cudaMalloc(similarity catalog refit inliers)");
+    check_cuda(cudaMalloc(&d_refit_status, sizeof(int)), "cudaMalloc(similarity catalog refit status)");
+    check_cuda(
+        cudaMalloc(&d_refit_matrix, host_matrix.size() * sizeof(float)),
+        "cudaMalloc(similarity catalog refit matrix)");
+    check_cuda(cudaMalloc(&d_refit_scale, sizeof(float)), "cudaMalloc(similarity catalog refit scale)");
+    check_cuda(
+        cudaMalloc(&d_refit_rotation_rad, sizeof(float)),
+        "cudaMalloc(similarity catalog refit rotation)");
+    check_cuda(cudaMalloc(&d_refit_rms_px, sizeof(float)), "cudaMalloc(similarity catalog refit rms)");
+    check_cuda(
+        cudaMalloc(&d_refit_partial_sums, static_cast<std::size_t>(refit_blocks) * 7 * sizeof(double)),
+        "cudaMalloc(similarity catalog refit partial sums)");
+    check_cuda(
+        cudaMalloc(
+            &d_refit_partial_count,
+            static_cast<std::size_t>(refit_blocks) * sizeof(unsigned long long)),
+        "cudaMalloc(similarity catalog refit partial count)");
+    check_cuda(
+        cudaMalloc(
+            &d_refit_partial_residual_sums,
+            static_cast<std::size_t>(refit_blocks) * sizeof(double)),
+        "cudaMalloc(similarity catalog refit partial residual sums)");
     check_cuda(
         cudaMemcpy(
             d_reference_x,
@@ -2969,6 +3016,16 @@ py::dict estimate_similarity_from_catalogs_f32(
         d_rms_px,
         d_best_inliers,
         d_best_index,
+        d_refit_inliers,
+        d_refit_status,
+        d_refit_matrix,
+        d_refit_scale,
+        d_refit_rotation_rad,
+        d_refit_rms_px,
+        d_refit_partial_sums,
+        d_refit_partial_count,
+        d_refit_partial_residual_sums,
+        refit_blocks,
         reference_count,
         moving_count,
         candidate_count,
@@ -2994,6 +3051,15 @@ py::dict estimate_similarity_from_catalogs_f32(
         cudaMemcpy(&best_inliers, d_best_inliers, sizeof(int), cudaMemcpyDeviceToHost),
         "cudaMemcpy(similarity catalog best inliers)");
     check_cuda(cudaMemcpy(&best_index, d_best_index, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(similarity catalog best index)");
+    check_cuda(
+        cudaMemcpy(&refit_inliers, d_refit_inliers, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(similarity catalog refit inliers)");
+    check_cuda(
+        cudaMemcpy(&refit_status, d_refit_status, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(similarity catalog refit status)");
+    check_cuda(
+        cudaMemcpy(&refit_rms_px, d_refit_rms_px, sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(similarity catalog refit rms)");
   } catch (...) {
     cudaFree(d_reference_x);
     cudaFree(d_reference_y);
@@ -3008,6 +3074,15 @@ py::dict estimate_similarity_from_catalogs_f32(
     cudaFree(d_rms_px);
     cudaFree(d_best_inliers);
     cudaFree(d_best_index);
+    cudaFree(d_refit_inliers);
+    cudaFree(d_refit_status);
+    cudaFree(d_refit_matrix);
+    cudaFree(d_refit_scale);
+    cudaFree(d_refit_rotation_rad);
+    cudaFree(d_refit_rms_px);
+    cudaFree(d_refit_partial_sums);
+    cudaFree(d_refit_partial_count);
+    cudaFree(d_refit_partial_residual_sums);
     throw;
   }
   cudaFree(d_reference_x);
@@ -3023,6 +3098,15 @@ py::dict estimate_similarity_from_catalogs_f32(
   cudaFree(d_rms_px);
   cudaFree(d_best_inliers);
   cudaFree(d_best_index);
+  cudaFree(d_refit_inliers);
+  cudaFree(d_refit_status);
+  cudaFree(d_refit_matrix);
+  cudaFree(d_refit_scale);
+  cudaFree(d_refit_rotation_rad);
+  cudaFree(d_refit_rms_px);
+  cudaFree(d_refit_partial_sums);
+  cudaFree(d_refit_partial_count);
+  cudaFree(d_refit_partial_residual_sums);
 
   py::list matrix_rows;
   for (int row = 0; row < 3; ++row) {
@@ -3038,6 +3122,10 @@ py::dict estimate_similarity_from_catalogs_f32(
   result["rotation_rad"] = rotation_rad;
   result["rms_px"] = rms_px;
   result["inliers"] = best_inliers;
+  result["refined_inliers"] = refit_inliers;
+  result["refit_status_code"] = refit_status;
+  result["refit_status"] = refit_status == 0 ? "ok" : (refit_status == 3 ? "rejected" : "failed");
+  result["refit_rms_px"] = refit_rms_px;
   result["best_candidate_index"] = best_index;
   result["candidate_count"] = candidate_count;
   result["reference_count"] = reference_count;

@@ -198,6 +198,42 @@ def test_gpu_matrix_alignment_metrics_distinguishes_bad_transform():
     assert good["ncc"] > bad["ncc"]
 
 
+def test_gpu_matrix_metric_translation_refine_improves_offset_matrix():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "matrix_alignment_metrics_f32"):
+        raise AssertionError("matrix_alignment_metrics_f32 is missing from gpwbpp_cuda")
+    from gpwbpp.gpu.registration import refine_matrix_translation_with_metrics_f32
+
+    reference = _smooth_star_field()
+    good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
+    moving, _ = module.warp_matrix_bilinear_f32(reference, np.linalg.inv(good_matrix).astype(np.float32), 0.0)
+    offset_matrix = good_matrix.copy()
+    offset_matrix[0, 2] += 0.5
+    offset_matrix[1, 2] -= 0.375
+
+    before = module.matrix_alignment_metrics_f32(reference, moving, offset_matrix, sample_stride=1)
+    refined = refine_matrix_translation_with_metrics_f32(
+        reference,
+        moving,
+        offset_matrix,
+        search_radius_px=0.75,
+        coarse_step_px=0.25,
+        fine_radius_px=0.125,
+        fine_step_px=0.125,
+        coarse_sample_stride=1,
+        final_sample_stride=1,
+    )
+    after = refined["metrics"]
+    matrix = np.asarray(refined["matrix"], dtype=np.float32)
+
+    assert after["rms"] < before["rms"] * 0.6
+    assert after["ncc"] > before["ncc"]
+    assert abs(matrix[0, 2] - good_matrix[0, 2]) <= 0.125
+    assert abs(matrix[1, 2] - good_matrix[1, 2]) <= 0.125
+    assert refined["coarse_candidates"] > 0
+    assert refined["fine_candidates"] > 0
+
+
 def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_from_catalogs_f32"):
@@ -506,6 +542,8 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
     assert result["status"] == "ok"
     assert result["model"] == "catalog_pair_similarity_cuda"
     assert result["inliers"] >= len(moving)
+    assert result["refined_inliers"] >= len(moving)
+    assert result["refit_status"] in {"ok", "rejected"}
     assert result["candidate_count"] == len(reference_catalog) * (len(reference_catalog) - 1) * len(
         moving_catalog
     ) * (len(moving_catalog) - 1)
@@ -518,6 +556,76 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
     assert result["rms_px"] < 1.0e-3
     assert np.allclose(matrix[:2, :2], linear, atol=1.0e-4)
     assert np.allclose(matrix[:2, 2], translation, atol=1.0e-3)
+
+
+def test_gpu_estimate_similarity_from_catalogs_refits_seed_inliers():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_similarity_from_catalogs_f32"):
+        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from gpwbpp_cuda")
+
+    moving = np.array(
+        [
+            (10.0, 11.0),
+            (25.0, 14.0),
+            (18.0, 34.0),
+            (41.0, 37.0),
+            (53.0, 21.0),
+            (63.0, 45.0),
+            (31.0, 58.0),
+            (72.0, 18.0),
+            (84.0, 52.0),
+            (48.0, 74.0),
+        ],
+        dtype=np.float32,
+    )
+    angle = np.deg2rad(2.5)
+    scale = 1.01
+    linear = scale * np.array(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+        dtype=np.float32,
+    )
+    translation = np.array([3.5, -2.25], dtype=np.float32)
+    jitter = np.array(
+        [
+            (0.04, -0.02),
+            (-0.03, 0.02),
+            (0.01, 0.03),
+            (-0.02, -0.04),
+            (0.03, 0.01),
+            (-0.01, -0.03),
+            (0.02, 0.04),
+            (-0.04, 0.00),
+            (0.01, -0.01),
+            (0.00, 0.02),
+        ],
+        dtype=np.float32,
+    )
+    reference = moving @ linear.T + translation + jitter
+    moving_catalog = np.vstack([moving, np.array([[2.0, 88.0], [95.0, 9.0]], dtype=np.float32)])
+    reference_catalog = np.vstack([reference, np.array([[88.0, 4.0], [5.0, 92.0]], dtype=np.float32)])
+
+    result = module.estimate_similarity_from_catalogs_f32(
+        reference_catalog[:, 0],
+        reference_catalog[:, 1],
+        moving_catalog[:, 0],
+        moving_catalog[:, 1],
+        tolerance_px=0.25,
+        min_pair_distance=5.0,
+        prior_dx=float(translation[0]),
+        prior_dy=float(translation[1]),
+        prior_radius_px=2.0,
+        min_scale=0.98,
+        max_scale=1.04,
+        max_abs_rotation_rad=0.1,
+    )
+    matrix = np.asarray(result["matrix"], dtype=np.float32)
+
+    assert result["status"] == "ok"
+    assert result["refit_status"] == "ok"
+    assert result["refined_inliers"] >= len(moving)
+    assert result["rms_px"] < 0.08
+    assert np.allclose(matrix[:2, :2], linear, atol=0.003)
+    assert np.allclose(matrix[:2, 2], translation, atol=0.12)
 
 
 def test_gpu_similarity_catalog_registration_aligns_synthetic_images():

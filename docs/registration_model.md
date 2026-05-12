@@ -198,6 +198,27 @@ not pass the benchmark agreement check against astroalign
 benchmark now marks it `accepted=false`. This is a useful speed signal for the
 final GPU matcher, not yet the accepted production registration path.
 
+The catalog-similarity seed now has a guarded CUDA refit pass. After the best
+two-star seed is selected, the GPU gathers nearest-neighbor star inliers for
+that seed and fits a similarity matrix from the inlier sums. The refit only
+replaces the seed when its star-catalog residual does not worsen; otherwise the
+seed matrix is kept and `refit_status=rejected` is recorded. This prevents the
+real M38 pair from regressing when the nearest-neighbor inliers are not clean
+enough.
+
+`refine_matrix_translation_with_metrics_f32(...)` adds a CUDA pixel-metric
+translation refinement for an existing similarity/affine matrix. It scores a
+small translation grid with `matrix_alignment_metrics_f32` and returns the
+matrix with the lowest RMS/highest NCC. This is still a CPU-orchestrated loop
+over GPU metric kernels, but it downloads only compact diagnostics. On the M38
+grid-top benchmark artifact
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json`,
+pixel refinement improved the catalog-similarity output RMS difference versus
+astroalign apply to about 58.89 ADU, but it still failed the current agreement
+gate (`translation_delta_px=1.25`, limit 0.5; output RMS limit 55). The result
+is therefore useful progress, not a completed replacement for astroalign's
+asterism matcher.
+
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
 needed to apply similarity and affine matrices without falling back to CPU pixel

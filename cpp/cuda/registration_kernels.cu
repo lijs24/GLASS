@@ -940,6 +940,329 @@ __global__ void catalog_similarity_best_kernel(
   *rms_px = selected_rms;
 }
 
+__global__ void catalog_similarity_refit_stats_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const float* candidate_params,
+    const int* best_index,
+    double* partial_sums,
+    unsigned long long* partial_count,
+    int reference_count,
+    int moving_count,
+    float tolerance_px) {
+  extern __shared__ unsigned char similarity_scratch[];
+  double* sum_mx = reinterpret_cast<double*>(similarity_scratch);
+  double* sum_my = sum_mx + blockDim.x;
+  double* sum_rx = sum_my + blockDim.x;
+  double* sum_ry = sum_rx + blockDim.x;
+  double* sum_moving_power = sum_ry + blockDim.x;
+  double* sum_dot_same = sum_moving_power + blockDim.x;
+  double* sum_dot_cross = sum_dot_same + blockDim.x;
+  unsigned long long* valid_counts = reinterpret_cast<unsigned long long*>(sum_dot_cross + blockDim.x);
+
+  const int lane = static_cast<int>(threadIdx.x);
+  double local_mx = 0.0;
+  double local_my = 0.0;
+  double local_rx = 0.0;
+  double local_ry = 0.0;
+  double local_moving_power = 0.0;
+  double local_dot_same = 0.0;
+  double local_dot_cross = 0.0;
+  unsigned long long local_count = 0;
+
+  const int selected_index = *best_index;
+  if (selected_index >= 0) {
+    const int param_offset = selected_index * 4;
+    const float a = candidate_params[param_offset + 0];
+    const float b = candidate_params[param_offset + 1];
+    const float tx = candidate_params[param_offset + 2];
+    const float ty = candidate_params[param_offset + 3];
+    const float tolerance2 = tolerance_px * tolerance_px;
+    if (isfinite(a) && isfinite(b) && isfinite(tx) && isfinite(ty)) {
+      for (int moving_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+           moving_index < moving_count;
+           moving_index += static_cast<int>(gridDim.x * blockDim.x)) {
+        const float mx_f = moving_x[moving_index];
+        const float my_f = moving_y[moving_index];
+        if (!isfinite(mx_f) || !isfinite(my_f)) {
+          continue;
+        }
+        const float transformed_x = a * mx_f - b * my_f + tx;
+        const float transformed_y = b * mx_f + a * my_f + ty;
+        float best_distance2 = tolerance2;
+        int best_reference = -1;
+        for (int reference_index = 0; reference_index < reference_count; ++reference_index) {
+          const float rx_f = reference_x[reference_index];
+          const float ry_f = reference_y[reference_index];
+          if (!isfinite(rx_f) || !isfinite(ry_f)) {
+            continue;
+          }
+          const float dx = transformed_x - rx_f;
+          const float dy = transformed_y - ry_f;
+          const float distance2 = dx * dx + dy * dy;
+          if (distance2 <= best_distance2) {
+            best_distance2 = distance2;
+            best_reference = reference_index;
+          }
+        }
+        if (best_reference < 0) {
+          continue;
+        }
+        const double mx = static_cast<double>(mx_f);
+        const double my = static_cast<double>(my_f);
+        const double rx = static_cast<double>(reference_x[best_reference]);
+        const double ry = static_cast<double>(reference_y[best_reference]);
+        local_mx += mx;
+        local_my += my;
+        local_rx += rx;
+        local_ry += ry;
+        local_moving_power += mx * mx + my * my;
+        local_dot_same += mx * rx + my * ry;
+        local_dot_cross += mx * ry - my * rx;
+        ++local_count;
+      }
+    }
+  }
+
+  sum_mx[lane] = local_mx;
+  sum_my[lane] = local_my;
+  sum_rx[lane] = local_rx;
+  sum_ry[lane] = local_ry;
+  sum_moving_power[lane] = local_moving_power;
+  sum_dot_same[lane] = local_dot_same;
+  sum_dot_cross[lane] = local_dot_cross;
+  valid_counts[lane] = local_count;
+  __syncthreads();
+
+  for (int stride = static_cast<int>(blockDim.x) / 2; stride > 0; stride >>= 1) {
+    if (lane < stride) {
+      sum_mx[lane] += sum_mx[lane + stride];
+      sum_my[lane] += sum_my[lane + stride];
+      sum_rx[lane] += sum_rx[lane + stride];
+      sum_ry[lane] += sum_ry[lane + stride];
+      sum_moving_power[lane] += sum_moving_power[lane + stride];
+      sum_dot_same[lane] += sum_dot_same[lane + stride];
+      sum_dot_cross[lane] += sum_dot_cross[lane + stride];
+      valid_counts[lane] += valid_counts[lane + stride];
+    }
+    __syncthreads();
+  }
+
+  if (lane == 0) {
+    const int offset = static_cast<int>(blockIdx.x) * 7;
+    partial_sums[offset + 0] = sum_mx[0];
+    partial_sums[offset + 1] = sum_my[0];
+    partial_sums[offset + 2] = sum_rx[0];
+    partial_sums[offset + 3] = sum_ry[0];
+    partial_sums[offset + 4] = sum_moving_power[0];
+    partial_sums[offset + 5] = sum_dot_same[0];
+    partial_sums[offset + 6] = sum_dot_cross[0];
+    partial_count[blockIdx.x] = valid_counts[0];
+  }
+}
+
+__global__ void catalog_similarity_refit_finalize_matrix_kernel(
+    const double* partial_sums,
+    const unsigned long long* partial_count,
+    float* refit_matrix,
+    float* refit_scale,
+    float* refit_rotation_rad,
+    int* refit_inliers,
+    int* refit_status,
+    int blocks) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  double sum_mx = 0.0;
+  double sum_my = 0.0;
+  double sum_rx = 0.0;
+  double sum_ry = 0.0;
+  double sum_moving_power = 0.0;
+  double sum_dot_same = 0.0;
+  double sum_dot_cross = 0.0;
+  unsigned long long count = 0;
+  for (int block = 0; block < blocks; ++block) {
+    const int offset = block * 7;
+    sum_mx += partial_sums[offset + 0];
+    sum_my += partial_sums[offset + 1];
+    sum_rx += partial_sums[offset + 2];
+    sum_ry += partial_sums[offset + 3];
+    sum_moving_power += partial_sums[offset + 4];
+    sum_dot_same += partial_sums[offset + 5];
+    sum_dot_cross += partial_sums[offset + 6];
+    count += partial_count[block];
+  }
+  *refit_inliers = static_cast<int>(count);
+  if (count < 2ULL) {
+    *refit_status = 1;
+    return;
+  }
+
+  const double n = static_cast<double>(count);
+  const double mean_mx = sum_mx / n;
+  const double mean_my = sum_my / n;
+  const double mean_rx = sum_rx / n;
+  const double mean_ry = sum_ry / n;
+  const double denominator = sum_moving_power - n * (mean_mx * mean_mx + mean_my * mean_my);
+  if (denominator <= 1.0e-20) {
+    *refit_status = 2;
+    return;
+  }
+  const double numer_a = sum_dot_same - n * (mean_mx * mean_rx + mean_my * mean_ry);
+  const double numer_b = sum_dot_cross - n * (mean_mx * mean_ry - mean_my * mean_rx);
+  const double a = numer_a / denominator;
+  const double b = numer_b / denominator;
+  const double tx = mean_rx - (a * mean_mx - b * mean_my);
+  const double ty = mean_ry - (b * mean_mx + a * mean_my);
+
+  refit_matrix[0] = static_cast<float>(a);
+  refit_matrix[1] = static_cast<float>(-b);
+  refit_matrix[2] = static_cast<float>(tx);
+  refit_matrix[3] = static_cast<float>(b);
+  refit_matrix[4] = static_cast<float>(a);
+  refit_matrix[5] = static_cast<float>(ty);
+  refit_matrix[6] = 0.0f;
+  refit_matrix[7] = 0.0f;
+  refit_matrix[8] = 1.0f;
+  *refit_scale = static_cast<float>(sqrt(a * a + b * b));
+  *refit_rotation_rad = static_cast<float>(atan2(b, a));
+  *refit_status = 0;
+}
+
+__global__ void catalog_similarity_refit_residual_sums_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const float* candidate_params,
+    const int* best_index,
+    const float* matrix,
+    const int* refit_status,
+    double* partial_residual_sums,
+    int reference_count,
+    int moving_count,
+    float tolerance_px) {
+  extern __shared__ double residual_sums[];
+  const int lane = static_cast<int>(threadIdx.x);
+  double local_sum = 0.0;
+  const int selected_index = *best_index;
+  if (*refit_status == 0 && selected_index >= 0) {
+    const int param_offset = selected_index * 4;
+    const float seed_a = candidate_params[param_offset + 0];
+    const float seed_b = candidate_params[param_offset + 1];
+    const float seed_tx = candidate_params[param_offset + 2];
+    const float seed_ty = candidate_params[param_offset + 3];
+    const double m00 = static_cast<double>(matrix[0]);
+    const double m01 = static_cast<double>(matrix[1]);
+    const double m02 = static_cast<double>(matrix[2]);
+    const double m10 = static_cast<double>(matrix[3]);
+    const double m11 = static_cast<double>(matrix[4]);
+    const double m12 = static_cast<double>(matrix[5]);
+    const float tolerance2 = tolerance_px * tolerance_px;
+    if (isfinite(seed_a) && isfinite(seed_b) && isfinite(seed_tx) && isfinite(seed_ty)) {
+      for (int moving_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+           moving_index < moving_count;
+           moving_index += static_cast<int>(gridDim.x * blockDim.x)) {
+        const float mx_f = moving_x[moving_index];
+        const float my_f = moving_y[moving_index];
+        if (!isfinite(mx_f) || !isfinite(my_f)) {
+          continue;
+        }
+        const float seed_x = seed_a * mx_f - seed_b * my_f + seed_tx;
+        const float seed_y = seed_b * mx_f + seed_a * my_f + seed_ty;
+        float best_distance2 = tolerance2;
+        int best_reference = -1;
+        for (int reference_index = 0; reference_index < reference_count; ++reference_index) {
+          const float rx_f = reference_x[reference_index];
+          const float ry_f = reference_y[reference_index];
+          if (!isfinite(rx_f) || !isfinite(ry_f)) {
+            continue;
+          }
+          const float dx = seed_x - rx_f;
+          const float dy = seed_y - ry_f;
+          const float distance2 = dx * dx + dy * dy;
+          if (distance2 <= best_distance2) {
+            best_distance2 = distance2;
+            best_reference = reference_index;
+          }
+        }
+        if (best_reference < 0) {
+          continue;
+        }
+        const double mx = static_cast<double>(mx_f);
+        const double my = static_cast<double>(my_f);
+        const double dx = (m00 * mx + m01 * my + m02) - static_cast<double>(reference_x[best_reference]);
+        const double dy = (m10 * mx + m11 * my + m12) - static_cast<double>(reference_y[best_reference]);
+        local_sum += dx * dx + dy * dy;
+      }
+    }
+  }
+  residual_sums[lane] = local_sum;
+  __syncthreads();
+  for (int stride = static_cast<int>(blockDim.x) / 2; stride > 0; stride >>= 1) {
+    if (lane < stride) {
+      residual_sums[lane] += residual_sums[lane + stride];
+    }
+    __syncthreads();
+  }
+  if (lane == 0) {
+    partial_residual_sums[blockIdx.x] = residual_sums[0];
+  }
+}
+
+__global__ void catalog_similarity_refit_finalize_rms_kernel(
+    const double* partial_residual_sums,
+    const int* refit_inliers,
+    const int* refit_status,
+    float* refit_rms_px,
+    int blocks) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  if (*refit_status != 0 || *refit_inliers <= 0) {
+    *refit_rms_px = NAN;
+    return;
+  }
+  double residual_sum = 0.0;
+  for (int block = 0; block < blocks; ++block) {
+    residual_sum += partial_residual_sums[block];
+  }
+  *refit_rms_px = static_cast<float>(sqrt(residual_sum / static_cast<double>(*refit_inliers)));
+}
+
+__global__ void catalog_similarity_refit_select_kernel(
+    float* matrix,
+    float* scale,
+    float* rotation_rad,
+    float* rms_px,
+    const float* refit_matrix,
+    const float* refit_scale,
+    const float* refit_rotation_rad,
+    const float* refit_rms_px,
+    const int* best_inliers,
+    const int* refit_inliers,
+    int* refit_status) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  if (*refit_status != 0) {
+    return;
+  }
+  if (*refit_inliers < *best_inliers || !isfinite(*refit_rms_px) || !isfinite(*rms_px) ||
+      *refit_rms_px > *rms_px) {
+    *refit_status = 3;
+    return;
+  }
+  for (int i = 0; i < 9; ++i) {
+    matrix[i] = refit_matrix[i];
+  }
+  *scale = *refit_scale;
+  *rotation_rad = *refit_rotation_rad;
+  *rms_px = *refit_rms_px;
+}
+
 }  // namespace
 
 void gpwbpp_estimate_translation_search_f32_launch(
@@ -1152,6 +1475,16 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
     float* rms_px,
     int* best_inliers,
     int* best_index,
+    int* refit_inliers,
+    int* refit_status,
+    float* refit_matrix,
+    float* refit_scale,
+    float* refit_rotation_rad,
+    float* refit_rms_px,
+    double* refit_partial_sums,
+    unsigned long long* refit_partial_count,
+    double* refit_partial_residual_sums,
+    int refit_blocks,
     int reference_count,
     int moving_count,
     int candidate_count,
@@ -1195,4 +1528,58 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
       best_inliers,
       best_index,
       candidate_count);
+  const std::size_t stats_shared_bytes =
+      7 * threads * sizeof(double) + threads * sizeof(unsigned long long);
+  catalog_similarity_refit_stats_kernel<<<refit_blocks, threads, stats_shared_bytes>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      candidate_params,
+      best_index,
+      refit_partial_sums,
+      refit_partial_count,
+      reference_count,
+      moving_count,
+      tolerance_px);
+  catalog_similarity_refit_finalize_matrix_kernel<<<1, 1>>>(
+      refit_partial_sums,
+      refit_partial_count,
+      refit_matrix,
+      refit_scale,
+      refit_rotation_rad,
+      refit_inliers,
+      refit_status,
+      refit_blocks);
+  catalog_similarity_refit_residual_sums_kernel<<<refit_blocks, threads, threads * sizeof(double)>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      candidate_params,
+      best_index,
+      refit_matrix,
+      refit_status,
+      refit_partial_residual_sums,
+      reference_count,
+      moving_count,
+      tolerance_px);
+  catalog_similarity_refit_finalize_rms_kernel<<<1, 1>>>(
+      refit_partial_residual_sums,
+      refit_inliers,
+      refit_status,
+      refit_rms_px,
+      refit_blocks);
+  catalog_similarity_refit_select_kernel<<<1, 1>>>(
+      matrix,
+      scale,
+      rotation_rad,
+      rms_px,
+      refit_matrix,
+      refit_scale,
+      refit_rotation_rad,
+      refit_rms_px,
+      best_inliers,
+      refit_inliers,
+      refit_status);
 }

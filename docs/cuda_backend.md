@@ -111,6 +111,15 @@ Resident CUDA integration now supports:
   but the current seed scorer can still choose an astroalign-disagreeing
   transform, so benchmark artifacts record both internal acceptance and external
   agreement checks.
+- Catalog similarity now performs a guarded GPU refit from the best seed's
+  nearest-neighbor star inliers. The refit is applied only if its star-catalog
+  residual does not worsen; diagnostics report `refined_inliers`,
+  `refit_status`, and `refit_rms_px`.
+- `gpwbpp.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`
+  uses CUDA matrix metrics to search a small translation correction around an
+  existing matrix. It is a diagnostic bridge toward pixel-evidence transform
+  scoring; the current implementation launches multiple GPU metric kernels from
+  Python rather than a fused CUDA search kernel.
 - GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
   a bounded fractional-offset grid with bilinear sampling and normalized
   cross-correlation, returning `dx`, `dy`, `score`, and candidate-count
