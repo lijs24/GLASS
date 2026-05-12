@@ -45,6 +45,13 @@ mutual-nearest matching around that highest-vote translation, reports
 and computes `rms_px`. It still depends on the input catalog coordinates; true
 subpixel centroid measurement is not yet implemented on the GPU.
 
+The refined catalog translation can now drive
+`warp_translation_bilinear_f32`, a CUDA bilinear subpixel translation warp that
+returns both the aligned image and a valid-pixel coverage mask. The current
+validated scope is translation-only. Similarity, affine, homography,
+Lanczos/resampling choices, and fully resident frame-to-frame transform
+application remain future warp gates.
+
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
 open-source external reference, not as GPWBPP runtime logic.

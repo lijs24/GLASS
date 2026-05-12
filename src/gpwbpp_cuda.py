@@ -229,6 +229,37 @@ def warp_translation_f32(data: Any, dx: float, dy: float, fill: float = 0.0) -> 
     return out, coverage
 
 
+def warp_translation_bilinear_f32(data: Any, dx: float, dy: float, fill: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    native = _native()
+    if native is not None and hasattr(native, "warp_translation_bilinear_f32"):
+        warped, coverage = native.warp_translation_bilinear_f32(data, float(dx), float(dy), float(fill))
+        return np.asarray(warped, dtype=np.float32), np.asarray(coverage, dtype=np.float32)
+
+    image = np.asarray(data, dtype=np.float32)
+    h, w = image.shape
+    out = np.full_like(image, fill, dtype=np.float32)
+    coverage = np.zeros_like(image, dtype=np.float32)
+    for y in range(h):
+        sy = float(y) - float(dy)
+        if sy < 0.0 or sy > float(h - 1):
+            continue
+        y0 = int(np.floor(sy))
+        y1 = min(y0 + 1, h - 1)
+        ty = np.float32(sy - y0)
+        for x in range(w):
+            sx = float(x) - float(dx)
+            if sx < 0.0 or sx > float(w - 1):
+                continue
+            x0 = int(np.floor(sx))
+            x1 = min(x0 + 1, w - 1)
+            tx = np.float32(sx - x0)
+            top = image[y0, x0] * (1.0 - tx) + image[y0, x1] * tx
+            bottom = image[y1, x0] * (1.0 - tx) + image[y1, x1] * tx
+            out[y, x] = top * (1.0 - ty) + bottom * ty
+            coverage[y, x] = 1.0
+    return out, coverage
+
+
 def _translation_ncc_score(reference: np.ndarray, moving: np.ndarray, dx: int, dy: int) -> float:
     h, w = reference.shape
     src_x0 = max(0, -dx)
