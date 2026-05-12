@@ -764,7 +764,13 @@ __global__ void catalog_similarity_score_kernel(
     int moving_count,
     int candidate_count,
     float tolerance_px,
-    float min_pair_distance) {
+    float min_pair_distance,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px,
+    float min_scale,
+    float max_scale,
+    float max_abs_rotation_rad) {
   const int candidate_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   if (candidate_index >= candidate_count) {
     return;
@@ -812,6 +818,22 @@ __global__ void catalog_similarity_score_kernel(
   const float b = (mvx * rvy - mvy * rvx) / moving_distance2;
   const float tx = rax - (a * max - b * may);
   const float ty = ray - (b * max + a * may);
+  const float candidate_scale = sqrtf(a * a + b * b);
+  const float candidate_rotation = atan2f(b, a);
+  if (candidate_scale < min_scale || candidate_scale > max_scale) {
+    return;
+  }
+  if (max_abs_rotation_rad >= 0.0f && fabsf(candidate_rotation) > max_abs_rotation_rad) {
+    return;
+  }
+  if (prior_radius_px >= 0.0f) {
+    const float prior_dx_error = tx - prior_dx;
+    const float prior_dy_error = ty - prior_dy;
+    if ((prior_dx_error * prior_dx_error + prior_dy_error * prior_dy_error) >
+        prior_radius_px * prior_radius_px) {
+      return;
+    }
+  }
   candidate_params[param_offset + 0] = a;
   candidate_params[param_offset + 1] = b;
   candidate_params[param_offset + 2] = tx;
@@ -1134,7 +1156,13 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
     int moving_count,
     int candidate_count,
     float tolerance_px,
-    float min_pair_distance) {
+    float min_pair_distance,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px,
+    float min_scale,
+    float max_scale,
+    float max_abs_rotation_rad) {
   constexpr int threads = 256;
   const int blocks = (candidate_count + threads - 1) / threads;
   catalog_similarity_score_kernel<<<blocks, threads>>>(
@@ -1149,7 +1177,13 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
       moving_count,
       candidate_count,
       tolerance_px,
-      min_pair_distance);
+      min_pair_distance,
+      prior_dx,
+      prior_dy,
+      prior_radius_px,
+      min_scale,
+      max_scale,
+      max_abs_rotation_rad);
   catalog_similarity_best_kernel<<<1, 1>>>(
       candidate_params,
       candidate_scores,

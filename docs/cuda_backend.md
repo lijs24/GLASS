@@ -94,6 +94,16 @@ Resident CUDA integration now supports:
   provides a Python orchestration helper for controlled tests: it extracts GPU
   star catalogs from two images, estimates the similarity seed on the GPU, and
   applies the resulting matrix with the CUDA bilinear warp.
+- `star_top_nms_candidates_f32(...)` adds a CUDA-side top-candidate selection
+  plus minimum-distance suppression step. This reduces duplicated local maxima
+  around saturated stars before catalog matching.
+- `estimate_similarity_from_catalogs_f32(...)` now accepts optional priors for
+  translation, scale, and rotation. The real M38 pair benchmark can run a
+  fully GPWBPP-owned path (GPU star candidates -> GPU NMS catalog -> GPU
+  constrained similarity seed -> GPU matrix warp) without astroalign control
+  points. The current brute-force seed path is correct on the recorded pair but
+  still slow; it needs parallel best-candidate reduction and a cheaper catalog
+  prefilter before it becomes the default production registration path.
 - GPU subpixel translation refinement around a coarse NCC estimate. It evaluates
   a bounded fractional-offset grid with bilinear sampling and normalized
   cross-correlation, returning `dx`, `dy`, `score`, and candidate-count

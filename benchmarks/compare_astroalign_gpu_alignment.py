@@ -448,6 +448,117 @@ def _gpu_catalog_run(
     }
 
 
+def _gpu_catalog_similarity_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    max_stars: int,
+    threshold_sigma: float,
+    tolerance_px: float,
+    min_pair_distance: float,
+    min_inliers: int,
+    grid_cols: int | None,
+    grid_rows: int | None,
+    nms_scan_candidates: int | None,
+    nms_min_separation_px: float | None,
+    prior_dx: float | None,
+    prior_dy: float | None,
+    prior_radius_px: float | None,
+    min_scale: float | None,
+    max_scale: float | None,
+    max_abs_rotation_rad: float | None,
+) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    if not hasattr(gpwbpp_cuda, "estimate_similarity_from_catalogs_f32"):
+        raise RuntimeError("native CUDA backend lacks estimate_similarity_from_catalogs_f32")
+    t0 = time.perf_counter()
+    reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
+    moving_threshold = _adaptive_star_threshold(moving, threshold_sigma)
+    if grid_cols is not None and grid_rows is not None:
+        reference_catalog = gpwbpp_cuda.star_grid_candidates_f32(reference, reference_threshold, grid_cols, grid_rows)
+        moving_catalog = gpwbpp_cuda.star_grid_candidates_f32(moving, moving_threshold, grid_cols, grid_rows)
+        selection_model = "grid_brightest_local_maximum"
+    elif nms_scan_candidates is not None or nms_min_separation_px is not None:
+        reference_catalog = gpwbpp_cuda.star_top_nms_candidates_f32(
+            reference,
+            reference_threshold,
+            4096 if nms_scan_candidates is None else nms_scan_candidates,
+            max_stars,
+            32.0 if nms_min_separation_px is None else nms_min_separation_px,
+        )
+        moving_catalog = gpwbpp_cuda.star_top_nms_candidates_f32(
+            moving,
+            moving_threshold,
+            4096 if nms_scan_candidates is None else nms_scan_candidates,
+            max_stars,
+            32.0 if nms_min_separation_px is None else nms_min_separation_px,
+        )
+        selection_model = "global_top_flux_local_maximum_nms"
+    else:
+        reference_catalog = gpwbpp_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
+        moving_catalog = gpwbpp_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
+        selection_model = "global_top_flux_local_maximum"
+    fit = gpwbpp_cuda.estimate_similarity_from_catalogs_f32(
+        reference_catalog["x"],
+        reference_catalog["y"],
+        moving_catalog["x"],
+        moving_catalog["y"],
+        tolerance_px=float(tolerance_px),
+        min_pair_distance=float(min_pair_distance),
+        prior_dx=prior_dx,
+        prior_dy=prior_dy,
+        prior_radius_px=prior_radius_px,
+        min_scale=min_scale,
+        max_scale=max_scale,
+        max_abs_rotation_rad=max_abs_rotation_rad,
+    )
+    matrix = np.asarray(fit["matrix"], dtype=np.float64)
+    aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
+    valid = coverage > 0.0
+    elapsed = time.perf_counter() - t0
+    accepted = fit["status"] == "ok" and int(fit["inliers"]) >= int(min_inliers)
+    warnings = [] if accepted else [f"catalog similarity inliers below {int(min_inliers)}"]
+    result = {
+        "elapsed_s": elapsed,
+        "matrix": matrix.tolist(),
+        "scale": float(fit["scale"]),
+        "rotation_rad": float(fit["rotation_rad"]),
+        "rms_px": float(fit["rms_px"]),
+        "inliers": int(fit["inliers"]),
+        "best_candidate_index": int(fit["best_candidate_index"]),
+        "candidate_count": int(fit["candidate_count"]),
+        "reference_count": int(fit["reference_count"]),
+        "moving_count": int(fit["moving_count"]),
+        "reference_detected": int(reference_catalog["count"]),
+        "moving_detected": int(moving_catalog["count"]),
+        "reference_stored": int(reference_catalog["stored_count"]),
+        "moving_stored": int(moving_catalog["stored_count"]),
+        "reference_threshold": reference_threshold,
+        "moving_threshold": moving_threshold,
+        "selection_model": selection_model,
+        "grid_cols": grid_cols,
+        "grid_rows": grid_rows,
+        "nms_scan_candidates": nms_scan_candidates,
+        "nms_min_separation_px": nms_min_separation_px,
+        "tolerance_px": float(tolerance_px),
+        "min_pair_distance": float(min_pair_distance),
+        "prior_dx": prior_dx,
+        "prior_dy": prior_dy,
+        "prior_radius_px": prior_radius_px,
+        "min_scale": min_scale,
+        "max_scale": max_scale,
+        "max_abs_rotation_rad": max_abs_rotation_rad,
+        "coverage_pixels": int(np.sum(valid)),
+        "accepted": accepted,
+        "warnings": warnings,
+        "fit_status": str(fit["status"]),
+        "fit_model": str(fit["model"]),
+        "model": "pure_cuda_catalog_similarity_seed_then_matrix_warp",
+        "rms": _rms(reference, aligned, valid),
+    }
+    return result, np.asarray(aligned, dtype=np.float32), valid
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare astroalign with GPWBPP CUDA translation alignment.")
     parser.add_argument("--reference", type=Path)
@@ -466,7 +577,13 @@ def main() -> int:
     parser.add_argument("--catalog-min-inliers", type=int, default=6)
     parser.add_argument("--catalog-grid-cols", type=int)
     parser.add_argument("--catalog-grid-rows", type=int)
+    parser.add_argument("--catalog-nms-scan-stars", type=int)
+    parser.add_argument("--catalog-nms-min-separation", type=float)
     parser.add_argument("--catalog-prior-radius", type=float)
+    parser.add_argument("--catalog-similarity-min-pair-distance", type=float, default=4.0)
+    parser.add_argument("--catalog-similarity-min-scale", type=float, default=0.98)
+    parser.add_argument("--catalog-similarity-max-scale", type=float, default=1.02)
+    parser.add_argument("--catalog-similarity-max-rotation-rad", type=float, default=0.02)
     parser.add_argument("--subpixel-radius-steps", type=int, default=4)
     parser.add_argument("--subpixel-step", type=float, default=0.25)
     args = parser.parse_args()
@@ -548,6 +665,27 @@ def main() -> int:
         prior_dy,
         args.catalog_prior_radius,
     )
+    gpu_catalog_similarity_result, gpu_catalog_similarity_aligned, gpu_catalog_similarity_valid = (
+        _gpu_catalog_similarity_run(
+            reference,
+            moving,
+            args.catalog_stars,
+            args.catalog_threshold_sigma,
+            args.catalog_tolerance_px,
+            args.catalog_similarity_min_pair_distance,
+            args.catalog_min_inliers,
+            args.catalog_grid_cols,
+            args.catalog_grid_rows,
+            args.catalog_nms_scan_stars,
+            args.catalog_nms_min_separation,
+            prior_dx,
+            prior_dy,
+            args.catalog_prior_radius,
+            args.catalog_similarity_min_scale,
+            args.catalog_similarity_max_scale,
+            args.catalog_similarity_max_rotation_rad,
+        )
+    )
     if (
         gpu_catalog_result["accepted"]
         and np.isfinite(gpu_catalog_result["rms"])
@@ -577,13 +715,26 @@ def main() -> int:
             astroalign_aligned,
             astroalign_valid,
         ),
+        "direct_output_diff_gpu_catalog_similarity_minus_astroalign_apply_on_common_valid_pixels": _diff_on_common_valid_pixels(
+            gpu_catalog_similarity_aligned,
+            gpu_catalog_similarity_valid,
+            astroalign_aligned,
+            astroalign_valid,
+        ),
         "valid_pixels": {
             "astroalign": int(np.sum(astroalign_valid)),
             "gpwbpp_cuda_matrix": int(np.sum(gpu_matrix_valid)),
             "gpwbpp_cuda_similarity_fit": int(np.sum(gpu_similarity_valid)),
+            "gpwbpp_cuda_catalog_similarity": int(np.sum(gpu_catalog_similarity_valid)),
             "common": int(np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_matrix_valid, dtype=bool))),
             "common_similarity_fit": int(
                 np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_similarity_valid, dtype=bool))
+            ),
+            "common_catalog_similarity": int(
+                np.sum(
+                    np.asarray(astroalign_valid, dtype=bool)
+                    & np.asarray(gpu_catalog_similarity_valid, dtype=bool)
+                )
             ),
         },
         "gpwbpp_cuda": gpu_result,
@@ -592,6 +743,7 @@ def main() -> int:
         "gpwbpp_cuda_resident_ncc_subpixel": gpu_resident_result,
         "gpwbpp_cuda_resident_matrix_warp_from_astroalign": gpu_resident_matrix_result,
         "gpwbpp_cuda_catalog": gpu_catalog_result,
+        "gpwbpp_cuda_catalog_similarity": gpu_catalog_similarity_result,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
         else None,
@@ -614,6 +766,10 @@ def main() -> int:
         ),
         "catalog_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_catalog_result["elapsed_s"]
         if gpu_catalog_result["elapsed_s"] > 0.0
+        else None,
+        "catalog_similarity_speedup_vs_astroalign": astroalign_result["elapsed_s"]
+        / gpu_catalog_similarity_result["elapsed_s"]
+        if gpu_catalog_similarity_result["elapsed_s"] > 0.0
         else None,
         "subpixel_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_subpixel_result["elapsed_s"]
         if gpu_subpixel_result["elapsed_s"] > 0.0

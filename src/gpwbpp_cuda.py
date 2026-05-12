@@ -904,6 +904,12 @@ def _similarity_from_catalogs_cpu(
     moving_y: Any,
     tolerance_px: float,
     min_pair_distance: float,
+    prior_dx: float | None = None,
+    prior_dy: float | None = None,
+    prior_radius_px: float | None = None,
+    min_scale: float | None = None,
+    max_scale: float | None = None,
+    max_abs_rotation_rad: float | None = None,
 ) -> dict[str, Any]:
     reference = np.column_stack(
         [np.asarray(reference_x, dtype=np.float32).reshape(-1), np.asarray(reference_y, dtype=np.float32).reshape(-1)]
@@ -936,6 +942,21 @@ def _similarity_from_catalogs_cpu(
                     )
                     if matrix is None:
                         continue
+                    a = float(matrix[0, 0])
+                    b = float(matrix[1, 0])
+                    scale = float(np.sqrt(a * a + b * b))
+                    rotation = float(np.arctan2(b, a))
+                    if min_scale is not None and scale < float(min_scale):
+                        continue
+                    if max_scale is not None and scale > float(max_scale):
+                        continue
+                    if max_abs_rotation_rad is not None and abs(rotation) > float(max_abs_rotation_rad):
+                        continue
+                    if prior_radius_px is not None and prior_radius_px >= 0.0:
+                        dx_error = float(matrix[0, 2]) - float(0.0 if prior_dx is None else prior_dx)
+                        dy_error = float(matrix[1, 2]) - float(0.0 if prior_dy is None else prior_dy)
+                        if dx_error * dx_error + dy_error * dy_error > float(prior_radius_px) ** 2:
+                            continue
                     inliers, rms = _score_similarity_catalog_matrix(matrix, reference, moving, tolerance_px)
                     if inliers > best_inliers or (inliers == best_inliers and rms < best_rms):
                         best_matrix = matrix
@@ -956,6 +977,12 @@ def _similarity_from_catalogs_cpu(
         "moving_count": int(len(moving)),
         "tolerance_px": float(tolerance_px),
         "min_pair_distance": float(min_pair_distance),
+        "prior_dx": None if prior_dx is None else float(prior_dx),
+        "prior_dy": None if prior_dy is None else float(prior_dy),
+        "prior_radius_px": None if prior_radius_px is None else float(prior_radius_px),
+        "min_scale": None if min_scale is None else float(min_scale),
+        "max_scale": None if max_scale is None else float(max_scale),
+        "max_abs_rotation_rad": None if max_abs_rotation_rad is None else float(max_abs_rotation_rad),
         "status": "ok" if best_inliers > 0 else "failed",
         "model": "catalog_pair_similarity_cpu_fallback",
     }
@@ -968,6 +995,12 @@ def estimate_similarity_from_catalogs_f32(
     moving_y: Any,
     tolerance_px: float = 2.0,
     min_pair_distance: float = 2.0,
+    prior_dx: float | None = None,
+    prior_dy: float | None = None,
+    prior_radius_px: float | None = None,
+    min_scale: float | None = None,
+    max_scale: float | None = None,
+    max_abs_rotation_rad: float | None = None,
 ) -> dict[str, Any]:
     """Estimate a similarity transform directly from two bounded star catalogs.
 
@@ -988,6 +1021,12 @@ def estimate_similarity_from_catalogs_f32(
                 np.ascontiguousarray(np.asarray(moving_y, dtype=np.float32).reshape(-1)),
                 float(tolerance_px),
                 float(min_pair_distance),
+                float(0.0 if prior_dx is None else prior_dx),
+                float(0.0 if prior_dy is None else prior_dy),
+                float(-1.0 if prior_radius_px is None else prior_radius_px),
+                float(0.0 if min_scale is None else min_scale),
+                float(np.finfo(np.float32).max if max_scale is None else max_scale),
+                float(-1.0 if max_abs_rotation_rad is None else max_abs_rotation_rad),
             )
         )
         return {
@@ -1002,6 +1041,12 @@ def estimate_similarity_from_catalogs_f32(
             "moving_count": int(result["moving_count"]),
             "tolerance_px": float(result["tolerance_px"]),
             "min_pair_distance": float(result["min_pair_distance"]),
+            "prior_dx": float(result["prior_dx"]),
+            "prior_dy": float(result["prior_dy"]),
+            "prior_radius_px": float(result["prior_radius_px"]),
+            "min_scale": float(result["min_scale"]),
+            "max_scale": float(result["max_scale"]),
+            "max_abs_rotation_rad": float(result["max_abs_rotation_rad"]),
             "status": str(result["status"]),
             "model": str(result.get("model", "catalog_pair_similarity_cuda")),
         }
@@ -1012,6 +1057,12 @@ def estimate_similarity_from_catalogs_f32(
         moving_y,
         tolerance_px,
         min_pair_distance,
+        prior_dx,
+        prior_dy,
+        prior_radius_px,
+        min_scale,
+        max_scale,
+        max_abs_rotation_rad,
     )
 
 
@@ -1185,6 +1236,68 @@ def star_top_candidates_f32(data: Any, threshold: float, max_candidates: int = 4
         "x": xs[stored].astype(np.float32),
         "y": ys[stored].astype(np.float32),
         "flux": flux[stored].astype(np.float32),
+    }
+
+
+def star_top_nms_candidates_f32(
+    data: Any,
+    threshold: float,
+    scan_candidates: int = 4096,
+    max_output_candidates: int = 64,
+    min_separation_px: float = 32.0,
+) -> dict[str, Any]:
+    native = _native()
+    if native is not None and hasattr(native, "star_top_nms_candidates_f32"):
+        result = dict(
+            native.star_top_nms_candidates_f32(
+                data,
+                float(threshold),
+                int(scan_candidates),
+                int(max_output_candidates),
+                float(min_separation_px),
+            )
+        )
+        return {
+            "count": int(result["count"]),
+            "stored_count": int(result["stored_count"]),
+            "scan_candidates": int(result["scan_candidates"]),
+            "max_output_candidates": int(result["max_output_candidates"]),
+            "min_separation_px": float(result["min_separation_px"]),
+            "x": np.asarray(result["x"], dtype=np.float32),
+            "y": np.asarray(result["y"], dtype=np.float32),
+            "flux": np.asarray(result["flux"], dtype=np.float32),
+        }
+
+    top = star_top_candidates_f32(data, threshold, int(scan_candidates))
+    xs = np.asarray(top["x"], dtype=np.float32)
+    ys = np.asarray(top["y"], dtype=np.float32)
+    flux = np.asarray(top["flux"], dtype=np.float32)
+    selected: list[int] = []
+    min_separation2 = float(min_separation_px) * float(min_separation_px)
+    for i, (x, y) in enumerate(zip(xs, ys, strict=True)):
+        if len(selected) >= int(max_output_candidates):
+            break
+        if not np.isfinite(x) or not np.isfinite(y):
+            continue
+        keep = True
+        for j in selected:
+            dx = float(x - xs[j])
+            dy = float(y - ys[j])
+            if dx * dx + dy * dy < min_separation2:
+                keep = False
+                break
+        if keep:
+            selected.append(i)
+    selected_array = np.asarray(selected, dtype=np.int64)
+    return {
+        "count": int(top["count"]),
+        "stored_count": int(len(selected)),
+        "scan_candidates": int(scan_candidates),
+        "max_output_candidates": int(max_output_candidates),
+        "min_separation_px": float(min_separation_px),
+        "x": xs[selected_array].astype(np.float32),
+        "y": ys[selected_array].astype(np.float32),
+        "flux": flux[selected_array].astype(np.float32),
     }
 
 

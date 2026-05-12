@@ -221,6 +221,49 @@ __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxe
   }
 }
 
+__global__ void star_catalog_nms_kernel(
+    const float* scan_xs,
+    const float* scan_ys,
+    const float* scan_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* stored_count,
+    int scan_candidates,
+    int max_output_candidates,
+    float min_separation_px) {
+  if (blockIdx.x != 0 || threadIdx.x != 0) {
+    return;
+  }
+  const float min_separation2 = min_separation_px * min_separation_px;
+  int selected = 0;
+  for (int i = 0; i < scan_candidates && selected < max_output_candidates; ++i) {
+    const float flux = scan_fluxes[i];
+    const float x = scan_xs[i];
+    const float y = scan_ys[i];
+    if (!isfinite(flux) || flux <= -1.0e30f || !isfinite(x) || !isfinite(y)) {
+      continue;
+    }
+    bool keep = true;
+    for (int j = 0; j < selected; ++j) {
+      const float dx = x - out_xs[j];
+      const float dy = y - out_ys[j];
+      if (dx * dx + dy * dy < min_separation2) {
+        keep = false;
+        break;
+      }
+    }
+    if (!keep) {
+      continue;
+    }
+    out_xs[selected] = x;
+    out_ys[selected] = y;
+    out_fluxes[selected] = flux;
+    ++selected;
+  }
+  *stored_count = selected;
+}
+
 void gpwbpp_star_local_max_mask_f32_launch(
     const float* input,
     unsigned char* mask,
@@ -270,6 +313,49 @@ void gpwbpp_star_top_candidates_f32_launch(
   star_candidate_topn_kernel<<<grid, block>>>(
       input, xs, ys, fluxes, count, lock, width, height, threshold, max_candidates);
   star_catalog_sort_desc_kernel<<<1, 1>>>(xs, ys, fluxes, max_candidates);
+}
+
+void gpwbpp_star_top_nms_candidates_f32_launch(
+    const float* input,
+    float* scan_xs,
+    float* scan_ys,
+    float* scan_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* lock,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int scan_candidates,
+    int max_output_candidates,
+    float min_separation_px) {
+  cudaMemset(count, 0, sizeof(int));
+  cudaMemset(lock, 0, sizeof(int));
+  cudaMemset(stored_count, 0, sizeof(int));
+  constexpr int init_threads = 256;
+  const int scan_init_blocks = (scan_candidates + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<scan_init_blocks, init_threads>>>(scan_xs, scan_ys, scan_fluxes, scan_candidates);
+  const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<out_init_blocks, init_threads>>>(out_xs, out_ys, out_fluxes, max_output_candidates);
+  const dim3 block(16, 16);
+  const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+  star_candidate_topn_kernel<<<grid, block>>>(
+      input, scan_xs, scan_ys, scan_fluxes, count, lock, width, height, threshold, scan_candidates);
+  star_catalog_sort_desc_kernel<<<1, 1>>>(scan_xs, scan_ys, scan_fluxes, scan_candidates);
+  star_catalog_nms_kernel<<<1, 1>>>(
+      scan_xs,
+      scan_ys,
+      scan_fluxes,
+      out_xs,
+      out_ys,
+      out_fluxes,
+      stored_count,
+      scan_candidates,
+      max_output_candidates,
+      min_separation_px);
 }
 
 void gpwbpp_star_grid_candidates_f32_launch(

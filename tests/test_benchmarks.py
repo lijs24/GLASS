@@ -74,19 +74,25 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
         "32",
         "--catalog-threshold-sigma",
         "4",
-        "--catalog-grid-cols",
-        "4",
-        "--catalog-grid-rows",
+        "--catalog-nms-scan-stars",
+        "64",
+        "--catalog-nms-min-separation",
         "4",
         "--catalog-prior-radius",
+        "4",
+        "--catalog-min-inliers",
         "4",
     )
 
     payload = json.loads(out.read_text(encoding="utf-8"))
     diff = payload["direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels"]
     fit_diff = payload["direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels"]
+    catalog_similarity_diff = payload[
+        "direct_output_diff_gpu_catalog_similarity_minus_astroalign_apply_on_common_valid_pixels"
+    ]
     valid_pixels = payload["valid_pixels"]
     fit = payload["gpwbpp_cuda_similarity_fit_from_astroalign_matches"]
+    catalog_similarity = payload["gpwbpp_cuda_catalog_similarity"]
 
     assert payload["astroalign"]["matched_control_points"] > 0
     assert payload["gpwbpp_cuda_matrix_warp_from_astroalign"]["coverage_pixels"] > 0
@@ -97,12 +103,21 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     assert fit["coverage_pixels"] > 0
     assert valid_pixels["common"] == diff["valid_pixels"]
     assert valid_pixels["common_similarity_fit"] == fit_diff["valid_pixels"]
+    assert valid_pixels["common_catalog_similarity"] == catalog_similarity_diff["valid_pixels"]
     assert diff["valid_pixels"] > 0
     assert fit_diff["valid_pixels"] > 0
+    assert catalog_similarity_diff["valid_pixels"] > 0
     assert diff["median_abs_diff"] is not None
     assert fit_diff["median_abs_diff"] is not None
+    assert catalog_similarity_diff["median_abs_diff"] is not None
     assert diff["rms_diff"] is not None
     assert fit_diff["rms_diff"] is not None
+    assert catalog_similarity_diff["rms_diff"] is not None
     assert payload["gpu_similarity_fit_plus_warp_speedup_vs_astroalign_apply_transform"] is not None
     assert payload["gpu_similarity_matrix_max_abs_delta_vs_astroalign"] < 0.02
+    assert catalog_similarity["fit_model"] == "catalog_pair_similarity_cuda"
+    assert catalog_similarity["fit_status"] == "ok"
+    assert catalog_similarity["accepted"]
+    assert catalog_similarity["coverage_pixels"] > 0
+    assert payload["catalog_similarity_speedup_vs_astroalign"] is not None
     assert payload["resident_matrix_device_speedup_vs_astroalign_apply_transform"] is not None

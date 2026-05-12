@@ -143,7 +143,13 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
     int moving_count,
     int candidate_count,
     float tolerance_px,
-    float min_pair_distance);
+    float min_pair_distance,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px,
+    float min_scale,
+    float max_scale,
+    float max_abs_rotation_rad);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
 void gpwbpp_frame_sum_stats_f32_launch(
@@ -212,6 +218,23 @@ void gpwbpp_star_top_candidates_f32_launch(
     int height,
     float threshold,
     int max_candidates);
+void gpwbpp_star_top_nms_candidates_f32_launch(
+    const float* input,
+    float* scan_xs,
+    float* scan_ys,
+    float* scan_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* lock,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int scan_candidates,
+    int max_output_candidates,
+    float min_separation_px);
 void gpwbpp_star_grid_candidates_f32_launch(
     const float* input,
     float* xs,
@@ -2536,7 +2559,13 @@ py::dict estimate_similarity_from_catalogs_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> moving_x,
     py::array_t<float, py::array::c_style | py::array::forcecast> moving_y,
     float tolerance_px,
-    float min_pair_distance) {
+    float min_pair_distance,
+    float prior_dx,
+    float prior_dy,
+    float prior_radius_px,
+    float min_scale,
+    float max_scale,
+    float max_abs_rotation_rad) {
   const py::buffer_info reference_x_info = reference_x.request();
   const py::buffer_info reference_y_info = reference_y.request();
   const py::buffer_info moving_x_info = moving_x.request();
@@ -2557,6 +2586,16 @@ py::dict estimate_similarity_from_catalogs_f32(
   }
   if (min_pair_distance < 0.0f) {
     throw std::invalid_argument("min_pair_distance must be non-negative");
+  }
+  if (prior_radius_px < 0.0f) {
+    prior_dx = 0.0f;
+    prior_dy = 0.0f;
+  }
+  if (min_scale < 0.0f || max_scale < min_scale) {
+    throw std::invalid_argument("scale constraints must satisfy 0 <= min_scale <= max_scale");
+  }
+  if (max_abs_rotation_rad < 0.0f) {
+    max_abs_rotation_rad = -1.0f;
   }
   const int candidate_count =
       reference_count * (reference_count - 1) * moving_count * (moving_count - 1);
@@ -2654,7 +2693,13 @@ py::dict estimate_similarity_from_catalogs_f32(
         moving_count,
         candidate_count,
         tolerance_px,
-        min_pair_distance);
+        min_pair_distance,
+        prior_dx,
+        prior_dy,
+        prior_radius_px,
+        min_scale,
+        max_scale,
+        max_abs_rotation_rad);
     check_cuda(cudaGetLastError(), "estimate_similarity_from_catalogs_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "estimate_similarity_from_catalogs_f32 synchronize");
     check_cuda(
@@ -2719,6 +2764,12 @@ py::dict estimate_similarity_from_catalogs_f32(
   result["moving_count"] = moving_count;
   result["tolerance_px"] = tolerance_px;
   result["min_pair_distance"] = min_pair_distance;
+  result["prior_dx"] = prior_dx;
+  result["prior_dy"] = prior_dy;
+  result["prior_radius_px"] = prior_radius_px;
+  result["min_scale"] = min_scale;
+  result["max_scale"] = max_scale;
+  result["max_abs_rotation_rad"] = max_abs_rotation_rad;
   result["status"] = best_inliers > 0 ? "ok" : "failed";
   result["model"] = "catalog_pair_similarity_cuda";
   return result;
@@ -3152,6 +3203,142 @@ py::dict star_top_candidates_f32(
   }
 }
 
+py::dict star_top_nms_candidates_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    float threshold,
+    int scan_candidates,
+    int max_output_candidates,
+    float min_separation_px) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  if (scan_candidates <= 0 || max_output_candidates <= 0) {
+    throw std::invalid_argument("candidate counts must be positive");
+  }
+  if (scan_candidates < max_output_candidates) {
+    throw std::invalid_argument("scan_candidates must be greater than or equal to max_output_candidates");
+  }
+  if (min_separation_px < 0.0f) {
+    throw std::invalid_argument("min_separation_px must be non-negative");
+  }
+  const int height = static_cast<int>(info.shape[0]);
+  const int width = static_cast<int>(info.shape[1]);
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  py::array_t<float> xs({max_output_candidates});
+  py::array_t<float> ys({max_output_candidates});
+  py::array_t<float> fluxes({max_output_candidates});
+  const py::buffer_info xs_info = xs.request();
+  const py::buffer_info ys_info = ys.request();
+  const py::buffer_info flux_info = fluxes.request();
+
+  float* d_input = nullptr;
+  float* d_scan_xs = nullptr;
+  float* d_scan_ys = nullptr;
+  float* d_scan_fluxes = nullptr;
+  float* d_xs = nullptr;
+  float* d_ys = nullptr;
+  float* d_fluxes = nullptr;
+  int* d_count = nullptr;
+  int* d_lock = nullptr;
+  int* d_stored_count = nullptr;
+  int total_count = 0;
+  int stored_count = 0;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(top nms star input)");
+    check_cuda(
+        cudaMalloc(&d_scan_xs, static_cast<std::size_t>(scan_candidates) * sizeof(float)),
+        "cudaMalloc(top nms scan xs)");
+    check_cuda(
+        cudaMalloc(&d_scan_ys, static_cast<std::size_t>(scan_candidates) * sizeof(float)),
+        "cudaMalloc(top nms scan ys)");
+    check_cuda(
+        cudaMalloc(&d_scan_fluxes, static_cast<std::size_t>(scan_candidates) * sizeof(float)),
+        "cudaMalloc(top nms scan fluxes)");
+    check_cuda(
+        cudaMalloc(&d_xs, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+        "cudaMalloc(top nms star xs)");
+    check_cuda(
+        cudaMalloc(&d_ys, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+        "cudaMalloc(top nms star ys)");
+    check_cuda(
+        cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+        "cudaMalloc(top nms star fluxes)");
+    check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(top nms star count)");
+    check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(top nms star lock)");
+    check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(top nms stored count)");
+    check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(top nms star input)");
+    gpwbpp_star_top_nms_candidates_f32_launch(
+        d_input,
+        d_scan_xs,
+        d_scan_ys,
+        d_scan_fluxes,
+        d_xs,
+        d_ys,
+        d_fluxes,
+        d_count,
+        d_lock,
+        d_stored_count,
+        width,
+        height,
+        threshold,
+        scan_candidates,
+        max_output_candidates,
+        min_separation_px);
+    check_cuda(cudaGetLastError(), "star_top_nms_candidates_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "star_top_nms_candidates_f32 synchronize");
+    check_cuda(cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(top nms count)");
+    check_cuda(
+        cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(top nms stored count)");
+    check_cuda(
+        cudaMemcpy(xs_info.ptr, d_xs, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(top nms star xs)");
+    check_cuda(
+        cudaMemcpy(ys_info.ptr, d_ys, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(top nms star ys)");
+    check_cuda(
+        cudaMemcpy(
+            flux_info.ptr,
+            d_fluxes,
+            static_cast<std::size_t>(stored_count) * sizeof(float),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(top nms star fluxes)");
+    py::dict result;
+    result["count"] = total_count;
+    result["stored_count"] = stored_count;
+    result["scan_candidates"] = scan_candidates;
+    result["max_output_candidates"] = max_output_candidates;
+    result["min_separation_px"] = min_separation_px;
+    result["x"] = xs[py::slice(0, stored_count, 1)];
+    result["y"] = ys[py::slice(0, stored_count, 1)];
+    result["flux"] = fluxes[py::slice(0, stored_count, 1)];
+    cudaFree(d_input);
+    cudaFree(d_scan_xs);
+    cudaFree(d_scan_ys);
+    cudaFree(d_scan_fluxes);
+    cudaFree(d_xs);
+    cudaFree(d_ys);
+    cudaFree(d_fluxes);
+    cudaFree(d_count);
+    cudaFree(d_lock);
+    cudaFree(d_stored_count);
+    return result;
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_scan_xs);
+    cudaFree(d_scan_ys);
+    cudaFree(d_scan_fluxes);
+    cudaFree(d_xs);
+    cudaFree(d_ys);
+    cudaFree(d_fluxes);
+    cudaFree(d_count);
+    cudaFree(d_lock);
+    cudaFree(d_stored_count);
+    throw;
+  }
+}
+
 py::dict star_grid_candidates_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> input,
     float threshold,
@@ -3310,13 +3497,27 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("moving_x"),
       py::arg("moving_y"),
       py::arg("tolerance_px") = 2.0f,
-      py::arg("min_pair_distance") = 2.0f);
+      py::arg("min_pair_distance") = 2.0f,
+      py::arg("prior_dx") = 0.0f,
+      py::arg("prior_dy") = 0.0f,
+      py::arg("prior_radius_px") = -1.0f,
+      py::arg("min_scale") = 0.0f,
+      py::arg("max_scale") = std::numeric_limits<float>::max(),
+      py::arg("max_abs_rotation_rad") = -1.0f);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
   m.def("local_norm_pair_stats_f32", &local_norm_pair_stats_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);
   m.def("star_candidates_f32", &star_candidates_f32);
   m.def("star_top_candidates_f32", &star_top_candidates_f32);
+  m.def(
+      "star_top_nms_candidates_f32",
+      &star_top_nms_candidates_f32,
+      py::arg("input"),
+      py::arg("threshold"),
+      py::arg("scan_candidates"),
+      py::arg("max_output_candidates"),
+      py::arg("min_separation_px"));
   m.def("star_grid_candidates_f32", &star_grid_candidates_f32);
   py::class_<ResidentCalibratedStack>(m, "ResidentCalibratedStack")
       .def(py::init<std::size_t, std::size_t, std::size_t>())

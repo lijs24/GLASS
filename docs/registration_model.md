@@ -176,6 +176,18 @@ rotated/scaled star field and verifies that the closed loop improves image RMS
 and recovers the expected similarity matrix within subpixel/catalog-detection
 limits.
 
+The catalog path now includes two guardrails for real frames. First,
+`star_top_nms_candidates_f32` performs CUDA-side minimum-distance suppression
+after bright local-maximum selection, which avoids filling compact catalogs with
+multiple peaks from the same saturated star. Second,
+`estimate_similarity_from_catalogs_f32` can constrain candidate two-star seeds
+by a prior translation, scale range, and rotation range. The intended prior is
+the GPU NCC coarse alignment, so the seed search remains clean-room and
+GPWBPP-owned. On the recorded full-frame M38 pair, this pure GPWBPP GPU path
+accepted 12 inliers and produced a matrix close to astroalign, but the current
+brute-force implementation is still slower than astroalign because top-NMS and
+best-candidate selection are not yet optimized.
+
 GPU matrix bilinear warp is now available as both a standalone array function
 and an in-place resident-frame operation. This validates the CUDA primitive
 needed to apply similarity and affine matrices without falling back to CPU pixel

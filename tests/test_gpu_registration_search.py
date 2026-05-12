@@ -453,6 +453,12 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
         moving_catalog[:, 1],
         tolerance_px=0.15,
         min_pair_distance=3.0,
+        prior_dx=float(translation[0]),
+        prior_dy=float(translation[1]),
+        prior_radius_px=2.0,
+        min_scale=0.95,
+        max_scale=1.05,
+        max_abs_rotation_rad=0.2,
     )
     matrix = np.asarray(result["matrix"], dtype=np.float32)
 
@@ -462,6 +468,10 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
     assert result["candidate_count"] == len(reference_catalog) * (len(reference_catalog) - 1) * len(
         moving_catalog
     ) * (len(moving_catalog) - 1)
+    assert result["prior_radius_px"] == 2.0
+    assert abs(result["min_scale"] - 0.95) < 1.0e-6
+    assert abs(result["max_scale"] - 1.05) < 1.0e-6
+    assert abs(result["max_abs_rotation_rad"] - 0.2) < 1.0e-6
     assert abs(result["scale"] - scale) < 1.0e-4
     assert abs(result["rotation_rad"] - angle) < 1.0e-4
     assert result["rms_px"] < 1.0e-3
@@ -525,3 +535,31 @@ def test_gpu_similarity_catalog_registration_aligns_synthetic_images():
     assert after < before * 0.6
     assert np.allclose(matrix[:2, :2], linear, atol=0.04)
     assert np.allclose(matrix[:2, 2], translation, atol=2.0)
+
+
+def test_gpu_star_top_nms_candidates_suppresses_close_peaks():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_top_nms_candidates_f32"):
+        raise AssertionError("star_top_nms_candidates_f32 is missing from gpwbpp_cuda")
+
+    image = np.zeros((48, 48), dtype=np.float32)
+    image[10, 10] = 100.0
+    image[11, 11] = 95.0
+    image[30, 30] = 90.0
+    image[40, 7] = 85.0
+
+    result = module.star_top_nms_candidates_f32(
+        image,
+        threshold=10.0,
+        scan_candidates=8,
+        max_output_candidates=4,
+        min_separation_px=4.0,
+    )
+    points = {(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)}
+
+    assert result["count"] == 3
+    assert result["stored_count"] == 3
+    assert (10, 10) in points
+    assert (11, 11) not in points
+    assert (30, 30) in points
+    assert (7, 40) in points
