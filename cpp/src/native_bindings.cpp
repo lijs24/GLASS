@@ -89,6 +89,17 @@ void gpwbpp_star_candidates_f32_launch(
     int height,
     float threshold,
     int max_candidates);
+void gpwbpp_star_top_candidates_f32_launch(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int* count,
+    int* lock,
+    int width,
+    int height,
+    float threshold,
+    int max_candidates);
 
 namespace {
 
@@ -396,6 +407,75 @@ class ResidentCalibratedStack {
       cudaFree(d_ys);
       cudaFree(d_fluxes);
       cudaFree(d_count);
+      throw;
+    }
+  }
+
+  py::dict star_top_candidates(std::size_t index, float threshold, int max_candidates) const {
+    require_index(index);
+    if (!loaded_[index]) {
+      throw std::runtime_error("resident frame must be loaded before star detection");
+    }
+    if (max_candidates <= 0) {
+      throw std::invalid_argument("max_candidates must be positive");
+    }
+    py::array_t<float> xs({max_candidates});
+    py::array_t<float> ys({max_candidates});
+    py::array_t<float> fluxes({max_candidates});
+    const py::buffer_info xs_info = xs.request();
+    const py::buffer_info ys_info = ys.request();
+    const py::buffer_info flux_info = fluxes.request();
+
+    float* d_xs = nullptr;
+    float* d_ys = nullptr;
+    float* d_fluxes = nullptr;
+    int* d_count = nullptr;
+    int* d_lock = nullptr;
+    int total_count = 0;
+    try {
+      check_cuda(cudaMalloc(&d_xs, static_cast<std::size_t>(max_candidates) * sizeof(float)), "cudaMalloc(top star xs)");
+      check_cuda(cudaMalloc(&d_ys, static_cast<std::size_t>(max_candidates) * sizeof(float)), "cudaMalloc(top star ys)");
+      check_cuda(
+          cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_candidates) * sizeof(float)),
+          "cudaMalloc(top star fluxes)");
+      check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(top star count)");
+      check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(top star lock)");
+      gpwbpp_star_top_candidates_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_xs,
+          d_ys,
+          d_fluxes,
+          d_count,
+          d_lock,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          threshold,
+          max_candidates);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_top_candidates kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_top_candidates synchronize");
+      check_cuda(cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(top star count)");
+      const int stored_count = total_count < max_candidates ? total_count : max_candidates;
+      check_cuda(cudaMemcpy(xs_info.ptr, d_xs, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(top star xs)");
+      check_cuda(cudaMemcpy(ys_info.ptr, d_ys, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(top star ys)");
+      check_cuda(cudaMemcpy(flux_info.ptr, d_fluxes, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(top star fluxes)");
+      py::dict result;
+      result["count"] = total_count;
+      result["stored_count"] = stored_count;
+      result["x"] = xs[py::slice(0, stored_count, 1)];
+      result["y"] = ys[py::slice(0, stored_count, 1)];
+      result["flux"] = fluxes[py::slice(0, stored_count, 1)];
+      cudaFree(d_xs);
+      cudaFree(d_ys);
+      cudaFree(d_fluxes);
+      cudaFree(d_count);
+      cudaFree(d_lock);
+      return result;
+    } catch (...) {
+      cudaFree(d_xs);
+      cudaFree(d_ys);
+      cudaFree(d_fluxes);
+      cudaFree(d_count);
+      cudaFree(d_lock);
       throw;
     }
   }
@@ -1222,6 +1302,77 @@ py::dict star_candidates_f32(
   }
 }
 
+py::dict star_top_candidates_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    float threshold,
+    int max_candidates) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  if (max_candidates <= 0) {
+    throw std::invalid_argument("max_candidates must be positive");
+  }
+  const int height = static_cast<int>(info.shape[0]);
+  const int width = static_cast<int>(info.shape[1]);
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  py::array_t<float> xs({max_candidates});
+  py::array_t<float> ys({max_candidates});
+  py::array_t<float> fluxes({max_candidates});
+  const py::buffer_info xs_info = xs.request();
+  const py::buffer_info ys_info = ys.request();
+  const py::buffer_info flux_info = fluxes.request();
+
+  float* d_input = nullptr;
+  float* d_xs = nullptr;
+  float* d_ys = nullptr;
+  float* d_fluxes = nullptr;
+  int* d_count = nullptr;
+  int* d_lock = nullptr;
+  int total_count = 0;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(top star input)");
+    check_cuda(cudaMalloc(&d_xs, static_cast<std::size_t>(max_candidates) * sizeof(float)), "cudaMalloc(top star xs)");
+    check_cuda(cudaMalloc(&d_ys, static_cast<std::size_t>(max_candidates) * sizeof(float)), "cudaMalloc(top star ys)");
+    check_cuda(
+        cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_candidates) * sizeof(float)),
+        "cudaMalloc(top star fluxes)");
+    check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(top star count)");
+    check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(top star lock)");
+    check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(top star input)");
+    gpwbpp_star_top_candidates_f32_launch(
+        d_input, d_xs, d_ys, d_fluxes, d_count, d_lock, width, height, threshold, max_candidates);
+    check_cuda(cudaGetLastError(), "star_top_candidates_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "star_top_candidates_f32 synchronize");
+    check_cuda(cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(top star count)");
+    const int stored_count = total_count < max_candidates ? total_count : max_candidates;
+    check_cuda(cudaMemcpy(xs_info.ptr, d_xs, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(top star xs)");
+    check_cuda(cudaMemcpy(ys_info.ptr, d_ys, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(top star ys)");
+    check_cuda(cudaMemcpy(flux_info.ptr, d_fluxes, static_cast<std::size_t>(stored_count) * sizeof(float), cudaMemcpyDeviceToHost), "cudaMemcpy(top star fluxes)");
+    py::dict result;
+    result["count"] = total_count;
+    result["stored_count"] = stored_count;
+    result["x"] = xs[py::slice(0, stored_count, 1)];
+    result["y"] = ys[py::slice(0, stored_count, 1)];
+    result["flux"] = fluxes[py::slice(0, stored_count, 1)];
+    cudaFree(d_input);
+    cudaFree(d_xs);
+    cudaFree(d_ys);
+    cudaFree(d_fluxes);
+    cudaFree(d_count);
+    cudaFree(d_lock);
+    return result;
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_xs);
+    cudaFree(d_ys);
+    cudaFree(d_fluxes);
+    cudaFree(d_count);
+    cudaFree(d_lock);
+    throw;
+  }
+}
+
 PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.doc() = "Native CUDA backend for GPWBPP";
   m.def("cuda_available", &cuda_available);
@@ -1237,6 +1388,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);
   m.def("star_candidates_f32", &star_candidates_f32);
+  m.def("star_top_candidates_f32", &star_top_candidates_f32);
   py::class_<ResidentCalibratedStack>(m, "ResidentCalibratedStack")
       .def(py::init<std::size_t, std::size_t, std::size_t>())
       .def_property_readonly("frame_count", &ResidentCalibratedStack::frame_count)
@@ -1269,6 +1421,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
       .def("star_local_max_mask", &ResidentCalibratedStack::star_local_max_mask)
       .def("star_candidates", &ResidentCalibratedStack::star_candidates)
+      .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)
       .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none())
       .def(
           "integrate_sigma_clip",

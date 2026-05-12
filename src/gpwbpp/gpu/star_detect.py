@@ -19,4 +19,10 @@ def star_candidates(data: Any, threshold: float, max_candidates: int = 4096) -> 
     return gpwbpp_cuda.star_candidates_f32(data, threshold, max_candidates)
 
 
-__all__ = ["detect_stars", "star_candidates", "star_local_max_mask"]
+def star_top_candidates(data: Any, threshold: float, max_candidates: int = 4096) -> dict[str, Any]:
+    import gpwbpp_cuda
+
+    return gpwbpp_cuda.star_top_candidates_f32(data, threshold, max_candidates)
+
+
+__all__ = ["detect_stars", "star_candidates", "star_local_max_mask", "star_top_candidates"]
