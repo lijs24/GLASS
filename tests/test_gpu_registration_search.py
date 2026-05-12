@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
 from tests.conftest import cuda_module_or_skip
@@ -684,6 +686,85 @@ def test_gpu_similarity_catalog_registration_aligns_synthetic_images():
     assert after < before * 0.6
     assert np.allclose(matrix[:2, :2], linear, atol=0.04)
     assert np.allclose(matrix[:2, 2], translation, atol=2.0)
+
+
+def test_register_calibrated_frames_can_use_cuda_catalog_backend(tmp_path: Path):
+    cuda_module_or_skip()
+    from gpwbpp.engine.registration import register_calibrated_frames
+    from gpwbpp.io.fits_io import write_fits_data
+    from gpwbpp.io.json_io import write_json
+
+    reference = _star_field()
+    moving = _shift_image(reference, 4, -3)
+    run = tmp_path / "run"
+    cache = run / "calibrated_cache"
+    cache.mkdir(parents=True)
+    ref_path = cache / "ref.fits"
+    moving_path = cache / "moving.fits"
+    write_fits_data(ref_path, reference)
+    write_fits_data(moving_path, moving)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "schema_version": 1,
+            "calibrated_lights": [
+                {"frame_id": "ref", "path": str(ref_path)},
+                {"frame_id": "moving", "path": str(moving_path)},
+            ],
+        },
+    )
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "ref",
+            "frame_quality": [
+                {"frame_id": "ref", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+                {"frame_id": "moving", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+            ],
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {
+            "schema_version": 1,
+            "registration_policy": {
+                "transform_model": "similarity",
+                "min_inliers": 6,
+                "cuda_catalog_threshold_sigma": 3.0,
+                "cuda_catalog_max_stars": 24,
+                "cuda_catalog_tolerance_px": 1.5,
+                "cuda_catalog_min_pair_distance": 8.0,
+                "cuda_catalog_grid_top_cols": 0,
+                "cuda_catalog_grid_top_rows": 0,
+                "cuda_catalog_nms_scan_candidates": 128,
+                "cuda_catalog_nms_min_separation_px": 4.0,
+                "cuda_catalog_prior": "ncc",
+                "cuda_catalog_prior_radius_px": 2.0,
+                "cuda_catalog_min_scale": 0.99,
+                "cuda_catalog_max_scale": 1.01,
+                "cuda_catalog_max_abs_rotation_rad": 0.02,
+                "cuda_catalog_pixel_refine_coarse_stride": 1,
+                "cuda_catalog_pixel_refine_final_stride": 1,
+            },
+        },
+    )
+
+    payload = register_calibrated_frames(run, tile_size=64, preview_max_dimension=256, method="cuda_catalog")
+    moving_result = next(item for item in payload["registration_results"] if item["frame_id"] == "moving")
+
+    assert payload["method"] == "cuda_catalog"
+    assert payload["transform_model"] == "similarity"
+    assert payload["cuda_catalog"]["native_cuda_required"] is True
+    assert moving_result["status"] == "ok"
+    assert moving_result["registration_solution_source"] == "cuda_catalog_similarity_preview"
+    assert moving_result["cuda_catalog"]["selection_model"] == "global_top_flux_local_maximum_nms"
+    assert moving_result["cuda_catalog"]["pixel_refine"] is not None
+    assert moving_result["cuda_catalog"]["prior"]["model"].startswith("translation_")
+    assert moving_result["inliers"] >= 6
+    assert abs(moving_result["matrix"][0][2] + 4.0) < 0.75
+    assert abs(moving_result["matrix"][1][2] - 3.0) < 0.75
+    assert any("cuda catalog similarity" in warning for warning in moving_result["warnings"])
 
 
 def test_gpu_star_top_nms_candidates_suppresses_close_peaks():

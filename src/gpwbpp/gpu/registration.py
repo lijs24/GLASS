@@ -133,7 +133,7 @@ def refine_matrix_translation_with_metrics_f32(
     search_radius_px: float = 1.0,
     coarse_step_px: float = 0.25,
     fine_radius_px: float = 0.25,
-    fine_step_px: float = 0.125,
+    fine_step_px: float = 0.0625,
     coarse_sample_stride: int = 4,
     final_sample_stride: int = 1,
 ) -> dict[str, Any]:

@@ -24,7 +24,7 @@ def capability_report() -> dict[str, object]:
         "cuda_extension_importable": find_spec("gpwbpp_cuda") is not None,
         "cuda_available": cuda_extension_available(),
         "out_of_core_design": True,
-        "registration": "cpu-basic",
+        "registration": "cpu-basic + optional cuda_catalog_preview",
         "local_normalization": "cpu-basic",
         "weighted_integration": "cpu-basic",
     }
@@ -36,4 +36,3 @@ def require_cuda() -> None:
             "CUDA backend is not available. Install/build the optional gpwbpp_cuda "
             "extension or choose --backend cpu/auto."
         )
-

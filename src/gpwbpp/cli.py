@@ -309,6 +309,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
             args.local_normalization,
             args.integration_weighting,
             args.integration_rejection,
+            registration_method=args.registration_method,
             timing=timing,
         )
     else:
@@ -609,9 +610,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--tile-size", type=int, default=512)
     run.add_argument(
         "--registration-method",
-        choices=["auto", "star", "astroalign"],
+        choices=["auto", "star", "astroalign", "cuda_catalog"],
         default="auto",
-        help="tile-mode registration method; astroalign uses the optional open-source gpwbpp[align] backend",
+        help=(
+            "tile-mode registration method; astroalign uses the optional open-source gpwbpp[align] backend, "
+            "cuda_catalog requires the native CUDA backend"
+        ),
     )
     run.add_argument(
         "--registration-preview-max-dimension",
@@ -718,6 +722,12 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--out", required=True)
     audit.add_argument("--backend", choices=["cpu", "cuda", "auto"], default="auto")
     audit.add_argument("--tile-size", type=int, default=512)
+    audit.add_argument(
+        "--registration-method",
+        choices=["auto", "star", "astroalign", "cuda_catalog"],
+        default="auto",
+        help="registration method passed to the gated run portion of audit",
+    )
     audit.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     audit.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
     audit.add_argument(

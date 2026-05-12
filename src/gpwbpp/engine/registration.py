@@ -11,6 +11,7 @@ from gpwbpp.cpu.registration import (
     estimate_translation_phase_correlation,
     translation_matrix,
 )
+from gpwbpp.gpu.registration import refine_matrix_translation_with_metrics_f32
 from gpwbpp.gpu.tile_scheduler import iter_tiles
 from gpwbpp.io.fits_io import FitsImageReader
 from gpwbpp.io.json_io import read_json, write_json
@@ -74,6 +75,285 @@ def _select_reference_id(
     return quality_reference_id
 
 
+def _adaptive_star_threshold(image: np.ndarray, sigma: float) -> float:
+    finite = np.asarray(image[np.isfinite(image)], dtype=np.float32)
+    if finite.size == 0:
+        raise ValueError("cannot compute star threshold for an image with no finite pixels")
+    median = float(np.median(finite))
+    mad = float(np.median(np.abs(finite - median)))
+    robust_sigma = 1.4826 * mad
+    if robust_sigma <= 0.0:
+        robust_sigma = float(np.std(finite))
+    if robust_sigma <= 0.0:
+        robust_sigma = 1.0
+    return median + float(sigma) * robust_sigma
+
+
+def _preview_matrix_to_source_pixels(matrix: Any, scale: int) -> list[list[float]]:
+    source_matrix = np.asarray(matrix, dtype=np.float64).reshape(3, 3)
+    source_matrix = np.array(source_matrix, copy=True)
+    source_matrix[0, 2] *= float(scale)
+    source_matrix[1, 2] *= float(scale)
+    return [[float(value) for value in row] for row in source_matrix]
+
+
+def _policy_int(policy: dict[str, Any], key: str, default: int) -> int:
+    value = policy.get(key)
+    if value is None:
+        return int(default)
+    return int(value)
+
+
+def _policy_float(policy: dict[str, Any], key: str, default: float) -> float:
+    value = policy.get(key)
+    if value is None:
+        return float(default)
+    return float(value)
+
+
+def _policy_optional_float(policy: dict[str, Any], key: str, default: float | None) -> float | None:
+    value = policy.get(key)
+    if value is None:
+        return default
+    return float(value)
+
+
+def _cuda_catalog_backend() -> Any:
+    import gpwbpp_cuda
+
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is required for registration method cuda_catalog")
+    required = [
+        "estimate_similarity_from_catalogs_f32",
+        "star_grid_top_nms_candidates_f32",
+        "star_top_nms_candidates_f32",
+        "warp_matrix_bilinear_f32",
+        "estimate_translation_search_f32",
+    ]
+    missing = [name for name in required if not hasattr(gpwbpp_cuda, name)]
+    if missing:
+        raise RuntimeError(f"native CUDA backend lacks registration primitive(s): {', '.join(missing)}")
+    return gpwbpp_cuda
+
+
+def _cuda_catalog_similarity_preview(
+    reference_preview: np.ndarray,
+    moving_preview: np.ndarray,
+    registration_policy: dict[str, Any],
+    reference_scale: int,
+    min_inliers: int,
+    max_rms_px: float,
+) -> dict[str, Any]:
+    gpwbpp_cuda = _cuda_catalog_backend()
+
+    threshold_sigma = _policy_float(registration_policy, "cuda_catalog_threshold_sigma", 6.0)
+    max_candidates = _policy_int(registration_policy, "cuda_catalog_max_stars", 64)
+    tolerance_px = _policy_float(registration_policy, "cuda_catalog_tolerance_px", 3.0)
+    h, w = reference_preview.shape
+    default_min_pair_distance = max(8.0, float(min(h, w)) / 24.0)
+    min_pair_distance = _policy_float(
+        registration_policy,
+        "cuda_catalog_min_pair_distance",
+        default_min_pair_distance,
+    )
+    nms_min_separation_px = _policy_float(
+        registration_policy,
+        "cuda_catalog_nms_min_separation_px",
+        max(4.0, float(min(h, w)) / 24.0),
+    )
+    candidates_per_cell = _policy_int(registration_policy, "cuda_catalog_grid_top_per_cell", 4)
+
+    grid_top_cols = _policy_int(
+        registration_policy,
+        "cuda_catalog_grid_top_cols",
+        0 if min(h, w) < 64 else max(2, min(24, int(np.ceil(w / 64.0)))),
+    )
+    grid_top_rows = _policy_int(
+        registration_policy,
+        "cuda_catalog_grid_top_rows",
+        0 if min(h, w) < 64 else max(2, min(16, int(np.ceil(h / 64.0)))),
+    )
+
+    reference_threshold = _adaptive_star_threshold(reference_preview, threshold_sigma)
+    moving_threshold = _adaptive_star_threshold(moving_preview, threshold_sigma)
+    if grid_top_cols > 0 and grid_top_rows > 0:
+        reference_catalog = gpwbpp_cuda.star_grid_top_nms_candidates_f32(
+            reference_preview,
+            reference_threshold,
+            grid_top_cols,
+            grid_top_rows,
+            candidates_per_cell,
+            max_candidates,
+            nms_min_separation_px,
+        )
+        moving_catalog = gpwbpp_cuda.star_grid_top_nms_candidates_f32(
+            moving_preview,
+            moving_threshold,
+            grid_top_cols,
+            grid_top_rows,
+            candidates_per_cell,
+            max_candidates,
+            nms_min_separation_px,
+        )
+        selection_model = "grid_topk_local_maximum_nms"
+    else:
+        nms_scan_candidates = _policy_int(registration_policy, "cuda_catalog_nms_scan_candidates", 4096)
+        reference_catalog = gpwbpp_cuda.star_top_nms_candidates_f32(
+            reference_preview,
+            reference_threshold,
+            nms_scan_candidates,
+            max_candidates,
+            nms_min_separation_px,
+        )
+        moving_catalog = gpwbpp_cuda.star_top_nms_candidates_f32(
+            moving_preview,
+            moving_threshold,
+            nms_scan_candidates,
+            max_candidates,
+            nms_min_separation_px,
+        )
+        selection_model = "global_top_flux_local_maximum_nms"
+
+    prior_mode = str(registration_policy.get("cuda_catalog_prior") or "ncc")
+    prior_dx: float | None = None
+    prior_dy: float | None = None
+    prior_radius_px = _policy_optional_float(registration_policy, "cuda_catalog_prior_radius_px", 4.0)
+    prior: dict[str, Any] | None = None
+    if prior_mode == "ncc":
+        max_shift = _policy_int(
+            registration_policy,
+            "cuda_catalog_prior_max_shift",
+            max(4, min(64, int(np.ceil(max(h, w) * 0.08)))),
+        )
+        sample_stride = _policy_int(registration_policy, "cuda_catalog_prior_sample_stride", 1)
+        prior = gpwbpp_cuda.estimate_translation_search_f32(
+            reference_preview,
+            moving_preview,
+            max_shift,
+            max_shift,
+            sample_stride=sample_stride,
+        )
+        prior_dx = float(prior["dx"])
+        prior_dy = float(prior["dy"])
+        if hasattr(gpwbpp_cuda, "estimate_translation_subpixel_ncc_f32"):
+            radius_steps = _policy_int(registration_policy, "cuda_catalog_prior_subpixel_radius_steps", 4)
+            step = _policy_float(registration_policy, "cuda_catalog_prior_subpixel_step", 0.25)
+            prior = gpwbpp_cuda.estimate_translation_subpixel_ncc_f32(
+                reference_preview,
+                moving_preview,
+                prior_dx,
+                prior_dy,
+                radius_steps,
+                step,
+                sample_stride=sample_stride,
+            )
+            prior_dx = float(prior["dx"])
+            prior_dy = float(prior["dy"])
+    elif prior_mode != "none":
+        raise ValueError("cuda_catalog_prior must be ncc or none")
+
+    fit = gpwbpp_cuda.estimate_similarity_from_catalogs_f32(
+        reference_catalog["x"],
+        reference_catalog["y"],
+        moving_catalog["x"],
+        moving_catalog["y"],
+        tolerance_px=tolerance_px,
+        min_pair_distance=min_pair_distance,
+        prior_dx=prior_dx,
+        prior_dy=prior_dy,
+        prior_radius_px=prior_radius_px,
+        min_scale=_policy_optional_float(registration_policy, "cuda_catalog_min_scale", 0.995),
+        max_scale=_policy_optional_float(registration_policy, "cuda_catalog_max_scale", 1.005),
+        max_abs_rotation_rad=_policy_optional_float(
+            registration_policy,
+            "cuda_catalog_max_abs_rotation_rad",
+            0.01,
+        ),
+    )
+    preview_matrix = np.asarray(fit["matrix"], dtype=np.float32).reshape(3, 3)
+    pixel_refine: dict[str, Any] | None = None
+    if bool(registration_policy.get("cuda_catalog_pixel_refine", True)) and str(fit["status"]) == "ok":
+        pixel_refine = refine_matrix_translation_with_metrics_f32(
+            reference_preview,
+            moving_preview,
+            preview_matrix,
+            search_radius_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_radius", 1.0),
+            coarse_step_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_coarse_step", 0.25),
+            fine_radius_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_radius", 0.25),
+            fine_step_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_step", 0.0625),
+            coarse_sample_stride=_policy_int(
+                registration_policy,
+                "cuda_catalog_pixel_refine_coarse_stride",
+                4,
+            ),
+            final_sample_stride=_policy_int(registration_policy, "cuda_catalog_pixel_refine_final_stride", 1),
+        )
+        preview_matrix = np.asarray(pixel_refine["matrix"], dtype=np.float32).reshape(3, 3)
+
+    fit_rms_preview = float(fit.get("rms_px", float("nan")))
+    rms_limit_preview = _policy_float(
+        registration_policy,
+        "cuda_catalog_max_rms_preview_px",
+        max(tolerance_px, float(max_rms_px) / max(float(reference_scale), 1.0)),
+    )
+    inliers = int(fit.get("refined_inliers", fit.get("inliers", 0)))
+    accepted = str(fit["status"]) == "ok" and inliers >= int(min_inliers)
+    if np.isfinite(fit_rms_preview):
+        accepted = accepted and fit_rms_preview <= rms_limit_preview
+
+    warnings: list[str] = []
+    if str(fit["status"]) != "ok":
+        warnings.append(f"cuda catalog fit status: {fit['status']}")
+    if inliers < int(min_inliers):
+        warnings.append(f"cuda catalog inliers below {int(min_inliers)}")
+    if np.isfinite(fit_rms_preview) and fit_rms_preview > rms_limit_preview:
+        warnings.append(
+            f"cuda catalog preview RMS {fit_rms_preview:.3f}px exceeds limit {rms_limit_preview:.3f}px"
+        )
+    warnings.append("cuda catalog similarity estimated on streaming preview")
+    if pixel_refine is not None:
+        warnings.append("cuda pixel metrics refined catalog matrix translation")
+
+    metrics = None if pixel_refine is None else pixel_refine.get("metrics")
+    return {
+        "status": "ok" if accepted else "failed",
+        "matrix": _preview_matrix_to_source_pixels(preview_matrix, reference_scale),
+        "matched_stars": int(fit.get("inliers", 0)),
+        "inliers": inliers,
+        "rms_px": fit_rms_preview * float(reference_scale) if np.isfinite(fit_rms_preview) else float("nan"),
+        "warnings": warnings,
+        "diagnostics": {
+            "model": "cuda_catalog_similarity_preview",
+            "selection_model": selection_model,
+            "reference_detected": int(reference_catalog["count"]),
+            "moving_detected": int(moving_catalog["count"]),
+            "reference_stored": int(reference_catalog["stored_count"]),
+            "moving_stored": int(moving_catalog["stored_count"]),
+            "reference_threshold": float(reference_threshold),
+            "moving_threshold": float(moving_threshold),
+            "tolerance_px_preview": float(tolerance_px),
+            "rms_px_preview": fit_rms_preview,
+            "rms_limit_px_preview": float(rms_limit_preview),
+            "min_pair_distance_px_preview": float(min_pair_distance),
+            "grid_top_cols": int(grid_top_cols),
+            "grid_top_rows": int(grid_top_rows),
+            "nms_min_separation_px": float(nms_min_separation_px),
+            "prior_mode": prior_mode,
+            "prior": prior,
+            "prior_radius_px": prior_radius_px,
+            "scale": float(fit.get("scale", float("nan"))),
+            "rotation_rad": float(fit.get("rotation_rad", float("nan"))),
+            "candidate_count": int(fit.get("candidate_count", 0)),
+            "best_candidate_index": int(fit.get("best_candidate_index", -1)),
+            "refit_status": str(fit.get("refit_status", "not_run")),
+            "refit_rms_px_preview": float(fit.get("refit_rms_px", fit_rms_preview)),
+            "pixel_refine": pixel_refine,
+            "pixel_metric_rms_adu": None if metrics is None else float(metrics.get("rms", float("nan"))),
+            "pixel_metric_ncc": None if metrics is None else float(metrics.get("ncc", float("nan"))),
+        },
+    }
+
+
 def register_calibrated_frames(
     run_dir: str | Path,
     out_path: str | Path | None = None,
@@ -97,10 +377,12 @@ def register_calibrated_frames(
     astroalign_min_area = int(registration_policy.get("astroalign_min_area") or 5)
     if transform_model not in {"translation", "similarity", "affine"}:
         transform_model = "translation"
-    if method == "astroalign":
+    if method in {"astroalign", "cuda_catalog"}:
         transform_model = "similarity"
-    if method not in {"auto", "star", "astroalign"}:
-        raise ValueError("registration method must be auto, star, or astroalign")
+    if method not in {"auto", "star", "astroalign", "cuda_catalog"}:
+        raise ValueError("registration method must be auto, star, astroalign, or cuda_catalog")
+    if method == "cuda_catalog":
+        _cuda_catalog_backend()
     calibrated = {item["frame_id"]: item for item in artifacts.get("calibrated_lights", [])}
     plan_frames = {frame["id"]: frame for frame in plan.get("frames", [])}
     reference_id = _select_reference_id(
@@ -128,6 +410,7 @@ def register_calibrated_frames(
     results = []
     for frame_id, item in calibrated.items():
         warnings: list[str] = []
+        extra_fields: dict[str, Any] = {}
         tile_count = reference_tile_count
         row_source = "streaming_star_detector"
         if frame_id == reference_id:
@@ -139,6 +422,8 @@ def register_calibrated_frames(
             inliers = len(reference_stars)
             preview_scale = reference_scale
             preview_shape = list(reference_preview.shape)
+            if method == "cuda_catalog":
+                row_source = "cuda_catalog_similarity_preview"
         else:
             moving_preview, moving_scale, tile_count = _registration_preview(
                 item["path"],
@@ -156,6 +441,32 @@ def register_calibrated_frames(
             inliers = 0
             rms = float("nan")
             status = "failed"
+            if method == "cuda_catalog":
+                try:
+                    cuda_catalog_result = _cuda_catalog_similarity_preview(
+                        reference_preview,
+                        moving_preview,
+                        registration_policy,
+                        reference_scale,
+                        min_inliers,
+                        max_rms_px,
+                    )
+                    matrix = cuda_catalog_result["matrix"]
+                    matched = int(cuda_catalog_result["matched_stars"])
+                    inliers = int(cuda_catalog_result["inliers"])
+                    rms = float(cuda_catalog_result["rms_px"])
+                    status = str(cuda_catalog_result["status"])
+                    warnings.extend(cuda_catalog_result["warnings"])
+                    extra_fields["cuda_catalog"] = cuda_catalog_result["diagnostics"]
+                    row_source = "cuda_catalog_similarity_preview"
+                except Exception as exc:
+                    matrix = translation_matrix(0.0, 0.0)
+                    matched = 0
+                    inliers = 0
+                    rms = float("nan")
+                    status = "failed"
+                    warnings.append(f"cuda catalog registration failed: {exc}")
+                    row_source = "cuda_catalog_similarity_preview"
             if method == "astroalign":
                 try:
                     astroalign_result = estimate_astroalign_transform(
@@ -248,6 +559,7 @@ def register_calibrated_frames(
                 "tile_count": tile_count,
             }
         )
+        row.update(to_jsonable(extra_fields))
         results.append(row)
 
     payload = {
@@ -262,6 +574,12 @@ def register_calibrated_frames(
             "detection_sigma": astroalign_detection_sigma,
             "min_area": astroalign_min_area,
             "license": "MIT",
+        },
+        "cuda_catalog": {
+            "available": method == "cuda_catalog",
+            "native_cuda_required": True,
+            "model": "cuda_catalog_similarity_preview",
+            "pixel_refine_default": True,
         },
         "min_inliers": min_inliers,
         "max_rms_px": max_rms_px,

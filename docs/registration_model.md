@@ -40,6 +40,19 @@ streaming bilinear matrix warp for fractional translation, similarity, and
 affine matrices, so astroalign's similarity matrix can flow into downstream
 integration without loading a full frame into memory.
 
+Tile-mode registration now also exposes the clean-room GPU path with
+`gpwbpp run --registration-method cuda_catalog` or
+`gpwbpp audit --registration-method cuda_catalog`. It builds the same bounded
+streaming previews, requires the native CUDA backend, selects compact star
+catalogs on the GPU, estimates a similarity matrix with the CUDA mutual
+catalog scorer, optionally constrains the search with a CUDA NCC prior, and
+refines only the matrix translation terms with CUDA pixel metrics. The preview
+matrix translation is scaled back to source-image pixels before it is written
+to `registration_results.json`, so the existing streaming matrix warp can
+consume it. Each row records `cuda_catalog` diagnostics including candidate
+counts, thresholds, prior details, preview RMS, pixel metric RMS/NCC, and
+refit status.
+
 Warp skips non-reference frames with failed registration status and writes them
 to `warp_results.json` under `skipped_frames`; they do not enter local
 normalization or integration.
