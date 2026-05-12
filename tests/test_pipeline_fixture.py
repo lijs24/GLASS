@@ -276,3 +276,34 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
         == 0
     )
     assert "Integration summary" in report.read_text(encoding="utf-8")
+
+
+def test_resume_continues_from_warp_without_repeating_calibration(tmp_path: Path):
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    generate_synthetic_dataset(data, frames=3, width=24, height=24, known_shift=True)
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(run),
+                "--backend",
+                "cpu",
+                "--until-stage",
+                "warp",
+                "--tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+    calibration_artifacts = run / "calibration_artifacts.json"
+    before = calibration_artifacts.stat().st_mtime_ns
+    assert main(["resume", "--run", str(run)]) == 0
+    assert (run / "integration_results.json").exists()
+    assert calibration_artifacts.stat().st_mtime_ns == before

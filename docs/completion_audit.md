@@ -50,6 +50,7 @@ real-data timing comparison against PixInsight/WBPP and an observed speedup.
 | Local normalization | Gate 10 checkpoint, tests | tile baseline only |
 | Weighted integration/rejection/maps | Gate 11 checkpoint, tests | CPU rejection, CUDA mean accumulator |
 | End-to-end audit | Gate 12 checkpoint, synthetic CUDA/CPU compare | covered on synthetic |
+| Resume from partial run | `runs/checkpoints/resume_status.md`, pipeline fixture test | covered with artifact-presence skip |
 | Real-data GPWBPP run | `runs/checkpoints/real_data_m5_lum_status.md` | covered small subset |
 | Benchmarks | `benchmarks/*.py`, `runs/checkpoints/benchmark_status.md` | covered baseline |
 | HTML report | report tests and run artifacts | covered baseline |

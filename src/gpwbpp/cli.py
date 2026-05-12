@@ -50,6 +50,15 @@ def _write_run_report(run: Path, report_path: Path, manifest_path: Path, plan_pa
     )
 
 
+def _seed_run_inputs(run: Path, plan_path: str | Path) -> None:
+    run.mkdir(parents=True, exist_ok=True)
+    plan = read_json(plan_path)
+    write_json(run / "processing_plan.json", plan)
+    manifest_path = plan.get("manifest_path")
+    if manifest_path and Path(manifest_path).exists():
+        write_json(run / "manifest.json", read_json(manifest_path))
+
+
 def _run_full_pipeline(
     plan_path: Path,
     out: Path,
@@ -86,6 +95,41 @@ def _run_full_pipeline(
         weighting_override=integration_weighting,
         rejection_override=integration_rejection,
     )
+    state.completed_stages.append("integration")
+    state.current_stage = "integration"
+    return state
+
+
+def _resume_pipeline(plan_path: Path, out: Path, backend: str = "auto", tile_size: int = 512):
+    state = initialize_run(out)
+    if (out / "calibration_artifacts.json").exists():
+        state.completed_stages.extend(["master_calibration", "light_calibration"])
+        state.current_stage = "calibration"
+    else:
+        return _run_full_pipeline(plan_path, out, backend, tile_size, "auto", "auto", "auto")
+
+    if not (out / "frame_quality.json").exists():
+        measure_calibrated_quality(out)
+    state.completed_stages.append("quality")
+    state.current_stage = "quality"
+
+    if not (out / "registration_results.json").exists():
+        register_calibrated_frames(out)
+    state.completed_stages.append("registration")
+    state.current_stage = "registration"
+
+    if not (out / "warp_results.json").exists():
+        warp_registered_frames(out, tile_size=tile_size)
+    state.completed_stages.append("warp")
+    state.current_stage = "warp"
+
+    if not (out / "local_norm_results.json").exists():
+        local_normalize_registered_frames(out, plan_path=plan_path, backend=backend, tile_size=tile_size)
+    state.completed_stages.append("local_normalization")
+    state.current_stage = "local_normalization"
+
+    if not (out / "integration_results.json").exists():
+        integrate_registered_frames(out, plan_path=plan_path, backend=backend, tile_size=tile_size)
     state.completed_stages.append("integration")
     state.current_stage = "integration"
     return state
@@ -199,6 +243,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     capabilities = capability_report()
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
+    _seed_run_inputs(Path(args.out), args.plan)
     implemented_stages = {
         "master_calibration",
         "light_calibration",
@@ -279,7 +324,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
             console.print(resume_summary(args.run))
             console.print("Processing plan is not executable; nothing to resume.")
             return 0
-        state = _run_full_pipeline(plan_path, run, "auto", 512, "auto", "auto", "auto")
+        state = _resume_pipeline(plan_path, run, "auto", 512)
         state.completed_stages.insert(0, "plan")
         if manifest_path.exists():
             state.completed_stages.insert(0, "scan")
