@@ -79,6 +79,13 @@ trial with the most mutual inliers and lowest RMS. This avoids hand-tuning a
 single threshold for every real dataset while keeping full-frame pixels resident
 on the device.
 
+`--resident-star-prior ncc` adds an optional resident GPU NCC prior before
+catalog scoring. The pipeline estimates a coarse/subpixel translation with the
+resident NCC kernels, then constrains catalog pair-offset voting to a configured
+radius around that prior. This reduces false zero-shift catalog clusters in
+repeated star fields while still using the catalog inlier/RMS result as the
+registration diagnostic.
+
 The next CUDA registration primitive is
 `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x,
 moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None,

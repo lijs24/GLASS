@@ -103,6 +103,10 @@ Resident CUDA integration now supports:
   `--resident-star-threshold 0` derives several mean-plus-sigma thresholds from
   GPU global frame statistics, scores each candidate on the GPU, and keeps the
   result with the strongest mutual-inlier support.
+- Resident star-catalog voting can optionally be constrained by a GPU NCC prior
+  with `--resident-star-prior ncc`. The prior is computed from resident
+  integer/subpixel NCC kernels and passed to the catalog pair-offset scorer as a
+  compact `(dx, dy, radius)` search window.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight

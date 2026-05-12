@@ -304,6 +304,8 @@ def run_resident_calibration_integration(
     resident_star_tolerance_px: float = 1.0,
     resident_star_grid_cols: int = 0,
     resident_star_grid_rows: int = 0,
+    resident_star_prior: str = "none",
+    resident_star_prior_radius_px: float = 4.0,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
@@ -334,6 +336,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_star_max_candidates must be positive")
     if resident_star_tolerance_px < 0:
         raise ValueError("resident_star_tolerance_px must be non-negative")
+    if resident_star_prior not in {"none", "ncc"}:
+        raise ValueError("resident_star_prior must be none or ncc")
+    if resident_star_prior_radius_px < 0:
+        raise ValueError("resident_star_prior_radius_px must be non-negative")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -589,6 +595,43 @@ def run_resident_calibration_integration(
                             inliers = 1
                             rms_px = 0.0
                         else:
+                            prior_dx = 0.0
+                            prior_dy = 0.0
+                            prior_radius = -1.0
+                            prior_warnings: list[str] = []
+                            if resident_star_prior == "ncc":
+                                if not hasattr(stack, "estimate_translation_to_reference") or not hasattr(
+                                    stack,
+                                    "estimate_translation_subpixel_to_reference",
+                                ):
+                                    raise RuntimeError("resident star NCC prior requires resident NCC registration")
+                                coarse = stack.estimate_translation_to_reference(
+                                    reference_index,
+                                    index,
+                                    resident_registration_max_shift,
+                                    resident_registration_max_shift,
+                                )
+                                refined_prior = stack.estimate_translation_subpixel_to_reference(
+                                    reference_index,
+                                    index,
+                                    float(coarse["dx"]),
+                                    float(coarse["dy"]),
+                                    resident_subpixel_radius_steps,
+                                    resident_subpixel_step,
+                                )
+                                prior_dx = float(refined_prior["dx"])
+                                prior_dy = float(refined_prior["dy"])
+                                prior_radius = float(resident_star_prior_radius_px)
+                                prior_warnings.extend(
+                                    [
+                                        "star_prior_model=ncc",
+                                        f"star_prior_dx={prior_dx:.6g}",
+                                        f"star_prior_dy={prior_dy:.6g}",
+                                        f"star_prior_radius_px={prior_radius:.6g}",
+                                        f"star_prior_coarse_score={float(coarse['score']):.6g}",
+                                        f"star_prior_subpixel_score={float(refined_prior['score']):.6g}",
+                                    ]
+                                )
                             threshold_candidates, threshold_mode = _resident_star_threshold_candidates(
                                 stack,
                                 reference_index,
@@ -606,9 +649,9 @@ def run_resident_calibration_integration(
                                     resident_star_tolerance_px,
                                     float(resident_registration_max_shift),
                                     float(resident_registration_max_shift),
-                                    0.0,
-                                    0.0,
-                                    -1.0,
+                                    prior_dx,
+                                    prior_dy,
+                                    prior_radius,
                                     resident_star_grid_cols,
                                     resident_star_grid_rows,
                                 )
@@ -643,6 +686,7 @@ def run_resident_calibration_integration(
                                     f"raw_dx={float(result['dx']):.6g}",
                                     f"raw_dy={float(result['dy']):.6g}",
                                 ]
+                                + prior_warnings
                             )
                     except Exception as exc:
                         status = "failed"
@@ -835,6 +879,8 @@ def run_resident_calibration_integration(
                         "star_tolerance_px": resident_star_tolerance_px,
                         "star_grid_cols": resident_star_grid_cols,
                         "star_grid_rows": resident_star_grid_rows,
+                        "star_prior": resident_star_prior,
+                        "star_prior_radius_px": resident_star_prior_radius_px,
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                         "excluded_frame_tokens": sorted(excluded_tokens),
                     },

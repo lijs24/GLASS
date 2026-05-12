@@ -239,6 +239,7 @@ def test_cli_resident_cuda_run_star_catalog_registration_smoke(small_fits_datase
     assert resident_registration["star_grid_cols"] == 4
     assert resident_registration["star_grid_rows"] == 4
     assert resident_registration["star_threshold_mode"] == "fixed"
+    assert resident_registration["star_prior"] == "none"
 
 
 def test_cli_resident_cuda_run_star_catalog_auto_threshold_aligns_shifted_pair(tmp_path: Path):
@@ -283,6 +284,10 @@ def test_cli_resident_cuda_run_star_catalog_auto_threshold_aligns_shifted_pair(t
             "4",
             "--resident-star-grid-rows",
             "4",
+            "--resident-star-prior",
+            "ncc",
+            "--resident-star-prior-radius-px",
+            "2",
             "--reference-frame-id",
             "light_001",
         ]
@@ -295,11 +300,14 @@ def test_cli_resident_cuda_run_star_catalog_auto_threshold_aligns_shifted_pair(t
 
     assert resident_registration["star_threshold_mode"] == "auto_mean_std"
     assert resident_registration["star_threshold"] == 0.0
+    assert resident_registration["star_prior"] == "ncc"
+    assert resident_registration["star_prior_radius_px"] == 2.0
     assert moving["status"] == "ok"
     assert moving["matched_stars"] >= 6
     assert abs(moving["matrix"][0][2] + 3.0) < 1.0e-5
     assert abs(moving["matrix"][1][2] - 2.0) < 1.0e-5
     assert any("selected_star_threshold=" in warning for warning in moving["warnings"])
+    assert any("star_prior_model=ncc" in warning for warning in moving["warnings"])
 
 
 def test_resident_frame_exclusion_matches_id_name_or_stem():

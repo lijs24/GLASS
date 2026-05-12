@@ -231,6 +231,31 @@ def test_gpu_catalog_translation_respects_ncc_prior_window():
     assert result["prior_radius_px"] == 1.0
 
 
+def test_gpu_catalog_translation_reports_no_match_when_prior_rejects_all_pairs():
+    module = cuda_module_or_skip()
+    reference = np.array([(10.0, 10.0), (25.0, 12.0), (18.0, 31.0)], dtype=np.float32)
+    moving = reference.copy()
+
+    result = module.estimate_translation_from_catalogs_f32(
+        reference[:, 0],
+        reference[:, 1],
+        moving[:, 0],
+        moving[:, 1],
+        0.4,
+        10.0,
+        10.0,
+        6.0,
+        6.0,
+        0.5,
+    )
+
+    assert result["inliers"] == 0
+    assert result["mutual_inliers"] == 0
+    assert np.isnan(result["dx"])
+    assert np.isnan(result["dy"])
+    assert np.isnan(result["rms_px"])
+
+
 def test_gpu_catalog_translation_from_top_star_candidates():
     module = cuda_module_or_skip()
     reference = _star_field()

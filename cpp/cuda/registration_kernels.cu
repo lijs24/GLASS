@@ -346,8 +346,8 @@ __global__ void catalog_offset_best_kernel(
     }
   }
   if (best_index < 0 || best_score < 0) {
-    *best_dx = 0.0f;
-    *best_dy = 0.0f;
+    *best_dx = NAN;
+    *best_dy = NAN;
     *best_inliers = 0;
     return;
   }

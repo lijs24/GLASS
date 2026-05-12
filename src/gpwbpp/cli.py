@@ -357,6 +357,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_tolerance_px=args.resident_star_tolerance_px,
                 resident_star_grid_cols=args.resident_star_grid_cols,
                 resident_star_grid_rows=args.resident_star_grid_rows,
+                resident_star_prior=args.resident_star_prior,
+                resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
@@ -617,6 +619,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resident-star-tolerance-px", type=float, default=1.0)
     run.add_argument("--resident-star-grid-cols", type=int, default=0)
     run.add_argument("--resident-star-grid-rows", type=int, default=0)
+    run.add_argument(
+        "--resident-star-prior",
+        choices=["none", "ncc"],
+        default="none",
+        help="optional GPU NCC prior to constrain resident star-catalog translation voting",
+    )
+    run.add_argument("--resident-star-prior-radius-px", type=float, default=4.0)
     run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for resident registration",
