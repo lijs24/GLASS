@@ -7,7 +7,11 @@ from astropy.io import fits
 
 from gpwbpp.cli import main
 from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.engine.resident_cuda import _matches_any_token
+from gpwbpp.engine.resident_cuda import (
+    _matches_any_token,
+    _select_star_core_preselected_seed_indices,
+    _select_star_guarded_seed,
+)
 from tests.conftest import cuda_module_or_skip
 
 
@@ -65,6 +69,59 @@ def _two_light_star_dataset(tmp_path: Path) -> Path:
     _write_test_frame(root / "light" / "light_001.fits", "light", reference, 60.0)
     _write_test_frame(root / "light" / "light_002.fits", "light", moving, 60.0)
     return root
+
+
+def test_resident_star_core_preselection_keeps_refit_seed_and_rejects_low_inlier_trap():
+    seed_metrics = [
+        {"seed_index": 0, "seed_inliers": 12, "seed_rms_px": 1.4, "star_core_metric": {"rms": 800.0}},
+        {"seed_index": 1, "seed_inliers": 12, "seed_rms_px": 1.2, "star_core_metric": {"rms": 600.0}},
+        {"seed_index": 2, "seed_inliers": 11, "seed_rms_px": 1.1, "star_core_metric": {"rms": 590.0}},
+        {"seed_index": 3, "seed_inliers": 9, "seed_rms_px": 0.8, "star_core_metric": {"rms": 100.0}},
+    ]
+
+    selected, summary = _select_star_core_preselected_seed_indices(seed_metrics, max_count=3)
+
+    assert selected == [0, 1, 2]
+    assert summary["enabled"]
+    assert summary["star_max_inliers"] == 12
+    assert summary["star_min_inliers_for_core_metric"] == 10
+    assert summary["selection_key"] == "pre_refine_star_core_rms_with_two_inlier_slack"
+
+
+def test_resident_star_guarded_seed_prefers_star_core_metric_with_inlier_slack():
+    seed_metrics = [
+        {
+            "seed_index": 0,
+            "seed_rank": 0,
+            "seed_inliers": 15,
+            "seed_rms_px": 1.2,
+            "metrics": {"rms": 82.0},
+            "star_core_metric": {"rms": 640.0},
+        },
+        {
+            "seed_index": 1,
+            "seed_rank": 1,
+            "seed_inliers": 13,
+            "seed_rms_px": 1.3,
+            "metrics": {"rms": 78.0},
+            "star_core_metric": {"rms": 600.0},
+        },
+        {
+            "seed_index": 2,
+            "seed_rank": 2,
+            "seed_inliers": 10,
+            "seed_rms_px": 1.0,
+            "metrics": {"rms": 76.0},
+            "star_core_metric": {"rms": 590.0},
+        },
+    ]
+
+    selected_index, guard = _select_star_guarded_seed(seed_metrics, pixel_selected_index=2)
+
+    assert selected_index == 1
+    assert guard["status"] == "replaced_pixel_metric_with_star_core_metric"
+    assert guard["star_max_inliers"] == 15
+    assert guard["star_min_inliers_for_core_metric"] == 13
 
 
 def _two_dark_group_dataset(tmp_path: Path) -> Path:
@@ -391,6 +448,8 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
             "ncc",
             "--resident-star-prior-radius-px",
             "2",
+            "--resident-star-core-preselect-top-k",
+            "2",
             "--reference-frame-id",
             "light_001",
         ]
@@ -405,14 +464,19 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
     assert registration["transform_model"] == "similarity_cuda_catalog"
     assert integration["outputs"][0]["resident_registration"] == "similarity_cuda_catalog"
     assert resident_registration["mode"] == "similarity_cuda_catalog"
+    assert resident_registration["star_core_preselect_top_k"] == 2
+    assert resident_registration["star_core_guard"] is True
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_catalog"
     assert moving["matched_stars"] >= 3
     assert abs(moving["matrix"][0][2] + 3.0) < 0.5
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert any("similarity_top_k=3" in warning for warning in moving["warnings"])
-    assert any("similarity_seed_count=4" in warning for warning in moving["warnings"])
+    assert any("similarity_seed_count=2" in warning for warning in moving["warnings"])
+    assert any("similarity_refined_seed_count=2" in warning for warning in moving["warnings"])
     assert any("similarity_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
+    assert any("similarity_star_core_preselect_enabled=True" in warning for warning in moving["warnings"])
+    assert any("similarity_star_core_guard_status=" in warning for warning in moving["warnings"])
     assert any("resident CUDA catalog similarity" in warning for warning in moving["warnings"])
 
 

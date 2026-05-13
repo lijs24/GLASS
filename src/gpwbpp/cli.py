@@ -368,6 +368,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_grid_rows=args.resident_star_grid_rows,
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
+                resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
                 resident_registration_results=args.resident_registration_results,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
@@ -696,6 +697,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional GPU NCC prior to constrain resident star-catalog translation voting",
     )
     run.add_argument("--resident-star-prior-radius-px", type=float, default=4.0)
+    run.add_argument(
+        "--resident-star-core-preselect-top-k",
+        type=int,
+        default=0,
+        help=(
+            "for resident similarity_cuda_catalog, use GPU star-core metrics to preselect this many "
+            "candidate matrices before pixel refinement; 0 disables preselection"
+        ),
+    )
     run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for registration",

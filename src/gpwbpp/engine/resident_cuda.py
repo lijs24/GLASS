@@ -135,6 +135,18 @@ def _float_or_nan(value: Any) -> float:
         return float("nan")
 
 
+def _finite_float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(result):
+        return None
+    return result
+
+
 def _policy_int(raw: dict[str, Any], key: str, default: int) -> int:
     value = raw.get(key)
     if value is None:
@@ -154,6 +166,22 @@ def _policy_optional_float(raw: dict[str, Any], key: str, default: float | None)
     if value is None:
         return default
     return float(value)
+
+
+def _policy_bool(raw: dict[str, Any], key: str, default: bool) -> bool:
+    value = raw.get(key)
+    if value is None:
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{key} must be a boolean-like value")
 
 
 def _apply_resident_registration_matrix(stack: Any, index: int, matrix: list[list[float]]) -> str:
@@ -297,6 +325,228 @@ def _resident_similarity_score(result: dict[str, Any]) -> tuple[int, float, int]
     finite_rms = rms if np.isfinite(rms) else float("inf")
     support = min(int(result.get("reference_count", 0)), int(result.get("moving_count", 0)))
     return inliers, -finite_rms, support
+
+
+def _select_star_core_preselected_seed_indices(
+    seed_metrics: list[dict[str, Any]],
+    max_count: int,
+) -> tuple[list[int], dict[str, Any]]:
+    max_count = int(max_count)
+    if max_count <= 0 or max_count >= len(seed_metrics):
+        return list(range(len(seed_metrics))), {
+            "enabled": False,
+            "requested_top_k": max_count,
+            "input_seed_count": len(seed_metrics),
+            "selected_seed_count": len(seed_metrics),
+            "selected_seed_indices": list(range(len(seed_metrics))),
+            "selection_key": "disabled",
+        }
+
+    star_core_candidates: list[tuple[int, dict[str, Any]]] = []
+    for index, seed in enumerate(seed_metrics):
+        star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+        if star_core_rms is not None:
+            star_core_candidates.append((index, seed))
+
+    if not star_core_candidates:
+        selected = list(range(min(max_count, len(seed_metrics))))
+        return selected, {
+            "enabled": True,
+            "requested_top_k": max_count,
+            "input_seed_count": len(seed_metrics),
+            "selected_seed_count": len(selected),
+            "selected_seed_indices": selected,
+            "selection_key": "first_n_no_star_core_metric",
+        }
+
+    inlier_values = [
+        int(seed["seed_inliers"])
+        for _, seed in star_core_candidates
+        if seed.get("seed_inliers") is not None
+    ]
+    if inlier_values:
+        max_inliers = max(inlier_values)
+        min_inliers = max(0, max_inliers - 2)
+        eligible = [
+            (index, seed)
+            for index, seed in star_core_candidates
+            if seed.get("seed_inliers") is None or int(seed["seed_inliers"]) >= min_inliers
+        ]
+    else:
+        max_inliers = None
+        min_inliers = None
+        eligible = star_core_candidates
+
+    def key(item: tuple[int, dict[str, Any]]) -> tuple[float, int, float, int]:
+        index, seed = item
+        star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+        inliers = int(seed["seed_inliers"]) if seed.get("seed_inliers") is not None else -1
+        seed_rms = _finite_float_or_none(seed.get("seed_rms_px"))
+        return (
+            float("inf") if star_core_rms is None else star_core_rms,
+            -inliers,
+            float("inf") if seed_rms is None else seed_rms,
+            index,
+        )
+
+    selected_set: set[int] = {0}
+    for index, _seed in sorted(eligible, key=key):
+        selected_set.add(index)
+        if len(selected_set) >= max_count:
+            break
+    if len(selected_set) < max_count:
+        for index, _seed in sorted(star_core_candidates, key=key):
+            selected_set.add(index)
+            if len(selected_set) >= max_count:
+                break
+
+    selected = sorted(selected_set)
+    return selected, {
+        "enabled": True,
+        "requested_top_k": max_count,
+        "input_seed_count": len(seed_metrics),
+        "selected_seed_count": len(selected),
+        "selected_seed_indices": selected,
+        "star_max_inliers": None if max_inliers is None else int(max_inliers),
+        "star_min_inliers_for_core_metric": None if min_inliers is None else int(min_inliers),
+        "eligible_seed_count": len(eligible),
+        "selection_key": "pre_refine_star_core_rms_with_two_inlier_slack",
+    }
+
+
+def _select_star_guarded_seed(
+    seed_metrics: list[dict[str, Any]],
+    pixel_selected_index: int,
+) -> tuple[int, dict[str, Any]]:
+    pixel_selected_index = int(pixel_selected_index)
+    if pixel_selected_index < 0 or pixel_selected_index >= len(seed_metrics):
+        pixel_selected_index = 0
+
+    star_core_candidates: list[tuple[int, dict[str, Any]]] = []
+    for index, seed in enumerate(seed_metrics):
+        star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+        if star_core_rms is not None:
+            star_core_candidates.append((index, seed))
+
+    if star_core_candidates:
+        inlier_values = [
+            int(seed["seed_inliers"])
+            for _, seed in star_core_candidates
+            if seed.get("seed_inliers") is not None
+        ]
+        if inlier_values:
+            max_inliers = max(inlier_values)
+            min_inliers = max(0, max_inliers - 2)
+            eligible = [
+                (index, seed)
+                for index, seed in star_core_candidates
+                if seed.get("seed_inliers") is None or int(seed["seed_inliers"]) >= min_inliers
+            ]
+        else:
+            max_inliers = None
+            min_inliers = None
+            eligible = star_core_candidates
+
+        def star_core_key(item: tuple[int, dict[str, Any]]) -> tuple[float, int, float, int]:
+            index, seed = item
+            star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+            inliers = int(seed["seed_inliers"]) if seed.get("seed_inliers") is not None else -1
+            seed_rms = _finite_float_or_none(seed.get("seed_rms_px"))
+            return (
+                float("inf") if star_core_rms is None else star_core_rms,
+                -inliers,
+                float("inf") if seed_rms is None else seed_rms,
+                index,
+            )
+
+        selected_index, _selected = min(eligible, key=star_core_key)
+        pixel_seed = seed_metrics[pixel_selected_index]
+        return selected_index, {
+            "status": "kept_star_core_metric"
+            if selected_index == pixel_selected_index
+            else "replaced_pixel_metric_with_star_core_metric",
+            "pixel_selected_index": pixel_selected_index,
+            "pixel_selected_seed_rank": int(pixel_seed.get("seed_rank", pixel_selected_index)),
+            "pixel_selected_seed_inliers": pixel_seed.get("seed_inliers"),
+            "pixel_selected_seed_rms_px": pixel_seed.get("seed_rms_px"),
+            "selected_index": selected_index,
+            "star_max_inliers": None if max_inliers is None else int(max_inliers),
+            "star_min_inliers_for_core_metric": None if min_inliers is None else int(min_inliers),
+            "eligible_seed_count": len(eligible),
+            "selection_key": "star_core_rms_with_two_inlier_slack",
+        }
+
+    star_candidates: list[tuple[int, dict[str, Any]]] = []
+    for index, seed in enumerate(seed_metrics):
+        inliers = seed.get("seed_inliers")
+        rms_px = _finite_float_or_none(seed.get("seed_rms_px"))
+        if inliers is None or rms_px is None:
+            continue
+        star_candidates.append((index, seed))
+
+    if not star_candidates:
+        return pixel_selected_index, {
+            "status": "pixel_metric_only_no_star_metadata",
+            "pixel_selected_index": pixel_selected_index,
+            "selected_index": pixel_selected_index,
+            "eligible_seed_count": 0,
+            "selection_key": "pixel_metric_rms",
+        }
+
+    max_inliers = max(int(seed["seed_inliers"]) for _, seed in star_candidates)
+    eligible = [(index, seed) for index, seed in star_candidates if int(seed["seed_inliers"]) == max_inliers]
+
+    def key(item: tuple[int, dict[str, Any]]) -> tuple[float, float, int]:
+        index, seed = item
+        metric_rms = _finite_float_or_none(seed.get("metrics", {}).get("rms"))
+        seed_rms = _finite_float_or_none(seed.get("seed_rms_px"))
+        return (
+            float("inf") if metric_rms is None else metric_rms,
+            float("inf") if seed_rms is None else seed_rms,
+            index,
+        )
+
+    selected_index, _selected = min(eligible, key=key)
+    pixel_seed = seed_metrics[pixel_selected_index]
+    return selected_index, {
+        "status": "kept_pixel_metric" if selected_index == pixel_selected_index else "replaced_pixel_metric",
+        "pixel_selected_index": pixel_selected_index,
+        "pixel_selected_seed_rank": int(pixel_seed.get("seed_rank", pixel_selected_index)),
+        "pixel_selected_seed_inliers": pixel_seed.get("seed_inliers"),
+        "pixel_selected_seed_rms_px": pixel_seed.get("seed_rms_px"),
+        "selected_index": selected_index,
+        "star_max_inliers": int(max_inliers),
+        "eligible_seed_count": len(eligible),
+        "selection_key": "max_seed_inliers_then_pixel_rms_then_seed_rms",
+    }
+
+
+def _annotate_resident_star_core_metrics(
+    stack: Any,
+    reference_index: int,
+    moving_index: int,
+    seed_metrics: list[dict[str, Any]],
+    threshold: float,
+) -> dict[str, Any]:
+    matrices = np.asarray([seed["matrix"] for seed in seed_metrics], dtype=np.float32)
+    t0 = perf_counter()
+    result = stack.star_core_metrics_candidates_to_reference(reference_index, moving_index, matrices, float(threshold))
+    elapsed = perf_counter() - t0
+    candidate_metrics = list(result["candidate_metrics"])
+    available_pixels = 0
+    for item in candidate_metrics:
+        local_seed_index = int(item["seed_index"])
+        metrics = dict(item["metrics"])
+        seed_metrics[local_seed_index]["star_core_metric"] = metrics
+        available_pixels = max(available_pixels, int(metrics.get("valid_pixels", 0)))
+    return {
+        "elapsed_s": elapsed,
+        "threshold": float(result["threshold"]),
+        "available_pixels": int(available_pixels),
+        "sampled_pixels": int(result["sampled_pixels"]),
+        "candidate_count": int(result["candidate_count"]),
+        "model": str(result["model"]),
+    }
 
 
 def _group_map(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -527,6 +777,7 @@ def run_resident_calibration_integration(
     resident_star_grid_rows: int = 0,
     resident_star_prior: str = "none",
     resident_star_prior_radius_px: float = 4.0,
+    resident_star_core_preselect_top_k: int = 0,
     resident_registration_results: str | Path | None = None,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
@@ -568,6 +819,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_star_prior must be none or ncc")
     if resident_star_prior_radius_px < 0:
         raise ValueError("resident_star_prior_radius_px must be non-negative")
+    if resident_star_core_preselect_top_k < 0:
+        raise ValueError("resident_star_core_preselect_top_k must be non-negative")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1096,8 +1349,22 @@ def run_resident_calibration_integration(
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
                 has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
+                has_star_core_metrics = hasattr(native_stack, "star_core_metrics_candidates_to_reference")
                 use_grid_catalog = (
                     resident_star_grid_cols > 0 and resident_star_grid_rows > 0 and has_grid_nms_catalog
+                )
+                star_core_preselect_top_k = max(
+                    0,
+                    _policy_int(
+                        registration_policy,
+                        "cuda_catalog_star_core_preselect_top_k",
+                        resident_star_core_preselect_top_k,
+                    ),
+                )
+                star_core_guard_enabled = _policy_bool(
+                    registration_policy,
+                    "cuda_catalog_star_core_guard",
+                    star_core_preselect_top_k > 0,
                 )
                 catalog_selector = (
                     "resident_grid_top_nms"
@@ -1258,12 +1525,89 @@ def run_resident_calibration_integration(
                                 frame_weights[frame["id"]] = 0.0
                                 warnings.append("resident similarity catalog registration found no accepted fit")
                             else:
+                                seeds: list[dict[str, Any]] = [
+                                    {
+                                        "seed_rank": 0,
+                                        "seed_source": "catalog_similarity_refit",
+                                        "candidate_index": None,
+                                        "inliers": int(
+                                            selected_fit.get(
+                                                "refined_inliers",
+                                                selected_fit.get("inliers", 0),
+                                            )
+                                        ),
+                                        "rms_px": _finite_float_or_none(
+                                            selected_fit.get("refit_rms_px", selected_fit.get("rms_px"))
+                                        ),
+                                        "matrix": np.asarray(selected_fit["matrix"], dtype=np.float32)
+                                        .reshape(3, 3)
+                                        .tolist(),
+                                    }
+                                ]
+                                for seed_rank, candidate in enumerate(selected_fit.get("top_candidates", []), start=1):
+                                    seeds.append(
+                                        {
+                                            "seed_rank": seed_rank,
+                                            "seed_source": "catalog_similarity_top_candidate",
+                                            "candidate_index": int(candidate.get("candidate_index", seed_rank - 1)),
+                                            "inliers": int(candidate.get("inliers", 0)),
+                                            "rms_px": _finite_float_or_none(candidate.get("rms_px")),
+                                            "matrix": np.asarray(candidate["matrix"], dtype=np.float32)
+                                            .reshape(3, 3)
+                                            .tolist(),
+                                        }
+                                    )
+                                selected_seed_indices = list(range(len(seeds)))
+                                preselection: dict[str, Any] = {
+                                    "enabled": False,
+                                    "requested_top_k": int(star_core_preselect_top_k),
+                                    "input_seed_count": len(seeds),
+                                    "selected_seed_count": len(seeds),
+                                    "selected_seed_indices": selected_seed_indices,
+                                    "selection_key": "disabled",
+                                }
+                                pre_refine_metric_summary: dict[str, Any] | None = None
+                                star_core_threshold = _policy_float(
+                                    registration_policy,
+                                    "cuda_catalog_star_core_threshold",
+                                    float(selected_threshold or threshold_candidates[0]),
+                                )
+                                if 0 < star_core_preselect_top_k < len(seeds):
+                                    if has_star_core_metrics:
+                                        prescreen_seed_metrics = [
+                                            {
+                                                "seed_index": seed_index,
+                                                "seed_rank": int(seed["seed_rank"]),
+                                                "seed_source": str(seed["seed_source"]),
+                                                "candidate_index": seed["candidate_index"],
+                                                "seed_inliers": seed["inliers"],
+                                                "seed_rms_px": seed["rms_px"],
+                                                "matrix": np.asarray(seed["matrix"], dtype=np.float32)
+                                                .reshape(3, 3)
+                                                .tolist(),
+                                            }
+                                            for seed_index, seed in enumerate(seeds)
+                                        ]
+                                        pre_refine_metric_summary = _annotate_resident_star_core_metrics(
+                                            stack,
+                                            reference_index,
+                                            index,
+                                            prescreen_seed_metrics,
+                                            star_core_threshold,
+                                        )
+                                        selected_seed_indices, preselection = _select_star_core_preselected_seed_indices(
+                                            prescreen_seed_metrics,
+                                            star_core_preselect_top_k,
+                                        )
+                                    else:
+                                        preselection = {
+                                            **preselection,
+                                            "enabled": False,
+                                            "selection_key": "native_star_core_metric_unavailable",
+                                        }
                                 seed_matrices = [
-                                    np.asarray(selected_fit["matrix"], dtype=np.float32).reshape(3, 3),
-                                    *[
-                                        np.asarray(candidate["matrix"], dtype=np.float32).reshape(3, 3)
-                                        for candidate in selected_fit.get("top_candidates", [])
-                                    ],
+                                    np.asarray(seeds[seed_index]["matrix"], dtype=np.float32).reshape(3, 3)
+                                    for seed_index in selected_seed_indices
                                 ]
                                 refinement = stack.refine_matrix_translation_candidates_to_reference(
                                     reference_index,
@@ -1271,7 +1615,65 @@ def run_resident_calibration_integration(
                                     np.asarray(seed_matrices, dtype=np.float32),
                                     **refine_kwargs,
                                 )
-                                matrix = np.asarray(refinement["matrix"], dtype=np.float32).tolist()
+                                seed_metrics: list[dict[str, Any]] = []
+                                for seed_result in refinement.get("seed_results", []):
+                                    refine_seed_index = int(seed_result["seed_index"])
+                                    seed_index = int(selected_seed_indices[refine_seed_index])
+                                    seed = seeds[seed_index]
+                                    seed_metrics.append(
+                                        {
+                                            "seed_index": seed_index,
+                                            "refine_seed_index": refine_seed_index,
+                                            "seed_rank": int(seed["seed_rank"]),
+                                            "seed_source": str(seed["seed_source"]),
+                                            "candidate_index": seed["candidate_index"],
+                                            "seed_inliers": seed["inliers"],
+                                            "seed_rms_px": seed["rms_px"],
+                                            "dx_correction": float(seed_result["dx_correction"]),
+                                            "dy_correction": float(seed_result["dy_correction"]),
+                                            "metrics": dict(seed_result["metrics"]),
+                                            "matrix": np.asarray(seed_result["matrix"], dtype=np.float32)
+                                            .reshape(3, 3)
+                                            .tolist(),
+                                        }
+                                    )
+                                pixel_selected_index = int(refinement["selected_index"])
+                                selected_metric_index = pixel_selected_index
+                                star_guard = {
+                                    "status": "disabled",
+                                    "pixel_selected_index": pixel_selected_index,
+                                    "selected_index": pixel_selected_index,
+                                    "selection_key": "disabled",
+                                }
+                                star_core_metric_summary: dict[str, Any] | None = None
+                                if star_core_guard_enabled and has_star_core_metrics and seed_metrics:
+                                    star_core_metric_summary = _annotate_resident_star_core_metrics(
+                                        stack,
+                                        reference_index,
+                                        index,
+                                        seed_metrics,
+                                        star_core_threshold,
+                                    )
+                                    selected_metric_index, star_guard = _select_star_guarded_seed(
+                                        seed_metrics,
+                                        pixel_selected_index,
+                                    )
+                                selected_seed_metric = (
+                                    seed_metrics[selected_metric_index]
+                                    if seed_metrics
+                                    else {
+                                        "seed_index": pixel_selected_index,
+                                        "refine_seed_index": pixel_selected_index,
+                                        "seed_rank": pixel_selected_index,
+                                        "seed_source": "pixel_metric",
+                                        "candidate_index": None,
+                                        "seed_inliers": None,
+                                        "seed_rms_px": None,
+                                        "matrix": refinement["matrix"],
+                                        "metrics": dict(refinement["metrics"]),
+                                    }
+                                )
+                                matrix = np.asarray(selected_seed_metric["matrix"], dtype=np.float32).tolist()
                                 matched = int(selected_fit.get("inliers", 0))
                                 inliers = int(selected_fit.get("refined_inliers", matched))
                                 rms_px = _float_or_nan(selected_fit.get("refit_rms_px", selected_fit.get("rms_px")))
@@ -1287,18 +1689,39 @@ def run_resident_calibration_integration(
                                         f"similarity_top_k={int(selected_fit.get('top_k', similarity_top_k))}",
                                         f"similarity_top_candidate_count={len(selected_fit.get('top_candidates', []))}",
                                         f"similarity_seed_count={int(refinement['seed_count'])}",
-                                        f"similarity_selected_seed={int(refinement['selected_index'])}",
+                                        f"similarity_refined_seed_count={len(selected_seed_indices)}",
+                                        f"similarity_selected_refine_seed={int(refinement['selected_index'])}",
+                                        f"similarity_selected_seed={int(selected_seed_metric['seed_index'])}",
+                                        f"similarity_selected_seed_rank={int(selected_seed_metric['seed_rank'])}",
+                                        f"similarity_pixel_selected_seed={pixel_selected_index}",
                                         f"similarity_scale={float(selected_fit.get('scale', float('nan'))):.9g}",
                                         f"similarity_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
                                         f"similarity_fit_rms_px={rms_px:.6g}",
-                                        f"similarity_pixel_rms_adu={float(refinement['metrics'].get('rms', float('nan'))):.6g}",
-                                        f"similarity_pixel_ncc={float(refinement['metrics'].get('ncc', float('nan'))):.6g}",
+                                        f"similarity_pixel_rms_adu={float(selected_seed_metric['metrics'].get('rms', float('nan'))):.6g}",
+                                        f"similarity_pixel_ncc={float(selected_seed_metric['metrics'].get('ncc', float('nan'))):.6g}",
                                         f"similarity_catalog_selector={catalog_selector}",
                                         f"similarity_nms_min_separation_px={nms_min_separation_px:.6g}",
+                                        f"similarity_star_core_preselect_enabled={bool(preselection.get('enabled', False))}",
+                                        f"similarity_star_core_preselect_requested_top_k={star_core_preselect_top_k}",
+                                        f"similarity_star_core_preselect_selected_seed_count={int(preselection.get('selected_seed_count', len(selected_seed_indices)))}",
+                                        "similarity_star_core_preselect_indices="
+                                        + ",".join(str(int(item)) for item in preselection.get("selected_seed_indices", [])),
+                                        f"similarity_star_core_guard_enabled={bool(star_core_guard_enabled and has_star_core_metrics)}",
+                                        f"similarity_star_core_guard_status={star_guard['status']}",
+                                        f"similarity_star_core_threshold={star_core_threshold:.6g}",
                                         "resident CUDA catalog similarity with multi-seed pixel refinement",
                                     ]
                                     + prior_warnings
                                 )
+                                if pre_refine_metric_summary is not None:
+                                    warnings.append(
+                                        "similarity_star_core_pre_refine_summary="
+                                        + str(pre_refine_metric_summary)
+                                    )
+                                if star_core_metric_summary is not None:
+                                    warnings.append(
+                                        "similarity_star_core_guard_summary=" + str(star_core_metric_summary)
+                                    )
                             warnings.append("similarity_trials=" + str(trial_results))
                     except Exception as exc:
                         status = "failed"
@@ -1570,6 +1993,21 @@ def run_resident_calibration_integration(
                         "star_grid_rows": resident_star_grid_rows,
                         "star_prior": resident_star_prior,
                         "star_prior_radius_px": resident_star_prior_radius_px,
+                        "star_core_preselect_top_k": _policy_int(
+                            registration_policy,
+                            "cuda_catalog_star_core_preselect_top_k",
+                            resident_star_core_preselect_top_k,
+                        ),
+                        "star_core_guard": _policy_bool(
+                            registration_policy,
+                            "cuda_catalog_star_core_guard",
+                            _policy_int(
+                                registration_policy,
+                                "cuda_catalog_star_core_preselect_top_k",
+                                resident_star_core_preselect_top_k,
+                            )
+                            > 0,
+                        ),
                         "external_registration_results_path": None
                         if external_registration_path is None
                         else str(external_registration_path),
