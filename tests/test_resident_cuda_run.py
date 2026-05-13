@@ -203,6 +203,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
             "none",
             "--flat-floor",
             "0.05",
+            "--resident-prefetch-frames",
+            "2",
             "--resident-registration",
             "translation_preview",
             "--reference-frame-id",
@@ -232,12 +234,17 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0
     timing = resident["artifacts"][0]["timing_s"]
     fine_timing = resident["artifacts"][0]["fine_timing"]
+    io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
     assert fine_timing["schema_version"] == 1
+    assert io_pipeline["prefetch_frames"] == 2
+    assert io_pipeline["prefetch_workers"] == 1
     assert timing["light_read_decode"] >= 0.0
+    assert timing["light_read_decode_worker"] >= 0.0
     assert timing["light_h2d_calibrate_store"] >= 0.0
     assert timing["resident_registration_warp"] >= 0.0
     assert timing["light_loop_unaccounted"] >= 0.0
     assert fine_timing["seconds"]["light_read_decode_total"] == timing["light_read_decode"]
+    assert fine_timing["seconds"]["light_read_decode_worker_total"] == timing["light_read_decode_worker"]
     assert fine_timing["seconds"]["light_h2d_calibrate_store_total"] == timing["light_h2d_calibrate_store"]
     assert fine_timing["seconds"]["resident_registration_warp_total"] == timing["resident_registration_warp"]
 

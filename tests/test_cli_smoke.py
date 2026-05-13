@@ -140,6 +140,7 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "frame_ids": ["F1", "F2"],
                     "master_stats": {"bias_count": 1, "dark_count": 1, "flat_count": 1},
                     "memory_estimate": {"resident_base_gib": 1.25, "estimated_peak_gib": 1.75},
+                    "resident_io_pipeline": {"prefetch_frames": 2, "prefetch_workers": 1},
                     "resident_registration": {"mode": "similarity_cuda_triangle", "warp_interpolation": "lanczos3"},
                     "resident_local_normalization": {"mode": "resident_grid_mean_std"},
                     "resident_integration_weighting": {"mode": "simple_snr"},
@@ -147,6 +148,7 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "timing_s": {
                         "light_read_upload_calibrate": 2.0,
                         "light_read_decode": 1.0,
+                        "light_read_decode_worker": 1.25,
                         "light_h2d_calibrate_store": 0.75,
                         "resident_registration_warp": 0.5,
                         "light_loop_unaccounted": 0.25,
@@ -166,7 +168,9 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "cuda_resident_stack" in html
     assert "Test GPU" in html
     assert "estimated_peak_gib" in html
+    assert "prefetch_frames" in html
     assert "read_decode_s" in html
+    assert "read_decode_worker_s" in html
     assert "h2d_calibrate_store_s" in html
     assert "registration_warp_s" in html
     assert "similarity_cuda_triangle" in html

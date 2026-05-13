@@ -338,6 +338,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 local_normalization=args.local_normalization,
                 resident_local_normalization_mode=args.resident_local_normalization_mode,
                 resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
+                resident_prefetch_frames=args.resident_prefetch_frames,
             ),
         )
     elif plan.executable:
@@ -417,6 +418,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 local_normalization=args.local_normalization,
                 resident_local_normalization_mode=args.resident_local_normalization_mode,
                 resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
+                resident_prefetch_frames=args.resident_prefetch_frames,
             ),
         )
         write_run_state(args.out, state)
@@ -727,6 +729,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="tile",
         help="execution memory strategy; resident currently covers CUDA calibration plus integration",
     )
+    run.add_argument(
+        "--resident-prefetch-frames",
+        type=int,
+        default=0,
+        help="number of light frames to prefetch into CPU RAM ahead of resident CUDA calibration",
+    )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
     run.add_argument(
@@ -865,6 +873,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["tile", "resident"],
         default="tile",
         help="execution memory strategy for the run portion of audit",
+    )
+    audit.add_argument(
+        "--resident-prefetch-frames",
+        type=int,
+        default=0,
+        help="number of light frames to prefetch into CPU RAM ahead of resident CUDA calibration",
     )
     audit.add_argument(
         "--registration-method",

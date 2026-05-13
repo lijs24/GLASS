@@ -23,6 +23,7 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
         timing = item.get("timing_s", {})
         master_stats = item.get("master_stats", {})
         registration = item.get("resident_registration", {})
+        io_pipeline = item.get("resident_io_pipeline", {})
         local_norm = item.get("resident_local_normalization", {})
         weighting = item.get("resident_integration_weighting", {})
         rejection = item.get("integration_rejection", {})
@@ -41,7 +42,9 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "resident_base_gib": round(float(memory.get("resident_base_gib") or 0.0), 3),
                 "estimated_peak_gib": round(float(memory.get("estimated_peak_gib") or 0.0), 3),
                 "light_calibrate_s": round(float(timing.get("light_read_upload_calibrate") or 0.0), 3),
+                "prefetch_frames": io_pipeline.get("prefetch_frames", 0),
                 "read_decode_s": round(float(timing.get("light_read_decode") or 0.0), 3),
+                "read_decode_worker_s": round(float(timing.get("light_read_decode_worker") or 0.0), 3),
                 "h2d_calibrate_store_s": round(float(timing.get("light_h2d_calibrate_store") or 0.0), 3),
                 "registration_warp_s": round(float(timing.get("resident_registration_warp") or 0.0), 3),
                 "light_loop_unaccounted_s": round(float(timing.get("light_loop_unaccounted") or 0.0), 3),

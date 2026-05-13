@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
 from time import perf_counter
@@ -85,6 +86,51 @@ def _timing_summary(values: list[float]) -> dict[str, float]:
         "min": float(np.min(data)),
         "max": float(np.max(data)),
     }
+
+
+def _read_light_timed(path: str | Path) -> tuple[np.ndarray, float]:
+    start = perf_counter()
+    data = read_fits_data(path, dtype=np.float32)
+    return data, perf_counter() - start
+
+
+class _LightPrefetcher:
+    def __init__(self, light_frames: list[dict[str, Any]], depth: int):
+        self.light_frames = light_frames
+        self.depth = max(0, int(depth))
+        self.executor: ThreadPoolExecutor | None = None
+        self.pending: dict[int, Future[tuple[np.ndarray, float]]] = {}
+        self.next_submit = 0
+
+    def __enter__(self) -> "_LightPrefetcher":
+        if self.depth > 0:
+            self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gpwbpp-light-prefetch")
+            self._fill()
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        if self.executor is not None:
+            self.executor.shutdown(wait=True, cancel_futures=True)
+            self.executor = None
+
+    def _fill(self) -> None:
+        if self.executor is None:
+            return
+        while self.next_submit < len(self.light_frames) and len(self.pending) < self.depth:
+            frame = self.light_frames[self.next_submit]
+            self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"])
+            self.next_submit += 1
+
+    def result(self, index: int) -> tuple[np.ndarray, float, float]:
+        if self.executor is None:
+            data, read_elapsed = _read_light_timed(self.light_frames[index]["path"])
+            return data, read_elapsed, read_elapsed
+        future = self.pending.pop(index)
+        wait_start = perf_counter()
+        data, read_elapsed = future.result()
+        wait_elapsed = perf_counter() - wait_start
+        self._fill()
+        return data, read_elapsed, wait_elapsed
 
 
 def _grid_local_norm_coefficients(stats: dict[str, Any], eps: float = 1.0e-6) -> dict[str, Any]:
@@ -955,6 +1001,7 @@ def run_resident_calibration_integration(
     local_normalization: str = "off",
     resident_local_normalization_mode: str = "global_mean_std",
     resident_local_normalization_tile_size: int = 512,
+    resident_prefetch_frames: int = 0,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -1001,6 +1048,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_star_prior_radius_px must be non-negative")
     if resident_star_core_preselect_top_k < 0:
         raise ValueError("resident_star_core_preselect_top_k must be non-negative")
+    if resident_prefetch_frames < 0:
+        raise ValueError("resident_prefetch_frames must be non-negative")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1103,6 +1152,7 @@ def run_resident_calibration_integration(
             load_calibrate_start = perf_counter()
             per_frame_s = []
             per_frame_read_s: list[float] = []
+            per_frame_read_worker_s: list[float] = []
             per_frame_calibrate_s: list[float] = []
             per_frame_registration_s = []
             registration_during_load_elapsed = 0.0
@@ -1110,110 +1160,113 @@ def run_resident_calibration_integration(
             frame_weight_values: list[float] = []
             current_master_key: str | None = None
             current_dark_exposure: float | None = None
-            for index, frame in enumerate(light_frames):
-                frame_start = perf_counter()
-                calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
-                bias_group = calibration_groups.get("bias_group")
-                dark_group = calibration_groups.get("dark_group")
-                flat_group = calibration_groups.get("flat_group")
-                master_key = _master_set_cache_key(
-                    filter_name,
-                    height,
-                    width,
-                    bias_group,
-                    dark_group,
-                    flat_group,
-                )
-                if master_key != current_master_key:
-                    master_set_start = perf_counter()
-                    master_bias, master_dark, master_flat, stats, dark_exposure = _load_or_build_matching_masters(
-                        run,
+            with _LightPrefetcher(light_frames, resident_prefetch_frames) as light_prefetch:
+                for index, frame in enumerate(light_frames):
+                    frame_start = perf_counter()
+                    calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
+                    bias_group = calibration_groups.get("bias_group")
+                    dark_group = calibration_groups.get("dark_group")
+                    flat_group = calibration_groups.get("flat_group")
+                    master_key = _master_set_cache_key(
                         filter_name,
                         height,
                         width,
-                        frames,
-                        groups,
                         bias_group,
                         dark_group,
                         flat_group,
-                        policy,
                     )
-                    stack.set_calibration_masters(master_bias, master_dark, master_flat)
-                    master_elapsed += perf_counter() - master_set_start
-                    master_stats_sets[master_key] = stats
-                    current_master_key = master_key
-                    current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
-                    del master_bias, master_dark, master_flat
-                    gc_start = perf_counter()
-                    gc.collect()
-                    gc_elapsed += perf_counter() - gc_start
-                read_start = perf_counter()
-                light = read_fits_data(frame["path"], dtype=np.float32)
-                per_frame_read_s.append(perf_counter() - read_start)
-                calibrate_start = perf_counter()
-                stack.calibrate_frame(
-                    index,
-                    light,
-                    float(frame.get("exposure_s") or 0.0),
-                    current_dark_exposure,
-                    asdict(policy),
-                )
-                per_frame_calibrate_s.append(perf_counter() - calibrate_start)
-                frame_weight = 1.0
-                if resident_registration == "translation_preview":
-                    registration_frame_start = perf_counter()
-                    warnings = []
-                    status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
-                    dx = 0.0
-                    dy = 0.0
-                    try:
-                        if status == "excluded":
-                            frame_weight = 0.0
-                            warnings.append("excluded by resident frame mask")
-                        elif frame["id"] != reference_frame["id"]:
-                            preview = _registration_preview(light, preview_scale)
-                            if reference_preview is None:
-                                raise RuntimeError("reference preview is not available")
-                            preview_dx, preview_dy = estimate_translation_phase_correlation(reference_preview, preview)
-                            dx = float(preview_dx * preview_scale)
-                            dy = float(preview_dy * preview_scale)
-                            stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
-                        else:
-                            status = "reference"
-                    except Exception as exc:
-                        status = "failed"
-                        frame_weight = 0.0
-                        warnings.append(str(exc))
-                    registration_elapsed = perf_counter() - registration_frame_start
-                    registration_during_load_elapsed += registration_elapsed
-                    per_frame_registration_s.append(registration_elapsed)
-                    registration_results.append(
-                        RegistrationResult(
-                            frame_id=str(frame["id"]),
-                            reference_frame_id=str(reference_frame["id"]),
-                            transform_model="translation_preview",
-                            matrix=translation_matrix(dx, dy),
-                            matched_stars=0,
-                            inliers=0 if status in {"failed", "excluded"} else 1,
-                            rms_px=0.0 if status not in {"failed", "excluded"} else float("nan"),
-                            status=status,
-                            warnings=warnings
-                            + [
-                                f"preview_scale={preview_scale}",
-                                "phase-correlation preview registration; no star-model RMS yet",
-                            ],
+                    if master_key != current_master_key:
+                        master_set_start = perf_counter()
+                        master_bias, master_dark, master_flat, stats, dark_exposure = _load_or_build_matching_masters(
+                            run,
+                            filter_name,
+                            height,
+                            width,
+                            frames,
+                            groups,
+                            bias_group,
+                            dark_group,
+                            flat_group,
+                            policy,
                         )
+                        stack.set_calibration_masters(master_bias, master_dark, master_flat)
+                        master_elapsed += perf_counter() - master_set_start
+                        master_stats_sets[master_key] = stats
+                        current_master_key = master_key
+                        current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
+                        del master_bias, master_dark, master_flat
+                        gc_start = perf_counter()
+                        gc.collect()
+                        gc_elapsed += perf_counter() - gc_start
+                    light, read_worker_elapsed, read_wait_elapsed = light_prefetch.result(index)
+                    per_frame_read_worker_s.append(read_worker_elapsed)
+                    per_frame_read_s.append(read_wait_elapsed)
+                    calibrate_start = perf_counter()
+                    stack.calibrate_frame(
+                        index,
+                        light,
+                        float(frame.get("exposure_s") or 0.0),
+                        current_dark_exposure,
+                        asdict(policy),
                     )
-                per_frame_s.append(perf_counter() - frame_start)
-                if resident_registration == "off" and _matches_any_token(frame, excluded_tokens):
-                    frame_weight = 0.0
-                frame_weights[frame["id"]] = frame_weight
-                frame_weight_values.append(frame_weight)
-                del light
-                if index % 10 == 9:
-                    gc_start = perf_counter()
-                    gc.collect()
-                    gc_elapsed += perf_counter() - gc_start
+                    per_frame_calibrate_s.append(perf_counter() - calibrate_start)
+                    frame_weight = 1.0
+                    if resident_registration == "translation_preview":
+                        registration_frame_start = perf_counter()
+                        warnings = []
+                        status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
+                        dx = 0.0
+                        dy = 0.0
+                        try:
+                            if status == "excluded":
+                                frame_weight = 0.0
+                                warnings.append("excluded by resident frame mask")
+                            elif frame["id"] != reference_frame["id"]:
+                                preview = _registration_preview(light, preview_scale)
+                                if reference_preview is None:
+                                    raise RuntimeError("reference preview is not available")
+                                preview_dx, preview_dy = estimate_translation_phase_correlation(
+                                    reference_preview, preview
+                                )
+                                dx = float(preview_dx * preview_scale)
+                                dy = float(preview_dy * preview_scale)
+                                stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
+                            else:
+                                status = "reference"
+                        except Exception as exc:
+                            status = "failed"
+                            frame_weight = 0.0
+                            warnings.append(str(exc))
+                        registration_elapsed = perf_counter() - registration_frame_start
+                        registration_during_load_elapsed += registration_elapsed
+                        per_frame_registration_s.append(registration_elapsed)
+                        registration_results.append(
+                            RegistrationResult(
+                                frame_id=str(frame["id"]),
+                                reference_frame_id=str(reference_frame["id"]),
+                                transform_model="translation_preview",
+                                matrix=translation_matrix(dx, dy),
+                                matched_stars=0,
+                                inliers=0 if status in {"failed", "excluded"} else 1,
+                                rms_px=0.0 if status not in {"failed", "excluded"} else float("nan"),
+                                status=status,
+                                warnings=warnings
+                                + [
+                                    f"preview_scale={preview_scale}",
+                                    "phase-correlation preview registration; no star-model RMS yet",
+                                ],
+                            )
+                        )
+                    per_frame_s.append(perf_counter() - frame_start)
+                    if resident_registration == "off" and _matches_any_token(frame, excluded_tokens):
+                        frame_weight = 0.0
+                    frame_weights[frame["id"]] = frame_weight
+                    frame_weight_values.append(frame_weight)
+                    del light
+                    if index % 10 == 9:
+                        gc_start = perf_counter()
+                        gc.collect()
+                        gc_elapsed += perf_counter() - gc_start
             load_calibrate_elapsed = perf_counter() - load_calibrate_start
 
             if resident_registration == "translation_ncc_subpixel":
@@ -2752,6 +2805,7 @@ def run_resident_calibration_integration(
             }
             memory_estimate = _memory_estimate(len(light_frames), height, width)
             read_timing = _timing_summary(per_frame_read_s)
+            read_worker_timing = _timing_summary(per_frame_read_worker_s)
             calibrate_timing = _timing_summary(per_frame_calibrate_s)
             registration_timing = _timing_summary(per_frame_registration_s)
             registration_total = registration_timing["total"]
@@ -2768,6 +2822,7 @@ def run_resident_calibration_integration(
                 "seconds": {
                     "light_loop_total": load_calibrate_elapsed,
                     "light_read_decode_total": read_timing["total"],
+                    "light_read_decode_worker_total": read_worker_timing["total"],
                     "light_h2d_calibrate_store_total": calibrate_timing["total"],
                     "resident_registration_warp_total": registration_total,
                     "resident_registration_warp_during_load_total": registration_during_load_elapsed,
@@ -2779,6 +2834,7 @@ def run_resident_calibration_integration(
                 "per_frame_seconds": {
                     "total": _timing_summary(per_frame_s),
                     "read_decode": read_timing,
+                    "read_decode_worker": read_worker_timing,
                     "h2d_calibrate_store": calibrate_timing,
                     "registration_warp": registration_timing,
                 },
@@ -2798,6 +2854,7 @@ def run_resident_calibration_integration(
                         "registration_preview_setup": registration_setup_elapsed,
                         "light_read_upload_calibrate": load_calibrate_elapsed,
                         "light_read_decode": read_timing["total"],
+                        "light_read_decode_worker": read_worker_timing["total"],
                         "light_h2d_calibrate_store": calibrate_timing["total"],
                         "resident_registration_warp": registration_total,
                         "resident_registration_warp_during_load": registration_during_load_elapsed,
@@ -2812,10 +2869,15 @@ def run_resident_calibration_integration(
                         "per_frame_min": fine_timing["per_frame_seconds"]["total"]["min"],
                         "per_frame_max": fine_timing["per_frame_seconds"]["total"]["max"],
                         "per_frame_read_decode_mean": read_timing["mean"],
+                        "per_frame_read_decode_worker_mean": read_worker_timing["mean"],
                         "per_frame_h2d_calibrate_store_mean": calibrate_timing["mean"],
                         "per_frame_registration_mean": registration_timing["mean"],
                     },
                     "fine_timing": fine_timing,
+                    "resident_io_pipeline": {
+                        "prefetch_frames": int(resident_prefetch_frames),
+                        "prefetch_workers": 1 if resident_prefetch_frames > 0 else 0,
+                    },
                     "resident_registration": {
                         "mode": resident_registration,
                         "reference_frame_id": str(reference_frame["id"]),
