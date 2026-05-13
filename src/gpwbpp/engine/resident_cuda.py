@@ -1013,6 +1013,7 @@ def run_resident_calibration_integration(
     resident_local_normalization_tile_size: int = 512,
     resident_prefetch_frames: int = 0,
     resident_prefetch_workers: int = 1,
+    resident_h2d_mode: str = "pageable",
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -1067,6 +1068,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
         raise ValueError("resident_prefetch_workers must be positive")
+    if resident_h2d_mode not in {"pageable", "pinned_async"}:
+        raise ValueError("resident_h2d_mode must be one of: pageable, pinned_async")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1171,6 +1174,9 @@ def run_resident_calibration_integration(
             per_frame_read_s: list[float] = []
             per_frame_read_worker_s: list[float] = []
             per_frame_calibrate_s: list[float] = []
+            per_frame_host_copy_s: list[float] = []
+            per_frame_h2d_s: list[float] = []
+            per_frame_calibrate_store_s: list[float] = []
             per_frame_registration_s = []
             registration_component_s: dict[str, float] = {}
             registration_during_load_elapsed = 0.0
@@ -1220,14 +1226,26 @@ def run_resident_calibration_integration(
                     per_frame_read_worker_s.append(read_worker_elapsed)
                     per_frame_read_s.append(read_wait_elapsed)
                     calibrate_start = perf_counter()
-                    stack.calibrate_frame(
-                        index,
-                        light,
-                        float(frame.get("exposure_s") or 0.0),
-                        current_dark_exposure,
-                        asdict(policy),
-                    )
+                    if resident_h2d_mode == "pinned_async":
+                        calibration_timing = stack.calibrate_frame_pinned_async_timed(
+                            index,
+                            light,
+                            float(frame.get("exposure_s") or 0.0),
+                            current_dark_exposure,
+                            asdict(policy),
+                        )
+                    else:
+                        calibration_timing = stack.calibrate_frame_timed(
+                            index,
+                            light,
+                            float(frame.get("exposure_s") or 0.0),
+                            current_dark_exposure,
+                            asdict(policy),
+                        )
                     per_frame_calibrate_s.append(perf_counter() - calibrate_start)
+                    per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
+                    per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
+                    per_frame_calibrate_store_s.append(float(calibration_timing.get("calibrate_store_s", 0.0)))
                     frame_weight = 1.0
                     if resident_registration == "translation_preview":
                         registration_frame_start = perf_counter()
@@ -2927,6 +2945,9 @@ def run_resident_calibration_integration(
             read_timing = _timing_summary(per_frame_read_s)
             read_worker_timing = _timing_summary(per_frame_read_worker_s)
             calibrate_timing = _timing_summary(per_frame_calibrate_s)
+            host_copy_timing = _timing_summary(per_frame_host_copy_s)
+            h2d_timing = _timing_summary(per_frame_h2d_s)
+            calibrate_store_timing = _timing_summary(per_frame_calibrate_store_s)
             registration_timing = _timing_summary(per_frame_registration_s)
             registration_total = registration_timing["total"]
             registration_component_total = float(
@@ -2951,6 +2972,9 @@ def run_resident_calibration_integration(
                     "light_loop_total": load_calibrate_elapsed,
                     "light_read_decode_total": read_timing["total"],
                     "light_read_decode_worker_total": read_worker_timing["total"],
+                    "light_host_copy_to_pinned_total": host_copy_timing["total"],
+                    "light_h2d_total": h2d_timing["total"],
+                    "light_calibrate_store_total": calibrate_store_timing["total"],
                     "light_h2d_calibrate_store_total": calibrate_timing["total"],
                     "resident_registration_warp_total": registration_total,
                     "resident_registration_warp_during_load_total": registration_during_load_elapsed,
@@ -2963,6 +2987,9 @@ def run_resident_calibration_integration(
                     "total": _timing_summary(per_frame_s),
                     "read_decode": read_timing,
                     "read_decode_worker": read_worker_timing,
+                    "host_copy_to_pinned": host_copy_timing,
+                    "h2d": h2d_timing,
+                    "calibrate_store": calibrate_store_timing,
                     "h2d_calibrate_store": calibrate_timing,
                     "registration_warp": registration_timing,
                 },
@@ -2988,6 +3015,9 @@ def run_resident_calibration_integration(
                         "light_read_upload_calibrate": load_calibrate_elapsed,
                         "light_read_decode": read_timing["total"],
                         "light_read_decode_worker": read_worker_timing["total"],
+                        "light_host_copy_to_pinned": host_copy_timing["total"],
+                        "light_h2d": h2d_timing["total"],
+                        "light_calibrate_store": calibrate_store_timing["total"],
                         "light_h2d_calibrate_store": calibrate_timing["total"],
                         "resident_registration_warp": registration_total,
                         "resident_registration_warp_during_load": registration_during_load_elapsed,
@@ -3005,6 +3035,9 @@ def run_resident_calibration_integration(
                         "per_frame_max": fine_timing["per_frame_seconds"]["total"]["max"],
                         "per_frame_read_decode_mean": read_timing["mean"],
                         "per_frame_read_decode_worker_mean": read_worker_timing["mean"],
+                        "per_frame_host_copy_to_pinned_mean": host_copy_timing["mean"],
+                        "per_frame_h2d_mean": h2d_timing["mean"],
+                        "per_frame_calibrate_store_mean": calibrate_store_timing["mean"],
                         "per_frame_h2d_calibrate_store_mean": calibrate_timing["mean"],
                         "per_frame_registration_mean": registration_timing["mean"],
                     },
@@ -3012,6 +3045,8 @@ def run_resident_calibration_integration(
                     "resident_io_pipeline": {
                         "prefetch_frames": int(resident_prefetch_frames),
                         "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
+                        "h2d_mode": resident_h2d_mode,
+                        "host_pinned_bytes": int(getattr(stack, "host_pinned_bytes", 0)),
                     },
                     "resident_registration": {
                         "mode": resident_registration,

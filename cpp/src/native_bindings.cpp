@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <array>
 #include <utility>
+#include <chrono>
+#include <cstring>
 
 namespace py = pybind11;
 
@@ -30,6 +32,21 @@ void gpwbpp_calibrate_tile_f32_launch(
     float dark_scale,
     float flat_floor,
     float pedestal);
+void gpwbpp_calibrate_tile_f32_launch_stream(
+    const float* light,
+    const float* bias,
+    const float* dark,
+    const float* flat,
+    float* out,
+    std::size_t n,
+    bool has_bias,
+    bool has_dark,
+    bool has_flat,
+    bool master_dark_includes_bias,
+    float dark_scale,
+    float flat_floor,
+    float pedestal,
+    cudaStream_t stream);
 void gpwbpp_mean_stack_tiles_f32_launch(
     const float* stack, float* out, std::size_t frame_count, std::size_t pixels_per_frame);
 void gpwbpp_warp_translation_f32_launch(
@@ -414,6 +431,54 @@ float dict_float(const py::dict& dict, const char* key, float fallback) {
     return fallback;
   }
   return py::cast<float>(dict[key]);
+}
+
+using Clock = std::chrono::steady_clock;
+
+double seconds_since(const Clock::time_point& start) {
+  return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+struct CalibrationParameters {
+  bool master_dark_includes_bias = true;
+  bool dark_scaling_enabled = true;
+  float flat_floor = 1.0e-6f;
+  float pedestal = 0.0f;
+  float dark_scale = 1.0f;
+};
+
+struct ResidentCalibrationTiming {
+  double host_copy_s = 0.0;
+  double h2d_s = 0.0;
+  double calibrate_store_s = 0.0;
+  double total_s = 0.0;
+};
+
+class CudaEvent {
+ public:
+  explicit CudaEvent(const char* operation) {
+    check_cuda(cudaEventCreate(&event_), operation);
+  }
+
+  CudaEvent(const CudaEvent&) = delete;
+  CudaEvent& operator=(const CudaEvent&) = delete;
+
+  ~CudaEvent() {
+    if (event_ != nullptr) {
+      cudaEventDestroy(event_);
+    }
+  }
+
+  cudaEvent_t get() const { return event_; }
+
+ private:
+  cudaEvent_t event_ = nullptr;
+};
+
+double cuda_event_elapsed_s(const CudaEvent& start, const CudaEvent& stop, const char* operation) {
+  float elapsed_ms = 0.0f;
+  check_cuda(cudaEventElapsedTime(&elapsed_ms, start.get(), stop.get()), operation);
+  return static_cast<double>(elapsed_ms) / 1000.0;
 }
 
 void require_frame_shape(const py::buffer_info& info, std::size_t height, std::size_t width) {
@@ -830,12 +895,19 @@ class ResidentCalibratedStack {
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     check_cuda(cudaMalloc(&d_stack_, frame_count_ * frame_bytes), "cudaMalloc(resident calibrated stack)");
     check_cuda(cudaMalloc(&d_light_, frame_bytes), "cudaMalloc(resident raw light buffer)");
+    check_cuda(cudaStreamCreate(&calibrate_stream_), "cudaStreamCreate(resident calibration stream)");
   }
 
   ResidentCalibratedStack(const ResidentCalibratedStack&) = delete;
   ResidentCalibratedStack& operator=(const ResidentCalibratedStack&) = delete;
 
   ~ResidentCalibratedStack() {
+    if (calibrate_stream_ != nullptr) {
+      cudaStreamDestroy(calibrate_stream_);
+    }
+    if (h_pinned_light_ != nullptr) {
+      cudaFreeHost(h_pinned_light_);
+    }
     cudaFree(d_stack_);
     cudaFree(d_light_);
     cudaFree(d_bias_);
@@ -848,6 +920,9 @@ class ResidentCalibratedStack {
   std::size_t width() const { return width_; }
   std::size_t pixels_per_frame() const { return pixels_per_frame_; }
   std::size_t loaded_count() const { return loaded_count_; }
+  std::size_t host_pinned_bytes() const {
+    return h_pinned_light_ == nullptr ? 0 : pixels_per_frame_ * sizeof(float);
+  }
 
   std::size_t bytes_allocated() const {
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
@@ -895,45 +970,63 @@ class ResidentCalibratedStack {
     require_index(index);
     const py::buffer_info light_info = light.request();
     require_frame_shape(light_info, height_, width_);
+    const CalibrationParameters params =
+        calibration_parameters(light_exposure_s, dark_exposure_obj, policy_obj);
 
-    py::dict policy;
-    if (!policy_obj.is_none()) {
-      policy = py::cast<py::dict>(policy_obj);
-    }
-    const bool master_dark_includes_bias =
-        dict_bool(policy, "master_dark_includes_bias", true);
-    const bool dark_scaling_enabled = dict_bool(policy, "dark_scaling_enabled", true);
-    const float flat_floor = dict_float(policy, "flat_floor", 1.0e-6f);
-    const float pedestal = dict_float(policy, "pedestal", 0.0f);
-
-    float dark_scale = 1.0f;
-    if (has_dark_ && dark_scaling_enabled && !dark_exposure_obj.is_none()) {
-      const float dark_exposure_s = py::cast<float>(dark_exposure_obj);
-      if (dark_exposure_s != 0.0f) {
-        dark_scale = light_exposure_s / dark_exposure_s;
-      }
-    }
-
-    check_cuda(
-        cudaMemcpy(d_light_, light_info.ptr, pixels_per_frame_ * sizeof(float), cudaMemcpyHostToDevice),
-        "cudaMemcpy(resident raw light)");
-    gpwbpp_calibrate_tile_f32_launch(
-        d_light_,
-        d_bias_,
-        d_dark_,
-        d_flat_,
-        d_stack_ + index * pixels_per_frame_,
-        pixels_per_frame_,
-        has_bias_,
-        has_dark_,
-        has_flat_,
-        master_dark_includes_bias,
-        dark_scale,
-        flat_floor,
-        pedestal);
-    check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame kernel launch");
-    check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.calibrate_frame synchronize");
+    calibrate_frame_pageable_impl(index, light_info.ptr, params);
     mark_loaded(index);
+  }
+
+  py::dict calibrate_frame_timed(
+      std::size_t index,
+      py::array_t<float, py::array::c_style | py::array::forcecast> light,
+      float light_exposure_s,
+      py::object dark_exposure_obj,
+      py::object policy_obj) {
+    require_index(index);
+    const py::buffer_info light_info = light.request();
+    require_frame_shape(light_info, height_, width_);
+    const CalibrationParameters params =
+        calibration_parameters(light_exposure_s, dark_exposure_obj, policy_obj);
+
+    const ResidentCalibrationTiming timing =
+        calibrate_frame_pageable_impl(index, light_info.ptr, params);
+    mark_loaded(index);
+    return calibration_timing_dict(timing, "pageable");
+  }
+
+  void calibrate_frame_pinned_async(
+      std::size_t index,
+      py::array_t<float, py::array::c_style | py::array::forcecast> light,
+      float light_exposure_s,
+      py::object dark_exposure_obj,
+      py::object policy_obj) {
+    require_index(index);
+    const py::buffer_info light_info = light.request();
+    require_frame_shape(light_info, height_, width_);
+    const CalibrationParameters params =
+        calibration_parameters(light_exposure_s, dark_exposure_obj, policy_obj);
+
+    calibrate_frame_pinned_async_impl(index, light_info.ptr, params);
+    mark_loaded(index);
+  }
+
+  py::dict calibrate_frame_pinned_async_timed(
+      std::size_t index,
+      py::array_t<float, py::array::c_style | py::array::forcecast> light,
+      float light_exposure_s,
+      py::object dark_exposure_obj,
+      py::object policy_obj) {
+    require_index(index);
+    const py::buffer_info light_info = light.request();
+    require_frame_shape(light_info, height_, width_);
+    const CalibrationParameters params =
+        calibration_parameters(light_exposure_s, dark_exposure_obj, policy_obj);
+
+    const ResidentCalibrationTiming timing =
+        calibrate_frame_pinned_async_impl(index, light_info.ptr, params);
+    mark_loaded(index);
+    return calibration_timing_dict(timing, "pinned_async");
   }
 
   void apply_translation_frame(std::size_t index, int dx, int dy, float fill) {
@@ -2888,6 +2981,152 @@ class ResidentCalibratedStack {
     }
   }
 
+  CalibrationParameters calibration_parameters(
+      float light_exposure_s,
+      py::object dark_exposure_obj,
+      py::object policy_obj) const {
+    py::dict policy;
+    if (!policy_obj.is_none()) {
+      policy = py::cast<py::dict>(policy_obj);
+    }
+    CalibrationParameters params;
+    params.master_dark_includes_bias = dict_bool(policy, "master_dark_includes_bias", true);
+    params.dark_scaling_enabled = dict_bool(policy, "dark_scaling_enabled", true);
+    params.flat_floor = dict_float(policy, "flat_floor", 1.0e-6f);
+    params.pedestal = dict_float(policy, "pedestal", 0.0f);
+    if (has_dark_ && params.dark_scaling_enabled && !dark_exposure_obj.is_none()) {
+      const float dark_exposure_s = py::cast<float>(dark_exposure_obj);
+      if (dark_exposure_s != 0.0f) {
+        params.dark_scale = light_exposure_s / dark_exposure_s;
+      }
+    }
+    return params;
+  }
+
+  py::dict calibration_timing_dict(const ResidentCalibrationTiming& timing, const char* mode) const {
+    py::dict out;
+    out["schema_version"] = 1;
+    out["h2d_mode"] = mode;
+    out["host_copy_s"] = timing.host_copy_s;
+    out["h2d_s"] = timing.h2d_s;
+    out["calibrate_store_s"] = timing.calibrate_store_s;
+    out["total_s"] = timing.total_s;
+    out["host_pinned_bytes"] = host_pinned_bytes();
+    return out;
+  }
+
+  void ensure_pinned_light_buffer() {
+    if (h_pinned_light_ != nullptr) {
+      return;
+    }
+    check_cuda(
+        cudaHostAlloc(
+            reinterpret_cast<void**>(&h_pinned_light_),
+            pixels_per_frame_ * sizeof(float),
+            cudaHostAllocPortable),
+        "cudaHostAlloc(resident pinned raw light buffer)");
+  }
+
+  ResidentCalibrationTiming calibrate_frame_pageable_impl(
+      std::size_t index,
+      void* light_ptr,
+      const CalibrationParameters& params) {
+    ResidentCalibrationTiming timing;
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    const auto total_start = Clock::now();
+    {
+      py::gil_scoped_release release;
+      const auto h2d_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(d_light_, light_ptr, frame_bytes, cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident raw light)");
+      timing.h2d_s = seconds_since(h2d_start);
+
+      const auto calibrate_start = Clock::now();
+      gpwbpp_calibrate_tile_f32_launch(
+          d_light_,
+          d_bias_,
+          d_dark_,
+          d_flat_,
+          d_stack_ + index * pixels_per_frame_,
+          pixels_per_frame_,
+          has_bias_,
+          has_dark_,
+          has_flat_,
+          params.master_dark_includes_bias,
+          params.dark_scale,
+          params.flat_floor,
+          params.pedestal);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.calibrate_frame synchronize");
+      timing.calibrate_store_s = seconds_since(calibrate_start);
+    }
+    timing.total_s = seconds_since(total_start);
+    return timing;
+  }
+
+  ResidentCalibrationTiming calibrate_frame_pinned_async_impl(
+      std::size_t index,
+      void* light_ptr,
+      const CalibrationParameters& params) {
+    ResidentCalibrationTiming timing;
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    const auto total_start = Clock::now();
+    {
+      py::gil_scoped_release release;
+      ensure_pinned_light_buffer();
+
+      const auto host_copy_start = Clock::now();
+      std::memcpy(h_pinned_light_, light_ptr, frame_bytes);
+      timing.host_copy_s = seconds_since(host_copy_start);
+
+      CudaEvent h2d_start("cudaEventCreate(resident pinned h2d start)");
+      CudaEvent h2d_stop("cudaEventCreate(resident pinned h2d stop)");
+      CudaEvent kernel_start("cudaEventCreate(resident calibration start)");
+      CudaEvent kernel_stop("cudaEventCreate(resident calibration stop)");
+      check_cuda(cudaEventRecord(h2d_start.get(), calibrate_stream_), "cudaEventRecord(resident pinned h2d start)");
+      check_cuda(
+          cudaMemcpyAsync(
+              d_light_,
+              h_pinned_light_,
+              frame_bytes,
+              cudaMemcpyHostToDevice,
+              calibrate_stream_),
+          "cudaMemcpyAsync(resident pinned raw light)");
+      check_cuda(cudaEventRecord(h2d_stop.get(), calibrate_stream_), "cudaEventRecord(resident pinned h2d stop)");
+      check_cuda(
+          cudaEventRecord(kernel_start.get(), calibrate_stream_),
+          "cudaEventRecord(resident calibration start)");
+      gpwbpp_calibrate_tile_f32_launch_stream(
+          d_light_,
+          d_bias_,
+          d_dark_,
+          d_flat_,
+          d_stack_ + index * pixels_per_frame_,
+          pixels_per_frame_,
+          has_bias_,
+          has_dark_,
+          has_flat_,
+          params.master_dark_includes_bias,
+          params.dark_scale,
+          params.flat_floor,
+          params.pedestal,
+          calibrate_stream_);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame_pinned_async kernel launch");
+      check_cuda(
+          cudaEventRecord(kernel_stop.get(), calibrate_stream_),
+          "cudaEventRecord(resident calibration stop)");
+      check_cuda(
+          cudaStreamSynchronize(calibrate_stream_),
+          "ResidentCalibratedStack.calibrate_frame_pinned_async synchronize");
+      timing.h2d_s = cuda_event_elapsed_s(h2d_start, h2d_stop, "cudaEventElapsedTime(resident pinned h2d)");
+      timing.calibrate_store_s =
+          cuda_event_elapsed_s(kernel_start, kernel_stop, "cudaEventElapsedTime(resident calibration)");
+    }
+    timing.total_s = seconds_since(total_start);
+    return timing;
+  }
+
   void upload_optional_master(py::object obj, float** destination, bool* present, const char* name) {
     cudaFree(*destination);
     *destination = nullptr;
@@ -2917,6 +3156,8 @@ class ResidentCalibratedStack {
   float* d_bias_ = nullptr;
   float* d_dark_ = nullptr;
   float* d_flat_ = nullptr;
+  float* h_pinned_light_ = nullptr;
+  cudaStream_t calibrate_stream_ = nullptr;
   bool has_bias_ = false;
   bool has_dark_ = false;
   bool has_flat_ = false;
@@ -6374,6 +6615,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       .def_property_readonly("width", &ResidentCalibratedStack::width)
       .def_property_readonly("pixels_per_frame", &ResidentCalibratedStack::pixels_per_frame)
       .def_property_readonly("loaded_count", &ResidentCalibratedStack::loaded_count)
+      .def_property_readonly("host_pinned_bytes", &ResidentCalibratedStack::host_pinned_bytes)
       .def_property_readonly("bytes_allocated", &ResidentCalibratedStack::bytes_allocated)
       .def(
           "set_calibration_masters",
@@ -6385,6 +6627,30 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       .def(
           "calibrate_frame",
           &ResidentCalibratedStack::calibrate_frame,
+          py::arg("index"),
+          py::arg("light"),
+          py::arg("light_exposure_s"),
+          py::arg("dark_exposure_s") = py::none(),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frame_timed",
+          &ResidentCalibratedStack::calibrate_frame_timed,
+          py::arg("index"),
+          py::arg("light"),
+          py::arg("light_exposure_s"),
+          py::arg("dark_exposure_s") = py::none(),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frame_pinned_async",
+          &ResidentCalibratedStack::calibrate_frame_pinned_async,
+          py::arg("index"),
+          py::arg("light"),
+          py::arg("light_exposure_s"),
+          py::arg("dark_exposure_s") = py::none(),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frame_pinned_async_timed",
+          &ResidentCalibratedStack::calibrate_frame_pinned_async_timed,
           py::arg("index"),
           py::arg("light"),
           py::arg("light_exposure_s"),

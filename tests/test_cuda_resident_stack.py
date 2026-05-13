@@ -94,6 +94,39 @@ def test_resident_stack_calibrates_and_integrates_like_cpu():
     assert np.allclose(weight_map, np.full((4, 5), len(lights), dtype=np.float32))
 
 
+def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+
+    light = np.arange(20, dtype=np.float32).reshape(4, 5) + 1000.0
+    bias = np.full((4, 5), 100, dtype=np.float32)
+    dark = np.full((4, 5), 120, dtype=np.float32)
+    flat = np.full((4, 5), 2, dtype=np.float32)
+    policy = CalibrationPolicy(master_dark_includes_bias=True, dark_scaling_enabled=False)
+
+    pageable = module.ResidentCalibratedStack(1, 4, 5)
+    pageable.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    pageable_timing = pageable.calibrate_frame_timed(0, light, 60.0, 60.0, asdict(policy))
+    pageable_master, _ = pageable.integrate_mean()
+
+    pinned = module.ResidentCalibratedStack(1, 4, 5)
+    pinned.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    pinned_timing = pinned.calibrate_frame_pinned_async_timed(0, light, 60.0, 60.0, asdict(policy))
+    pinned_master, pinned_weight = pinned.integrate_mean()
+
+    expected = calibrate_light(light, bias, dark, flat, 60.0, 60.0, policy)
+    assert pageable_timing["h2d_mode"] == "pageable"
+    assert pinned_timing["h2d_mode"] == "pinned_async"
+    assert pinned_timing["host_pinned_bytes"] >= light.nbytes
+    assert pinned_timing["h2d_s"] >= 0.0
+    assert pinned_timing["calibrate_store_s"] >= 0.0
+    assert np.allclose(pageable_master, expected, rtol=1e-5, atol=1e-5)
+    assert np.allclose(pinned_master, expected, rtol=1e-5, atol=1e-5)
+    assert np.allclose(pinned_master, pageable_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(pinned_weight, np.ones((4, 5), dtype=np.float32))
+
+
 def test_resident_stack_weighted_mean_matches_cpu():
     module = cuda_module_or_skip()
     frames = [

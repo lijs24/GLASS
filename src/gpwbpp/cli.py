@@ -342,6 +342,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
+                resident_h2d_mode=args.resident_h2d_mode,
             ),
         )
     elif plan.executable:
@@ -425,6 +426,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
+                resident_h2d_mode=args.resident_h2d_mode,
             ),
         )
         write_run_state(args.out, state)
@@ -747,6 +749,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=1,
         help="worker threads used for resident light-frame CPU RAM prefetch",
     )
+    run.add_argument(
+        "--resident-h2d-mode",
+        choices=["pageable", "pinned_async"],
+        default="pageable",
+        help="resident light upload mode: pageable cudaMemcpy or persistent pinned host staging plus async H2D",
+    )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
     run.add_argument(
@@ -907,6 +915,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="worker threads used for resident light-frame CPU RAM prefetch",
+    )
+    audit.add_argument(
+        "--resident-h2d-mode",
+        choices=["pageable", "pinned_async"],
+        default="pageable",
+        help="resident light upload mode for resident audit",
     )
     audit.add_argument(
         "--registration-method",

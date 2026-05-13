@@ -2132,6 +2132,12 @@ class ResidentCalibratedStack:
     def bytes_allocated(self) -> int:
         return int(self._impl.bytes_allocated)
 
+    @property
+    def host_pinned_bytes(self) -> int:
+        if not hasattr(self._impl, "host_pinned_bytes"):
+            return 0
+        return int(self._impl.host_pinned_bytes)
+
     def set_calibration_masters(
         self,
         bias: Any | None = None,
@@ -2162,6 +2168,71 @@ class ResidentCalibratedStack:
             None if dark_exposure_s is None else float(dark_exposure_s),
             _policy_payload(policy),
         )
+
+    def calibrate_frame_timed(
+        self,
+        index: int,
+        light: Any,
+        light_exposure_s: float,
+        dark_exposure_s: float | None,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "calibrate_frame_timed"):
+            self.calibrate_frame(index, light, light_exposure_s, dark_exposure_s, policy)
+            return {
+                "schema_version": 1,
+                "h2d_mode": "pageable",
+                "host_copy_s": 0.0,
+                "h2d_s": 0.0,
+                "calibrate_store_s": 0.0,
+                "total_s": 0.0,
+                "host_pinned_bytes": self.host_pinned_bytes,
+            }
+        result = self._impl.calibrate_frame_timed(
+            int(index),
+            _as_f32_c(light),
+            float(light_exposure_s),
+            None if dark_exposure_s is None else float(dark_exposure_s),
+            _policy_payload(policy),
+        )
+        return dict(result)
+
+    def calibrate_frame_pinned_async(
+        self,
+        index: int,
+        light: Any,
+        light_exposure_s: float,
+        dark_exposure_s: float | None,
+        policy: Any | None = None,
+    ) -> None:
+        if not hasattr(self._impl, "calibrate_frame_pinned_async"):
+            raise RuntimeError("native ResidentCalibratedStack.calibrate_frame_pinned_async is not available")
+        self._impl.calibrate_frame_pinned_async(
+            int(index),
+            _as_f32_c(light),
+            float(light_exposure_s),
+            None if dark_exposure_s is None else float(dark_exposure_s),
+            _policy_payload(policy),
+        )
+
+    def calibrate_frame_pinned_async_timed(
+        self,
+        index: int,
+        light: Any,
+        light_exposure_s: float,
+        dark_exposure_s: float | None,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "calibrate_frame_pinned_async_timed"):
+            raise RuntimeError("native ResidentCalibratedStack.calibrate_frame_pinned_async_timed is not available")
+        result = self._impl.calibrate_frame_pinned_async_timed(
+            int(index),
+            _as_f32_c(light),
+            float(light_exposure_s),
+            None if dark_exposure_s is None else float(dark_exposure_s),
+            _policy_payload(policy),
+        )
+        return dict(result)
 
     def apply_translation_frame(self, index: int, dx: int, dy: int, fill: float = np.nan) -> None:
         if not hasattr(self._impl, "apply_translation_frame"):
