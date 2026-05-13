@@ -296,6 +296,83 @@ def warp_matrix_bilinear_f32(data: Any, matrix: Any, fill: float = 0.0) -> tuple
     return out, coverage
 
 
+def _sinc(value: float) -> float:
+    if abs(value) < 1.0e-6:
+        return 1.0
+    pix = float(np.pi) * float(value)
+    return float(np.sin(pix) / pix)
+
+
+def _lanczos3_weight(value: float) -> float:
+    if abs(value) >= 3.0:
+        return 0.0
+    return _sinc(value) * _sinc(value / 3.0)
+
+
+def warp_matrix_lanczos3_f32(
+    data: Any,
+    matrix: Any,
+    fill: float = np.nan,
+    clamping_threshold: float = -1.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    native = _native()
+    if native is not None and hasattr(native, "warp_matrix_lanczos3_f32"):
+        warped, coverage = native.warp_matrix_lanczos3_f32(
+            data,
+            matrix,
+            float(fill),
+            float(clamping_threshold),
+        )
+        return np.asarray(warped, dtype=np.float32), np.asarray(coverage, dtype=np.float32)
+
+    image = np.asarray(data, dtype=np.float32)
+    transform = np.asarray(matrix, dtype=np.float64)
+    if transform.shape != (3, 3):
+        raise ValueError(f"matrix must have shape (3, 3), got {transform.shape}")
+    inverse = np.linalg.inv(transform)
+    h, w = image.shape
+    out = np.full_like(image, fill, dtype=np.float32)
+    coverage = np.zeros_like(image, dtype=np.float32)
+    for y in range(h):
+        for x in range(w):
+            source = inverse @ np.asarray([x, y, 1.0], dtype=np.float64)
+            if abs(float(source[2])) <= 1.0e-12:
+                continue
+            sx = float(source[0] / source[2])
+            sy = float(source[1] / source[2])
+            if sx < 2.0 or sx >= float(w - 3) or sy < 2.0 or sy >= float(h - 3):
+                continue
+            x0 = int(np.floor(sx))
+            y0 = int(np.floor(sy))
+            weighted_sum = 0.0
+            weight_sum = 0.0
+            local_values: list[float] = []
+            for yy in range(y0 - 2, y0 + 4):
+                wy = _lanczos3_weight(sy - float(yy))
+                for xx in range(x0 - 2, x0 + 4):
+                    value = float(image[yy, xx])
+                    if not np.isfinite(value):
+                        continue
+                    weight = wy * _lanczos3_weight(sx - float(xx))
+                    weighted_sum += value * weight
+                    weight_sum += weight
+                    local_values.append(value)
+            if abs(weight_sum) <= 1.0e-12:
+                continue
+            value = weighted_sum / weight_sum
+            if clamping_threshold >= 0.0 and local_values:
+                local_min = min(local_values)
+                local_max = max(local_values)
+                local_range = local_max - local_min
+                value = min(
+                    local_max + float(clamping_threshold) * local_range,
+                    max(local_min - float(clamping_threshold) * local_range, value),
+                )
+            out[y, x] = np.float32(value)
+            coverage[y, x] = 1.0
+    return out, coverage
+
+
 def matrix_alignment_metrics_f32(
     reference: Any,
     moving: Any,
@@ -2061,6 +2138,22 @@ class ResidentCalibratedStack:
         if not hasattr(self._impl, "apply_matrix_bilinear_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_matrix_bilinear_frame is not available")
         self._impl.apply_matrix_bilinear_frame(int(index), np.asarray(matrix, dtype=np.float32), float(fill))
+
+    def apply_matrix_lanczos3_frame(
+        self,
+        index: int,
+        matrix: Any,
+        fill: float = np.nan,
+        clamping_threshold: float = -1.0,
+    ) -> None:
+        if not hasattr(self._impl, "apply_matrix_lanczos3_frame"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_matrix_lanczos3_frame is not available")
+        self._impl.apply_matrix_lanczos3_frame(
+            int(index),
+            np.asarray(matrix, dtype=np.float32),
+            float(fill),
+            float(clamping_threshold),
+        )
 
     def matrix_alignment_metrics_to_reference(
         self,

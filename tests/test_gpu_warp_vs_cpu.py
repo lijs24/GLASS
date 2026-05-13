@@ -64,6 +64,70 @@ def _warp_matrix_bilinear_cpu(
     return output, coverage
 
 
+def _sinc(value: float) -> float:
+    if abs(value) < 1.0e-6:
+        return 1.0
+    pix = np.pi * value
+    return float(np.sin(pix) / pix)
+
+
+def _lanczos3_weight(value: float) -> float:
+    if abs(value) >= 3.0:
+        return 0.0
+    return _sinc(value) * _sinc(value / 3.0)
+
+
+def _warp_matrix_lanczos3_cpu(
+    data: np.ndarray,
+    matrix: np.ndarray,
+    fill: float = 0.0,
+    clamping_threshold: float = -1.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    image = np.asarray(data, dtype=np.float32)
+    h, w = image.shape
+    output = np.full_like(image, fill, dtype=np.float32)
+    coverage = np.zeros_like(image, dtype=np.float32)
+    inverse = np.linalg.inv(np.asarray(matrix, dtype=np.float64))
+    for y in range(h):
+        for x in range(w):
+            source = inverse @ np.asarray([x, y, 1.0], dtype=np.float64)
+            if abs(float(source[2])) <= 1.0e-12:
+                continue
+            sx = float(source[0] / source[2])
+            sy = float(source[1] / source[2])
+            if sx < 2.0 or sx >= float(w - 3) or sy < 2.0 or sy >= float(h - 3):
+                continue
+            x0 = int(np.floor(sx))
+            y0 = int(np.floor(sy))
+            weighted_sum = 0.0
+            weight_sum = 0.0
+            values: list[float] = []
+            for yy in range(y0 - 2, y0 + 4):
+                wy = _lanczos3_weight(sy - float(yy))
+                for xx in range(x0 - 2, x0 + 4):
+                    value = float(image[yy, xx])
+                    if not np.isfinite(value):
+                        continue
+                    weight = wy * _lanczos3_weight(sx - float(xx))
+                    weighted_sum += value * weight
+                    weight_sum += weight
+                    values.append(value)
+            if abs(weight_sum) <= 1.0e-12:
+                continue
+            value = weighted_sum / weight_sum
+            if clamping_threshold >= 0.0 and values:
+                local_min = min(values)
+                local_max = max(values)
+                local_range = local_max - local_min
+                value = min(
+                    local_max + clamping_threshold * local_range,
+                    max(local_min - clamping_threshold * local_range, value),
+                )
+            output[y, x] = np.float32(value)
+            coverage[y, x] = 1.0
+    return output, coverage
+
+
 def test_gpu_warp_translation_matches_cpu():
     module = cuda_module_or_skip()
     data = np.arange(25, dtype=np.float32).reshape(5, 5)
@@ -109,6 +173,30 @@ def test_gpu_warp_matrix_bilinear_matches_cpu_reference():
     assert np.array_equal(gpu_coverage, expected_coverage)
 
 
+def test_gpu_warp_matrix_lanczos3_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "warp_matrix_lanczos3_f32"):
+        raise AssertionError("warp_matrix_lanczos3_f32 is missing from gpwbpp_cuda")
+
+    yy, xx = np.indices((12, 13), dtype=np.float32)
+    data = 0.2 * xx + 0.4 * yy
+    data[:, 7:] += 5.0
+    angle = np.deg2rad(1.0)
+    matrix = np.array(
+        [
+            [np.cos(angle), -np.sin(angle), 0.35],
+            [np.sin(angle), np.cos(angle), -0.25],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    gpu, gpu_coverage = module.warp_matrix_lanczos3_f32(data, matrix, -1.0, 0.30)
+    expected, expected_coverage = _warp_matrix_lanczos3_cpu(data, matrix, -1.0, 0.30)
+
+    assert np.allclose(gpu, expected, atol=3.0e-5)
+    assert np.array_equal(gpu_coverage, expected_coverage)
+
+
 def test_resident_stack_matrix_bilinear_warp_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_matrix_bilinear_frame"):
@@ -124,6 +212,26 @@ def test_resident_stack_matrix_bilinear_warp_matches_cpu_reference():
     valid = expected_coverage > 0
 
     assert np.allclose(warped[valid], expected[valid], atol=1.0e-5)
+    assert np.all(warped[~valid] == 0.0)
+    assert np.array_equal(weight_map, expected_coverage)
+
+
+def test_resident_stack_matrix_lanczos3_warp_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_lanczos3_frame"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_lanczos3_frame is missing")
+
+    yy, xx = np.indices((12, 13), dtype=np.float32)
+    data = np.sin(xx * 0.3) + np.cos(yy * 0.2)
+    matrix = np.array([[1.0, 0.0, 0.4], [0.0, 1.0, -0.35], [0.0, 0.0, 1.0]], dtype=np.float32)
+    stack = module.ResidentCalibratedStack(1, data.shape[0], data.shape[1])
+    stack.upload_calibrated_frame(0, data)
+    stack.apply_matrix_lanczos3_frame(0, matrix, np.nan, 0.30)
+    warped, weight_map = stack.integrate_mean()
+    expected, expected_coverage = _warp_matrix_lanczos3_cpu(data, matrix, np.nan, 0.30)
+    valid = expected_coverage > 0
+
+    assert np.allclose(warped[valid], expected[valid], atol=3.0e-5)
     assert np.all(warped[~valid] == 0.0)
     assert np.array_equal(weight_map, expected_coverage)
 

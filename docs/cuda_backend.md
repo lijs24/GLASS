@@ -33,6 +33,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `ResidentCalibratedStack.apply_translation_frame(...)`
 - `ResidentCalibratedStack.apply_translation_bilinear_frame(...)`
 - `ResidentCalibratedStack.apply_matrix_bilinear_frame(...)`
+- `ResidentCalibratedStack.apply_matrix_lanczos3_frame(...)`
 - `ResidentCalibratedStack.matrix_alignment_metrics_to_reference(...)`
 - `ResidentCalibratedStack.estimate_translation_to_reference(...)`
 - `ResidentCalibratedStack.estimate_translation_subpixel_to_reference(...)`
@@ -171,6 +172,14 @@ Resident CUDA integration now supports:
   invertible 3x3 source-to-destination transform matrix. Resident stacks expose
   the same primitive as an in-place frame warp, which is the first CUDA bridge
   toward consuming similarity/affine registration matrices.
+- GPU Lanczos3 matrix warp, returning the same warped-frame and coverage-map
+  contract as the bilinear matrix warp. Resident stacks expose it as
+  `apply_matrix_lanczos3_frame`; resident runs select it with
+  `--resident-warp-interpolation lanczos3`. The optional
+  `--resident-warp-clamping-threshold` applies a clean-room local overshoot
+  limiter around the Lanczos support window. This is a WBPP-like interpolation
+  control for black-box comparisons, not a claim of PixInsight-internal
+  equivalence.
 - `matrix_alignment_metrics_f32(reference, moving, matrix, sample_stride=1)`
   scores a moving-to-reference matrix directly on the GPU without downloading a
   full warped image. It returns valid-pixel count, RMS, mean absolute difference,
@@ -184,9 +193,10 @@ Resident CUDA integration now supports:
 - Resident runs can consume a prior `registration_results.json` with
   `--resident-registration external_matrix` and
   `--resident-registration-results`. Accepted translation matrices keep the
-  resident translation bilinear path; accepted similarity/affine matrices use
-  the resident CUDA matrix bilinear warp before local normalization and
-  integration.
+  resident translation bilinear path by default; accepted similarity/affine
+  matrices use the selected resident CUDA matrix warp before local normalization
+  and integration. The default remains bilinear for continuity, while Lanczos3
+  can be enabled explicitly for WBPP-like comparison runs.
 - Resident star-catalog translation registration. The resident stack detects
   top-N stars for the reference and moving frames on the GPU, scores pair-offset
   translations and mutual-nearest refinement on the GPU, then returns compact

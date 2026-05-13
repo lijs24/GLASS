@@ -370,6 +370,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
                 resident_registration_results=args.resident_registration_results,
+                resident_warp_interpolation=args.resident_warp_interpolation,
+                resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
@@ -663,6 +665,18 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resident-registration-results",
         help="registration_results.json to consume when --resident-registration external_matrix is selected",
+    )
+    run.add_argument(
+        "--resident-warp-interpolation",
+        choices=["bilinear", "lanczos3"],
+        default="bilinear",
+        help="resident CUDA matrix warp interpolation for similarity/external registration",
+    )
+    run.add_argument(
+        "--resident-warp-clamping-threshold",
+        type=float,
+        default=-1.0,
+        help="Lanczos3 local overshoot clamp threshold; negative disables clamping",
     )
     run.add_argument("--resident-registration-max-shift", type=int, default=128)
     run.add_argument(

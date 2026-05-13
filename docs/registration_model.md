@@ -399,11 +399,11 @@ validated but the robust catalog matcher still needs work before the full
 200-frame benchmark.
 
 GPU matrix bilinear warp is now available as both a standalone array function
-and an in-place resident-frame operation. This validates the CUDA primitive
-needed to apply similarity and affine matrices without falling back to CPU pixel
-warping. Automatic resident pipeline wiring for non-translation registration
-matrices, homography, Lanczos/resampling choices, and higher-level acceptance
-policy remain future warp gates.
+and an in-place resident-frame operation. GPU matrix Lanczos3 warp is also
+available through the same standalone/resident contracts, with an optional
+clean-room local overshoot clamp. This validates the CUDA primitive needed to
+apply similarity and affine matrices without falling back to CPU pixel warping.
+Homography support and higher-level acceptance policy remain future warp gates.
 
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
@@ -445,16 +445,21 @@ Resident runs can also use `--resident-registration external_matrix` together
 with `--resident-registration-results <registration_results.json>`. That mode
 keeps the high-VRAM calibration/integration path but consumes a prior
 registration artifact: accepted translation matrices use the resident
-translation bilinear warp, and accepted similarity/affine matrices use the
-resident CUDA matrix bilinear warp. This is intended for staged validation,
-for example running tile-mode `--registration-method astroalign` first, then
-using the resulting matrices to test pure GPU pixel resampling and integration.
+translation bilinear warp by default, and accepted similarity/affine matrices
+use the selected resident CUDA matrix warp. The default remains bilinear;
+`--resident-warp-interpolation lanczos3` and
+`--resident-warp-clamping-threshold 0.30` enable the WBPP-like comparison
+resampling path observed in the black-box FastIntegration settings. This is
+intended for staged validation, for example running tile-mode
+`--registration-method astroalign` first, then using the resulting matrices to
+test pure GPU pixel resampling and integration.
 
 Resident runs can now use `--resident-registration similarity_cuda_triangle` as
 the first high-VRAM bridge for the triangle descriptor route. Calibrated frames
 remain in the `ResidentCalibratedStack`; the stack detects compact star
 catalogs on the GPU, GPWBPP builds/matches CUDA triangle descriptors from those
-catalogs, and the selected similarity matrix is applied in place with resident
-CUDA matrix bilinear warp. This still downloads compact catalogs/diagnostics,
-so it is not the final fully resident descriptor primitive, but it avoids
-materializing calibrated or registered full frames on the host.
+catalogs, and the selected similarity matrix is applied in place with the
+selected resident CUDA matrix warp. This still downloads compact
+catalogs/diagnostics, so it is not the final fully resident descriptor
+primitive, but it avoids materializing calibrated or registered full frames on
+the host.

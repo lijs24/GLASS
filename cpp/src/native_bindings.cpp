@@ -58,6 +58,15 @@ void gpwbpp_warp_matrix_bilinear_f32_launch(
     int width,
     int height,
     float fill);
+void gpwbpp_warp_matrix_lanczos3_f32_launch(
+    const float* input,
+    float* output,
+    float* coverage,
+    const float* inverse,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold);
 void gpwbpp_matrix_alignment_metrics_f32_launch(
     const float* reference,
     const float* moving,
@@ -994,6 +1003,49 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident matrix warped frame)");
+    } catch (...) {
+      cudaFree(d_output);
+      cudaFree(d_coverage);
+      cudaFree(d_inverse);
+      throw;
+    }
+    cudaFree(d_output);
+    cudaFree(d_coverage);
+    cudaFree(d_inverse);
+  }
+
+  void apply_matrix_lanczos3_frame(
+      std::size_t index,
+      py::object matrix_obj,
+      float fill,
+      float clamping_threshold) {
+    require_loaded(index, "matrix Lanczos3 warp");
+    const auto inverse = invert_matrix3x3(parse_matrix3x3(matrix_obj));
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    float* d_output = nullptr;
+    float* d_coverage = nullptr;
+    float* d_inverse = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident matrix Lanczos3 warp output)");
+      check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident matrix Lanczos3 warp coverage)");
+      check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(resident matrix Lanczos3 inverse)");
+      check_cuda(
+          cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident matrix Lanczos3 inverse)");
+      gpwbpp_warp_matrix_lanczos3_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_output,
+          d_coverage,
+          d_inverse,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          fill,
+          clamping_threshold);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frame kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_lanczos3_frame synchronize");
+      check_cuda(
+          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
+          "cudaMemcpy(resident matrix Lanczos3 warped frame)");
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -2875,6 +2927,70 @@ py::tuple warp_matrix_bilinear_f32(
     check_cuda(
         cudaMemcpy(coverage_info.ptr, d_coverage, n * sizeof(float), cudaMemcpyDeviceToHost),
         "cudaMemcpy(matrix warp coverage)");
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_output);
+    cudaFree(d_coverage);
+    cudaFree(d_inverse);
+    throw;
+  }
+  cudaFree(d_input);
+  cudaFree(d_output);
+  cudaFree(d_coverage);
+  cudaFree(d_inverse);
+  return py::make_tuple(output, coverage);
+}
+
+py::tuple warp_matrix_lanczos3_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    py::object matrix_obj,
+    float fill,
+    float clamping_threshold) {
+  const py::buffer_info info = input.request();
+  if (info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  const int height = static_cast<int>(info.shape[0]);
+  const int width = static_cast<int>(info.shape[1]);
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  const auto inverse = invert_matrix3x3(parse_matrix3x3(matrix_obj));
+  py::array_t<float> output({height, width});
+  py::array_t<float> coverage({height, width});
+  const py::buffer_info output_info = output.request();
+  const py::buffer_info coverage_info = coverage.request();
+
+  float* d_input = nullptr;
+  float* d_output = nullptr;
+  float* d_coverage = nullptr;
+  float* d_inverse = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(matrix Lanczos3 warp input)");
+    check_cuda(cudaMalloc(&d_output, n * sizeof(float)), "cudaMalloc(matrix Lanczos3 warp output)");
+    check_cuda(cudaMalloc(&d_coverage, n * sizeof(float)), "cudaMalloc(matrix Lanczos3 warp coverage)");
+    check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(matrix Lanczos3 warp inverse)");
+    check_cuda(
+        cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix Lanczos3 warp input)");
+    check_cuda(
+        cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix Lanczos3 warp inverse)");
+    gpwbpp_warp_matrix_lanczos3_f32_launch(
+        d_input,
+        d_output,
+        d_coverage,
+        d_inverse,
+        width,
+        height,
+        fill,
+        clamping_threshold);
+    check_cuda(cudaGetLastError(), "warp_matrix_lanczos3_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "warp_matrix_lanczos3_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(output_info.ptr, d_output, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix Lanczos3 warp output)");
+    check_cuda(
+        cudaMemcpy(coverage_info.ptr, d_coverage, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(matrix Lanczos3 warp coverage)");
   } catch (...) {
     cudaFree(d_input);
     cudaFree(d_output);
@@ -5615,6 +5731,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("warp_translation_bilinear_f32", &warp_translation_bilinear_f32);
   m.def("warp_matrix_bilinear_f32", &warp_matrix_bilinear_f32);
   m.def(
+      "warp_matrix_lanczos3_f32",
+      &warp_matrix_lanczos3_f32,
+      py::arg("input"),
+      py::arg("matrix"),
+      py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
+      py::arg("clamping_threshold") = -1.0f);
+  m.def(
       "matrix_alignment_metrics_f32",
       &matrix_alignment_metrics_f32,
       py::arg("reference"),
@@ -5788,6 +5911,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("index"),
           py::arg("matrix"),
           py::arg("fill") = std::numeric_limits<float>::quiet_NaN())
+      .def(
+          "apply_matrix_lanczos3_frame",
+          &ResidentCalibratedStack::apply_matrix_lanczos3_frame,
+          py::arg("index"),
+          py::arg("matrix"),
+          py::arg("fill") = std::numeric_limits<float>::quiet_NaN(),
+          py::arg("clamping_threshold") = -1.0f)
       .def(
           "matrix_alignment_metrics_to_reference",
           &ResidentCalibratedStack::matrix_alignment_metrics_to_reference,

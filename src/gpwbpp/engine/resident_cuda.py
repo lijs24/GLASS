@@ -266,10 +266,24 @@ def _policy_bool(raw: dict[str, Any], key: str, default: bool) -> bool:
     raise ValueError(f"{key} must be a boolean-like value")
 
 
-def _apply_resident_registration_matrix(stack: Any, index: int, matrix: list[list[float]]) -> str:
+def _apply_resident_registration_matrix(
+    stack: Any,
+    index: int,
+    matrix: list[list[float]],
+    interpolation: str = "bilinear",
+    clamping_threshold: float = -1.0,
+) -> str:
     if _matrix_is_translation(matrix):
+        if interpolation == "lanczos3" and hasattr(stack, "apply_matrix_lanczos3_frame"):
+            stack.apply_matrix_lanczos3_frame(index, matrix, np.nan, float(clamping_threshold))
+            return "matrix_lanczos3"
         stack.apply_translation_bilinear_frame(index, float(matrix[0][2]), float(matrix[1][2]), np.nan)
         return "translation_bilinear"
+    if interpolation == "lanczos3":
+        if not hasattr(stack, "apply_matrix_lanczos3_frame"):
+            raise RuntimeError("resident CUDA backend does not expose matrix Lanczos3 warp")
+        stack.apply_matrix_lanczos3_frame(index, matrix, np.nan, float(clamping_threshold))
+        return "matrix_lanczos3"
     if not hasattr(stack, "apply_matrix_bilinear_frame"):
         raise RuntimeError("resident CUDA backend does not expose matrix bilinear warp")
     stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
@@ -861,6 +875,8 @@ def run_resident_calibration_integration(
     resident_star_prior_radius_px: float = 4.0,
     resident_star_core_preselect_top_k: int = 0,
     resident_registration_results: str | Path | None = None,
+    resident_warp_interpolation: str = "bilinear",
+    resident_warp_clamping_threshold: float = -1.0,
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
@@ -886,6 +902,8 @@ def run_resident_calibration_integration(
         raise ValueError("local_normalization must be auto, on, or off")
     if resident_registration_max_shift < 0:
         raise ValueError("resident_registration_max_shift must be non-negative")
+    if resident_warp_interpolation not in {"bilinear", "lanczos3"}:
+        raise ValueError("resident_warp_interpolation must be bilinear or lanczos3")
     if resident_ncc_sample_stride <= 0:
         raise ValueError("resident_ncc_sample_stride must be positive")
     if resident_ncc_fallback_score_threshold < 0.0 or resident_ncc_fallback_score_threshold > 1.0:
@@ -908,6 +926,11 @@ def run_resident_calibration_integration(
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
         raise ValueError("resident star grid dimensions must both be positive")
+    resident_matrix_warp_method = (
+        "apply_matrix_lanczos3_frame"
+        if resident_warp_interpolation == "lanczos3"
+        else "apply_matrix_bilinear_frame"
+    )
 
     cuda_module = _cuda_module_required()
     plan = read_json(plan_path)
@@ -1353,7 +1376,7 @@ def run_resident_calibration_integration(
                 required_methods = [
                     "star_top_candidates",
                     "refine_matrix_translation_candidates_to_reference",
-                    "apply_matrix_bilinear_frame",
+                    resident_matrix_warp_method,
                 ]
                 missing_methods = [name for name in required_methods if not hasattr(stack, name)]
                 if missing_methods:
@@ -1866,7 +1889,14 @@ def run_resident_calibration_integration(
                                         + "; ".join(quality_failures)
                                     )
                                 else:
-                                    stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
+                                    warp_model = _apply_resident_registration_matrix(
+                                        stack,
+                                        index,
+                                        matrix,
+                                        resident_warp_interpolation,
+                                        resident_warp_clamping_threshold,
+                                    )
+                                    warnings.append(f"resident_registration_application={warp_model}")
                                 warnings.extend(
                                     [
                                         f"similarity_threshold_mode={threshold_mode}",
@@ -1947,7 +1977,7 @@ def run_resident_calibration_integration(
             if resident_registration == "similarity_cuda_triangle":
                 required_methods = [
                     "star_top_candidates",
-                    "apply_matrix_bilinear_frame",
+                    resident_matrix_warp_method,
                 ]
                 missing_methods = [name for name in required_methods if not hasattr(stack, name)]
                 if missing_methods:
@@ -2243,7 +2273,14 @@ def run_resident_calibration_integration(
                                         + "; ".join(quality_failures)
                                     )
                                 else:
-                                    stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
+                                    warp_model = _apply_resident_registration_matrix(
+                                        stack,
+                                        index,
+                                        matrix,
+                                        resident_warp_interpolation,
+                                        resident_warp_clamping_threshold,
+                                    )
+                                    warnings.append(f"resident_registration_application={warp_model}")
                                 warnings.extend(
                                     [
                                         f"triangle_threshold_mode={threshold_mode}",
@@ -2337,7 +2374,13 @@ def run_resident_calibration_integration(
                                 frame_weights[frame["id"]] = 0.0
                                 warnings.append(f"external registration status was {source_status}")
                             else:
-                                warp_model = _apply_resident_registration_matrix(stack, index, matrix)
+                                warp_model = _apply_resident_registration_matrix(
+                                    stack,
+                                    index,
+                                    matrix,
+                                    resident_warp_interpolation,
+                                    resident_warp_clamping_threshold,
+                                )
                                 warnings.append(f"external_registration_application={warp_model}")
                             if external_registration_path is not None:
                                 warnings.append(f"external_registration_results={external_registration_path}")
@@ -2527,6 +2570,8 @@ def run_resident_calibration_integration(
                         "mode": resident_registration,
                         "reference_frame_id": str(reference_frame["id"]),
                         "preview_scale": preview_scale,
+                        "warp_interpolation": resident_warp_interpolation,
+                        "warp_clamping_threshold": resident_warp_clamping_threshold,
                         "max_shift": resident_registration_max_shift,
                         "ncc_sample_stride": resident_ncc_sample_stride,
                         "ncc_fallback_score_threshold": resident_ncc_fallback_score_threshold,
@@ -2646,7 +2691,7 @@ def run_resident_calibration_integration(
                         "Calibrated frames remain resident in VRAM until integration completes.",
                         (
                             "Resident registration can consume external similarity/affine matrices and apply them "
-                            "with CUDA matrix bilinear warp."
+                            f"with CUDA matrix {resident_warp_interpolation} warp."
                             if resident_registration == "external_matrix"
                             else "Resident registration estimated CUDA similarity matrices and applied resident matrix warp."
                             if resident_registration == "similarity_cuda_catalog"

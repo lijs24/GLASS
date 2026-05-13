@@ -753,6 +753,10 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
             "external_matrix",
             "--resident-registration-results",
             str(external_registration),
+            "--resident-warp-interpolation",
+            "lanczos3",
+            "--resident-warp-clamping-threshold",
+            "0.30",
         ]
     ) == 0
 
@@ -766,13 +770,15 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert registration["transform_model"] == "external_matrix"
     assert registration["warnings"][0].startswith("resident registration consumed external matrices")
     assert resident_registration["mode"] == "external_matrix"
+    assert resident_registration["warp_interpolation"] == "lanczos3"
+    assert resident_registration["warp_clamping_threshold"] == 0.30
     assert resident_registration["external_registration_results_path"] == str(external_registration)
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity"
     assert moving["matched_stars"] == 12
     assert moving["inliers"] == 10
     assert np.allclose(np.asarray(moving["matrix"], dtype=np.float32), np.asarray(similarity_matrix, dtype=np.float32))
-    assert any("external_registration_application=matrix_bilinear" == item for item in moving["warnings"])
+    assert any("external_registration_application=matrix_lanczos3" == item for item in moving["warnings"])
 
 
 def test_cli_resident_cuda_uses_planner_matching_master_sets(tmp_path: Path):

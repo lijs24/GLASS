@@ -165,6 +165,118 @@ void gpwbpp_warp_matrix_bilinear_f32_launch(
       input, output, coverage, inverse, width, height, fill);
 }
 
+__device__ float gpwbpp_sinc_f32(float x) {
+  const float ax = fabsf(x);
+  if (ax < 1.0e-6f) {
+    return 1.0f;
+  }
+  const float pix = 3.14159265358979323846f * x;
+  return sinf(pix) / pix;
+}
+
+__device__ float gpwbpp_lanczos3_weight_f32(float x) {
+  const float ax = fabsf(x);
+  if (ax >= 3.0f) {
+    return 0.0f;
+  }
+  return gpwbpp_sinc_f32(x) * gpwbpp_sinc_f32(x / 3.0f);
+}
+
+__global__ void gpwbpp_warp_matrix_lanczos3_f32_kernel(
+    const float* input,
+    float* output,
+    float* coverage,
+    const float* inverse,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold) {
+  const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  const int n = width * height;
+  if (i >= n) {
+    return;
+  }
+  const int x = i % width;
+  const int y = i / width;
+  const float fx = static_cast<float>(x);
+  const float fy = static_cast<float>(y);
+  const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
+  if (fabsf(denom) <= 1.0e-12f) {
+    output[i] = fill;
+    coverage[i] = 0.0f;
+    return;
+  }
+
+  const float sx = (inverse[0] * fx + inverse[1] * fy + inverse[2]) / denom;
+  const float sy = (inverse[3] * fx + inverse[4] * fy + inverse[5]) / denom;
+  if (sx < 2.0f || sx >= static_cast<float>(width - 3) ||
+      sy < 2.0f || sy >= static_cast<float>(height - 3)) {
+    output[i] = fill;
+    coverage[i] = 0.0f;
+    return;
+  }
+
+  const int x0 = static_cast<int>(floorf(sx));
+  const int y0 = static_cast<int>(floorf(sy));
+  float wx[6];
+  float wy[6];
+  for (int k = 0; k < 6; ++k) {
+    wx[k] = gpwbpp_lanczos3_weight_f32(sx - static_cast<float>(x0 - 2 + k));
+    wy[k] = gpwbpp_lanczos3_weight_f32(sy - static_cast<float>(y0 - 2 + k));
+  }
+
+  float weighted_sum = 0.0f;
+  float weight_sum = 0.0f;
+  float local_min = 3.402823466e+38f;
+  float local_max = -3.402823466e+38f;
+
+  for (int ky = 0; ky < 6; ++ky) {
+    const int yy = y0 - 2 + ky;
+    for (int kx = 0; kx < 6; ++kx) {
+      const int xx = x0 - 2 + kx;
+      const float w = wx[kx] * wy[ky];
+      const float value = input[yy * width + xx];
+      if (!isfinite(value)) {
+        continue;
+      }
+      weighted_sum += value * w;
+      weight_sum += w;
+      local_min = fminf(local_min, value);
+      local_max = fmaxf(local_max, value);
+    }
+  }
+
+  if (fabsf(weight_sum) <= 1.0e-12f) {
+    output[i] = fill;
+    coverage[i] = 0.0f;
+    return;
+  }
+  float value = weighted_sum / weight_sum;
+  if (clamping_threshold >= 0.0f && local_max >= local_min) {
+    const float range = local_max - local_min;
+    const float lo = local_min - clamping_threshold * range;
+    const float hi = local_max + clamping_threshold * range;
+    value = fminf(hi, fmaxf(lo, value));
+  }
+  output[i] = value;
+  coverage[i] = 1.0f;
+}
+
+void gpwbpp_warp_matrix_lanczos3_f32_launch(
+    const float* input,
+    float* output,
+    float* coverage,
+    const float* inverse,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold) {
+  constexpr int threads = 256;
+  const int blocks = (width * height + threads - 1) / threads;
+  gpwbpp_warp_matrix_lanczos3_f32_kernel<<<blocks, threads>>>(
+      input, output, coverage, inverse, width, height, fill, clamping_threshold);
+}
+
 __global__ void gpwbpp_matrix_alignment_metrics_f32_kernel(
     const float* reference,
     const float* moving,
