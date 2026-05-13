@@ -107,6 +107,11 @@ Resident CUDA integration now supports:
   provides a Python orchestration helper for controlled tests: it extracts GPU
   star catalogs from two images, estimates the similarity seed on the GPU, and
   applies the resulting matrix with the CUDA bilinear warp.
+- `gpwbpp.gpu.registration.register_triangle_descriptor_similarity_f32(...)`
+  provides the triangle-descriptor orchestration helper: GPU star catalogs,
+  CUDA triangle descriptors, CUDA descriptor-based similarity scoring, then
+  CUDA matrix warp. It is currently validated on a controlled synthetic image
+  pair and is ready for the M38 astroalign comparison benchmark.
 - `star_top_nms_candidates_f32(...)` adds a CUDA-side top-candidate selection
   plus minimum-distance suppression step. This reduces duplicated local maxima
   around saturated stars before catalog matching.

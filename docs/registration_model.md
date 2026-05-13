@@ -115,6 +115,13 @@ mutual nearest-neighbor inliers. The current test scope is a controlled
 synthetic catalog with a known similarity transform; robust multi-hypothesis
 selection on real M38 frames and resident pipeline wiring remain open.
 
+`gpwbpp.gpu.registration.register_triangle_descriptor_similarity_f32(...)` wires
+the controlled image-pair loop: CUDA star catalog extraction, CUDA triangle
+descriptor generation, CUDA triangle-descriptor similarity scoring, and CUDA
+matrix warp. The current unit test validates that this loop improves alignment
+on a synthetic rotated/translated star field. The next benchmark step is to run
+the same helper on the calibrated M38 pair used for the astroalign comparison.
+
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
 offsets; similarity/affine candidates come from simple triangle descriptors and

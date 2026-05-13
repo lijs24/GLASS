@@ -162,6 +162,61 @@ def test_gpu_triangle_descriptor_similarity_recovers_catalog_transform():
     assert np.allclose(matrix[:2, 2], translation, atol=1.0e-4)
 
 
+def test_gpu_triangle_descriptor_image_registration_improves_alignment():
+    cuda_module_or_skip()
+    from gpwbpp.gpu.registration import register_triangle_descriptor_similarity_f32
+
+    shape = (96, 112)
+    stars = np.asarray(
+        [
+            (12.0, 17.0, 100.0),
+            (30.0, 42.0, 220.0),
+            (71.0, 15.0, 160.0),
+            (88.0, 63.0, 180.0),
+            (45.0, 79.0, 250.0),
+            (19.0, 86.0, 130.0),
+            (101.0, 33.0, 145.0),
+            (53.0, 55.0, 190.0),
+        ],
+        dtype=np.float64,
+    )
+    angle = np.deg2rad(3.0)
+    linear = np.asarray(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+        dtype=np.float64,
+    )
+    translation = np.asarray([2.0, -1.0], dtype=np.float64)
+    moving_xy = (stars[:, :2] - translation) @ np.linalg.inv(linear).T
+    reference = _render_catalog_field(shape, stars)
+    moving = _render_catalog_field(shape, np.column_stack([moving_xy, stars[:, 2]]))
+
+    aligned, coverage, diagnostics = register_triangle_descriptor_similarity_f32(
+        reference,
+        moving,
+        threshold=25.0,
+        max_candidates=32,
+        neighbors=5,
+        max_descriptors=256,
+        tolerance_px=2.0,
+        descriptor_radius=0.08,
+        nms_scan_candidates=128,
+        nms_min_separation_px=3.0,
+    )
+
+    valid = coverage > 0.0
+    before_rms = float(np.sqrt(np.mean((moving[valid] - reference[valid]) ** 2)))
+    after_rms = float(np.sqrt(np.mean((aligned[valid] - reference[valid]) ** 2)))
+    matrix = np.asarray(diagnostics["matrix"], dtype=np.float64)
+    assert diagnostics["model"] == "gpu_triangle_descriptor_similarity_registration"
+    assert diagnostics["status"] == "ok"
+    assert diagnostics["similarity"]["inliers"] == len(stars)
+    assert diagnostics["reference_descriptor_count"] > 0
+    assert diagnostics["moving_descriptor_count"] > 0
+    assert after_rms < before_rms * 0.5
+    assert np.allclose(matrix[:2, :2], linear, atol=0.01)
+    assert np.allclose(matrix[:2, 2], translation, atol=0.75)
+
+
 def test_gpu_estimate_translation_search_aligns_shifted_pair():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_search_f32"):

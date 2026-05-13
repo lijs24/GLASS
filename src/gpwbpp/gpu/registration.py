@@ -129,6 +129,86 @@ def register_similarity_from_star_catalogs_f32(
     return aligned, coverage, diagnostics
 
 
+def register_triangle_descriptor_similarity_f32(
+    reference: Any,
+    moving: Any,
+    threshold: float,
+    max_candidates: int = 64,
+    neighbors: int = 5,
+    max_descriptors: int = 1200,
+    tolerance_px: float = 2.0,
+    descriptor_radius: float = 0.1,
+    fill: float = 0.0,
+    nms_scan_candidates: int | None = None,
+    nms_min_separation_px: float | None = None,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    """Register two images with CUDA triangle descriptors from GPU star catalogs."""
+
+    if nms_scan_candidates is not None or nms_min_separation_px is not None:
+        reference_catalog = star_top_nms_candidates_f32(
+            reference,
+            threshold,
+            int(max_candidates if nms_scan_candidates is None else nms_scan_candidates),
+            int(max_candidates),
+            float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
+        )
+        moving_catalog = star_top_nms_candidates_f32(
+            moving,
+            threshold,
+            int(max_candidates if nms_scan_candidates is None else nms_scan_candidates),
+            int(max_candidates),
+            float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
+        )
+        selector = "top_nms"
+    else:
+        reference_catalog = star_top_candidates_f32(reference, threshold, int(max_candidates))
+        moving_catalog = star_top_candidates_f32(moving, threshold, int(max_candidates))
+        selector = "top"
+
+    reference_descriptors = triangle_asterism_descriptors_f32(
+        reference_catalog["x"],
+        reference_catalog["y"],
+        max_stars=int(max_candidates),
+        neighbors=int(neighbors),
+        max_descriptors=int(max_descriptors),
+    )
+    moving_descriptors = triangle_asterism_descriptors_f32(
+        moving_catalog["x"],
+        moving_catalog["y"],
+        max_stars=int(max_candidates),
+        neighbors=int(neighbors),
+        max_descriptors=int(max_descriptors),
+    )
+    fit = estimate_similarity_from_triangle_descriptors_f32(
+        reference_catalog["x"],
+        reference_catalog["y"],
+        moving_catalog["x"],
+        moving_catalog["y"],
+        reference_descriptors["descriptors"],
+        reference_descriptors["indices"],
+        moving_descriptors["descriptors"],
+        moving_descriptors["indices"],
+        tolerance_px=float(tolerance_px),
+        descriptor_radius=float(descriptor_radius),
+    )
+    aligned, coverage = warp_matrix_bilinear_f32(moving, fit["matrix"], float(fill))
+    diagnostics = {
+        "status": fit["status"],
+        "model": "gpu_triangle_descriptor_similarity_registration",
+        "catalog_selector": selector,
+        "reference_detected": int(reference_catalog["count"]),
+        "moving_detected": int(moving_catalog["count"]),
+        "reference_stored": int(reference_catalog["stored_count"]),
+        "moving_stored": int(moving_catalog["stored_count"]),
+        "reference_descriptor_count": int(reference_descriptors["count"]),
+        "moving_descriptor_count": int(moving_descriptors["count"]),
+        "similarity": fit,
+        "matrix": fit["matrix"],
+        "coverage_pixels": int(np.sum(coverage > 0.0)),
+    }
+    return aligned, coverage, diagnostics
+
+
 def refine_matrix_translation_with_metrics_f32(
     reference: Any,
     moving: Any,
@@ -214,6 +294,7 @@ __all__ = [
     "refine_matrix_translation_candidates_with_metrics_f32",
     "refine_matrix_translation_with_metrics_f32",
     "register_similarity_from_star_catalogs_f32",
+    "register_triangle_descriptor_similarity_f32",
     "star_grid_top_nms_candidates_f32",
     "star_top_nms_candidates_f32",
     "triangle_asterism_descriptors_f32",
