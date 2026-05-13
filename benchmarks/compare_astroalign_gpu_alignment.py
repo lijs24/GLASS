@@ -745,8 +745,8 @@ def _annotate_resident_star_core_metrics(
     elapsed = time.perf_counter() - t0
     candidate_metrics = list(result["candidate_metrics"])
     for item in candidate_metrics:
-        seed_index = int(item["seed_index"])
-        seed_metrics[seed_index]["star_core_metric"] = dict(item["metrics"])
+        local_seed_index = int(item["seed_index"])
+        seed_metrics[local_seed_index]["star_core_metric"] = dict(item["metrics"])
     available_pixels = 0
     for item in candidate_metrics:
         metrics = dict(item["metrics"])
@@ -757,6 +757,93 @@ def _annotate_resident_star_core_metrics(
         "available_pixels": int(available_pixels),
         "sampled_pixels": int(result["sampled_pixels"]),
         "model": str(result["model"]),
+    }
+
+
+def _select_star_core_preselected_seed_indices(
+    seed_metrics: list[dict[str, Any]],
+    max_count: int,
+) -> tuple[list[int], dict[str, Any]]:
+    max_count = int(max_count)
+    if max_count <= 0 or max_count >= len(seed_metrics):
+        return list(range(len(seed_metrics))), {
+            "enabled": False,
+            "requested_top_k": max_count,
+            "input_seed_count": len(seed_metrics),
+            "selected_seed_count": len(seed_metrics),
+            "selected_seed_indices": list(range(len(seed_metrics))),
+            "selection_key": "disabled",
+        }
+
+    star_core_candidates: list[tuple[int, dict[str, Any]]] = []
+    for index, seed in enumerate(seed_metrics):
+        star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+        if star_core_rms is not None:
+            star_core_candidates.append((index, seed))
+
+    if not star_core_candidates:
+        selected = list(range(min(max_count, len(seed_metrics))))
+        return selected, {
+            "enabled": True,
+            "requested_top_k": max_count,
+            "input_seed_count": len(seed_metrics),
+            "selected_seed_count": len(selected),
+            "selected_seed_indices": selected,
+            "selection_key": "first_n_no_star_core_metric",
+        }
+
+    inlier_values = [
+        int(seed["seed_inliers"])
+        for _, seed in star_core_candidates
+        if seed.get("seed_inliers") is not None
+    ]
+    if inlier_values:
+        max_inliers = max(inlier_values)
+        min_inliers = max(0, max_inliers - 2)
+        eligible = [
+            (index, seed)
+            for index, seed in star_core_candidates
+            if seed.get("seed_inliers") is None or int(seed["seed_inliers"]) >= min_inliers
+        ]
+    else:
+        max_inliers = None
+        min_inliers = None
+        eligible = star_core_candidates
+
+    def key(item: tuple[int, dict[str, Any]]) -> tuple[float, int, float, int]:
+        index, seed = item
+        star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+        inliers = int(seed["seed_inliers"]) if seed.get("seed_inliers") is not None else -1
+        seed_rms = _finite_float_or_none(seed.get("seed_rms_px"))
+        return (
+            float("inf") if star_core_rms is None else star_core_rms,
+            -inliers,
+            float("inf") if seed_rms is None else seed_rms,
+            index,
+        )
+
+    selected_set: set[int] = {0}
+    for index, _seed in sorted(eligible, key=key):
+        selected_set.add(index)
+        if len(selected_set) >= max_count:
+            break
+    if len(selected_set) < max_count:
+        for index, _seed in sorted(star_core_candidates, key=key):
+            selected_set.add(index)
+            if len(selected_set) >= max_count:
+                break
+
+    selected = sorted(selected_set)
+    return selected, {
+        "enabled": True,
+        "requested_top_k": max_count,
+        "input_seed_count": len(seed_metrics),
+        "selected_seed_count": len(selected),
+        "selected_seed_indices": selected,
+        "star_max_inliers": None if max_inliers is None else int(max_inliers),
+        "star_min_inliers_for_core_metric": None if min_inliers is None else int(min_inliers),
+        "eligible_seed_count": len(eligible),
+        "selection_key": "pre_refine_star_core_rms_with_two_inlier_slack",
     }
 
 
@@ -885,6 +972,7 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
     fine_step_px: float,
     coarse_sample_stride: int,
     final_sample_stride: int,
+    star_core_preselect_top_k: int = 0,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
     if not gpwbpp_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
@@ -912,13 +1000,48 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
                 "matrix": np.asarray(candidate["matrix"], dtype=np.float64).tolist(),
             }
         )
-    seed_matrices = [np.asarray(seed["matrix"], dtype=np.float32) for seed in seeds]
-
     t0 = time.perf_counter()
     stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
     stack.upload_calibrated_frame(0, reference)
     stack.upload_calibrated_frame(1, moving)
     upload_elapsed = time.perf_counter() - t0
+
+    pre_refine_metric_summary: dict[str, Any] | None = None
+    preselection: dict[str, Any] = {
+        "enabled": False,
+        "requested_top_k": int(star_core_preselect_top_k),
+        "input_seed_count": len(seeds),
+        "selected_seed_count": len(seeds),
+        "selected_seed_indices": list(range(len(seeds))),
+        "selection_key": "disabled",
+    }
+    selected_seed_indices = list(range(len(seeds)))
+    if 0 < int(star_core_preselect_top_k) < len(seeds):
+        prescreen_seed_metrics: list[dict[str, Any]] = [
+            {
+                "seed_index": index,
+                "seed_rank": int(seed["seed_rank"]),
+                "seed_source": str(seed["seed_source"]),
+                "candidate_index": seed["candidate_index"],
+                "seed_inliers": seed["inliers"],
+                "seed_rms_px": seed["rms_px"],
+                "matrix": np.asarray(seed["matrix"], dtype=np.float64).tolist(),
+            }
+            for index, seed in enumerate(seeds)
+        ]
+        pre_refine_metric_summary = _annotate_resident_star_core_metrics(
+            stack,
+            reference,
+            prescreen_seed_metrics,
+        )
+        selected_seed_indices, preselection = _select_star_core_preselected_seed_indices(
+            prescreen_seed_metrics,
+            int(star_core_preselect_top_k),
+        )
+        preselection["pre_refine_metric_summary"] = pre_refine_metric_summary
+        preselection["pre_refine_seed_metrics"] = prescreen_seed_metrics
+
+    seed_matrices = [np.asarray(seeds[index]["matrix"], dtype=np.float32) for index in selected_seed_indices]
 
     t1 = time.perf_counter()
     refinement = stack.refine_matrix_translation_candidates_to_reference(
@@ -936,11 +1059,13 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
 
     seed_metrics: list[dict[str, Any]] = []
     for seed_result in refinement["seed_results"]:
-        seed_index = int(seed_result["seed_index"])
+        refine_seed_index = int(seed_result["seed_index"])
+        seed_index = int(selected_seed_indices[refine_seed_index])
         seed = seeds[seed_index]
         seed_metrics.append(
             {
                 "seed_index": seed_index,
+                "refine_seed_index": refine_seed_index,
                 "seed_rank": int(seed["seed_rank"]),
                 "seed_source": str(seed["seed_source"]),
                 "candidate_index": seed["candidate_index"],
@@ -964,6 +1089,7 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
         "metrics": dict(selected_seed["metrics"]),
         "selected_index": int(selected_seed["seed_index"]),
         "pixel_metric_selected_index": pixel_selected_index,
+        "pixel_metric_selected_seed_index": int(seed_metrics[pixel_selected_index]["seed_index"]),
         "star_guard": star_guard,
     }
 
@@ -990,13 +1116,17 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
         "warp_elapsed_s": warp_elapsed,
         "seed_selection_model": "resident_catalog_topk_star_guarded_pixel_metric",
         "seed_count": len(seeds),
+        "refined_seed_count": len(selected_seed_indices),
+        "seed_preselection": preselection,
         "selected_seed_index": int(selected_seed["seed_index"]),
+        "selected_refine_seed_index": int(selected_seed["refine_seed_index"]),
         "selected_seed_rank": int(selected_seed["seed_rank"]),
         "selected_seed_source": str(selected_seed["seed_source"]),
         "selected_seed_candidate_index": selected_seed["candidate_index"],
         "selected_seed_inliers": selected_seed["seed_inliers"],
         "selected_seed_rms_px": selected_seed["seed_rms_px"],
         "pixel_metric_selected_index": pixel_selected_index,
+        "pixel_metric_selected_seed_index": int(seed_metrics[pixel_selected_index]["seed_index"]),
         "star_guard": star_guard,
         "star_core_metric_summary": star_core_metric_summary,
         "seed_metrics": seed_metrics,
@@ -1275,6 +1405,15 @@ def main() -> int:
     parser.add_argument("--catalog-pixel-refine-fine-step", type=float, default=0.0625)
     parser.add_argument("--catalog-pixel-refine-coarse-stride", type=int, default=4)
     parser.add_argument("--catalog-pixel-refine-final-stride", type=int, default=1)
+    parser.add_argument(
+        "--resident-star-core-preselect-top-k",
+        type=int,
+        default=0,
+        help=(
+            "Before resident full-frame pixel refinement, score all seed matrices on the GPU star-core metric "
+            "and refine only this many candidates. Zero disables preselection."
+        ),
+    )
     parser.add_argument("--subpixel-radius-steps", type=int, default=4)
     parser.add_argument("--subpixel-step", type=float, default=0.25)
     parser.add_argument("--matrix-metric-sample-stride", type=int, default=1)
@@ -1289,6 +1428,8 @@ def main() -> int:
         raise ValueError("catalog pixel-refine strides must be positive")
     if args.catalog_similarity_top_k < 0:
         raise ValueError("--catalog-similarity-top-k must be non-negative")
+    if args.resident_star_core_preselect_top_k < 0:
+        raise ValueError("--resident-star-core-preselect-top-k must be non-negative")
 
     if args.reference and args.moving:
         reference = _center_crop(_read_fits(args.reference), args.center_crop)
@@ -1437,6 +1578,7 @@ def main() -> int:
         args.catalog_pixel_refine_fine_step,
         args.catalog_pixel_refine_coarse_stride,
         args.catalog_pixel_refine_final_stride,
+        args.resident_star_core_preselect_top_k,
     )
     if (
         gpu_catalog_result["accepted"]

@@ -164,3 +164,37 @@ def test_resident_stack_star_top_candidates_from_device_frame():
         (5, 4),
         (3, 7),
     ]
+
+
+def test_gpu_star_top_candidate_selectors_are_repeatable_under_contention():
+    module = cuda_module_or_skip()
+    required = [
+        "star_top_candidates_f32",
+        "star_top_nms_candidates_f32",
+        "star_grid_top_nms_candidates_f32",
+    ]
+    for name in required:
+        if not hasattr(module, name):
+            raise AssertionError(f"{name} is missing from gpwbpp_cuda")
+
+    rng = np.random.default_rng(20260513)
+    image = rng.normal(0.0, 0.01, size=(192, 192)).astype(np.float32)
+    for index in range(900):
+        x = 2 + (index * 37) % 188
+        y = 2 + (index * 53) % 188
+        image[y, x] = np.float32(1000.0 + index)
+    threshold = 100.0
+
+    selectors = [
+        lambda: module.star_top_candidates_f32(image, threshold, 64),
+        lambda: module.star_top_nms_candidates_f32(image, threshold, 256, 64, 8.0),
+        lambda: module.star_grid_top_nms_candidates_f32(image, threshold, 12, 12, 4, 64, 8.0),
+    ]
+
+    for selector in selectors:
+        first = selector()
+        first_catalog = np.column_stack([first["x"], first["y"], first["flux"]])
+        for _ in range(4):
+            current = selector()
+            current_catalog = np.column_stack([current["x"], current["y"], current["flux"]])
+            assert np.array_equal(current_catalog, first_catalog)

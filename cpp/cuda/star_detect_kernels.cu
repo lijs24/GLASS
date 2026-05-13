@@ -186,6 +186,7 @@ __global__ void star_candidate_topn_kernel(
     ys[weakest_index] = static_cast<float>(y);
     fluxes[weakest_index] = center;
   }
+  __threadfence();
   atomicExch(lock, 0);
 }
 
@@ -228,6 +229,7 @@ __global__ void star_candidate_grid_kernel(
     ys[cell_index] = static_cast<float>(y);
     fluxes[cell_index] = center;
   }
+  __threadfence();
   atomicExch(locks + cell_index, 0);
 }
 
@@ -287,6 +289,7 @@ __global__ void star_candidate_grid_topk_kernel(
     ys[weakest_index] = static_cast<float>(y);
     fluxes[weakest_index] = center;
   }
+  __threadfence();
   atomicExch(locks + cell_index, 0);
 }
 

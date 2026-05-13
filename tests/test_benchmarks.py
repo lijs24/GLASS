@@ -231,3 +231,60 @@ def test_star_guarded_seed_selection_uses_star_core_metric_with_inlier_slack():
     assert guard["status"] == "replaced_pixel_metric_with_star_core_metric"
     assert guard["star_max_inliers"] == 15
     assert guard["star_min_inliers_for_core_metric"] == 13
+
+
+def test_star_core_preselection_keeps_refit_and_rejects_low_inlier_trap():
+    spec = importlib.util.spec_from_file_location(
+        "compare_astroalign_gpu_alignment",
+        Path("benchmarks/compare_astroalign_gpu_alignment.py"),
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    seed_metrics = [
+        {
+            "seed_index": 0,
+            "seed_rank": 0,
+            "seed_inliers": 12,
+            "seed_rms_px": 1.4,
+            "star_core_metric": {"rms": 800.0},
+        },
+        {
+            "seed_index": 1,
+            "seed_rank": 1,
+            "seed_inliers": 12,
+            "seed_rms_px": 1.2,
+            "star_core_metric": {"rms": 600.0},
+        },
+        {
+            "seed_index": 2,
+            "seed_rank": 2,
+            "seed_inliers": 11,
+            "seed_rms_px": 1.1,
+            "star_core_metric": {"rms": 590.0},
+        },
+        {
+            "seed_index": 3,
+            "seed_rank": 3,
+            "seed_inliers": 9,
+            "seed_rms_px": 0.8,
+            "star_core_metric": {"rms": 100.0},
+        },
+        {
+            "seed_index": 4,
+            "seed_rank": 4,
+            "seed_inliers": 10,
+            "seed_rms_px": 1.0,
+            "star_core_metric": {"rms": 610.0},
+        },
+    ]
+
+    selected_indices, summary = module._select_star_core_preselected_seed_indices(seed_metrics, max_count=3)
+
+    assert selected_indices == [0, 1, 2]
+    assert summary["enabled"]
+    assert summary["star_max_inliers"] == 12
+    assert summary["star_min_inliers_for_core_metric"] == 10
+    assert summary["selected_seed_count"] == 3
