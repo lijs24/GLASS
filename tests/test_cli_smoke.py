@@ -97,8 +97,14 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "frame_ids": ["F1", "F2"],
                     "master_stats": {"bias_count": 1, "dark_count": 1, "flat_count": 1},
                     "memory_estimate": {"resident_base_gib": 1.25, "estimated_peak_gib": 1.75},
+                    "resident_registration": {"mode": "similarity_cuda_triangle", "warp_interpolation": "lanczos3"},
+                    "resident_local_normalization": {"mode": "resident_grid_mean_std"},
+                    "resident_integration_weighting": {"mode": "simple_snr"},
+                    "integration_rejection": {"mode": "winsorized_sigma"},
                     "timing_s": {
                         "light_read_upload_calibrate": 2.0,
+                        "resident_weighting": 0.1,
+                        "resident_local_normalization": 0.2,
                         "resident_integration": 0.25,
                         "output_write": 0.5,
                     },
@@ -113,3 +119,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "cuda_resident_stack" in html
     assert "Test GPU" in html
     assert "estimated_peak_gib" in html
+    assert "similarity_cuda_triangle" in html
+    assert "lanczos3" in html
+    assert "resident_grid_mean_std" in html
+    assert "simple_snr" in html
+    assert "winsorized_sigma" in html

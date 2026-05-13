@@ -22,6 +22,10 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
         memory = item.get("memory_estimate", {})
         timing = item.get("timing_s", {})
         master_stats = item.get("master_stats", {})
+        registration = item.get("resident_registration", {})
+        local_norm = item.get("resident_local_normalization", {})
+        weighting = item.get("resident_integration_weighting", {})
+        rejection = item.get("integration_rejection", {})
         rows.append(
             {
                 "filter": item.get("filter"),
@@ -29,9 +33,16 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "bias": master_stats.get("bias_count"),
                 "dark": master_stats.get("dark_count"),
                 "flat": master_stats.get("flat_count"),
+                "registration": registration.get("mode"),
+                "warp": registration.get("warp_interpolation"),
+                "local_norm": local_norm.get("mode"),
+                "weighting": weighting.get("mode"),
+                "rejection": rejection.get("mode"),
                 "resident_base_gib": round(float(memory.get("resident_base_gib") or 0.0), 3),
                 "estimated_peak_gib": round(float(memory.get("estimated_peak_gib") or 0.0), 3),
                 "light_calibrate_s": round(float(timing.get("light_read_upload_calibrate") or 0.0), 3),
+                "weighting_s": round(float(timing.get("resident_weighting") or 0.0), 3),
+                "local_norm_s": round(float(timing.get("resident_local_normalization") or 0.0), 3),
                 "resident_integrate_s": round(float(timing.get("resident_integration") or 0.0), 3),
                 "write_s": round(float(timing.get("output_write") or 0.0), 3),
             }
