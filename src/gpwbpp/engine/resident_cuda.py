@@ -1366,6 +1366,19 @@ def run_resident_calibration_integration(
                     "cuda_catalog_star_core_guard",
                     star_core_preselect_top_k > 0,
                 )
+                min_pixel_ncc = _policy_optional_float(
+                    registration_policy,
+                    "cuda_catalog_min_pixel_ncc",
+                    None,
+                )
+                min_selected_seed_inliers = max(
+                    0,
+                    _policy_int(
+                        registration_policy,
+                        "cuda_catalog_min_selected_seed_inliers",
+                        0,
+                    ),
+                )
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -1677,7 +1690,36 @@ def run_resident_calibration_integration(
                                 matched = int(selected_fit.get("inliers", 0))
                                 inliers = int(selected_fit.get("refined_inliers", matched))
                                 rms_px = _float_or_nan(selected_fit.get("refit_rms_px", selected_fit.get("rms_px")))
-                                stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
+                                selected_metrics = dict(selected_seed_metric["metrics"])
+                                selected_pixel_ncc = _float_or_nan(selected_metrics.get("ncc"))
+                                selected_pixel_rms = _float_or_nan(selected_metrics.get("rms"))
+                                selected_seed_inliers = selected_seed_metric.get("seed_inliers")
+                                quality_failures: list[str] = []
+                                if min_pixel_ncc is not None and (
+                                    not np.isfinite(selected_pixel_ncc) or selected_pixel_ncc < float(min_pixel_ncc)
+                                ):
+                                    quality_failures.append(
+                                        f"pixel_ncc {selected_pixel_ncc:.6g} < {float(min_pixel_ncc):.6g}"
+                                    )
+                                if (
+                                    min_selected_seed_inliers > 0
+                                    and selected_seed_inliers is not None
+                                    and int(selected_seed_inliers) < min_selected_seed_inliers
+                                ):
+                                    quality_failures.append(
+                                        f"selected_seed_inliers {int(selected_seed_inliers)} < "
+                                        f"{min_selected_seed_inliers}"
+                                    )
+                                if quality_failures:
+                                    status = "failed"
+                                    frame_weight_values[index] = 0.0
+                                    frame_weights[frame["id"]] = 0.0
+                                    warnings.append(
+                                        "resident similarity registration failed quality gate: "
+                                        + "; ".join(quality_failures)
+                                    )
+                                else:
+                                    stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
                                 warnings.extend(
                                     [
                                         f"similarity_threshold_mode={threshold_mode}",
@@ -1697,8 +1739,12 @@ def run_resident_calibration_integration(
                                         f"similarity_scale={float(selected_fit.get('scale', float('nan'))):.9g}",
                                         f"similarity_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
                                         f"similarity_fit_rms_px={rms_px:.6g}",
-                                        f"similarity_pixel_rms_adu={float(selected_seed_metric['metrics'].get('rms', float('nan'))):.6g}",
-                                        f"similarity_pixel_ncc={float(selected_seed_metric['metrics'].get('ncc', float('nan'))):.6g}",
+                                        f"similarity_pixel_rms_adu={selected_pixel_rms:.6g}",
+                                        f"similarity_pixel_ncc={selected_pixel_ncc:.6g}",
+                                        "similarity_quality_gate_status="
+                                        + ("failed" if quality_failures else "ok"),
+                                        f"similarity_min_pixel_ncc={min_pixel_ncc}",
+                                        f"similarity_min_selected_seed_inliers={min_selected_seed_inliers}",
                                         f"similarity_catalog_selector={catalog_selector}",
                                         f"similarity_nms_min_separation_px={nms_min_separation_px:.6g}",
                                         f"similarity_star_core_preselect_enabled={bool(preselection.get('enabled', False))}",
@@ -2007,6 +2053,16 @@ def run_resident_calibration_integration(
                                 resident_star_core_preselect_top_k,
                             )
                             > 0,
+                        ),
+                        "min_pixel_ncc": _policy_optional_float(
+                            registration_policy,
+                            "cuda_catalog_min_pixel_ncc",
+                            None,
+                        ),
+                        "min_selected_seed_inliers": _policy_int(
+                            registration_policy,
+                            "cuda_catalog_min_selected_seed_inliers",
+                            0,
                         ),
                         "external_registration_results_path": None
                         if external_registration_path is None

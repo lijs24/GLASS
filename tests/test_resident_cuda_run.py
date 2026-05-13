@@ -407,6 +407,8 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
             "cuda_catalog_max_abs_rotation_rad": 0.02,
             "cuda_catalog_pixel_refine_coarse_stride": 1,
             "cuda_catalog_pixel_refine_final_stride": 1,
+            "cuda_catalog_min_pixel_ncc": 0.1,
+            "cuda_catalog_min_selected_seed_inliers": 3,
         }
     )
     write_json(plan, plan_payload)
@@ -477,7 +479,88 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
     assert any("similarity_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
     assert any("similarity_star_core_preselect_enabled=True" in warning for warning in moving["warnings"])
     assert any("similarity_star_core_guard_status=" in warning for warning in moving["warnings"])
+    assert any("similarity_quality_gate_status=ok" in warning for warning in moving["warnings"])
     assert any("resident CUDA catalog similarity" in warning for warning in moving["warnings"])
+
+
+def test_cli_resident_cuda_run_similarity_catalog_rejects_low_quality_matrix(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_similarity_catalog_quality_gate"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_catalog_tolerance_px": 1.5,
+            "cuda_catalog_min_pair_distance": 8.0,
+            "cuda_catalog_similarity_top_k": 3,
+            "cuda_catalog_min_scale": 0.99,
+            "cuda_catalog_max_scale": 1.01,
+            "cuda_catalog_max_abs_rotation_rad": 0.02,
+            "cuda_catalog_pixel_refine_coarse_stride": 1,
+            "cuda_catalog_pixel_refine_final_stride": 1,
+            "cuda_catalog_min_pixel_ncc": 1.01,
+            "cuda_catalog_min_selected_seed_inliers": 3,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_catalog",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-registration-max-shift",
+            "8",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--resident-star-prior",
+            "ncc",
+            "--resident-star-prior-radius-px",
+            "2",
+            "--resident-star-core-preselect-top-k",
+            "2",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+
+    registration = read_json(run / "registration_results.json")
+    integration = read_json(run / "integration_results.json")
+    moving = [item for item in registration["results"] if item["status"] != "reference"][0]
+
+    assert moving["status"] == "failed"
+    assert integration["frame_weights"][moving["frame_id"]] == 0.0
+    assert any("failed quality gate" in warning for warning in moving["warnings"])
+    assert any("similarity_quality_gate_status=failed" in warning for warning in moving["warnings"])
 
 
 def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
