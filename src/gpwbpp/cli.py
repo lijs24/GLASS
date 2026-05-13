@@ -751,9 +751,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-h2d-mode",
-        choices=["pageable", "pinned_async"],
+        choices=["pageable", "pinned_async", "pinned_ring"],
         default="pageable",
-        help="resident light upload mode: pageable cudaMemcpy or persistent pinned host staging plus async H2D",
+        help=(
+            "resident light upload mode: pageable cudaMemcpy, native pinned staging plus async H2D, "
+            "or prefetch-ring pinned slots plus async H2D"
+        ),
     )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
@@ -918,7 +921,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-h2d-mode",
-        choices=["pageable", "pinned_async"],
+        choices=["pageable", "pinned_async", "pinned_ring"],
         default="pageable",
         help="resident light upload mode for resident audit",
     )

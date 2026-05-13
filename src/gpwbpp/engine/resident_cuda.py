@@ -92,13 +92,16 @@ def _add_elapsed(buckets: dict[str, float], key: str, elapsed: float) -> None:
     buckets[key] = float(buckets.get(key, 0.0) + float(elapsed))
 
 
-def _read_light_timed(path: str | Path) -> tuple[np.ndarray, dict[str, float]]:
+def _read_light_timed(path: str | Path, output: np.ndarray | None = None) -> tuple[np.ndarray, dict[str, float]]:
     total_start = perf_counter()
     open_start = perf_counter()
     with FitsImageReader(path) as reader:
         open_elapsed = perf_counter() - open_start
         materialize_start = perf_counter()
-        data = reader.read_full(dtype=np.float32)
+        if output is None:
+            data = reader.read_full(dtype=np.float32)
+        else:
+            data = reader.read_full_into(output)
         materialize_elapsed = perf_counter() - materialize_start
     total_elapsed = perf_counter() - total_start
     return data, {
@@ -109,16 +112,39 @@ def _read_light_timed(path: str | Path) -> tuple[np.ndarray, dict[str, float]]:
 
 
 class _LightPrefetcher:
-    def __init__(self, light_frames: list[dict[str, Any]], depth: int, workers: int = 1):
+    def __init__(
+        self,
+        light_frames: list[dict[str, Any]],
+        depth: int,
+        workers: int = 1,
+        pinned_ring: bool = False,
+        height: int | None = None,
+        width: int | None = None,
+    ):
         self.light_frames = light_frames
         self.depth = max(0, int(depth))
         self.workers = max(1, int(workers))
+        self.pinned_ring = bool(pinned_ring and self.depth > 0)
+        self.height = height
+        self.width = width
         self.executor: ThreadPoolExecutor | None = None
         self.pending: dict[int, Future[tuple[np.ndarray, dict[str, float]]]] = {}
+        self.pinned_slots: list[np.ndarray] = []
+        self.free_slots: list[int] = []
+        self.inflight_slots: dict[int, int] = {}
         self.next_submit = 0
 
     def __enter__(self) -> "_LightPrefetcher":
         if self.depth > 0:
+            if self.pinned_ring:
+                if self.height is None or self.width is None:
+                    raise ValueError("pinned resident prefetch requires image height and width")
+                gpwbpp_cuda = _cuda_module_required()
+                self.pinned_slots = [
+                    gpwbpp_cuda.host_pinned_empty_f32(int(self.height), int(self.width))
+                    for _ in range(self.depth)
+                ]
+                self.free_slots = list(range(len(self.pinned_slots)))
             self.executor = ThreadPoolExecutor(
                 max_workers=self.workers,
                 thread_name_prefix="gpwbpp-light-prefetch",
@@ -135,8 +161,17 @@ class _LightPrefetcher:
         if self.executor is None:
             return
         while self.next_submit < len(self.light_frames) and len(self.pending) < self.depth:
+            slot: np.ndarray | None = None
+            slot_id: int | None = None
+            if self.pinned_ring:
+                if not self.free_slots:
+                    return
+                slot_id = self.free_slots.pop()
+                slot = self.pinned_slots[slot_id]
             frame = self.light_frames[self.next_submit]
-            self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"])
+            self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"], slot)
+            if slot_id is not None:
+                self.inflight_slots[self.next_submit] = slot_id
             self.next_submit += 1
 
     def result(self, index: int) -> tuple[np.ndarray, dict[str, float], float]:
@@ -147,8 +182,24 @@ class _LightPrefetcher:
         wait_start = perf_counter()
         data, read_profile = future.result()
         wait_elapsed = perf_counter() - wait_start
-        self._fill()
+        if not self.pinned_ring:
+            self._fill()
         return data, read_profile, wait_elapsed
+
+    def release(self, index: int) -> None:
+        if not self.pinned_ring:
+            return
+        slot_id = self.inflight_slots.pop(index, None)
+        if slot_id is None:
+            return
+        self.free_slots.append(slot_id)
+        self._fill()
+
+    @property
+    def host_pinned_bytes(self) -> int:
+        if not self.pinned_slots:
+            return 0
+        return int(sum(slot.nbytes for slot in self.pinned_slots))
 
 
 def _grid_local_norm_coefficients(stats: dict[str, Any], eps: float = 1.0e-6) -> dict[str, Any]:
@@ -1078,8 +1129,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
         raise ValueError("resident_prefetch_workers must be positive")
-    if resident_h2d_mode not in {"pageable", "pinned_async"}:
-        raise ValueError("resident_h2d_mode must be one of: pageable, pinned_async")
+    if resident_h2d_mode not in {"pageable", "pinned_async", "pinned_ring"}:
+        raise ValueError("resident_h2d_mode must be one of: pageable, pinned_async, pinned_ring")
+    if resident_h2d_mode == "pinned_ring" and resident_prefetch_frames <= 0:
+        raise ValueError("resident_h2d_mode=pinned_ring requires resident_prefetch_frames > 0")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1196,7 +1249,16 @@ def run_resident_calibration_integration(
             frame_weight_values: list[float] = []
             current_master_key: str | None = None
             current_dark_exposure: float | None = None
-            with _LightPrefetcher(light_frames, resident_prefetch_frames, resident_prefetch_workers) as light_prefetch:
+            prefetch_host_pinned_bytes = 0
+            with _LightPrefetcher(
+                light_frames,
+                resident_prefetch_frames,
+                resident_prefetch_workers,
+                pinned_ring=resident_h2d_mode == "pinned_ring",
+                height=height,
+                width=width,
+            ) as light_prefetch:
+                prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
                 for index, frame in enumerate(light_frames):
                     frame_start = perf_counter()
                     calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
@@ -1242,22 +1304,33 @@ def run_resident_calibration_integration(
                     )
                     per_frame_read_s.append(read_wait_elapsed)
                     calibrate_start = perf_counter()
-                    if resident_h2d_mode == "pinned_async":
-                        calibration_timing = stack.calibrate_frame_pinned_async_timed(
-                            index,
-                            light,
-                            float(frame.get("exposure_s") or 0.0),
-                            current_dark_exposure,
-                            asdict(policy),
-                        )
-                    else:
-                        calibration_timing = stack.calibrate_frame_timed(
-                            index,
-                            light,
-                            float(frame.get("exposure_s") or 0.0),
-                            current_dark_exposure,
-                            asdict(policy),
-                        )
+                    try:
+                        if resident_h2d_mode == "pinned_async":
+                            calibration_timing = stack.calibrate_frame_pinned_async_timed(
+                                index,
+                                light,
+                                float(frame.get("exposure_s") or 0.0),
+                                current_dark_exposure,
+                                asdict(policy),
+                            )
+                        elif resident_h2d_mode == "pinned_ring":
+                            calibration_timing = stack.calibrate_frame_host_async_timed(
+                                index,
+                                light,
+                                float(frame.get("exposure_s") or 0.0),
+                                current_dark_exposure,
+                                asdict(policy),
+                            )
+                        else:
+                            calibration_timing = stack.calibrate_frame_timed(
+                                index,
+                                light,
+                                float(frame.get("exposure_s") or 0.0),
+                                current_dark_exposure,
+                                asdict(policy),
+                            )
+                    finally:
+                        light_prefetch.release(index)
                     per_frame_calibrate_s.append(perf_counter() - calibrate_start)
                     per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
                     per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
@@ -3072,7 +3145,11 @@ def run_resident_calibration_integration(
                         "prefetch_frames": int(resident_prefetch_frames),
                         "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                         "h2d_mode": resident_h2d_mode,
-                        "host_pinned_bytes": int(getattr(stack, "host_pinned_bytes", 0)),
+                        "host_pinned_bytes": int(
+                            max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
+                        ),
+                        "prefetch_host_pinned_bytes": int(prefetch_host_pinned_bytes),
+                        "stack_host_pinned_bytes": int(getattr(stack, "host_pinned_bytes", 0)),
                     },
                     "resident_registration": {
                         "mode": resident_registration,

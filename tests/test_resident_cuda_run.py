@@ -208,7 +208,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
             "--resident-prefetch-workers",
             "2",
             "--resident-h2d-mode",
-            "pinned_async",
+            "pinned_ring",
             "--resident-registration",
             "translation_preview",
             "--reference-frame-id",
@@ -242,13 +242,16 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert fine_timing["schema_version"] == 1
     assert io_pipeline["prefetch_frames"] == 2
     assert io_pipeline["prefetch_workers"] == 2
-    assert io_pipeline["h2d_mode"] == "pinned_async"
+    assert io_pipeline["h2d_mode"] == "pinned_ring"
     assert io_pipeline["host_pinned_bytes"] > 0
+    assert io_pipeline["prefetch_host_pinned_bytes"] > 0
+    assert io_pipeline["stack_host_pinned_bytes"] == 0
     assert timing["light_read_decode"] >= 0.0
     assert timing["light_read_decode_worker"] >= 0.0
     assert timing["light_fits_open"] >= 0.0
     assert timing["light_fits_materialize_decode"] >= 0.0
     assert timing["light_host_copy_to_pinned"] >= 0.0
+    assert timing["light_host_copy_to_pinned"] == 0.0
     assert timing["light_h2d"] >= 0.0
     assert timing["light_calibrate_store"] >= 0.0
     assert timing["light_h2d_calibrate_store"] >= 0.0

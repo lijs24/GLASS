@@ -127,6 +127,33 @@ def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
     assert np.allclose(pinned_weight, np.ones((4, 5), dtype=np.float32))
 
 
+def test_resident_stack_host_async_calibration_accepts_pinned_host_array():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+
+    pinned_light = module.host_pinned_empty_f32(4, 5)
+    pinned_light[...] = np.arange(20, dtype=np.float32).reshape(4, 5) + 1000.0
+    bias = np.full((4, 5), 100, dtype=np.float32)
+    dark = np.full((4, 5), 120, dtype=np.float32)
+    flat = np.full((4, 5), 2, dtype=np.float32)
+    policy = CalibrationPolicy(master_dark_includes_bias=True, dark_scaling_enabled=False)
+
+    stack = module.ResidentCalibratedStack(1, 4, 5)
+    stack.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    timing = stack.calibrate_frame_host_async_timed(0, pinned_light, 60.0, 60.0, asdict(policy))
+    master, weight = stack.integrate_mean()
+
+    expected = calibrate_light(pinned_light, bias, dark, flat, 60.0, 60.0, policy)
+    assert pinned_light.flags.c_contiguous
+    assert timing["h2d_mode"] == "host_async"
+    assert timing["host_copy_s"] == 0.0
+    assert timing["h2d_s"] >= 0.0
+    assert timing["calibrate_store_s"] >= 0.0
+    assert np.allclose(master, expected, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight, np.ones((4, 5), dtype=np.float32))
+
+
 def test_resident_stack_weighted_mean_matches_cpu():
     module = cuda_module_or_skip()
     frames = [

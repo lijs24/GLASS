@@ -881,6 +881,29 @@ py::dict device_info_dict(int device_id) {
   return info;
 }
 
+py::array_t<float> host_pinned_empty_f32(std::size_t height, std::size_t width) {
+  if (height == 0 || width == 0) {
+    throw std::invalid_argument("pinned host array dimensions must be non-empty");
+  }
+  float* ptr = nullptr;
+  check_cuda(
+      cudaHostAlloc(
+          reinterpret_cast<void**>(&ptr),
+          height * width * sizeof(float),
+          cudaHostAllocPortable),
+      "cudaHostAlloc(host_pinned_empty_f32)");
+  py::capsule owner(ptr, [](void* value) {
+    if (value != nullptr) {
+      cudaFreeHost(value);
+    }
+  });
+  return py::array_t<float>(
+      {static_cast<py::ssize_t>(height), static_cast<py::ssize_t>(width)},
+      {static_cast<py::ssize_t>(width * sizeof(float)), static_cast<py::ssize_t>(sizeof(float))},
+      ptr,
+      owner);
+}
+
 class ResidentCalibratedStack {
  public:
   ResidentCalibratedStack(std::size_t frame_count, std::size_t height, std::size_t width)
@@ -1027,6 +1050,24 @@ class ResidentCalibratedStack {
         calibrate_frame_pinned_async_impl(index, light_info.ptr, params);
     mark_loaded(index);
     return calibration_timing_dict(timing, "pinned_async");
+  }
+
+  py::dict calibrate_frame_host_async_timed(
+      std::size_t index,
+      py::array_t<float, py::array::c_style | py::array::forcecast> light,
+      float light_exposure_s,
+      py::object dark_exposure_obj,
+      py::object policy_obj) {
+    require_index(index);
+    const py::buffer_info light_info = light.request();
+    require_frame_shape(light_info, height_, width_);
+    const CalibrationParameters params =
+        calibration_parameters(light_exposure_s, dark_exposure_obj, policy_obj);
+
+    const ResidentCalibrationTiming timing =
+        calibrate_frame_host_async_impl(index, light_info.ptr, params);
+    mark_loaded(index);
+    return calibration_timing_dict(timing, "host_async");
   }
 
   void apply_translation_frame(std::size_t index, int dx, int dy, float fill) {
@@ -3122,6 +3163,62 @@ class ResidentCalibratedStack {
       timing.h2d_s = cuda_event_elapsed_s(h2d_start, h2d_stop, "cudaEventElapsedTime(resident pinned h2d)");
       timing.calibrate_store_s =
           cuda_event_elapsed_s(kernel_start, kernel_stop, "cudaEventElapsedTime(resident calibration)");
+    }
+    timing.total_s = seconds_since(total_start);
+    return timing;
+  }
+
+  ResidentCalibrationTiming calibrate_frame_host_async_impl(
+      std::size_t index,
+      void* light_ptr,
+      const CalibrationParameters& params) {
+    ResidentCalibrationTiming timing;
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    const auto total_start = Clock::now();
+    {
+      py::gil_scoped_release release;
+      CudaEvent h2d_start("cudaEventCreate(resident host async h2d start)");
+      CudaEvent h2d_stop("cudaEventCreate(resident host async h2d stop)");
+      CudaEvent kernel_start("cudaEventCreate(resident host async calibration start)");
+      CudaEvent kernel_stop("cudaEventCreate(resident host async calibration stop)");
+      check_cuda(cudaEventRecord(h2d_start.get(), calibrate_stream_), "cudaEventRecord(resident host async h2d start)");
+      check_cuda(
+          cudaMemcpyAsync(
+              d_light_,
+              light_ptr,
+              frame_bytes,
+              cudaMemcpyHostToDevice,
+              calibrate_stream_),
+          "cudaMemcpyAsync(resident host raw light)");
+      check_cuda(cudaEventRecord(h2d_stop.get(), calibrate_stream_), "cudaEventRecord(resident host async h2d stop)");
+      check_cuda(
+          cudaEventRecord(kernel_start.get(), calibrate_stream_),
+          "cudaEventRecord(resident host async calibration start)");
+      gpwbpp_calibrate_tile_f32_launch_stream(
+          d_light_,
+          d_bias_,
+          d_dark_,
+          d_flat_,
+          d_stack_ + index * pixels_per_frame_,
+          pixels_per_frame_,
+          has_bias_,
+          has_dark_,
+          has_flat_,
+          params.master_dark_includes_bias,
+          params.dark_scale,
+          params.flat_floor,
+          params.pedestal,
+          calibrate_stream_);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame_host_async kernel launch");
+      check_cuda(
+          cudaEventRecord(kernel_stop.get(), calibrate_stream_),
+          "cudaEventRecord(resident host async calibration stop)");
+      check_cuda(
+          cudaStreamSynchronize(calibrate_stream_),
+          "ResidentCalibratedStack.calibrate_frame_host_async synchronize");
+      timing.h2d_s = cuda_event_elapsed_s(h2d_start, h2d_stop, "cudaEventElapsedTime(resident host async h2d)");
+      timing.calibrate_store_s =
+          cuda_event_elapsed_s(kernel_start, kernel_stop, "cudaEventElapsedTime(resident host async calibration)");
     }
     timing.total_s = seconds_since(total_start);
     return timing;
@@ -6455,6 +6552,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
   m.def("cuda_available", &cuda_available);
   m.def("list_devices", &list_devices);
   m.def("get_device_info", &get_device_info);
+  m.def("host_pinned_empty_f32", &host_pinned_empty_f32, py::arg("height"), py::arg("width"));
   m.def("smoke_add_f32", &smoke_add_f32);
   m.def("reduce_mean_tile_f32", &reduce_mean_tile_f32);
   m.def("calibrate_tile_f32", &calibrate_tile_f32);
@@ -6651,6 +6749,14 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       .def(
           "calibrate_frame_pinned_async_timed",
           &ResidentCalibratedStack::calibrate_frame_pinned_async_timed,
+          py::arg("index"),
+          py::arg("light"),
+          py::arg("light_exposure_s"),
+          py::arg("dark_exposure_s") = py::none(),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frame_host_async_timed",
+          &ResidentCalibratedStack::calibrate_frame_host_async_timed,
           py::arg("index"),
           py::arg("light"),
           py::arg("light_exposure_s"),

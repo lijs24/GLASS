@@ -101,6 +101,13 @@ def get_device_info(device_id: int) -> dict[str, Any]:
     raise RuntimeError(f"CUDA device {device_id} is not visible to gpwbpp_cuda")
 
 
+def host_pinned_empty_f32(height: int, width: int) -> np.ndarray:
+    native = _native()
+    if native is None or not hasattr(native, "host_pinned_empty_f32"):
+        raise RuntimeError("native CUDA backend with host_pinned_empty_f32 is not available")
+    return np.asarray(native.host_pinned_empty_f32(int(height), int(width)), dtype=np.float32)
+
+
 def smoke_add_f32(a: Any, b: Any) -> np.ndarray:
     native = _native()
     if native is not None:
@@ -2226,6 +2233,25 @@ class ResidentCalibratedStack:
         if not hasattr(self._impl, "calibrate_frame_pinned_async_timed"):
             raise RuntimeError("native ResidentCalibratedStack.calibrate_frame_pinned_async_timed is not available")
         result = self._impl.calibrate_frame_pinned_async_timed(
+            int(index),
+            _as_f32_c(light),
+            float(light_exposure_s),
+            None if dark_exposure_s is None else float(dark_exposure_s),
+            _policy_payload(policy),
+        )
+        return dict(result)
+
+    def calibrate_frame_host_async_timed(
+        self,
+        index: int,
+        light: Any,
+        light_exposure_s: float,
+        dark_exposure_s: float | None,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "calibrate_frame_host_async_timed"):
+            raise RuntimeError("native ResidentCalibratedStack.calibrate_frame_host_async_timed is not available")
+        result = self._impl.calibrate_frame_host_async_timed(
             int(index),
             _as_f32_c(light),
             float(light_exposure_s),

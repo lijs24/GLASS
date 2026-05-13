@@ -144,6 +144,24 @@ class FitsImageReader:
             out = out * np.float32(self.bscale) + np.float32(self.bzero)
         return np.asarray(out, dtype=dtype)
 
+    def read_full_into(self, output: np.ndarray) -> np.ndarray:
+        if self._data is None:
+            raise RuntimeError("FitsImageReader is not open")
+        if output.shape != (self.height, self.width):
+            raise ValueError("output shape does not match FITS image shape")
+        if output.dtype != np.float32:
+            raise ValueError("read_full_into currently requires a float32 output buffer")
+        raw = self._data
+        np.copyto(output, raw, casting="unsafe")
+        if self.blank is not None:
+            mask = np.asarray(raw == self.blank)
+            if np.any(mask):
+                output[mask] = np.nan
+        if self.bscale != 1.0 or self.bzero != 0.0:
+            output *= np.float32(self.bscale)
+            output += np.float32(self.bzero)
+        return output
+
     def read_full(self, dtype=np.float32) -> np.ndarray:
         return self.read_tile(0, self.height, 0, self.width, dtype=dtype)
 
