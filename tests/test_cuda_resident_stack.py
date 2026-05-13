@@ -4,10 +4,10 @@ from dataclasses import asdict
 
 import numpy as np
 
-from gpwbpp.cpu.calibration import calibrate_light
-from gpwbpp.cpu.warp import warp_translation
-from gpwbpp.engine.resident_cuda import _output_diagnostics
-from gpwbpp.models import CalibrationPolicy
+from glass.cpu.calibration import calibrate_light
+from glass.cpu.warp import warp_translation
+from glass.engine.resident_cuda import _output_diagnostics
+from glass.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
 
 
@@ -65,7 +65,7 @@ def test_resident_output_diagnostics_reports_range_and_clipping():
 def test_resident_stack_calibrates_and_integrates_like_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
-        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
 
     lights = [
         np.full((4, 5), 1000 + index * 10, dtype=np.float32)
@@ -97,7 +97,7 @@ def test_resident_stack_calibrates_and_integrates_like_cpu():
 def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
-        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
 
     light = np.arange(20, dtype=np.float32).reshape(4, 5) + 1000.0
     bias = np.full((4, 5), 100, dtype=np.float32)
@@ -130,7 +130,7 @@ def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
 def test_resident_stack_host_async_calibration_accepts_pinned_host_array():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
-        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
 
     pinned_light = module.host_pinned_empty_f32(4, 5)
     pinned_light[...] = np.arange(20, dtype=np.float32).reshape(4, 5) + 1000.0
@@ -211,7 +211,7 @@ def test_resident_stack_global_normalization_matches_reference_stats():
 def test_resident_stack_grid_normalization_matches_standalone_cuda():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_grid_normalization_frame"):
-        raise AssertionError("ResidentCalibratedStack.apply_grid_normalization_frame is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack.apply_grid_normalization_frame is missing from glass_cuda")
 
     frame = np.arange(35, dtype=np.float32).reshape(5, 7)
     scales = np.array([[1.0, 2.0], [0.5, 1.25]], dtype=np.float32)
@@ -230,7 +230,7 @@ def test_resident_stack_grid_normalization_matches_standalone_cuda():
 def test_resident_stack_grid_stats_can_drive_in_vram_normalization():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "frame_pair_grid_stats"):
-        raise AssertionError("ResidentCalibratedStack.frame_pair_grid_stats is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack.frame_pair_grid_stats is missing from glass_cuda")
 
     reference = np.arange(16, dtype=np.float32).reshape(4, 4) + np.float32(10.0)
     scales_true = np.array([[2.0, 0.5], [1.5, 3.0]], dtype=np.float32)
@@ -266,7 +266,7 @@ def test_resident_stack_grid_stats_can_drive_in_vram_normalization():
 def test_resident_stack_translation_warp_uses_nan_coverage():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_translation_frame"):
-        raise AssertionError("ResidentCalibratedStack.apply_translation_frame is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack.apply_translation_frame is missing from glass_cuda")
 
     frame = np.arange(20, dtype=np.float32).reshape(4, 5)
     stack = module.ResidentCalibratedStack(1, 4, 5)
@@ -503,7 +503,7 @@ def test_resident_stack_sigma_clip_maps_match_cpu_reference():
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
         module.ResidentCalibratedStack, "integrate_sigma_clip"
     ):
-        raise AssertionError("ResidentCalibratedStack.integrate_sigma_clip is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack.integrate_sigma_clip is missing from glass_cuda")
 
     frames = [
         np.array([[1, 5], [10, 2]], dtype=np.float32),
@@ -556,7 +556,7 @@ def test_resident_stack_winsorized_sigma_matches_cpu_reference():
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
         module.ResidentCalibratedStack, "integrate_sigma_clip"
     ):
-        raise AssertionError("ResidentCalibratedStack.integrate_sigma_clip is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack.integrate_sigma_clip is missing from glass_cuda")
 
     frames = [
         np.full((2, 2), 1, dtype=np.float32),

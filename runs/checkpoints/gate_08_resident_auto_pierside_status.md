@@ -48,5 +48,5 @@ Run a small then full real M38 resident similarity test with `--resident-star-pr
 ## Clean-Room Compliance
 
 - No PixInsight/WBPP/PJSR source was read or modified.
-- The implementation uses FITS metadata and GPWBPP-owned CUDA registration code only.
+- The implementation uses FITS metadata and GLASS-owned CUDA registration code only.
 - Input data directories were not modified.

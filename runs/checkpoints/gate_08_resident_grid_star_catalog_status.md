@@ -14,7 +14,7 @@ bright structure or outliers.
 
 - Extended `ResidentCalibratedStack.estimate_translation_from_stars_to_reference`
   with `grid_cols` and `grid_rows`.
-- Grid mode runs `gpwbpp_star_grid_candidates_f32_launch` directly on resident
+- Grid mode runs `glass_star_grid_candidates_f32_launch` directly on resident
   reference and moving frames.
 - Pair-offset voting and mutual-nearest refinement remain on the GPU.
 - Python wrapper now returns `candidate_selection`, `catalog_capacity`,
@@ -27,13 +27,13 @@ bright structure or outliers.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
 ```
 
 ```powershell
 $pybind = (& .\.venv\Scripts\python.exe -m pybind11 --cmakedir).Trim()
 $ninja = (Resolve-Path .\.venv\Scripts\ninja.exe).Path
-cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR="..." -DCMAKE_MAKE_PROGRAM="..." -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
+cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -Dpybind11_DIR="..." -DCMAKE_MAKE_PROGRAM="..." -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
 ```
 
 ```powershell
@@ -56,8 +56,8 @@ cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Com
 Ran a read-only calibrated M38 H-alpha pair diagnostic using the same two frames
 from the astroalign/NCC comparison:
 
-- Reference: `C:\gpwbpp_runs\final_m38_h_200\input\Light\LIGHT_H_0001.fits`
-- Moving: `C:\gpwbpp_runs\final_m38_h_200\input\Light\LIGHT_H_0005.fits`
+- Reference: `C:\glass_runs\final_m38_h_200\input\Light\LIGHT_H_0001.fits`
+- Moving: `C:\glass_runs\final_m38_h_200\input\Light\LIGHT_H_0005.fits`
 - Artifact:
   `runs/alignment_compare_resident_star_catalog_m38_pair_calibrated/resident_star_catalog_grid_pair_summary.md`
 
@@ -79,7 +79,7 @@ CUDA was available.
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition
 - Compute capability: 12.0
 - VRAM: 97886 MiB
-- Native backend: loaded and available to GPWBPP
+- Native backend: loaded and available to GLASS
 
 ## Known Limitations
 
@@ -96,5 +96,5 @@ real multi-frame resident run before attempting full similarity/affine matching.
 
 ## Clean-Room Compliance
 
-Compliant. This checkpoint used GPWBPP code and project-generated diagnostics.
+Compliant. This checkpoint used GLASS code and project-generated diagnostics.
 It did not read or copy PixInsight/WBPP/PJSR official source.

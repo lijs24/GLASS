@@ -9,11 +9,11 @@ from typing import Any
 import numpy as np
 from astropy.io import fits
 
-from gpwbpp.gpu.registration import (
+from glass.gpu.registration import (
     refine_matrix_translation_candidates_with_metrics_f32,
     register_triangle_descriptor_similarity_f32,
 )
-import gpwbpp_cuda
+import glass_cuda
 
 
 def _shift_image(data: np.ndarray, dx: int, dy: int) -> np.ndarray:
@@ -207,26 +207,26 @@ def _best_alignment_summary(payload: dict[str, Any]) -> dict[str, Any]:
     candidates = [
         _method_agreement_summary(
             payload,
-            method_key="gpwbpp_cuda_catalog_similarity",
+            method_key="glass_cuda_catalog_similarity",
             agreement_key="catalog_similarity_agreement_vs_astroalign",
             speedup_key="catalog_similarity_speedup_vs_astroalign",
         ),
         _method_agreement_summary(
             payload,
-            method_key="gpwbpp_cuda_catalog_similarity_pixel_refined",
+            method_key="glass_cuda_catalog_similarity_pixel_refined",
             agreement_key="catalog_similarity_pixel_refined_agreement_vs_astroalign",
             speedup_key="catalog_similarity_pixel_refined_speedup_vs_astroalign",
         ),
         _method_agreement_summary(
             payload,
-            method_key="gpwbpp_cuda_resident_catalog_similarity_pixel_refined",
+            method_key="glass_cuda_resident_catalog_similarity_pixel_refined",
             agreement_key="resident_catalog_similarity_pixel_refined_agreement_vs_astroalign",
             speedup_key="resident_catalog_similarity_pixel_refined_algorithm_speedup_vs_astroalign",
             upload_speedup_key="resident_catalog_similarity_pixel_refined_upload_plus_algorithm_speedup_vs_astroalign",
         ),
         _method_agreement_summary(
             payload,
-            method_key="gpwbpp_cuda_triangle_descriptor_similarity",
+            method_key="glass_cuda_triangle_descriptor_similarity",
             agreement_key="triangle_descriptor_similarity_agreement_vs_astroalign",
             speedup_key="triangle_descriptor_similarity_speedup_vs_astroalign",
         ),
@@ -288,11 +288,11 @@ def _astroalign_run(reference: np.ndarray, moving: np.ndarray) -> dict[str, Any]
 
 
 def _gpu_run(reference: np.ndarray, moving: np.ndarray, max_shift: int) -> dict[str, Any]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
     t0 = time.perf_counter()
-    estimate = gpwbpp_cuda.estimate_translation_search_f32(reference, moving, max_shift, max_shift)
-    aligned, coverage = gpwbpp_cuda.warp_translation_f32(moving, estimate["dx"], estimate["dy"], 0.0)
+    estimate = glass_cuda.estimate_translation_search_f32(reference, moving, max_shift, max_shift)
+    aligned, coverage = glass_cuda.warp_translation_f32(moving, estimate["dx"], estimate["dy"], 0.0)
     elapsed = time.perf_counter() - t0
     return {
         "elapsed_s": elapsed,
@@ -312,10 +312,10 @@ def _gpu_subpixel_run(
     radius_steps: int,
     step: float,
 ) -> dict[str, Any]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
     t0 = time.perf_counter()
-    estimate = gpwbpp_cuda.estimate_translation_subpixel_ncc_f32(
+    estimate = glass_cuda.estimate_translation_subpixel_ncc_f32(
         reference,
         moving,
         float(coarse["dx"]),
@@ -323,7 +323,7 @@ def _gpu_subpixel_run(
         radius_steps,
         step,
     )
-    aligned, coverage = gpwbpp_cuda.warp_translation_bilinear_f32(moving, estimate["dx"], estimate["dy"], 0.0)
+    aligned, coverage = glass_cuda.warp_translation_bilinear_f32(moving, estimate["dx"], estimate["dy"], 0.0)
     elapsed = time.perf_counter() - t0
     return {
         "elapsed_s": elapsed,
@@ -345,10 +345,10 @@ def _gpu_matrix_warp_run_with_output(
     moving: np.ndarray,
     matrix: Any,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
     t0 = time.perf_counter()
-    aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
+    aligned, coverage = glass_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
     elapsed = time.perf_counter() - t0
     valid = coverage > 0.0
     result = {
@@ -371,15 +371,15 @@ def _gpu_similarity_fit_from_pairs_run(
     moving_points: np.ndarray,
     reference_points: np.ndarray,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
-    if not hasattr(gpwbpp_cuda, "estimate_similarity_from_pairs_f32"):
+    if not hasattr(glass_cuda, "estimate_similarity_from_pairs_f32"):
         raise RuntimeError("native CUDA backend lacks estimate_similarity_from_pairs_f32")
     if len(moving_points) == 0 or len(reference_points) == 0:
         raise RuntimeError("cannot fit GPU similarity transform without matched control points")
 
     t0 = time.perf_counter()
-    fit = gpwbpp_cuda.estimate_similarity_from_pairs_f32(
+    fit = glass_cuda.estimate_similarity_from_pairs_f32(
         reference_points[:, 0],
         reference_points[:, 1],
         moving_points[:, 0],
@@ -388,7 +388,7 @@ def _gpu_similarity_fit_from_pairs_run(
     fit_elapsed = time.perf_counter() - t0
     matrix = np.asarray(fit["matrix"], dtype=np.float64)
     t1 = time.perf_counter()
-    aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
+    aligned, coverage = glass_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
     warp_elapsed = time.perf_counter() - t1
     valid = coverage > 0.0
     result = {
@@ -417,7 +417,7 @@ def _gpu_matrix_metrics_run(
     sample_stride: int,
 ) -> dict[str, Any]:
     t0 = time.perf_counter()
-    metrics = gpwbpp_cuda.matrix_alignment_metrics_f32(reference, moving, matrix, sample_stride)
+    metrics = glass_cuda.matrix_alignment_metrics_f32(reference, moving, matrix, sample_stride)
     elapsed = time.perf_counter() - t0
     return {**metrics, "elapsed_s": elapsed}
 
@@ -429,12 +429,12 @@ def _gpu_resident_ncc_subpixel_run(
     radius_steps: int,
     step: float,
 ) -> dict[str, Any]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
-    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+    if not hasattr(glass_cuda, "ResidentCalibratedStack"):
         raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
     t0 = time.perf_counter()
-    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack = glass_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
     stack.upload_calibrated_frame(0, reference)
     stack.upload_calibrated_frame(1, moving)
     upload_elapsed = time.perf_counter() - t0
@@ -477,12 +477,12 @@ def _gpu_resident_ncc_subpixel_run(
 
 
 def _gpu_resident_matrix_warp_run(reference: np.ndarray, moving: np.ndarray, matrix: Any) -> dict[str, Any]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
-    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+    if not hasattr(glass_cuda, "ResidentCalibratedStack"):
         raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
     t0 = time.perf_counter()
-    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack = glass_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
     stack.upload_calibrated_frame(0, reference)
     stack.upload_calibrated_frame(1, moving)
     upload_elapsed = time.perf_counter() - t0
@@ -514,12 +514,12 @@ def _gpu_resident_matrix_metrics_run(
     matrix: Any,
     sample_stride: int,
 ) -> dict[str, Any]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
-    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+    if not hasattr(glass_cuda, "ResidentCalibratedStack"):
         raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
     t0 = time.perf_counter()
-    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack = glass_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
     stack.upload_calibrated_frame(0, reference)
     stack.upload_calibrated_frame(1, moving)
     upload_elapsed = time.perf_counter() - t0
@@ -939,7 +939,7 @@ def _gpu_catalog_similarity_pixel_refine_run(
         "star_guard": star_guard,
     }
     t1 = time.perf_counter()
-    aligned, valid = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, refinement["matrix"], 0.0)
+    aligned, valid = glass_cuda.warp_matrix_bilinear_f32(moving, refinement["matrix"], 0.0)
     warp_elapsed = time.perf_counter() - t1
     device_elapsed = refine_elapsed + warp_elapsed
     algorithm_elapsed = device_elapsed + selection_elapsed
@@ -983,9 +983,9 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
     final_sample_stride: int,
     star_core_preselect_top_k: int = 0,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
-    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+    if not hasattr(glass_cuda, "ResidentCalibratedStack"):
         raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
 
     seeds: list[dict[str, Any]] = [
@@ -1010,7 +1010,7 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
             }
         )
     t0 = time.perf_counter()
-    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack = glass_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
     stack.upload_calibrated_frame(0, reference)
     stack.upload_calibrated_frame(1, moving)
     upload_elapsed = time.perf_counter() - t0
@@ -1160,25 +1160,25 @@ def _gpu_catalog_run(
     prior_dy: float | None = None,
     prior_radius_px: float | None = None,
 ) -> dict[str, Any]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
     t0 = time.perf_counter()
     reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
     moving_threshold = _adaptive_star_threshold(moving, threshold_sigma)
     if grid_cols is not None and grid_rows is not None:
-        reference_catalog = gpwbpp_cuda.star_grid_candidates_f32(reference, reference_threshold, grid_cols, grid_rows)
-        moving_catalog = gpwbpp_cuda.star_grid_candidates_f32(moving, moving_threshold, grid_cols, grid_rows)
+        reference_catalog = glass_cuda.star_grid_candidates_f32(reference, reference_threshold, grid_cols, grid_rows)
+        moving_catalog = glass_cuda.star_grid_candidates_f32(moving, moving_threshold, grid_cols, grid_rows)
         selection_model = "grid_brightest_local_maximum"
     else:
-        reference_catalog = gpwbpp_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
-        moving_catalog = gpwbpp_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
+        reference_catalog = glass_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
+        moving_catalog = glass_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
         selection_model = "global_top_flux_local_maximum"
     if reference_catalog["stored_count"] == 0 or moving_catalog["stored_count"] == 0:
         raise RuntimeError(
             "GPU catalog alignment found no stars "
             f"(reference={reference_catalog['stored_count']}, moving={moving_catalog['stored_count']})"
         )
-    estimate = gpwbpp_cuda.estimate_translation_from_catalogs_f32(
+    estimate = glass_cuda.estimate_translation_from_catalogs_f32(
         reference_catalog["x"],
         reference_catalog["y"],
         moving_catalog["x"],
@@ -1192,7 +1192,7 @@ def _gpu_catalog_run(
     )
     dx = float(estimate["refined_dx"])
     dy = float(estimate["refined_dy"])
-    aligned, coverage = gpwbpp_cuda.warp_translation_bilinear_f32(moving, dx, dy, 0.0)
+    aligned, coverage = glass_cuda.warp_translation_bilinear_f32(moving, dx, dy, 0.0)
     elapsed = time.perf_counter() - t0
     accepted = int(estimate["mutual_inliers"]) >= int(min_inliers)
     warnings = [] if accepted else [f"catalog mutual inliers below {int(min_inliers)}"]
@@ -1253,15 +1253,15 @@ def _gpu_catalog_similarity_run(
     max_abs_rotation_rad: float | None,
     top_k: int,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
-    if not hasattr(gpwbpp_cuda, "estimate_similarity_from_catalogs_f32"):
+    if not hasattr(glass_cuda, "estimate_similarity_from_catalogs_f32"):
         raise RuntimeError("native CUDA backend lacks estimate_similarity_from_catalogs_f32")
     t0 = time.perf_counter()
     reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
     moving_threshold = _adaptive_star_threshold(moving, threshold_sigma)
     if grid_top_cols is not None and grid_top_rows is not None:
-        reference_catalog = gpwbpp_cuda.star_grid_top_nms_candidates_f32(
+        reference_catalog = glass_cuda.star_grid_top_nms_candidates_f32(
             reference,
             reference_threshold,
             grid_top_cols,
@@ -1270,7 +1270,7 @@ def _gpu_catalog_similarity_run(
             max_stars,
             32.0 if nms_min_separation_px is None else nms_min_separation_px,
         )
-        moving_catalog = gpwbpp_cuda.star_grid_top_nms_candidates_f32(
+        moving_catalog = glass_cuda.star_grid_top_nms_candidates_f32(
             moving,
             moving_threshold,
             grid_top_cols,
@@ -1281,18 +1281,18 @@ def _gpu_catalog_similarity_run(
         )
         selection_model = "grid_topk_local_maximum_nms"
     elif grid_cols is not None and grid_rows is not None:
-        reference_catalog = gpwbpp_cuda.star_grid_candidates_f32(reference, reference_threshold, grid_cols, grid_rows)
-        moving_catalog = gpwbpp_cuda.star_grid_candidates_f32(moving, moving_threshold, grid_cols, grid_rows)
+        reference_catalog = glass_cuda.star_grid_candidates_f32(reference, reference_threshold, grid_cols, grid_rows)
+        moving_catalog = glass_cuda.star_grid_candidates_f32(moving, moving_threshold, grid_cols, grid_rows)
         selection_model = "grid_brightest_local_maximum"
     elif nms_scan_candidates is not None or nms_min_separation_px is not None:
-        reference_catalog = gpwbpp_cuda.star_top_nms_candidates_f32(
+        reference_catalog = glass_cuda.star_top_nms_candidates_f32(
             reference,
             reference_threshold,
             4096 if nms_scan_candidates is None else nms_scan_candidates,
             max_stars,
             32.0 if nms_min_separation_px is None else nms_min_separation_px,
         )
-        moving_catalog = gpwbpp_cuda.star_top_nms_candidates_f32(
+        moving_catalog = glass_cuda.star_top_nms_candidates_f32(
             moving,
             moving_threshold,
             4096 if nms_scan_candidates is None else nms_scan_candidates,
@@ -1301,10 +1301,10 @@ def _gpu_catalog_similarity_run(
         )
         selection_model = "global_top_flux_local_maximum_nms"
     else:
-        reference_catalog = gpwbpp_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
-        moving_catalog = gpwbpp_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
+        reference_catalog = glass_cuda.star_top_candidates_f32(reference, reference_threshold, max_stars)
+        moving_catalog = glass_cuda.star_top_candidates_f32(moving, moving_threshold, max_stars)
         selection_model = "global_top_flux_local_maximum"
-    fit = gpwbpp_cuda.estimate_similarity_from_catalogs_f32(
+    fit = glass_cuda.estimate_similarity_from_catalogs_f32(
         reference_catalog["x"],
         reference_catalog["y"],
         moving_catalog["x"],
@@ -1320,7 +1320,7 @@ def _gpu_catalog_similarity_run(
         top_k=top_k,
     )
     matrix = np.asarray(fit["matrix"], dtype=np.float64)
-    aligned, coverage = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
+    aligned, coverage = glass_cuda.warp_matrix_bilinear_f32(moving, matrix, 0.0)
     valid = coverage > 0.0
     elapsed = time.perf_counter() - t0
     accepted = fit["status"] == "ok" and int(fit["inliers"]) >= int(min_inliers)
@@ -1390,9 +1390,9 @@ def _gpu_triangle_descriptor_similarity_run(
     nms_scan_candidates: int | None,
     nms_min_separation_px: float | None,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
-    if not gpwbpp_cuda.cuda_available():
+    if not glass_cuda.cuda_available():
         raise RuntimeError("native CUDA backend is not available")
-    if not hasattr(gpwbpp_cuda, "estimate_similarity_from_triangle_descriptors_f32"):
+    if not hasattr(glass_cuda, "estimate_similarity_from_triangle_descriptors_f32"):
         raise RuntimeError("native CUDA backend lacks estimate_similarity_from_triangle_descriptors_f32")
 
     reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
@@ -1463,7 +1463,7 @@ def _gpu_triangle_descriptor_similarity_run(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Compare astroalign with GPWBPP CUDA translation alignment.")
+    parser = argparse.ArgumentParser(description="Compare astroalign with GLASS CUDA translation alignment.")
     parser.add_argument("--reference", type=Path)
     parser.add_argument("--moving", type=Path)
     parser.add_argument("--out", type=Path, default=Path("runs/alignment_compare/astroalign_vs_gpu_alignment.json"))
@@ -1724,7 +1724,7 @@ def main() -> int:
         gpu_catalog_similarity_result["warnings"].append(
             "catalog similarity image RMS is worse than subpixel NCC by more than 10%"
         )
-    devices = gpwbpp_cuda.list_devices()
+    devices = glass_cuda.list_devices()
     gpu_matrix_diff = _diff_on_common_valid_pixels(
         gpu_matrix_aligned,
         gpu_matrix_valid,
@@ -1836,10 +1836,10 @@ def main() -> int:
         "center_crop": args.center_crop,
         "truth": truth,
         "astroalign": astroalign_result,
-        "gpwbpp_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
-        "gpwbpp_cuda_matrix_metrics_from_astroalign": gpu_matrix_metrics,
-        "gpwbpp_cuda_resident_matrix_metrics_from_astroalign": gpu_resident_matrix_metrics,
-        "gpwbpp_cuda_similarity_fit_from_astroalign_matches": gpu_similarity_result,
+        "glass_cuda_matrix_warp_from_astroalign": gpu_matrix_result,
+        "glass_cuda_matrix_metrics_from_astroalign": gpu_matrix_metrics,
+        "glass_cuda_resident_matrix_metrics_from_astroalign": gpu_resident_matrix_metrics,
+        "glass_cuda_similarity_fit_from_astroalign_matches": gpu_similarity_result,
         "direct_output_diff_gpu_matrix_minus_astroalign_apply_on_common_valid_pixels": gpu_matrix_diff,
         "direct_output_diff_gpu_similarity_fit_minus_astroalign_apply_on_common_valid_pixels": gpu_similarity_diff,
         "direct_output_diff_gpu_catalog_similarity_minus_astroalign_apply_on_common_valid_pixels": (
@@ -1862,16 +1862,16 @@ def main() -> int:
         "triangle_descriptor_similarity_agreement_vs_astroalign": triangle_descriptor_similarity_agreement,
         "valid_pixels": {
             "astroalign": int(np.sum(astroalign_valid)),
-            "gpwbpp_cuda_matrix": int(np.sum(gpu_matrix_valid)),
-            "gpwbpp_cuda_similarity_fit": int(np.sum(gpu_similarity_valid)),
-            "gpwbpp_cuda_catalog_similarity": int(np.sum(gpu_catalog_similarity_valid)),
-            "gpwbpp_cuda_catalog_similarity_pixel_refined": int(
+            "glass_cuda_matrix": int(np.sum(gpu_matrix_valid)),
+            "glass_cuda_similarity_fit": int(np.sum(gpu_similarity_valid)),
+            "glass_cuda_catalog_similarity": int(np.sum(gpu_catalog_similarity_valid)),
+            "glass_cuda_catalog_similarity_pixel_refined": int(
                 np.sum(gpu_catalog_similarity_pixel_refined_valid)
             ),
-            "gpwbpp_cuda_resident_catalog_similarity_pixel_refined": int(
+            "glass_cuda_resident_catalog_similarity_pixel_refined": int(
                 np.sum(gpu_resident_catalog_similarity_pixel_refined_valid)
             ),
-            "gpwbpp_cuda_triangle_descriptor_similarity": int(np.sum(gpu_triangle_descriptor_similarity_valid)),
+            "glass_cuda_triangle_descriptor_similarity": int(np.sum(gpu_triangle_descriptor_similarity_valid)),
             "common": int(np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_matrix_valid, dtype=bool))),
             "common_similarity_fit": int(
                 np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_similarity_valid, dtype=bool))
@@ -1901,19 +1901,19 @@ def main() -> int:
                 )
             ),
         },
-        "gpwbpp_cuda": gpu_result,
-        "gpwbpp_cuda_subpixel": gpu_subpixel_result,
-        "gpwbpp_cuda_ncc_subpixel": gpu_ncc_subpixel_result,
-        "gpwbpp_cuda_resident_ncc_subpixel": gpu_resident_result,
-        "gpwbpp_cuda_resident_matrix_warp_from_astroalign": gpu_resident_matrix_result,
-        "gpwbpp_cuda_catalog": gpu_catalog_result,
-        "gpwbpp_cuda_catalog_similarity": gpu_catalog_similarity_result,
-        "gpwbpp_cuda_catalog_similarity_pixel_refined": gpu_catalog_similarity_pixel_refined_result,
-        "gpwbpp_cuda_resident_catalog_similarity_pixel_refined": (
+        "glass_cuda": gpu_result,
+        "glass_cuda_subpixel": gpu_subpixel_result,
+        "glass_cuda_ncc_subpixel": gpu_ncc_subpixel_result,
+        "glass_cuda_resident_ncc_subpixel": gpu_resident_result,
+        "glass_cuda_resident_matrix_warp_from_astroalign": gpu_resident_matrix_result,
+        "glass_cuda_catalog": gpu_catalog_result,
+        "glass_cuda_catalog_similarity": gpu_catalog_similarity_result,
+        "glass_cuda_catalog_similarity_pixel_refined": gpu_catalog_similarity_pixel_refined_result,
+        "glass_cuda_resident_catalog_similarity_pixel_refined": (
             gpu_resident_catalog_similarity_pixel_refined_result
         ),
-        "gpwbpp_cuda_triangle_descriptor_similarity": gpu_triangle_descriptor_similarity_result,
-        "gpwbpp_cuda_catalog_similarity_matrix_metrics": gpu_catalog_similarity_matrix_metrics,
+        "glass_cuda_triangle_descriptor_similarity": gpu_triangle_descriptor_similarity_result,
+        "glass_cuda_catalog_similarity_matrix_metrics": gpu_catalog_similarity_matrix_metrics,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
         else None,
@@ -2006,7 +2006,7 @@ def main() -> int:
         else None,
         "cuda_devices": devices,
     }
-    result["best_gpwbpp_cuda_alignment_vs_astroalign"] = _best_alignment_summary(result)
+    result["best_glass_cuda_alignment_vs_astroalign"] = _best_alignment_summary(result)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(json.dumps(result, indent=2))

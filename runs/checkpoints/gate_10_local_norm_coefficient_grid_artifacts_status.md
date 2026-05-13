@@ -24,7 +24,7 @@ This checkpoint strengthens the tile-mode Local Normalization stage by making pe
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\local_norm.py tests\test_pipeline_fixture.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\local_norm.py tests\test_pipeline_fixture.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_pipeline_fixture.py::test_pipeline_fixture_run_local_normalization tests\test_cpu_local_norm.py tests\test_gpu_local_norm_vs_cpu.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -56,5 +56,5 @@ This checkpoint strengthens the tile-mode Local Normalization stage by making pe
 
 ## Clean-room Compliance
 
-- Compliant. The change records GPWBPP-owned LN coefficients and uses general local statistics math.
+- Compliant. The change records GLASS-owned LN coefficients and uses general local statistics math.
 - No official PixInsight/WBPP/PJSR source code was read, copied, summarized, or used as implementation input.

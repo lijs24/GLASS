@@ -11,7 +11,7 @@
 
 ## Completed
 
-- `gpwbpp audit` supports scan -> plan -> run -> report for executable plans.
+- `glass audit` supports scan -> plan -> run -> report for executable plans.
 - The tile-mode pipeline covers calibration, quality, registration, warp,
   local normalization, integration, resume behavior, and reports.
 - The resident CUDA path supports a high-VRAM end-to-end benchmark mode using a
@@ -27,11 +27,11 @@
 ## Representative Commands
 
 ```powershell
-.\.venv\Scripts\gpwbpp synthetic --out runs\gate_12_synth\source --frames 5 --width 48 --height 48 --filter H --known-shift
-.\.venv\Scripts\gpwbpp audit --root runs\gate_12_synth\source --out runs\gate_12_synth\cuda_audit --backend cuda --tile-size 12 --local-normalization on --integration-weighting none --integration-rejection none
-.\.venv\Scripts\gpwbpp resume --run runs\gate_12_synth\cuda_audit
-.\.venv\Scripts\gpwbpp audit --root runs\gate_12_synth\source --out runs\gate_12_synth\cpu_audit --backend cpu --tile-size 12 --local-normalization on --integration-weighting none --integration-rejection none
-.\.venv\Scripts\gpwbpp compare --gpwbpp runs\gate_12_synth\cuda_audit\integration\master_H.fits --reference runs\gate_12_synth\cpu_audit\integration\master_H.fits --out runs\gate_12_synth\cuda_vs_cpu_compare.html
+.\.venv\Scripts\glass synthetic --out runs\gate_12_synth\source --frames 5 --width 48 --height 48 --filter H --known-shift
+.\.venv\Scripts\glass audit --root runs\gate_12_synth\source --out runs\gate_12_synth\cuda_audit --backend cuda --tile-size 12 --local-normalization on --integration-weighting none --integration-rejection none
+.\.venv\Scripts\glass resume --run runs\gate_12_synth\cuda_audit
+.\.venv\Scripts\glass audit --root runs\gate_12_synth\source --out runs\gate_12_synth\cpu_audit --backend cpu --tile-size 12 --local-normalization on --integration-weighting none --integration-rejection none
+.\.venv\Scripts\glass compare --glass runs\gate_12_synth\cuda_audit\integration\master_H.fits --reference runs\gate_12_synth\cpu_audit\integration\master_H.fits --out runs\gate_12_synth\cuda_vs_cpu_compare.html
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -67,12 +67,12 @@ Synthetic Gate 12 artifacts:
 
 Real resident CUDA artifacts:
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\run_timing.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\resident_artifacts.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_coverage_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_low_rejection_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_high_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\run_timing.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\resident_artifacts.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_coverage_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_low_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_high_rejection_map_H.fits`
 
 ## Known Limitations
 
@@ -81,13 +81,13 @@ Real resident CUDA artifacts:
 - Resident CUDA is a high-VRAM execution strategy, not the replacement for the
   tile/out-of-core path.
 - The fastest validated real-data parity run disables local normalization.
-- GPWBPP remains WBPP-like and clean-room; exact PixInsight/WBPP algorithmic
+- GLASS remains WBPP-like and clean-room; exact PixInsight/WBPP algorithmic
   equivalence is not claimed.
 
 ## Next Step
 
 - Gate 13 remains the comparison/acceptance evidence layer, now backed by
-  `gpwbpp speedup-summary` and `gpwbpp acceptance-audit`.
+  `glass speedup-summary` and `glass acceptance-audit`.
 
 ## Clean-room Compliance
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gpwbpp.cli import main
-from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.report.acceptance_audit import build_acceptance_audit
+from glass.cli import main
+from glass.io.json_io import read_json, write_json
+from glass.report.acceptance_audit import build_acceptance_audit
 
 
 def _write_manifest(path: Path, *, light: int = 200, bias: int = 20, dark: int = 20, flat: int = 20) -> None:
@@ -15,7 +15,7 @@ def _write_manifest(path: Path, *, light: int = 200, bias: int = 20, dark: int =
     write_json(path, {"frames": frames, "summary": {"count": len(frames)}})
 
 
-def _write_gpwbpp_run(path: Path, *, elapsed_s: float = 100.0, active: int = 193, zero: int = 7) -> None:
+def _write_glass_run(path: Path, *, elapsed_s: float = 100.0, active: int = 193, zero: int = 7) -> None:
     path.mkdir()
     write_json(path / "run_timing.json", {"total_elapsed_s": elapsed_s, "memory_mode": "resident"})
     weights = {f"L{idx:04d}": 1.0 for idx in range(active)}
@@ -63,13 +63,13 @@ def test_acceptance_audit_passes_real_benchmark_thresholds(tmp_path: Path):
     wbpp = tmp_path / "wbpp.json"
     compare = tmp_path / "compare.json"
     _write_manifest(manifest)
-    _write_gpwbpp_run(gp_run)
+    _write_glass_run(gp_run)
     _write_wbpp_result(wbpp)
     _write_compare(compare)
 
     audit = build_acceptance_audit(
         manifest_path=manifest,
-        gpwbpp_run=gp_run,
+        glass_run=gp_run,
         wbpp_result=wbpp,
         compare_json=compare,
         min_active_frames=190,
@@ -89,7 +89,7 @@ def test_acceptance_audit_cli_writes_outputs_and_returns_failure(tmp_path: Path)
     out_json = tmp_path / "audit.json"
     out_md = tmp_path / "audit.md"
     _write_manifest(manifest, light=199)
-    _write_gpwbpp_run(gp_run, elapsed_s=100.0)
+    _write_glass_run(gp_run, elapsed_s=100.0)
     _write_wbpp_result(wbpp, elapsed_s=150.0)
     _write_compare(compare, rms=0.02)
 
@@ -98,7 +98,7 @@ def test_acceptance_audit_cli_writes_outputs_and_returns_failure(tmp_path: Path)
             "acceptance-audit",
             "--manifest",
             str(manifest),
-            "--gpwbpp-run",
+            "--glass-run",
             str(gp_run),
             "--wbpp-result",
             str(wbpp),

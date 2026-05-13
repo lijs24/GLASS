@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cmath>
 
-__global__ void gpwbpp_integrate_accumulate_mean_tile_f32_kernel(
+__global__ void glass_integrate_accumulate_mean_tile_f32_kernel(
     const float* frame,
     const float* weight,
     float* sum,
@@ -18,7 +18,7 @@ __global__ void gpwbpp_integrate_accumulate_mean_tile_f32_kernel(
   weight_sum[i] += w;
 }
 
-void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
+void glass_integrate_accumulate_mean_tile_f32_launch(
     const float* frame,
     const float* weight,
     float* sum,
@@ -26,10 +26,10 @@ void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
     std::size_t n) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((n + threads - 1) / threads);
-  gpwbpp_integrate_accumulate_mean_tile_f32_kernel<<<blocks, threads>>>(frame, weight, sum, weight_sum, n);
+  glass_integrate_accumulate_mean_tile_f32_kernel<<<blocks, threads>>>(frame, weight, sum, weight_sum, n);
 }
 
-__global__ void gpwbpp_integrate_resident_weighted_mean_f32_kernel(
+__global__ void glass_integrate_resident_weighted_mean_f32_kernel(
     const float* stack,
     const float* weights,
     float* master,
@@ -59,7 +59,7 @@ __global__ void gpwbpp_integrate_resident_weighted_mean_f32_kernel(
   master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
 }
 
-void gpwbpp_integrate_resident_weighted_mean_f32_launch(
+void glass_integrate_resident_weighted_mean_f32_launch(
     const float* stack,
     const float* weights,
     float* master,
@@ -68,7 +68,7 @@ void gpwbpp_integrate_resident_weighted_mean_f32_launch(
     std::size_t pixels_per_frame) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
-  gpwbpp_integrate_resident_weighted_mean_f32_kernel<<<blocks, threads>>>(
+  glass_integrate_resident_weighted_mean_f32_kernel<<<blocks, threads>>>(
       stack,
       weights,
       master,
@@ -77,7 +77,7 @@ void gpwbpp_integrate_resident_weighted_mean_f32_launch(
       pixels_per_frame);
 }
 
-__global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
+__global__ void glass_integrate_resident_sigma_clip_f32_kernel(
     const float* stack,
     const float* weights,
     float* master,
@@ -216,7 +216,7 @@ __global__ void gpwbpp_integrate_resident_sigma_clip_f32_kernel(
   high_rejection_map[pixel] = high_reject;
 }
 
-void gpwbpp_integrate_resident_sigma_clip_f32_launch(
+void glass_integrate_resident_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
     float* master,
@@ -231,7 +231,7 @@ void gpwbpp_integrate_resident_sigma_clip_f32_launch(
     bool winsorize) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
-  gpwbpp_integrate_resident_sigma_clip_f32_kernel<<<blocks, threads>>>(
+  glass_integrate_resident_sigma_clip_f32_kernel<<<blocks, threads>>>(
       stack,
       weights,
       master,

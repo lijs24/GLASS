@@ -10,7 +10,7 @@ Gate 08: Registration
 
 - Ran resident CUDA `similarity_cuda_triangle` on a real M38 H subset.
 - Input plan reused the existing curated subset:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350\processing_plan.json`.
+  `C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350\processing_plan.json`.
 - Dataset subset:
   - Light: 12.
   - Bias: 6.
@@ -22,8 +22,8 @@ Gate 08: Registration
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run --plan "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350\processing_plan.json" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_fixed350" --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --reference-frame-id LIGHT_H_0001
-.\.venv\Scripts\gpwbpp.exe report --run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_fixed350" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_fixed350\report.html"
+.\.venv\Scripts\glass.exe run --plan "C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350\processing_plan.json" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_fixed350" --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --reference-frame-id LIGHT_H_0001
+.\.venv\Scripts\glass.exe report --run "C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_fixed350" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_fixed350\report.html"
 ```
 
 ## Test Results
@@ -46,9 +46,9 @@ Gate 08: Registration
   - Output write: 0.3417213999782689 s.
 - Estimated peak resident memory: 4.134035155177116 GiB.
 - Output master:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_fixed350\integration\resident_master_H.fits`.
+  `C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_fixed350\integration\resident_master_H.fits`.
 - Report:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_fixed350\report.html`.
+  `C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_fixed350\report.html`.
 
 ## CUDA
 
@@ -75,5 +75,5 @@ existing astroalign/external-matrix runs.
 
 ## Clean-room Compliance
 
-Compliant. This run used user-provided real data and GPWBPP-owned code only.
+Compliant. This run used user-provided real data and GLASS-owned code only.
 No PixInsight/WBPP/PJSR source code was read, copied, summarized, or modified.

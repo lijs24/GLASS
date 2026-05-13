@@ -9,7 +9,7 @@ Precision audit for the resident CUDA calibration plus mean integration path.
 - Did not read official WBPP/PJSR source code.
 - Inspected WBPP black-box XISF output headers and found `sampleFormat="Float32"`
   for the M38 master light, master bias, and a calibrated light output.
-- Added reusable precision validation helpers under `gpwbpp.validation.precision`.
+- Added reusable precision validation helpers under `glass.validation.precision`.
 - Added `benchmarks/audit_precision.py` for crop-based CPU64/CPU32/CUDA32 audits.
 - Added unit tests for precision helper functions.
 - Added `docs/precision_model.md`.
@@ -17,7 +17,7 @@ Precision audit for the resident CUDA calibration plus mean integration path.
 ## Commands
 
 ```powershell
-.venv\Scripts\python.exe benchmarks\audit_precision.py --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\precision_audit_512.json --light-limit 16 --calib-limit 20 --crop-size 512 --wbpp-xisf C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --wbpp-xisf C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterBias_BIN-1_9600x6422.xisf --wbpp-xisf C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\calibrated\Light_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono\LIGHT_H_0001_c.xisf
+.venv\Scripts\python.exe benchmarks\audit_precision.py --plan C:\glass_runs\final_m38_h_200\processing_plan.json --out C:\glass_runs\final_m38_h_200\precision_audit_512.json --light-limit 16 --calib-limit 20 --crop-size 512 --wbpp-xisf C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --wbpp-xisf C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterBias_BIN-1_9600x6422.xisf --wbpp-xisf C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\calibrated\Light_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono\LIGHT_H_0001_c.xisf
 ```
 
 ## Results

@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <math.h>
 
-__global__ void gpwbpp_warp_translation_f32_kernel(
+__global__ void glass_warp_translation_f32_kernel(
     const float* input,
     float* output,
     float* coverage,
@@ -30,7 +30,7 @@ __global__ void gpwbpp_warp_translation_f32_kernel(
   }
 }
 
-void gpwbpp_warp_translation_f32_launch(
+void glass_warp_translation_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -41,11 +41,11 @@ void gpwbpp_warp_translation_f32_launch(
     float fill) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
-  gpwbpp_warp_translation_f32_kernel<<<blocks, threads>>>(
+  glass_warp_translation_f32_kernel<<<blocks, threads>>>(
       input, output, coverage, width, height, dx, dy, fill);
 }
 
-__global__ void gpwbpp_warp_translation_bilinear_f32_kernel(
+__global__ void glass_warp_translation_bilinear_f32_kernel(
     const float* input,
     float* output,
     float* coverage,
@@ -87,7 +87,7 @@ __global__ void gpwbpp_warp_translation_bilinear_f32_kernel(
   coverage[i] = 1.0f;
 }
 
-void gpwbpp_warp_translation_bilinear_f32_launch(
+void glass_warp_translation_bilinear_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -98,11 +98,11 @@ void gpwbpp_warp_translation_bilinear_f32_launch(
     float fill) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
-  gpwbpp_warp_translation_bilinear_f32_kernel<<<blocks, threads>>>(
+  glass_warp_translation_bilinear_f32_kernel<<<blocks, threads>>>(
       input, output, coverage, width, height, dx, dy, fill);
 }
 
-__global__ void gpwbpp_warp_matrix_bilinear_f32_kernel(
+__global__ void glass_warp_matrix_bilinear_f32_kernel(
     const float* input,
     float* output,
     float* coverage,
@@ -151,7 +151,7 @@ __global__ void gpwbpp_warp_matrix_bilinear_f32_kernel(
   coverage[i] = 1.0f;
 }
 
-void gpwbpp_warp_matrix_bilinear_f32_launch(
+void glass_warp_matrix_bilinear_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -161,11 +161,11 @@ void gpwbpp_warp_matrix_bilinear_f32_launch(
     float fill) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
-  gpwbpp_warp_matrix_bilinear_f32_kernel<<<blocks, threads>>>(
+  glass_warp_matrix_bilinear_f32_kernel<<<blocks, threads>>>(
       input, output, coverage, inverse, width, height, fill);
 }
 
-__device__ float gpwbpp_sinc_f32(float x) {
+__device__ float glass_sinc_f32(float x) {
   const float ax = fabsf(x);
   if (ax < 1.0e-6f) {
     return 1.0f;
@@ -174,15 +174,15 @@ __device__ float gpwbpp_sinc_f32(float x) {
   return sinf(pix) / pix;
 }
 
-__device__ float gpwbpp_lanczos3_weight_f32(float x) {
+__device__ float glass_lanczos3_weight_f32(float x) {
   const float ax = fabsf(x);
   if (ax >= 3.0f) {
     return 0.0f;
   }
-  return gpwbpp_sinc_f32(x) * gpwbpp_sinc_f32(x / 3.0f);
+  return glass_sinc_f32(x) * glass_sinc_f32(x / 3.0f);
 }
 
-__global__ void gpwbpp_warp_matrix_lanczos3_f32_kernel(
+__global__ void glass_warp_matrix_lanczos3_f32_kernel(
     const float* input,
     float* output,
     float* coverage,
@@ -221,8 +221,8 @@ __global__ void gpwbpp_warp_matrix_lanczos3_f32_kernel(
   float wx[6];
   float wy[6];
   for (int k = 0; k < 6; ++k) {
-    wx[k] = gpwbpp_lanczos3_weight_f32(sx - static_cast<float>(x0 - 2 + k));
-    wy[k] = gpwbpp_lanczos3_weight_f32(sy - static_cast<float>(y0 - 2 + k));
+    wx[k] = glass_lanczos3_weight_f32(sx - static_cast<float>(x0 - 2 + k));
+    wy[k] = glass_lanczos3_weight_f32(sy - static_cast<float>(y0 - 2 + k));
   }
 
   float weighted_sum = 0.0f;
@@ -262,7 +262,7 @@ __global__ void gpwbpp_warp_matrix_lanczos3_f32_kernel(
   coverage[i] = 1.0f;
 }
 
-void gpwbpp_warp_matrix_lanczos3_f32_launch(
+void glass_warp_matrix_lanczos3_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -273,11 +273,11 @@ void gpwbpp_warp_matrix_lanczos3_f32_launch(
     float clamping_threshold) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
-  gpwbpp_warp_matrix_lanczos3_f32_kernel<<<blocks, threads>>>(
+  glass_warp_matrix_lanczos3_f32_kernel<<<blocks, threads>>>(
       input, output, coverage, inverse, width, height, fill, clamping_threshold);
 }
 
-__global__ void gpwbpp_matrix_alignment_metrics_f32_kernel(
+__global__ void glass_matrix_alignment_metrics_f32_kernel(
     const float* reference,
     const float* moving,
     const float* inverse,
@@ -396,7 +396,7 @@ __global__ void gpwbpp_matrix_alignment_metrics_f32_kernel(
   }
 }
 
-void gpwbpp_matrix_alignment_metrics_f32_launch(
+void glass_matrix_alignment_metrics_f32_launch(
     const float* reference,
     const float* moving,
     const float* inverse,
@@ -408,11 +408,11 @@ void gpwbpp_matrix_alignment_metrics_f32_launch(
     int blocks) {
   constexpr int threads = 256;
   const std::size_t shared_bytes = 7 * threads * sizeof(double) + threads * sizeof(unsigned long long);
-  gpwbpp_matrix_alignment_metrics_f32_kernel<<<blocks, threads, shared_bytes>>>(
+  glass_matrix_alignment_metrics_f32_kernel<<<blocks, threads, shared_bytes>>>(
       reference, moving, inverse, partial_stats, partial_count, width, height, sample_stride);
 }
 
-__global__ void gpwbpp_matrix_alignment_metrics_candidates_f32_kernel(
+__global__ void glass_matrix_alignment_metrics_candidates_f32_kernel(
     const float* reference,
     const float* moving,
     const float* inverses,
@@ -535,7 +535,7 @@ __global__ void gpwbpp_matrix_alignment_metrics_candidates_f32_kernel(
   }
 }
 
-void gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
+void glass_matrix_alignment_metrics_candidates_f32_launch(
     const float* reference,
     const float* moving,
     const float* inverses,
@@ -547,7 +547,7 @@ void gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
     int candidate_count) {
   constexpr int threads = 256;
   const std::size_t shared_bytes = 7 * threads * sizeof(double) + threads * sizeof(unsigned long long);
-  gpwbpp_matrix_alignment_metrics_candidates_f32_kernel<<<candidate_count, threads, shared_bytes>>>(
+  glass_matrix_alignment_metrics_candidates_f32_kernel<<<candidate_count, threads, shared_bytes>>>(
       reference,
       moving,
       inverses,
@@ -559,7 +559,7 @@ void gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
       candidate_count);
 }
 
-__global__ void gpwbpp_star_core_metrics_candidates_f32_kernel(
+__global__ void glass_star_core_metrics_candidates_f32_kernel(
     const float* reference,
     const float* moving,
     const float* inverses,
@@ -682,7 +682,7 @@ __global__ void gpwbpp_star_core_metrics_candidates_f32_kernel(
   }
 }
 
-void gpwbpp_star_core_metrics_candidates_f32_launch(
+void glass_star_core_metrics_candidates_f32_launch(
     const float* reference,
     const float* moving,
     const float* inverses,
@@ -694,7 +694,7 @@ void gpwbpp_star_core_metrics_candidates_f32_launch(
     int candidate_count) {
   constexpr int threads = 256;
   const std::size_t shared_bytes = 7 * threads * sizeof(double) + threads * sizeof(unsigned long long);
-  gpwbpp_star_core_metrics_candidates_f32_kernel<<<candidate_count, threads, shared_bytes>>>(
+  glass_star_core_metrics_candidates_f32_kernel<<<candidate_count, threads, shared_bytes>>>(
       reference,
       moving,
       inverses,

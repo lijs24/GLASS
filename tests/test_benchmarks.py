@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.synthetic.generator import generate_synthetic_dataset
 from tests.conftest import cuda_module_or_skip
 
 
@@ -94,15 +94,15 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
         "direct_output_diff_gpu_catalog_similarity_minus_astroalign_apply_on_common_valid_pixels"
     ]
     valid_pixels = payload["valid_pixels"]
-    fit = payload["gpwbpp_cuda_similarity_fit_from_astroalign_matches"]
-    matrix_metrics = payload["gpwbpp_cuda_matrix_metrics_from_astroalign"]
-    catalog_similarity = payload["gpwbpp_cuda_catalog_similarity"]
-    catalog_similarity_matrix_metrics = payload["gpwbpp_cuda_catalog_similarity_matrix_metrics"]
+    fit = payload["glass_cuda_similarity_fit_from_astroalign_matches"]
+    matrix_metrics = payload["glass_cuda_matrix_metrics_from_astroalign"]
+    catalog_similarity = payload["glass_cuda_catalog_similarity"]
+    catalog_similarity_matrix_metrics = payload["glass_cuda_catalog_similarity_matrix_metrics"]
     catalog_similarity_agreement = payload["catalog_similarity_agreement_vs_astroalign"]
-    catalog_similarity_pixel_refined = payload["gpwbpp_cuda_catalog_similarity_pixel_refined"]
+    catalog_similarity_pixel_refined = payload["glass_cuda_catalog_similarity_pixel_refined"]
 
     assert payload["astroalign"]["matched_control_points"] > 0
-    assert payload["gpwbpp_cuda_matrix_warp_from_astroalign"]["coverage_pixels"] > 0
+    assert payload["glass_cuda_matrix_warp_from_astroalign"]["coverage_pixels"] > 0
     assert fit["fit_model"] == "matched_pair_similarity_cuda"
     assert fit["fit_status"] == "ok"
     assert fit["valid_pairs"] == payload["astroalign"]["matched_control_points"]
@@ -152,7 +152,7 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
 
 
 def test_star_guarded_seed_selection_prefers_star_supported_seed():
-    pytest.importorskip("gpwbpp_cuda")
+    pytest.importorskip("glass_cuda")
     spec = importlib.util.spec_from_file_location(
         "compare_astroalign_gpu_alignment",
         Path("benchmarks/compare_astroalign_gpu_alignment.py"),
@@ -188,7 +188,7 @@ def test_star_guarded_seed_selection_prefers_star_supported_seed():
 
 
 def test_star_guarded_seed_selection_uses_star_core_metric_with_inlier_slack():
-    pytest.importorskip("gpwbpp_cuda")
+    pytest.importorskip("glass_cuda")
     spec = importlib.util.spec_from_file_location(
         "compare_astroalign_gpu_alignment",
         Path("benchmarks/compare_astroalign_gpu_alignment.py"),

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
-from gpwbpp.cli import main
+from glass.cli import main
 
 
 def _write(path: Path, value: float) -> None:
@@ -23,9 +23,9 @@ def test_blackbox_finalize_generates_compare_summary(tmp_path: Path):
     timing.write_text(
         json.dumps(
             {
-                "gpwbpp_time_seconds": 10.0,
+                "glass_time_seconds": 10.0,
                 "reference_time_seconds": 30.0,
-                "gpwbpp_master_paths": [str(gp)],
+                "glass_master_paths": [str(gp)],
                 "reference_master_paths": [str(ref)],
                 "reference_label": "PixInsight WBPP",
             }
@@ -36,14 +36,14 @@ def test_blackbox_finalize_generates_compare_summary(tmp_path: Path):
     summary = json.loads((out / "blackbox_finalize_summary.json").read_text(encoding="utf-8"))
     assert summary["status"] == "complete"
     assert summary["speedup_vs_reference"] == 3.0
-    assert summary["all_gpwbpp_faster"] is True
+    assert summary["all_glass_faster"] is True
     assert Path(summary["comparisons"][0]["html"]).exists()
 
 
 def test_blackbox_finalize_reports_blocker(tmp_path: Path):
     timing = tmp_path / "timing_template.json"
     out = tmp_path / "final"
-    timing.write_text(json.dumps({"gpwbpp_master_paths": [], "reference_master_paths": []}), encoding="utf-8")
+    timing.write_text(json.dumps({"glass_master_paths": [], "reference_master_paths": []}), encoding="utf-8")
     assert main(["blackbox-finalize", "--timing", str(timing), "--out", str(out)]) == 2
     summary = json.loads((out / "blackbox_finalize_summary.json").read_text(encoding="utf-8"))
     assert summary["status"] == "blocked"

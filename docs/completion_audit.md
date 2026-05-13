@@ -1,4 +1,4 @@
-# GPWBPP Completion Audit
+# GLASS Completion Audit
 
 Date: 2026-05-13
 
@@ -47,10 +47,10 @@ astrometric integrations.
 | No official WBPP/PJSR source used | Checkpoints record black-box outputs, public behavior references, and open-source bridge code only | Met |
 | Installable package | `pyproject.toml`; `.\.venv\Scripts\python.exe -m pip install -e ".[dev,report]"` succeeded | Met |
 | Project-local virtual environment | All verification commands use `.venv` | Met |
-| CLI commands | `gpwbpp --help` plus 14 subcommand help calls succeeded | Met |
-| Metadata scan and planning | `src/gpwbpp/metadata`, `src/gpwbpp/planner`, Gate 1 tests/checkpoint | Met |
+| CLI commands | `glass --help` plus 14 subcommand help calls succeeded | Met |
+| Metadata scan and planning | `src/glass/metadata`, `src/glass/planner`, Gate 1 tests/checkpoint | Met |
 | FITS/XISF metadata behavior | FITS and XISF metadata tests and warning paths | Met |
-| Synthetic data and CPU baseline | `src/gpwbpp/synthetic`, `src/gpwbpp/cpu`, Gate 2 and CPU tests | Met |
+| Synthetic data and CPU baseline | `src/glass/synthetic`, `src/glass/cpu`, Gate 2 and CPU tests | Met |
 | Optional CUDA backend | Native CUDA extension, Python wrappers, CUDA skip behavior, Gate 3-4 tests | Met |
 | CUDA tile calibration | `calibrate_tile_f32` wrappers and CPU/GPU tests | Met |
 | Master frames and light calibration | Gate 5-6 code/tests/checkpoints | Met |
@@ -65,33 +65,33 @@ astrometric integrations.
 | Benchmarks | `benchmarks/` plus benchmark checkpoint and resident benchmark entry | Met |
 | Real data source | User-provided acquisition directories under `E:\摄影素材\天协远程台原始素材`, read-only | Met |
 | Final data scale | M38 manifest has 200 light, 20 bias, 20 dark, 20 flat | Met |
-| WBPP black-box timing | `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json` records `1092.541 s` | Met |
-| GPWBPP timing | Resident CUDA run records `111.94882199994754 s` | Met |
-| Observed speedup | `gpwbpp acceptance-audit` reports `9.75928982978054x`, threshold `2.0x` passed | Met |
+| WBPP black-box timing | `C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json` records `1092.541 s` | Met |
+| GLASS timing | Resident CUDA run records `111.94882199994754 s` | Met |
+| Observed speedup | `glass acceptance-audit` reports `9.75928982978054x`, threshold `2.0x` passed | Met |
 | Output consistency | Coverage-masked compare: shape match true, RMS `0.0017183155193652361`, p99 `0.00045279982034117025`, coverage fraction `0.9612859117097478` | Met |
-| PixInsight optional front-end | `pixinsight/GPWBPP.js`, docs, clean-room wrapper tests | Met as optional launcher |
+| PixInsight optional front-end | `pixinsight/GLASS.js`, docs, clean-room wrapper tests | Met as optional launcher |
 
 ## Verification Commands
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,report]"
-.\.venv\Scripts\gpwbpp.exe --help
-.\.venv\Scripts\gpwbpp.exe scan --help
-.\.venv\Scripts\gpwbpp.exe plan --help
-.\.venv\Scripts\gpwbpp.exe subset --help
-.\.venv\Scripts\gpwbpp.exe run --help
-.\.venv\Scripts\gpwbpp.exe resume --help
-.\.venv\Scripts\gpwbpp.exe report --help
-.\.venv\Scripts\gpwbpp.exe audit --help
-.\.venv\Scripts\gpwbpp.exe compare --help
-.\.venv\Scripts\gpwbpp.exe speedup-summary --help
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --help
-.\.venv\Scripts\gpwbpp.exe blackbox-package --help
-.\.venv\Scripts\gpwbpp.exe blackbox-finalize --help
-.\.venv\Scripts\gpwbpp.exe blackbox-history --help
-.\.venv\Scripts\gpwbpp.exe synthetic --help
+.\.venv\Scripts\glass.exe --help
+.\.venv\Scripts\glass.exe scan --help
+.\.venv\Scripts\glass.exe plan --help
+.\.venv\Scripts\glass.exe subset --help
+.\.venv\Scripts\glass.exe run --help
+.\.venv\Scripts\glass.exe resume --help
+.\.venv\Scripts\glass.exe report --help
+.\.venv\Scripts\glass.exe audit --help
+.\.venv\Scripts\glass.exe compare --help
+.\.venv\Scripts\glass.exe speedup-summary --help
+.\.venv\Scripts\glass.exe acceptance-audit --help
+.\.venv\Scripts\glass.exe blackbox-package --help
+.\.venv\Scripts\glass.exe blackbox-finalize --help
+.\.venv\Scripts\glass.exe blackbox-history --help
+.\.venv\Scripts\glass.exe synthetic --help
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --manifest C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_final.json --markdown runs\benchmarks\m38_acceptance_audit_final.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
+.\.venv\Scripts\glass.exe acceptance-audit --manifest C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --glass-run C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_final.json --markdown runs\benchmarks\m38_acceptance_audit_final.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 ```
 
 ## Latest Results
@@ -110,7 +110,7 @@ astrometric integrations.
 - Phase B advanced features are not complete: drizzle, OSC advanced workflows,
   mosaic support, comet alignment, astrometric integration, and richer
   PixInsight front-end work.
-- GPWBPP is a clean-room WBPP-like implementation and benchmark-proven
+- GLASS is a clean-room WBPP-like implementation and benchmark-proven
   acceleration path, not a claim of exact PixInsight/WBPP algorithm identity.
 - The optional PixInsight launcher has pytest/static coverage but was not
   executed inside PixInsight during automated tests.

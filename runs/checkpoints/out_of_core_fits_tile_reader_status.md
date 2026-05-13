@@ -16,8 +16,8 @@
 ```powershell
 .\.venv\Scripts\python -m pytest -q tests/test_fits_io.py tests/test_pipeline_fixture.py::test_pipeline_fixture_run_integration
 .\.venv\Scripts\python -m pytest -q
-.\.venv\Scripts\gpwbpp run --plan runs\real_m5_lum_subset\processing_plan.json --out runs\real_m5_lum_subset\gpwbpp_cuda_tile_reader_manual --backend cuda --until-stage integration --local-normalization off --integration-weighting none --integration-rejection none --tile-size 1024
-.\.venv\Scripts\gpwbpp compare --gpwbpp runs\real_m5_lum_subset\gpwbpp_cuda_tile_reader_manual\integration\master_Lum.fits --reference runs\real_m5_lum_subset\gpwbpp_cuda_v2\integration\master_Lum.fits --out runs\real_m5_lum_subset\tile_reader_manual_vs_previous.html
+.\.venv\Scripts\glass run --plan runs\real_m5_lum_subset\processing_plan.json --out runs\real_m5_lum_subset\glass_cuda_tile_reader_manual --backend cuda --until-stage integration --local-normalization off --integration-weighting none --integration-rejection none --tile-size 1024
+.\.venv\Scripts\glass compare --glass runs\real_m5_lum_subset\glass_cuda_tile_reader_manual\integration\master_Lum.fits --reference runs\real_m5_lum_subset\glass_cuda_v2\integration\master_Lum.fits --out runs\real_m5_lum_subset\tile_reader_manual_vs_previous.html
 ```
 
 ## Test Result
@@ -29,7 +29,7 @@
 
 ## Artifacts
 
-- `runs\real_m5_lum_subset\gpwbpp_cuda_tile_reader_manual\integration\master_Lum.fits`
+- `runs\real_m5_lum_subset\glass_cuda_tile_reader_manual\integration\master_Lum.fits`
 - `runs\real_m5_lum_subset\tile_reader_manual_vs_previous.html`
 - `runs\real_m5_lum_subset\tile_reader_manual_vs_previous.json`
 

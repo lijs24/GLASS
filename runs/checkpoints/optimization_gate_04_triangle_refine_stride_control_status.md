@@ -9,16 +9,16 @@ Optimization Gate 04.
 - Added CLI/runtime overrides for resident triangle pixel-refine sampling:
   - `--resident-triangle-pixel-refine-coarse-stride`
   - `--resident-triangle-pixel-refine-final-stride`
-- Wired the overrides through both `gpwbpp run` and `gpwbpp audit`.
+- Wired the overrides through both `glass run` and `glass audit`.
 - Recorded the resolved final stride in `resident_artifacts.json` under `resident_registration`.
 - Added a resident triangle smoke test that exercises the final-stride override.
 
 ## Commands
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair
-.\.venv\Scripts\gpwbpp.exe run --help
+.\.venv\Scripts\glass.exe run --help
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```

@@ -7,17 +7,17 @@ Date: 2026-05-13
 ## Completed content
 
 - Added a CUDA bilinear 3x3 matrix warp kernel for float32 images.
-- Added Python native binding `gpwbpp_cuda.warp_matrix_bilinear_f32(data, matrix, fill=0.0)`.
+- Added Python native binding `glass_cuda.warp_matrix_bilinear_f32(data, matrix, fill=0.0)`.
 - Added CPU fallback for the same wrapper when the native CUDA module is unavailable.
 - Added resident GPU in-place matrix warp through `ResidentCalibratedStack.apply_matrix_bilinear_frame(...)`.
-- Exported the wrapper from `src/gpwbpp/gpu/warp.py`.
+- Exported the wrapper from `src/glass/gpu/warp.py`.
 - Added GPU-vs-CPU tests for standalone matrix warp and resident in-place matrix warp.
 - Documented the CUDA matrix warp capability as the bridge from translation-only GPU alignment toward similarity/affine registration.
 
 ## Commands run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\gpu\warp.py tests\test_gpu_warp_vs_cpu.py
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\gpu\warp.py tests\test_gpu_warp_vs_cpu.py
 ```
 
 Result: passed.
@@ -25,7 +25,7 @@ Result: passed.
 ```powershell
 $pybind = (& .\.venv\Scripts\python.exe -m pybind11 --cmakedir).Trim()
 $ninja = (Resolve-Path .\.venv\Scripts\ninja.exe).Path
-$cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR="' + $pybind + '" -DCMAKE_MAKE_PROGRAM="' + $ninja + '" -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
+$cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -Dpybind11_DIR="' + $pybind + '" -DCMAKE_MAKE_PROGRAM="' + $ninja + '" -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
 cmd /c $cmd
 ```
 
@@ -67,4 +67,4 @@ Wire similarity/affine registration outputs into the resident CUDA matrix warp p
 
 ## Clean-room compliance
 
-This work used only GPWBPP-owned code, open-source astroalign as an external behavioral baseline, and user-provided image data/artifacts. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.
+This work used only GLASS-owned code, open-source astroalign as an external behavioral baseline, and user-provided image data/artifacts. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.

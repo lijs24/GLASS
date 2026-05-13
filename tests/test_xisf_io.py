@@ -4,9 +4,9 @@ from pathlib import Path
 
 import numpy as np
 
-from gpwbpp.io.fits_io import write_fits_data
-from gpwbpp.io.xisf_io import read_xisf_data
-from gpwbpp.report.compare_report import compare_fits
+from glass.io.fits_io import write_fits_data
+from glass.io.xisf_io import read_xisf_data
+from glass.report.compare_report import compare_fits
 
 
 def _write_minimal_xisf(path: Path, data: np.ndarray) -> None:

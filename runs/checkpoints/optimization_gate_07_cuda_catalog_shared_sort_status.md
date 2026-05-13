@@ -12,7 +12,7 @@ Optimization Gate 07
 
 ## Commands Run
 
-- `cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && ""C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\cmake.exe"" --build build\native-cuda --config Release --target _gpwbpp_cuda_native"`
+- `cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && ""<repo>\.venv\Scripts\cmake.exe"" --build build\native-cuda --config Release --target _glass_cuda_native"`
 - `.venv\Scripts\python.exe -m pytest -q tests\test_gpu_star_detect.py tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair`
 - `.venv\Scripts\python.exe -m pytest -q`
 
@@ -42,4 +42,4 @@ Run the same M38 resident triangle benchmark as the current best `cand48_batchca
 
 ## Clean-room Compliance
 
-Compliant. This gate only modified GPWBPP-owned CUDA code and used project tests. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR official source code, and it did not touch original image data.
+Compliant. This gate only modified GLASS-owned CUDA code and used project tests. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR official source code, and it did not touch original image data.

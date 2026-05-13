@@ -4,8 +4,8 @@ import html
 import json
 from pathlib import Path
 
-from gpwbpp.cli import main
-from gpwbpp.report.wbpp_history import parse_fastintegration_history, read_fastintegration_history
+from glass.cli import main
+from glass.report.wbpp_history import parse_fastintegration_history, read_fastintegration_history
 
 
 def _history_xml() -> str:
@@ -75,7 +75,7 @@ def test_parse_fastintegration_history_summarizes_failed_targets():
     assert payload["summary"]["failed_target_image_names"] == ["LIGHT_H_0002_c.xisf"]
     assert payload["outputData"][0]["H13"] == 2.5
     assert payload["outputData"][0]["target_image_name"] == "LIGHT_H_0001_c.xisf"
-    assert "not used as GPWBPP registration input" in payload["clean_room_note"]
+    assert "not used as GLASS registration input" in payload["clean_room_note"]
 
 
 def test_read_fastintegration_history_from_xisf_property(tmp_path: Path):

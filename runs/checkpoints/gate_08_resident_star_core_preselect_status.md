@@ -16,7 +16,7 @@ Gate 08: Registration
 - `.venv\Scripts\python -m pytest -q tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair tests/test_gpu_registration_search.py::test_resident_stack_star_core_candidate_metrics_match_cpu`
 - `.venv\Scripts\python -m pytest -q tests/test_resident_cuda_run.py tests/test_gpu_registration_search.py tests/test_gpu_star_detect.py`
 - `.venv\Scripts\python -m pytest -q`
-- `.venv\Scripts\gpwbpp.exe run --plan C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_pair_grid96\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_pair_grid96_starcore8_v2 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 0 --resident-star-max-candidates 96 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 24 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior ncc --resident-star-prior-radius-px 4 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id LIGHT_H_0001`
+- `.venv\Scripts\glass.exe run --plan C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_pair_grid96\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_pair_grid96_starcore8_v2 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 0 --resident-star-max-candidates 96 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 24 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior ncc --resident-star-prior-radius-px 4 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id LIGHT_H_0001`
 
 ## Test results
 - Targeted resident similarity + star-core metric tests: `2 passed in 0.26s`.
@@ -24,8 +24,8 @@ Gate 08: Registration
 - Full test suite: `149 passed in 7.34s`.
 
 ## Real-data validation
-- Input plan: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_pair_grid96\processing_plan.json`
-- Output run: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_pair_grid96_starcore8_v2`
+- Input plan: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_pair_grid96\processing_plan.json`
+- Output run: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_pair_grid96_starcore8_v2`
 - Frames: `S000021` reference and `S000022` moving, shape `6422x9600`.
 - Resident registration mode: `similarity_cuda_catalog`.
 - Catalog selector: `resident_grid_top_nms`.
@@ -63,4 +63,4 @@ Gate 08: Registration
 ## Clean-room compliance
 - Compliant.
 - No PixInsight/WBPP/PJSR source, script internals, or installation directories were read or modified.
-- The work uses GPWBPP's own CUDA kernels and clean-room catalog/pixel metric registration logic.
+- The work uses GLASS's own CUDA kernels and clean-room catalog/pixel metric registration logic.

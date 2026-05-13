@@ -8,11 +8,11 @@ Gate 08 / registration increment.
 
 ## Completed Content
 
-- Added an optional open-source `astroalign` registration backend for tile-mode GPWBPP runs.
-- Added `gpwbpp.cpu.registration.estimate_astroalign_transform(...)`.
-- Added `gpwbpp run --registration-method astroalign`.
+- Added an optional open-source `astroalign` registration backend for tile-mode GLASS runs.
+- Added `glass.cpu.registration.estimate_astroalign_transform(...)`.
+- Added `glass run --registration-method astroalign`.
 - The backend:
-  - calls `astroalign.find_transform` on GPWBPP streaming preview images;
+  - calls `astroalign.find_transform` on GLASS streaming preview images;
   - records the resulting similarity matrix;
   - records matched control-point count and RMS;
   - records `registration_solution_source=open_source_astroalign_preview`;
@@ -25,7 +25,7 @@ Gate 08 / registration increment.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cpu\registration.py src\gpwbpp\engine\registration.py src\gpwbpp\cli.py tests\test_cpu_registration.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\cpu\registration.py src\glass\engine\registration.py src\glass\cli.py tests\test_cpu_registration.py
 ```
 
 Result: `All checks passed!`
@@ -43,7 +43,7 @@ Result: `23 passed in 4.08s`
 Result: `112 passed in 6.23s`
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run --help
+.\.venv\Scripts\glass.exe run --help
 ```
 
 Result: help includes `--registration-method {auto,star,astroalign}`.
@@ -53,7 +53,7 @@ Result: help includes `--registration-method {auto,star,astroalign}`.
 - Package: `astroalign`
 - Installed version in this environment: `2.6.2`
 - License reported by package metadata: `MIT License`
-- `pyproject.toml` already exposes this as optional extra `gpwbpp[align]`.
+- `pyproject.toml` already exposes this as optional extra `glass[align]`.
 
 ## CUDA Availability
 
@@ -67,7 +67,7 @@ CUDA is available in the environment, but this increment is a CPU/open-source re
 
 - This is not yet the final GPU star/affine registration implementation.
 - The tile-mode warp stage currently consumes only the translation terms from the registration matrix. Astroalign's non-translation similarity terms are recorded for audit, but are not yet fully used by integration.
-- The backend depends on optional `astroalign`; CPU-only installs without `gpwbpp[align]` still work with `auto`/`star`.
+- The backend depends on optional `astroalign`; CPU-only installs without `glass[align]` still work with `auto`/`star`.
 - Resident high-VRAM mode still uses the existing resident NCC/star-catalog CUDA paths and does not call astroalign.
 
 ## Next Step

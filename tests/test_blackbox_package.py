@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gpwbpp.cli import main
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.cli import main
+from glass.synthetic.generator import generate_synthetic_dataset
 
 
 def test_blackbox_package_writes_handoff_files(tmp_path: Path):
@@ -21,9 +21,9 @@ def test_blackbox_package_writes_handoff_files(tmp_path: Path):
                 str(audit / "manifest.json"),
                 "--plan",
                 str(audit / "processing_plan.json"),
-                "--gpwbpp-run",
+                "--glass-run",
                 str(audit),
-                "--gpwbpp-time-seconds",
+                "--glass-time-seconds",
                 "12.5",
                 "--out",
                 str(package),
@@ -34,12 +34,12 @@ def test_blackbox_package_writes_handoff_files(tmp_path: Path):
     payload = json.loads((package / "blackbox_package.json").read_text(encoding="utf-8"))
     timing = json.loads((package / "timing_template.json").read_text(encoding="utf-8"))
     assert payload["frame_count"] > 0
-    assert payload["gpwbpp_master_count"] == 1
-    assert timing["gpwbpp_time_seconds"] == 12.5
-    assert timing["gpwbpp_timing_source"] == "explicit_cli"
+    assert payload["glass_master_count"] == 1
+    assert timing["glass_time_seconds"] == 12.5
+    assert timing["glass_timing_source"] == "explicit_cli"
     assert (package / "input_frames.csv").exists()
     assert "Do not read or copy official WBPP" in (package / "wbpp_manual_run.md").read_text(encoding="utf-8")
-    assert "gpwbpp compare" in (package / "compare_command.ps1").read_text(encoding="utf-8")
+    assert "glass compare" in (package / "compare_command.ps1").read_text(encoding="utf-8")
 
 
 def test_blackbox_package_uses_run_timing_when_time_omitted(tmp_path: Path):
@@ -57,7 +57,7 @@ def test_blackbox_package_uses_run_timing_when_time_omitted(tmp_path: Path):
                 str(audit / "manifest.json"),
                 "--plan",
                 str(audit / "processing_plan.json"),
-                "--gpwbpp-run",
+                "--glass-run",
                 str(audit),
                 "--out",
                 str(package),
@@ -66,9 +66,9 @@ def test_blackbox_package_uses_run_timing_when_time_omitted(tmp_path: Path):
         == 0
     )
     timing = json.loads((package / "timing_template.json").read_text(encoding="utf-8"))
-    assert timing["gpwbpp_time_seconds"] == run_timing["total_elapsed_s"]
-    assert timing["gpwbpp_timing_source"] == "run_timing_json"
-    assert timing["gpwbpp_stage_timings"]
+    assert timing["glass_time_seconds"] == run_timing["total_elapsed_s"]
+    assert timing["glass_timing_source"] == "run_timing_json"
+    assert timing["glass_stage_timings"]
 
 
 def test_blackbox_finalize_uses_run_timing_and_reports_speedup(tmp_path: Path):
@@ -86,7 +86,7 @@ def test_blackbox_finalize_uses_run_timing_and_reports_speedup(tmp_path: Path):
                 str(audit / "manifest.json"),
                 "--plan",
                 str(audit / "processing_plan.json"),
-                "--gpwbpp-run",
+                "--glass-run",
                 str(audit),
                 "--out",
                 str(package),
@@ -96,15 +96,15 @@ def test_blackbox_finalize_uses_run_timing_and_reports_speedup(tmp_path: Path):
     )
     timing_path = package / "timing_template.json"
     timing = json.loads(timing_path.read_text(encoding="utf-8"))
-    gp_time = float(timing["gpwbpp_time_seconds"])
-    timing["gpwbpp_time_seconds"] = None
+    gp_time = float(timing["glass_time_seconds"])
+    timing["glass_time_seconds"] = None
     timing["reference_time_seconds"] = gp_time * 2.0
-    timing["reference_master_paths"] = timing["gpwbpp_master_paths"]
+    timing["reference_master_paths"] = timing["glass_master_paths"]
     timing_path.write_text(json.dumps(timing, indent=2), encoding="utf-8")
 
     assert main(["blackbox-finalize", "--timing", str(timing_path), "--out", str(final)]) == 0
     summary = json.loads((final / "blackbox_finalize_summary.json").read_text(encoding="utf-8"))
     assert summary["status"] == "complete"
-    assert summary["gpwbpp_timing_source"] == "run_timing_json"
+    assert summary["glass_timing_source"] == "run_timing_json"
     assert summary["speedup_observed"] is True
-    assert summary["all_gpwbpp_faster"] is True
+    assert summary["all_glass_faster"] is True

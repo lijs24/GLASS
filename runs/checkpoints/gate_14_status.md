@@ -6,11 +6,11 @@
 
 ## Completed
 
-- Added `pixinsight/GPWBPP.js`, an independent clean-room launcher for the
-  external `gpwbpp` CLI.
+- Added `pixinsight/GLASS.js`, an independent clean-room launcher for the
+  external `glass` CLI.
 - Added `pixinsight/README.md` with manual use instructions.
 - Added `docs/pixinsight_frontend.md` documenting the front-end boundary.
-- Added tests that verify the launcher is a thin wrapper around `gpwbpp audit`
+- Added tests that verify the launcher is a thin wrapper around `glass audit`
   and does not contain forbidden official preprocessing script names.
 
 ## Commands Run
@@ -38,9 +38,9 @@
 ## Known Limitations
 
 - The launcher was not executed inside PixInsight during automated tests.
-- The supported automation interface remains the `gpwbpp` CLI.
+- The supported automation interface remains the `glass` CLI.
 - The launcher does not implement PixInsight process instances or scientific
-  image-processing algorithms; it only calls `gpwbpp audit` externally.
+  image-processing algorithms; it only calls `glass audit` externally.
 
 ## Next Step
 

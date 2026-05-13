@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.cpu.local_norm import (
+from glass.cpu.local_norm import (
     apply_grid_normalization,
     apply_tile_normalization,
     estimate_grid_normalization_mean_std,

@@ -5,8 +5,8 @@ Date: 2026-05-13
 ## Completed contents
 
 - Added explicit tile-mode registration method `cuda_catalog`.
-- Wired `gpwbpp run --registration-method cuda_catalog` and
-  `gpwbpp audit --registration-method cuda_catalog`.
+- Wired `glass run --registration-method cuda_catalog` and
+  `glass audit --registration-method cuda_catalog`.
 - The new method builds the existing streaming registration previews, requires
   the native CUDA backend, selects compact star catalogs on GPU, estimates a
   similarity transform with the CUDA mutual catalog scorer, optionally uses a
@@ -28,10 +28,10 @@ Date: 2026-05-13
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_cli_smoke.py tests\test_pipeline_fixture.py tests\test_cpu_registration.py`
 - `.\.venv\Scripts\python.exe -m pytest -q`
 - `git diff --check`
-- `.\.venv\Scripts\python.exe -m gpwbpp.cli synthetic --out runs\cuda_catalog_cli_smoke_data --frames 4 --width 96 --height 96 --known-shift`
-- `.\.venv\Scripts\python.exe -m gpwbpp.cli scan --root runs\cuda_catalog_cli_smoke_data --out runs\cuda_catalog_cli_smoke_manifest.json`
-- `.\.venv\Scripts\python.exe -m gpwbpp.cli plan --manifest runs\cuda_catalog_cli_smoke_manifest.json --out runs\cuda_catalog_cli_smoke_plan.json`
-- `.\.venv\Scripts\python.exe -m gpwbpp.cli run --plan runs\cuda_catalog_cli_smoke_plan.json --out runs\cuda_catalog_cli_smoke_run --backend cuda --until-stage registration --tile-size 32 --registration-method cuda_catalog --registration-preview-max-dimension 128`
+- `.\.venv\Scripts\python.exe -m glass.cli synthetic --out runs\cuda_catalog_cli_smoke_data --frames 4 --width 96 --height 96 --known-shift`
+- `.\.venv\Scripts\python.exe -m glass.cli scan --root runs\cuda_catalog_cli_smoke_data --out runs\cuda_catalog_cli_smoke_manifest.json`
+- `.\.venv\Scripts\python.exe -m glass.cli plan --manifest runs\cuda_catalog_cli_smoke_manifest.json --out runs\cuda_catalog_cli_smoke_plan.json`
+- `.\.venv\Scripts\python.exe -m glass.cli run --plan runs\cuda_catalog_cli_smoke_plan.json --out runs\cuda_catalog_cli_smoke_run --backend cuda --until-stage registration --tile-size 32 --registration-method cuda_catalog --registration-preview-max-dimension 128`
 
 ## Test results
 
@@ -82,7 +82,7 @@ CUDA is available.
 
 ## Clean-room compliance
 
-- This increment used only GPWBPP code and open, generic image-registration
+- This increment used only GLASS code and open, generic image-registration
   techniques already present in the project.
 - No PixInsight/WBPP/PJSR source code was read, copied, summarized, or used.
 - Original data directories were not modified.

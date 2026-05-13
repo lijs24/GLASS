@@ -20,7 +20,7 @@ Date: 2026-05-13
 ## Commands run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_resident_cuda_run.py
 ```
 
 Result: passed.
@@ -51,7 +51,7 @@ The resident pipeline can now ingest an external registration artifact and apply
 
 ## Known limitations
 
-- `external_matrix` still depends on a prior registration artifact; GPWBPP's owned GPU similarity/affine matcher is not complete.
+- `external_matrix` still depends on a prior registration artifact; GLASS's owned GPU similarity/affine matcher is not complete.
 - The external matrix path trusts the source artifact's accepted status and does not yet recompute star-model residuals on GPU.
 - Homography, Lanczos, distortion models, and full tile/window Local Normalization remain later gates.
 
@@ -61,4 +61,4 @@ Run tile-mode astroalign registration on a small real subset, feed its `registra
 
 ## Clean-room compliance
 
-This increment used GPWBPP-owned code, test-generated registration artifacts, and open-source astroalign-compatible matrix semantics already present in our artifacts. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.
+This increment used GLASS-owned code, test-generated registration artifacts, and open-source astroalign-compatible matrix semantics already present in our artifacts. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.

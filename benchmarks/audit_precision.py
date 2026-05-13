@@ -10,9 +10,9 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.models import CalibrationPolicy
-from gpwbpp.validation.precision import compare_precision_on_crops, read_xisf_sample_format
+from glass.io.json_io import read_json, write_json
+from glass.models import CalibrationPolicy
+from glass.validation.precision import compare_precision_on_crops, read_xisf_sample_format
 
 
 def _frames_by_type(plan: dict[str, Any], frame_type: str) -> list[dict[str, Any]]:
@@ -58,9 +58,9 @@ def main() -> int:
     dark_exposure_s = float(np.median(dark_exposures)) if dark_exposures else None
 
     try:
-        import gpwbpp_cuda
+        import glass_cuda
 
-        cuda_module = gpwbpp_cuda if gpwbpp_cuda.cuda_available() else None
+        cuda_module = glass_cuda if glass_cuda.cuda_available() else None
     except Exception:
         cuda_module = None
 

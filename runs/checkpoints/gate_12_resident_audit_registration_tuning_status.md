@@ -6,7 +6,7 @@ Gate 12: End-to-end CUDA audit reproducibility increment.
 
 ## Completed
 
-- Extended `gpwbpp audit --memory-mode resident` so it can pass the resident registration tuning parameters used by detailed real-data runs.
+- Extended `glass audit --memory-mode resident` so it can pass the resident registration tuning parameters used by detailed real-data runs.
 - Added audit options:
   - `--resident-ncc-sample-stride`
   - `--resident-ncc-fallback-score-threshold`
@@ -25,9 +25,9 @@ Gate 12: End-to-end CUDA audit reproducibility increment.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cli.py tests\test_cli_smoke.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\cli.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cli_smoke.py::test_cli_audit_resident_cuda_smoke tests\test_cli_smoke.py::test_cli_help_commands
-.\.venv\Scripts\gpwbpp.exe audit --help
+.\.venv\Scripts\glass.exe audit --help
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cli_smoke.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -49,11 +49,11 @@ Gate 12: End-to-end CUDA audit reproducibility increment.
 
 ## Known Limitations
 
-- Resident audit still intentionally exposes only stable resident controls. Very specialized debug switches should remain on `gpwbpp run` unless needed for reproducible benchmark workflows.
+- Resident audit still intentionally exposes only stable resident controls. Very specialized debug switches should remain on `glass run` unless needed for reproducible benchmark workflows.
 
 ## Next Step
 
-- Reuse resident audit for real-data benchmark reruns when a complete scan/plan/run/report artifact is preferred over the lower-level `gpwbpp run` command.
+- Reuse resident audit for real-data benchmark reruns when a complete scan/plan/run/report artifact is preferred over the lower-level `glass run` command.
 
 ## Clean-room
 

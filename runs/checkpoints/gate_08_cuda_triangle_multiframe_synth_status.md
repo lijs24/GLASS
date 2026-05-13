@@ -11,7 +11,7 @@ Gate 08: Registration
 - Ran a full CLI chain on a new controlled synthetic dataset:
   synthetic data generation, metadata scan, planning, CUDA calibration, quality
   measurement, and `cuda_triangle` registration.
-- Verified that `gpwbpp run --until-stage registration --registration-method
+- Verified that `glass run --until-stage registration --registration-method
   cuda_triangle` writes a valid `registration_results.json`.
 - Verified that the report command can consume the resulting registration
   artifact.
@@ -19,11 +19,11 @@ Gate 08: Registration
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe synthetic --out runs\gate_08_cuda_triangle_pipeline_synth_data --frames 12 --width 256 --height 256 --filter H --known-shift
-.\.venv\Scripts\gpwbpp.exe scan --root runs\gate_08_cuda_triangle_pipeline_synth_data --out runs\gate_08_cuda_triangle_pipeline_synth_manifest.json
-.\.venv\Scripts\gpwbpp.exe plan --manifest runs\gate_08_cuda_triangle_pipeline_synth_manifest.json --out runs\gate_08_cuda_triangle_pipeline_synth_plan.json
-.\.venv\Scripts\gpwbpp.exe run --plan runs\gate_08_cuda_triangle_pipeline_synth_plan.json --out runs\gate_08_cuda_triangle_pipeline_synth_run --backend cuda --until-stage registration --registration-method cuda_triangle --registration-preview-max-dimension 512 --tile-size 128
-.\.venv\Scripts\gpwbpp.exe report --run runs\gate_08_cuda_triangle_pipeline_synth_run --out runs\gate_08_cuda_triangle_pipeline_synth_run\report.html
+.\.venv\Scripts\glass.exe synthetic --out runs\gate_08_cuda_triangle_pipeline_synth_data --frames 12 --width 256 --height 256 --filter H --known-shift
+.\.venv\Scripts\glass.exe scan --root runs\gate_08_cuda_triangle_pipeline_synth_data --out runs\gate_08_cuda_triangle_pipeline_synth_manifest.json
+.\.venv\Scripts\glass.exe plan --manifest runs\gate_08_cuda_triangle_pipeline_synth_manifest.json --out runs\gate_08_cuda_triangle_pipeline_synth_plan.json
+.\.venv\Scripts\glass.exe run --plan runs\gate_08_cuda_triangle_pipeline_synth_plan.json --out runs\gate_08_cuda_triangle_pipeline_synth_run --backend cuda --until-stage registration --registration-method cuda_triangle --registration-preview-max-dimension 512 --tile-size 128
+.\.venv\Scripts\glass.exe report --run runs\gate_08_cuda_triangle_pipeline_synth_run --out runs\gate_08_cuda_triangle_pipeline_synth_run\report.html
 ```
 
 ## Test Results
@@ -91,6 +91,6 @@ with resident descriptor primitives.
 
 ## Clean-room Compliance
 
-Compliant. The validation used GPWBPP-generated synthetic FITS data and
-GPWBPP-owned CUDA/Python code. No PixInsight/WBPP/PJSR source code was read,
+Compliant. The validation used GLASS-generated synthetic FITS data and
+GLASS-owned CUDA/Python code. No PixInsight/WBPP/PJSR source code was read,
 copied, summarized, or modified.

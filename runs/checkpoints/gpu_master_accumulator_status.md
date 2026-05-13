@@ -6,17 +6,17 @@
 
 ## Completed
 
-- Reworked `gpwbpp.gpu.master_frames.mean_stack_paths_tile_streaming` to read source FITS files through `FitsImageReader`.
+- Reworked `glass.gpu.master_frames.mean_stack_paths_tile_streaming` to read source FITS files through `FitsImageReader`.
 - Removed Astropy HDU `.data` slicing and per-tile `np.stack` construction from the helper.
 - Added a per-tile accumulator path:
-  - Uses `gpwbpp_cuda.integrate_accumulate_mean_tile_f32` when native CUDA is available.
+  - Uses `glass_cuda.integrate_accumulate_mean_tile_f32` when native CUDA is available.
   - Uses a float64 CPU tile accumulator when CUDA is unavailable.
 - Added a regression test that monkeypatches `numpy.stack` to fail, proving the fallback helper does not build a 3D tile stack.
 - Updated memory-model and completion-audit docs.
 
 ## Commands Run
 
-- `.\\.venv\\Scripts\\python.exe -m py_compile src/gpwbpp/gpu/master_frames.py tests/test_gpu_master_frames_vs_cpu.py`
+- `.\\.venv\\Scripts\\python.exe -m py_compile src/glass/gpu/master_frames.py tests/test_gpu_master_frames_vs_cpu.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests/test_gpu_master_frames_vs_cpu.py tests/test_cpu_master_frames.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
 

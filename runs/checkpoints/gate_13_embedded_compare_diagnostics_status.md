@@ -8,7 +8,7 @@ Gate 13 compare/report checkpoint.
 
 - Replaced the generic compare HTML output with a dedicated compare report.
 - Embedded diagnostic PNG previews directly in the compare HTML when `--diagnostics-dir` is used:
-  - GPWBPP preview;
+  - GLASS preview;
   - reference preview;
   - absolute difference preview;
   - signed difference preview.
@@ -19,9 +19,9 @@ Gate 13 compare/report checkpoint.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\report\compare_report.py tests\test_compare_report.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\report\compare_report.py tests\test_compare_report.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_compare_report.py tests\test_cli_smoke.py
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics_embedded.html" --gpwbpp-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle Lanczos3 193 WBPP-failed-excluded scaled diagnostics embedded" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --diagnostics-dir "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics_embedded" --diagnostic-max-size 1200 --hotspot-tile-size 512 --ignore-border-px 32
+.\.venv\Scripts\glass.exe compare --glass "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics_embedded.html" --glass-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --glass-label "GLASS resident CUDA triangle Lanczos3 193 WBPP-failed-excluded scaled diagnostics embedded" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --diagnostics-dir "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics_embedded" --diagnostic-max-size 1200 --hotspot-tile-size 512 --ignore-border-px 32
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -33,8 +33,8 @@ Gate 13 compare/report checkpoint.
 
 ## Real-data Artifact
 
-- Compare report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics_embedded.html`.
-- Diagnostics directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics_embedded`.
+- Compare report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics_embedded.html`.
+- Diagnostics directory: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics_embedded`.
 - The HTML contains relative image links such as `compare_diagnostics_embedded/signed_diff_preview.png`.
 - The report records:
   - speedup: `9.75928982978x`;
@@ -63,5 +63,5 @@ Gate 13 compare/report checkpoint.
 
 ## Clean-room Compliance
 
-- Compliant. The report compares GPWBPP output to user-generated PixInsight/WBPP black-box artifacts only.
+- Compliant. The report compares GLASS output to user-generated PixInsight/WBPP black-box artifacts only.
 - No official PixInsight/WBPP/PJSR source code was read, copied, summarized, or used as implementation input.

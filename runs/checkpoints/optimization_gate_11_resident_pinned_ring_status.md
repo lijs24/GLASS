@@ -22,14 +22,14 @@ Optimization Gate 11.
 ## Commands Run
 
 ```powershell
-cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && ""C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\cmake.exe"" --build build\native-cuda --config Release --target _gpwbpp_cuda_native"
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\io\fits_io.py src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py src\gpwbpp_cuda.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
+cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && ""<repo>\.venv\Scripts\cmake.exe"" --build build\native-cuda --config Release --target _glass_cuda_native"
+.\.venv\Scripts\python.exe -m ruff check src\glass\io\fits_io.py src\glass\engine\resident_cuda.py src\glass\cli.py src\glass_cuda.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cuda_resident_stack.py::test_resident_stack_host_async_calibration_accepts_pinned_host_array tests\test_cuda_resident_stack.py::test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m gpwbpp.cli run --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --flat-floor 0.05 --resident-prefetch-frames 16 --resident-prefetch-workers 8 --resident-h2d-mode pinned_ring --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30 --reference-frame-id LIGHT_H_0136 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158
-.\.venv\Scripts\python.exe -m gpwbpp.cli compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\compare_vs_wbpp_fastintegration_scaled_coverage190.html --gpwbpp-time-seconds 31.245748999994248 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP pinned_ring coarse4" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --gpwbpp-coverage-map C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\integration\resident_coverage_map_H.fits --min-coverage 190
-.\.venv\Scripts\python.exe -m gpwbpp.cli compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4\integration\resident_master_H.fits --out C:\gpwbpp_runs\final_m38_h_200\pinnedring_vs_pageable_readprofile_coarse4_compare.html --gpwbpp-label pinned_ring --reference-label pageable_readprofile --clip-low 0 --clip-high 65535
-.\.venv\Scripts\python.exe -m gpwbpp.cli acceptance-audit --manifest C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\manifest.json --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_pinnedring_coarse4.json --markdown runs\benchmarks\m38_acceptance_audit_pinnedring_coarse4.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
+.\.venv\Scripts\python.exe -m glass.cli run --plan C:\glass_runs\final_m38_h_200\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --flat-floor 0.05 --resident-prefetch-frames 16 --resident-prefetch-workers 8 --resident-h2d-mode pinned_ring --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30 --reference-frame-id LIGHT_H_0136 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158
+.\.venv\Scripts\python.exe -m glass.cli compare --glass C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\integration\resident_master_H.fits --reference C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\compare_vs_wbpp_fastintegration_scaled_coverage190.html --glass-time-seconds 31.245748999994248 --reference-time-seconds 1092.541 --glass-label "GLASS pinned_ring coarse4" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --glass-coverage-map C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\integration\resident_coverage_map_H.fits --min-coverage 190
+.\.venv\Scripts\python.exe -m glass.cli compare --glass C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\integration\resident_master_H.fits --reference C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4\integration\resident_master_H.fits --out C:\glass_runs\final_m38_h_200\pinnedring_vs_pageable_readprofile_coarse4_compare.html --glass-label pinned_ring --reference-label pageable_readprofile --clip-low 0 --clip-high 65535
+.\.venv\Scripts\python.exe -m glass.cli acceptance-audit --manifest C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\manifest.json --glass-run C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4 --wbpp-result C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_pinnedring_coarse4.json --markdown runs\benchmarks\m38_acceptance_audit_pinnedring_coarse4.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 git diff --check
 ```
 
@@ -45,7 +45,7 @@ git diff --check
 
 Pinned-ring run:
 
-- Run directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4`
+- Run directory: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4`
 - Frame set: 200 lights, 20 bias, 20 dark, 20 flat.
 - Active integrated frames: 193.
 - Total run timing: `31.245748999994248 s`.
@@ -81,16 +81,16 @@ Pinned memory:
 
 Against WBPP FastIntegration:
 
-- Compare report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
+- Compare report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
 - RMS diff: `0.001558294284488301`.
 - P99 absolute diff: `0.00043095467146486016`.
 - P99.9 absolute diff: `0.004013502578251386`.
 - Shape match: true.
 - Coverage fraction with minimum coverage 190: `0.9574613308418977`.
 
-Against the previous pageable readprofile GPWBPP run:
+Against the previous pageable readprofile GLASS run:
 
-- Compare report: `C:\gpwbpp_runs\final_m38_h_200\pinnedring_vs_pageable_readprofile_coarse4_compare.html`
+- Compare report: `C:\glass_runs\final_m38_h_200\pinnedring_vs_pageable_readprofile_coarse4_compare.html`
 - Master SHA-256 matched exactly:
   - `F9F7E173B5BA7EC582DB7460B7F051E0B75B2E2A48C0ADF035940A071CD79CC2`
 - Coverage-map SHA-256 matched exactly:

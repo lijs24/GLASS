@@ -11,8 +11,8 @@ Status: completed incremental Gate 10 capability. This is not the full PixInsigh
   - finite-pixel source/reference mean and standard deviation
   - ignores pixels where either source or reference is non-finite
 - Added Python wrapper:
-  - `gpwbpp_cuda.local_norm_pair_stats_f32`
-  - `gpwbpp_cuda.local_norm_estimate_apply_mean_std_f32`
+  - `glass_cuda.local_norm_pair_stats_f32`
+  - `glass_cuda.local_norm_estimate_apply_mean_std_f32`
 - Added CPU baseline helper:
   - `estimate_tile_normalization_mean_std`
 - Wired non-resident `local_normalize_registered_frames(..., backend="cuda")` to use CUDA mean/std stats plus CUDA apply when available.
@@ -25,7 +25,7 @@ Status: completed incremental Gate 10 capability. This is not the full PixInsigh
 ## Verification commands
 
 ```powershell
-cmd.exe /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build build\native-cuda --config Release --target _gpwbpp_cuda_native'
+cmd.exe /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build build\native-cuda --config Release --target _glass_cuda_native'
 ```
 
 ```powershell
@@ -46,11 +46,11 @@ Result: 123 passed in 6.59 s.
 
 ```powershell
 .\.venv\Scripts\python.exe - <<'PY'
-import numpy as np, gpwbpp_cuda
+import numpy as np, glass_cuda
 src = np.arange(12, dtype=np.float32).reshape(3, 4)
 ref = src * 2 + 3
-out, stats = gpwbpp_cuda.local_norm_estimate_apply_mean_std_f32(src, ref)
-print(gpwbpp_cuda.cuda_available(), stats["stats_backend"], float(np.max(np.abs(out - ref))))
+out, stats = glass_cuda.local_norm_estimate_apply_mean_std_f32(src, ref)
+print(glass_cuda.cuda_available(), stats["stats_backend"], float(np.max(np.abs(out - ref))))
 PY
 ```
 
@@ -60,7 +60,7 @@ Observed: CUDA available, `stats_backend=cuda`, max absolute error 0.0.
 
 - CUDA backend available: yes.
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
-- Native module rebuilt: `src\_gpwbpp_cuda_native.cp312-win_amd64.pyd`.
+- Native module rebuilt: `src\_glass_cuda_native.cp312-win_amd64.pyd`.
 
 ## Known limitations
 
@@ -75,4 +75,4 @@ Use this CUDA tile primitive to implement a resident tiled LN pass, or add a smo
 
 ## Clean-room compliance
 
-Compliant. This implementation uses only GPWBPP code, CUDA primitives, and generic local-normalization formulas. No official WBPP/PJSR source was read or copied.
+Compliant. This implementation uses only GLASS code, CUDA primitives, and generic local-normalization formulas. No official WBPP/PJSR source was read or copied.

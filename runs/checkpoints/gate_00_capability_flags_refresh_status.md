@@ -19,7 +19,7 @@ Gate 00 audit/capability metadata checkpoint.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\capabilities.py tests\test_capabilities.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\capabilities.py tests\test_capabilities.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_capabilities.py tests\test_cli_smoke.py tests\test_cuda_import.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -45,7 +45,7 @@ Gate 00 audit/capability metadata checkpoint.
 
 ## Next Step
 
-- Keep capability flags synchronized with each new gate so `gpwbpp` does not overstate or understate implemented behavior.
+- Keep capability flags synchronized with each new gate so `glass` does not overstate or understate implemented behavior.
 
 ## Clean-room Compliance
 

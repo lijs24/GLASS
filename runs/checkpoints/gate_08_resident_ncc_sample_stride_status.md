@@ -10,8 +10,8 @@ Gate 08 / registration increment.
 
 - Added an optional `sample_stride` parameter to CUDA integer NCC translation search and subpixel NCC refinement.
 - Exposed the option through:
-  - `gpwbpp_cuda.estimate_translation_search_f32(..., sample_stride=1)`
-  - `gpwbpp_cuda.estimate_translation_subpixel_ncc_f32(..., sample_stride=1)`
+  - `glass_cuda.estimate_translation_search_f32(..., sample_stride=1)`
+  - `glass_cuda.estimate_translation_subpixel_ncc_f32(..., sample_stride=1)`
   - `ResidentCalibratedStack.estimate_translation_to_reference(..., sample_stride=1)`
   - `ResidentCalibratedStack.estimate_translation_subpixel_to_reference(..., sample_stride=1)`
   - CLI flag `--resident-ncc-sample-stride`
@@ -23,7 +23,7 @@ Gate 08 / registration increment.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_gpu_registration_search.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_gpu_registration_search.py tests\test_resident_cuda_run.py
 ```
 
 Result: `All checks passed!`
@@ -31,7 +31,7 @@ Result: `All checks passed!`
 ```powershell
 $pybind = (& .\.venv\Scripts\python.exe -m pybind11 --cmakedir).Trim()
 $ninja = (Resolve-Path .\.venv\Scripts\ninja.exe).Path
-cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR="<pybind11 cmake dir>" -DCMAKE_MAKE_PROGRAM="<ninja>" -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
+cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -Dpybind11_DIR="<pybind11 cmake dir>" -DCMAKE_MAKE_PROGRAM="<ninja>" -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
 ```
 
 Result: configure succeeded; build result `ninja: no work to do.`
@@ -46,29 +46,29 @@ Result: `110 passed in 5.99s`
 
 Resident M38 subset12 baseline:
 
-- Run: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset12`
+- Run: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset12`
 - Registration mode: resident CUDA `translation_ncc_subpixel`
 - Elapsed: `18.7239103000029 s`
 
 Resident M38 subset12 with `--resident-ncc-sample-stride 4`:
 
-- Run: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_subset12`
+- Run: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_subset12`
 - Status counts: `1 reference`, `11 ok`
 - Elapsed: `15.676582099986263 s`
 - Compared frames: `12`
 - Mean translation delta vs stride-1 baseline: `0.08333333333333333 px`
 - Max translation delta vs stride-1 baseline: `1.0 px`
 
-Astroalign vs GPWBPP CUDA two-frame diagnostic:
+Astroalign vs GLASS CUDA two-frame diagnostic:
 
 - Artifact: `runs/diagnostics/astroalign_vs_gpu_m38_light0001_0003/result.json`
 - Pair: M38 `LIGHT_H_0001.fits` reference and `LIGHT_H_0003.fits` moving, full frame `6422 x 9600`
-- Common input: FITS `BSCALE/BZERO` applied, calibrated with existing GPWBPP master dark/flat, flat floor `0.05`
+- Common input: FITS `BSCALE/BZERO` applied, calibrated with existing GLASS master dark/flat, flat floor `0.05`
 - Astroalign full-frame affine: `6.658273199980613 s`
-- GPWBPP CUDA standalone NCC+warp stride 1: `0.6261521999840625 s`, refined shift `(4.5, 0.5)`
-- GPWBPP CUDA standalone NCC+warp stride 4: `0.23493669996969402 s`, refined shift `(4.5, 0.5)`
-- GPWBPP resident upload+estimate+warp+download stride 1: `0.506568199954927 s`, refined shift `(4.5, 0.5)`
-- GPWBPP resident upload+estimate+warp+download stride 4: `0.1733166000340134 s`, refined shift `(4.5, 0.5)`
+- GLASS CUDA standalone NCC+warp stride 1: `0.6261521999840625 s`, refined shift `(4.5, 0.5)`
+- GLASS CUDA standalone NCC+warp stride 4: `0.23493669996969402 s`, refined shift `(4.5, 0.5)`
+- GLASS resident upload+estimate+warp+download stride 1: `0.506568199954927 s`, refined shift `(4.5, 0.5)`
+- GLASS resident upload+estimate+warp+download stride 4: `0.1733166000340134 s`, refined shift `(4.5, 0.5)`
 
 ## CUDA Availability
 
@@ -92,4 +92,4 @@ Run a larger resident NCC stride sweep on the 200-light M38 set, then decide whe
 
 ## Clean-Room Compliance
 
-Compliant. This work used project-owned CUDA code, project tests, generated GPWBPP artifacts, user-provided raw frames, and public/open Python package behavior. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR source code.
+Compliant. This work used project-owned CUDA code, project tests, generated GLASS artifacts, user-provided raw frames, and public/open Python package behavior. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR source code.

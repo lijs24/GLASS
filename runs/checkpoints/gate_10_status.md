@@ -11,7 +11,7 @@
 - Implemented CUDA pixel apply kernel `local_norm_apply_f32`.
 - Added Python CUDA wrapper with CPU fallback.
 - Added tile-streaming local normalization stage after warp.
-- Added `gpwbpp run --until-stage local_normalization`.
+- Added `glass run --until-stage local_normalization`.
 - Added `--local-normalization auto|on|off` so LN can be explicitly enabled or disabled.
 - Added `local_norm_results.json` with reference frame, crop box, policy, backend, tile counts, mean scale/offset, valid pixels, and warnings.
 - Added Local Normalization summary to HTML reports.
@@ -23,10 +23,10 @@
 .\.venv\Scripts\python -m pybind11 --cmakedir
 cmd /c "call Visual Studio VsDevCmd.bat ... && cmake -S . -B build\native-cuda ... && cmake --build build\native-cuda --config Release"
 .\.venv\Scripts\python -m pytest -q tests/test_cpu_local_norm.py tests/test_gpu_local_norm_vs_cpu.py tests/test_pipeline_fixture.py
-.\.venv\Scripts\gpwbpp synthetic --out runs\gate_10_synth\source --frames 4 --width 48 --height 48 --filter H --known-shift
-.\.venv\Scripts\gpwbpp audit --root runs\gate_10_synth\source --out runs\gate_10_synth\audit --backend auto
-.\.venv\Scripts\gpwbpp run --plan runs\gate_10_synth\audit\processing_plan.json --out runs\gate_10_synth\run --backend cuda --until-stage local_normalization --local-normalization on --tile-size 12
-.\.venv\Scripts\gpwbpp report --run runs\gate_10_synth\run --manifest runs\gate_10_synth\audit\manifest.json --plan runs\gate_10_synth\audit\processing_plan.json --out runs\gate_10_synth\run\report.html
+.\.venv\Scripts\glass synthetic --out runs\gate_10_synth\source --frames 4 --width 48 --height 48 --filter H --known-shift
+.\.venv\Scripts\glass audit --root runs\gate_10_synth\source --out runs\gate_10_synth\audit --backend auto
+.\.venv\Scripts\glass run --plan runs\gate_10_synth\audit\processing_plan.json --out runs\gate_10_synth\run --backend cuda --until-stage local_normalization --local-normalization on --tile-size 12
+.\.venv\Scripts\glass report --run runs\gate_10_synth\run --manifest runs\gate_10_synth\audit\manifest.json --plan runs\gate_10_synth\audit\processing_plan.json --out runs\gate_10_synth\run\report.html
 .\.venv\Scripts\python -m pytest -q
 ```
 

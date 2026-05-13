@@ -2,7 +2,7 @@
 
 ## Scope
 
-This checkpoint records a completion audit of the current GPWBPP real-data
+This checkpoint records a completion audit of the current GLASS real-data
 acceptance evidence. It does not add new pipeline behavior.
 
 ## Completed
@@ -10,14 +10,14 @@ acceptance evidence. It does not add new pipeline behavior.
 - Inspected final M38 real-data artifacts directly:
   - manifest;
   - processing plan;
-  - GPWBPP run timing;
+  - GLASS run timing;
   - integration results;
   - resident CUDA artifacts;
   - coverage-masked compare JSON;
   - PixInsight/WBPP black-box timing JSON.
 - Verified the final data set has 200 light frames, 20 bias frames, 20 dark
   frames, and 20 flat frames.
-- Verified GPWBPP resident CUDA elapsed time is `111.94882199994754 s`.
+- Verified GLASS resident CUDA elapsed time is `111.94882199994754 s`.
 - Verified WBPP black-box elapsed time is `1092.541 s`.
 - Verified speedup is `9.75928982978054x`.
 - Verified coverage-masked result comparison has shape match true, RMS
@@ -33,7 +33,7 @@ acceptance evidence. It does not add new pipeline behavior.
 ```
 
 Direct artifact audit was performed with a local Python JSON inspection script
-against `C:\gpwbpp_runs\final_m38_h_200`.
+against `C:\glass_runs\final_m38_h_200`.
 
 ## Test Result
 
@@ -49,12 +49,12 @@ against `C:\gpwbpp_runs\final_m38_h_200`.
 
 ## Known Limitations
 
-- Optional Gate 14 PixInsight launcher exists as `pixinsight/GPWBPP.js`, but
+- Optional Gate 14 PixInsight launcher exists as `pixinsight/GLASS.js`, but
   PixInsight-side execution is not part of the automated pytest suite.
 - Phase B advanced gates are not implemented.
 - Local normalization is validated separately but disabled in the fastest
   real-data WBPP parity run.
-- GPWBPP remains WBPP-like and clean-room, not a claim of exact PixInsight/WBPP
+- GLASS remains WBPP-like and clean-room, not a claim of exact PixInsight/WBPP
   algorithm identity.
 
 ## Next Step

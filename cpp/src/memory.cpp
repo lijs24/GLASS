@@ -1,2 +1,2 @@
-#include <gpwbpp_cuda/memory.hpp>
+#include <glass_cuda/memory.hpp>
 

@@ -12,24 +12,24 @@ Gate 12 / end-to-end resident CUDA WBPP-like pipeline increment.
 - Used the new `--resident-ncc-sample-stride 4` option to reduce full-frame NCC scoring work.
 - Compared the output master against:
   - PixInsight/WBPP black-box FastIntegration output.
-  - The previous GPWBPP resident NCC stride-1 200-light run.
+  - The previous GLASS resident NCC stride-1 200-light run.
 
 ## Commands Run
 
 ```powershell
-$base='C:\gpwbpp_runs\final_m38_h_200'
-$src=Join-Path $base 'gpwbpp_resident_ncc_winsorized_allcal_200'
-$run=Join-Path $base 'gpwbpp_resident_ncc_stride4_winsorized_allcal_200'
+$base='C:\glass_runs\final_m38_h_200'
+$src=Join-Path $base 'glass_resident_ncc_winsorized_allcal_200'
+$run=Join-Path $base 'glass_resident_ncc_stride4_winsorized_allcal_200'
 New-Item -ItemType Directory -Force -Path $run | Out-Null
-.\.venv\Scripts\gpwbpp.exe run --plan (Join-Path $src 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 64 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
+.\.venv\Scripts\glass.exe run --plan (Join-Path $src 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 64 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
 ```
 
 ```powershell
-$base='C:\gpwbpp_runs\final_m38_h_200'
-$run=Join-Path $base 'gpwbpp_resident_ncc_stride4_winsorized_allcal_200'
-$ref='C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf'
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp (Join-Path $run 'integration\resident_master_H.fits') --reference $ref --out (Join-Path $run 'resident_stride4_vs_wbpp_fastintegration_scaled_compare.html') --gpwbpp-time-seconds 110.08566179999616 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident NCC stride4 200 scaled" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 1.5259021896696422e-05 --clip-low 0 --clip-high 1
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp (Join-Path $run 'integration\resident_master_H.fits') --reference (Join-Path $base 'gpwbpp_resident_ncc_winsorized_allcal_200\integration\resident_master_H.fits') --out (Join-Path $run 'resident_stride4_vs_stride1_compare.html') --gpwbpp-time-seconds 110.08566179999616 --reference-time-seconds 363.1756594000035 --gpwbpp-label "GPWBPP resident NCC stride4 200" --reference-label "GPWBPP resident NCC stride1 200"
+$base='C:\glass_runs\final_m38_h_200'
+$run=Join-Path $base 'glass_resident_ncc_stride4_winsorized_allcal_200'
+$ref='C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf'
+.\.venv\Scripts\glass.exe compare --glass (Join-Path $run 'integration\resident_master_H.fits') --reference $ref --out (Join-Path $run 'resident_stride4_vs_wbpp_fastintegration_scaled_compare.html') --glass-time-seconds 110.08566179999616 --reference-time-seconds 1092.541 --glass-label "GLASS resident NCC stride4 200 scaled" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 1.5259021896696422e-05 --clip-low 0 --clip-high 1
+.\.venv\Scripts\glass.exe compare --glass (Join-Path $run 'integration\resident_master_H.fits') --reference (Join-Path $base 'glass_resident_ncc_winsorized_allcal_200\integration\resident_master_H.fits') --out (Join-Path $run 'resident_stride4_vs_stride1_compare.html') --glass-time-seconds 110.08566179999616 --reference-time-seconds 363.1756594000035 --glass-label "GLASS resident NCC stride4 200" --reference-label "GLASS resident NCC stride1 200"
 ```
 
 ```powershell
@@ -40,8 +40,8 @@ Result: `110 passed in 5.95s`
 
 ## Real M38 Run Result
 
-- Run directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_winsorized_allcal_200`
-- Input plan: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\processing_plan.json`
+- Run directory: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_winsorized_allcal_200`
+- Input plan: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\processing_plan.json`
 - Data scale:
   - 200 light frames.
   - 20 bias frames.
@@ -69,11 +69,11 @@ Result: `110 passed in 5.95s`
 ## Comparison to PixInsight/WBPP FastIntegration
 
 - Report:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_wbpp_fastintegration_scaled_compare.html`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_wbpp_fastintegration_scaled_compare.html`
 - JSON:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_wbpp_fastintegration_scaled_compare.json`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_wbpp_fastintegration_scaled_compare.json`
 - WBPP black-box elapsed: `1092.541 s`
-- GPWBPP resident stride-4 elapsed: `110.08566179999616 s`
+- GLASS resident stride-4 elapsed: `110.08566179999616 s`
 - Speedup vs WBPP: `9.924462297232955x`
 - Shape match: true
 - Scaled direct diff:
@@ -86,12 +86,12 @@ Result: `110 passed in 5.95s`
   - fit-pixel RMS diff: `0.0018023733283998135`
   - fit-pixel p99 absolute diff: `0.0015271070722244543`
 
-## Comparison to GPWBPP Resident NCC Stride 1
+## Comparison to GLASS Resident NCC Stride 1
 
 - Report:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_stride1_compare.html`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_stride1_compare.html`
 - JSON:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_stride1_compare.json`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_winsorized_allcal_200\resident_stride4_vs_stride1_compare.json`
 - Previous stride-1 elapsed: `363.1756594000035 s`
 - Speedup vs stride 1: `3.299027806725836x`
 - Master diff vs stride 1:

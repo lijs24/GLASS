@@ -6,7 +6,7 @@ Optimization Gate 02.
 
 ## Completed content
 
-- Added `--resident-prefetch-frames` to `gpwbpp run` and `gpwbpp audit`.
+- Added `--resident-prefetch-frames` to `glass run` and `glass audit`.
 - Implemented a bounded CPU RAM light-frame prefetch queue for resident CUDA runs.
 - The prefetch queue starts FITS read/decode ahead of calibration and preserves ordered resident-stack writes.
 - Added timing fields for both foreground wait and background read/decode work:
@@ -21,10 +21,10 @@ Optimization Gate 02.
 ## Commands
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\report\html_report.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py tests\test_cli_smoke.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\report\html_report.py src\glass\cli.py tests\test_resident_cuda_run.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke tests\test_cli_smoke.py::test_cli_report_includes_resident_artifacts
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py
-.\.venv\Scripts\gpwbpp.exe run --help
+.\.venv\Scripts\glass.exe run --help
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 

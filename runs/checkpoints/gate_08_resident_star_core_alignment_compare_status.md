@@ -4,7 +4,7 @@ Date: 2026-05-13
 
 ## Gate
 
-Gate 8: Registration, incremental checkpoint for astroalign vs GPWBPP CUDA alignment on one real calibrated image pair.
+Gate 8: Registration, incremental checkpoint for astroalign vs GLASS CUDA alignment on one real calibrated image pair.
 
 ## Completed
 
@@ -13,20 +13,20 @@ Gate 8: Registration, incremental checkpoint for astroalign vs GPWBPP CUDA align
 - Updated `benchmarks/compare_astroalign_gpu_alignment.py` to report:
   - strict matrix + output agreement against astroalign;
   - output-only agreement;
-  - best GPWBPP CUDA method by agreement class.
-- Ran the same real calibrated FITS pair through astroalign and GPWBPP CUDA resident alignment:
-  - reference: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits`
-  - moving: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits`
+  - best GLASS CUDA method by agreement class.
+- Ran the same real calibrated FITS pair through astroalign and GLASS CUDA resident alignment:
+  - reference: `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits`
+  - moving: `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits`
   - shape: `6422 x 9600`
 - Best balanced benchmark artifact:
-  - `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v42_top32.json`
+  - `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v42_top32.json`
 
 ## Commands
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_benchmarks.py
 
-.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v42_top32.json" --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 32 --catalog-pixel-refine-radius 1.0 --catalog-pixel-refine-coarse-step 0.25 --catalog-pixel-refine-fine-radius 0.25 --catalog-pixel-refine-fine-step 0.0625 --catalog-pixel-refine-coarse-stride 4 --catalog-pixel-refine-final-stride 1
+.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v42_top32.json" --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 32 --catalog-pixel-refine-radius 1.0 --catalog-pixel-refine-coarse-step 0.25 --catalog-pixel-refine-fine-radius 0.25 --catalog-pixel-refine-fine-step 0.0625 --catalog-pixel-refine-coarse-stride 4 --catalog-pixel-refine-final-stride 1
 
 git diff --check
 .venv\Scripts\python.exe -m pytest -q
@@ -55,9 +55,9 @@ astroalign:
 - find transform: `6.708765 s`
 - apply transform: `2.860113 s`
 
-Best strict GPWBPP CUDA resident alignment (`catalog_similarity_top_k=32`):
+Best strict GLASS CUDA resident alignment (`catalog_similarity_top_k=32`):
 
-- method: `gpwbpp_cuda_resident_catalog_similarity_pixel_refined`
+- method: `glass_cuda_resident_catalog_similarity_pixel_refined`
 - strict matrix + output agreement: passed
 - total resident algorithm: `6.587991 s`
 - device work: `6.492506 s`
@@ -79,7 +79,7 @@ Warp-only resident CUDA using astroalign's matrix:
   - `top_k=32` passed strict matrix + output agreement while staying faster than astroalign overall.
   - `top_k=64` also passed but was slower than astroalign because candidate refinement scanned too many full-frame hypotheses.
 - Candidate ranking still needs a stronger GPU-side geometric/photometric prior so the correct seed rises earlier without brute-force larger top-k.
-- This is a two-frame alignment benchmark, not the final 200-light end-to-end WBPP/GPWBPP comparison.
+- This is a two-frame alignment benchmark, not the final 200-light end-to-end WBPP/GLASS comparison.
 
 ## Next Step
 
@@ -88,4 +88,4 @@ Warp-only resident CUDA using astroalign's matrix:
 
 ## Clean-Room Compliance
 
-Compliant. This checkpoint used GPWBPP code, astroalign as an open-source comparison library, and user-generated FITS data/artifacts. No PixInsight/WBPP/PJSR source code was read, copied, summarized, or modified.
+Compliant. This checkpoint used GLASS code, astroalign as an open-source comparison library, and user-generated FITS data/artifacts. No PixInsight/WBPP/PJSR source code was read, copied, summarized, or modified.

@@ -1,6 +1,6 @@
 # Calibration Model
 
-This document records the independent calibration semantics used by GPWBPP.
+This document records the independent calibration semantics used by GLASS.
 
 Master bias is the mean or median of bias frames. Gate 2 uses mean stacking as a
 CPU baseline.
@@ -13,7 +13,7 @@ state, and report artifacts.
 
 Master flat is calibrated by subtracting either bias or flat-dark data, then
 normalizing by median or mean. A `flat_floor` avoids division by zero.
-Both tile-mode and resident-mode `gpwbpp run` honor `--flat-floor`, and the
+Both tile-mode and resident-mode `glass run` honor `--flat-floor`, and the
 effective value is written into `calibration_artifacts.json` or
 `resident_artifacts.json`. This is scientifically important for real flat
 fields with dust shadows or clipped pixels because too small a floor can create

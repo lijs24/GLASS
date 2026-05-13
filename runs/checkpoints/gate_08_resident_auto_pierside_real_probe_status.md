@@ -19,9 +19,9 @@ Gate 08 - Registration.
 ## Commands Run
 
 - Generated filtered plan:
-  - `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_probe3_flip\processing_plan.json`
+  - `C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_probe3_flip\processing_plan.json`
 - Resident CUDA run:
-  - `.venv\Scripts\gpwbpp.exe run --plan C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_probe3_flip\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_probe3_flip --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 128 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 96 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior auto_pierside --resident-star-prior-radius-px 8 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id F000061`
+  - `.venv\Scripts\glass.exe run --plan C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_probe3_flip\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_probe3_flip --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 128 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 96 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior auto_pierside --resident-star-prior-radius-px 8 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id F000061`
 
 ## Test Results
 
@@ -37,7 +37,7 @@ Gate 08 - Registration.
 ## Real Probe Results
 
 - Output directory:
-  - `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_probe3_flip`
+  - `C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_probe3_flip`
 - Registration diagnostics:
   - `F000062`: status `ok`, inliers `89`, RMS `0.7880619168 px`, pixel NCC `0.976626`
   - `F000137`: status `ok`, inliers `62`, RMS `1.3638278246 px`, pixel NCC `0.897666`
@@ -56,7 +56,7 @@ Gate 08 - Registration.
 
 - This was a 3-light probe, not the final 200-light timing comparison.
 - The flipped frame path is still substantially more expensive than the same-side path.
-- The `F000062` same-side matrix remains GPWBPP-owned and not forced to match astroalign exactly.
+- The `F000062` same-side matrix remains GLASS-owned and not forced to match astroalign exactly.
 - The metadata ID offset is important: `F000061` maps to `LIGHT_H_0001.fits` because calibration frames occupy earlier frame IDs in the full manifest.
 
 ## Next Step
@@ -66,5 +66,5 @@ Run a larger real subset with mixed pier sides, then the full 200-light resident
 ## Clean-Room Compliance
 
 - No PixInsight/WBPP/PJSR source was read or modified.
-- Only FITS headers and GPWBPP-owned CUDA registration diagnostics were used.
+- Only FITS headers and GLASS-owned CUDA registration diagnostics were used.
 - Original input data directories were not modified.

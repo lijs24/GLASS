@@ -15,10 +15,10 @@
 
 ## Commands Run
 
-- `.\\.venv\\Scripts\\python.exe -m py_compile src/gpwbpp/engine/pipeline.py src/gpwbpp/engine/registration.py tests/test_pipeline_fixture.py tests/test_cpu_registration.py`
+- `.\\.venv\\Scripts\\python.exe -m py_compile src/glass/engine/pipeline.py src/glass/engine/registration.py tests/test_pipeline_fixture.py tests/test_cpu_registration.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests/test_pipeline_fixture.py tests/test_cpu_registration.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
-- `Select-String -Path src/gpwbpp/engine/*.py,src/gpwbpp/gpu/*.py -Pattern "read_full\\(|np\\.stack\\(|fits\\.getdata\\(|\\.data" -Context 1,2`
+- `Select-String -Path src/glass/engine/*.py,src/glass/gpu/*.py -Pattern "read_full\\(|np\\.stack\\(|fits\\.getdata\\(|\\.data" -Context 1,2`
 
 ## Test Results
 

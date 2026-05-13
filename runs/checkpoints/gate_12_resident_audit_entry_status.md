@@ -6,8 +6,8 @@ Gate 12: End-to-end CUDA WBPP-like pipeline entrypoint increment.
 
 ## Completed
 
-- Added `gpwbpp audit --memory-mode resident` so scan -> plan -> resident CUDA run -> report can be executed as one command.
-- Resident audit currently requires `--backend cuda` and uses the same resident CUDA calibration/integration engine as `gpwbpp run`.
+- Added `glass audit --memory-mode resident` so scan -> plan -> resident CUDA run -> report can be executed as one command.
+- Resident audit currently requires `--backend cuda` and uses the same resident CUDA calibration/integration engine as `glass run`.
 - Exposed key resident audit controls:
   - `--resident-registration`
   - `--resident-registration-results`
@@ -23,12 +23,12 @@ Gate 12: End-to-end CUDA WBPP-like pipeline entrypoint increment.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cli.py tests\test_cli_smoke.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\cli.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cli_smoke.py::test_cli_audit_resident_cuda_smoke tests\test_cli_smoke.py::test_cli_help_commands
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cli_smoke.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\gpwbpp.exe audit --help
-.\.venv\Scripts\python.exe -c "import gpwbpp_cuda; print(gpwbpp_cuda.cuda_available()); print(gpwbpp_cuda.get_device_info(0) if gpwbpp_cuda.cuda_available() else {})"
+.\.venv\Scripts\glass.exe audit --help
+.\.venv\Scripts\python.exe -c "import glass_cuda; print(glass_cuda.cuda_available()); print(glass_cuda.get_device_info(0) if glass_cuda.cuda_available() else {})"
 ```
 
 ## Test Result
@@ -48,7 +48,7 @@ Gate 12: End-to-end CUDA WBPP-like pipeline entrypoint increment.
 
 ## Known Limitations
 
-- Resident audit does not yet expose every fine-grained resident registration tuning flag available on `gpwbpp run`; it exposes the core entrypoint and commonly needed controls.
+- Resident audit does not yet expose every fine-grained resident registration tuning flag available on `glass run`; it exposes the core entrypoint and commonly needed controls.
 - `--memory-mode resident` currently requires `--backend cuda` rather than falling back to CPU.
 - This checkpoint validates a small FITS smoke dataset, not the full 200-light M38 real-data benchmark.
 
@@ -59,4 +59,4 @@ Gate 12: End-to-end CUDA WBPP-like pipeline entrypoint increment.
 ## Clean-room
 
 - Compliant. No official PixInsight/WBPP/PJSR source was read or copied.
-- This change only wires project-owned CLI orchestration around existing GPWBPP resident CUDA code.
+- This change only wires project-owned CLI orchestration around existing GLASS resident CUDA code.

@@ -14,15 +14,15 @@ Optimization Gate 03 benchmark.
 ## Commands
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run --plan "C:\gpwbpp_runs\final_m38_h_200\processing_plan.json" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming" --backend cuda --memory-mode resident --resident-prefetch-frames 2 --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --reference-frame-id LIGHT_H_0136 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30
-.\.venv\Scripts\gpwbpp.exe report --run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\report.html"
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2\integration\resident_master_H.fits" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\compare_vs_prefetch2.html" --gpwbpp-time-seconds 0 --reference-time-seconds 0 --gpwbpp-label "GPWBPP regtiming" --reference-label "GPWBPP prefetch2"
+.\.venv\Scripts\glass.exe run --plan "C:\glass_runs\final_m38_h_200\processing_plan.json" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming" --backend cuda --memory-mode resident --resident-prefetch-frames 2 --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --reference-frame-id LIGHT_H_0136 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30
+.\.venv\Scripts\glass.exe report --run "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\report.html"
+.\.venv\Scripts\glass.exe compare --glass "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\integration\resident_master_H.fits" --reference "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2\integration\resident_master_H.fits" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\compare_vs_prefetch2.html" --glass-time-seconds 0 --reference-time-seconds 0 --glass-label "GLASS regtiming" --reference-label "GLASS prefetch2"
 ```
 
 Code validation from Gate 03:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\report\html_report.py tests\test_resident_cuda_run.py tests\test_cli_smoke.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\report\html_report.py tests\test_resident_cuda_run.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -59,10 +59,10 @@ Registration component timing:
 
 ## Artifacts
 
-- Run directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming`
-- Report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\report.html`
-- Resident artifacts: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\resident_artifacts.json`
-- Compare report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\compare_vs_prefetch2.json`
+- Run directory: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming`
+- Report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\report.html`
+- Resident artifacts: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\resident_artifacts.json`
+- Compare report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3_prefetch2_regtiming\compare_vs_prefetch2.json`
 
 ## CUDA availability
 

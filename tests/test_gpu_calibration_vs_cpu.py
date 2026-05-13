@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 from dataclasses import asdict
 
-from gpwbpp.cpu.calibration import calibrate_light
-from gpwbpp.models import CalibrationPolicy
+from glass.cpu.calibration import calibrate_light
+from glass.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
 
 

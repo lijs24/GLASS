@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gpwbpp.gpu.tile_scheduler import iter_tiles
+from glass.gpu.tile_scheduler import iter_tiles
 
 
 def test_iter_tiles_covers_shape():

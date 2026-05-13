@@ -12,17 +12,17 @@ This checkpoint does not claim full WBPP-like Local Normalization. It adds and v
   - `estimate_grid_normalization_mean_std`;
   - `apply_grid_normalization`;
   - `normalize_grid_mean_std`.
-- Added CUDA kernel `gpwbpp_local_norm_apply_grid_f32_kernel`.
+- Added CUDA kernel `glass_local_norm_apply_grid_f32_kernel`.
 - Added native binding `local_norm_apply_grid_f32`.
-- Added Python wrapper `gpwbpp_cuda.local_norm_apply_grid_f32` with CPU fallback.
+- Added Python wrapper `glass_cuda.local_norm_apply_grid_f32` with CPU fallback.
 - Added CPU and CUDA tests for edge tiles, grid coefficient application, and tile mean/std matching.
 - Updated `docs/local_normalization_model.md` to describe the grid model and its limitations.
 
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cpu\local_norm.py src\gpwbpp\gpu\local_norm.py src\gpwbpp_cuda.py tests\test_cpu_local_norm.py tests\test_gpu_local_norm_vs_cpu.py
-& cmd.exe /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\cmake.exe" --build "C:\Users\ljs\WORK\astro\gpuwbpp\build\native-cuda"'
+.\.venv\Scripts\python.exe -m ruff check src\glass\cpu\local_norm.py src\glass\gpu\local_norm.py src\glass_cuda.py tests\test_cpu_local_norm.py tests\test_gpu_local_norm_vs_cpu.py
+& cmd.exe /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "<repo>\.venv\Scripts\cmake.exe" --build "<repo>\build\native-cuda"'
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cpu_local_norm.py tests\test_gpu_local_norm_vs_cpu.py tests\test_cuda_import.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```

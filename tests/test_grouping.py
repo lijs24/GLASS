@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from gpwbpp.metadata.scanner import scan_tree
-from gpwbpp.models import FrameRecord
-from gpwbpp.planner.grouping import group_frames
+from glass.metadata.scanner import scan_tree
+from glass.models import FrameRecord
+from glass.planner.grouping import group_frames
 
 
 def test_group_frames_by_calibration_keys(small_fits_dataset):

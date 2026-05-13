@@ -15,12 +15,12 @@ Gate 08: Registration
   - `--triangle-descriptor-max-descriptors`
   - `--triangle-descriptor-radius`
 - Added JSON report sections for:
-  - `gpwbpp_cuda_triangle_descriptor_similarity`
+  - `glass_cuda_triangle_descriptor_similarity`
   - `triangle_descriptor_similarity_agreement_vs_astroalign`
   - `direct_output_diff_gpu_triangle_descriptor_similarity_minus_astroalign_apply_on_common_valid_pixels`
   - `triangle_descriptor_similarity_speedup_vs_astroalign`
   - triangle valid/common pixel counts
-- Included the triangle-descriptor path in `best_gpwbpp_cuda_alignment_vs_astroalign`.
+- Included the triangle-descriptor path in `best_glass_cuda_alignment_vs_astroalign`.
 - Updated `docs/registration_model.md` and `docs/cuda_backend.md`.
 
 ## Commands Run
@@ -54,7 +54,7 @@ git diff --check
 
 - The benchmark wiring is validated on the synthetic smoke pair in this checkpoint.
 - The calibrated real M38 pair comparison still needs to be rerun with
-  `gpwbpp_cuda_triangle_descriptor_similarity`.
+  `glass_cuda_triangle_descriptor_similarity`.
 - Triangle descriptors remain a bridge toward the stronger PixInsight-like
   polygonal descriptor model; quad/pentagon descriptors are not implemented yet.
 - The helper currently uses a single effective threshold:
@@ -70,7 +70,7 @@ triangle ambiguity.
 
 ## Clean-room Compliance
 
-Compliant. This checkpoint uses GPWBPP-owned CUDA code, open-source astroalign as
+Compliant. This checkpoint uses GLASS-owned CUDA code, open-source astroalign as
 an external reference, public PixInsight/StarAlignment behavior notes, and
 user-generated benchmark outputs only. No PixInsight/WBPP/PJSR source code was
 read, copied, summarized, or modified.

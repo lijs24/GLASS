@@ -15,9 +15,9 @@ Optimization Gate 08
 
 ## Commands Run
 
-- `.venv\Scripts\ruff.exe check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py`
+- `.venv\Scripts\ruff.exe check src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_resident_cuda_run.py`
 - `.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke tests\test_cli_smoke.py`
-- `.venv\Scripts\gpwbpp.exe run --help`
+- `.venv\Scripts\glass.exe run --help`
 - `.venv\Scripts\python.exe -m pytest -q`
 
 ## Test Results
@@ -47,4 +47,4 @@ Sweep M38 resident runs with shared-sort registration using different `--residen
 
 ## Clean-room Compliance
 
-Compliant. This gate only changed GPWBPP-owned Python code and tests. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR official source code, and it did not touch original image data.
+Compliant. This gate only changed GLASS-owned Python code and tests. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR official source code, and it did not touch original image data.

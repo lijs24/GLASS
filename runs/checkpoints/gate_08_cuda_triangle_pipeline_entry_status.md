@@ -8,8 +8,8 @@ Gate 08: Registration
 
 ## Completed
 
-- Added `--registration-method cuda_triangle` to tile-mode `gpwbpp run` and
-  `gpwbpp audit`.
+- Added `--registration-method cuda_triangle` to tile-mode `glass run` and
+  `glass audit`.
 - Promoted the existing CUDA triangle descriptor registration helper into the
   formal streaming-preview registration pipeline.
 - Added native CUDA primitive checks for triangle-descriptor registration.
@@ -22,12 +22,12 @@ Gate 08: Registration
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\registration.py src\gpwbpp\cli.py tests\test_gpu_registration_search.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\registration.py src\glass\cli.py tests\test_gpu_registration_search.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -c "import gpwbpp_cuda,json; print(json.dumps({'cuda_available': gpwbpp_cuda.cuda_available(), 'devices': gpwbpp_cuda.list_devices()}, ensure_ascii=False, indent=2))"
-.\.venv\Scripts\gpwbpp.exe run --help | Select-String -Pattern "cuda_triangle|registration-method"
-.\.venv\Scripts\gpwbpp.exe audit --help | Select-String -Pattern "cuda_triangle|registration-method"
+.\.venv\Scripts\python.exe -c "import glass_cuda,json; print(json.dumps({'cuda_available': glass_cuda.cuda_available(), 'devices': glass_cuda.list_devices()}, ensure_ascii=False, indent=2))"
+.\.venv\Scripts\glass.exe run --help | Select-String -Pattern "cuda_triangle|registration-method"
+.\.venv\Scripts\glass.exe audit --help | Select-String -Pattern "cuda_triangle|registration-method"
 git diff --check
 ```
 
@@ -68,6 +68,6 @@ pipeline so calibrated frames can remain in VRAM through warp/integration.
 
 ## Clean-room Compliance
 
-Compliant. The implementation uses GPWBPP-owned CUDA/Python code and public
+Compliant. The implementation uses GLASS-owned CUDA/Python code and public
 algorithmic behavior. No PixInsight/WBPP/PJSR source code was read, copied,
 summarized, or modified.

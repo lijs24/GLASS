@@ -1,2 +1,2 @@
-#include <gpwbpp_cuda/errors.hpp>
+#include <glass_cuda/errors.hpp>
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpwbpp.metadata.xisf_reader import read_xisf_metadata
+from glass.metadata.xisf_reader import read_xisf_metadata
 
 
 def test_xisf_prefix_metadata(tmp_path: Path):

@@ -7,7 +7,7 @@ Gate 13 validation documentation checkpoint.
 ## Completed Content
 
 - Updated `docs/validation.md` with the current strongest M38 real-data black-box comparison.
-- Recorded the WBPP black-box reference path, GPWBPP resident CUDA output path, runtime, speedup, full-frame compare metrics, coverage-masked compare metrics, diagnostics reports, and known interpretation limits.
+- Recorded the WBPP black-box reference path, GLASS resident CUDA output path, runtime, speedup, full-frame compare metrics, coverage-masked compare metrics, diagnostics reports, and known interpretation limits.
 
 ## Commands Run
 
@@ -40,5 +40,5 @@ git diff --check docs\validation.md
 
 ## Clean-room Compliance
 
-- Compliant. The documented comparison uses GPWBPP-owned outputs and user-generated PixInsight/WBPP black-box artifacts only.
+- Compliant. The documented comparison uses GLASS-owned outputs and user-generated PixInsight/WBPP black-box artifacts only.
 - No official PixInsight/WBPP/PJSR source code was read, copied, summarized, or used as implementation input.

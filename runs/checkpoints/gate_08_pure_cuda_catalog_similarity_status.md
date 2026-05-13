@@ -2,7 +2,7 @@
 
 Date: 2026-05-13
 
-Status: completed incremental pure-GPWBPP GPU catalog-similarity path. This does not use astroalign control points for the catalog-similarity estimate.
+Status: completed incremental pure-GLASS GPU catalog-similarity path. This does not use astroalign control points for the catalog-similarity estimate.
 
 ## Completed work
 
@@ -14,9 +14,9 @@ Status: completed incremental pure-GPWBPP GPU catalog-similarity path. This does
   - optional prior translation constraint;
   - optional min/max scale constraint;
   - optional maximum absolute rotation constraint.
-- Extended `gpwbpp.gpu.registration.register_similarity_from_star_catalogs_f32(...)` to pass NMS and transform-prior settings.
+- Extended `glass.gpu.registration.register_similarity_from_star_catalogs_f32(...)` to pass NMS and transform-prior settings.
 - Extended `benchmarks/compare_astroalign_gpu_alignment.py` to report:
-  - `gpwbpp_cuda_catalog_similarity`;
+  - `glass_cuda_catalog_similarity`;
   - direct output difference vs astroalign apply on common valid pixels;
   - `catalog_similarity_speedup_vs_astroalign`.
 - Added tests for CUDA top-NMS candidates and constrained catalog similarity fields.
@@ -37,19 +37,19 @@ Result: native CUDA extension rebuilt successfully. CUDA Toolkit emitted C4819 w
 Result: 17 passed in 1.45 s.
 
 ```powershell
-.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits --moving C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits --out C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v6.json --max-shift 16 --catalog-stars 64 --catalog-nms-scan-stars 4096 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-min-inliers 6 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01
+.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits --moving C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits --out C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v6.json --max-shift 16 --catalog-stars 64 --catalog-nms-scan-stars 4096 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-min-inliers 6 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01
 ```
 
 Result: benchmark completed.
 
 ## Real pair result
 
-- Output JSON: `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v6.json`
+- Output JSON: `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v6.json`
 - Image shape: 6422 x 9600.
 - astroalign total: 9.7354587999871 s.
 - astroalign find transform: 6.796644399990328 s.
 - astroalign apply transform: 2.9388143999967724 s.
-- Pure GPWBPP GPU catalog similarity:
+- Pure GLASS GPU catalog similarity:
   - model: `pure_cuda_catalog_similarity_seed_then_matrix_warp`;
   - elapsed: 29.245655699982308 s;
   - accepted: true;
@@ -68,7 +68,7 @@ Result: benchmark completed.
 - CUDA backend available: yes.
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
 - Compute capability: 12.0.
-- Total VRAM reported by GPWBPP: 97,886 MiB.
+- Total VRAM reported by GLASS: 97,886 MiB.
 
 ## Known limitations
 
@@ -79,8 +79,8 @@ Result: benchmark completed.
 
 ## Next step
 
-Optimize pure GPU registration by replacing the global-lock top-N scan and serial best-candidate selection with a parallel per-tile/per-cell candidate prefilter and parallel reduction. Then retest the same M38 pair until the pure GPWBPP GPU catalog path is both accepted and faster than astroalign find+apply.
+Optimize pure GPU registration by replacing the global-lock top-N scan and serial best-candidate selection with a parallel per-tile/per-cell candidate prefilter and parallel reduction. Then retest the same M38 pair until the pure GLASS GPU catalog path is both accepted and faster than astroalign find+apply.
 
 ## Clean-room compliance
 
-Compliant. The new code uses GPWBPP-owned CUDA kernels and generic geometric registration formulas. No official WBPP/PJSR source was read or copied.
+Compliant. The new code uses GLASS-owned CUDA kernels and generic geometric registration formulas. No official WBPP/PJSR source was read or copied.

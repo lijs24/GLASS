@@ -23,29 +23,29 @@ Validation is gate-driven:
 ## M38 193-frame PixInsight/WBPP Black-box Compare
 
 The current strongest real-data validation uses the M38 H-alpha run in
-`C:\gpwbpp_runs\final_m38_h_200`.
+`C:\glass_runs\final_m38_h_200`.
 
 Input scale:
 
 - 200 light frames were planned.
 - PixInsight/WBPP FastIntegration integrated 193 of 200 frames.
-- GPWBPP excludes the same 7 WBPP-failed frames for the parity comparison.
+- GLASS excludes the same 7 WBPP-failed frames for the parity comparison.
 - Calibration groups come from the project processing plan; source data is read
   only from user-provided acquisition directories.
 
 PixInsight/WBPP black-box reference:
 
 - Reference master:
-  `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf`
+  `C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf`
 - External elapsed time: `1092.541 s`.
 - WBPP reported time: `18:03.17`.
 - Observed settings include FastIntegration, Lanczos3 interpolation,
   Winsorized Sigma Clipping, sigma low/high `3.0`, and weighting disabled.
 
-GPWBPP resident CUDA reference run:
+GLASS resident CUDA reference run:
 
 - Output directory:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3`
+  `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3`
 - Master:
   `integration\resident_master_H.fits`
 - Registration: resident CUDA triangle descriptors, 192 ok, 1 reference,
@@ -91,9 +91,9 @@ Machine-readable speedup summary:
 
 ```powershell
 .\.venv\Scripts\python.exe benchmarks\summarize_wbpp_speedup.py `
-  --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 `
-  --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json `
-  --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json `
+  --glass-run C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3 `
+  --wbpp-result C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json `
+  --compare-json C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json `
   --out runs\benchmarks\m38_wbpp_speedup_summary.json `
   --markdown runs\benchmarks\m38_wbpp_speedup_summary.md `
   --min-speedup 2.0
@@ -118,7 +118,7 @@ Interpretation:
 - The current evidence supports a clear speedup on this data set.
 - The high-percentile full-frame residuals are dominated by coverage/boundary
   policy differences rather than a full-frame registration failure.
-- GPWBPP does not claim PixInsight-equivalent algorithms. Known remaining
+- GLASS does not claim PixInsight-equivalent algorithms. Known remaining
   differences include star matching, boundary/crop policy, exact interpolation
   and clamping behavior, local normalization, rejection details, and output
   scaling.

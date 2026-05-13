@@ -6,24 +6,24 @@ Gate 08: Registration.
 
 ## Completed content
 
-- Added `gpwbpp_cuda.estimate_similarity_from_triangle_descriptors_f32(...)`.
+- Added `glass_cuda.estimate_similarity_from_triangle_descriptors_f32(...)`.
 - Added a CUDA candidate scorer that:
   - filters triangle descriptor pairs by side-ratio radius;
   - tries both ordered-triangle orientations;
   - fits moving-to-reference similarity matrices from triangle vertices;
   - scores compact catalogs with mutual nearest-neighbor inliers.
-- Added Python compatibility wrapper and `gpwbpp.gpu.registration` export.
+- Added Python compatibility wrapper and `glass.gpu.registration` export.
 - Added a CUDA test recovering a known synthetic similarity transform from triangle descriptors.
 - Updated CUDA and registration documentation.
 
 ## Commands run
 
-- `.\\.venv\\Scripts\\python.exe -m ruff check src\\gpwbpp_cuda.py src\\gpwbpp\\gpu\\registration.py tests\\test_gpu_registration_search.py`
+- `.\\.venv\\Scripts\\python.exe -m ruff check src\\glass_cuda.py src\\glass\\gpu\\registration.py tests\\test_gpu_registration_search.py`
 - `cmd.exe /d /s /c 'call "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .venv\\Scripts\\cmake.exe --build build\\native-cuda --config Release'`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_registration_search.py::test_gpu_triangle_descriptor_similarity_recovers_catalog_transform`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_registration_search.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
-- `.\\.venv\\Scripts\\python.exe -c "import gpwbpp_cuda as c; print('cuda_available', c.cuda_available()); print(c.list_devices())"`
+- `.\\.venv\\Scripts\\python.exe -c "import glass_cuda as c; print('cuda_available', c.cuda_available()); print(c.list_devices())"`
 - `git diff --check`
 
 ## Test results
@@ -57,4 +57,4 @@ Wire the triangle descriptor similarity scorer into a controlled image-pair benc
 
 ## Clean-room compliance
 
-Compliant. No PixInsight/WBPP/PJSR source code was read or used. This implements GPWBPP-owned triangle descriptor candidate scoring and validates it against synthetic known-truth catalogs only.
+Compliant. No PixInsight/WBPP/PJSR source code was read or used. This implements GLASS-owned triangle descriptor candidate scoring and validates it against synthetic known-truth catalogs only.

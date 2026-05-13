@@ -1,35 +1,67 @@
-# GPWBPP
+# GLASS
 
-GPWBPP is a clean-room, open implementation of a WBPP-like astronomical image
-preprocessing pipeline with a CPU baseline and an optional CUDA backend.
+**GLASS** is the **GPU-Accelerated Lightframe Alignment and Stacking System**:
+a clean-room deep-sky image calibration, alignment, rejection, and integration
+engine with a CPU baseline and an optional CUDA resident backend.
 
-The project is gate-driven. Early gates provide metadata scanning, planning,
-synthetic FITS data, CPU calibration, reporting, and resumable state files.
-Later gates add CUDA tile kernels, registration, local normalization, weighted
-integration, diagnostic maps, and black-box comparison against user-generated
-PixInsight/WBPP outputs.
+The project is designed for large FITS/XISF datasets. It uses staged manifests,
+processing plans, resumable run state, diagnostic artifacts, HTML reports, and
+out-of-core or full-VRAM execution modes. On suitable NVIDIA hardware, the
+resident CUDA path keeps calibrated light frames in VRAM and minimizes round
+trips through disk and host memory.
 
-Clean-room boundary:
+## Clean-Room Boundary
 
-- This repository does not read, copy, summarize, or rework official
-  PixInsight WBPP/PJSR source code.
-- PixInsight may only be used as a black-box reference through user-generated
-  logs, settings, and outputs.
+- GLASS does not read, copy, summarize, or rework official PixInsight WBPP/PJSR
+  source code.
+- PixInsight/WBPP may be used only as a black-box reference through
+  user-generated logs, settings, and outputs.
 - Input image directories are treated as read-only.
 
-Quick start:
+## Quick Start
 
 ```powershell
 python -m pip install -e .[dev,report]
-gpwbpp --help
-gpwbpp synthetic --out runs/demo_synth --frames 8 --width 128 --height 128 --filter H --known-shift
-gpwbpp audit --root runs/demo_synth --out runs/demo_audit --backend cpu
+glass --help
+glass doctor --allow-cpu-only
+glass synthetic --out runs/demo_synth --frames 8 --width 128 --height 128 --filter H --known-shift
+glass audit --root runs/demo_synth --out runs/demo_audit --backend cpu
 python -m pytest -q
 ```
 
-Current capability flags are reported by:
+CUDA diagnostics:
 
 ```powershell
-python -c "from gpwbpp.capabilities import capability_report; print(capability_report())"
+glass doctor
+python -c "from glass.capabilities import capability_report; print(capability_report())"
 ```
 
+## Main Commands
+
+- `glass doctor`: diagnose Python, CUDA wrapper, native backend, GPU, driver, and fallback status.
+- `glass scan`: recursively scan FITS/FIT/XISF metadata without loading full image pixels.
+- `glass plan`: build `processing_plan.json` with calibration matching and warnings.
+- `glass run`: execute staged CPU, tile CUDA, or resident CUDA processing.
+- `glass resume`: summarize and resume-safe state for an existing run directory.
+- `glass report`: generate an HTML report from run artifacts.
+- `glass audit`: scan, plan, run, and report in one command.
+- `glass compare`: compare a GLASS master with a black-box reference master.
+- `glass synthetic`: generate controlled FITS fixtures for correctness tests.
+
+## Windows Distribution Strategy
+
+Ordinary Windows users should not need the CUDA Toolkit. The target release
+shape is a portable folder or installer that includes Python, GLASS,
+dependencies, and the optional native CUDA module. Users only need a compatible
+NVIDIA driver for GPU acceleration.
+
+Release helpers live in `packaging/windows/`:
+
+```powershell
+.\packaging\windows\build_portable.ps1 -BuildCuda -StaticCudaRuntime
+.\packaging\windows\build_wheel.ps1
+```
+
+See [docs/project_overview.md](docs/project_overview.md) and
+[docs/windows_release.md](docs/windows_release.md) for the project and release
+model.

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.engine.warp import warp_registered_frames
-from gpwbpp.io.fits_io import read_fits_data, write_fits_data
-from gpwbpp.io.json_io import write_json
+from glass.engine.warp import warp_registered_frames
+from glass.io.fits_io import read_fits_data, write_fits_data
+from glass.io.json_io import write_json
 
 
 def _warp_matrix_bilinear_reference(

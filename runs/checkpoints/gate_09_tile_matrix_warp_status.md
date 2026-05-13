@@ -23,7 +23,7 @@ Gate 09 / warp streaming increment.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\warp.py tests\test_cpu_warp.py docs\registration_model.md
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\warp.py tests\test_cpu_warp.py docs\registration_model.md
 ```
 
 Result: `All checks passed!`

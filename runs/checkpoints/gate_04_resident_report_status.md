@@ -6,7 +6,7 @@ Resident CUDA report/audit visibility.
 
 ## Completed
 
-- `gpwbpp report` now reads `resident_artifacts.json` when present.
+- `glass report` now reads `resident_artifacts.json` when present.
 - HTML reports now include a `Resident CUDA summary` section.
 - The resident section reports backend, GPU name, frame count, calibration frame
   counts, resident base VRAM, estimated peak VRAM, calibration timing,
@@ -19,7 +19,7 @@ Resident CUDA report/audit visibility.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -q tests/test_cli_smoke.py tests/test_resident_cuda_run.py
-.venv\Scripts\python.exe -m gpwbpp.cli report --run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\report.html
+.venv\Scripts\python.exe -m glass.cli report --run C:\glass_runs\final_m38_h_200\glass_resident_formal_run --out C:\glass_runs\final_m38_h_200\glass_resident_formal_run\report.html
 .venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -35,21 +35,21 @@ Resident CUDA report/audit visibility.
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\report.html`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\report.html`
 
 ## Known Limitations
 
 - This report visibility gate does not make the resident path a complete
   WBPP-equivalent pipeline.
-- Final validation still requires a full same-flow WBPP vs GPWBPP comparison
+- Final validation still requires a full same-flow WBPP vs GLASS comparison
   with both speedup and image-result agreement.
 
 ## Next Step
 
-Implement XISF Float32 read/compare support so GPWBPP can compare directly
+Implement XISF Float32 read/compare support so GLASS can compare directly
 against WBPP black-box master outputs.
 
 ## Clean Room
 
-Compliant. The report consumes GPWBPP artifacts and black-box run products only.
+Compliant. The report consumes GLASS artifacts and black-box run products only.
 No official WBPP/PJSR source was read or copied.

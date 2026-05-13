@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpwbpp.cli import main
-from gpwbpp.io.json_io import read_json
-from gpwbpp.metadata.scanner import scan_tree
-from gpwbpp.planner.plan_builder import build_processing_plan
-from gpwbpp.planner.subset import build_subset_manifest
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.cli import main
+from glass.io.json_io import read_json
+from glass.metadata.scanner import scan_tree
+from glass.planner.plan_builder import build_processing_plan
+from glass.planner.subset import build_subset_manifest
+from glass.synthetic.generator import generate_synthetic_dataset
 
 
 def test_build_subset_manifest_keeps_matching_calibration(tmp_path: Path):

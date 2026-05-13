@@ -17,8 +17,8 @@
 
 namespace py = pybind11;
 
-void gpwbpp_smoke_add_f32_launch(const float* a, const float* b, float* out, std::size_t n);
-void gpwbpp_calibrate_tile_f32_launch(
+void glass_smoke_add_f32_launch(const float* a, const float* b, float* out, std::size_t n);
+void glass_calibrate_tile_f32_launch(
     const float* light,
     const float* bias,
     const float* dark,
@@ -32,7 +32,7 @@ void gpwbpp_calibrate_tile_f32_launch(
     float dark_scale,
     float flat_floor,
     float pedestal);
-void gpwbpp_calibrate_tile_f32_launch_stream(
+void glass_calibrate_tile_f32_launch_stream(
     const float* light,
     const float* bias,
     const float* dark,
@@ -47,9 +47,9 @@ void gpwbpp_calibrate_tile_f32_launch_stream(
     float flat_floor,
     float pedestal,
     cudaStream_t stream);
-void gpwbpp_mean_stack_tiles_f32_launch(
+void glass_mean_stack_tiles_f32_launch(
     const float* stack, float* out, std::size_t frame_count, std::size_t pixels_per_frame);
-void gpwbpp_warp_translation_f32_launch(
+void glass_warp_translation_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -58,7 +58,7 @@ void gpwbpp_warp_translation_f32_launch(
     int dx,
     int dy,
     float fill);
-void gpwbpp_warp_translation_bilinear_f32_launch(
+void glass_warp_translation_bilinear_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -67,7 +67,7 @@ void gpwbpp_warp_translation_bilinear_f32_launch(
     float dx,
     float dy,
     float fill);
-void gpwbpp_warp_matrix_bilinear_f32_launch(
+void glass_warp_matrix_bilinear_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -75,7 +75,7 @@ void gpwbpp_warp_matrix_bilinear_f32_launch(
     int width,
     int height,
     float fill);
-void gpwbpp_warp_matrix_lanczos3_f32_launch(
+void glass_warp_matrix_lanczos3_f32_launch(
     const float* input,
     float* output,
     float* coverage,
@@ -84,7 +84,7 @@ void gpwbpp_warp_matrix_lanczos3_f32_launch(
     int height,
     float fill,
     float clamping_threshold);
-void gpwbpp_matrix_alignment_metrics_f32_launch(
+void glass_matrix_alignment_metrics_f32_launch(
     const float* reference,
     const float* moving,
     const float* inverse,
@@ -94,7 +94,7 @@ void gpwbpp_matrix_alignment_metrics_f32_launch(
     int height,
     int sample_stride,
     int blocks);
-void gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
+void glass_matrix_alignment_metrics_candidates_f32_launch(
     const float* reference,
     const float* moving,
     const float* inverses,
@@ -104,7 +104,7 @@ void gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
     int height,
     int sample_stride,
     int candidate_count);
-void gpwbpp_star_core_metrics_candidates_f32_launch(
+void glass_star_core_metrics_candidates_f32_launch(
     const float* reference,
     const float* moving,
     const float* inverses,
@@ -114,7 +114,7 @@ void gpwbpp_star_core_metrics_candidates_f32_launch(
     int width,
     int height,
     int candidate_count);
-void gpwbpp_estimate_translation_search_f32_launch(
+void glass_estimate_translation_search_f32_launch(
     const float* reference,
     const float* moving,
     float* scores,
@@ -126,7 +126,7 @@ void gpwbpp_estimate_translation_search_f32_launch(
     int max_shift_x,
     int max_shift_y,
     int sample_stride);
-void gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
+void glass_estimate_translation_subpixel_ncc_f32_launch(
     const float* reference,
     const float* moving,
     float* scores,
@@ -140,7 +140,7 @@ void gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
     int radius_steps,
     float step,
     int sample_stride);
-void gpwbpp_estimate_translation_from_catalogs_f32_launch(
+void glass_estimate_translation_from_catalogs_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,
@@ -166,7 +166,7 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     float prior_dx,
     float prior_dy,
     float prior_radius_px);
-void gpwbpp_triangle_asterism_descriptors_f32_launch(
+void glass_triangle_asterism_descriptors_f32_launch(
     const float* x,
     const float* y,
     float* descriptors,
@@ -176,7 +176,7 @@ void gpwbpp_triangle_asterism_descriptors_f32_launch(
     int count,
     int neighbors,
     int raw_count);
-void gpwbpp_estimate_similarity_from_triangle_descriptors_f32_launch(
+void glass_estimate_similarity_from_triangle_descriptors_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,
@@ -201,7 +201,7 @@ void gpwbpp_estimate_similarity_from_triangle_descriptors_f32_launch(
     int candidate_count,
     float tolerance_px,
     float descriptor_radius);
-void gpwbpp_estimate_similarity_from_pairs_f32_launch(
+void glass_estimate_similarity_from_pairs_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,
@@ -217,7 +217,7 @@ void gpwbpp_estimate_similarity_from_pairs_f32_launch(
     double* partial_residual_sums,
     int count,
     int blocks);
-void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
+void glass_estimate_similarity_from_catalogs_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,
@@ -252,9 +252,9 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
     float min_scale,
     float max_scale,
     float max_abs_rotation_rad);
-void gpwbpp_local_norm_apply_f32_launch(
+void glass_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
-void gpwbpp_local_norm_apply_grid_f32_launch(
+void glass_local_norm_apply_grid_f32_launch(
     const float* input,
     float* output,
     const float* scales,
@@ -265,14 +265,14 @@ void gpwbpp_local_norm_apply_grid_f32_launch(
     int tile_height,
     int grid_cols,
     int grid_rows);
-void gpwbpp_frame_sum_stats_f32_launch(
+void glass_frame_sum_stats_f32_launch(
     const float* input,
     double* partial_sum,
     double* partial_sum2,
     unsigned long long* partial_count,
     std::size_t n,
     int blocks);
-void gpwbpp_pair_sum_stats_f32_launch(
+void glass_pair_sum_stats_f32_launch(
     const float* source,
     const float* reference,
     double* partial_source_sum,
@@ -282,7 +282,7 @@ void gpwbpp_pair_sum_stats_f32_launch(
     unsigned long long* partial_count,
     std::size_t n,
     int blocks);
-void gpwbpp_pair_grid_sum_stats_f32_launch(
+void glass_pair_grid_sum_stats_f32_launch(
     const float* source,
     const float* reference,
     double* source_sum,
@@ -296,16 +296,16 @@ void gpwbpp_pair_grid_sum_stats_f32_launch(
     int tile_height,
     int grid_cols,
     int grid_rows);
-void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
+void glass_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
-void gpwbpp_integrate_resident_weighted_mean_f32_launch(
+void glass_integrate_resident_weighted_mean_f32_launch(
     const float* stack,
     const float* weights,
     float* master,
     float* weight_map,
     std::size_t frame_count,
     std::size_t pixels_per_frame);
-void gpwbpp_integrate_resident_sigma_clip_f32_launch(
+void glass_integrate_resident_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
     float* master,
@@ -318,13 +318,13 @@ void gpwbpp_integrate_resident_sigma_clip_f32_launch(
     float low_sigma,
     float high_sigma,
     bool winsorize);
-void gpwbpp_star_local_max_mask_f32_launch(
+void glass_star_local_max_mask_f32_launch(
     const float* input,
     unsigned char* mask,
     int width,
     int height,
     float threshold);
-void gpwbpp_star_candidates_f32_launch(
+void glass_star_candidates_f32_launch(
     const float* input,
     float* xs,
     float* ys,
@@ -334,7 +334,7 @@ void gpwbpp_star_candidates_f32_launch(
     int height,
     float threshold,
     int max_candidates);
-void gpwbpp_star_top_candidates_f32_launch(
+void glass_star_top_candidates_f32_launch(
     const float* input,
     float* xs,
     float* ys,
@@ -345,7 +345,7 @@ void gpwbpp_star_top_candidates_f32_launch(
     int height,
     float threshold,
     int max_candidates);
-void gpwbpp_star_top_nms_candidates_f32_launch(
+void glass_star_top_nms_candidates_f32_launch(
     const float* input,
     float* scan_xs,
     float* scan_ys,
@@ -362,7 +362,7 @@ void gpwbpp_star_top_nms_candidates_f32_launch(
     int scan_candidates,
     int max_output_candidates,
     float min_separation_px);
-void gpwbpp_star_grid_top_nms_candidates_f32_launch(
+void glass_star_grid_top_nms_candidates_f32_launch(
     const float* input,
     float* grid_xs,
     float* grid_ys,
@@ -381,7 +381,7 @@ void gpwbpp_star_grid_top_nms_candidates_f32_launch(
     int candidates_per_cell,
     int max_output_candidates,
     float min_separation_px);
-void gpwbpp_star_grid_candidates_f32_launch(
+void glass_star_grid_candidates_f32_launch(
     const float* input,
     float* xs,
     float* ys,
@@ -727,7 +727,7 @@ MatrixCandidateMetrics score_matrix_translation_candidates_f32(
     check_cuda(
         cudaMemcpy(d_inverses, inverses.data(), inverses.size() * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(matrix refine candidate inverses)");
-    gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
+    glass_matrix_alignment_metrics_candidates_f32_launch(
         d_reference,
         d_moving,
         d_inverses,
@@ -819,7 +819,7 @@ std::vector<MatrixCandidateMetrics> score_star_core_matrix_candidates_f32(
     check_cuda(
         cudaMemcpy(d_inverses, inverses.data(), inverses.size() * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(star core metric inverses)");
-    gpwbpp_star_core_metrics_candidates_f32_launch(
+    glass_star_core_metrics_candidates_f32_launch(
         d_reference,
         d_moving,
         d_inverses,
@@ -877,7 +877,7 @@ py::dict device_info_dict(int device_id) {
   info["memory_total_mib"] = static_cast<unsigned long long>(props.totalGlobalMem / (1024 * 1024));
   info["multi_processor_count"] = props.multiProcessorCount;
   info["native_backend"] = true;
-  info["available_to_gpwbpp"] = true;
+  info["available_to_glass"] = true;
   return info;
 }
 
@@ -1081,7 +1081,7 @@ class ResidentCalibratedStack {
     try {
       check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident translation output)");
       check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident translation coverage)");
-      gpwbpp_warp_translation_f32_launch(
+      glass_warp_translation_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_output,
           d_coverage,
@@ -1112,7 +1112,7 @@ class ResidentCalibratedStack {
     try {
       check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident bilinear translation output)");
       check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident bilinear translation coverage)");
-      gpwbpp_warp_translation_bilinear_f32_launch(
+      glass_warp_translation_bilinear_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_output,
           d_coverage,
@@ -1149,7 +1149,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident matrix warp inverse)");
-      gpwbpp_warp_matrix_bilinear_f32_launch(
+      glass_warp_matrix_bilinear_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_output,
           d_coverage,
@@ -1191,7 +1191,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident matrix Lanczos3 inverse)");
-      gpwbpp_warp_matrix_lanczos3_f32_launch(
+      glass_warp_matrix_lanczos3_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_output,
           d_coverage,
@@ -1249,7 +1249,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident matrix metrics inverse)");
-      gpwbpp_matrix_alignment_metrics_f32_launch(
+      glass_matrix_alignment_metrics_f32_launch(
           d_stack_ + reference_index * pixels_per_frame_,
           d_stack_ + moving_index * pixels_per_frame_,
           d_inverse,
@@ -1505,7 +1505,7 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_best_dx, sizeof(int)), "cudaMalloc(resident translation best dx)");
       check_cuda(cudaMalloc(&d_best_dy, sizeof(int)), "cudaMalloc(resident translation best dy)");
       check_cuda(cudaMalloc(&d_best_score, sizeof(float)), "cudaMalloc(resident translation best score)");
-      gpwbpp_estimate_translation_search_f32_launch(
+      glass_estimate_translation_search_f32_launch(
           d_stack_ + reference_index * pixels_per_frame_,
           d_stack_ + moving_index * pixels_per_frame_,
           d_scores,
@@ -1580,7 +1580,7 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_best_dx, sizeof(float)), "cudaMalloc(resident subpixel best dx)");
       check_cuda(cudaMalloc(&d_best_dy, sizeof(float)), "cudaMalloc(resident subpixel best dy)");
       check_cuda(cudaMalloc(&d_best_score, sizeof(float)), "cudaMalloc(resident subpixel best score)");
-      gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
+      glass_estimate_translation_subpixel_ncc_f32_launch(
           d_stack_ + reference_index * pixels_per_frame_,
           d_stack_ + moving_index * pixels_per_frame_,
           d_scores,
@@ -1647,7 +1647,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
           "cudaMalloc(resident stats count)");
-      gpwbpp_frame_sum_stats_f32_launch(
+      glass_frame_sum_stats_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_partial_sum,
           d_partial_sum2,
@@ -1746,7 +1746,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMalloc(&d_count, grid_count * sizeof(unsigned long long)),
           "cudaMalloc(resident grid valid count)");
-      gpwbpp_pair_grid_sum_stats_f32_launch(
+      glass_pair_grid_sum_stats_f32_launch(
           d_stack_ + source_index * pixels_per_frame_,
           d_stack_ + reference_index * pixels_per_frame_,
           d_source_sum,
@@ -1852,7 +1852,7 @@ class ResidentCalibratedStack {
     float* d_output = nullptr;
     try {
       check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident global normalization output)");
-      gpwbpp_local_norm_apply_f32_launch(d_stack_ + index * pixels_per_frame_, d_output, pixels_per_frame_, scale, offset);
+      glass_local_norm_apply_f32_launch(d_stack_ + index * pixels_per_frame_, d_output, pixels_per_frame_, scale, offset);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_global_normalization_frame kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_global_normalization_frame synchronize");
       check_cuda(
@@ -1915,7 +1915,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_offsets, offsets_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident grid normalization offsets)");
-      gpwbpp_local_norm_apply_grid_f32_launch(
+      glass_local_norm_apply_grid_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_output,
           d_scales,
@@ -1952,7 +1952,7 @@ class ResidentCalibratedStack {
     unsigned char* d_mask = nullptr;
     try {
       check_cuda(cudaMalloc(&d_mask, pixels_per_frame_ * sizeof(unsigned char)), "cudaMalloc(resident star mask)");
-      gpwbpp_star_local_max_mask_f32_launch(
+      glass_star_local_max_mask_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_mask,
           static_cast<int>(width_),
@@ -1998,7 +1998,7 @@ class ResidentCalibratedStack {
           cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_candidates) * sizeof(float)),
           "cudaMalloc(star fluxes)");
       check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(star count)");
-      gpwbpp_star_candidates_f32_launch(
+      glass_star_candidates_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_xs,
           d_ys,
@@ -2064,7 +2064,7 @@ class ResidentCalibratedStack {
           "cudaMalloc(top star fluxes)");
       check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(top star count)");
       check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(top star lock)");
-      gpwbpp_star_top_candidates_f32_launch(
+      glass_star_top_candidates_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_xs,
           d_ys,
@@ -2163,7 +2163,7 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(resident top nms star count)");
       check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(resident top nms star lock)");
       check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident top nms stored count)");
-      gpwbpp_star_top_nms_candidates_f32_launch(
+      glass_star_top_nms_candidates_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_scan_xs,
           d_scan_ys,
@@ -2294,7 +2294,7 @@ class ResidentCalibratedStack {
           cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)),
           "cudaMalloc(resident grid top nms locks)");
       check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident grid top nms stored count)");
-      gpwbpp_star_grid_top_nms_candidates_f32_launch(
+      glass_star_grid_top_nms_candidates_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_grid_xs,
           d_grid_ys,
@@ -2437,7 +2437,7 @@ class ResidentCalibratedStack {
         int total_count = 0;
         int stored_count = 0;
 
-        gpwbpp_star_grid_top_nms_candidates_f32_launch(
+        glass_star_grid_top_nms_candidates_f32_launch(
             d_stack_ + index * pixels_per_frame_,
             d_grid_xs,
             d_grid_ys,
@@ -2608,7 +2608,7 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_reference_lock, lock_count * sizeof(int)), "cudaMalloc(resident reference star locks)");
       check_cuda(cudaMalloc(&d_moving_lock, lock_count * sizeof(int)), "cudaMalloc(resident moving star locks)");
       if (use_grid_candidates) {
-        gpwbpp_star_grid_candidates_f32_launch(
+        glass_star_grid_candidates_f32_launch(
             d_stack_ + reference_index * pixels_per_frame_,
             d_reference_x,
             d_reference_y,
@@ -2620,7 +2620,7 @@ class ResidentCalibratedStack {
             threshold,
             grid_cols,
             grid_rows);
-        gpwbpp_star_grid_candidates_f32_launch(
+        glass_star_grid_candidates_f32_launch(
             d_stack_ + moving_index * pixels_per_frame_,
             d_moving_x,
             d_moving_y,
@@ -2633,7 +2633,7 @@ class ResidentCalibratedStack {
             grid_cols,
             grid_rows);
       } else {
-        gpwbpp_star_top_candidates_f32_launch(
+        glass_star_top_candidates_f32_launch(
             d_stack_ + reference_index * pixels_per_frame_,
             d_reference_x,
             d_reference_y,
@@ -2644,7 +2644,7 @@ class ResidentCalibratedStack {
             static_cast<int>(height_),
             threshold,
             max_candidates);
-        gpwbpp_star_top_candidates_f32_launch(
+        glass_star_top_candidates_f32_launch(
             d_stack_ + moving_index * pixels_per_frame_,
             d_moving_x,
             d_moving_y,
@@ -2693,7 +2693,7 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_refined_dx, sizeof(float)), "cudaMalloc(resident catalog refined dx)");
       check_cuda(cudaMalloc(&d_refined_dy, sizeof(float)), "cudaMalloc(resident catalog refined dy)");
       check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(resident catalog rms)");
-      gpwbpp_estimate_translation_from_catalogs_f32_launch(
+      glass_estimate_translation_from_catalogs_f32_launch(
           d_reference_x,
           d_reference_y,
           d_moving_x,
@@ -2847,7 +2847,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident weights)");
-      gpwbpp_integrate_resident_weighted_mean_f32_launch(
+      glass_integrate_resident_weighted_mean_f32_launch(
           d_stack_,
           d_weights,
           d_master,
@@ -2937,7 +2937,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident sigma weights)");
-      gpwbpp_integrate_resident_sigma_clip_f32_launch(
+      glass_integrate_resident_sigma_clip_f32_launch(
           d_stack_,
           d_weights,
           d_master,
@@ -3084,7 +3084,7 @@ class ResidentCalibratedStack {
       timing.h2d_s = seconds_since(h2d_start);
 
       const auto calibrate_start = Clock::now();
-      gpwbpp_calibrate_tile_f32_launch(
+      glass_calibrate_tile_f32_launch(
           d_light_,
           d_bias_,
           d_dark_,
@@ -3138,7 +3138,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaEventRecord(kernel_start.get(), calibrate_stream_),
           "cudaEventRecord(resident calibration start)");
-      gpwbpp_calibrate_tile_f32_launch_stream(
+      glass_calibrate_tile_f32_launch_stream(
           d_light_,
           d_bias_,
           d_dark_,
@@ -3194,7 +3194,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaEventRecord(kernel_start.get(), calibrate_stream_),
           "cudaEventRecord(resident host async calibration start)");
-      gpwbpp_calibrate_tile_f32_launch_stream(
+      glass_calibrate_tile_f32_launch_stream(
           d_light_,
           d_bias_,
           d_dark_,
@@ -3306,7 +3306,7 @@ py::array_t<float> smoke_add_f32(
     check_cuda(cudaMalloc(&d_out, n * sizeof(float)), "cudaMalloc(out)");
     check_cuda(cudaMemcpy(d_a, a_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(a)");
     check_cuda(cudaMemcpy(d_b, b_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(b)");
-    gpwbpp_smoke_add_f32_launch(d_a, d_b, d_out, n);
+    glass_smoke_add_f32_launch(d_a, d_b, d_out, n);
     check_cuda(cudaGetLastError(), "smoke_add_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "smoke_add_f32 synchronize");
     check_cuda(
@@ -3426,7 +3426,7 @@ py::array_t<float> calibrate_tile_f32(
           cudaMemcpy(d_flat, flat_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(flat)");
     }
-    gpwbpp_calibrate_tile_f32_launch(
+    glass_calibrate_tile_f32_launch(
         d_light,
         d_bias,
         d_dark,
@@ -3487,7 +3487,7 @@ py::array_t<float> mean_stack_tiles_f32(
     check_cuda(
         cudaMemcpy(d_stack, stack_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(stack)");
-    gpwbpp_mean_stack_tiles_f32_launch(d_stack, d_out, frame_count, pixels_per_frame);
+    glass_mean_stack_tiles_f32_launch(d_stack, d_out, frame_count, pixels_per_frame);
     check_cuda(cudaGetLastError(), "mean_stack_tiles_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "mean_stack_tiles_f32 synchronize");
     check_cuda(
@@ -3531,7 +3531,7 @@ py::tuple warp_translation_f32(
     check_cuda(
         cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(warp input)");
-    gpwbpp_warp_translation_f32_launch(
+    glass_warp_translation_f32_launch(
         d_input,
         d_output,
         d_coverage,
@@ -3587,7 +3587,7 @@ py::tuple warp_translation_bilinear_f32(
     check_cuda(
         cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(bilinear warp input)");
-    gpwbpp_warp_translation_bilinear_f32_launch(
+    glass_warp_translation_bilinear_f32_launch(
         d_input,
         d_output,
         d_coverage,
@@ -3648,7 +3648,7 @@ py::tuple warp_matrix_bilinear_f32(
     check_cuda(
         cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(matrix warp inverse)");
-    gpwbpp_warp_matrix_bilinear_f32_launch(
+    glass_warp_matrix_bilinear_f32_launch(
         d_input,
         d_output,
         d_coverage,
@@ -3711,7 +3711,7 @@ py::tuple warp_matrix_lanczos3_f32(
     check_cuda(
         cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(matrix Lanczos3 warp inverse)");
-    gpwbpp_warp_matrix_lanczos3_f32_launch(
+    glass_warp_matrix_lanczos3_f32_launch(
         d_input,
         d_output,
         d_coverage,
@@ -3792,7 +3792,7 @@ py::dict matrix_alignment_metrics_f32(
     check_cuda(
         cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(matrix metrics inverse)");
-    gpwbpp_matrix_alignment_metrics_f32_launch(
+    glass_matrix_alignment_metrics_f32_launch(
         d_reference,
         d_moving,
         d_inverse,
@@ -4173,7 +4173,7 @@ py::dict estimate_translation_search_f32(
     check_cuda(
         cudaMemcpy(d_moving, moving_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(registration moving)");
-    gpwbpp_estimate_translation_search_f32_launch(
+    glass_estimate_translation_search_f32_launch(
         d_reference,
         d_moving,
         d_scores,
@@ -4273,7 +4273,7 @@ py::dict estimate_translation_subpixel_ncc_f32(
     check_cuda(
         cudaMemcpy(d_moving, moving_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(subpixel moving)");
-    gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
+    glass_estimate_translation_subpixel_ncc_f32_launch(
         d_reference,
         d_moving,
         d_scores,
@@ -4450,7 +4450,7 @@ py::dict estimate_translation_from_catalogs_f32(
             static_cast<std::size_t>(moving_count) * sizeof(float),
             cudaMemcpyHostToDevice),
         "cudaMemcpy(catalog moving y)");
-    gpwbpp_estimate_translation_from_catalogs_f32_launch(
+    glass_estimate_translation_from_catalogs_f32_launch(
         d_reference_x,
         d_reference_y,
         d_moving_x,
@@ -4651,7 +4651,7 @@ py::dict estimate_similarity_from_pairs_f32(
             static_cast<std::size_t>(count) * sizeof(float),
             cudaMemcpyHostToDevice),
         "cudaMemcpy(similarity moving y)");
-    gpwbpp_estimate_similarity_from_pairs_f32_launch(
+    glass_estimate_similarity_from_pairs_f32_launch(
         d_reference_x,
         d_reference_y,
         d_moving_x,
@@ -4797,7 +4797,7 @@ py::dict triangle_asterism_descriptors_f32(
     check_cuda(cudaMalloc(&d_valid, static_cast<std::size_t>(raw_count) * sizeof(unsigned char)), "cudaMalloc(triangle valid)");
     check_cuda(cudaMemcpy(d_x, x_info.ptr, static_cast<std::size_t>(count) * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(triangle x)");
     check_cuda(cudaMemcpy(d_y, y_info.ptr, static_cast<std::size_t>(count) * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(triangle y)");
-    gpwbpp_triangle_asterism_descriptors_f32_launch(
+    glass_triangle_asterism_descriptors_f32_launch(
         d_x,
         d_y,
         d_descriptors,
@@ -5091,7 +5091,7 @@ py::dict estimate_similarity_from_triangle_descriptors_f32(
             static_cast<std::size_t>(moving_descriptor_count) * 3 * sizeof(int),
             cudaMemcpyHostToDevice),
         "cudaMemcpy(triangle similarity moving indices)");
-    gpwbpp_estimate_similarity_from_triangle_descriptors_f32_launch(
+    glass_estimate_similarity_from_triangle_descriptors_f32_launch(
         d_reference_x,
         d_reference_y,
         d_moving_x,
@@ -5359,7 +5359,7 @@ py::dict estimate_similarity_from_catalogs_f32(
             static_cast<std::size_t>(moving_count) * sizeof(float),
             cudaMemcpyHostToDevice),
         "cudaMemcpy(similarity catalog moving y)");
-    gpwbpp_estimate_similarity_from_catalogs_f32_launch(
+    glass_estimate_similarity_from_catalogs_f32_launch(
         d_reference_x,
         d_reference_y,
         d_moving_x,
@@ -5667,7 +5667,7 @@ py::array_t<float> local_norm_apply_f32(
     check_cuda(
         cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(local_norm input)");
-    gpwbpp_local_norm_apply_f32_launch(d_input, d_output, n, scale, offset);
+    glass_local_norm_apply_f32_launch(d_input, d_output, n, scale, offset);
     check_cuda(cudaGetLastError(), "local_norm_apply_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "local_norm_apply_f32 synchronize");
     check_cuda(
@@ -5745,7 +5745,7 @@ py::array_t<float> local_norm_apply_grid_f32(
     check_cuda(
         cudaMemcpy(d_offsets, offsets_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(local_norm_grid offsets)");
-    gpwbpp_local_norm_apply_grid_f32_launch(
+    glass_local_norm_apply_grid_f32_launch(
         d_input,
         d_output,
         d_scales,
@@ -5833,7 +5833,7 @@ py::dict local_norm_pair_stats_f32(
     check_cuda(
         cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
         "cudaMalloc(local_norm count)");
-    gpwbpp_pair_sum_stats_f32_launch(
+    glass_pair_sum_stats_f32_launch(
         d_source,
         d_reference,
         d_partial_source_sum,
@@ -5971,7 +5971,7 @@ py::tuple integrate_accumulate_mean_tile_f32(
     check_cuda(
         cudaMemcpy(d_weight_sum, weight_sum_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
         "cudaMemcpy(weight sum)");
-    gpwbpp_integrate_accumulate_mean_tile_f32_launch(d_frame, d_weight, d_sum, d_weight_sum, n);
+    glass_integrate_accumulate_mean_tile_f32_launch(d_frame, d_weight, d_sum, d_weight_sum, n);
     check_cuda(cudaGetLastError(), "integrate_accumulate_mean_tile_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "integrate_accumulate_mean_tile_f32 synchronize");
     check_cuda(
@@ -6013,7 +6013,7 @@ py::array_t<unsigned char> star_local_max_mask_f32(
     check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(star input)");
     check_cuda(cudaMalloc(&d_mask, n * sizeof(unsigned char)), "cudaMalloc(star mask)");
     check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(star input)");
-    gpwbpp_star_local_max_mask_f32_launch(d_input, d_mask, width, height, threshold);
+    glass_star_local_max_mask_f32_launch(d_input, d_mask, width, height, threshold);
     check_cuda(cudaGetLastError(), "star_local_max_mask_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "star_local_max_mask_f32 synchronize");
     check_cuda(
@@ -6065,7 +6065,7 @@ py::dict star_candidates_f32(
         "cudaMalloc(star fluxes)");
     check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(star count)");
     check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(star input)");
-    gpwbpp_star_candidates_f32_launch(
+    glass_star_candidates_f32_launch(
         d_input, d_xs, d_ys, d_fluxes, d_count, width, height, threshold, max_candidates);
     check_cuda(cudaGetLastError(), "star_candidates_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "star_candidates_f32 synchronize");
@@ -6134,7 +6134,7 @@ py::dict star_top_candidates_f32(
     check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(top star count)");
     check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(top star lock)");
     check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(top star input)");
-    gpwbpp_star_top_candidates_f32_launch(
+    glass_star_top_candidates_f32_launch(
         d_input, d_xs, d_ys, d_fluxes, d_count, d_lock, width, height, threshold, max_candidates);
     check_cuda(cudaGetLastError(), "star_top_candidates_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "star_top_candidates_f32 synchronize");
@@ -6232,7 +6232,7 @@ py::dict star_top_nms_candidates_f32(
     check_cuda(cudaMalloc(&d_lock, sizeof(int)), "cudaMalloc(top nms star lock)");
     check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(top nms stored count)");
     check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(top nms star input)");
-    gpwbpp_star_top_nms_candidates_f32_launch(
+    glass_star_top_nms_candidates_f32_launch(
         d_input,
         d_scan_xs,
         d_scan_ys,
@@ -6369,7 +6369,7 @@ py::dict star_grid_top_nms_candidates_f32(
     check_cuda(cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)), "cudaMalloc(grid top nms locks)");
     check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(grid top nms stored count)");
     check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(grid top nms input)");
-    gpwbpp_star_grid_top_nms_candidates_f32_launch(
+    glass_star_grid_top_nms_candidates_f32_launch(
         d_input,
         d_grid_xs,
         d_grid_ys,
@@ -6487,7 +6487,7 @@ py::dict star_grid_candidates_f32(
     check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(grid star count)");
     check_cuda(cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)), "cudaMalloc(grid star locks)");
     check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(grid star input)");
-    gpwbpp_star_grid_candidates_f32_launch(
+    glass_star_grid_candidates_f32_launch(
         d_input,
         d_xs,
         d_ys,
@@ -6547,8 +6547,8 @@ py::dict star_grid_candidates_f32(
   return result;
 }
 
-PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
-  m.doc() = "Native CUDA backend for GPWBPP";
+PYBIND11_MODULE(_glass_cuda_native, m) {
+  m.doc() = "Native CUDA backend for GLASS";
   m.def("cuda_available", &cuda_available);
   m.def("list_devices", &list_devices);
   m.def("get_device_info", &get_device_info);

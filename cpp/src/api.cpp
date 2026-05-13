@@ -1,6 +1,6 @@
-#include <gpwbpp_cuda/api.hpp>
+#include <glass_cuda/api.hpp>
 
-namespace gpwbpp_cuda {
+namespace glass_cuda {
 bool cuda_available() { return false; }
 }
 

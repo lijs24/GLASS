@@ -6,7 +6,7 @@ Gate 08: Registration.
 
 ## Completed content
 
-- Added `gpwbpp.gpu.registration.register_triangle_descriptor_similarity_f32(...)`.
+- Added `glass.gpu.registration.register_triangle_descriptor_similarity_f32(...)`.
 - The helper wires a controlled image-pair loop:
   - GPU star catalog extraction;
   - CUDA triangle descriptor generation;
@@ -17,7 +17,7 @@ Gate 08: Registration.
 
 ## Commands run
 
-- `.\\.venv\\Scripts\\python.exe -m ruff check src\\gpwbpp\\gpu\\registration.py tests\\test_gpu_registration_search.py`
+- `.\\.venv\\Scripts\\python.exe -m ruff check src\\glass\\gpu\\registration.py tests\\test_gpu_registration_search.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_registration_search.py::test_gpu_triangle_descriptor_image_registration_improves_alignment`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_registration_search.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
@@ -51,4 +51,4 @@ Extend `benchmarks/compare_astroalign_gpu_alignment.py` to include this triangle
 
 ## Clean-room compliance
 
-Compliant. No PixInsight/WBPP/PJSR source code was read or used. The helper composes GPWBPP-owned CUDA primitives and is validated against synthetic known-truth image data.
+Compliant. No PixInsight/WBPP/PJSR source code was read or used. The helper composes GLASS-owned CUDA primitives and is validated against synthetic known-truth image data.

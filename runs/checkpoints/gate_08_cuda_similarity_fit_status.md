@@ -21,7 +21,7 @@ Status: completed incremental Gate 08/09 registration capability. This is not a 
 ## Verification commands
 
 ```powershell
-cmd.exe /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build build\native-cuda --config Release --target _gpwbpp_cuda_native'
+cmd.exe /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build build\native-cuda --config Release --target _glass_cuda_native'
 ```
 
 Result: native CUDA extension rebuilt successfully. An initial compile attempt exposed a dynamic shared-memory symbol conflict in the new kernel; the kernel shared-memory name was fixed and the rebuild passed.
@@ -34,14 +34,14 @@ Result: 16 passed in 0.90 s.
 
 ```powershell
 @'
-import numpy as np, gpwbpp_cuda
+import numpy as np, glass_cuda
 moving = np.array([(0,0),(1,0),(0,1),(2,3)], dtype=np.float32)
 angle = np.deg2rad(5.0)
 scale = 1.02
 linear = scale * np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]], dtype=np.float32)
 translation = np.array([3.0, -2.0], dtype=np.float32)
 reference = moving @ linear.T + translation
-result = gpwbpp_cuda.estimate_similarity_from_pairs_f32(reference[:,0], reference[:,1], moving[:,0], moving[:,1])
+result = glass_cuda.estimate_similarity_from_pairs_f32(reference[:,0], reference[:,1], moving[:,0], moving[:,1])
 print(result)
 '@ | .\.venv\Scripts\python.exe -
 ```
@@ -59,7 +59,7 @@ Result: 125 passed in 7.04 s.
 - CUDA backend available: yes.
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
 - Compute capability: 12.0.
-- Total VRAM reported by GPWBPP: 97,886 MiB.
+- Total VRAM reported by GLASS: 97,886 MiB.
 
 ## Known limitations
 
@@ -74,4 +74,4 @@ Use an open-source registration algorithm as the behavioral reference for matchi
 
 ## Clean-room compliance
 
-Compliant. This implementation uses generic 2D similarity least-squares formulas and GPWBPP CUDA code. No official WBPP/PJSR source was read or copied.
+Compliant. This implementation uses generic 2D similarity least-squares formulas and GLASS CUDA code. No official WBPP/PJSR source was read or copied.

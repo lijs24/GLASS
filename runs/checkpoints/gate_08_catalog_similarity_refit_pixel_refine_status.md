@@ -7,7 +7,7 @@ Date: 2026-05-13
 - Added a guarded CUDA refit pass after `estimate_similarity_from_catalogs_f32` selects its best two-star similarity seed.
 - The refit gathers nearest-neighbor star inliers for the selected seed on the GPU, fits a similarity matrix from those inlier sums, and applies it only when the star-catalog residual does not worsen.
 - Added diagnostics: `refined_inliers`, `refit_status`, `refit_status_code`, and `refit_rms_px`.
-- Added `gpwbpp.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`, a CUDA pixel-metric translation refinement helper for an existing matrix.
+- Added `glass.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`, a CUDA pixel-metric translation refinement helper for an existing matrix.
 - Extended `benchmarks/compare_astroalign_gpu_alignment.py` to record a pixel-refined catalog-similarity path separately from the raw catalog-similarity seed.
 - Added focused tests for guarded catalog refit diagnostics and pixel-metric translation refinement.
 
@@ -16,7 +16,7 @@ Date: 2026-05-13
 - `cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .venv\Scripts\cmake.exe --build build\native-cuda --config Release'`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_cuda_resident_stack.py`
 - `.\.venv\Scripts\python.exe -m pytest -q`
-- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json"`
+- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json"`
 - `git diff --check`
 
 ## Test results
@@ -29,7 +29,7 @@ Date: 2026-05-13
 
 Artifact:
 
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json`
 
 Input pair:
 
@@ -41,7 +41,7 @@ Key timing:
 
 - astroalign total: `9.5811 s`
 - astroalign apply transform: `2.8675 s`
-- raw GPWBPP CUDA grid-top catalog similarity: `2.9638 s`
+- raw GLASS CUDA grid-top catalog similarity: `2.9638 s`
 - pixel-refined catalog similarity plus CUDA warp: `4.1595 s`
 - pixel-refine metric search only: `4.0721 s`
 - pixel-refined CUDA warp: `0.0874 s`
@@ -76,6 +76,6 @@ CUDA is available.
 
 ## Clean-room compliance
 
-- This increment used GPWBPP code and the open-source astroalign package only as an external comparison target.
+- This increment used GLASS code and the open-source astroalign package only as an external comparison target.
 - No PixInsight/WBPP/PJSR source code was read, copied, summarized, or used as implementation material.
-- Original image data were read only; generated benchmark artifacts were written under `C:\gpwbpp_runs`.
+- Original image data were read only; generated benchmark artifacts were written under `C:\glass_runs`.

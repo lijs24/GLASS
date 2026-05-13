@@ -8,9 +8,6 @@ import tracemalloc
 from pathlib import Path
 from typing import Any, Callable
 
-from gpwbpp.capabilities import capability_report
-
-
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--out", required=True)
     parser.add_argument("--frames", type=int, default=4)
@@ -31,9 +28,9 @@ def run_timed(fn: Callable[[], Any]) -> tuple[Any, float, float]:
 
 def vram_mib() -> int | None:
     try:
-        import gpwbpp_cuda
+        import glass_cuda
 
-        devices = gpwbpp_cuda.list_devices()
+        devices = glass_cuda.list_devices()
     except Exception:
         return None
     if not devices:

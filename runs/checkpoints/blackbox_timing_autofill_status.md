@@ -1,23 +1,23 @@
 # Black-box Timing Autofill Checkpoint
 
 - Date: 2026-05-12
-- Scope: Connect GPWBPP `run_timing.json` to the PixInsight/WBPP black-box handoff and finalize workflow.
+- Scope: Connect GLASS `run_timing.json` to the PixInsight/WBPP black-box handoff and finalize workflow.
 - Related gates: prepares Gate 13 timing comparison.
 
 ## Completed
 
-- `gpwbpp blackbox-package` now reads `run_timing.json` from `--gpwbpp-run` when `--gpwbpp-time-seconds` is omitted.
+- `glass blackbox-package` now reads `run_timing.json` from `--glass-run` when `--glass-time-seconds` is omitted.
 - `timing_template.json` records:
-  - `gpwbpp_time_seconds`
-  - `gpwbpp_timing_source`
-  - `gpwbpp_stage_timings`
-- `gpwbpp blackbox-finalize` can recover GPWBPP time from `gpwbpp_run/run_timing.json` if the template has `gpwbpp_time_seconds: null`.
-- Finalize summaries now include `gpwbpp_timing_source` and `speedup_observed`.
+  - `glass_time_seconds`
+  - `glass_timing_source`
+  - `glass_stage_timings`
+- `glass blackbox-finalize` can recover GLASS time from `glass_run/run_timing.json` if the template has `glass_time_seconds: null`.
+- Finalize summaries now include `glass_timing_source` and `speedup_observed`.
 - Added tests for explicit timing, run-timing autofill, and finalize-time recovery.
 
 ## Commands Run
 
-- `.\\.venv\\Scripts\\python.exe -m py_compile src/gpwbpp/report/blackbox_package.py tests/test_blackbox_package.py`
+- `.\\.venv\\Scripts\\python.exe -m py_compile src/glass/report/blackbox_package.py tests/test_blackbox_package.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests/test_blackbox_package.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
 

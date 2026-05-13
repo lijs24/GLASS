@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.cpu.warp import warp_translation
+from glass.cpu.warp import warp_translation
 from tests.conftest import cuda_module_or_skip
 
 
@@ -141,7 +141,7 @@ def test_gpu_warp_translation_matches_cpu():
 def test_gpu_warp_translation_bilinear_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module, "warp_translation_bilinear_f32"):
-        raise AssertionError("warp_translation_bilinear_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("warp_translation_bilinear_f32 is missing from glass_cuda")
 
     data = np.arange(36, dtype=np.float32).reshape(6, 6)
     gpu, gpu_coverage = module.warp_translation_bilinear_f32(data, 1.25, -0.5, -1.0)
@@ -154,7 +154,7 @@ def test_gpu_warp_translation_bilinear_matches_cpu_reference():
 def test_gpu_warp_matrix_bilinear_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module, "warp_matrix_bilinear_f32"):
-        raise AssertionError("warp_matrix_bilinear_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("warp_matrix_bilinear_f32 is missing from glass_cuda")
 
     data = np.arange(49, dtype=np.float32).reshape(7, 7)
     angle = np.deg2rad(3.0)
@@ -176,7 +176,7 @@ def test_gpu_warp_matrix_bilinear_matches_cpu_reference():
 def test_gpu_warp_matrix_lanczos3_matches_cpu_reference():
     module = cuda_module_or_skip()
     if not hasattr(module, "warp_matrix_lanczos3_f32"):
-        raise AssertionError("warp_matrix_lanczos3_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("warp_matrix_lanczos3_f32 is missing from glass_cuda")
 
     yy, xx = np.indices((12, 13), dtype=np.float32)
     data = 0.2 * xx + 0.4 * yy

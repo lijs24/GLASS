@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
-from gpwbpp.cli import main
-from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.engine.resident_cuda import (
+from glass.cli import main
+from glass.io.json_io import read_json, write_json
+from glass.engine.resident_cuda import (
     _matches_any_token,
     _resident_similarity_frame_dispatch,
     _select_star_core_preselected_seed_indices,

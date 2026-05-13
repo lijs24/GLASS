@@ -6,16 +6,16 @@ Gate 08: Registration.
 
 ## Completed content
 
-- Added `gpwbpp_cuda.triangle_asterism_descriptors_f32(...)`.
+- Added `glass_cuda.triangle_asterism_descriptors_f32(...)`.
 - Added a CUDA kernel that computes local nearest-neighbor triangle side-ratio descriptors from compact star catalogs.
 - Added native pybind11 binding and Python compatibility wrapper.
-- Exported the function through `gpwbpp.gpu.registration`.
-- Added GPU test coverage comparing CUDA descriptor output to the GPWBPP-owned CPU triangle bridge.
+- Exported the function through `glass.gpu.registration`.
+- Added GPU test coverage comparing CUDA descriptor output to the GLASS-owned CPU triangle bridge.
 - Updated CUDA and registration documentation.
 
 ## Commands run
 
-- `.\\.venv\\Scripts\\python.exe -m ruff check src\\gpwbpp_cuda.py src\\gpwbpp\\gpu\\registration.py tests\\test_gpu_registration_search.py`
+- `.\\.venv\\Scripts\\python.exe -m ruff check src\\glass_cuda.py src\\glass\\gpu\\registration.py tests\\test_gpu_registration_search.py`
 - `.\\.venv\\Scripts\\cmake.exe --build build\\native-cuda --config Release`
 - `cmd.exe /d /s /c 'call "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .venv\\Scripts\\cmake.exe --build build\\native-cuda --config Release'`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_gpu_registration_search.py::test_gpu_triangle_asterism_descriptors_match_cpu_bridge`
@@ -54,4 +54,4 @@ Move descriptor matching and candidate similarity hypothesis scoring to CUDA usi
 
 ## Clean-room compliance
 
-Compliant. No PixInsight/WBPP/PJSR source code was read or used. This CUDA primitive implements GPWBPP-owned local triangle descriptor generation and is validated only against GPWBPP's CPU bridge.
+Compliant. No PixInsight/WBPP/PJSR source code was read or used. This CUDA primitive implements GLASS-owned local triangle descriptor generation and is validated only against GLASS's CPU bridge.

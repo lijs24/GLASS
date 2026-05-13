@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.cpu.calibration import calibrate_light
-from gpwbpp.models import CalibrationPolicy
+from glass.cpu.calibration import calibrate_light
+from glass.models import CalibrationPolicy
 
 
 def test_calibrate_light_dark_includes_bias_semantics():

@@ -7,17 +7,17 @@
 
 ```powershell
 .\.venv\Scripts\python -m pip install -e .[dev,report]
-.\.venv\Scripts\gpwbpp --help
-.\.venv\Scripts\gpwbpp scan --help
-.\.venv\Scripts\gpwbpp plan --help
-.\.venv\Scripts\gpwbpp subset --help
-.\.venv\Scripts\gpwbpp run --help
-.\.venv\Scripts\gpwbpp resume --help
-.\.venv\Scripts\gpwbpp audit --help
-.\.venv\Scripts\gpwbpp compare --help
-.\.venv\Scripts\gpwbpp blackbox-package --help
-.\.venv\Scripts\gpwbpp blackbox-finalize --help
-.\.venv\Scripts\gpwbpp synthetic --help
+.\.venv\Scripts\glass --help
+.\.venv\Scripts\glass scan --help
+.\.venv\Scripts\glass plan --help
+.\.venv\Scripts\glass subset --help
+.\.venv\Scripts\glass run --help
+.\.venv\Scripts\glass resume --help
+.\.venv\Scripts\glass audit --help
+.\.venv\Scripts\glass compare --help
+.\.venv\Scripts\glass blackbox-package --help
+.\.venv\Scripts\glass blackbox-finalize --help
+.\.venv\Scripts\glass synthetic --help
 ```
 
 ## Result

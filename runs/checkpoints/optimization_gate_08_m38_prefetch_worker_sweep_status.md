@@ -47,19 +47,19 @@ Swept settings:
 Best-run report:
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe report --run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\report.html"
+.\.venv\Scripts\glass.exe report --run "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\report.html"
 ```
 
 Best-run compare:
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.html" --gpwbpp-time-seconds 39.175000299932435 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP shared-sort prefetch16-workers8 scaled coverage190" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --gpwbpp-coverage-map "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\integration\resident_coverage_map_H.fits" --min-coverage 190
+.\.venv\Scripts\glass.exe compare --glass "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\integration\resident_master_H.fits" --reference "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.html" --glass-time-seconds 39.175000299932435 --reference-time-seconds 1092.541 --glass-label "GLASS shared-sort prefetch16-workers8 scaled coverage190" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --glass-coverage-map "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\integration\resident_coverage_map_H.fits" --min-coverage 190
 ```
 
 Acceptance audit:
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --manifest "C:\gpwbpp_runs\final_m38_h_200\manifest.json" --gpwbpp-run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort" --wbpp-result "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json" --compare-json "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.json" --out "runs\benchmarks\m38_acceptance_audit_prefetch16_workers8_sharedsort.json" --markdown "runs\benchmarks\m38_acceptance_audit_prefetch16_workers8_sharedsort.md" --min-lights 200 --min-bias 20 --min-dark 20 --min-flat 20 --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
+.\.venv\Scripts\glass.exe acceptance-audit --manifest "C:\glass_runs\final_m38_h_200\manifest.json" --glass-run "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort" --wbpp-result "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json" --compare-json "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.json" --out "runs\benchmarks\m38_acceptance_audit_prefetch16_workers8_sharedsort.json" --markdown "runs\benchmarks\m38_acceptance_audit_prefetch16_workers8_sharedsort.md" --min-lights 200 --min-bias 20 --min-dark 20 --min-flat 20 --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 ```
 
 ## Test result
@@ -101,10 +101,10 @@ Acceptance audit:
 
 ## Artifacts
 
-- Best run directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort`
-- Report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\report.html`
-- Compare report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
-- Compare JSON: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- Best run directory: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort`
+- Report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\report.html`
+- Compare report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.html`
+- Compare JSON: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_sharedsort\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
 - Acceptance audit: `runs\benchmarks\m38_acceptance_audit_prefetch16_workers8_sharedsort.json`
 - Acceptance audit summary: `runs\benchmarks\m38_acceptance_audit_prefetch16_workers8_sharedsort.md`
 
@@ -134,6 +134,6 @@ The next I/O optimization should avoid excessive CPU memory contention while red
 
 ## Clean-room compliance
 
-- Compliant. The benchmark used GPWBPP code and user-generated PixInsight/WBPP black-box outputs only.
+- Compliant. The benchmark used GLASS code and user-generated PixInsight/WBPP black-box outputs only.
 - No PixInsight/WBPP/PJSR official source was read, copied, summarized, or modified.
 - No original image data directory was modified.

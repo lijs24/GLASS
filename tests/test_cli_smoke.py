@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpwbpp.cli import main
-from gpwbpp.io.json_io import read_json, write_json
+from glass.cli import main
+from glass.io.json_io import read_json, write_json
 from tests.conftest import cuda_module_or_skip
 
 
@@ -106,6 +106,7 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
 
 def test_cli_help_commands():
     for command in [
+        "doctor",
         "scan",
         "plan",
         "subset",
@@ -124,6 +125,16 @@ def test_cli_help_commands():
             main([command, "--help"])
         except SystemExit as exc:
             assert exc.code == 0
+
+
+def test_cli_doctor_cpu_only_success(tmp_path: Path):
+    out = tmp_path / "doctor.json"
+    assert main(["doctor", "--allow-cpu-only", "--json", str(out)]) == 0
+    payload = read_json(out)
+    assert payload["product"] == "GLASS"
+    assert payload["full_name"] == "GPU-Accelerated Lightframe Alignment and Stacking System"
+    assert "cuda" in payload
+    assert "capabilities" in payload
 
 
 def test_cli_report_includes_resident_artifacts(tmp_path: Path):

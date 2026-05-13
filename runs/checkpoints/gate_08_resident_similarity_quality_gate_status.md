@@ -44,4 +44,4 @@ Gate 08: Registration
 ## Clean-room compliance
 - Compliant.
 - No PixInsight/WBPP/PJSR source, script internals, or installation directories were read or modified.
-- The fix uses GPWBPP's clean-room CUDA registration diagnostics.
+- The fix uses GLASS's clean-room CUDA registration diagnostics.

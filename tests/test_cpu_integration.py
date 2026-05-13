@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.cpu.integration import mean_integrate, sigma_clip_integrate, weighted_integrate_stack
+from glass.cpu.integration import mean_integrate, sigma_clip_integrate, weighted_integrate_stack
 
 
 def test_mean_integrate():

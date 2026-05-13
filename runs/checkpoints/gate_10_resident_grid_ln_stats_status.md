@@ -19,13 +19,13 @@ Gate 10: Local Normalization resident CUDA increment.
 ## Commands Run
 
 ```powershell
-& cmd.exe /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\cmake.exe" --build "C:\Users\ljs\WORK\astro\gpuwbpp\build\native-cuda"'
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cli.py src\gpwbpp\engine\resident_cuda.py src\gpwbpp_cuda.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
+& cmd.exe /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "<repo>\.venv\Scripts\cmake.exe" --build "<repo>\build\native-cuda"'
+.\.venv\Scripts\python.exe -m ruff check src\glass\cli.py src\glass\engine\resident_cuda.py src\glass_cuda.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cuda_resident_stack.py::test_resident_stack_grid_stats_can_drive_in_vram_normalization tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_ncc_subpixel_registration_smoke
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py tests\test_cli_smoke.py
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cli.py src\gpwbpp\engine\resident_cuda.py src\gpwbpp_cuda.py src\gpwbpp\capabilities.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py tests\test_capabilities.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\cli.py src\glass\engine\resident_cuda.py src\glass_cuda.py src\glass\capabilities.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py tests\test_capabilities.py
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -c "import gpwbpp_cuda; print(gpwbpp_cuda.cuda_available()); print(gpwbpp_cuda.get_device_info(0) if gpwbpp_cuda.cuda_available() else {})"
+.\.venv\Scripts\python.exe -c "import glass_cuda; print(glass_cuda.cuda_available()); print(glass_cuda.get_device_info(0) if glass_cuda.cuda_available() else {})"
 ```
 
 ## Test Result

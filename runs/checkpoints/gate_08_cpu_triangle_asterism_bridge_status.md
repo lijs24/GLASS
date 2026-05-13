@@ -6,7 +6,7 @@ Gate 08: Registration.
 
 ## Completed content
 
-- Added a GPWBPP-owned CPU triangle asterism bridge:
+- Added a GLASS-owned CPU triangle asterism bridge:
   - local nearest-neighbor triangle descriptor generation;
   - scale-invariant side-ratio descriptor matching;
   - similarity/affine hypothesis fitting;
@@ -19,9 +19,9 @@ Gate 08: Registration.
 ## Commands run
 
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_cpu_registration.py`
-- `.\\.venv\\Scripts\\python.exe -m ruff check src\\gpwbpp\\cpu\\registration.py tests\\test_cpu_registration.py`
+- `.\\.venv\\Scripts\\python.exe -m ruff check src\\glass\\cpu\\registration.py tests\\test_cpu_registration.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
-- `.\\.venv\\Scripts\\python.exe -c "import gpwbpp_cuda as c; print('cuda_available', c.cuda_available()); print(c.list_devices())"`
+- `.\\.venv\\Scripts\\python.exe -c "import glass_cuda as c; print('cuda_available', c.cuda_available()); print(c.list_devices())"`
 - `git diff --check`
 
 ## Test results
@@ -58,4 +58,4 @@ Port the triangle asterism bridge to CUDA-resident catalogs:
 
 ## Clean-room compliance
 
-Compliant. No PixInsight/WBPP/PJSR source code was read or used. PixInsight StarAlignment behavior was treated as public documentation/forum black-box context only. The implementation is GPWBPP-owned and was checked against optional open-source `astroalign` behavior only for validation.
+Compliant. No PixInsight/WBPP/PJSR source code was read or used. PixInsight StarAlignment behavior was treated as public documentation/forum black-box context only. The implementation is GLASS-owned and was checked against optional open-source `astroalign` behavior only for validation.

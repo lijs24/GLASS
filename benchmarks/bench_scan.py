@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmarks.common import run_timed, write_result
-from gpwbpp.metadata.scanner import scan_tree
+from glass.metadata.scanner import scan_tree
 
 
 def main() -> int:

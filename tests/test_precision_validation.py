@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from gpwbpp.models import CalibrationPolicy
-from gpwbpp.validation.precision import calibrate_light_f64, finite_error_stats
+from glass.models import CalibrationPolicy
+from glass.validation.precision import calibrate_light_f64, finite_error_stats
 
 
 def test_finite_error_stats_reports_small_float32_roundoff():

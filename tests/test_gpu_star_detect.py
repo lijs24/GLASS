@@ -25,7 +25,7 @@ def _cpu_local_max_mask(data: np.ndarray, threshold: float) -> np.ndarray:
 def test_gpu_star_local_max_mask_matches_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_local_max_mask_f32"):
-        raise AssertionError("star_local_max_mask_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_local_max_mask_f32 is missing from glass_cuda")
 
     image = np.zeros((8, 9), dtype=np.float32)
     image[2, 3] = 10.0
@@ -45,7 +45,7 @@ def test_gpu_star_local_max_mask_matches_cpu():
 def test_resident_stack_star_local_max_mask_uses_device_frame():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
-        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
 
     image = np.zeros((6, 7), dtype=np.float32)
     image[2, 2] = 11.0
@@ -63,7 +63,7 @@ def test_resident_stack_star_local_max_mask_uses_device_frame():
 def test_gpu_star_candidates_compacts_local_maxima():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_candidates_f32"):
-        raise AssertionError("star_candidates_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_candidates_f32 is missing from glass_cuda")
 
     image = np.zeros((7, 8), dtype=np.float32)
     image[2, 2] = 11.0
@@ -98,7 +98,7 @@ def test_resident_stack_star_candidates_from_device_frame():
 def test_gpu_star_top_candidates_sorts_by_flux_and_caps():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_top_candidates_f32"):
-        raise AssertionError("star_top_candidates_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_top_candidates_f32 is missing from glass_cuda")
 
     image = np.zeros((9, 10), dtype=np.float32)
     image[2, 2] = 11.0
@@ -121,7 +121,7 @@ def test_gpu_star_top_candidates_sorts_by_flux_and_caps():
 def test_gpu_star_grid_candidates_keeps_brightest_per_cell():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_grid_candidates_f32"):
-        raise AssertionError("star_grid_candidates_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_grid_candidates_f32 is missing from glass_cuda")
 
     image = np.zeros((8, 8), dtype=np.float32)
     image[1, 1] = 9.0
@@ -247,7 +247,7 @@ def test_gpu_star_top_candidate_selectors_are_repeatable_under_contention():
     ]
     for name in required:
         if not hasattr(module, name):
-            raise AssertionError(f"{name} is missing from gpwbpp_cuda")
+            raise AssertionError(f"{name} is missing from glass_cuda")
 
     rng = np.random.default_rng(20260513)
     image = rng.normal(0.0, 0.01, size=(192, 192)).astype(np.float32)

@@ -13,9 +13,9 @@
 ## Commands
 
 ```powershell
-cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug"
+cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "<repo>\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug"
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_gpu_star_detect.py
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\gpu\registration.py tests\test_gpu_registration_search.py
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\gpu\registration.py tests\test_gpu_registration_search.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -34,7 +34,7 @@ cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\
 
 ## Artifacts
 
-- Updated CUDA native module in local `src/_gpwbpp_cuda_native*.pyd` build output.
+- Updated CUDA native module in local `src/_glass_cuda_native*.pyd` build output.
 - Updated tests in `tests/test_gpu_registration_search.py`.
 - Updated docs:
   - `docs/cuda_backend.md`

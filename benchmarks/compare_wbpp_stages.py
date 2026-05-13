@@ -12,12 +12,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from gpwbpp.cpu.calibration import calibrate_light
-from gpwbpp.io.fits_io import read_fits_data
-from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.io.xisf_io import read_xisf_data, read_xisf_metadata
-from gpwbpp.models import CalibrationPolicy
-from gpwbpp.report.compare_report import _diff_stats, _robust_linear_fit_to_reference
+from glass.cpu.calibration import calibrate_light
+from glass.io.fits_io import read_fits_data
+from glass.io.json_io import read_json, write_json
+from glass.io.xisf_io import read_xisf_data, read_xisf_metadata
+from glass.models import CalibrationPolicy
+from glass.report.compare_report import _diff_stats, _robust_linear_fit_to_reference
 
 UINT16_SCALE = 1.0 / 65535.0
 
@@ -116,16 +116,16 @@ def _xisf_pedestal(path: Path) -> float | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Compare GPWBPP stage outputs to WBPP black-box XISF outputs.")
+    parser = argparse.ArgumentParser(description="Compare GLASS stage outputs to WBPP black-box XISF outputs.")
     parser.add_argument("--plan", required=True)
-    parser.add_argument("--gpwbpp-run", required=True)
+    parser.add_argument("--glass-run", required=True)
     parser.add_argument("--wbpp-run", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--light-index", type=int, default=1)
     args = parser.parse_args()
 
     plan = read_json(args.plan)
-    gp_run = Path(args.gpwbpp_run)
+    gp_run = Path(args.glass_run)
     wbpp_run = Path(args.wbpp_run)
     cache = gp_run / "calib_cache" / "resident_masters"
     policy = _policy_from_plan(plan)
@@ -140,7 +140,7 @@ def main() -> int:
     result: dict[str, Any] = {
         "schema_version": 1,
         "plan": str(Path(args.plan).resolve()),
-        "gpwbpp_run": str(gp_run.resolve()),
+        "glass_run": str(gp_run.resolve()),
         "wbpp_run": str(wbpp_run.resolve()),
         "policy": asdict(policy),
         "masters": {
@@ -177,7 +177,7 @@ def main() -> int:
     result["calibrated_light"] = {
         "light_index": args.light_index,
         "frame_id": light_record["id"],
-        "gpwbpp_source": str(Path(light_record["path"]).resolve()),
+        "glass_source": str(Path(light_record["path"]).resolve()),
         "wbpp_source": str(wbpp_calibrated_path.resolve()),
         "wbpp_pedestal_adu": wbpp_pedestal_adu,
         "comparison": _stage_compare(gp_calibrated, wbpp_calibrated),

@@ -8,7 +8,7 @@
 ## Completed
 
 - Built a larger real M38 subset from the existing
-  `C:\gpwbpp_runs\final_m38_h_200\manifest.json`.
+  `C:\glass_runs\final_m38_h_200\manifest.json`.
 - Ran full-size resident CUDA calibration, resident NCC+subpixel translation
   registration, bilinear resident warp, and winsorized sigma integration.
 - Verified output master, weight map, coverage map, low rejection map, and high
@@ -19,8 +19,8 @@
 ## Commands Run
 
 ```powershell
-$base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_ncc_winsorized_subset50'; .\.venv\Scripts\gpwbpp.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 50 --bias-limit 20 --dark-limit 20 --flat-limit 20
-$base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_ncc_winsorized_subset50'; .\.venv\Scripts\gpwbpp.exe run --plan (Join-Path $run 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 24 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
+$base='C:\glass_runs\final_m38_h_200'; $run=Join-Path $base 'glass_resident_ncc_winsorized_subset50'; .\.venv\Scripts\glass.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 50 --bias-limit 20 --dark-limit 20 --flat-limit 20
+$base='C:\glass_runs\final_m38_h_200'; $run=Join-Path $base 'glass_resident_ncc_winsorized_subset50'; .\.venv\Scripts\glass.exe run --plan (Join-Path $run 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 24 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -40,7 +40,7 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 ## Real M38 Resident Run Result
 
 - Run directory:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50`
 - Registration model: `translation_ncc_subpixel`.
 - Registration results: 50 total; 1 reference, 49 ok, 0 failed.
 - Translation range:
@@ -73,20 +73,20 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\manifest.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\processing_plan.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\registration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\resident_artifacts.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\integration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\integration\resident_weight_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\integration\resident_coverage_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\integration\resident_low_rejection_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_subset50\integration\resident_high_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\manifest.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\processing_plan.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\registration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\resident_artifacts.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\integration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\integration\resident_weight_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\integration\resident_coverage_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\integration\resident_low_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_subset50\integration\resident_high_rejection_map_H.fits`
 
 ## Known Limitations
 
-- This is a 50-light real subset, not the final 200-light WBPP/GPWBPP acceptance
+- This is a 50-light real subset, not the final 200-light WBPP/GLASS acceptance
   comparison.
 - Matching calibration selection still yields only 11 dark, 6 bias, and 4 flat
   frames for this subset; final acceptance must use a selection satisfying the
@@ -106,6 +106,6 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 
 - No official PixInsight WBPP/PJSR source was read, copied, summarized, or
   modified.
-- Only GPWBPP outputs, user-provided M38 data, and black-box comparison artifacts
+- Only GLASS outputs, user-provided M38 data, and black-box comparison artifacts
   were used.
 - Original input data directories were not modified.

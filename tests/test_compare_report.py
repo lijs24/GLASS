@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 
-from gpwbpp.cli import main
-from gpwbpp.io.fits_io import write_fits_data
-from gpwbpp.report.compare_report import compare_fits
+from glass.cli import main
+from glass.io.fits_io import write_fits_data
+from glass.report.compare_report import compare_fits
 
 
 def _write(path: Path, value: float) -> None:
@@ -19,10 +19,10 @@ def test_compare_fits_records_timing_speedup(tmp_path: Path):
     ref = tmp_path / "ref.fits"
     _write(gp, 1.0)
     _write(ref, 1.5)
-    result = compare_fits(gp, ref, gpwbpp_time_seconds=10.0, reference_time_seconds=25.0)
+    result = compare_fits(gp, ref, glass_time_seconds=10.0, reference_time_seconds=25.0)
     assert result["shape_match"] is True
     assert result["timing"]["speedup_vs_reference"] == 2.5
-    assert result["timing"]["gpwbpp_faster"] is True
+    assert result["timing"]["glass_faster"] is True
 
 
 def test_compare_cli_writes_timing_json(tmp_path: Path):
@@ -35,13 +35,13 @@ def test_compare_cli_writes_timing_json(tmp_path: Path):
         main(
             [
                 "compare",
-                "--gpwbpp",
+                "--glass",
                 str(gp),
                 "--reference",
                 str(ref),
                 "--out",
                 str(out),
-                "--gpwbpp-time-seconds",
+                "--glass-time-seconds",
                 "12",
                 "--reference-time-seconds",
                 "36",
@@ -66,15 +66,15 @@ def test_compare_cli_records_candidate_transform(tmp_path: Path):
         main(
             [
                 "compare",
-                "--gpwbpp",
+                "--glass",
                 str(gp),
                 "--reference",
                 str(ref),
                 "--out",
                 str(out),
-                "--gpwbpp-scale",
+                "--glass-scale",
                 "0.001",
-                "--gpwbpp-offset",
+                "--glass-offset",
                 "0",
                 "--clip-low",
                 "0",
@@ -101,7 +101,7 @@ def test_compare_can_ignore_border_for_metrics(tmp_path: Path):
     write_fits_data(gp, candidate)
     write_fits_data(ref, reference)
 
-    assert main(["compare", "--gpwbpp", str(gp), "--reference", str(ref), "--out", str(out), "--ignore-border-px", "1"]) == 0
+    assert main(["compare", "--glass", str(gp), "--reference", str(ref), "--out", str(out), "--ignore-border-px", "1"]) == 0
 
     payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
     assert payload["comparison_region"]["ignore_border_px"] == 1
@@ -110,7 +110,7 @@ def test_compare_can_ignore_border_for_metrics(tmp_path: Path):
     assert payload["full_frame_stats"]["rms_diff"] > 0.0
 
 
-def test_compare_can_mask_by_gpwbpp_coverage_map(tmp_path: Path):
+def test_compare_can_mask_by_glass_coverage_map(tmp_path: Path):
     gp = tmp_path / "gp.fits"
     ref = tmp_path / "ref.fits"
     coverage = tmp_path / "coverage.fits"
@@ -130,13 +130,13 @@ def test_compare_can_mask_by_gpwbpp_coverage_map(tmp_path: Path):
         main(
             [
                 "compare",
-                "--gpwbpp",
+                "--glass",
                 str(gp),
                 "--reference",
                 str(ref),
                 "--out",
                 str(out),
-                "--gpwbpp-coverage-map",
+                "--glass-coverage-map",
                 str(coverage),
                 "--min-coverage",
                 "5",
@@ -159,19 +159,19 @@ def test_compare_writes_diagnostic_artifacts(tmp_path: Path):
     candidate[8:12, 10:14] += 5.0
     candidate[20:24, 25:30] -= 3.0
 
-    gpwbpp = tmp_path / "gpwbpp.fits"
+    glass = tmp_path / "glass.fits"
     ref = tmp_path / "reference.fits"
     out = tmp_path / "compare.html"
     diagnostics = tmp_path / "diagnostics"
-    write_fits_data(gpwbpp, candidate)
+    write_fits_data(glass, candidate)
     write_fits_data(ref, reference)
 
     assert (
         main(
             [
                 "compare",
-                "--gpwbpp",
-                str(gpwbpp),
+                "--glass",
+                str(glass),
                 "--reference",
                 str(ref),
                 "--out",
@@ -191,7 +191,7 @@ def test_compare_writes_diagnostic_artifacts(tmp_path: Path):
     assert comparison["shape_match"] is True
     assert comparison["diagnostics"]["directory"] == str(diagnostics)
     for name in [
-        "gpwbpp_preview.png",
+        "glass_preview.png",
         "reference_preview.png",
         "abs_diff_preview.png",
         "signed_diff_preview.png",

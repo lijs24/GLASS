@@ -7,8 +7,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmarks.common import add_common_args, run_timed, write_result
-from gpwbpp.cli import main as gpwbpp_main
-from gpwbpp.io.json_io import read_json
+from glass.cli import main as glass_main
+from glass.io.json_io import read_json
 
 
 def main() -> int:
@@ -40,7 +40,7 @@ def main() -> int:
     base = Path(args.out).with_suffix("")
     source = base / "source"
     audit = base / "audit"
-    gpwbpp_main(
+    glass_main(
         [
             "synthetic",
             "--out",
@@ -55,7 +55,7 @@ def main() -> int:
         ]
     )
     _, elapsed, peak_ram = run_timed(
-        lambda: gpwbpp_main(
+        lambda: glass_main(
             [
                 "audit",
                 "--root",

@@ -4,8 +4,8 @@ Date: 2026-05-13
 
 ## Completed
 
-- Tightened the astroalign-vs-GPWBPP benchmark acceptance semantics.
-- `benchmarks/compare_astroalign_gpu_alignment.py` now marks the GPWBPP-owned
+- Tightened the astroalign-vs-GLASS benchmark acceptance semantics.
+- `benchmarks/compare_astroalign_gpu_alignment.py` now marks the GLASS-owned
   CUDA catalog-similarity path as `accepted=false` when its transform/output
   fails `catalog_similarity_agreement_vs_astroalign`, even if the internal
   catalog fit reports enough inliers.
@@ -18,7 +18,7 @@ Date: 2026-05-13
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q tests\test_benchmarks.py tests\test_gpu_registration_search.py
-.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits --moving C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits --out C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v14_gridtop_acceptance.json --max-shift 16 --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-min-inliers 6 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01
+.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits --moving C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits --out C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v14_gridtop_acceptance.json --max-shift 16 --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-min-inliers 6 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01
 ```
 
 ## Test Results
@@ -29,7 +29,7 @@ Date: 2026-05-13
 
 Output artifact:
 
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v14_gridtop_acceptance.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v14_gridtop_acceptance.json`
 
 Key results:
 
@@ -40,10 +40,10 @@ Key results:
 - CUDA resident matrix warp using astroalign matrix, device-only: 0.0070 s.
 - CUDA resident matrix warp including upload plus device work: 0.0463 s.
 - CUDA similarity fit from astroalign control points plus warp: 0.089 s.
-- GPWBPP-owned CUDA grid-top catalog similarity: 2.964 s.
+- GLASS-owned CUDA grid-top catalog similarity: 2.964 s.
 - Grid-top catalog-similarity speedup vs astroalign total: 3.23x.
 - Grid-top catalog-similarity agreement vs astroalign: failed.
-- `gpwbpp_cuda_catalog_similarity.accepted`: false.
+- `glass_cuda_catalog_similarity.accepted`: false.
 - Agreement failure details: translation delta 1.56 px, output median absolute
   difference 16.71 ADU, output RMS difference 75.68 ADU.
 

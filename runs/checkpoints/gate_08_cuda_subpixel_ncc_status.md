@@ -14,8 +14,8 @@
   offset grid with bilinear sampling and normalized cross-correlation.
 - Added Python wrapper and CPU fallback support.
 - Extended the astroalign comparison benchmark with:
-  - refinement-only `gpwbpp_cuda_subpixel`;
-  - fair combined `gpwbpp_cuda_ncc_subpixel`, which includes integer NCC search
+  - refinement-only `glass_cuda_subpixel`;
+  - fair combined `glass_cuda_ncc_subpixel`, which includes integer NCC search
     plus subpixel refinement time.
 - Added CUDA regression coverage for subpixel NCC refinement.
 - Documented the current CUDA registration scope and limitations.
@@ -23,11 +23,11 @@
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check benchmarks\compare_astroalign_gpu_alignment.py src\gpwbpp_cuda.py tests\test_gpu_registration_search.py
+.\.venv\Scripts\python.exe -m ruff check benchmarks\compare_astroalign_gpu_alignment.py src\glass_cuda.py tests\test_gpu_registration_search.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_gpu_warp_vs_cpu.py
-$pybind = (& .\.venv\Scripts\python.exe -m pybind11 --cmakedir).Trim(); $ninja = (Resolve-Path .\.venv\Scripts\ninja.exe).Path; $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR="' + $pybind + '" -DCMAKE_MAKE_PROGRAM="' + $ninja + '" -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'; cmd /c $cmd
+$pybind = (& .\.venv\Scripts\python.exe -m pybind11 --cmakedir).Trim(); $ninja = (Resolve-Path .\.venv\Scripts\ninja.exe).Path; $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -Dpybind11_DIR="' + $pybind + '" -DCMAKE_MAKE_PROGRAM="' + $ninja + '" -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'; cmd /c $cmd
 .\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --width 512 --height 512 --synthetic-dx 7 --synthetic-dy -5 --max-shift 16 --catalog-grid-cols 8 --catalog-grid-rows 8 --catalog-prior-radius 4 --out runs\alignment_compare\astroalign_vs_gpu_alignment_subpixel_synth.json
-.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_cuda_run\calib_cache\calibrated\calibrated_F000061.fits --moving C:\gpwbpp_runs\final_m38_h_200\gpwbpp_cuda_run\calib_cache\calibrated\calibrated_F000080.fits --center-crop 1024 --max-shift 128 --subpixel-radius-steps 4 --subpixel-step 0.25 --catalog-max-shift 20 --catalog-grid-cols 8 --catalog-grid-rows 8 --catalog-threshold-sigma 6 --catalog-tolerance-px 3 --catalog-prior-radius 4 --out runs\alignment_compare\astroalign_vs_gpu_alignment_subpixel_m38_crop_061_080.json
+.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\glass_runs\final_m38_h_200\glass_cuda_run\calib_cache\calibrated\calibrated_F000061.fits --moving C:\glass_runs\final_m38_h_200\glass_cuda_run\calib_cache\calibrated\calibrated_F000080.fits --center-crop 1024 --max-shift 128 --subpixel-radius-steps 4 --subpixel-step 0.25 --catalog-max-shift 20 --catalog-grid-cols 8 --catalog-grid-rows 8 --catalog-threshold-sigma 6 --catalog-tolerance-px 3 --catalog-prior-radius 4 --out runs\alignment_compare\astroalign_vs_gpu_alignment_subpixel_m38_crop_061_080.json
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 

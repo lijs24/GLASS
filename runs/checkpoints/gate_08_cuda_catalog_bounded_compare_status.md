@@ -12,7 +12,7 @@
 - Preserved the existing unbounded API behavior by default.
 - Added Python wrapper parameters and CPU fallback support for the same bounds.
 - Extended the astroalign comparison benchmark with a second GPU path:
-  `gpwbpp_cuda_catalog`.
+  `glass_cuda_catalog`.
 - The catalog benchmark path now runs GPU top-star extraction, GPU bounded
   catalog offset voting/refinement, and CUDA bilinear translation warp.
 - Added `accepted` and `warnings` diagnostics so weak catalog matches are not
@@ -22,11 +22,11 @@
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check benchmarks\compare_astroalign_gpu_alignment.py src\gpwbpp_cuda.py tests\test_gpu_registration_search.py
-cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug"
+.\.venv\Scripts\python.exe -m ruff check benchmarks\compare_astroalign_gpu_alignment.py src\glass_cuda.py tests\test_gpu_registration_search.py
+cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "<repo>\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug"
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_gpu_warp_vs_cpu.py
 .\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --out runs\alignment_compare\astroalign_vs_gpu_alignment_catalog_bounded_final.json --width 512 --height 512 --synthetic-dx 7 --synthetic-dy -5 --max-shift 16 --catalog-stars 64 --catalog-threshold-sigma 6 --catalog-tolerance-px 1
-.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_cuda_run\calib_cache\calibrated\calibrated_F000061.fits --moving C:\gpwbpp_runs\final_m38_h_200\gpwbpp_cuda_run\calib_cache\calibrated\calibrated_F000080.fits --center-crop 1024 --max-shift 128 --catalog-max-shift 20 --catalog-stars 64 --catalog-threshold-sigma 6 --catalog-tolerance-px 3 --out runs\alignment_compare\astroalign_vs_gpu_alignment_catalog_bounded_final_m38_crop_061_080.json
+.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\glass_runs\final_m38_h_200\glass_cuda_run\calib_cache\calibrated\calibrated_F000061.fits --moving C:\glass_runs\final_m38_h_200\glass_cuda_run\calib_cache\calibrated\calibrated_F000080.fits --center-crop 1024 --max-shift 128 --catalog-max-shift 20 --catalog-stars 64 --catalog-threshold-sigma 6 --catalog-tolerance-px 3 --out runs\alignment_compare\astroalign_vs_gpu_alignment_catalog_bounded_final_m38_crop_061_080.json
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 

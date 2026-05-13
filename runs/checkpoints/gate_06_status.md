@@ -4,9 +4,9 @@ Gate: 6 - light calibration streaming
 
 Completed content:
 
-- `gpwbpp run --until-stage calibration` now calibrates light frames tile-by-tile.
+- `glass run --until-stage calibration` now calibrates light frames tile-by-tile.
 - Calibrated FITS outputs are created as empty FITS images and filled by memmap tile writes.
-- CUDA backend uses native `gpwbpp_cuda.calibrate_tile_f32` per tile when requested/available.
+- CUDA backend uses native `glass_cuda.calibrate_tile_f32` per tile when requested/available.
 - CPU backend uses the CPU reference formula per tile.
 - `calibration_artifacts.json` records backend, tile size, and tile count per calibrated frame.
 - `run_state.json` records completed `master_calibration` and `light_calibration` stages.
@@ -16,9 +16,9 @@ Commands run:
 
 - `.\\.venv\\Scripts\\python -m pytest -q tests/test_pipeline_fixture.py tests/test_synthetic_generator.py tests/test_gpu_calibration_vs_cpu.py`
 - `.\\.venv\\Scripts\\python -m pytest -q`
-- `.\\.venv\\Scripts\\gpwbpp synthetic --out runs/gate_06_synth/source --frames 3 --width 36 --height 30 --filter H --known-shift`
-- `.\\.venv\\Scripts\\gpwbpp audit --root runs/gate_06_synth/source --out runs/gate_06_synth/audit --backend auto`
-- `.\\.venv\\Scripts\\gpwbpp run --plan runs/gate_06_synth/audit/processing_plan.json --out runs/gate_06_synth/run --backend cuda --until-stage calibration --tile-size 10`
+- `.\\.venv\\Scripts\\glass synthetic --out runs/gate_06_synth/source --frames 3 --width 36 --height 30 --filter H --known-shift`
+- `.\\.venv\\Scripts\\glass audit --root runs/gate_06_synth/source --out runs/gate_06_synth/audit --backend auto`
+- `.\\.venv\\Scripts\\glass run --plan runs/gate_06_synth/audit/processing_plan.json --out runs/gate_06_synth/run --backend cuda --until-stage calibration --tile-size 10`
 
 Test result:
 
@@ -30,7 +30,7 @@ Test result:
 CUDA availability:
 
 - Native backend loaded: yes
-- CUDA available to GPWBPP: yes
+- CUDA available to GLASS: yes
 - GPU: `NVIDIA RTX PRO 6000 Blackwell Workstation Edition`
 - Compute capability: `12.0`
 - VRAM: `97886 MiB`
@@ -46,7 +46,7 @@ Known limitations:
 Next step:
 
 - Gate 7: star detection and quality metrics with frame_quality.json and report integration.
-- Benchmark target: later compare GPWBPP and PixInsight/WBPP as black boxes on the same small real target dataset.
+- Benchmark target: later compare GLASS and PixInsight/WBPP as black boxes on the same small real target dataset.
 
 Clean-room compliance:
 

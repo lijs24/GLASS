@@ -18,7 +18,7 @@ Gate 12: End-to-end CUDA report/audit increment.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\report\html_report.py tests\test_cli_smoke.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\report\html_report.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cli_smoke.py::test_cli_report_includes_resident_artifacts tests\test_cli_smoke.py::test_cli_audit_resident_cuda_smoke
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cli_smoke.py tests\test_blackbox_package.py
 .\.venv\Scripts\python.exe -m pytest -q

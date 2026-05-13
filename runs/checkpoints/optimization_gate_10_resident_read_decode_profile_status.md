@@ -26,11 +26,11 @@ Optimization Gate 10.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke tests\test_cuda_resident_stack.py::test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m gpwbpp.cli run --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --flat-floor 0.05 --resident-prefetch-frames 16 --resident-prefetch-workers 8 --resident-h2d-mode pageable --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30 --reference-frame-id LIGHT_H_0136 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158
-.\.venv\Scripts\python.exe -m gpwbpp.cli compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_timed_coarse4\integration\resident_master_H.fits --out C:\gpwbpp_runs\final_m38_h_200\readprofile_vs_pageable_timed_coarse4_compare.html --gpwbpp-label readprofile --reference-label pageable_timed --clip-low 0 --clip-high 65535
+.\.venv\Scripts\python.exe -m glass.cli run --plan C:\glass_runs\final_m38_h_200\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --flat-floor 0.05 --resident-prefetch-frames 16 --resident-prefetch-workers 8 --resident-h2d-mode pageable --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30 --reference-frame-id LIGHT_H_0136 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158
+.\.venv\Scripts\python.exe -m glass.cli compare --glass C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4\integration\resident_master_H.fits --reference C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_timed_coarse4\integration\resident_master_H.fits --out C:\glass_runs\final_m38_h_200\readprofile_vs_pageable_timed_coarse4_compare.html --glass-label readprofile --reference-label pageable_timed --clip-low 0 --clip-high 65535
 ```
 
 ## Test Results
@@ -43,7 +43,7 @@ Optimization Gate 10.
 
 Run:
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pageable_readprofile_coarse4`
 
 Timing:
 
@@ -61,8 +61,8 @@ Timing:
 Correctness smoke against the prior pageable timed run:
 
 - Direct compare report:
-  - `C:\gpwbpp_runs\final_m38_h_200\readprofile_vs_pageable_timed_coarse4_compare.html`
-  - `C:\gpwbpp_runs\final_m38_h_200\readprofile_vs_pageable_timed_coarse4_compare.json`
+  - `C:\glass_runs\final_m38_h_200\readprofile_vs_pageable_timed_coarse4_compare.html`
+  - `C:\glass_runs\final_m38_h_200\readprofile_vs_pageable_timed_coarse4_compare.json`
 - Direct difference:
   - P50/P90/P99/P99.9 absolute diff: `0.0`.
   - RMS diff: `1.520365561548271`.

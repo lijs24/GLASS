@@ -5,7 +5,7 @@
 - Scope:
   - Added GPU top-N local-maximum star catalog selection.
   - Added descending flux sorting on device before returning compact diagnostics.
-  - Exposed standalone API: `gpwbpp_cuda.star_top_candidates_f32(...)`.
+  - Exposed standalone API: `glass_cuda.star_top_candidates_f32(...)`.
   - Exposed resident API:
     `ResidentCalibratedStack.star_top_candidates(index, threshold, max_candidates)`.
   - Kept the previous `star_candidates_f32` compact API unchanged for backward
@@ -14,9 +14,9 @@
 ## Commands
 
 ```powershell
-cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug"
+cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "<repo>\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug"
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_star_detect.py tests\test_gpu_registration_search.py
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\gpu\star_detect.py tests\test_gpu_star_detect.py
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\gpu\star_detect.py tests\test_gpu_star_detect.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -35,7 +35,7 @@ cmd /c ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\
 
 ## Artifacts
 
-- Updated CUDA native module in local `src/_gpwbpp_cuda_native*.pyd` build output.
+- Updated CUDA native module in local `src/_glass_cuda_native*.pyd` build output.
 - Added tests in `tests/test_gpu_star_detect.py`.
 - Updated CUDA backend documentation.
 
@@ -58,5 +58,5 @@ diagnostics.
 ## Clean-Room
 
 No official PixInsight WBPP/PJSR source was read or used. This increment is a
-clean-room CUDA implementation based on GPWBPP's own local-maximum detector and
+clean-room CUDA implementation based on GLASS's own local-maximum detector and
 general GPU selection/sorting techniques.

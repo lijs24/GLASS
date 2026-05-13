@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpwbpp.cli import main
-from gpwbpp.engine.pipeline import _exact_median_scratch, _mean_stack_tile, _normalization_scalar
-from gpwbpp.io.fits_io import write_fits_data
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.cli import main
+from glass.engine.pipeline import _exact_median_scratch, _mean_stack_tile, _normalization_scalar
+from glass.io.fits_io import write_fits_data
+from glass.synthetic.generator import generate_synthetic_dataset
 
 
 def test_pipeline_fixture_audit(tmp_path: Path):
@@ -89,7 +89,7 @@ def test_streaming_exact_median_scratch_matches_numpy(tmp_path: Path):
 
 def test_flat_normalization_scalar_uses_scratch_for_small_images(tmp_path: Path, monkeypatch):
     import numpy as np
-    from gpwbpp.engine.pipeline import FitsImageReader
+    from glass.engine.pipeline import FitsImageReader
 
     path = tmp_path / "flat.fits"
     data = np.arange(25, dtype=np.float32).reshape(5, 5)

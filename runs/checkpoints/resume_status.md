@@ -5,9 +5,9 @@
 
 ## Completed
 
-- `gpwbpp run` now writes `processing_plan.json` into the run directory.
-- When the plan's manifest path exists, `gpwbpp run` also writes `manifest.json` into the run directory.
-- `gpwbpp resume` can continue a run directory from existing artifacts instead of requiring the original command context.
+- `glass run` now writes `processing_plan.json` into the run directory.
+- When the plan's manifest path exists, `glass run` also writes `manifest.json` into the run directory.
+- `glass resume` can continue a run directory from existing artifacts instead of requiring the original command context.
 - Resume skips existing calibration artifacts and continues from later stage artifacts when present.
 
 ## Commands Run

@@ -10,8 +10,8 @@ Date: 2026-05-13
   offsets in one CUDA launch, then scores all fine offsets in one CUDA launch.
 - The Python compatibility wrapper keeps a CPU/per-candidate fallback when the
   native extension is unavailable.
-- `gpwbpp.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`
-  now delegates to the top-level `gpwbpp_cuda` API, so tile-mode
+- `glass.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`
+  now delegates to the top-level `glass_cuda` API, so tile-mode
   `cuda_catalog` registration uses the fused native primitive when CUDA is
   available.
 - Updated CUDA and registration documentation.
@@ -20,9 +20,9 @@ Date: 2026-05-13
 
 - `cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 && .venv\Scripts\cmake.exe --build build\native-cuda --config Release"`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py`
-- `.\.venv\Scripts\python.exe -m gpwbpp.cli run --plan runs\cuda_catalog_cli_smoke_plan.json --out runs\cuda_catalog_cli_smoke_run_fused_refine --backend cuda --until-stage registration --tile-size 32 --registration-method cuda_catalog --registration-preview-max-dimension 128`
-- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v23_fused_pixel_refine.json"`
-- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-pixel-refine-coarse-stride 1 --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v24_fused_pixel_refine_stride1.json"`
+- `.\.venv\Scripts\python.exe -m glass.cli run --plan runs\cuda_catalog_cli_smoke_plan.json --out runs\cuda_catalog_cli_smoke_run_fused_refine --backend cuda --until-stage registration --tile-size 32 --registration-method cuda_catalog --registration-preview-max-dimension 128`
+- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v23_fused_pixel_refine.json"`
+- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-pixel-refine-coarse-stride 1 --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v24_fused_pixel_refine_stride1.json"`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_cuda_resident_stack.py`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_benchmarks.py`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_pipeline_fixture.py tests\test_cli_smoke.py`
@@ -53,8 +53,8 @@ Date: 2026-05-13
 
 Artifacts:
 
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v23_fused_pixel_refine.json`
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v24_fused_pixel_refine_stride1.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v23_fused_pixel_refine.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v24_fused_pixel_refine_stride1.json`
 
 Key v23 timing:
 
@@ -103,8 +103,8 @@ CUDA is available.
 
 ## Clean-room compliance
 
-- This increment used GPWBPP code, CUDA kernels written in this repository, and
+- This increment used GLASS code, CUDA kernels written in this repository, and
   open numerical image-alignment concepts.
 - No PixInsight/WBPP/PJSR source code was read, copied, summarized, or used.
 - Original image data were read only; generated artifacts were written under
-  `runs\` and `C:\gpwbpp_runs\`.
+  `runs\` and `C:\glass_runs\`.

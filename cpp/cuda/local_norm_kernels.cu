@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-__global__ void gpwbpp_local_norm_apply_f32_kernel(
+__global__ void glass_local_norm_apply_f32_kernel(
     const float* input,
     float* output,
     std::size_t n,
@@ -16,7 +16,7 @@ __global__ void gpwbpp_local_norm_apply_f32_kernel(
   output[i] = input[i] * scale + offset;
 }
 
-void gpwbpp_local_norm_apply_f32_launch(
+void glass_local_norm_apply_f32_launch(
     const float* input,
     float* output,
     std::size_t n,
@@ -24,10 +24,10 @@ void gpwbpp_local_norm_apply_f32_launch(
     float offset) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((n + threads - 1) / threads);
-  gpwbpp_local_norm_apply_f32_kernel<<<blocks, threads>>>(input, output, n, scale, offset);
+  glass_local_norm_apply_f32_kernel<<<blocks, threads>>>(input, output, n, scale, offset);
 }
 
-__global__ void gpwbpp_local_norm_apply_grid_f32_kernel(
+__global__ void glass_local_norm_apply_grid_f32_kernel(
     const float* input,
     float* output,
     const float* scales,
@@ -51,7 +51,7 @@ __global__ void gpwbpp_local_norm_apply_grid_f32_kernel(
   output[pixel_index] = input[pixel_index] * scales[tile_index] + offsets[tile_index];
 }
 
-void gpwbpp_local_norm_apply_grid_f32_launch(
+void glass_local_norm_apply_grid_f32_launch(
     const float* input,
     float* output,
     const float* scales,
@@ -66,11 +66,11 @@ void gpwbpp_local_norm_apply_grid_f32_launch(
   dim3 blocks(
       static_cast<unsigned int>((width + static_cast<int>(threads.x) - 1) / static_cast<int>(threads.x)),
       static_cast<unsigned int>((height + static_cast<int>(threads.y) - 1) / static_cast<int>(threads.y)));
-  gpwbpp_local_norm_apply_grid_f32_kernel<<<blocks, threads>>>(
+  glass_local_norm_apply_grid_f32_kernel<<<blocks, threads>>>(
       input, output, scales, offsets, width, height, tile_width, tile_height, grid_cols, grid_rows);
 }
 
-__global__ void gpwbpp_frame_sum_stats_f32_kernel(
+__global__ void glass_frame_sum_stats_f32_kernel(
     const float* input,
     double* partial_sum,
     double* partial_sum2,
@@ -116,7 +116,7 @@ __global__ void gpwbpp_frame_sum_stats_f32_kernel(
   }
 }
 
-void gpwbpp_frame_sum_stats_f32_launch(
+void glass_frame_sum_stats_f32_launch(
     const float* input,
     double* partial_sum,
     double* partial_sum2,
@@ -126,11 +126,11 @@ void gpwbpp_frame_sum_stats_f32_launch(
   constexpr int threads = 256;
   const std::size_t shared_bytes =
       2 * threads * sizeof(double) + threads * sizeof(unsigned long long);
-  gpwbpp_frame_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
+  glass_frame_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
       input, partial_sum, partial_sum2, partial_count, n);
 }
 
-__global__ void gpwbpp_pair_sum_stats_f32_kernel(
+__global__ void glass_pair_sum_stats_f32_kernel(
     const float* source,
     const float* reference,
     double* partial_source_sum,
@@ -193,7 +193,7 @@ __global__ void gpwbpp_pair_sum_stats_f32_kernel(
   }
 }
 
-void gpwbpp_pair_sum_stats_f32_launch(
+void glass_pair_sum_stats_f32_launch(
     const float* source,
     const float* reference,
     double* partial_source_sum,
@@ -206,7 +206,7 @@ void gpwbpp_pair_sum_stats_f32_launch(
   constexpr int threads = 256;
   const std::size_t shared_bytes =
       4 * threads * sizeof(double) + threads * sizeof(unsigned long long);
-  gpwbpp_pair_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
+  glass_pair_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
       source,
       reference,
       partial_source_sum,
@@ -217,7 +217,7 @@ void gpwbpp_pair_sum_stats_f32_launch(
       n);
 }
 
-__global__ void gpwbpp_pair_grid_sum_stats_f32_kernel(
+__global__ void glass_pair_grid_sum_stats_f32_kernel(
     const float* source,
     const float* reference,
     double* source_sum,
@@ -303,7 +303,7 @@ __global__ void gpwbpp_pair_grid_sum_stats_f32_kernel(
   }
 }
 
-void gpwbpp_pair_grid_sum_stats_f32_launch(
+void glass_pair_grid_sum_stats_f32_launch(
     const float* source,
     const float* reference,
     double* source_sum,
@@ -321,7 +321,7 @@ void gpwbpp_pair_grid_sum_stats_f32_launch(
   const int blocks = grid_cols * grid_rows;
   const std::size_t shared_bytes =
       4 * threads * sizeof(double) + threads * sizeof(unsigned long long);
-  gpwbpp_pair_grid_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
+  glass_pair_grid_sum_stats_f32_kernel<<<blocks, threads, shared_bytes>>>(
       source,
       reference,
       source_sum,

@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-__global__ void gpwbpp_mean_stack_tiles_f32_kernel(
+__global__ void glass_mean_stack_tiles_f32_kernel(
     const float* stack, float* out, std::size_t frame_count, std::size_t pixels_per_frame) {
   const std::size_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= pixels_per_frame) {
@@ -16,9 +16,9 @@ __global__ void gpwbpp_mean_stack_tiles_f32_kernel(
   out[i] = static_cast<float>(sum / static_cast<double>(frame_count));
 }
 
-void gpwbpp_mean_stack_tiles_f32_launch(
+void glass_mean_stack_tiles_f32_launch(
     const float* stack, float* out, std::size_t frame_count, std::size_t pixels_per_frame) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
-  gpwbpp_mean_stack_tiles_f32_kernel<<<blocks, threads>>>(stack, out, frame_count, pixels_per_frame);
+  glass_mean_stack_tiles_f32_kernel<<<blocks, threads>>>(stack, out, frame_count, pixels_per_frame);
 }

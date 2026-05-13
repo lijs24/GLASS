@@ -8,7 +8,7 @@
 ## Completed
 
 - Added tile-streaming integration stage.
-- Added `gpwbpp run --until-stage integration`.
+- Added `glass run --until-stage integration`.
 - Added `--integration-weighting auto|none|simple_snr`.
 - Added `--integration-rejection auto|none|sigma_clip|winsorized_sigma`.
 - Implemented CPU weighted integration baseline with coverage support.
@@ -24,11 +24,11 @@
 ```powershell
 cmd /c "call Visual Studio VsDevCmd.bat ... && cmake -S . -B build\native-cuda ... && cmake --build build\native-cuda --config Release"
 .\.venv\Scripts\python -m pytest -q tests/test_cpu_integration.py tests/test_gpu_integration_vs_cpu.py tests/test_pipeline_fixture.py
-.\.venv\Scripts\gpwbpp synthetic --out runs\gate_11_synth\source --frames 5 --width 48 --height 48 --filter H --known-shift
-.\.venv\Scripts\gpwbpp audit --root runs\gate_11_synth\source --out runs\gate_11_synth\audit --backend auto
-.\.venv\Scripts\gpwbpp run --plan runs\gate_11_synth\audit\processing_plan.json --out runs\gate_11_synth\run --backend cuda --until-stage integration --local-normalization on --integration-weighting simple_snr --integration-rejection winsorized_sigma --tile-size 12
-.\.venv\Scripts\gpwbpp report --run runs\gate_11_synth\run --manifest runs\gate_11_synth\audit\manifest.json --plan runs\gate_11_synth\audit\processing_plan.json --out runs\gate_11_synth\run\report.html
-.\.venv\Scripts\gpwbpp run --plan runs\gate_11_synth\audit\processing_plan.json --out runs\gate_11_synth\run_cuda_mean --backend cuda --until-stage integration --local-normalization off --integration-weighting none --integration-rejection none --tile-size 12
+.\.venv\Scripts\glass synthetic --out runs\gate_11_synth\source --frames 5 --width 48 --height 48 --filter H --known-shift
+.\.venv\Scripts\glass audit --root runs\gate_11_synth\source --out runs\gate_11_synth\audit --backend auto
+.\.venv\Scripts\glass run --plan runs\gate_11_synth\audit\processing_plan.json --out runs\gate_11_synth\run --backend cuda --until-stage integration --local-normalization on --integration-weighting simple_snr --integration-rejection winsorized_sigma --tile-size 12
+.\.venv\Scripts\glass report --run runs\gate_11_synth\run --manifest runs\gate_11_synth\audit\manifest.json --plan runs\gate_11_synth\audit\processing_plan.json --out runs\gate_11_synth\run\report.html
+.\.venv\Scripts\glass run --plan runs\gate_11_synth\audit\processing_plan.json --out runs\gate_11_synth\run_cuda_mean --backend cuda --until-stage integration --local-normalization off --integration-weighting none --integration-rejection none --tile-size 12
 .\.venv\Scripts\python -m pytest -q
 ```
 

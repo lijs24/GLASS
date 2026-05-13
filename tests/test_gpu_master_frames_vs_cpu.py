@@ -4,15 +4,15 @@ from pathlib import Path
 
 import numpy as np
 
-from gpwbpp.cpu.master_frames import make_master_bias as make_master_bias_cpu
-import gpwbpp.gpu.master_frames as master_frames_module
-from gpwbpp.gpu.master_frames import (
+from glass.cpu.master_frames import make_master_bias as make_master_bias_cpu
+import glass.gpu.master_frames as master_frames_module
+from glass.gpu.master_frames import (
     make_master_bias,
     make_master_dark,
     make_master_flat,
     mean_stack_paths_tile_streaming,
 )
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.synthetic.generator import generate_synthetic_dataset
 from tests.conftest import cuda_module_or_skip
 
 

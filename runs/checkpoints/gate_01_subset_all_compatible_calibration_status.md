@@ -7,7 +7,7 @@
 
 ## Completed
 
-- Added `--all-compatible-calibration` to `gpwbpp subset`.
+- Added `--all-compatible-calibration` to `glass subset`.
 - Default subset behavior remains lightweight and unchanged.
 - When the new flag is set, the subset manifest keeps every calibration frame
   compatible with the selected lights by camera sampling:
@@ -22,9 +22,9 @@
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\planner\subset.py src\gpwbpp\cli.py tests\test_subset.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\planner\subset.py src\glass\cli.py tests\test_subset.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_subset.py
-$base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_ncc_subset50_allcal_probe'; New-Item -ItemType Directory -Force -Path $run | Out-Null; .\.venv\Scripts\gpwbpp.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 50 --all-compatible-calibration
+$base='C:\glass_runs\final_m38_h_200'; $run=Join-Path $base 'glass_resident_ncc_subset50_allcal_probe'; New-Item -ItemType Directory -Force -Path $run | Out-Null; .\.venv\Scripts\glass.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 50 --all-compatible-calibration
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -51,8 +51,8 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\manifest.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\processing_plan.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\manifest.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\processing_plan.json`
 
 ## Known Limitations
 
@@ -72,5 +72,5 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 
 - No official PixInsight WBPP/PJSR source was read, copied, summarized, or
   modified.
-- Only GPWBPP outputs and user-provided M38 metadata were used.
+- Only GLASS outputs and user-provided M38 metadata were used.
 - Original input data directories were not modified.

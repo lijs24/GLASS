@@ -13,11 +13,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import gpwbpp_cuda
-from gpwbpp.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
-from gpwbpp.io.fits_io import read_fits_data, write_fits_data
-from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.models import CalibrationPolicy
+import glass_cuda
+from glass.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
+from glass.io.fits_io import read_fits_data, write_fits_data
+from glass.io.json_io import read_json, write_json
+from glass.models import CalibrationPolicy
 
 
 def _frames_by_type(plan: dict[str, Any], frame_type: str) -> list[dict[str, Any]]:
@@ -128,7 +128,7 @@ def main() -> int:
     parser.add_argument("--write-weight-map", action="store_true", help="write the weight map FITS output")
     args = parser.parse_args()
 
-    if not gpwbpp_cuda.cuda_available() or not gpwbpp_cuda.native_extension_loaded():
+    if not glass_cuda.cuda_available() or not glass_cuda.native_extension_loaded():
         raise RuntimeError("native CUDA backend is required for resident benchmark")
 
     plan = read_json(args.plan)
@@ -158,7 +158,7 @@ def main() -> int:
     master_elapsed = time.perf_counter() - master_start
 
     stack_start = time.perf_counter()
-    stack = gpwbpp_cuda.ResidentCalibratedStack(len(lights), height, width)
+    stack = glass_cuda.ResidentCalibratedStack(len(lights), height, width)
     stack.set_calibration_masters(master_bias, master_dark, master_flat)
     stack_elapsed = time.perf_counter() - stack_start
 
@@ -190,9 +190,9 @@ def main() -> int:
     write_start = time.perf_counter()
     master_path = out_dir / "resident_master_mean.fits"
     weight_map_path = out_dir / "resident_weight_map.fits"
-    write_fits_data(master_path, master, {"GPWBPP": "RESCUDA", "NFRAMES": len(lights)})
+    write_fits_data(master_path, master, {"GLASS": "RESCUDA", "NFRAMES": len(lights)})
     if args.write_weight_map:
-        write_fits_data(weight_map_path, weight_map, {"GPWBPP": "RESCUDA", "NFRAMES": len(lights)})
+        write_fits_data(weight_map_path, weight_map, {"GLASS": "RESCUDA", "NFRAMES": len(lights)})
     write_elapsed = time.perf_counter() - write_start
     total_elapsed = time.perf_counter() - total_start
 
@@ -200,7 +200,7 @@ def main() -> int:
     result = {
         "status": "completed",
         "backend": "cuda_resident_stack",
-        "device": gpwbpp_cuda.get_device_info(0),
+        "device": glass_cuda.get_device_info(0),
         "plan": str(Path(args.plan).resolve()),
         "out_dir": str(out_dir.resolve()),
         "frame_count": len(lights),

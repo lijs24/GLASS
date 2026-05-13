@@ -4,11 +4,11 @@ from pathlib import Path
 
 import numpy as np
 
-from gpwbpp.cpu.star_detect import detect_stars
-from gpwbpp.cpu.metrics import measure_quality
-from gpwbpp.engine.quality import measure_quality_streaming
-from gpwbpp.io.fits_io import write_fits_data
-from gpwbpp.synthetic.generator import render_star_field
+from glass.cpu.star_detect import detect_stars
+from glass.cpu.metrics import measure_quality
+from glass.engine.quality import measure_quality_streaming
+from glass.io.fits_io import write_fits_data
+from glass.synthetic.generator import render_star_field
 
 
 def test_cpu_star_detection_finds_synthetic_stars():

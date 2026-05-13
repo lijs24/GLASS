@@ -3,12 +3,12 @@
 The CUDA backend is optional. CPU-only installation must remain functional even
 when CUDA, NVCC, or a compatible NVIDIA driver is not present.
 
-Until the native extension is built, `src/gpwbpp_cuda.py` provides a compatibility
+Until the native extension is built, `src/glass_cuda.py` provides a compatibility
 API. It can import, report devices visible through `nvidia-smi`, and run CPU
 fallback smoke helpers. It deliberately reports `cuda_available() == false` so
 tests and reports do not confuse fallback helpers with real CUDA kernels.
 
-Gate 3 introduces the `gpwbpp_cuda` Python extension with:
+Gate 3 introduces the `glass_cuda` Python extension with:
 
 - `cuda_available()`
 - `list_devices()`
@@ -53,10 +53,10 @@ Local native build command used on Windows:
 
 ```powershell
 $pybind = (& .\.venv\Scripts\python -m pybind11 --cmakedir).Trim()
-cmd /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat`" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR=`"$pybind`" -DCMAKE_MAKE_PROGRAM=`"$((Resolve-Path .\.venv\Scripts\ninja.exe))`" -DCMAKE_CUDA_COMPILER=`"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe`" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release"
+cmd /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat`" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -Dpybind11_DIR=`"$pybind`" -DCMAKE_MAKE_PROGRAM=`"$((Resolve-Path .\.venv\Scripts\ninja.exe))`" -DCMAKE_CUDA_COMPILER=`"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe`" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release"
 ```
 
-The command writes `_gpwbpp_cuda_native*.pyd` into `src/` for local testing. The
+The command writes `_glass_cuda_native*.pyd` into `src/` for local testing. The
 binary is ignored by git; source, CMake configuration, and tests are tracked.
 
 Resident CUDA integration now supports:
@@ -106,16 +106,16 @@ Resident CUDA integration now supports:
   reference catalog, and returns the highest-inlier matrix with RMS diagnostics.
   This is intentionally scoped to compact catalogs and is not yet a full robust
   descriptor/RANSAC implementation.
-- `gpwbpp.gpu.registration.register_similarity_from_star_catalogs_f32(...)`
+- `glass.gpu.registration.register_similarity_from_star_catalogs_f32(...)`
   provides a Python orchestration helper for controlled tests: it extracts GPU
   star catalogs from two images, estimates the similarity seed on the GPU, and
   applies the resulting matrix with the CUDA bilinear warp.
-- `gpwbpp.gpu.registration.register_triangle_descriptor_similarity_f32(...)`
+- `glass.gpu.registration.register_triangle_descriptor_similarity_f32(...)`
   provides the triangle-descriptor orchestration helper: GPU star catalogs,
   CUDA triangle descriptors, CUDA descriptor-based similarity scoring, then
   CUDA matrix warp. It is currently validated on a controlled synthetic image
   pair and is wired into `benchmarks/compare_astroalign_gpu_alignment.py` as
-  `gpwbpp_cuda_triangle_descriptor_similarity` for astroalign agreement and
+  `glass_cuda_triangle_descriptor_similarity` for astroalign agreement and
   timing comparisons. The helper supports grid-top NMS catalog selection and
   defaults global top-NMS scanning to 4096 candidates when only a minimum
   separation is provided. This avoids the real-frame failure mode where NMS
@@ -129,7 +129,7 @@ Resident CUDA integration now supports:
   spatially distributed catalog prefilter for large real frames.
 - `estimate_similarity_from_catalogs_f32(...)` now accepts optional priors for
   translation, scale, and rotation. The real M38 pair benchmark can run a
-  fully GPWBPP-owned path (GPU star candidates -> GPU NMS catalog -> GPU
+  fully GLASS-owned path (GPU star candidates -> GPU NMS catalog -> GPU
   constrained similarity seed -> GPU matrix warp) without astroalign control
   points. The global top-NMS path has produced an astroalign-close matrix on the
   recorded pair but is still slow. The new grid-top prefilter is much faster,
@@ -143,7 +143,7 @@ Resident CUDA integration now supports:
 - Catalog similarity seed scoring now uses mutual nearest-neighbor star matches
   under the candidate transform instead of one-way nearest-reference hits. This
   reduces duplicate-match false positives in compact catalogs.
-- `gpwbpp.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`
+- `glass.gpu.registration.refine_matrix_translation_with_metrics_f32(...)`
   uses CUDA matrix metrics to search a small translation correction around an
   existing matrix. It is a diagnostic bridge toward pixel-evidence transform
   scoring. The native implementation now batches a whole coarse or fine

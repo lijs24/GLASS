@@ -23,7 +23,7 @@ Date: 2026-05-13
 ## Commands run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py tests\test_resident_cuda_run.py
 ```
 
 Result: passed.
@@ -35,7 +35,7 @@ Result: passed.
 Result: 20 passed.
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run --plan C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration external_matrix --resident-registration-results C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\registration_results.json
+.\.venv\Scripts\glass.exe run --plan C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration external_matrix --resident-registration-results C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\registration_results.json
 ```
 
 Result: completed through integration in 24.8587 s.
@@ -51,7 +51,7 @@ Resident result:
 - resident integration: 0.0813 s
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\integration\master_H.fits --out C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_matchedmasters_vs_tile_astroalign_subset50_compare.html --gpwbpp-label resident_cuda_external_matrix_50_matchedmasters --reference-label tile_astroalign_cpu_warp_50 --gpwbpp-time-seconds 24.858685999992304 --reference-time-seconds 871.9394945999375
+.\.venv\Scripts\glass.exe compare --glass C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\integration\resident_master_H.fits --reference C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\integration\master_H.fits --out C:\glass_runs\final_m38_h_200\resident_external_matrix_matchedmasters_vs_tile_astroalign_subset50_compare.html --glass-label resident_cuda_external_matrix_50_matchedmasters --reference-label tile_astroalign_cpu_warp_50 --glass-time-seconds 24.858685999992304 --reference-time-seconds 871.9394945999375
 ```
 
 Result: passed.
@@ -90,11 +90,11 @@ CUDA was available.
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\resident_artifacts.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\registration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_matchedmasters_vs_tile_astroalign_subset50_compare.json`
-- `C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_matchedmasters_vs_tile_astroalign_subset50_compare.html`
+- `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\resident_artifacts.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\registration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_subset50_flat005_preview3072_matchedmasters\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\resident_external_matrix_matchedmasters_vs_tile_astroalign_subset50_compare.json`
+- `C:\glass_runs\final_m38_h_200\resident_external_matrix_matchedmasters_vs_tile_astroalign_subset50_compare.html`
 
 ## Known limitations
 
@@ -109,4 +109,4 @@ Run the same matched-master resident external-matrix path on the 200-light plan,
 
 ## Clean-room compliance
 
-This work used GPWBPP-owned code, user-provided M38 data, and open-source astroalign as an external reference. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.
+This work used GLASS-owned code, user-provided M38 data, and open-source astroalign as an external reference. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.

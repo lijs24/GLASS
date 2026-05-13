@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-__global__ void gpwbpp_calibrate_tile_f32_kernel(
+__global__ void glass_calibrate_tile_f32_kernel(
     const float* light,
     const float* bias,
     const float* dark,
@@ -42,7 +42,7 @@ __global__ void gpwbpp_calibrate_tile_f32_kernel(
   out[i] = value + pedestal;
 }
 
-void gpwbpp_calibrate_tile_f32_launch(
+void glass_calibrate_tile_f32_launch(
     const float* light,
     const float* bias,
     const float* dark,
@@ -58,7 +58,7 @@ void gpwbpp_calibrate_tile_f32_launch(
     float pedestal) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((n + threads - 1) / threads);
-  gpwbpp_calibrate_tile_f32_kernel<<<blocks, threads>>>(
+  glass_calibrate_tile_f32_kernel<<<blocks, threads>>>(
       light,
       bias,
       dark,
@@ -74,7 +74,7 @@ void gpwbpp_calibrate_tile_f32_launch(
       pedestal);
 }
 
-void gpwbpp_calibrate_tile_f32_launch_stream(
+void glass_calibrate_tile_f32_launch_stream(
     const float* light,
     const float* bias,
     const float* dark,
@@ -91,7 +91,7 @@ void gpwbpp_calibrate_tile_f32_launch_stream(
     cudaStream_t stream) {
   constexpr int threads = 256;
   const int blocks = static_cast<int>((n + threads - 1) / threads);
-  gpwbpp_calibrate_tile_f32_kernel<<<blocks, threads, 0, stream>>>(
+  glass_calibrate_tile_f32_kernel<<<blocks, threads, 0, stream>>>(
       light,
       bias,
       dark,

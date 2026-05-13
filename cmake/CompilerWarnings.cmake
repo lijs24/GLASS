@@ -1,4 +1,4 @@
-function(gpwbpp_enable_warnings target)
+function(glass_enable_warnings target)
   if(MSVC)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W4>)
   else()

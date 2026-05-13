@@ -38,5 +38,5 @@ Regenerate future real-data manifests/plans so `PIERSIDE` is captured in `header
 ## Clean-Room Compliance
 
 - No PixInsight/WBPP/PJSR source was read or modified.
-- Only FITS header metadata was added to the open GPWBPP scan summary.
+- Only FITS header metadata was added to the open GLASS scan summary.
 - Input data directories were not modified.

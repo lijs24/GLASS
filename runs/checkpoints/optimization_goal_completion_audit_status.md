@@ -2,14 +2,14 @@
 
 ## Objective restatement
 
-Active objective: reduce GPWBPP resident CUDA runtime on the real M38 200-light benchmark below the previous 111.95 s baseline, while preserving WBPP/current-GPWBPP comparison quality. The objective also calls out two optimization paths: I/O/upload/calibration overlap and resident registration/warp batching.
+Active objective: reduce GLASS resident CUDA runtime on the real M38 200-light benchmark below the previous 111.95 s baseline, while preserving WBPP/current-GLASS comparison quality. The objective also calls out two optimization paths: I/O/upload/calibration overlap and resident registration/warp batching.
 
 ## Evidence inspected
 
 - Code commits through `e11ddc6`.
 - Full test command: `.\\.venv\\Scripts\\python.exe -m pytest -q`.
 - Acceptance audit: `runs\benchmarks\m38_acceptance_audit_refinefinal8_cand48.json`.
-- M38 artifacts under `C:\gpwbpp_runs\final_m38_h_200`.
+- M38 artifacts under `C:\glass_runs\final_m38_h_200`.
 - Checkpoints:
   - `runs\checkpoints\optimization_gate_00_fine_timing_status.md`
   - `runs\checkpoints\optimization_gate_01_m38_fine_timing_baseline_status.md`
@@ -36,16 +36,16 @@ Active objective: reduce GPWBPP resident CUDA runtime on the real M38 200-light 
 | Real M38 before/after timing | Baseline 111.948822 s / fine baseline 113.246565 s; best accepted 72.988996 s | Done |
 | Result consistency compare report | `compare_vs_wbpp_fastintegration_scaled_coverage190.json` for best run | Done |
 | Acceptance on 200 lights and 20 calibration frames each | `m38_acceptance_audit_refinefinal8_cand48.json`: 200 light, 20 bias, 20 dark, 20 flat | Done |
-| Significant speedup below 111.95 s baseline | 72.988996 s, 1.5338x faster than GPWBPP baseline and 14.9686x faster than WBPP | Done |
+| Significant speedup below 111.95 s baseline | 72.988996 s, 1.5338x faster than GLASS baseline and 14.9686x faster than WBPP | Done |
 | CUDA available and recorded | RTX PRO 6000 Blackwell, CC 12.0, 97886 MiB | Done |
 | Tests green | Full pytest: 180 passed | Done |
 | Gate checkpoint and commit per increment | Commits `08bd26a`, `cb84ecf`, `a6c80bf`, `4f68b3d`, `d1a8a57`, `0817cd8`, `48ea61c`, `f4f87bb`, `e11ddc6` | Done |
 | Clean-room compliance | Checkpoints state no PixInsight/WBPP/PJSR source read; only black-box outputs/logs used | Done |
-| Do not modify original data | Runs write under `C:\gpwbpp_runs` and repo `runs`; source data not modified | Done |
+| Do not modify original data | Runs write under `C:\glass_runs` and repo `runs`; source data not modified | Done |
 
 ## Best accepted result
 
-- Run: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch2_refinefinal8_cand48`
+- Run: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch2_refinefinal8_cand48`
 - Runtime: 72.98899570002686 s.
 - WBPP black-box runtime: 1092.541 s.
 - Speedup vs WBPP: 14.968571488367497x.

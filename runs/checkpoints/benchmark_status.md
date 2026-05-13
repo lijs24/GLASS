@@ -25,7 +25,7 @@
 - elapsed seconds
 - peak Python traced RAM
 - current NVIDIA used VRAM when `nvidia-smi` is available
-- total VRAM when `gpwbpp_cuda` can list devices
+- total VRAM when `glass_cuda` can list devices
 - throughput in MPix/s
 - output path
 

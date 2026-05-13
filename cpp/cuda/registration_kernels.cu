@@ -1649,7 +1649,7 @@ __global__ void catalog_similarity_refit_select_kernel(
 
 }  // namespace
 
-void gpwbpp_triangle_asterism_descriptors_f32_launch(
+void glass_triangle_asterism_descriptors_f32_launch(
     const float* x,
     const float* y,
     float* descriptors,
@@ -1666,7 +1666,7 @@ void gpwbpp_triangle_asterism_descriptors_f32_launch(
       x, y, descriptors, indices, areas, valid, count, neighbors, combos_per_anchor);
 }
 
-void gpwbpp_estimate_similarity_from_triangle_descriptors_f32_launch(
+void glass_estimate_similarity_from_triangle_descriptors_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,
@@ -1725,7 +1725,7 @@ void gpwbpp_estimate_similarity_from_triangle_descriptors_f32_launch(
       candidate_count);
 }
 
-void gpwbpp_estimate_translation_search_f32_launch(
+void glass_estimate_translation_search_f32_launch(
     const float* reference,
     const float* moving,
     float* scores,
@@ -1746,7 +1746,7 @@ void gpwbpp_estimate_translation_search_f32_launch(
       scores, best_dx, best_dy, best_score, max_shift_x, max_shift_y, shift_count);
 }
 
-void gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
+void glass_estimate_translation_subpixel_ncc_f32_launch(
     const float* reference,
     const float* moving,
     float* scores,
@@ -1769,7 +1769,7 @@ void gpwbpp_estimate_translation_subpixel_ncc_f32_launch(
       scores, best_dx, best_dy, best_score, center_dx, center_dy, radius_steps, step, candidate_count);
 }
 
-void gpwbpp_estimate_translation_from_catalogs_f32_launch(
+void glass_estimate_translation_from_catalogs_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,
@@ -1868,7 +1868,7 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
   catalog_finalize_rms_kernel<<<1, 1>>>(refine_sums, mutual_inliers, rms_px);
 }
 
-void gpwbpp_estimate_similarity_from_pairs_f32_launch(
+void glass_estimate_similarity_from_pairs_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,
@@ -1921,7 +1921,7 @@ void gpwbpp_estimate_similarity_from_pairs_f32_launch(
       blocks);
 }
 
-void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
+void glass_estimate_similarity_from_catalogs_f32_launch(
     const float* reference_x,
     const float* reference_y,
     const float* moving_x,

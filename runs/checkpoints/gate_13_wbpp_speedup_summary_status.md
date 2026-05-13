@@ -6,24 +6,24 @@ Gate 13: PixInsight/WBPP black-box comparison and timing summary increment.
 
 ## Completed
 
-- Added `gpwbpp.report.speedup_report` to summarize GPWBPP run timing against a user-generated WBPP black-box result JSON.
+- Added `glass.report.speedup_report` to summarize GLASS run timing against a user-generated WBPP black-box result JSON.
 - Added `benchmarks/summarize_wbpp_speedup.py` wrapper for reproducible speedup summaries.
 - The summary records:
-  - GPWBPP elapsed time, backend, memory mode, planned frame count, active weighted frame count, zero-weight frame count.
+  - GLASS elapsed time, backend, memory mode, planned frame count, active weighted frame count, zero-weight frame count.
   - WBPP elapsed time, dataset, reported WBPP time, final master files.
   - Speedup vs WBPP and threshold pass/fail.
   - Optional compare metrics including RMS, p99, coverage fraction, and compared pixels.
   - Clean-room compliance note.
-- Wrote real M38 summary artifacts from existing read-only GPWBPP/WBPP outputs:
+- Wrote real M38 summary artifacts from existing read-only GLASS/WBPP outputs:
   - `runs/benchmarks/m38_wbpp_speedup_summary.json`
   - `runs/benchmarks/m38_wbpp_speedup_summary.md`
 
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\report\speedup_report.py benchmarks\summarize_wbpp_speedup.py tests\test_speedup_report.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\report\speedup_report.py benchmarks\summarize_wbpp_speedup.py tests\test_speedup_report.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_speedup_report.py
-.\.venv\Scripts\python.exe benchmarks\summarize_wbpp_speedup.py --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_wbpp_speedup_summary.json --markdown runs\benchmarks\m38_wbpp_speedup_summary.md --min-speedup 2.0
+.\.venv\Scripts\python.exe benchmarks\summarize_wbpp_speedup.py --glass-run C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_wbpp_speedup_summary.json --markdown runs\benchmarks\m38_wbpp_speedup_summary.md --min-speedup 2.0
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -36,11 +36,11 @@ Gate 13: PixInsight/WBPP black-box comparison and timing summary increment.
 ## Real M38 Timing Summary
 
 - WBPP black-box elapsed: 1092.541 s.
-- GPWBPP resident CUDA elapsed: 111.94882199994754 s.
+- GLASS resident CUDA elapsed: 111.94882199994754 s.
 - Speedup: 9.75928982978054x.
 - Speedup threshold: 2.0x.
 - Threshold met: true.
-- Planned GPWBPP frames: 200.
+- Planned GLASS frames: 200.
 - Active weighted frames: 193.
 - Zero-weight frames: 7.
 - Compare artifact: coverage-masked scaled comparison against WBPP FastIntegration.
@@ -58,7 +58,7 @@ Gate 13: PixInsight/WBPP black-box comparison and timing summary increment.
 
 ## Known Limitations
 
-- This summary consumes existing GPWBPP/WBPP artifacts; it does not re-run the full real-data pipeline.
+- This summary consumes existing GLASS/WBPP artifacts; it does not re-run the full real-data pipeline.
 - The comparison uses the coverage-masked scaled result for the WBPP-accepted frame set; border/coverage differences remain documented separately.
 
 ## Next Step

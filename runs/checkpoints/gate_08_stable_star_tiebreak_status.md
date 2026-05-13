@@ -11,16 +11,16 @@ This is an incremental checkpoint inside Gate 8. It does not claim Gate 8 is com
 - Added deterministic tie-breaking for equal-flux CUDA star candidates.
 - Applied the same ordering to global top-N, grid winner, grid top-K, and final catalog sorting kernels.
 - Added regression tests for saturated 2x2 plateaus so equal-flux stars are returned in stable row-major order.
-- Re-ran the real full-resolution astroalign vs GPWBPP CUDA pair benchmark on:
-  - `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits`
-  - `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits`
+- Re-ran the real full-resolution astroalign vs GLASS CUDA pair benchmark on:
+  - `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits`
+  - `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits`
 
 ## Commands Run
 
 ```powershell
 cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 && .venv\Scripts\cmake.exe --build build\native-cuda --config Release"
 
-.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v33_current.json" --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 8 --catalog-pixel-refine-radius 1.0 --catalog-pixel-refine-coarse-step 0.25 --catalog-pixel-refine-fine-radius 0.25 --catalog-pixel-refine-fine-step 0.0625 --catalog-pixel-refine-coarse-stride 4 --catalog-pixel-refine-final-stride 1
+.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v33_current.json" --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 8 --catalog-pixel-refine-radius 1.0 --catalog-pixel-refine-coarse-step 0.25 --catalog-pixel-refine-fine-radius 0.25 --catalog-pixel-refine-fine-step 0.0625 --catalog-pixel-refine-coarse-stride 4 --catalog-pixel-refine-final-stride 1
 
 .venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py
 git diff --check
@@ -39,13 +39,13 @@ CUDA is available.
 
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition
 - Compute capability: 12.0
-- VRAM reported by GPWBPP benchmark: 97886 MiB
+- VRAM reported by GLASS benchmark: 97886 MiB
 
 ## Real Pair Benchmark Summary
 
 Artifact:
 
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v33_current.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v33_current.json`
 
 Image shape: `6422 x 9600`
 
@@ -54,9 +54,9 @@ Key timings:
 - astroalign total: `9.733074 s`
 - astroalign transform finding: `6.835126 s`
 - astroalign apply transform: `2.897948 s`
-- GPWBPP resident CUDA matrix warp using astroalign transform, device only: `0.007070 s`
-- GPWBPP resident CUDA matrix warp using astroalign transform, upload plus device: `0.044971 s`
-- GPWBPP resident CUDA autonomous catalog/pixel-refined alignment, upload plus device: `1.818251 s`
+- GLASS resident CUDA matrix warp using astroalign transform, device only: `0.007070 s`
+- GLASS resident CUDA matrix warp using astroalign transform, upload plus device: `0.044971 s`
+- GLASS resident CUDA autonomous catalog/pixel-refined alignment, upload plus device: `1.818251 s`
 
 Observed speedups:
 
@@ -87,4 +87,4 @@ Add a guarded transform selection policy for autonomous CUDA alignment:
 
 ## Clean-room Compliance
 
-Compliant. This checkpoint used only GPWBPP source, generated benchmark artifacts, astroalign behavior as an external open-source reference, and user-provided FITS data. No PixInsight/WBPP/PJSR source was read, copied, summarized, or modified.
+Compliant. This checkpoint used only GLASS source, generated benchmark artifacts, astroalign behavior as an external open-source reference, and user-provided FITS data. No PixInsight/WBPP/PJSR source was read, copied, summarized, or modified.

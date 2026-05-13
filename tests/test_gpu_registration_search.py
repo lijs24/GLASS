@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from gpwbpp.cpu.registration import _local_triangle_descriptors
+from glass.cpu.registration import _local_triangle_descriptors
 from tests.conftest import cuda_module_or_skip
 
 
@@ -87,7 +87,7 @@ def _catalog_points() -> np.ndarray:
 def test_gpu_triangle_asterism_descriptors_match_cpu_bridge():
     module = cuda_module_or_skip()
     if not hasattr(module, "triangle_asterism_descriptors_f32"):
-        raise AssertionError("triangle_asterism_descriptors_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("triangle_asterism_descriptors_f32 is missing from glass_cuda")
 
     points = _catalog_points()
     expected = _local_triangle_descriptors(points, max_points=8, neighbors=5, max_descriptors=64)
@@ -111,7 +111,7 @@ def test_gpu_triangle_asterism_descriptors_match_cpu_bridge():
 def test_gpu_triangle_descriptor_similarity_recovers_catalog_transform():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_similarity_from_triangle_descriptors_f32"):
-        raise AssertionError("estimate_similarity_from_triangle_descriptors_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_similarity_from_triangle_descriptors_f32 is missing from glass_cuda")
 
     angle = np.deg2rad(6.0)
     scale = 1.015
@@ -164,7 +164,7 @@ def test_gpu_triangle_descriptor_similarity_recovers_catalog_transform():
 
 def test_gpu_triangle_descriptor_image_registration_improves_alignment():
     cuda_module_or_skip()
-    from gpwbpp.gpu.registration import register_triangle_descriptor_similarity_f32
+    from glass.gpu.registration import register_triangle_descriptor_similarity_f32
 
     shape = (96, 112)
     stars = np.asarray(
@@ -219,7 +219,7 @@ def test_gpu_triangle_descriptor_image_registration_improves_alignment():
 
 def test_gpu_triangle_descriptor_image_registration_supports_grid_top_selector():
     cuda_module_or_skip()
-    from gpwbpp.gpu.registration import register_triangle_descriptor_similarity_f32
+    from glass.gpu.registration import register_triangle_descriptor_similarity_f32
 
     shape = (96, 112)
     stars = np.asarray(
@@ -270,7 +270,7 @@ def test_gpu_triangle_descriptor_image_registration_supports_grid_top_selector()
 def test_gpu_estimate_translation_search_aligns_shifted_pair():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_search_f32"):
-        raise AssertionError("estimate_translation_search_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_translation_search_f32 is missing from glass_cuda")
 
     reference = _star_field()
     moving = _shift_image(reference, 5, -4)
@@ -303,7 +303,7 @@ def test_gpu_estimate_translation_search_supports_sample_stride():
 def test_gpu_estimate_translation_subpixel_ncc_refines_integer_shift():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_subpixel_ncc_f32"):
-        raise AssertionError("estimate_translation_subpixel_ncc_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_translation_subpixel_ncc_f32 is missing from glass_cuda")
 
     reference = _smooth_star_field()
     true_delta = np.array([2.25, -1.5], dtype=np.float32)
@@ -363,7 +363,7 @@ def test_gpu_estimate_translation_subpixel_ncc_supports_sample_stride():
 def test_gpu_matrix_alignment_metrics_matches_matrix_warp_rms():
     module = cuda_module_or_skip()
     if not hasattr(module, "matrix_alignment_metrics_f32"):
-        raise AssertionError("matrix_alignment_metrics_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("matrix_alignment_metrics_f32 is missing from glass_cuda")
 
     reference = _smooth_star_field()
     matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
@@ -386,7 +386,7 @@ def test_gpu_matrix_alignment_metrics_matches_matrix_warp_rms():
 def test_gpu_matrix_alignment_metrics_distinguishes_bad_transform():
     module = cuda_module_or_skip()
     if not hasattr(module, "matrix_alignment_metrics_f32"):
-        raise AssertionError("matrix_alignment_metrics_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("matrix_alignment_metrics_f32 is missing from glass_cuda")
 
     reference = _smooth_star_field()
     good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
@@ -404,8 +404,8 @@ def test_gpu_matrix_alignment_metrics_distinguishes_bad_transform():
 def test_gpu_matrix_metric_translation_refine_improves_offset_matrix():
     module = cuda_module_or_skip()
     if not hasattr(module, "matrix_alignment_metrics_f32"):
-        raise AssertionError("matrix_alignment_metrics_f32 is missing from gpwbpp_cuda")
-    from gpwbpp.gpu.registration import refine_matrix_translation_with_metrics_f32
+        raise AssertionError("matrix_alignment_metrics_f32 is missing from glass_cuda")
+    from glass.gpu.registration import refine_matrix_translation_with_metrics_f32
 
     reference = _smooth_star_field()
     good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
@@ -442,7 +442,7 @@ def test_gpu_matrix_metric_translation_refine_improves_offset_matrix():
 def test_gpu_matrix_metric_multi_seed_refine_selects_best_seed():
     module = cuda_module_or_skip()
     if not hasattr(module, "refine_matrix_translation_candidates_with_metrics_f32"):
-        raise AssertionError("refine_matrix_translation_candidates_with_metrics_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("refine_matrix_translation_candidates_with_metrics_f32 is missing from glass_cuda")
 
     reference = _smooth_star_field()
     good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
@@ -480,7 +480,7 @@ def test_gpu_matrix_metric_multi_seed_refine_selects_best_seed():
 def test_resident_stack_matrix_metric_multi_seed_refine_uses_loaded_frames():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
-        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
 
     reference = _smooth_star_field()
     good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
@@ -520,7 +520,7 @@ def test_resident_stack_matrix_metric_multi_seed_refine_uses_loaded_frames():
 def test_resident_stack_star_core_candidate_metrics_match_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
-        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
 
     reference = _smooth_star_field()
     good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
@@ -575,7 +575,7 @@ def test_resident_stack_star_core_candidate_metrics_match_cpu():
 def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_from_catalogs_f32"):
-        raise AssertionError("estimate_translation_from_catalogs_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_translation_from_catalogs_f32 is missing from glass_cuda")
 
     reference = np.array(
         [
@@ -612,7 +612,7 @@ def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():
 def test_gpu_catalog_translation_respects_search_bounds():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_from_catalogs_f32"):
-        raise AssertionError("estimate_translation_from_catalogs_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_translation_from_catalogs_f32 is missing from glass_cuda")
 
     reference = np.array(
         [
@@ -656,7 +656,7 @@ def test_gpu_catalog_translation_respects_search_bounds():
 def test_gpu_catalog_translation_respects_ncc_prior_window():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_from_catalogs_f32"):
-        raise AssertionError("estimate_translation_from_catalogs_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_translation_from_catalogs_f32 is missing from glass_cuda")
 
     reference = np.array(
         [
@@ -787,7 +787,7 @@ def test_gpu_catalog_translation_refines_mutual_inliers():
 def test_gpu_estimate_similarity_from_matched_pairs():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_similarity_from_pairs_f32"):
-        raise AssertionError("estimate_similarity_from_pairs_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_similarity_from_pairs_f32 is missing from glass_cuda")
 
     moving = np.array(
         [
@@ -835,7 +835,7 @@ def test_gpu_estimate_similarity_from_matched_pairs():
 def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_similarity_from_catalogs_f32"):
-        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from glass_cuda")
 
     moving = np.array(
         [
@@ -904,7 +904,7 @@ def test_gpu_estimate_similarity_from_catalogs_scores_pair_candidates():
 def test_gpu_estimate_similarity_from_catalogs_refits_seed_inliers():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_similarity_from_catalogs_f32"):
-        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from glass_cuda")
 
     moving = np.array(
         [
@@ -974,8 +974,8 @@ def test_gpu_estimate_similarity_from_catalogs_refits_seed_inliers():
 def test_gpu_similarity_catalog_registration_aligns_synthetic_images():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_similarity_from_catalogs_f32"):
-        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from gpwbpp_cuda")
-    from gpwbpp.gpu.registration import register_similarity_from_star_catalogs_f32
+        raise AssertionError("estimate_similarity_from_catalogs_f32 is missing from glass_cuda")
+    from glass.gpu.registration import register_similarity_from_star_catalogs_f32
 
     reference_stars = np.array(
         [
@@ -1031,9 +1031,9 @@ def test_gpu_similarity_catalog_registration_aligns_synthetic_images():
 
 def test_register_calibrated_frames_can_use_cuda_catalog_backend(tmp_path: Path):
     cuda_module_or_skip()
-    from gpwbpp.engine.registration import register_calibrated_frames
-    from gpwbpp.io.fits_io import write_fits_data
-    from gpwbpp.io.json_io import write_json
+    from glass.engine.registration import register_calibrated_frames
+    from glass.io.fits_io import write_fits_data
+    from glass.io.json_io import write_json
 
     reference = _star_field()
     moving = _shift_image(reference, 4, -3)
@@ -1115,9 +1115,9 @@ def test_register_calibrated_frames_can_use_cuda_catalog_backend(tmp_path: Path)
 
 def test_register_calibrated_frames_can_use_cuda_triangle_backend(tmp_path: Path):
     cuda_module_or_skip()
-    from gpwbpp.engine.registration import register_calibrated_frames
-    from gpwbpp.io.fits_io import write_fits_data
-    from gpwbpp.io.json_io import write_json
+    from glass.engine.registration import register_calibrated_frames
+    from glass.io.fits_io import write_fits_data
+    from glass.io.json_io import write_json
 
     reference = _star_field()
     moving = _shift_image(reference, 4, -3)
@@ -1192,7 +1192,7 @@ def test_register_calibrated_frames_can_use_cuda_triangle_backend(tmp_path: Path
 def test_gpu_star_top_nms_candidates_suppresses_close_peaks():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_top_nms_candidates_f32"):
-        raise AssertionError("star_top_nms_candidates_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_top_nms_candidates_f32 is missing from glass_cuda")
 
     image = np.zeros((48, 48), dtype=np.float32)
     image[10, 10] = 100.0
@@ -1220,7 +1220,7 @@ def test_gpu_star_top_nms_candidates_suppresses_close_peaks():
 def test_gpu_star_grid_top_nms_candidates_keeps_spatial_candidates():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_grid_top_nms_candidates_f32"):
-        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from glass_cuda")
 
     image = np.zeros((64, 64), dtype=np.float32)
     image[8, 8] = 100.0
@@ -1253,7 +1253,7 @@ def test_gpu_star_grid_top_nms_candidates_keeps_spatial_candidates():
 def test_gpu_star_top_candidates_tie_breaks_saturated_plateau_deterministically():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_top_candidates_f32"):
-        raise AssertionError("star_top_candidates_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_top_candidates_f32 is missing from glass_cuda")
 
     image = np.zeros((12, 12), dtype=np.float32)
     image[4:6, 4:6] = 100.0
@@ -1268,7 +1268,7 @@ def test_gpu_star_top_candidates_tie_breaks_saturated_plateau_deterministically(
 def test_gpu_star_grid_top_nms_candidates_tie_breaks_saturated_plateau_deterministically():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_grid_top_nms_candidates_f32"):
-        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from gpwbpp_cuda")
+        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from glass_cuda")
 
     image = np.zeros((12, 12), dtype=np.float32)
     image[4:6, 4:6] = 100.0

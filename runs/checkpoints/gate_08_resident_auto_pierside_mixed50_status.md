@@ -14,11 +14,11 @@ Gate 08 - Registration.
 ## Commands Run
 
 - Generated filtered plan:
-  - `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_mixed50\processing_plan.json`
+  - `C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_mixed50\processing_plan.json`
 - Resident CUDA run:
-  - `.venv\Scripts\python.exe -m gpwbpp.cli run --plan C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_mixed50\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_mixed50 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 128 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 96 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior auto_pierside --resident-star-prior-radius-px 8 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id F000061`
+  - `.venv\Scripts\python.exe -m glass.cli run --plan C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_mixed50\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_mixed50 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 128 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 96 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior auto_pierside --resident-star-prior-radius-px 8 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id F000061`
 - Report:
-  - `.venv\Scripts\python.exe -m gpwbpp.cli report --run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_mixed50 --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_mixed50\report.html`
+  - `.venv\Scripts\python.exe -m glass.cli report --run C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_mixed50 --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_mixed50\report.html`
 
 ## Test Results
 
@@ -33,9 +33,9 @@ Gate 08 - Registration.
 ## Real Probe Results
 
 - Output directory:
-  - `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_mixed50`
+  - `C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_mixed50`
 - Report:
-  - `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_auto_pierside_mixed50\report.html`
+  - `C:\glass_runs\final_m38_h_200\glass_resident_similarity_auto_pierside_mixed50\report.html`
 - Registration rows: `50`
 - Status counts:
   - `reference`: `1`
@@ -87,5 +87,5 @@ Implement or integrate a clean-room/open-source asterism descriptor matcher (qua
 ## Clean-Room Compliance
 
 - No PixInsight/WBPP/PJSR source was read or modified.
-- The run used FITS metadata, GPWBPP-owned CUDA registration, and GPWBPP-generated diagnostics only.
+- The run used FITS metadata, GLASS-owned CUDA registration, and GLASS-generated diagnostics only.
 - Original input data directories were not modified.

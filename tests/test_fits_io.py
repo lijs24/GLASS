@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from astropy.io import fits
 
-from gpwbpp.io.fits_io import FitsImageReader, read_fits_data
+from glass.io.fits_io import FitsImageReader, read_fits_data
 
 
 def test_fits_image_reader_applies_bscale_bzero_per_tile(tmp_path):

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gpwbpp.metadata.scanner import scan_tree
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.metadata.scanner import scan_tree
+from glass.synthetic.generator import generate_synthetic_dataset
 
 
 def test_synthetic_generator_writes_fits_and_truth(tmp_path: Path):

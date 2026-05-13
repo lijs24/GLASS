@@ -8,7 +8,7 @@
 ## Completed
 
 - Wired resident GPU NCC plus subpixel refinement into
-  `gpwbpp run --memory-mode resident`.
+  `glass run --memory-mode resident`.
 - Added resident registration mode `translation_ncc_subpixel`.
 - Added CLI controls:
   - `--resident-registration-max-shift`
@@ -25,12 +25,12 @@
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cli.py src\gpwbpp\engine\resident_cuda.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\cli.py src\glass\engine\resident_cuda.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py tests\test_cuda_resident_stack.py
-.\.venv\Scripts\gpwbpp.exe synthetic --out runs\resident_ncc_smoke_data --frames 3 --width 64 --height 64 --filter H --known-shift
-.\.venv\Scripts\gpwbpp.exe scan --root runs\resident_ncc_smoke_data --out runs\resident_ncc_smoke\manifest.json
-.\.venv\Scripts\gpwbpp.exe plan --manifest runs\resident_ncc_smoke\manifest.json --out runs\resident_ncc_smoke\processing_plan.json
-.\.venv\Scripts\gpwbpp.exe run --plan runs\resident_ncc_smoke\processing_plan.json --out runs\resident_ncc_smoke --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --resident-registration translation_ncc_subpixel --resident-registration-max-shift 8 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
+.\.venv\Scripts\glass.exe synthetic --out runs\resident_ncc_smoke_data --frames 3 --width 64 --height 64 --filter H --known-shift
+.\.venv\Scripts\glass.exe scan --root runs\resident_ncc_smoke_data --out runs\resident_ncc_smoke\manifest.json
+.\.venv\Scripts\glass.exe plan --manifest runs\resident_ncc_smoke\manifest.json --out runs\resident_ncc_smoke\processing_plan.json
+.\.venv\Scripts\glass.exe run --plan runs\resident_ncc_smoke\processing_plan.json --out runs\resident_ncc_smoke --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --resident-registration translation_ncc_subpixel --resident-registration-max-shift 8 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 

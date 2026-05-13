@@ -33,13 +33,13 @@ registration stack.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_cuda_resident_stack.py tests\test_resident_cuda_run.py
 ```
 
 ```powershell
 $pybind = (& .\.venv\Scripts\python.exe -m pybind11 --cmakedir).Trim()
 $ninja = (Resolve-Path .\.venv\Scripts\ninja.exe).Path
-cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR="..." -DCMAKE_MAKE_PROGRAM="..." -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
+cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -Dpybind11_DIR="..." -DCMAKE_MAKE_PROGRAM="..." -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120 && .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release'
 ```
 
 ```powershell
@@ -64,7 +64,7 @@ CUDA was available.
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition
 - Compute capability: 12.0
 - VRAM: 97886 MiB
-- Native backend: loaded and available to GPWBPP
+- Native backend: loaded and available to GLASS
 
 ## Known Limitations
 
@@ -82,6 +82,6 @@ GPU registration model toward similarity/affine.
 
 ## Clean-Room Compliance
 
-Compliant. This checkpoint used GPWBPP code, existing open-source dependency
+Compliant. This checkpoint used GLASS code, existing open-source dependency
 interfaces only as behavior references, and project-generated tests/artifacts.
 It did not read or copy PixInsight/WBPP/PJSR official source.

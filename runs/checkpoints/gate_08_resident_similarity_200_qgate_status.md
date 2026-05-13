@@ -10,26 +10,26 @@ Gate 08: Registration
   - `cuda_catalog_min_pixel_ncc=0.75`
   - `cuda_catalog_min_selected_seed_inliers=8`
 - Verified low-quality registrations are marked failed and assigned zero integration weight.
-- Generated GPWBPP report and comparison reports against:
-  - existing GPWBPP resident external-astroalign 200-light output
+- Generated GLASS report and comparison reports against:
+  - existing GLASS resident external-astroalign 200-light output
   - PixInsight/WBPP black-box FastIntegration output
 
 ## Commands run
 - `.venv\Scripts\python -m pytest -q`
-- `.venv\Scripts\gpwbpp.exe run --plan C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 128 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 96 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior none --resident-star-prior-radius-px 8 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id F000061`
-- `.venv\Scripts\gpwbpp.exe report --run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\report.html`
-- `.venv\Scripts\gpwbpp.exe compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters\integration\resident_master_H.fits --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_astroalign_resident.html --gpwbpp-label gpwbpp_resident_similarity_qgate --reference-label gpwbpp_resident_external_astroalign`
-- `.venv\Scripts\gpwbpp.exe compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_pixinsight_wbpp.html --gpwbpp-label gpwbpp_resident_similarity_qgate --reference-label pixinsight_wbpp_fastintegration --gpwbpp-time-seconds 4570.85339210002 --reference-time-seconds 1092.541`
+- `.venv\Scripts\glass.exe run --plan C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 128 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 96 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior none --resident-star-prior-radius-px 8 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id F000061`
+- `.venv\Scripts\glass.exe report --run C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\report.html`
+- `.venv\Scripts\glass.exe compare --glass C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\integration\resident_master_H.fits --reference C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters\integration\resident_master_H.fits --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_astroalign_resident.html --glass-label glass_resident_similarity_qgate --reference-label glass_resident_external_astroalign`
+- `.venv\Scripts\glass.exe compare --glass C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\integration\resident_master_H.fits --reference C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_pixinsight_wbpp.html --glass-label glass_resident_similarity_qgate --reference-label pixinsight_wbpp_fastintegration --glass-time-seconds 4570.85339210002 --reference-time-seconds 1092.541`
 
 ## Test results
 - Full test suite before the 200-light qgate run: `150 passed in 8.84s`.
 
 ## Real-data validation
-- Input plan: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\processing_plan.json`
-- Output run: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate`
-- Report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\report.html`
-- GPWBPP vs astroalign-resident compare: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_astroalign_resident.html`
-- GPWBPP vs PixInsight/WBPP compare: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_pixinsight_wbpp.html`
+- Input plan: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\processing_plan.json`
+- Output run: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate`
+- Report: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\report.html`
+- GLASS vs astroalign-resident compare: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_astroalign_resident.html`
+- GLASS vs PixInsight/WBPP compare: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_200_starcore8_fixed350_rotpi_qgate\compare_vs_pixinsight_wbpp.html`
 - Dataset: 200 H-filter M38 lights, 20 bias, 20 dark, 20 flat, full shape `6422x9600`.
 - Reference frame: `F000061`.
 - Registration mode: resident CUDA `similarity_cuda_catalog`.
@@ -51,21 +51,21 @@ Gate 08: Registration
   - ok frames with pixel NCC below `0.75`: `0`
   - ok 180-degree flip frame count: `102`
 - Timing:
-  - GPWBPP qgate elapsed: `4570.85339210002 s`
+  - GLASS qgate elapsed: `4570.85339210002 s`
   - PixInsight/WBPP black-box elapsed: `1092.541 s`
   - WBPP reported time: `18:03.17`
-  - current GPWBPP speedup vs WBPP: `0.239x`; this is slower than WBPP, not an acceleration result.
+  - current GLASS speedup vs WBPP: `0.239x`; this is slower than WBPP, not an acceleration result.
 - Memory estimate:
   - calibrated stack: `45.93372344970703 GiB`
   - resident base: `46.85239791870117 GiB`
   - estimated peak: `47.3117358982563 GiB`
 
 ## Comparison notes
-- GPWBPP vs existing astroalign-resident output:
+- GLASS vs existing astroalign-resident output:
   - robust fit-pixel RMS difference: `5.422116586843049 ADU`
   - robust fit-pixel relative RMS: `0.05358570152931445`
-- GPWBPP vs PixInsight/WBPP:
-  - direct scale differs substantially because WBPP XISF output is normalized differently from GPWBPP FITS ADU output.
+- GLASS vs PixInsight/WBPP:
+  - direct scale differs substantially because WBPP XISF output is normalized differently from GLASS FITS ADU output.
   - robust linear fit-pixel RMS difference: `0.001934817355535557` in WBPP output scale.
   - this is not yet proof of scientific equivalence because LN/rejection/output normalization policies still differ.
 

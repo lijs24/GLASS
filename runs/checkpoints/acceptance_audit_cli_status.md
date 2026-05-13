@@ -8,10 +8,10 @@ checklist.
 
 ## Completed
 
-- Added `gpwbpp acceptance-audit`.
+- Added `glass acceptance-audit`.
 - The command reads:
   - benchmark `manifest.json`;
-  - GPWBPP run directory;
+  - GLASS run directory;
   - user-generated PixInsight/WBPP black-box result JSON;
   - compare JSON.
 - It verifies configurable acceptance checks:
@@ -30,10 +30,10 @@ checklist.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\report\acceptance_audit.py src\gpwbpp\cli.py tests\test_acceptance_audit.py tests\test_cli_smoke.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\report\acceptance_audit.py src\glass\cli.py tests\test_acceptance_audit.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_acceptance_audit.py tests\test_cli_smoke.py::test_cli_help_commands
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --help
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --manifest C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_cli.json --markdown runs\benchmarks\m38_acceptance_audit_cli.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
+.\.venv\Scripts\glass.exe acceptance-audit --help
+.\.venv\Scripts\glass.exe acceptance-audit --manifest C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --glass-run C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_cli.json --markdown runs\benchmarks\m38_acceptance_audit_cli.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -60,13 +60,13 @@ checklist.
 
 ## Known Limitations
 
-- The command verifies existing artifacts. It does not run GPWBPP or WBPP.
+- The command verifies existing artifacts. It does not run GLASS or WBPP.
 - It validates explicit acceptance thresholds, not PixInsight/WBPP algorithmic
   identity.
 
 ## Next Step
 
-- Use `gpwbpp acceptance-audit` for future real-data acceptance runs and
+- Use `glass acceptance-audit` for future real-data acceptance runs and
   regression evidence.
 
 ## Clean-room

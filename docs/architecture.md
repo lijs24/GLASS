@@ -1,6 +1,6 @@
-# GPWBPP Architecture
+# GLASS Architecture
 
-GPWBPP is a clean-room WBPP-like astronomical preprocessing pipeline. It is
+GLASS is a clean-room WBPP-like astronomical preprocessing pipeline. It is
 organized as a Python control plane, CPU scientific baseline, optional CUDA
 backend, and auditable run directory.
 

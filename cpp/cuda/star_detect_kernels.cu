@@ -409,7 +409,7 @@ __global__ void star_catalog_nms_kernel(
   *stored_count = selected;
 }
 
-void gpwbpp_star_local_max_mask_f32_launch(
+void glass_star_local_max_mask_f32_launch(
     const float* input,
     unsigned char* mask,
     int width,
@@ -420,7 +420,7 @@ void gpwbpp_star_local_max_mask_f32_launch(
   star_local_max_mask_kernel<<<grid, block>>>(input, mask, width, height, threshold);
 }
 
-void gpwbpp_star_candidates_f32_launch(
+void glass_star_candidates_f32_launch(
     const float* input,
     float* xs,
     float* ys,
@@ -437,7 +437,7 @@ void gpwbpp_star_candidates_f32_launch(
       input, xs, ys, fluxes, count, width, height, threshold, max_candidates);
 }
 
-void gpwbpp_star_top_candidates_f32_launch(
+void glass_star_top_candidates_f32_launch(
     const float* input,
     float* xs,
     float* ys,
@@ -460,7 +460,7 @@ void gpwbpp_star_top_candidates_f32_launch(
   star_catalog_sort_desc_kernel<<<1, 1>>>(xs, ys, fluxes, max_candidates);
 }
 
-void gpwbpp_star_top_nms_candidates_f32_launch(
+void glass_star_top_nms_candidates_f32_launch(
     const float* input,
     float* scan_xs,
     float* scan_ys,
@@ -503,7 +503,7 @@ void gpwbpp_star_top_nms_candidates_f32_launch(
       min_separation_px);
 }
 
-void gpwbpp_star_grid_top_nms_candidates_f32_launch(
+void glass_star_grid_top_nms_candidates_f32_launch(
     const float* input,
     float* grid_xs,
     float* grid_ys,
@@ -568,7 +568,7 @@ void gpwbpp_star_grid_top_nms_candidates_f32_launch(
       min_separation_px);
 }
 
-void gpwbpp_star_grid_candidates_f32_launch(
+void glass_star_grid_candidates_f32_launch(
     const float* input,
     float* xs,
     float* ys,

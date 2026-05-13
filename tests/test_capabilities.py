@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gpwbpp.capabilities import capability_report
+from glass.capabilities import capability_report
 
 
 def test_capability_report_records_structured_gate_flags():

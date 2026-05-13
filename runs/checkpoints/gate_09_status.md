@@ -8,19 +8,19 @@
 ## Completed
 
 - Added native CUDA `warp_translation_f32` binding for integer translation warp.
-- Added CPU fallback wrapper in `gpwbpp_cuda.py`.
+- Added CPU fallback wrapper in `glass_cuda.py`.
 - Added tiled registered-frame writer that streams calibrated FITS frames tile by tile.
 - Added per-frame coverage FITS output and `warp_results.json`.
-- Extended `gpwbpp run --until-stage warp` to execute calibration, quality, registration, and warp.
+- Extended `glass run --until-stage warp` to execute calibration, quality, registration, and warp.
 - Added CPU/GPU warp comparison coverage test.
 - Added pipeline fixture test for registered cache and coverage cache generation.
 
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\gpwbpp synthetic --out runs\gate_09_synth\source --frames 4 --width 48 --height 48 --filter H --known-shift
-.\.venv\Scripts\gpwbpp audit --root runs\gate_09_synth\source --out runs\gate_09_synth\audit --backend auto
-.\.venv\Scripts\gpwbpp run --plan runs\gate_09_synth\audit\processing_plan.json --out runs\gate_09_synth\run --backend cuda --until-stage warp --tile-size 12
+.\.venv\Scripts\glass synthetic --out runs\gate_09_synth\source --frames 4 --width 48 --height 48 --filter H --known-shift
+.\.venv\Scripts\glass audit --root runs\gate_09_synth\source --out runs\gate_09_synth\audit --backend auto
+.\.venv\Scripts\glass run --plan runs\gate_09_synth\audit\processing_plan.json --out runs\gate_09_synth\run --backend cuda --until-stage warp --tile-size 12
 .\.venv\Scripts\python -m pytest -q
 ```
 

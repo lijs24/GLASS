@@ -7,7 +7,7 @@ Date: 2026-05-13
 ## Completed content
 
 - Used the successful 12-light M38 tile-mode astroalign matrix set from
-  `gpwbpp_tile_astroalign_subset12_ref_light001_flat005`.
+  `glass_tile_astroalign_subset12_ref_light001_flat005`.
 - Ran tile-mode matrix warp and integration directly from the existing
   `registration_results.json` without repeating calibration/quality/registration.
 - Compared tile-mode CPU/tile matrix-warp integration against resident CUDA
@@ -28,10 +28,10 @@ Result before this comparison checkpoint: 119 passed.
 from pathlib import Path
 from time import perf_counter
 import json
-from gpwbpp.engine.warp import warp_registered_frames
-from gpwbpp.engine.integration import integrate_registered_frames
-run = Path(r"C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset12_ref_light001_flat005")
-plan = Path(r"C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_subset12\processing_plan.json")
+from glass.engine.warp import warp_registered_frames
+from glass.engine.integration import integrate_registered_frames
+run = Path(r"C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset12_ref_light001_flat005")
+plan = Path(r"C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_subset12\processing_plan.json")
 timing = {"command": "direct_tile_warp_integration", "stages": []}
 for stage, fn in [
     ("warp", lambda: warp_registered_frames(run, tile_size=1024)),
@@ -67,7 +67,7 @@ Resident CUDA external-matrix timing:
 - resident integration: 0.0753 s
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_subset12_flat005\integration\resident_master_H.fits --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset12_ref_light001_flat005\integration\master_H.fits --out C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_vs_tile_astroalign_subset12_compare.html --gpwbpp-label resident_cuda_external_matrix --reference-label tile_astroalign_cpu_warp --gpwbpp-time-seconds 14.470209099992644 --reference-time-seconds 258.53909080004087
+.\.venv\Scripts\glass.exe compare --glass C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_subset12_flat005\integration\resident_master_H.fits --reference C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset12_ref_light001_flat005\integration\master_H.fits --out C:\glass_runs\final_m38_h_200\resident_external_matrix_vs_tile_astroalign_subset12_compare.html --glass-label resident_cuda_external_matrix --reference-label tile_astroalign_cpu_warp --glass-time-seconds 14.470209099992644 --reference-time-seconds 258.53909080004087
 ```
 
 Result: passed.
@@ -95,12 +95,12 @@ CUDA was available.
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset12_ref_light001_flat005\warp_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset12_ref_light001_flat005\integration\master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset12_ref_light001_flat005\direct_tile_warp_integration_timing.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_subset12_flat005\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_vs_tile_astroalign_subset12_compare.json`
-- `C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_vs_tile_astroalign_subset12_compare.html`
+- `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset12_ref_light001_flat005\warp_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset12_ref_light001_flat005\integration\master_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset12_ref_light001_flat005\direct_tile_warp_integration_timing.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_subset12_flat005\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\resident_external_matrix_vs_tile_astroalign_subset12_compare.json`
+- `C:\glass_runs\final_m38_h_200\resident_external_matrix_vs_tile_astroalign_subset12_compare.html`
 
 ## Known limitations
 
@@ -115,4 +115,4 @@ Scale the same validation pattern to a larger subset, then the final 200-light r
 
 ## Clean-room compliance
 
-This work used GPWBPP-owned code, user-provided M38 data, and open-source astroalign as an external reference. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.
+This work used GLASS-owned code, user-provided M38 data, and open-source astroalign as an external reference. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.

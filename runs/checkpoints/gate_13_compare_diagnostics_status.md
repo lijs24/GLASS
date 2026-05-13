@@ -6,29 +6,29 @@ Gate 13 support checkpoint: PixInsight/WBPP black-box comparison diagnostics.
 
 ## Completed Content
 
-- Added optional compare diagnostics through `gpwbpp compare --diagnostics-dir`.
+- Added optional compare diagnostics through `glass compare --diagnostics-dir`.
 - The diagnostics writer uses only the Python standard library and NumPy:
   - no Pillow dependency;
   - no matplotlib dependency;
   - no CUDA dependency.
 - Diagnostic outputs:
-  - `gpwbpp_preview.png`;
+  - `glass_preview.png`;
   - `reference_preview.png`;
   - `abs_diff_preview.png`;
   - `signed_diff_preview.png`;
   - `hotspots.json`.
 - Added residual hotspot ranking by tiled p99 absolute difference and RMS difference.
-- Added `gpwbpp compare --ignore-border-px` to compute metrics on an inner comparison region while preserving full-frame stats.
+- Added `glass compare --ignore-border-px` to compute metrics on an inner comparison region while preserving full-frame stats.
 - Added pytest coverage for FITS-to-FITS compare diagnostics.
 
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\report\compare_report.py src\gpwbpp\cli.py tests\test_compare_report.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\report\compare_report.py src\glass\cli.py tests\test_compare_report.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_compare_report.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics.html" --gpwbpp-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle Lanczos3 193 WBPP-failed-excluded scaled diagnostics" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --diagnostics-dir "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics" --diagnostic-max-size 1200 --hotspot-tile-size 512
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_inner32.html" --gpwbpp-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle Lanczos3 inner32 scaled" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --ignore-border-px 32
+.\.venv\Scripts\glass.exe compare --glass "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics.html" --glass-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --glass-label "GLASS resident CUDA triangle Lanczos3 193 WBPP-failed-excluded scaled diagnostics" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --diagnostics-dir "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics" --diagnostic-max-size 1200 --hotspot-tile-size 512
+.\.venv\Scripts\glass.exe compare --glass "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_inner32.html" --glass-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --glass-label "GLASS resident CUDA triangle Lanczos3 inner32 scaled" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 8.764434957115609e-06 --glass-offset 0.0006274500691899127 --ignore-border-px 32
 .\.venv\Scripts\python.exe -c "<coverage hotspot audit; see checkpoint text>"
 ```
 
@@ -40,8 +40,8 @@ Gate 13 support checkpoint: PixInsight/WBPP black-box comparison diagnostics.
 
 ## Real-data Diagnostic Results
 
-- Compare report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics.html`.
-- Diagnostics directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics`.
+- Compare report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics.html`.
+- Diagnostics directory: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics`.
 - Top residual hotspots are concentrated along the lower image edge, especially the lower-right edge tiles.
 - The highest hotspot tile was:
   - `x0=9216, x1=9600, y0=6144, y1=6422`;
@@ -49,7 +49,7 @@ Gate 13 support checkpoint: PixInsight/WBPP black-box comparison diagnostics.
   - `rms_diff=0.07569983121093987`;
   - `max_abs_diff=0.5095405578613281`.
 - Inner 32px-border-excluded compare:
-  - report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_inner32.html`;
+  - report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_inner32.html`;
   - compared shape: `6358 x 9536`;
   - speedup: `9.75928982978054x`;
   - RMS difference: `0.002586615126210406`;
@@ -83,5 +83,5 @@ Gate 13 support checkpoint: PixInsight/WBPP black-box comparison diagnostics.
 
 ## Clean-room Compliance
 
-- Compliant. Diagnostics compare only GPWBPP output against user-generated PixInsight/WBPP black-box output.
+- Compliant. Diagnostics compare only GLASS output against user-generated PixInsight/WBPP black-box output.
 - No official PixInsight/WBPP/PJSR source code was read, copied, summarized, or used as implementation input.

@@ -1,6 +1,6 @@
 # Memory Model
 
-GPWBPP must not load all input frames into CPU RAM or GPU VRAM by default.
+GLASS must not load all input frames into CPU RAM or GPU VRAM by default.
 Metadata stages read only headers. Pixel stages use an explicit memory plan:
 full-frame resident, batched resident, slab, or tile. A resident mode is allowed
 only when the planner proves the active stage fits inside the configured RAM and
@@ -19,7 +19,7 @@ in-place partition to compute an exact median without keeping the full image in
 process memory, including small flat images where a full-frame read would be
 convenient but unnecessary.
 
-The standalone `gpwbpp.gpu.master_frames` helpers use the same bounded input
+The standalone `glass.gpu.master_frames` helpers use the same bounded input
 pattern: FITS tile reads plus per-tile accumulators. When the native CUDA module
 is available they reuse the CUDA weighted-accumulation kernel; otherwise they
 fall back to a CPU tile accumulator instead of a full-frame stack.

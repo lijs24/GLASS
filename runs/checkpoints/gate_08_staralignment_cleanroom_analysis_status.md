@@ -7,14 +7,14 @@ Gate 08 - Registration.
 ## Completed Content
 
 - Added a clean-room StarAlignment reference section to `docs/registration_model.md`.
-- Summarized public, non-source information relevant to GPWBPP registration:
+- Summarized public, non-source information relevant to GLASS registration:
   - triangle similarity as the older descriptor model;
   - polygonal descriptors including quads through octagons, with pentagons described as the default;
   - local coordinate hash construction from the most distant pair of polygon stars;
   - RANSAC as robust false-match rejection and registration-model optimization;
   - thin-plate / surface-spline distortion correction;
   - mirror/specular-transform caveat for polygonal descriptors.
-- Recorded the GPWBPP implementation implication: move beyond simple pair-offset voting toward GPU star catalogs, quad/pentagon descriptors, batched GPU hypothesis scoring, interim CPU RANSAC control, and resident CUDA warp.
+- Recorded the GLASS implementation implication: move beyond simple pair-offset voting toward GPU star catalogs, quad/pentagon descriptors, batched GPU hypothesis scoring, interim CPU RANSAC control, and resident CUDA warp.
 
 ## Sources
 

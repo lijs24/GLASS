@@ -10,4 +10,4 @@ def test_cuda_device_info():
     if devices:
         info = module.get_device_info(0)
         assert "name" in info
-        assert "available_to_gpwbpp" in info
+        assert "available_to_glass" in info

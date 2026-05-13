@@ -4,7 +4,7 @@ Gate: 0 - engineering skeleton and clean-room constraints
 
 Completed content:
 
-- Initialized repository on branch `gpwbpp-cuda-wbpp`.
+- Initialized repository on branch `glass-cuda-wbpp`.
 - Created the requested Python, docs, benchmarks, CMake, C++ and CUDA skeleton layout.
 - Added installable `pyproject.toml`, CLI entry point, capability reporting, data models, optional CUDA placeholders, and baseline tests.
 - Added clean-room architecture, gates, memory model, CUDA, validation, calibration, registration, local normalization, integration, black-box reference, and known limitation docs.
@@ -13,25 +13,25 @@ Commands run:
 
 - `python -m venv .venv`
 - `.\\.venv\\Scripts\\python -m pip install -e .[dev,report]`
-- `.\\.venv\\Scripts\\gpwbpp --help`
-- `.\\.venv\\Scripts\\gpwbpp scan --help`
-- `.\\.venv\\Scripts\\gpwbpp plan --help`
-- `.\\.venv\\Scripts\\gpwbpp run --help`
-- `.\\.venv\\Scripts\\gpwbpp resume --help`
-- `.\\.venv\\Scripts\\gpwbpp audit --help`
-- `.\\.venv\\Scripts\\gpwbpp compare --help`
-- `.\\.venv\\Scripts\\gpwbpp synthetic --help`
+- `.\\.venv\\Scripts\\glass --help`
+- `.\\.venv\\Scripts\\glass scan --help`
+- `.\\.venv\\Scripts\\glass plan --help`
+- `.\\.venv\\Scripts\\glass run --help`
+- `.\\.venv\\Scripts\\glass resume --help`
+- `.\\.venv\\Scripts\\glass audit --help`
+- `.\\.venv\\Scripts\\glass compare --help`
+- `.\\.venv\\Scripts\\glass synthetic --help`
 - `.\\.venv\\Scripts\\python -m pytest -q`
 
 Test result:
 
 - `16 passed, 7 skipped`
-- Skips are CUDA tests because `gpwbpp_cuda` is not built yet.
+- Skips are CUDA tests because `glass_cuda` is not built yet.
 
 CUDA availability:
 
 - CUDA extension importable: no
-- CUDA available to GPWBPP: no
+- CUDA available to GLASS: no
 
 Known limitations:
 

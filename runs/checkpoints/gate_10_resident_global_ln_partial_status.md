@@ -15,8 +15,8 @@ This is not a full Local Normalization gate completion. It validates an early re
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run --plan "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350\processing_plan.json" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_global_ln" --backend cuda --memory-mode resident --until-stage integration --local-normalization on --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30
-.\.venv\Scripts\gpwbpp.exe report --run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_global_ln" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_global_ln\report.html"
+.\.venv\Scripts\glass.exe run --plan "C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350\processing_plan.json" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_lanczos3_global_ln" --backend cuda --memory-mode resident --until-stage integration --local-normalization on --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30
+.\.venv\Scripts\glass.exe report --run "C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_lanczos3_global_ln" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_lanczos3_global_ln\report.html"
 ```
 
 ## Test Results
@@ -28,14 +28,14 @@ This is not a full Local Normalization gate completion. It validates an early re
 
 ## Real-data Results
 
-- Output directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_global_ln`.
+- Output directory: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_lanczos3_global_ln`.
 - Total elapsed: `18.510745999985375 s`.
 - Local normalization mode: `resident_global_mean_std`.
 - Local normalization enabled: true.
 - Local normalization timing: `0.04855509998742491 s`.
 - Local normalization frame statuses: 11 ok, 1 reference.
 - Registration statuses: 11 ok, 1 reference.
-- Report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_global_ln\report.html`.
+- Report: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_subset12_lanczos3_global_ln\report.html`.
 
 ## CUDA Availability
 

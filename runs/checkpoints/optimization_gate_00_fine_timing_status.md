@@ -22,7 +22,7 @@ Optimization Gate 00.
 ## Commands
 
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_cuda_run.py::test_cli_resident_cuda_run_smoke tests\\test_cli_smoke.py::test_cli_report_includes_resident_artifacts`
-- `.\\.venv\\Scripts\\python.exe -m ruff check src\\gpwbpp\\engine\\resident_cuda.py src\\gpwbpp\\report\\html_report.py tests\\test_resident_cuda_run.py tests\\test_cli_smoke.py`
+- `.\\.venv\\Scripts\\python.exe -m ruff check src\\glass\\engine\\resident_cuda.py src\\glass\\report\\html_report.py tests\\test_resident_cuda_run.py tests\\test_cli_smoke.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_cuda_run.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
 

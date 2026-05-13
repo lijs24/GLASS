@@ -1,8 +1,8 @@
 # Precision Model
 
-GPWBPP is a clean-room project, so official WBPP/PJSR source code is not used to
+GLASS is a clean-room project, so official WBPP/PJSR source code is not used to
 determine implementation details. Precision behavior is established from
-black-box output metadata, public file formats, and GPWBPP's own numerical
+black-box output metadata, public file formats, and GLASS's own numerical
 audits.
 
 ## Black-Box WBPP Evidence
@@ -19,7 +19,7 @@ This proves the observed WBPP output images for this run are 32-bit floating
 point samples. It does not prove every internal WBPP temporary variable or every
 PixInsight process uses only 32-bit arithmetic.
 
-## GPWBPP Current Defaults
+## GLASS Current Defaults
 
 - Calibration CPU baseline: float32 input/output arithmetic.
 - CUDA calibration: float32 kernel arithmetic.
@@ -37,12 +37,12 @@ float64 accumulator.
 Command:
 
 ```powershell
-.venv\Scripts\python.exe benchmarks\audit_precision.py --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\precision_audit_512.json --light-limit 16 --calib-limit 20 --crop-size 512 --wbpp-xisf C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --wbpp-xisf C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterBias_BIN-1_9600x6422.xisf --wbpp-xisf C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\calibrated\Light_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono\LIGHT_H_0001_c.xisf
+.venv\Scripts\python.exe benchmarks\audit_precision.py --plan C:\glass_runs\final_m38_h_200\processing_plan.json --out C:\glass_runs\final_m38_h_200\precision_audit_512.json --light-limit 16 --calib-limit 20 --crop-size 512 --wbpp-xisf C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --wbpp-xisf C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterBias_BIN-1_9600x6422.xisf --wbpp-xisf C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\calibrated\Light_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono\LIGHT_H_0001_c.xisf
 ```
 
 Result artifact:
 
-`C:\gpwbpp_runs\final_m38_h_200\precision_audit_512.json`
+`C:\glass_runs\final_m38_h_200\precision_audit_512.json`
 
 On the central `512 x 512` crop with 16 lights and 20 calibration frames each:
 

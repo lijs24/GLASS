@@ -12,15 +12,15 @@ Gate 08: Registration
   - estimates a similarity matrix with CUDA catalog matching;
   - refines the selected matrix plus top-k candidates with resident multi-seed pixel metrics;
   - applies the final matrix with resident CUDA bilinear matrix warp.
-- Added CLI support through `gpwbpp run --resident-registration similarity_cuda_catalog`.
+- Added CLI support through `glass run --resident-registration similarity_cuda_catalog`.
 - Added a resident CUDA smoke test that scans, plans, runs, and verifies a shifted two-light synthetic pair through the new mode.
 
 ## Commands run
 - `.\\.venv\\Scripts\\python -m pytest -q tests/test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair`
 - `.\\.venv\\Scripts\\python -m pytest -q tests/test_resident_cuda_run.py`
 - `.\\.venv\\Scripts\\python -m pytest -q`
-- `.\\.venv\\Scripts\\gpwbpp.exe run --help | Select-String -Pattern "similarity_cuda_catalog|resident-registration" -Context 1,2`
-- `@' ... '@ | .\\.venv\\Scripts\\python -` to query CUDA capability through `gpwbpp_cuda`.
+- `.\\.venv\\Scripts\\glass.exe run --help | Select-String -Pattern "similarity_cuda_catalog|resident-registration" -Context 1,2`
+- `@' ... '@ | .\\.venv\\Scripts\\python -` to query CUDA capability through `glass_cuda`.
 
 ## Test results
 - New resident similarity test: `1 passed in 0.25s`.
@@ -46,4 +46,4 @@ Gate 08: Registration
 ## Clean-room compliance
 - Compliant.
 - No PixInsight/WBPP/PJSR source, script internals, or installation directories were read or modified.
-- The implementation uses GPWBPP CUDA primitives and clean-room catalog/pixel metric registration logic.
+- The implementation uses GLASS CUDA primitives and clean-room catalog/pixel metric registration logic.

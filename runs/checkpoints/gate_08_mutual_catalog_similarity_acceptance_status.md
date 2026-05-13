@@ -13,7 +13,7 @@ Date: 2026-05-13
 
 - `cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .venv\Scripts\cmake.exe --build build\native-cuda --config Release'`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_cuda_resident_stack.py`
-- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v22_mutual_score_pixel_refine_accept.json"`
+- `.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v22_mutual_score_pixel_refine_accept.json"`
 
 ## Test results
 
@@ -26,7 +26,7 @@ Date: 2026-05-13
 
 Artifact:
 
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v22_mutual_score_pixel_refine_accept.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v22_mutual_score_pixel_refine_accept.json`
 
 Input pair:
 
@@ -38,7 +38,7 @@ Key timing:
 
 - astroalign total: `9.6961 s`
 - astroalign apply transform: `2.9049 s`
-- raw GPWBPP CUDA grid-top catalog similarity: `2.9564 s`
+- raw GLASS CUDA grid-top catalog similarity: `2.9564 s`
 - pixel-refined catalog similarity plus CUDA warp: `6.4166 s`
 - pixel-refine metric search only: `6.3286 s`
 - pixel-refined CUDA warp: `0.0880 s`
@@ -74,6 +74,6 @@ CUDA is available.
 
 ## Clean-room compliance
 
-- This increment used GPWBPP code and the open-source astroalign package only as an external comparison target.
+- This increment used GLASS code and the open-source astroalign package only as an external comparison target.
 - No PixInsight/WBPP/PJSR source code was read, copied, summarized, or used as implementation material.
-- Original image data were read only; generated benchmark artifacts were written under `C:\gpwbpp_runs`.
+- Original image data were read only; generated benchmark artifacts were written under `C:\glass_runs`.

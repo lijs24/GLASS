@@ -6,19 +6,19 @@ Status: partial Gate 13 benchmark checkpoint. This records a real-data PixInsigh
 
 ## Scope
 
-- Dataset: M38 H mono, 200 light frames plus 20 bias, 20 dark, and 20 flat frames staged under `C:\gpwbpp_runs\final_m38_h_200`.
+- Dataset: M38 H mono, 200 light frames plus 20 bias, 20 dark, and 20 flat frames staged under `C:\glass_runs\final_m38_h_200`.
 - WBPP reference: user-generated PixInsight/WBPP black-box output only.
-- GPWBPP path: resident CUDA calibration, external astroalign similarity matrices, CUDA matrix warp, and resident winsorized sigma integration.
+- GLASS path: resident CUDA calibration, external astroalign similarity matrices, CUDA matrix warp, and resident winsorized sigma integration.
 - Local normalization: disabled.
 - Weighting: none, matching the extracted WBPP FastIntegration history.
-- Rejection: `winsorized_sigma`, matching the extracted WBPP FastIntegration history at a policy level. GPWBPP currently records this as a two-stage winsorized mean/std approximation.
+- Rejection: `winsorized_sigma`, matching the extracted WBPP FastIntegration history at a policy level. GLASS currently records this as a two-stage winsorized mean/std approximation.
 
 ## Commands
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run `
-  --plan "C:\gpwbpp_runs\final_m38_h_200\processing_plan_flatfloor005.json" `
-  --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_200_ref_light001_flat005_preview3072" `
+.\.venv\Scripts\glass.exe run `
+  --plan "C:\glass_runs\final_m38_h_200\processing_plan_flatfloor005.json" `
+  --out "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_200_ref_light001_flat005_preview3072" `
   --backend cuda `
   --until-stage registration `
   --registration-method astroalign `
@@ -29,9 +29,9 @@ Status: partial Gate 13 benchmark checkpoint. This records a real-data PixInsigh
 ```
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run `
-  --plan "C:\gpwbpp_runs\final_m38_h_200\processing_plan_flatfloor005.json" `
-  --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized" `
+.\.venv\Scripts\glass.exe run `
+  --plan "C:\glass_runs\final_m38_h_200\processing_plan_flatfloor005.json" `
+  --out "C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized" `
   --backend cuda `
   --memory-mode resident `
   --until-stage integration `
@@ -40,20 +40,20 @@ Status: partial Gate 13 benchmark checkpoint. This records a real-data PixInsigh
   --integration-weighting none `
   --flat-floor 0.05 `
   --resident-registration external_matrix `
-  --resident-registration-results "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_200_ref_light001_flat005_preview3072\registration_results.json"
+  --resident-registration-results "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_200_ref_light001_flat005_preview3072\registration_results.json"
 ```
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe compare `
-  --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_master_H.fits" `
-  --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" `
-  --out "C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_winsorized_200_vs_wbpp_compare_scaled.html" `
-  --gpwbpp-time-seconds 54.03370799997356 `
+.\.venv\Scripts\glass.exe compare `
+  --glass "C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_master_H.fits" `
+  --reference "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" `
+  --out "C:\glass_runs\final_m38_h_200\resident_external_matrix_winsorized_200_vs_wbpp_compare_scaled.html" `
+  --glass-time-seconds 54.03370799997356 `
   --reference-time-seconds 1092.541 `
-  --gpwbpp-label "GPWBPP resident CUDA external-matrix winsorized scaled" `
+  --glass-label "GLASS resident CUDA external-matrix winsorized scaled" `
   --reference-label "PixInsight WBPP FastIntegration" `
-  --gpwbpp-scale 2.4922592800688463e-06 `
-  --gpwbpp-offset 0.0013092293439297639 `
+  --glass-scale 2.4922592800688463e-06 `
+  --glass-offset 0.0013092293439297639 `
   --clip-low 0 `
   --clip-high 1
 ```
@@ -61,7 +61,7 @@ Status: partial Gate 13 benchmark checkpoint. This records a real-data PixInsigh
 ## Results
 
 - WBPP black-box elapsed time: 1092.541 s.
-- Tile GPWBPP astroalign registration preparation elapsed time: 2177.349 s.
+- Tile GLASS astroalign registration preparation elapsed time: 2177.349 s.
   - Calibration cache: 565.933 s.
   - Quality metrics: 541.366 s.
   - Astroalign registration: 1070.050 s.
@@ -74,20 +74,20 @@ Status: partial Gate 13 benchmark checkpoint. This records a real-data PixInsigh
 
 ## Artifacts
 
-- Registration artifact: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_200_ref_light001_flat005_preview3072\registration_results.json`.
-- Resident run: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized`.
-- Master output: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_master_H.fits`.
-- Weight map: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_weight_map_H.fits`.
-- Coverage map: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_coverage_map_H.fits`.
-- Low rejection map: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_low_rejection_map_H.fits`.
-- High rejection map: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_high_rejection_map_H.fits`.
-- Raw compare report: `C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_winsorized_200_vs_wbpp_compare.html`.
-- Scaled compare report: `C:\gpwbpp_runs\final_m38_h_200\resident_external_matrix_winsorized_200_vs_wbpp_compare_scaled.html`.
-- GPWBPP run report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\report.html`.
+- Registration artifact: `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_200_ref_light001_flat005_preview3072\registration_results.json`.
+- Resident run: `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized`.
+- Master output: `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_master_H.fits`.
+- Weight map: `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_weight_map_H.fits`.
+- Coverage map: `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_coverage_map_H.fits`.
+- Low rejection map: `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_low_rejection_map_H.fits`.
+- High rejection map: `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\integration\resident_high_rejection_map_H.fits`.
+- Raw compare report: `C:\glass_runs\final_m38_h_200\resident_external_matrix_winsorized_200_vs_wbpp_compare.html`.
+- Scaled compare report: `C:\glass_runs\final_m38_h_200\resident_external_matrix_winsorized_200_vs_wbpp_compare_scaled.html`.
+- GLASS run report: `C:\glass_runs\final_m38_h_200\glass_resident_external_matrix_astroalign_200_flat005_preview3072_matchedmasters_winsorized\report.html`.
 
 ## Scaled compare metrics
 
-The WBPP master is in a normalized XISF scale while GPWBPP writes ADU-scale FITS. A robust linear scale/offset was therefore applied to GPWBPP before the scaled report:
+The WBPP master is in a normalized XISF scale while GLASS writes ADU-scale FITS. A robust linear scale/offset was therefore applied to GLASS before the scaled report:
 
 - Scale: 2.4922592800688463e-06.
 - Offset: 0.0013092293439297639.
@@ -100,12 +100,12 @@ The WBPP master is in a normalized XISF scale while GPWBPP writes ADU-scale FITS
 
 ## Known limitations
 
-- This checkpoint does not include a fully clean-room GPU similarity/affine star matcher. The transform matrices are produced by open-source `astroalign` and then consumed by GPWBPP resident CUDA.
+- This checkpoint does not include a fully clean-room GPU similarity/affine star matcher. The transform matrices are produced by open-source `astroalign` and then consumed by GLASS resident CUDA.
 - The resident path uses full-frame VRAM residency for this dataset because 96 GiB is sufficient; the out-of-core path remains available but was not used for this speed result.
 - Local Normalization remains disabled in this comparison.
-- GPWBPP `winsorized_sigma` is currently a documented approximation, not a claim of PixInsight-identical rejection.
+- GLASS `winsorized_sigma` is currently a documented approximation, not a claim of PixInsight-identical rejection.
 - Output scaling and XISF/FITS metadata semantics still differ from WBPP.
-- Seven frames failed astroalign registration in both the WBPP black-box history and GPWBPP astroalign pass; they were excluded/zero-weighted.
+- Seven frames failed astroalign registration in both the WBPP black-box history and GLASS astroalign pass; they were excluded/zero-weighted.
 
 ## Tests
 

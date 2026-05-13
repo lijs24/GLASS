@@ -10,17 +10,17 @@ Gate 08: Registration
 - Generated an HTML report for the fixed-threshold validation run.
 
 ## Commands run
-- `.venv\Scripts\gpwbpp.exe run --plan C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 24 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior ncc --resident-star-prior-radius-px 4 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id LIGHT_H_0001`
-- `.venv\Scripts\gpwbpp.exe report --run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350 --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350\report.html`
+- `.venv\Scripts\glass.exe run --plan C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350 --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_catalog --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3.0 --resident-registration-max-shift 24 --resident-ncc-sample-stride 4 --resident-subpixel-radius-steps 4 --resident-subpixel-step 0.25 --resident-star-prior ncc --resident-star-prior-radius-px 4 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-star-core-preselect-top-k 8 --reference-frame-id LIGHT_H_0001`
+- `.venv\Scripts\glass.exe report --run C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350 --out C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350\report.html`
 
 ## Test results
 - No code changed after commit `221cf22`; this checkpoint records a real-data parameter validation.
 - Most recent full suite before this run: `149 passed in 7.34s`.
 
 ## Real-data validation
-- Input plan: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8\processing_plan.json`
-- Output run: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350`
-- Report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350\report.html`
+- Input plan: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8\processing_plan.json`
+- Output run: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350`
+- Report: `C:\glass_runs\final_m38_h_200\glass_resident_similarity_catalog_subset12_starcore8_fixed350\report.html`
 - Frames: 12 H-filter M38 lights, `S000021` through `S000032`, full shape `6422x9600`.
 - Registration mode: `similarity_cuda_catalog`.
 - Star threshold mode: fixed.
@@ -64,9 +64,9 @@ Gate 08: Registration
 - This checkpoint still uses `integration-rejection none` and `local-normalization off`.
 
 ## Next step
-- Run a 50-light validation with fixed threshold `350`, resident grid-top-NMS, and star-core preselection before attempting the final 200-light WBPP-vs-GPWBPP comparison.
+- Run a 50-light validation with fixed threshold `350`, resident grid-top-NMS, and star-core preselection before attempting the final 200-light WBPP-vs-GLASS comparison.
 
 ## Clean-room compliance
 - Compliant.
 - No PixInsight/WBPP/PJSR source, script internals, or installation directories were read or modified.
-- This is a parameter validation using user-provided image data and GPWBPP clean-room CUDA code.
+- This is a parameter validation using user-provided image data and GLASS clean-room CUDA code.

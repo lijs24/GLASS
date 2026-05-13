@@ -7,11 +7,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmarks.common import add_common_args, run_timed, write_result
-from gpwbpp.engine.pipeline import run_calibration_stages
-from gpwbpp.io.json_io import read_json, write_json
-from gpwbpp.metadata.scanner import scan_tree
-from gpwbpp.planner.plan_builder import build_processing_plan
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.engine.pipeline import run_calibration_stages
+from glass.io.json_io import read_json, write_json
+from glass.metadata.scanner import scan_tree
+from glass.planner.plan_builder import build_processing_plan
+from glass.synthetic.generator import generate_synthetic_dataset
 
 
 def main() -> int:

@@ -9,7 +9,7 @@ Gate 08: Registration
 ## Completed
 
 - Added resident CUDA registration mode `similarity_cuda_triangle`.
-- Added CLI support through `gpwbpp run --memory-mode resident
+- Added CLI support through `glass run --memory-mode resident
   --resident-registration similarity_cuda_triangle`.
 - Reused resident GPU star-catalog detection, CUDA triangle descriptor
   construction/matching, optional resident pixel-metric translation refinement,
@@ -22,11 +22,11 @@ Gate 08: Registration
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\gpwbpp.exe run --help | Select-String -Pattern "similarity_cuda_triangle|resident-registration"
-.\.venv\Scripts\python.exe -c "import gpwbpp_cuda,json; print(json.dumps({'cuda_available': gpwbpp_cuda.cuda_available(), 'devices': gpwbpp_cuda.list_devices()}, ensure_ascii=False, indent=2))"
+.\.venv\Scripts\glass.exe run --help | Select-String -Pattern "similarity_cuda_triangle|resident-registration"
+.\.venv\Scripts\python.exe -c "import glass_cuda,json; print(json.dumps({'cuda_available': glass_cuda.cuda_available(), 'devices': glass_cuda.list_devices()}, ensure_ascii=False, indent=2))"
 git diff --check
 ```
 
@@ -66,6 +66,6 @@ then promote the strongest registration path into the final high-VRAM
 
 ## Clean-room Compliance
 
-Compliant. The implementation uses GPWBPP-owned code and public algorithmic
+Compliant. The implementation uses GLASS-owned code and public algorithmic
 behavior only. No PixInsight/WBPP/PJSR source code was read, copied,
 summarized, or modified.

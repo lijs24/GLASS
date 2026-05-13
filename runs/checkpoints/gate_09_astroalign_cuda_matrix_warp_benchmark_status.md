@@ -9,8 +9,8 @@ Date: 2026-05-13
 - Extended `benchmarks/compare_astroalign_gpu_alignment.py` to split astroalign timing into:
   - transform search (`find_elapsed_s`)
   - pixel resampling (`apply_elapsed_s`)
-- Added benchmark paths that apply astroalign's own similarity matrix through GPWBPP:
-  - standalone `gpwbpp_cuda.warp_matrix_bilinear_f32`
+- Added benchmark paths that apply astroalign's own similarity matrix through GLASS:
+  - standalone `glass_cuda.warp_matrix_bilinear_f32`
   - resident `ResidentCalibratedStack.apply_matrix_bilinear_frame`
 - Added result fields for matrix-warp RMS, valid-pixel coverage, resident upload/device/download timing, and speedups against astroalign `apply_transform`.
 - Updated `docs/registration_model.md` to describe the benchmark's separation of matching cost from pixel-resampling cost.
@@ -44,7 +44,7 @@ Key synthetic result:
 - resident upload+device speedup vs astroalign apply_transform: 64.1x
 
 ```powershell
-.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_cuda_run\calib_cache\calibrated\calibrated_F000061.fits --moving C:\gpwbpp_runs\final_m38_h_200\gpwbpp_cuda_run\calib_cache\calibrated\calibrated_F000080.fits --center-crop 1024 --max-shift 128 --subpixel-radius-steps 4 --subpixel-step 0.25 --catalog-max-shift 20 --catalog-grid-cols 8 --catalog-grid-rows 8 --catalog-threshold-sigma 6 --catalog-tolerance-px 3 --catalog-prior-radius 4 --out runs\alignment_compare\astroalign_vs_gpu_matrix_warp_m38_crop_061_080.json
+.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\glass_runs\final_m38_h_200\glass_cuda_run\calib_cache\calibrated\calibrated_F000061.fits --moving C:\glass_runs\final_m38_h_200\glass_cuda_run\calib_cache\calibrated\calibrated_F000080.fits --center-crop 1024 --max-shift 128 --subpixel-radius-steps 4 --subpixel-step 0.25 --catalog-max-shift 20 --catalog-grid-cols 8 --catalog-grid-rows 8 --catalog-threshold-sigma 6 --catalog-tolerance-px 3 --catalog-prior-radius 4 --out runs\alignment_compare\astroalign_vs_gpu_matrix_warp_m38_crop_061_080.json
 ```
 
 Result: passed. The real-data diagnostic produced `runs/alignment_compare/astroalign_vs_gpu_matrix_warp_m38_crop_061_080.json`.
@@ -76,11 +76,11 @@ CUDA was available.
 
 ## Test result
 
-The benchmark now cleanly separates the CPU astroalign matching step from the pixel warp step and verifies that GPWBPP can apply astroalign's similarity matrix with CUDA. The resident path shows the intended high-VRAM behavior: pixels stay on device for the warp, and only compact timing/diagnostic output is reported.
+The benchmark now cleanly separates the CPU astroalign matching step from the pixel warp step and verifies that GLASS can apply astroalign's similarity matrix with CUDA. The resident path shows the intended high-VRAM behavior: pixels stay on device for the warp, and only compact timing/diagnostic output is reported.
 
 ## Known limitations
 
-- Astroalign still supplies the transform matrix in this benchmark; this is not yet a fully GPWBPP-owned GPU similarity/affine matcher.
+- Astroalign still supplies the transform matrix in this benchmark; this is not yet a fully GLASS-owned GPU similarity/affine matcher.
 - The standalone CUDA matrix warp includes host/device transfer overhead and can be slower on very small images.
 - The main resident 200-light pipeline still needs automatic wiring from similarity/affine registration results into the resident matrix warp.
 
@@ -90,4 +90,4 @@ Connect non-translation registration matrices to the resident run path and valid
 
 ## Clean-room compliance
 
-This increment used open-source astroalign as an external reference and user-generated GPWBPP calibrated FITS artifacts. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.
+This increment used open-source astroalign as an external reference and user-generated GLASS calibrated FITS artifacts. No PixInsight/WBPP/PJSR official source code was read, copied, summarized, or modified.

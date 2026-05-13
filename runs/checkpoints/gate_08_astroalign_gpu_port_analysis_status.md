@@ -51,12 +51,12 @@ Gate 08 - Registration.
 ## Known Limitations
 
 - Astroalign uses triangle asterisms; PixInsight public material describes newer polygonal descriptors as more robust.
-- Astroalign's CPU implementation is a bridge, not the final GPWBPP matcher.
+- Astroalign's CPU implementation is a bridge, not the final GLASS matcher.
 - The next real speed target requires implementing the descriptor/hypothesis scoring kernels, not just documenting them.
 
 ## Next Step
 
-Add a compact star-catalog golden test that compares astroalign's matched control points/matrix with a GPWBPP-owned triangle descriptor implementation on fixed synthetic and real calibrated crops. Then port the expensive parts to CUDA.
+Add a compact star-catalog golden test that compares astroalign's matched control points/matrix with a GLASS-owned triangle descriptor implementation on fixed synthetic and real calibrated crops. Then port the expensive parts to CUDA.
 
 ## Clean-Room Compliance
 

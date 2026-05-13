@@ -6,7 +6,7 @@ Status: completed incremental controlled registration loop. This wires the new b
 
 ## Completed work
 
-- Added `gpwbpp.gpu.registration.register_similarity_from_star_catalogs_f32(...)`.
+- Added `glass.gpu.registration.register_similarity_from_star_catalogs_f32(...)`.
 - The helper:
   - extracts compact reference/moving star catalogs with GPU star-candidate kernels;
   - estimates a moving-to-reference similarity matrix with `estimate_similarity_from_catalogs_f32`;
@@ -46,7 +46,7 @@ Result: 127 passed in 7.07 s.
 - CUDA backend available: yes.
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
 - Compute capability: 12.0.
-- Total VRAM reported by GPWBPP: 97,886 MiB.
+- Total VRAM reported by GLASS: 97,886 MiB.
 
 ## Known limitations
 
@@ -61,4 +61,4 @@ Add GPU subpixel centroid refinement or descriptor prefiltering before trying th
 
 ## Clean-room compliance
 
-Compliant. The implementation uses GPWBPP-owned CUDA code and generic geometric registration formulas. No official WBPP/PJSR source was read or copied.
+Compliant. The implementation uses GLASS-owned CUDA code and generic geometric registration formulas. No official WBPP/PJSR source was read or copied.

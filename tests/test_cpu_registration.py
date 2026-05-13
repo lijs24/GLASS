@@ -3,19 +3,19 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from gpwbpp.cpu.registration import (
+from glass.cpu.registration import (
     estimate_astroalign_transform,
     estimate_star_transform,
     estimate_triangle_asterism_transform,
     estimate_translation,
     estimate_translation_phase_correlation,
 )
-from gpwbpp.cpu.star_detect import detect_stars
-from gpwbpp.cpu.star_detect import Star
-from gpwbpp.engine.registration import _registration_preview
-from gpwbpp.engine.registration import register_calibrated_frames
-from gpwbpp.io.fits_io import write_fits_data
-from gpwbpp.io.json_io import write_json
+from glass.cpu.star_detect import detect_stars
+from glass.cpu.star_detect import Star
+from glass.engine.registration import _registration_preview
+from glass.engine.registration import register_calibrated_frames
+from glass.io.fits_io import write_fits_data
+from glass.io.json_io import write_json
 
 
 def _star_field(shape: tuple[int, int] = (96, 112)) -> np.ndarray:
@@ -316,7 +316,7 @@ def test_register_calibrated_frames_can_override_reference_by_stem(tmp_path):
 
 
 def test_register_calibrated_frames_records_astroalign_failure(tmp_path, monkeypatch):
-    import gpwbpp.engine.registration as registration_module
+    import glass.engine.registration as registration_module
 
     reference = _star_field()
     moving = np.zeros_like(reference)
@@ -387,7 +387,7 @@ def test_registration_preview_streams_block_means(tmp_path):
 
 
 def test_registration_preview_uses_tiles_for_scale_one(tmp_path, monkeypatch):
-    from gpwbpp.engine.registration import FitsImageReader
+    from glass.engine.registration import FitsImageReader
 
     data = np.arange(16, dtype=np.float32).reshape(4, 4)
     path = tmp_path / "preview_scale_one.fits"

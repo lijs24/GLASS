@@ -2,7 +2,7 @@
 
 ## Scope
 
-Final core Gate 0-14 completion audit for the GPWBPP objective.
+Final core Gate 0-14 completion audit for the GLASS objective.
 
 ## Completed
 
@@ -16,23 +16,23 @@ Final core Gate 0-14 completion audit for the GPWBPP objective.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,report]"
-.\.venv\Scripts\gpwbpp.exe --help
-.\.venv\Scripts\gpwbpp.exe scan --help
-.\.venv\Scripts\gpwbpp.exe plan --help
-.\.venv\Scripts\gpwbpp.exe subset --help
-.\.venv\Scripts\gpwbpp.exe run --help
-.\.venv\Scripts\gpwbpp.exe resume --help
-.\.venv\Scripts\gpwbpp.exe report --help
-.\.venv\Scripts\gpwbpp.exe audit --help
-.\.venv\Scripts\gpwbpp.exe compare --help
-.\.venv\Scripts\gpwbpp.exe speedup-summary --help
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --help
-.\.venv\Scripts\gpwbpp.exe blackbox-package --help
-.\.venv\Scripts\gpwbpp.exe blackbox-finalize --help
-.\.venv\Scripts\gpwbpp.exe blackbox-history --help
-.\.venv\Scripts\gpwbpp.exe synthetic --help
+.\.venv\Scripts\glass.exe --help
+.\.venv\Scripts\glass.exe scan --help
+.\.venv\Scripts\glass.exe plan --help
+.\.venv\Scripts\glass.exe subset --help
+.\.venv\Scripts\glass.exe run --help
+.\.venv\Scripts\glass.exe resume --help
+.\.venv\Scripts\glass.exe report --help
+.\.venv\Scripts\glass.exe audit --help
+.\.venv\Scripts\glass.exe compare --help
+.\.venv\Scripts\glass.exe speedup-summary --help
+.\.venv\Scripts\glass.exe acceptance-audit --help
+.\.venv\Scripts\glass.exe blackbox-package --help
+.\.venv\Scripts\glass.exe blackbox-finalize --help
+.\.venv\Scripts\glass.exe blackbox-history --help
+.\.venv\Scripts\glass.exe synthetic --help
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --manifest C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_final.json --markdown runs\benchmarks\m38_acceptance_audit_final.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
+.\.venv\Scripts\glass.exe acceptance-audit --manifest C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --glass-run C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_final.json --markdown runs\benchmarks\m38_acceptance_audit_final.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 ```
 
 ## Test Result
@@ -44,7 +44,7 @@ Final core Gate 0-14 completion audit for the GPWBPP objective.
 - Status: `passed`.
 - Frame counts: 200 light, 20 bias, 20 dark, 20 flat.
 - WBPP elapsed: `1092.541 s`.
-- GPWBPP elapsed: `111.94882199994754 s`.
+- GLASS elapsed: `111.94882199994754 s`.
 - Speedup: `9.75928982978054x`.
 - Coverage-masked RMS: `0.0017183155193652361`.
 - Coverage-masked p99 absolute difference: `0.00045279982034117025`.

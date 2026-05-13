@@ -9,7 +9,7 @@ Gate 13: PixInsight/WBPP black-box comparison documentation increment.
 - Updated `docs/validation.md` with the machine-readable M38 speedup summary artifacts:
   - `runs\benchmarks\m38_wbpp_speedup_summary.json`
   - `runs\benchmarks\m38_wbpp_speedup_summary.md`
-- Added the exact command to regenerate the summary from existing GPWBPP/WBPP black-box artifacts.
+- Added the exact command to regenerate the summary from existing GLASS/WBPP black-box artifacts.
 - Documented planned frame count, active weighted frame count, and zero-weight frame count for the WBPP accepted-mask comparison.
 
 ## Commands Run
@@ -32,8 +32,8 @@ Gate 13: PixInsight/WBPP black-box comparison documentation increment.
 
 ## Known Limitations
 
-- This checkpoint records documentation only; it does not re-run GPWBPP or WBPP.
-- The referenced summary is generated from existing artifacts under `C:\gpwbpp_runs\final_m38_h_200`.
+- This checkpoint records documentation only; it does not re-run GLASS or WBPP.
+- The referenced summary is generated from existing artifacts under `C:\glass_runs\final_m38_h_200`.
 
 ## Next Step
 

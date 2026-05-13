@@ -12,7 +12,7 @@ to the existing PixInsight/WBPP black-box run.
 
 ## Completed
 
-- Ran GPWBPP resident CUDA on the full M38 H dataset:
+- Ran GLASS resident CUDA on the full M38 H dataset:
   - Light: 200.
   - Bias: 20.
   - Dark: 20.
@@ -34,16 +34,16 @@ to the existing PixInsight/WBPP black-box run.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe run --plan "C:\gpwbpp_runs\final_m38_h_200\processing_plan.json" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized" --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --reference-frame-id LIGHT_H_0136
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration.html" --gpwbpp-time-seconds 113.3219756000326 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle 200" --reference-label "PixInsight WBPP FastIntegration"
-.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration_scaled.html" --gpwbpp-time-seconds 113.3219756000326 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle 200 scaled" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 0.000007190655869859117 --gpwbpp-offset 0.0007891069600940803
-.\.venv\Scripts\gpwbpp.exe report --run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\report.html"
+.\.venv\Scripts\glass.exe run --plan "C:\glass_runs\final_m38_h_200\processing_plan.json" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized" --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --reference-frame-id LIGHT_H_0136
+.\.venv\Scripts\glass.exe compare --glass "C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits" --reference "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration.html" --glass-time-seconds 113.3219756000326 --reference-time-seconds 1092.541 --glass-label "GLASS resident CUDA triangle 200" --reference-label "PixInsight WBPP FastIntegration"
+.\.venv\Scripts\glass.exe compare --glass "C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits" --reference "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration_scaled.html" --glass-time-seconds 113.3219756000326 --reference-time-seconds 1092.541 --glass-label "GLASS resident CUDA triangle 200 scaled" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 0.000007190655869859117 --glass-offset 0.0007891069600940803
+.\.venv\Scripts\glass.exe report --run "C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized" --out "C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\report.html"
 ```
 
 ## Test Results
 
-- GPWBPP run status: completed through resident integration.
-- Total GPWBPP time: 113.3219756000326 s.
+- GLASS run status: completed through resident integration.
+- Total GLASS time: 113.3219756000326 s.
 - PixInsight/WBPP black-box time:
   - External timing: 1092.541 s.
   - Reported WBPP line: `WeightedBatchPreprocessing: 18:03.17`.
@@ -63,18 +63,18 @@ to the existing PixInsight/WBPP black-box run.
 
 Reference:
 
-`C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf`
+`C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf`
 
 Candidate:
 
-`C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits`
+`C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits`
 
 Raw comparison:
 
 - Shape match: true.
 - Timing speedup: 9.64103382609653x.
 - Raw RMS difference is dominated by intensity-scale mismatch because the WBPP
-  XISF master is in normalized 0..1-like units while GPWBPP currently writes ADU
+  XISF master is in normalized 0..1-like units while GLASS currently writes ADU
   float output.
 
 Scaled comparison using robust fit:
@@ -90,14 +90,14 @@ Scaled comparison using robust fit:
 
 Artifacts:
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_weight_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_coverage_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_low_rejection_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_high_rejection_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\report.html`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration.html`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration_scaled.html`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_weight_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_coverage_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_low_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\integration\resident_high_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\report.html`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration.html`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_200_fixed350_ref136_winsorized\compare_vs_wbpp_fastintegration_scaled.html`
 
 ## CUDA
 
@@ -109,12 +109,12 @@ Artifacts:
 
 ## Known Limitations
 
-- WBPP integrated 193 of 200 frames; this GPWBPP run accepted all 200 frames.
+- WBPP integrated 193 of 200 frames; this GLASS run accepted all 200 frames.
   Frame-quality rejection parity is still pending.
-- GPWBPP uses resident bilinear matrix warp, not WBPP/StarAlignment-equivalent
+- GLASS uses resident bilinear matrix warp, not WBPP/StarAlignment-equivalent
   Lanczos/clamping.
 - Local normalization was off in this run.
-- GPWBPP writes ADU-like FITS output; WBPP master is normalized XISF, so the
+- GLASS writes ADU-like FITS output; WBPP master is normalized XISF, so the
   strongest comparison currently requires robust scale/offset matching.
 - The resident triangle descriptor path still routes compact catalogs through
   Python orchestration.

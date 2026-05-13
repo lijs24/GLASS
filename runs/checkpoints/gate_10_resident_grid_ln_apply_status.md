@@ -10,15 +10,15 @@ This checkpoint does not complete full resident tile/window LN. It adds the miss
 
 - Added native `ResidentCalibratedStack.apply_grid_normalization_frame(index, scales, offsets, tile_height, tile_width)`.
 - The method validates coefficient grid shape against resident frame shape and applies the scale/offset table directly in VRAM.
-- Added the Python wrapper method on `gpwbpp_cuda.ResidentCalibratedStack`.
+- Added the Python wrapper method on `glass_cuda.ResidentCalibratedStack`.
 - Added resident stack test comparing in-place resident grid normalization against the standalone CUDA `local_norm_apply_grid_f32` result.
 - Updated CUDA and Local Normalization documentation.
 
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py tests\test_cuda_resident_stack.py
-& cmd.exe /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\cmake.exe" --build "C:\Users\ljs\WORK\astro\gpuwbpp\build\native-cuda"'
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py tests\test_cuda_resident_stack.py
+& cmd.exe /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && "<repo>\.venv\Scripts\cmake.exe" --build "<repo>\build\native-cuda"'
 .\.venv\Scripts\python.exe -m pytest -q tests\test_cuda_resident_stack.py::test_resident_stack_grid_normalization_matches_standalone_cuda tests\test_gpu_local_norm_vs_cpu.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```

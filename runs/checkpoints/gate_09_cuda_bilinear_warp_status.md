@@ -9,8 +9,8 @@
 
 - Added native CUDA `warp_translation_bilinear_f32` for floating-point
   translation warp with bilinear interpolation.
-- Added Python wrapper and CPU fallback in `gpwbpp_cuda.py`.
-- Re-exported the CUDA warp primitive through `gpwbpp.gpu.warp`.
+- Added Python wrapper and CPU fallback in `glass_cuda.py`.
+- Re-exported the CUDA warp primitive through `glass.gpu.warp`.
 - Added CPU/GPU parity test for subpixel bilinear translation.
 - Added a catalog-refinement-to-warp test that estimates a refined translation
   on the GPU and applies it with CUDA bilinear warp.
@@ -21,7 +21,7 @@
 ```powershell
 .\.venv\Scripts\python.exe -m cmake --build build\native-cuda --config Debug
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_warp_vs_cpu.py tests\test_gpu_registration_search.py
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\gpu\warp.py tests\test_gpu_warp_vs_cpu.py
+.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\gpu\warp.py tests\test_gpu_warp_vs_cpu.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -62,5 +62,5 @@
 - No official PixInsight WBPP/PJSR source was read, copied, summarized, or
   modified.
 - Astroalign remains an open-source external comparison reference only; it is
-  not runtime logic for GPWBPP.
+  not runtime logic for GLASS.
 - Input data directories were not modified.

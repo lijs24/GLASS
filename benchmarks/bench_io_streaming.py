@@ -9,9 +9,9 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from benchmarks.common import add_common_args, run_timed, write_result
-from gpwbpp.gpu.tile_scheduler import iter_tiles
-from gpwbpp.io.fits_io import open_fits_image
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.gpu.tile_scheduler import iter_tiles
+from glass.io.fits_io import open_fits_image
+from glass.synthetic.generator import generate_synthetic_dataset
 
 
 def main() -> int:

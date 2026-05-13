@@ -24,7 +24,7 @@ The common command used the same M38 plan, 200 lights, 20 bias, 20 dark, 20 flat
 Validation commands from the code gate:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q
 ```
@@ -32,7 +32,7 @@ Validation commands from the code gate:
 Acceptance audit commands were run for stride 2, 4, and 8, for example:
 
 ```powershell
-.\.venv\Scripts\gpwbpp.exe acceptance-audit --manifest "C:\gpwbpp_runs\final_m38_h_200\manifest.json" --gpwbpp-run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch2_refinefinal8" --wbpp-result "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json" --compare-json "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch2_refinefinal8\compare_vs_wbpp_fastintegration_scaled_coverage190.json" --out "runs\benchmarks\m38_acceptance_audit_refinefinal8.json" --markdown "runs\benchmarks\m38_acceptance_audit_refinefinal8.md" --min-lights 200 --min-bias 20 --min-dark 20 --min-flat 20 --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
+.\.venv\Scripts\glass.exe acceptance-audit --manifest "C:\glass_runs\final_m38_h_200\manifest.json" --glass-run "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch2_refinefinal8" --wbpp-result "C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json" --compare-json "C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch2_refinefinal8\compare_vs_wbpp_fastintegration_scaled_coverage190.json" --out "runs\benchmarks\m38_acceptance_audit_refinefinal8.json" --markdown "runs\benchmarks\m38_acceptance_audit_refinefinal8.md" --min-lights 200 --min-bias 20 --min-dark 20 --min-flat 20 --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 ```
 
 ## Test result
@@ -63,10 +63,10 @@ Acceptance audit commands were run for stride 2, 4, and 8, for example:
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch2_refinefinal2`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch2_refinefinal4`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch2_refinefinal8`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch2_refinefinal8\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch2_refinefinal2`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch2_refinefinal4`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch2_refinefinal8`
+- `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch2_refinefinal8\compare_vs_wbpp_fastintegration_scaled_coverage190.json`
 
 ## CUDA availability
 

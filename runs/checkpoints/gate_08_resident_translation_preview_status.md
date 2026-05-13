@@ -21,7 +21,7 @@ Commands run:
   CUDA Toolkit 13.2.
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_cuda_resident_stack.py tests\\test_cuda_smoke.py tests\\test_gpu_warp_vs_cpu.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_cuda_run.py`
-- `.\\.venv\\Scripts\\python.exe -m gpwbpp.cli run --help`
+- `.\\.venv\\Scripts\\python.exe -m glass.cli run --help`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
 
 Test results:

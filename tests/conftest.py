@@ -46,6 +46,6 @@ def cuda_module_or_skip():
 
 
 def cuda_api_module():
-    if importlib.util.find_spec("gpwbpp_cuda") is None:
-        pytest.skip("gpwbpp_cuda extension is not built")
-    return importlib.import_module("gpwbpp_cuda")
+    if importlib.util.find_spec("glass_cuda") is None:
+        pytest.skip("glass_cuda extension is not built")
+    return importlib.import_module("glass_cuda")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from gpwbpp.metadata.scanner import scan_tree
-from gpwbpp.planner.plan_builder import build_processing_plan
+from glass.metadata.scanner import scan_tree
+from glass.planner.plan_builder import build_processing_plan
 
 
 def test_processing_plan_matches_calibration_groups(small_fits_dataset):

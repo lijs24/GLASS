@@ -8,7 +8,7 @@ Optimization Gate 06
 
 - Added `ResidentCalibratedStack.star_grid_top_nms_candidates_batch` to the native CUDA binding.
 - Reused one set of device scratch buffers across a batch of resident frames for grid/NMS star catalog extraction.
-- Added the public `gpwbpp_cuda.ResidentCalibratedStack.star_grid_top_nms_candidates_batch` wrapper.
+- Added the public `glass_cuda.ResidentCalibratedStack.star_grid_top_nms_candidates_batch` wrapper.
 - Wired `similarity_cuda_triangle` resident registration to batch moving-frame grid/NMS catalogs when:
   - grid catalog mode is enabled;
   - the star threshold is fixed;
@@ -20,13 +20,13 @@ Optimization Gate 06
 
 ## Commands Run
 
-- `.venv\Scripts\cmake.exe --build build\native-cuda --config Release --target _gpwbpp_cuda_native`
+- `.venv\Scripts\cmake.exe --build build\native-cuda --config Release --target _glass_cuda_native`
   - Initial plain-shell build failed because the MSVC/Windows SDK include environment was not loaded.
-- `cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && ""C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\cmake.exe"" --build build\native-cuda --config Release --target _gpwbpp_cuda_native"`
-- `.venv\Scripts\ruff.exe check src\gpwbpp_cuda.py src\gpwbpp\engine\resident_cuda.py tests\test_gpu_star_detect.py tests\test_resident_cuda_run.py`
+- `cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && ""<repo>\.venv\Scripts\cmake.exe"" --build build\native-cuda --config Release --target _glass_cuda_native"`
+- `.venv\Scripts\ruff.exe check src\glass_cuda.py src\glass\engine\resident_cuda.py tests\test_gpu_star_detect.py tests\test_resident_cuda_run.py`
 - `.venv\Scripts\python.exe -m pytest -q tests\test_gpu_star_detect.py::test_resident_stack_star_grid_top_nms_candidates_batch_matches_single_calls tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair`
 - `.venv\Scripts\python.exe -m pytest -q`
-- `.venv\Scripts\python.exe -c "import gpwbpp_cuda, json; print(json.dumps(gpwbpp_cuda.list_devices(), ensure_ascii=False))"`
+- `.venv\Scripts\python.exe -c "import glass_cuda, json; print(json.dumps(glass_cuda.list_devices(), ensure_ascii=False))"`
 
 ## Test Results
 
@@ -55,4 +55,4 @@ Run the fixed-threshold M38 resident triangle benchmark with the same accepted s
 
 ## Clean-room Compliance
 
-Compliant. This gate only changed GPWBPP-owned CUDA/Python code and tests. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR official source code, and it did not touch original image data.
+Compliant. This gate only changed GLASS-owned CUDA/Python code and tests. It did not read, copy, summarize, or modify PixInsight/WBPP/PJSR official source code, and it did not touch original image data.

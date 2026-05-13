@@ -6,7 +6,7 @@
 
 ## Completed
 
-- `gpwbpp_cuda.estimate_similarity_from_catalogs_f32(..., top_k=N)` now returns `top_k` and `top_candidates` diagnostics.
+- `glass_cuda.estimate_similarity_from_catalogs_f32(..., top_k=N)` now returns `top_k` and `top_candidates` diagnostics.
 - The native CUDA binding can optionally download candidate score/RMS buffers and select the best `N` candidates by inlier count then RMS.
 - `benchmarks/compare_astroalign_gpu_alignment.py` has `--catalog-similarity-top-k`.
 - The benchmark pixel-refine path evaluates the refit seed plus top-K catalog seeds with `refine_matrix_translation_with_metrics_f32`, records per-seed metrics, selects by final pixel RMS/NCC, and warps only the winning matrix.
@@ -17,8 +17,8 @@
 - `cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 && .venv\Scripts\cmake.exe --build build\native-cuda --config Release"`
 - `.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_benchmarks.py`
 - `.venv\Scripts\python.exe -m compileall -q benchmarks\compare_astroalign_gpu_alignment.py`
-- `.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v25_topk_pixel_refine.json" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 8`
-- `.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v26_single_seed_pixel_refine.json" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01`
+- `.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v25_topk_pixel_refine.json" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 8`
+- `.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v26_single_seed_pixel_refine.json" --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01`
 - `git diff --check`
 - `.venv\Scripts\python.exe -m pytest -q`
 
@@ -43,21 +43,21 @@
 - Moving: `calibrated_S000062.fits`
 - Shape: 6422 x 9600.
 - Astroalign total: 9.6717 s in the top-K run.
-- GPWBPP CUDA catalog top-K + pixel metric refine + matrix warp: 2.2133 s.
+- GLASS CUDA catalog top-K + pixel metric refine + matrix warp: 2.2133 s.
 - Speedup: 4.37x vs astroalign total.
 - Agreement: passed current strict benchmark criteria.
 - Translation delta vs astroalign: 0.312 px.
 - Output RMS diff vs astroalign apply: 30.88 ADU.
-- Output file: `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v25_topk_pixel_refine.json`
+- Output file: `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v25_topk_pixel_refine.json`
 
 The single-seed production-speed run remained much faster but selected an unstable catalog seed in this trial:
 
-- GPWBPP CUDA single-seed pixel refine + matrix warp: 0.3231 s.
+- GLASS CUDA single-seed pixel refine + matrix warp: 0.3231 s.
 - Speedup: 30.12x vs astroalign total.
 - Agreement: failed current strict criteria.
 - Translation delta vs astroalign: 1.515 px.
 - Output RMS diff vs astroalign apply: 78.83 ADU.
-- Output file: `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v26_single_seed_pixel_refine.json`
+- Output file: `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v26_single_seed_pixel_refine.json`
 
 ## Known Limitations
 
@@ -72,4 +72,4 @@ The single-seed production-speed run remained much faster but selected an unstab
 ## Clean-Room Compliance
 
 - No PixInsight/WBPP/PJSR source code was read or used.
-- Only GPWBPP code, open Python dependencies, synthetic/unit tests, and user-generated calibrated FITS artifacts were used.
+- Only GLASS code, open Python dependencies, synthetic/unit tests, and user-generated calibrated FITS artifacts were used.

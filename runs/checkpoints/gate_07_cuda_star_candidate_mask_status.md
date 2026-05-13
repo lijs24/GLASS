@@ -6,18 +6,18 @@ Completed content:
 - Added `cpp/cuda/star_detect_kernels.cu` local-maximum candidate mask kernel.
 - Added native Python bindings `star_local_max_mask_f32(image, threshold)` and `star_candidates_f32(image, threshold, max_candidates)`.
 - Added `ResidentCalibratedStack.star_local_max_mask(index, threshold)` and `ResidentCalibratedStack.star_candidates(index, threshold, max_candidates)` so star candidates can be detected and compacted directly from calibrated frames that already live in VRAM.
-- Added Python wrapper `gpwbpp_cuda.star_local_max_mask_f32`.
-- Added Python wrapper `gpwbpp_cuda.star_candidates_f32`.
-- Added `src/gpwbpp/gpu/star_detect.py` wrapper.
+- Added Python wrapper `glass_cuda.star_local_max_mask_f32`.
+- Added Python wrapper `glass_cuda.star_candidates_f32`.
+- Added `src/glass/gpu/star_detect.py` wrapper.
 - Vectorized the CPU fallback local-max detector for correctness comparison and cpu-only operation.
 - Added CUDA tests for standalone image mask/catalog and resident-stack mask/catalog.
 
 Commands run:
 - `.\.venv\Scripts\python.exe -m cmake --build build\native-cuda --config Debug` (failed outside the VS developer environment because `cl.exe`/MSVC include paths were not active).
-- `cmd /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "C:\Users\ljs\WORK\astro\gpuwbpp\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug'`
+- `cmd /d /s /c '"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && "<repo>\.venv\Scripts\python.exe" -m cmake --build build\native-cuda --config Debug'`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_star_detect.py tests\test_cuda_import.py tests\test_cuda_device_info.py tests\test_cuda_smoke.py`
 - `.\.venv\Scripts\python.exe -m pytest -q`
-- `.\.venv\Scripts\python.exe -m ruff check src\gpwbpp_cuda.py src\gpwbpp\gpu\star_detect.py src\gpwbpp\cpu\star_detect.py src\gpwbpp\engine\quality.py tests\test_gpu_star_detect.py`
+- `.\.venv\Scripts\python.exe -m ruff check src\glass_cuda.py src\glass\gpu\star_detect.py src\glass\cpu\star_detect.py src\glass\engine\quality.py tests\test_gpu_star_detect.py`
 - `.\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_star_detect.py`
 - `.\.venv\Scripts\python.exe -m pytest -q`
 

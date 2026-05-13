@@ -8,15 +8,15 @@ Date: 2026-05-13
   image grid cell and then applies CUDA-side minimum-distance suppression:
   `star_grid_top_nms_candidates_f32`.
 - Exposed the prefilter through the native pybind module, the Python
-  `gpwbpp_cuda` compatibility wrapper, and
-  `gpwbpp.gpu.registration.register_similarity_from_star_catalogs_f32`.
+  `glass_cuda` compatibility wrapper, and
+  `glass.gpu.registration.register_similarity_from_star_catalogs_f32`.
 - Extended `benchmarks/compare_astroalign_gpu_alignment.py` so the same two
   calibrated FITS frames can compare:
   - astroalign transform search and apply;
-  - GPWBPP CUDA matrix warp using astroalign's transform;
-  - GPWBPP CUDA similarity fit using astroalign's matched control points;
-  - GPWBPP-owned CUDA NCC translation diagnostics;
-  - GPWBPP-owned CUDA catalog-similarity diagnostics with grid-top prefilter.
+  - GLASS CUDA matrix warp using astroalign's transform;
+  - GLASS CUDA similarity fit using astroalign's matched control points;
+  - GLASS-owned CUDA NCC translation diagnostics;
+  - GLASS-owned CUDA catalog-similarity diagnostics with grid-top prefilter.
 - Added `catalog_similarity_agreement_vs_astroalign` to the benchmark artifact,
   so speed results are separated from transform/output agreement.
 - Updated CUDA backend and registration docs with the current capability and
@@ -27,7 +27,7 @@ Date: 2026-05-13
 ```powershell
 cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && .venv\Scripts\cmake.exe --build build\native-cuda --config Release'
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_benchmarks.py
-.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits --moving C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits --out C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v13_gridtop_agreement.json --max-shift 16 --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-min-inliers 6 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01
+.\.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits --moving C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits --out C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v13_gridtop_agreement.json --max-shift 16 --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-prior-radius 4 --catalog-min-inliers 6 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -40,12 +40,12 @@ cmd /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Com
 
 Input frames:
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits`
+- `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits`
+- `C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits`
 
 Output artifact:
 
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v13_gridtop_agreement.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v13_gridtop_agreement.json`
 
 Key results:
 
@@ -56,7 +56,7 @@ Key results:
 - CUDA resident matrix warp device-only using the astroalign matrix: 0.0070 s.
 - CUDA resident matrix warp including upload plus device work: 0.0444 s.
 - CUDA similarity fit from astroalign control points plus warp: 0.092 s.
-- GPWBPP-owned CUDA grid-top catalog similarity: 2.916 s.
+- GLASS-owned CUDA grid-top catalog similarity: 2.916 s.
 - Grid-top catalog-similarity speedup vs astroalign total: 3.28x.
 - Grid-top catalog-similarity agreement vs astroalign: failed.
 - Agreement failure details: translation delta 1.15 px, output median absolute

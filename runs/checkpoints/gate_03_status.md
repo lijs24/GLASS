@@ -8,10 +8,10 @@ Status:
 
 Completed diagnostic content:
 
-- Added importable `gpwbpp_cuda` compatibility module.
+- Added importable `glass_cuda` compatibility module.
 - `list_devices()` reports devices visible through `nvidia-smi`.
 - `smoke_add_f32()` and `reduce_mean_tile_f32()` provide CPU smoke fallbacks.
-- Added native `_gpwbpp_cuda_native` pybind/CUDA module.
+- Added native `_glass_cuda_native` pybind/CUDA module.
 - Native `cuda_available()`, `list_devices()`, `get_device_info()`, and CUDA `smoke_add_f32()` pass tests.
 - Installed project-local CMake/Ninja through `.venv`.
 - Installed Visual Studio Build Tools 2022 C++ workload.
@@ -33,7 +33,7 @@ Commands run:
 - `.\\.venv\\Scripts\\python -m pip install cmake ninja pybind11 scikit-build-core`
 - `winget install --id Microsoft.VisualStudio.2022.BuildTools --source winget --silent --accept-package-agreements --accept-source-agreements --override "--wait --quiet --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"`
 - `winget install --id Nvidia.CUDA --source winget --accept-package-agreements --accept-source-agreements --override "-s nvcc_13.2 cudart_13.2 crt_13.2 nvvm_13.2 nvrtc_13.2 nvrtc_dev_13.2 nvjitlink_13.2 nvptxcompiler_13.2 cuobjdump_13.2 nvdisasm_13.2 nvprune_13.2 nvfatbin_13.2 thrust_13.2 visual_studio_integration_13.2"`
-- `.\\.venv\\Scripts\\cmake -S . -B build\\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -DCMAKE_CUDA_ARCHITECTURES=120`
+- `.\\.venv\\Scripts\\cmake -S . -B build\\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -DCMAKE_CUDA_ARCHITECTURES=120`
 - `.\\.venv\\Scripts\\python -m pytest -q`
 
 Test result:
@@ -47,7 +47,7 @@ Test result:
 CUDA availability:
 
 - NVIDIA GPU present: yes
-- CUDA runtime/native extension available to GPWBPP: yes
+- CUDA runtime/native extension available to GLASS: yes
 - CUDA API module importable: yes
 
 Known limitations:

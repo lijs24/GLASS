@@ -4,8 +4,8 @@ from pathlib import Path
 
 import numpy as np
 
-from gpwbpp.cpu.master_frames import make_master_bias, make_master_dark, make_master_flat
-from gpwbpp.synthetic.generator import generate_synthetic_dataset
+from glass.cpu.master_frames import make_master_bias, make_master_dark, make_master_flat
+from glass.synthetic.generator import generate_synthetic_dataset
 
 
 def test_cpu_master_frames(tmp_path: Path):

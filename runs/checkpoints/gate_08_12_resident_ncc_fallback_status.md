@@ -11,7 +11,7 @@ Date: 2026-05-13
 
 - Added `--resident-ncc-fallback-score-threshold`.
 - Default is `0.0`, which disables fallback and preserves previous behavior.
-- When `--resident-ncc-sample-stride > 1` and the sampled subpixel NCC score is at or below the threshold, GPWBPP re-estimates that frame at full stride `1`.
+- When `--resident-ncc-sample-stride > 1` and the sampled subpixel NCC score is at or below the threshold, GLASS re-estimates that frame at full stride `1`.
 - Per-frame registration warnings record fallback details:
   - `ncc_fallback_stride=1`
   - fallback reason
@@ -24,7 +24,7 @@ Date: 2026-05-13
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_resident_cuda_run.py
 ```
 
 Result: `All checks passed!`
@@ -46,16 +46,16 @@ Result: `110 passed in 5.93s`
 Command:
 
 ```powershell
-$base='C:\gpwbpp_runs\final_m38_h_200'
-$src=Join-Path $base 'gpwbpp_resident_ncc_winsorized_allcal_200'
-$run=Join-Path $base 'gpwbpp_resident_ncc_stride4_fallback002_winsorized_allcal_200'
+$base='C:\glass_runs\final_m38_h_200'
+$src=Join-Path $base 'glass_resident_ncc_winsorized_allcal_200'
+$run=Join-Path $base 'glass_resident_ncc_stride4_fallback002_winsorized_allcal_200'
 New-Item -ItemType Directory -Force -Path $run | Out-Null
-.\.venv\Scripts\gpwbpp.exe run --plan (Join-Path $src 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 64 --resident-ncc-sample-stride 4 --resident-ncc-fallback-score-threshold 0.02 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
+.\.venv\Scripts\glass.exe run --plan (Join-Path $src 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 64 --resident-ncc-sample-stride 4 --resident-ncc-fallback-score-threshold 0.02 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
 ```
 
 Result:
 
-- Run directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_fallback002_winsorized_allcal_200`
+- Run directory: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_fallback002_winsorized_allcal_200`
 - Input scale: 200 light, 20 bias, 20 dark, 20 flat.
 - Total elapsed: `280.15153769997414 s`
 - `ncc_sample_stride`: `4`
@@ -68,7 +68,7 @@ Result:
 ## Registration Comparison vs Stride 1
 
 Compared against:
-`C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200`
+`C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200`
 
 - Compared frames: `200`
 - Changed frames: `19`
@@ -84,8 +84,8 @@ This is a large improvement over pure stride 4, which had max shift delta above 
 
 WBPP FastIntegration compare:
 
-- HTML: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_wbpp_fastintegration_scaled_compare.html`
-- JSON: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_wbpp_fastintegration_scaled_compare.json`
+- HTML: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_wbpp_fastintegration_scaled_compare.html`
+- JSON: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_wbpp_fastintegration_scaled_compare.json`
 - Speedup vs WBPP: `3.899821535764859x`
 - Direct scaled median absolute diff: `8.1482226960361e-05`
 - Direct scaled p90 absolute diff: `0.0002704000798985362`
@@ -93,10 +93,10 @@ WBPP FastIntegration compare:
 - Direct scaled RMS diff: `0.013439388820945046`
 - Robust fit-pixel RMS diff: `0.001810779780514216`
 
-Stride-1 GPWBPP compare:
+Stride-1 GLASS compare:
 
-- HTML: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_stride1_compare.html`
-- JSON: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_stride1_compare.json`
+- HTML: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_stride1_compare.html`
+- JSON: `C:\glass_runs\final_m38_h_200\glass_resident_ncc_stride4_fallback002_winsorized_allcal_200\resident_stride4_fallback002_vs_stride1_compare.json`
 - Speedup vs stride 1: `1.2963543315937225x`
 - Direct median absolute diff: `0.310211181640625`
 - Direct p90 absolute diff: `0.8171463012695312`

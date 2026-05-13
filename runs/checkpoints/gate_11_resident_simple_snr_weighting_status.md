@@ -16,7 +16,7 @@ Gate 11: Weighted integration and rejection resident CUDA increment.
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cli.py src\gpwbpp\engine\resident_cuda.py src\gpwbpp\capabilities.py tests\test_resident_cuda_run.py tests\test_capabilities.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\cli.py src\glass\engine\resident_cuda.py src\glass\capabilities.py tests\test_resident_cuda_run.py tests\test_capabilities.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py::test_cli_resident_cuda_run_simple_snr_weighting tests\test_capabilities.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py tests\test_cuda_resident_stack.py tests\test_cli_smoke.py
 .\.venv\Scripts\python.exe -m pytest -q

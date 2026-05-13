@@ -7,7 +7,7 @@
 
 ## Completed
 
-- Used the new `gpwbpp subset --all-compatible-calibration` mode to build a
+- Used the new `glass subset --all-compatible-calibration` mode to build a
   larger real M38 subset that satisfies the calibration-frame count target for
   this scale step.
 - Ran full-size resident CUDA calibration, resident NCC+subpixel translation
@@ -19,14 +19,14 @@
 ## Commands Run
 
 ```powershell
-$base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_ncc_subset50_allcal_probe'; .\.venv\Scripts\gpwbpp.exe run --plan (Join-Path $run 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 24 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
+$base='C:\glass_runs\final_m38_h_200'; $run=Join-Path $base 'glass_resident_ncc_subset50_allcal_probe'; .\.venv\Scripts\glass.exe run --plan (Join-Path $run 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 24 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
 The subset plan was generated in the previous checkpoint with:
 
 ```powershell
-$base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_ncc_subset50_allcal_probe'; New-Item -ItemType Directory -Force -Path $run | Out-Null; .\.venv\Scripts\gpwbpp.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 50 --all-compatible-calibration
+$base='C:\glass_runs\final_m38_h_200'; $run=Join-Path $base 'glass_resident_ncc_subset50_allcal_probe'; New-Item -ItemType Directory -Force -Path $run | Out-Null; .\.venv\Scripts\glass.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 50 --all-compatible-calibration
 ```
 
 ## Test Result
@@ -37,7 +37,7 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 ## Real M38 Resident Run Result
 
 - Run directory:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe`
 - Selected subset summary:
   - 110 total frames.
   - 50 light frames.
@@ -81,20 +81,20 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\manifest.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\processing_plan.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\registration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\resident_artifacts.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\integration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\integration\resident_weight_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\integration\resident_coverage_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\integration\resident_low_rejection_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset50_allcal_probe\integration\resident_high_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\manifest.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\processing_plan.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\registration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\resident_artifacts.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\integration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\integration\resident_weight_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\integration\resident_coverage_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\integration\resident_low_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset50_allcal_probe\integration\resident_high_rejection_map_H.fits`
 
 ## Known Limitations
 
-- This is still a 50-light scale step, not the final 200-light WBPP/GPWBPP
+- This is still a 50-light scale step, not the final 200-light WBPP/GLASS
   acceptance comparison.
 - Resident registration is translation-only and has no star-model RMS yet.
 - Resident Local Normalization is still disabled.
@@ -111,6 +111,6 @@ $base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_nc
 
 - No official PixInsight WBPP/PJSR source was read, copied, summarized, or
   modified.
-- Only GPWBPP outputs, user-provided M38 data, and black-box comparison artifacts
+- Only GLASS outputs, user-provided M38 data, and black-box comparison artifacts
   were used.
 - Original input data directories were not modified.

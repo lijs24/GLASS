@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from gpwbpp.cli import main
-from gpwbpp.io.json_io import write_json
-from gpwbpp.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
+from glass.cli import main
+from glass.io.json_io import write_json
+from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 
 
-def test_speedup_summary_reads_gpwbpp_and_wbpp_blackbox_artifacts(tmp_path: Path):
-    gp_run = tmp_path / "gpwbpp_run"
+def test_speedup_summary_reads_glass_and_wbpp_blackbox_artifacts(tmp_path: Path):
+    gp_run = tmp_path / "glass_run"
     gp_run.mkdir()
     write_json(
         gp_run / "run_timing.json",
@@ -73,10 +73,10 @@ def test_speedup_summary_reads_gpwbpp_and_wbpp_blackbox_artifacts(tmp_path: Path
 
     assert summary["speedup_vs_wbpp"] == 10.0
     assert summary["meets_min_speedup"] is True
-    assert summary["gpwbpp"]["backend"] == "cuda_resident_stack"
-    assert summary["gpwbpp"]["resident_device"] == "Test GPU"
-    assert summary["gpwbpp"]["weighted_frame_count"] == 2
-    assert summary["gpwbpp"]["zero_weight_frame_count"] == 1
+    assert summary["glass"]["backend"] == "cuda_resident_stack"
+    assert summary["glass"]["resident_device"] == "Test GPU"
+    assert summary["glass"]["weighted_frame_count"] == 2
+    assert summary["glass"]["zero_weight_frame_count"] == 1
     assert summary["wbpp_blackbox"]["dataset"] == "M38_H"
     assert summary["comparison"]["coverage_fraction"] == 0.96
     assert summary["clean_room"]["status"] == "compliant"
@@ -84,7 +84,7 @@ def test_speedup_summary_reads_gpwbpp_and_wbpp_blackbox_artifacts(tmp_path: Path
 
 def test_write_speedup_summary_writes_json_and_markdown(tmp_path: Path):
     summary = {
-        "gpwbpp": {
+        "glass": {
             "elapsed_s": 10.0,
             "backend": "cuda_resident_stack",
             "memory_mode": "resident",
@@ -113,7 +113,7 @@ def test_write_speedup_summary_writes_json_and_markdown(tmp_path: Path):
 
 
 def test_speedup_summary_cli_writes_outputs(tmp_path: Path):
-    gp_run = tmp_path / "gpwbpp_run"
+    gp_run = tmp_path / "glass_run"
     gp_run.mkdir()
     write_json(gp_run / "run_timing.json", {"total_elapsed_s": 5.0, "command": "run", "memory_mode": "resident"})
     write_json(
@@ -131,7 +131,7 @@ def test_speedup_summary_cli_writes_outputs(tmp_path: Path):
     assert main(
         [
             "speedup-summary",
-            "--gpwbpp-run",
+            "--glass-run",
             str(gp_run),
             "--wbpp-result",
             str(wbpp_result),

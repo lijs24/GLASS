@@ -2,12 +2,12 @@
 
 ## Objective Restatement
 
-The active optimization goal requires GPWBPP to reduce the M38 200-light resident CUDA benchmark from the previous roughly 100-second class baseline, with two重点 paths:
+The active optimization goal requires GLASS to reduce the M38 200-light resident CUDA benchmark from the previous roughly 100-second class baseline, with two重点 paths:
 
 1. Improve the I/O + upload + calibration pipeline with CPU RAM prefetch, pinned host memory, async H2D, CUDA stream scheduling, resident stack writes, and fine timing.
 2. Reduce resident registration/warp orchestration and host/device round trips through resident/batched star catalog, descriptor/scoring/refine/warp scheduling, while preserving clean-room constraints.
 
-Final acceptance requires the same M38 200-light dataset to run significantly faster than the previous `111.95 s` GPWBPP baseline and remain within established WBPP/current-GPWBPP compare tolerances.
+Final acceptance requires the same M38 200-light dataset to run significantly faster than the previous `111.95 s` GLASS baseline and remain within established WBPP/current-GLASS compare tolerances.
 
 ## Prompt-to-Artifact Checklist
 
@@ -15,7 +15,7 @@ Final acceptance requires the same M38 200-light dataset to run significantly fa
 | --- | --- | --- |
 | Real M38 benchmark, at least 200 lights | `runs\benchmarks\m38_acceptance_audit_pinnedring_coarse4.md` reports `light: 200` | PASS |
 | Calibration frames at least 20 each | Same audit reports `bias: 20`, `dark: 20`, `flat: 20` | PASS |
-| Do not modify original data directory | All outputs written under `C:\gpwbpp_runs\final_m38_h_200\...`; no input-tree writes were used | PASS |
+| Do not modify original data directory | All outputs written under `C:\glass_runs\final_m38_h_200\...`; no input-tree writes were used | PASS |
 | Fine timing for read/decode/H2D/calibrate/store | `resident_artifacts.json` in the pinned-ring run records FITS open, materialize/decode, worker read/decode, H2D, calibrate/store, combined H2D/calibrate/store, and host copy timing | PASS |
 | CPU RAM prefetch | `_LightPrefetcher` prefetches light frames with configurable `--resident-prefetch-frames` and `--resident-prefetch-workers`; M38 command used 16 slots and 8 workers | PASS |
 | Pinned host memory | Native `host_pinned_empty_f32` uses `cudaHostAlloc`; pinned-ring artifact reports `prefetch_host_pinned_bytes = 3945676800` | PASS |
@@ -29,17 +29,17 @@ Final acceptance requires the same M38 200-light dataset to run significantly fa
 | WBPP black-box speed comparison | WBPP FastIntegration timing `1092.541 s`; pinned-ring speedup `34.9660685042372x` | PASS |
 | Result consistency compare report | `compare_vs_wbpp_fastintegration_scaled_coverage190.html/json` exists for the pinned-ring run | PASS |
 | Result within established tolerance | Acceptance audit passed: RMS `0.001558294284488301`, p99 absolute diff `0.00043095467146486016`, coverage fraction `0.9574613308418977` | PASS |
-| Current GPWBPP parity preserved | Pinned-ring master SHA matches previous pageable readprofile master SHA: `F9F7E173B5BA7EC582DB7460B7F051E0B75B2E2A48C0ADF035940A071CD79CC2`; coverage SHA also matches | PASS |
+| Current GLASS parity preserved | Pinned-ring master SHA matches previous pageable readprofile master SHA: `F9F7E173B5BA7EC582DB7460B7F051E0B75B2E2A48C0ADF035940A071CD79CC2`; coverage SHA also matches | PASS |
 | Per-Gate checkpoint and commit | Latest checkpoint: `runs\checkpoints\optimization_gate_11_resident_pinned_ring_status.md`; commit: `106bbc7 perf: add resident pinned ring upload path` | PASS |
 | Clean-room | Checkpoints state no PixInsight/WBPP/PJSR official source was read or copied; compare consumes only user-generated WBPP black-box outputs/logs | PASS |
 
 ## Current Best M38 Result
 
-- Run directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4`
-- Total GPWBPP time: `31.245748999994248 s`
-- Previous GPWBPP baseline: about `111.95 s`
+- Run directory: `C:\glass_runs\final_m38_h_200\glass_resident_triangle_193_lanczos3_prefetch16_workers8_pinnedring_coarse4`
+- Total GLASS time: `31.245748999994248 s`
+- Previous GLASS baseline: about `111.95 s`
 - PixInsight/WBPP FastIntegration black-box time: `1092.541 s`
-- Speedup vs previous GPWBPP baseline: about `3.58x`
+- Speedup vs previous GLASS baseline: about `3.58x`
 - Speedup vs WBPP: `34.9660685042372x`
 - Active frames: `193`
 - Full pytest: `183 passed`
@@ -54,4 +54,4 @@ These are not blockers for the active goal, but they are the next performance wo
 
 ## Completion Decision
 
-The explicit final acceptance condition is met: the same M38 200-light dataset runs significantly below the previous `111.95 s` GPWBPP baseline, remains within established WBPP/current-GPWBPP compare tolerances, has tests/checkpoints/commits, and preserves clean-room constraints.
+The explicit final acceptance condition is met: the same M38 200-light dataset runs significantly below the previous `111.95 s` GLASS baseline, remains within established WBPP/current-GLASS compare tolerances, has tests/checkpoints/commits, and preserves clean-room constraints.

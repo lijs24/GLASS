@@ -28,7 +28,7 @@ cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Co
 
 .venv\Scripts\python.exe -m pytest -q tests\test_gpu_star_detect.py tests\test_gpu_registration_search.py tests\test_benchmarks.py
 
-.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v45_fenced_top32_preselect16.json" --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 32 --resident-star-core-preselect-top-k 16 --catalog-pixel-refine-radius 1.0 --catalog-pixel-refine-coarse-step 0.25 --catalog-pixel-refine-fine-radius 0.25 --catalog-pixel-refine-fine-step 0.0625 --catalog-pixel-refine-coarse-stride 4 --catalog-pixel-refine-final-stride 1
+.venv\Scripts\python.exe benchmarks\compare_astroalign_gpu_alignment.py --reference "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000061.fits" --moving "C:\glass_runs\final_m38_h_200\glass_tile_astroalign_subset50_ref_light001_flat005_preview3072\calib_cache\calibrated\calibrated_S000062.fits" --out "C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v45_fenced_top32_preselect16.json" --catalog-stars 64 --catalog-grid-top-cols 24 --catalog-grid-top-rows 16 --catalog-grid-top-per-cell 4 --catalog-nms-min-separation 64 --catalog-similarity-min-pair-distance 128 --catalog-similarity-min-scale 0.995 --catalog-similarity-max-scale 1.005 --catalog-similarity-max-rotation-rad 0.01 --catalog-similarity-top-k 32 --resident-star-core-preselect-top-k 16 --catalog-pixel-refine-radius 1.0 --catalog-pixel-refine-coarse-step 0.25 --catalog-pixel-refine-fine-radius 0.25 --catalog-pixel-refine-fine-step 0.0625 --catalog-pixel-refine-coarse-stride 4 --catalog-pixel-refine-final-stride 1
 
 git diff --check
 .venv\Scripts\python.exe -m pytest -q
@@ -54,7 +54,7 @@ CUDA is available.
 
 Artifact:
 
-- `C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v45_fenced_top32_preselect16.json`
+- `C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v45_fenced_top32_preselect16.json`
 
 Input pair:
 
@@ -66,7 +66,7 @@ astroalign:
 
 - total: `9.641944 s`
 
-GPWBPP resident CUDA, `catalog_similarity_top_k=32`, `resident_star_core_preselect_top_k=16`:
+GLASS resident CUDA, `catalog_similarity_top_k=32`, `resident_star_core_preselect_top_k=16`:
 
 - strict matrix + output agreement: passed
 - resident algorithm time: `3.249815 s`
@@ -82,7 +82,7 @@ GPWBPP resident CUDA, `catalog_similarity_top_k=32`, `resident_star_core_presele
 
 ## Known Limitations
 
-- This remains a two-frame alignment benchmark, not the final 200-light end-to-end WBPP/GPWBPP comparison.
+- This remains a two-frame alignment benchmark, not the final 200-light end-to-end WBPP/GLASS comparison.
 - The preselection logic currently lives in the benchmark path; it should be promoted into the production resident registration path after one more synthetic/fixture coverage pass.
 - Candidate scoring still uses full-frame metric scans for selected seeds. Further speedup should come from tile/ROI scoring around star cores before final whole-frame validation.
 
@@ -93,4 +93,4 @@ GPWBPP resident CUDA, `catalog_similarity_top_k=32`, `resident_star_core_presele
 
 ## Clean-Room Compliance
 
-Compliant. This work inspected and modified only GPWBPP project code and used user-provided FITS artifacts plus astroalign as an open-source comparison target. No PixInsight/WBPP/PJSR source code was read, copied, summarized, or modified.
+Compliant. This work inspected and modified only GLASS project code and used user-provided FITS artifacts plus astroalign as an open-source comparison target. No PixInsight/WBPP/PJSR source code was read, copied, summarized, or modified.

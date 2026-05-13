@@ -13,18 +13,18 @@
 
 ## Commands Run
 
-- `.\\.venv\\Scripts\\python.exe -m py_compile src/gpwbpp/engine/pipeline.py tests/test_pipeline_fixture.py`
+- `.\\.venv\\Scripts\\python.exe -m py_compile src/glass/engine/pipeline.py tests/test_pipeline_fixture.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests/test_pipeline_fixture.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
-- `.\\.venv\\Scripts\\gpwbpp.exe run --plan runs/real_m5_lum_subset/processing_plan.json --out runs/real_m5_lum_subset/gpwbpp_cuda_exact_flat_median --backend cuda --until-stage integration --local-normalization off --integration-weighting none --integration-rejection none --tile-size 1024`
-- `.\\.venv\\Scripts\\gpwbpp.exe compare --gpwbpp runs/real_m5_lum_subset/gpwbpp_cuda_exact_flat_median/integration/master_Lum.fits --reference runs/real_m5_lum_subset/gpwbpp_cuda_tile_reader_manual/integration/master_Lum.fits --out runs/real_m5_lum_subset/gpwbpp_cuda_exact_flat_median/compare_vs_tile_reader.html`
+- `.\\.venv\\Scripts\\glass.exe run --plan runs/real_m5_lum_subset/processing_plan.json --out runs/real_m5_lum_subset/glass_cuda_exact_flat_median --backend cuda --until-stage integration --local-normalization off --integration-weighting none --integration-rejection none --tile-size 1024`
+- `.\\.venv\\Scripts\\glass.exe compare --glass runs/real_m5_lum_subset/glass_cuda_exact_flat_median/integration/master_Lum.fits --reference runs/real_m5_lum_subset/glass_cuda_tile_reader_manual/integration/master_Lum.fits --out runs/real_m5_lum_subset/glass_cuda_exact_flat_median/compare_vs_tile_reader.html`
 
 ## Test Results
 
 - Pipeline fixture tests: 10 passed in 4.21 s.
 - Full pytest: 53 passed in 5.69 s.
 - Real M5/Lum subset CUDA run completed through integration in about 50 s wall time.
-- Compare against the previous full-frame/tile-reader GPWBPP output:
+- Compare against the previous full-frame/tile-reader GLASS output:
   - `shape_match`: true
   - `rms_diff`: 0.0
   - `mean_diff`: 0.0
@@ -39,10 +39,10 @@
 
 ## Artifacts
 
-- `runs/real_m5_lum_subset/gpwbpp_cuda_exact_flat_median/calibration_artifacts.json`
-- `runs/real_m5_lum_subset/gpwbpp_cuda_exact_flat_median/integration/master_Lum.fits`
-- `runs/real_m5_lum_subset/gpwbpp_cuda_exact_flat_median/compare_vs_tile_reader.html`
-- `runs/real_m5_lum_subset/gpwbpp_cuda_exact_flat_median/compare_vs_tile_reader.json`
+- `runs/real_m5_lum_subset/glass_cuda_exact_flat_median/calibration_artifacts.json`
+- `runs/real_m5_lum_subset/glass_cuda_exact_flat_median/integration/master_Lum.fits`
+- `runs/real_m5_lum_subset/glass_cuda_exact_flat_median/compare_vs_tile_reader.html`
+- `runs/real_m5_lum_subset/glass_cuda_exact_flat_median/compare_vs_tile_reader.json`
 
 ## Known Limitations
 
@@ -57,5 +57,5 @@
 ## Clean-Room Compliance
 
 - No PixInsight/WBPP/PJSR source files were read, copied, summarized, or modified.
-- The real-data run used only user-provided FITS inputs and GPWBPP-generated artifacts.
+- The real-data run used only user-provided FITS inputs and GLASS-generated artifacts.
 - The original data directory was not modified.

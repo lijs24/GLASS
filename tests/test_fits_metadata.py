@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gpwbpp.metadata.scanner import scan_tree
+from glass.metadata.scanner import scan_tree
 
 
 def test_scan_fits_metadata_without_pixel_load(small_fits_dataset):

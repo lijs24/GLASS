@@ -3,13 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gpwbpp"
+name = "glass-stack"
 version = "0.1.0"
-description = "Clean-room GPU Weighted Batch Preprocessing for astronomical images."
+description = "GLASS: GPU-Accelerated Lightframe Alignment and Stacking System."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
-authors = [{ name = "GPWBPP contributors" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "GLASS contributors" }]
 dependencies = [
   "astropy>=6",
   "numpy>=1.26",
@@ -19,16 +20,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
 report = ["jinja2>=3.1"]
-gpu = ["pybind11>=2.12", "scikit-build-core>=0.10"]
+gpu = ["cmake>=3.27", "ninja>=1.11", "pybind11>=2.12"]
 align = ["astroalign>=2.6"]
 zarr = ["zarr>=2.17"]
+release = ["build>=1.2", "twine>=5.0", "wheel>=0.43"]
 
 [project.scripts]
-gpwbpp = "gpwbpp.cli:main"
+glass = "glass.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-py-modules = ["gpwbpp_cuda"]
+py-modules = ["glass_cuda"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

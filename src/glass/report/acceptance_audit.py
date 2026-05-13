@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from glass.io.json_io import write_json
+from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
+
+
+def _frame_type_counts(manifest: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {"light": 0, "bias": 0, "dark": 0, "flat": 0}
+    for frame in manifest.get("frames") or []:
+        frame_type = str(frame.get("frame_type") or "unknown").lower()
+        counts[frame_type] = counts.get(frame_type, 0) + 1
+    return counts
+
+
+def _numeric(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
+    return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
+
+
+def build_acceptance_audit(
+    *,
+    manifest_path: str | Path,
+    glass_run: str | Path,
+    wbpp_result: str | Path,
+    compare_json: str | Path,
+    min_lights: int = 200,
+    min_bias: int = 20,
+    min_dark: int = 20,
+    min_flat: int = 20,
+    min_active_frames: int = 1,
+    min_speedup: float = 2.0,
+    min_coverage_fraction: float = 0.95,
+    max_rms_diff: float | None = 0.01,
+    max_abs_diff_p99: float | None = 0.01,
+) -> dict[str, Any]:
+    manifest = _read_json_lenient(manifest_path)
+    speedup = summarize_wbpp_speedup(
+        glass_run,
+        wbpp_result,
+        compare_json=compare_json,
+        min_speedup=min_speedup,
+    )
+    counts = _frame_type_counts(manifest)
+    comparison = speedup.get("comparison") or {}
+    gp = speedup["glass"]
+
+    rms = _numeric(comparison.get("rms_diff"))
+    p99 = _numeric(comparison.get("abs_diff_p99"))
+    coverage = _numeric(comparison.get("coverage_fraction"))
+    active_frames = int(gp.get("weighted_frame_count") or 0)
+
+    checks = [
+        _check(
+            "minimum_light_frames",
+            counts.get("light", 0) >= int(min_lights),
+            {"actual": counts.get("light", 0), "required": int(min_lights)},
+        ),
+        _check(
+            "minimum_bias_frames",
+            counts.get("bias", 0) >= int(min_bias),
+            {"actual": counts.get("bias", 0), "required": int(min_bias)},
+        ),
+        _check(
+            "minimum_dark_frames",
+            counts.get("dark", 0) >= int(min_dark),
+            {"actual": counts.get("dark", 0), "required": int(min_dark)},
+        ),
+        _check(
+            "minimum_flat_frames",
+            counts.get("flat", 0) >= int(min_flat),
+            {"actual": counts.get("flat", 0), "required": int(min_flat)},
+        ),
+        _check(
+            "minimum_active_frames",
+            active_frames >= int(min_active_frames),
+            {"actual": active_frames, "required": int(min_active_frames)},
+        ),
+        _check(
+            "minimum_speedup",
+            bool(speedup.get("meets_min_speedup")),
+            {"actual": speedup.get("speedup_vs_wbpp"), "required": float(min_speedup)},
+        ),
+        _check(
+            "shape_match",
+            comparison.get("shape_match") is True,
+            {"actual": comparison.get("shape_match"), "required": True},
+        ),
+        _check(
+            "minimum_coverage_fraction",
+            coverage is not None and coverage >= float(min_coverage_fraction),
+            {"actual": coverage, "required": float(min_coverage_fraction)},
+        ),
+    ]
+
+    if max_rms_diff is not None:
+        checks.append(
+            _check(
+                "maximum_rms_diff",
+                rms is not None and rms <= float(max_rms_diff),
+                {"actual": rms, "required_max": float(max_rms_diff)},
+            )
+        )
+    if max_abs_diff_p99 is not None:
+        checks.append(
+            _check(
+                "maximum_abs_diff_p99",
+                p99 is not None and p99 <= float(max_abs_diff_p99),
+                {"actual": p99, "required_max": float(max_abs_diff_p99)},
+            )
+        )
+
+    passed = all(item["passed"] for item in checks)
+    return {
+        "schema_version": 1,
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "manifest_path": str(manifest_path),
+        "glass_run": str(glass_run),
+        "wbpp_result": str(wbpp_result),
+        "compare_json": str(compare_json),
+        "frame_type_counts": counts,
+        "checks": checks,
+        "speedup_summary": speedup,
+        "clean_room": {
+            "status": "compliant",
+            "note": (
+                "Acceptance audit consumes GLASS artifacts and user-generated PixInsight/WBPP "
+                "black-box timing/output metadata only."
+            ),
+        },
+    }
+
+
+def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> None:
+    speedup = audit["speedup_summary"]
+    comparison = speedup.get("comparison") or {}
+    lines = [
+        "# GLASS Acceptance Audit",
+        "",
+        f"- Status: {audit['status']}",
+        f"- Speedup vs WBPP: {speedup.get('speedup_vs_wbpp')}",
+        f"- Frame counts: {audit.get('frame_type_counts')}",
+        f"- Shape match: {comparison.get('shape_match')}",
+        f"- RMS diff: {comparison.get('rms_diff')}",
+        f"- abs diff p99: {comparison.get('abs_diff_p99')}",
+        f"- Coverage fraction: {comparison.get('coverage_fraction')}",
+        "",
+        "## Checks",
+        "",
+    ]
+    for item in audit["checks"]:
+        marker = "PASS" if item["passed"] else "FAIL"
+        lines.append(f"- {marker}: {item['name']} - {item['evidence']}")
+    lines.extend(["", "## Clean-room", "", f"- {audit['clean_room']['note']}", ""])
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_acceptance_audit(
+    out_json: str | Path,
+    audit: dict[str, Any],
+    markdown: str | Path | None = None,
+) -> None:
+    write_json(out_json, audit)
+    if markdown is not None:
+        write_acceptance_audit_markdown(markdown, audit)

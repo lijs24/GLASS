@@ -9,23 +9,23 @@
 
 - Built a real M38 all-compatible subset satisfying the user's scale target:
   200 light frames plus 20 bias, 20 dark, and 20 flat frames.
-- Ran `gpwbpp run --memory-mode resident` with:
+- Ran `glass run --memory-mode resident` with:
   - resident CUDA calibration;
   - resident CUDA NCC + subpixel translation registration;
   - resident bilinear translation warp;
   - resident winsorized sigma integration;
   - output master, weight, coverage, low rejection, and high rejection maps.
-- Compared the GPWBPP master against the existing PixInsight/WBPP black-box
+- Compared the GLASS master against the existing PixInsight/WBPP black-box
   FastIntegration master.
-- Verified GPWBPP was faster on this run and produced a shape-matching output
+- Verified GLASS was faster on this run and produced a shape-matching output
   with small scaled median absolute difference.
 
 ## Commands Run
 
 ```powershell
-$base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_ncc_winsorized_allcal_200'; New-Item -ItemType Directory -Force -Path $run | Out-Null; .\.venv\Scripts\gpwbpp.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 200 --all-compatible-calibration
-$base='C:\gpwbpp_runs\final_m38_h_200'; $run=Join-Path $base 'gpwbpp_resident_ncc_winsorized_allcal_200'; .\.venv\Scripts\gpwbpp.exe run --plan (Join-Path $run 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 64 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
-$run='C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200'; $ref='C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf'; .\.venv\Scripts\gpwbpp.exe compare --gpwbpp (Join-Path $run 'integration\resident_master_H.fits') --reference $ref --out (Join-Path $run 'resident_vs_wbpp_fastintegration_scaled_compare.html') --gpwbpp-time-seconds 363.1756594000035 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident NCC 200 scaled" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 1.5259021896696422e-05 --clip-low 0 --clip-high 1
+$base='C:\glass_runs\final_m38_h_200'; $run=Join-Path $base 'glass_resident_ncc_winsorized_allcal_200'; New-Item -ItemType Directory -Force -Path $run | Out-Null; .\.venv\Scripts\glass.exe subset --manifest (Join-Path $base 'manifest.json') --out (Join-Path $run 'manifest.json') --plan-out (Join-Path $run 'processing_plan.json') --filter H --exposure-s 600 --light-limit 200 --all-compatible-calibration
+$base='C:\glass_runs\final_m38_h_200'; $run=Join-Path $base 'glass_resident_ncc_winsorized_allcal_200'; .\.venv\Scripts\glass.exe run --plan (Join-Path $run 'processing_plan.json') --out $run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration translation_ncc_subpixel --resident-registration-max-shift 64 --resident-subpixel-radius-steps 2 --resident-subpixel-step 0.5
+$run='C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200'; $ref='C:\glass_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf'; .\.venv\Scripts\glass.exe compare --glass (Join-Path $run 'integration\resident_master_H.fits') --reference $ref --out (Join-Path $run 'resident_vs_wbpp_fastintegration_scaled_compare.html') --glass-time-seconds 363.1756594000035 --reference-time-seconds 1092.541 --glass-label "GLASS resident NCC 200 scaled" --reference-label "PixInsight WBPP FastIntegration" --glass-scale 1.5259021896696422e-05 --clip-low 0 --clip-high 1
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -39,7 +39,7 @@ $run='C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200';
 ## Real M38 Resident Run Result
 
 - Run directory:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200`
 - Selected frames:
   - 200 light.
   - 20 bias.
@@ -71,7 +71,7 @@ $run='C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200';
 ## WBPP Compare Result
 
 - WBPP black-box elapsed: 1092.541 s.
-- GPWBPP resident elapsed: 363.176 s.
+- GLASS resident elapsed: 363.176 s.
 - Speedup vs WBPP: 3.008x.
 - Shape match: true.
 - Scaled compare transform:
@@ -96,21 +96,21 @@ $run='C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200';
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\manifest.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\processing_plan.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\registration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\resident_artifacts.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\integration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\run_timing.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\integration\resident_weight_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\integration\resident_coverage_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\integration\resident_low_rejection_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\integration\resident_high_rejection_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_compare.html`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_compare.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_scaled_compare.html`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_scaled_compare.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\manifest.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\processing_plan.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\registration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\resident_artifacts.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\integration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\run_timing.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\integration\resident_weight_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\integration\resident_coverage_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\integration\resident_low_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\integration\resident_high_rejection_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_compare.html`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_compare.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_scaled_compare.html`
+- `C:\glass_runs\final_m38_h_200\glass_resident_ncc_winsorized_allcal_200\resident_vs_wbpp_fastintegration_scaled_compare.json`
 
 ## Known Limitations
 
@@ -120,7 +120,7 @@ $run='C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_winsorized_allcal_200';
   not star-model RMS or affine/similarity transforms.
 - Winsorized sigma is the current two-stage mean/std approximation, not a
   byte-for-byte PixInsight FastIntegration reproduction.
-- GPWBPP is faster and broadly comparable after scaling, but differences remain
+- GLASS is faster and broadly comparable after scaling, but differences remain
   and should be attributed to registration model, Local Normalization,
   weighting, rejection, crop/mask policy, and normalization semantics.
 

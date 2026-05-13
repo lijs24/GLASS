@@ -9,7 +9,7 @@ RMS, status, and warnings. Failed frames are never silently integrated.
 
 ## Clean-room StarAlignment reference
 
-The PixInsight StarAlignment reference for GPWBPP is limited to public
+The PixInsight StarAlignment reference for GLASS is limited to public
 documentation, public forum discussion, user-generated logs, process settings,
 and black-box output artifacts. PixInsight/WBPP/PJSR source code is not used.
 
@@ -28,14 +28,14 @@ clean-room observations are:
   ambiguity relative to single triangles and reduces false putative matches.
 - RANSAC is used to reject false star-pair matches and optimize the
   registration model. User-visible failures such as "unable to find a valid set
-  of star pair matches" are treated in GPWBPP as failed registration rows, not
+  of star pair matches" are treated in GLASS as failed registration rows, not
   silent integration inputs.
 - Distortion correction is described as an iterative predictor-corrector model:
   an initial projective/linear model predicts putative matches, RANSAC validates
   and corrects the model, and two-dimensional surface splines/thin plates can
   model local residual distortion.
 - Public forum guidance notes that default polygonal descriptors do not support
-  specular mirror transformations. For GPWBPP this is separate from a meridian
+  specular mirror transformations. For GLASS this is separate from a meridian
   flip that is represented as a 180-degree rotation with positive determinant.
 
 Sources:
@@ -44,7 +44,7 @@ Sources:
 - https://pixinsight.com/forum/index.php?threads%2Fstaralignment-of-dissimilar-images.17826%2F=
 - https://pixinsight.com/forum/index.php?threads%2Fstaralignment-confusion.17047%2F=
 
-The implementation implication is that GPWBPP should not keep extending simple
+The implementation implication is that GLASS should not keep extending simple
 pair-offset voting as the final registration model. The next robust path is a
 bounded GPU star catalog, quad/pentagon-style descriptor generation, batched
 GPU hypothesis scoring, CPU-orchestrated RANSAC as an interim step, and resident
@@ -52,7 +52,7 @@ CUDA matrix/homography/thin-plate warp application.
 
 ## Open-source astroalign bridge
 
-GPWBPP also keeps `astroalign` as an open-source correctness bridge for
+GLASS also keeps `astroalign` as an open-source correctness bridge for
 asterism matching. The installed local package inspected during Gate 08 was
 `astroalign 2.6.2`, with MIT license metadata. Its implementation is small
 enough to serve as a clear migration target:
@@ -89,7 +89,7 @@ The short-term target is not source-level compatibility with astroalign, but
 behavioral equivalence on a fixed set of star catalogs and a much faster
 resident CUDA implementation for high-VRAM WBPP-like runs.
 
-`gpwbpp.cpu.registration.estimate_triangle_asterism_transform` is the current
+`glass.cpu.registration.estimate_triangle_asterism_transform` is the current
 owned CPU bridge for that migration. It builds local nearest-neighbor triangle
 descriptors from bounded star catalogs, matches scale-invariant side-ratio
 descriptors, fits similarity or affine hypotheses, scores one-to-one inliers,
@@ -99,7 +99,7 @@ backend on the same small star-field image pair. This keeps the GPU port target
 auditable before the local-KNN, descriptor matching, and hypothesis scoring
 steps move fully onto CUDA.
 
-`gpwbpp_cuda.triangle_asterism_descriptors_f32(x, y, max_stars, neighbors,
+`glass_cuda.triangle_asterism_descriptors_f32(x, y, max_stars, neighbors,
 max_descriptors)` is the first CUDA primitive for that bridge. It takes compact
 catalog coordinates, computes local nearest-neighbor triangle descriptors on
 the device, and returns deduplicated descriptor/index/area arrays for comparison
@@ -107,7 +107,7 @@ or downstream matching. The current host wrapper still performs deduplication
 and area ordering after downloading compact descriptor arrays; descriptor
 matching and RANSAC-style hypothesis selection remain follow-up CUDA work.
 
-`gpwbpp_cuda.estimate_similarity_from_triangle_descriptors_f32(...)` adds the
+`glass_cuda.estimate_similarity_from_triangle_descriptors_f32(...)` adds the
 next device-side step: descriptor-pair candidates are filtered by side-ratio
 distance on the GPU, both triangle orientations are tried, similarity matrices
 are fitted from the triangle vertices, and compact star catalogs are scored by
@@ -115,13 +115,13 @@ mutual nearest-neighbor inliers. The current test scope is a controlled
 synthetic catalog with a known similarity transform; robust multi-hypothesis
 selection on real M38 frames and resident pipeline wiring remain open.
 
-`gpwbpp.gpu.registration.register_triangle_descriptor_similarity_f32(...)` wires
+`glass.gpu.registration.register_triangle_descriptor_similarity_f32(...)` wires
 the controlled image-pair loop: CUDA star catalog extraction, CUDA triangle
 descriptor generation, CUDA triangle-descriptor similarity scoring, and CUDA
 matrix warp. The current unit test validates that this loop improves alignment
 on a synthetic rotated/translated star field. The astroalign comparison
 benchmark now records this path as
-`gpwbpp_cuda_triangle_descriptor_similarity`, including descriptor counts,
+`glass_cuda_triangle_descriptor_similarity`, including descriptor counts,
 candidate count, transform/output agreement versus astroalign, and speedup. A
 small synthetic benchmark smoke artifact is written under
 `runs/benchmarks/triangle_descriptor_synthetic_smoke.json`.
@@ -133,14 +133,14 @@ uses the same grid-top NMS selector as the catalog-similarity benchmark when
 grid parameters are provided, and defaults top-NMS scanning to 4096 candidates
 when no explicit scan count is provided. With the full calibrated M38
 `S000061`/`S000062` pair, artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v47_triangle_gridtop.json`
-records `gpwbpp_cuda_triangle_descriptor_similarity` passing the agreement gate:
+`C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v47_triangle_gridtop.json`
+records `glass_cuda_triangle_descriptor_similarity` passing the agreement gate:
 64/64 stored stars, 341/335 triangle descriptors, 47 inliers,
 `translation_delta_px=0.295`, output RMS difference about 38.27 ADU, and
 elapsed time about 0.327 s versus astroalign's 9.72 s. This is the first
 accepted pure CUDA descriptor path on the representative real pair.
 
-The current pipeline registration path first uses GPWBPP's own streaming star
+The current pipeline registration path first uses GLASS's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
 offsets; similarity/affine candidates come from simple triangle descriptors and
 least-squares refinement. Candidate transforms are scored by greedy one-to-one
@@ -148,7 +148,7 @@ matches within a pixel tolerance, then refined from the inlier set.
 
 If the star model cannot meet `min_inliers`, `method=auto` falls back to phase
 correlation on bounded previews and records that fallback in the warnings. For
-large calibrated frames, GPWBPP builds previews with FITS tile reads and block
+large calibrated frames, GLASS builds previews with FITS tile reads and block
 means, records `preview_scale`, `preview_shape`, `tile_size`, and `tile_count`,
 and multiplies preview translations back to source-image pixels. Small images
 stay at `preview_scale=1` for synthetic baseline tests.
@@ -163,19 +163,19 @@ failure is recorded as `status=failed` instead of aborting the whole registratio
 stage.
 
 Tile-mode registration can also use the optional open-source `astroalign`
-backend with `gpwbpp run --registration-method astroalign`. This path calls
+backend with `glass run --registration-method astroalign`. This path calls
 `astroalign.find_transform` on the same streaming preview images and records the
 resulting similarity matrix, matched control-point count, preview-scale RMS, and
 MIT-license provenance in `registration_results.json`. It is the current
 open-source CPU correctness baseline for star/asterism matching and a bridge
-toward GPWBPP-owned GPU descriptor registration. The tile warp stage now uses a
+toward GLASS-owned GPU descriptor registration. The tile warp stage now uses a
 streaming bilinear matrix warp for fractional translation, similarity, and
 affine matrices, so astroalign's similarity matrix can flow into downstream
 integration without loading a full frame into memory.
 
 Tile-mode registration now also exposes the clean-room GPU path with
-`gpwbpp run --registration-method cuda_catalog` or
-`gpwbpp audit --registration-method cuda_catalog`. It builds the same bounded
+`glass run --registration-method cuda_catalog` or
+`glass audit --registration-method cuda_catalog`. It builds the same bounded
 streaming previews, requires the native CUDA backend, selects compact star
 catalogs on the GPU, estimates a similarity matrix with the CUDA mutual
 catalog scorer, optionally constrains the search with a CUDA NCC prior, and
@@ -187,8 +187,8 @@ counts, thresholds, prior details, preview RMS, pixel metric RMS/NCC, and
 refit status.
 
 Tile-mode registration also exposes the GPU triangle-descriptor path with
-`gpwbpp run --registration-method cuda_triangle` or
-`gpwbpp audit --registration-method cuda_triangle`. This method uses bounded
+`glass run --registration-method cuda_triangle` or
+`glass audit --registration-method cuda_triangle`. This method uses bounded
 streaming previews, GPU top-N or grid-top NMS star selection, GPU triangle
 asterism descriptor construction, and CUDA descriptor matching to estimate a
 similarity matrix. The matrix translation is scaled from preview pixels back to
@@ -239,7 +239,7 @@ mutual-nearest refinement, then downloads only the final translation diagnostics
 It is still translation-only, but unlike NCC mode its `matched_stars`,
 `inliers`, and `rms_px` fields come from GPU star-catalog evidence rather than
 placeholders. This is the first resident bridge from the astroalign-style idea
-of star matching toward a GPWBPP-owned GPU implementation.
+of star matching toward a GLASS-owned GPU implementation.
 
 `translation_star_catalog` can use either global top-N flux candidates or a
 grid-distributed brightest-per-cell catalog. The grid mode is controlled by
@@ -328,7 +328,7 @@ returns the highest-inlier matrix with RMS diagnostics. The validated scope is
 small bounded catalogs with outliers; it is a stepping stone toward descriptor
 matching and robust RANSAC, not yet the final high-resolution registration
 model.
-`gpwbpp.gpu.registration.register_similarity_from_star_catalogs_f32` wires this
+`glass.gpu.registration.register_similarity_from_star_catalogs_f32` wires this
 into the first controlled image-registration loop: GPU star-catalog extraction,
 GPU catalog similarity seed, then GPU matrix warp. The synthetic test covers a
 rotated/scaled star field and verifies that the closed loop improves image RMS
@@ -342,7 +342,7 @@ multiple peaks from the same saturated star. Second,
 `estimate_similarity_from_catalogs_f32` can constrain candidate two-star seeds
 by a prior translation, scale range, and rotation range. The intended prior is
 the GPU NCC coarse alignment, so the seed search remains clean-room and
-GPWBPP-owned. On the recorded full-frame M38 pair, this pure GPWBPP GPU path
+GLASS-owned. On the recorded full-frame M38 pair, this pure GLASS GPU path
 accepted 12 inliers and produced a matrix close to astroalign, but the current
 brute-force implementation is still slower than astroalign because top-NMS and
 best-candidate selection are not yet optimized.
@@ -373,7 +373,7 @@ coarse or fine candidate grid into a single CUDA launch after uploading the
 two images once; CPU fallback keeps the older per-candidate loop for
 installations without the native primitive. On the M38
 grid-top benchmark artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json`,
+`C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v20_gridtop_pixel_refine.json`,
 pixel refinement improved the catalog-similarity output RMS difference versus
 astroalign apply to about 58.89 ADU, but it still failed the current agreement
 gate (`translation_delta_px=1.25`, limit 0.5; output RMS limit 55). The result
@@ -384,13 +384,13 @@ The similarity seed scorer now counts mutual nearest-neighbor star matches
 rather than one-way nearest-reference hits. This suppresses duplicate matches
 from repeated or clustered stars before the guarded refit runs. With the same
 M38 pair and grid-top parameters, artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v22_mutual_score_pixel_refine_accept.json`
+`C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v22_mutual_score_pixel_refine_accept.json`
 records the first accepted clean-room GPU catalog path for this pair:
 `catalog_similarity_pixel_refined_agreement_vs_astroalign.passed=true`,
 translation delta about 0.482 px, output RMS difference about 38.53 ADU, and
 elapsed time about 6.42 s versus astroalign's 9.70 s total. After the fused
 candidate-grid refine primitive, artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v23_fused_pixel_refine.json`
+`C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v23_fused_pixel_refine.json`
 reduced the pixel-refine search itself to about 0.235 s and the catalog
 similarity plus refine plus warp path to about 0.328 s. That v23 run did not
 pass the strict astroalign matrix-agreement threshold because the upstream
@@ -407,19 +407,19 @@ Homography support and higher-level acceptance policy remain future warp gates.
 
 The clean-room astroalign comparison benchmark lives in
 `benchmarks/compare_astroalign_gpu_alignment.py`. Astroalign is used as an
-open-source external reference and, when `gpwbpp[align]` is installed, as an
+open-source external reference and, when `glass[align]` is installed, as an
 optional tile-mode registration backend.
 The benchmark now records astroalign's transform search and pixel application
 timings separately, then applies the same astroalign similarity matrix with
-GPWBPP's standalone CUDA matrix warp and resident in-place CUDA matrix warp.
+GLASS's standalone CUDA matrix warp and resident in-place CUDA matrix warp.
 This isolates star/asterism matching cost from pixel resampling cost while the
 owned GPU matcher is still catching up.
 It also records a direct common-valid-pixel difference between astroalign's
-`apply_transform` output and GPWBPP's CUDA matrix-warp output. This keeps the
+`apply_transform` output and GLASS's CUDA matrix-warp output. This keeps the
 alignment timing claim tied to a numeric image-consistency check in the same
 JSON artifact. In the full calibrated M38 pair
 `S000061`/`S000062`, the refreshed artifact
-`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v16_resident_matrix_metrics.json`
+`C:\glass_runs\final_m38_h_200\astroalign_vs_glass_gpu_pair_S000061_S000062_full_benchmark_v16_resident_matrix_metrics.json`
 measured standalone CUDA matrix warp at about 0.146 s versus astroalign apply at
 about 2.840 s, and resident device-only matrix warp at about 0.0069 s. On the
 61,632,460 common valid pixels, the CUDA matrix output versus astroalign apply
@@ -457,7 +457,7 @@ test pure GPU pixel resampling and integration.
 Resident runs can now use `--resident-registration similarity_cuda_triangle` as
 the first high-VRAM bridge for the triangle descriptor route. Calibrated frames
 remain in the `ResidentCalibratedStack`; the stack detects compact star
-catalogs on the GPU, GPWBPP builds/matches CUDA triangle descriptors from those
+catalogs on the GPU, GLASS builds/matches CUDA triangle descriptors from those
 catalogs, and the selected similarity matrix is applied in place with the
 selected resident CUDA matrix warp. This still downloads compact
 catalogs/diagnostics, so it is not the final fully resident descriptor

@@ -9,7 +9,7 @@ without loading full images. Plans record matching and mismatch warnings.
 Gate 2: synthetic FITS data and CPU calibration baseline. Master bias, dark,
 flat, and light calibration are validated on small controlled data.
 
-Gate 3: CUDA extension skeleton. `gpwbpp_cuda` imports when built, reports
+Gate 3: CUDA extension skeleton. `glass_cuda` imports when built, reports
 devices, and passes smoke tests. Missing CUDA skips tests.
 
 Gate 4: CUDA tile calibration. Calibration kernels match CPU results within
@@ -41,8 +41,8 @@ CUDA with CPU comparison on small data.
 Gate 13: PixInsight/WBPP black-box comparison. User-generated references are
 compared without using official source.
 
-Gate 14: optional PixInsight front-end. `pixinsight/GPWBPP.js` is a separate
-clean-room launcher that calls the open GPWBPP CLI without modifying or copying
+Gate 14: optional PixInsight front-end. `pixinsight/GLASS.js` is a separate
+clean-room launcher that calls the open GLASS CLI without modifying or copying
 official preprocessing scripts.
 
 Phase B gates are advanced features such as drizzle, OSC CFA workflows, mosaic,

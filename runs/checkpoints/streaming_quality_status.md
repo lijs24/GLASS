@@ -17,10 +17,10 @@
 
 ## Commands Run
 
-- `.\\.venv\\Scripts\\python.exe -m py_compile src/gpwbpp/engine/quality.py src/gpwbpp/cli.py tests/test_cpu_star_detect.py tests/test_pipeline_fixture.py`
+- `.\\.venv\\Scripts\\python.exe -m py_compile src/glass/engine/quality.py src/glass/cli.py tests/test_cpu_star_detect.py tests/test_pipeline_fixture.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q tests/test_cpu_star_detect.py tests/test_pipeline_fixture.py`
 - `.\\.venv\\Scripts\\python.exe -m pytest -q`
-- `.\\.venv\\Scripts\\gpwbpp.exe run --plan runs/real_m5_lum_subset/processing_plan.json --out runs/real_m5_lum_subset/gpwbpp_cuda_streaming_quality --backend cuda --until-stage quality --tile-size 1024`
+- `.\\.venv\\Scripts\\glass.exe run --plan runs/real_m5_lum_subset/processing_plan.json --out runs/real_m5_lum_subset/glass_cuda_streaming_quality --backend cuda --until-stage quality --tile-size 1024`
 
 ## Test Results
 
@@ -45,9 +45,9 @@
 
 ## Artifacts
 
-- `runs/real_m5_lum_subset/gpwbpp_cuda_streaming_quality/frame_quality.json`
-- `runs/real_m5_lum_subset/gpwbpp_cuda_streaming_quality/calibration_artifacts.json`
-- `runs/real_m5_lum_subset/gpwbpp_cuda_streaming_quality/run_state.json`
+- `runs/real_m5_lum_subset/glass_cuda_streaming_quality/frame_quality.json`
+- `runs/real_m5_lum_subset/glass_cuda_streaming_quality/calibration_artifacts.json`
+- `runs/real_m5_lum_subset/glass_cuda_streaming_quality/run_state.json`
 
 ## Known Limitations
 
@@ -63,5 +63,5 @@
 ## Clean-Room Compliance
 
 - No PixInsight/WBPP/PJSR source files were read, copied, summarized, or modified.
-- The real-data run used only user-provided FITS inputs and GPWBPP-generated artifacts.
+- The real-data run used only user-provided FITS inputs and GLASS-generated artifacts.
 - The original data directory was not modified.

@@ -23,12 +23,12 @@
 ## Commands Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\engine\resident_cuda.py src\gpwbpp\cli.py tests\test_resident_cuda_run.py
+.\.venv\Scripts\python.exe -m ruff check src\glass\engine\resident_cuda.py src\glass\cli.py tests\test_resident_cuda_run.py
 .\.venv\Scripts\python.exe -m pytest -q tests\test_resident_cuda_run.py tests\test_cuda_resident_stack.py
-.\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGPWBPP_BUILD_PYTHON_CUDA=ON -DGPWBPP_BUILD_CUDA=OFF -Dpybind11_DIR=<venv pybind11> -DCMAKE_MAKE_PROGRAM=<venv ninja> -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120
+.\.venv\Scripts\cmake.exe -S . -B build\native-cuda -G Ninja -DGLASS_BUILD_PYTHON_CUDA=ON -DGLASS_BUILD_CUDA=OFF -Dpybind11_DIR=<venv pybind11> -DCMAKE_MAKE_PROGRAM=<venv ninja> -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\nvcc.exe" -DCMAKE_CUDA_ARCHITECTURES=120
 .\.venv\Scripts\cmake.exe --build build\native-cuda --config Release
 .\.venv\Scripts\python.exe -m pytest -q tests\test_gpu_registration_search.py tests\test_resident_cuda_run.py tests\test_cuda_resident_stack.py
-.\.venv\Scripts\gpwbpp.exe run --plan "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset12\processing_plan.json" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_star_auto_nccprior2_fixed_subset12" --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration translation_star_catalog --resident-star-threshold 0 --resident-star-max-candidates 128 --resident-star-tolerance-px 1.0 --resident-registration-max-shift 32 --resident-star-grid-cols 16 --resident-star-grid-rows 8 --resident-star-prior ncc --resident-star-prior-radius-px 2
+.\.venv\Scripts\glass.exe run --plan "C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset12\processing_plan.json" --out "C:\glass_runs\final_m38_h_200\glass_resident_star_auto_nccprior2_fixed_subset12" --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none --flat-floor 0.05 --resident-registration translation_star_catalog --resident-star-threshold 0 --resident-star-max-candidates 128 --resident-star-tolerance-px 1.0 --resident-registration-max-shift 32 --resident-star-grid-cols 16 --resident-star-grid-rows 8 --resident-star-prior ncc --resident-star-prior-radius-px 2
 .\.venv\Scripts\python.exe -m pytest -q
 git diff --check
 ```
@@ -44,9 +44,9 @@ git diff --check
 ## Real Data Diagnostic
 
 - Run path:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_star_auto_nccprior2_fixed_subset12`
+  `C:\glass_runs\final_m38_h_200\glass_resident_star_auto_nccprior2_fixed_subset12`
 - Input plan:
-  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_ncc_subset12\processing_plan.json`
+  `C:\glass_runs\final_m38_h_200\glass_resident_ncc_subset12\processing_plan.json`
 - Frame counts: 12 light frames with existing subset calibration frames.
 - Status counts: 1 reference, 11 ok, 0 failed.
 - Runtime: 21.43 s.

@@ -2,13 +2,13 @@
 
 ## Gate
 
-Formal `gpwbpp run` support for the full-VRAM resident CUDA calibration plus
+Formal `glass run` support for the full-VRAM resident CUDA calibration plus
 mean integration path.
 
 ## Completed
 
-- Added `--memory-mode resident` to `gpwbpp run`.
-- Added `gpwbpp.engine.resident_cuda` as the formal resident execution path.
+- Added `--memory-mode resident` to `glass run`.
+- Added `glass.engine.resident_cuda` as the formal resident execution path.
 - Resident mode aggregates lights by filter/shape so the M38 H run uses one
   200-frame calibrated stack instead of per-frame stacks.
 - Resident mode aggregates calibration frames by same shape/filter, using all
@@ -26,8 +26,8 @@ mean integration path.
 
 ```powershell
 .venv\Scripts\python.exe -m pytest -q tests/test_resident_cuda_run.py tests/test_cuda_resident_stack.py tests/test_cli_smoke.py
-.venv\Scripts\python.exe -m gpwbpp.cli run --plan C:\gpwbpp_runs\final_m38_h_200\processing_plan.json --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none
-.venv\Scripts\python.exe -m gpwbpp.cli report --run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run --out C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\report.html
+.venv\Scripts\python.exe -m glass.cli run --plan C:\glass_runs\final_m38_h_200\processing_plan.json --out C:\glass_runs\final_m38_h_200\glass_resident_formal_run --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection none --integration-weighting none
+.venv\Scripts\python.exe -m glass.cli report --run C:\glass_runs\final_m38_h_200\glass_resident_formal_run --out C:\glass_runs\final_m38_h_200\glass_resident_formal_run\report.html
 .venv\Scripts\python.exe -m pytest -q
 ```
 
@@ -61,15 +61,15 @@ mean integration path.
 
 ## Artifacts
 
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\resident_artifacts.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\integration_results.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\run_timing.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\run_state.json`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\integration\resident_master_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\integration\resident_weight_map_H.fits`
-- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_formal_run\report.html`
-- `C:\gpwbpp_runs\final_m38_h_200\formal_resident_vs_wbpp_summary.md`
-- `C:\gpwbpp_runs\final_m38_h_200\formal_resident_vs_wbpp_summary.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\resident_artifacts.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\integration_results.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\run_timing.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\run_state.json`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\integration\resident_master_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\integration\resident_weight_map_H.fits`
+- `C:\glass_runs\final_m38_h_200\glass_resident_formal_run\report.html`
+- `C:\glass_runs\final_m38_h_200\formal_resident_vs_wbpp_summary.md`
+- `C:\glass_runs\final_m38_h_200\formal_resident_vs_wbpp_summary.json`
 
 ## Known Limitations
 
@@ -78,7 +78,7 @@ mean integration path.
   WBPP-equivalent weighting are intentionally not part of this resident path yet.
 - The resident path writes a weight map, but coverage and rejection maps are null
   because no registration/rejection is applied in this gate.
-- It is a formal `gpwbpp run` mode now, but still a capability flag rather than
+- It is a formal `glass run` mode now, but still a capability flag rather than
   the complete WBPP-like pipeline.
 
 ## Next Step
