@@ -135,6 +135,27 @@ def _float_or_nan(value: Any) -> float:
         return float("nan")
 
 
+def _policy_int(raw: dict[str, Any], key: str, default: int) -> int:
+    value = raw.get(key)
+    if value is None:
+        return int(default)
+    return int(value)
+
+
+def _policy_float(raw: dict[str, Any], key: str, default: float) -> float:
+    value = raw.get(key)
+    if value is None:
+        return float(default)
+    return float(value)
+
+
+def _policy_optional_float(raw: dict[str, Any], key: str, default: float | None) -> float | None:
+    value = raw.get(key)
+    if value is None:
+        return default
+    return float(value)
+
+
 def _apply_resident_registration_matrix(stack: Any, index: int, matrix: list[list[float]]) -> str:
     if _matrix_is_translation(matrix):
         stack.apply_translation_bilinear_frame(index, float(matrix[0][2]), float(matrix[1][2]), np.nan)
@@ -265,6 +286,14 @@ def _resident_star_threshold_candidates(
 def _resident_star_registration_score(result: dict[str, Any]) -> tuple[int, float, int]:
     inliers = int(result.get("mutual_inliers", 0))
     rms = float(result.get("rms_px", float("nan")))
+    finite_rms = rms if np.isfinite(rms) else float("inf")
+    support = min(int(result.get("reference_count", 0)), int(result.get("moving_count", 0)))
+    return inliers, -finite_rms, support
+
+
+def _resident_similarity_score(result: dict[str, Any]) -> tuple[int, float, int]:
+    inliers = int(result.get("refined_inliers", result.get("inliers", 0)))
+    rms = float(result.get("refit_rms_px", result.get("rms_px", float("nan"))))
     finite_rms = rms if np.isfinite(rms) else float("inf")
     support = min(int(result.get("reference_count", 0)), int(result.get("moving_count", 0)))
     return inliers, -finite_rms, support
@@ -512,11 +541,12 @@ def run_resident_calibration_integration(
         "translation_preview",
         "translation_ncc_subpixel",
         "translation_star_catalog",
+        "similarity_cuda_catalog",
         "external_matrix",
     }:
         raise ValueError(
             "resident_registration must be off, translation_preview, translation_ncc_subpixel, "
-            "translation_star_catalog, or external_matrix"
+            "translation_star_catalog, similarity_cuda_catalog, or external_matrix"
         )
     if local_normalization not in {"auto", "on", "off"}:
         raise ValueError("local_normalization must be auto, on, or off")
@@ -558,6 +588,7 @@ def run_resident_calibration_integration(
             raise ValueError("flat_floor override must be positive")
         policy.flat_floor = float(flat_floor)
     integration_policy = plan.get("integration_policy", {})
+    registration_policy = plan.get("registration_policy", {})
     excluded_tokens = {str(item) for item in (exclude_frame_ids or []) if str(item)}
     rejection_mode = "none" if integration_rejection == "auto" else integration_rejection
     low_sigma = float(integration_policy.get("low_sigma", 3.0))
@@ -981,6 +1012,277 @@ def run_resident_calibration_integration(
                         )
                     )
 
+            if resident_registration == "similarity_cuda_catalog":
+                required_methods = [
+                    "star_top_candidates",
+                    "refine_matrix_translation_candidates_to_reference",
+                    "apply_matrix_bilinear_frame",
+                ]
+                missing_methods = [name for name in required_methods if not hasattr(stack, name)]
+                if missing_methods:
+                    raise RuntimeError(
+                        "resident CUDA backend lacks similarity registration primitive(s): "
+                        + ", ".join(missing_methods)
+                    )
+                if not hasattr(cuda_module, "estimate_similarity_from_catalogs_f32"):
+                    raise RuntimeError("CUDA backend lacks catalog similarity fitting")
+
+                tolerance_px = _policy_float(
+                    registration_policy,
+                    "cuda_catalog_tolerance_px",
+                    resident_star_tolerance_px,
+                )
+                default_min_pair_distance = max(8.0, float(min(height, width)) / 48.0)
+                min_pair_distance = _policy_float(
+                    registration_policy,
+                    "cuda_catalog_min_pair_distance",
+                    default_min_pair_distance,
+                )
+                similarity_top_k = max(0, _policy_int(registration_policy, "cuda_catalog_similarity_top_k", 8))
+                min_scale = _policy_optional_float(registration_policy, "cuda_catalog_min_scale", 0.995)
+                max_scale = _policy_optional_float(registration_policy, "cuda_catalog_max_scale", 1.005)
+                max_abs_rotation_rad = _policy_optional_float(
+                    registration_policy,
+                    "cuda_catalog_max_abs_rotation_rad",
+                    0.01,
+                )
+                refine_kwargs = {
+                    "search_radius_px": _policy_float(
+                        registration_policy,
+                        "cuda_catalog_pixel_refine_radius",
+                        1.0,
+                    ),
+                    "coarse_step_px": _policy_float(
+                        registration_policy,
+                        "cuda_catalog_pixel_refine_coarse_step",
+                        0.25,
+                    ),
+                    "fine_radius_px": _policy_float(
+                        registration_policy,
+                        "cuda_catalog_pixel_refine_fine_radius",
+                        0.25,
+                    ),
+                    "fine_step_px": _policy_float(
+                        registration_policy,
+                        "cuda_catalog_pixel_refine_fine_step",
+                        0.0625,
+                    ),
+                    "coarse_sample_stride": _policy_int(
+                        registration_policy,
+                        "cuda_catalog_pixel_refine_coarse_stride",
+                        resident_ncc_sample_stride,
+                    ),
+                    "final_sample_stride": _policy_int(
+                        registration_policy,
+                        "cuda_catalog_pixel_refine_final_stride",
+                        1,
+                    ),
+                }
+
+                reference_catalogs: dict[float, dict[str, Any]] = {}
+                for index, frame in enumerate(light_frames):
+                    registration_frame_start = perf_counter()
+                    warnings = []
+                    status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
+                    matrix = translation_matrix(0.0, 0.0)
+                    matched = 0
+                    inliers = 0
+                    rms_px = float("nan")
+                    try:
+                        if status == "excluded":
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("excluded by resident frame mask")
+                        elif frame["id"] == reference_frame["id"]:
+                            status = "reference"
+                            matched = 1
+                            inliers = 1
+                            rms_px = 0.0
+                        else:
+                            prior_dx = 0.0
+                            prior_dy = 0.0
+                            prior_radius = -1.0
+                            prior_warnings: list[str] = []
+                            if resident_star_prior == "ncc":
+                                if not hasattr(stack, "estimate_translation_to_reference") or not hasattr(
+                                    stack,
+                                    "estimate_translation_subpixel_to_reference",
+                                ):
+                                    raise RuntimeError("resident similarity NCC prior requires resident NCC registration")
+                                coarse = stack.estimate_translation_to_reference(
+                                    reference_index,
+                                    index,
+                                    resident_registration_max_shift,
+                                    resident_registration_max_shift,
+                                    resident_ncc_sample_stride,
+                                )
+                                refined_prior = stack.estimate_translation_subpixel_to_reference(
+                                    reference_index,
+                                    index,
+                                    float(coarse["dx"]),
+                                    float(coarse["dy"]),
+                                    resident_subpixel_radius_steps,
+                                    resident_subpixel_step,
+                                    resident_ncc_sample_stride,
+                                )
+                                prior_dx = float(refined_prior["dx"])
+                                prior_dy = float(refined_prior["dy"])
+                                prior_radius = float(resident_star_prior_radius_px)
+                                prior_warnings.extend(
+                                    [
+                                        "similarity_prior_model=ncc",
+                                        f"similarity_prior_dx={prior_dx:.6g}",
+                                        f"similarity_prior_dy={prior_dy:.6g}",
+                                        f"similarity_prior_radius_px={prior_radius:.6g}",
+                                        f"similarity_prior_coarse_score={float(coarse['score']):.6g}",
+                                        f"similarity_prior_subpixel_score={float(refined_prior['score']):.6g}",
+                                    ]
+                                )
+
+                            threshold_candidates, threshold_mode = _resident_star_threshold_candidates(
+                                stack,
+                                reference_index,
+                                index,
+                                resident_star_threshold,
+                            )
+                            trial_results = []
+                            selected_fit = None
+                            selected_threshold = None
+                            selected_reference_catalog = None
+                            selected_moving_catalog = None
+                            for threshold in threshold_candidates:
+                                threshold_key = round(float(threshold), 6)
+                                reference_catalog = reference_catalogs.get(threshold_key)
+                                if reference_catalog is None:
+                                    reference_catalog = stack.star_top_candidates(
+                                        reference_index,
+                                        threshold,
+                                        resident_star_max_candidates,
+                                    )
+                                    reference_catalogs[threshold_key] = reference_catalog
+                                moving_catalog = stack.star_top_candidates(
+                                    index,
+                                    threshold,
+                                    resident_star_max_candidates,
+                                )
+                                if int(reference_catalog["stored_count"]) < 2 or int(moving_catalog["stored_count"]) < 2:
+                                    trial_results.append(
+                                        {
+                                            "threshold": float(threshold),
+                                            "status": "too_few_stars",
+                                            "reference_stored": int(reference_catalog["stored_count"]),
+                                            "moving_stored": int(moving_catalog["stored_count"]),
+                                        }
+                                    )
+                                    continue
+                                fit = cuda_module.estimate_similarity_from_catalogs_f32(
+                                    reference_catalog["x"],
+                                    reference_catalog["y"],
+                                    moving_catalog["x"],
+                                    moving_catalog["y"],
+                                    tolerance_px=tolerance_px,
+                                    min_pair_distance=min_pair_distance,
+                                    prior_dx=prior_dx,
+                                    prior_dy=prior_dy,
+                                    prior_radius_px=prior_radius,
+                                    min_scale=min_scale,
+                                    max_scale=max_scale,
+                                    max_abs_rotation_rad=max_abs_rotation_rad,
+                                    top_k=similarity_top_k,
+                                )
+                                trial_results.append(
+                                    {
+                                        "threshold": float(threshold),
+                                        "status": str(fit.get("status", "failed")),
+                                        "inliers": int(fit.get("refined_inliers", fit.get("inliers", 0))),
+                                        "rms_px": _float_or_nan(fit.get("refit_rms_px", fit.get("rms_px"))),
+                                        "reference_stored": int(reference_catalog["stored_count"]),
+                                        "moving_stored": int(moving_catalog["stored_count"]),
+                                        "top_candidate_count": len(fit.get("top_candidates", [])),
+                                    }
+                                )
+                                if str(fit.get("status")) != "ok":
+                                    continue
+                                if selected_fit is None or _resident_similarity_score(fit) > _resident_similarity_score(
+                                    selected_fit
+                                ):
+                                    selected_fit = fit
+                                    selected_threshold = float(threshold)
+                                    selected_reference_catalog = reference_catalog
+                                    selected_moving_catalog = moving_catalog
+
+                            if selected_fit is None:
+                                status = "failed"
+                                frame_weight_values[index] = 0.0
+                                frame_weights[frame["id"]] = 0.0
+                                warnings.append("resident similarity catalog registration found no accepted fit")
+                            else:
+                                seed_matrices = [
+                                    np.asarray(selected_fit["matrix"], dtype=np.float32).reshape(3, 3),
+                                    *[
+                                        np.asarray(candidate["matrix"], dtype=np.float32).reshape(3, 3)
+                                        for candidate in selected_fit.get("top_candidates", [])
+                                    ],
+                                ]
+                                refinement = stack.refine_matrix_translation_candidates_to_reference(
+                                    reference_index,
+                                    index,
+                                    np.asarray(seed_matrices, dtype=np.float32),
+                                    **refine_kwargs,
+                                )
+                                matrix = np.asarray(refinement["matrix"], dtype=np.float32).tolist()
+                                matched = int(selected_fit.get("inliers", 0))
+                                inliers = int(selected_fit.get("refined_inliers", matched))
+                                rms_px = _float_or_nan(selected_fit.get("refit_rms_px", selected_fit.get("rms_px")))
+                                stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
+                                warnings.extend(
+                                    [
+                                        f"similarity_threshold_mode={threshold_mode}",
+                                        f"selected_similarity_threshold={float(selected_threshold or 0.0):.6g}",
+                                        "similarity_threshold_candidates="
+                                        + ",".join(f"{float(item):.6g}" for item in threshold_candidates),
+                                        f"reference_stars={int(selected_reference_catalog['stored_count'])}",
+                                        f"moving_stars={int(selected_moving_catalog['stored_count'])}",
+                                        f"similarity_top_k={int(selected_fit.get('top_k', similarity_top_k))}",
+                                        f"similarity_top_candidate_count={len(selected_fit.get('top_candidates', []))}",
+                                        f"similarity_seed_count={int(refinement['seed_count'])}",
+                                        f"similarity_selected_seed={int(refinement['selected_index'])}",
+                                        f"similarity_scale={float(selected_fit.get('scale', float('nan'))):.9g}",
+                                        f"similarity_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
+                                        f"similarity_fit_rms_px={rms_px:.6g}",
+                                        f"similarity_pixel_rms_adu={float(refinement['metrics'].get('rms', float('nan'))):.6g}",
+                                        f"similarity_pixel_ncc={float(refinement['metrics'].get('ncc', float('nan'))):.6g}",
+                                        "resident CUDA catalog similarity with multi-seed pixel refinement",
+                                    ]
+                                    + prior_warnings
+                                )
+                            warnings.append("similarity_trials=" + str(trial_results))
+                    except Exception as exc:
+                        status = "failed"
+                        frame_weight_values[index] = 0.0
+                        frame_weights[frame["id"]] = 0.0
+                        warnings.append(str(exc))
+                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_results.append(
+                        RegistrationResult(
+                            frame_id=str(frame["id"]),
+                            reference_frame_id=str(reference_frame["id"]),
+                            transform_model="similarity_cuda_catalog",
+                            matrix=matrix,
+                            matched_stars=matched,
+                            inliers=inliers,
+                            rms_px=rms_px,
+                            status=status,
+                            warnings=warnings
+                            + [
+                                f"max_shift={resident_registration_max_shift}",
+                                f"star_max_candidates={resident_star_max_candidates}",
+                                f"star_tolerance_px={resident_star_tolerance_px}",
+                                "resident GPU similarity catalog registration",
+                            ],
+                        )
+                    )
+
             if resident_registration == "external_matrix":
                 for index, frame in enumerate(light_frames):
                     registration_frame_start = perf_counter()
@@ -1256,6 +1558,8 @@ def run_resident_calibration_integration(
                             "Resident registration can consume external similarity/affine matrices and apply them "
                             "with CUDA matrix bilinear warp."
                             if resident_registration == "external_matrix"
+                            else "Resident registration estimated CUDA similarity matrices and applied resident matrix warp."
+                            if resident_registration == "similarity_cuda_catalog"
                             else "Resident registration is optional and currently limited to translation."
                         ),
                         (
@@ -1316,10 +1620,17 @@ def run_resident_calibration_integration(
                             "resident registration consumed external matrices; non-translation matrices are applied "
                             "with CUDA matrix bilinear warp"
                             if resident_registration == "external_matrix"
+                            else (
+                                "resident registration estimated CUDA catalog similarity matrices and applied them "
+                                "with resident matrix bilinear warp"
+                            )
+                            if resident_registration == "similarity_cuda_catalog"
                             else "resident registration is translation-only in the current gate"
                         ),
                         (
-                            "star-catalog mode records GPU mutual-inlier diagnostics; preview/NCC modes still use "
+                            "similarity-catalog mode records CUDA fit/refine diagnostics in warnings"
+                            if resident_registration == "similarity_cuda_catalog"
+                            else "star-catalog mode records GPU mutual-inlier diagnostics; preview/NCC modes still use "
                             "placeholder matched_stars/inliers/rms"
                             if resident_registration == "translation_star_catalog"
                             else "external_matrix mode preserves matched_stars/inliers/rms from the source artifact"
@@ -1402,6 +1713,8 @@ def run_resident_calibration_integration(
             + (
                 "external registration matrices are applied with CUDA matrix warp when requested"
                 if resident_registration == "external_matrix"
+                else "resident CUDA catalog similarity matrices are estimated and applied in VRAM"
+                if resident_registration == "similarity_cuda_catalog"
                 else "registration is translation only and local normalization is global mean/std when enabled"
             )
         )

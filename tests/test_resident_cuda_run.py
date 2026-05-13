@@ -330,6 +330,87 @@ def test_cli_resident_cuda_run_star_catalog_auto_threshold_aligns_shifted_pair(t
     assert any("star_prior_model=ncc" in warning for warning in moving["warnings"])
 
 
+def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_similarity_catalog"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_catalog_tolerance_px": 1.5,
+            "cuda_catalog_min_pair_distance": 8.0,
+            "cuda_catalog_similarity_top_k": 3,
+            "cuda_catalog_min_scale": 0.99,
+            "cuda_catalog_max_scale": 1.01,
+            "cuda_catalog_max_abs_rotation_rad": 0.02,
+            "cuda_catalog_pixel_refine_coarse_stride": 1,
+            "cuda_catalog_pixel_refine_final_stride": 1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_catalog",
+            "--resident-star-threshold",
+            "0",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-registration-max-shift",
+            "8",
+            "--resident-star-prior",
+            "ncc",
+            "--resident-star-prior-radius-px",
+            "2",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+
+    registration = read_json(run / "registration_results.json")
+    integration = read_json(run / "integration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    moving = [item for item in registration["results"] if item["status"] != "reference"][0]
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+
+    assert registration["transform_model"] == "similarity_cuda_catalog"
+    assert integration["outputs"][0]["resident_registration"] == "similarity_cuda_catalog"
+    assert resident_registration["mode"] == "similarity_cuda_catalog"
+    assert moving["status"] == "ok"
+    assert moving["transform_model"] == "similarity_cuda_catalog"
+    assert moving["matched_stars"] >= 6
+    assert abs(moving["matrix"][0][2] + 3.0) < 0.5
+    assert abs(moving["matrix"][1][2] - 2.0) < 0.5
+    assert any("similarity_top_k=3" in warning for warning in moving["warnings"])
+    assert any("similarity_seed_count=4" in warning for warning in moving["warnings"])
+    assert any("resident CUDA catalog similarity" in warning for warning in moving["warnings"])
+
+
 def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_star_dataset(tmp_path)

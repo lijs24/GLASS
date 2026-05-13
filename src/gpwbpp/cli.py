@@ -645,6 +645,7 @@ def build_parser() -> argparse.ArgumentParser:
             "translation_preview",
             "translation_ncc_subpixel",
             "translation_star_catalog",
+            "similarity_cuda_catalog",
             "external_matrix",
         ],
         default="off",
@@ -652,6 +653,7 @@ def build_parser() -> argparse.ArgumentParser:
             "resident CUDA registration mode; translation_preview uses downsampled phase correlation, "
             "translation_ncc_subpixel uses resident GPU NCC plus subpixel refinement, "
             "translation_star_catalog uses GPU star candidates plus pair-offset voting, "
+            "similarity_cuda_catalog uses resident GPU star catalogs plus CUDA similarity refinement, "
             "external_matrix applies matrices from a prior registration_results.json"
         ),
     )
