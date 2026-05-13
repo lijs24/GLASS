@@ -9,7 +9,10 @@ from typing import Any
 import numpy as np
 from astropy.io import fits
 
-from gpwbpp.gpu.registration import refine_matrix_translation_candidates_with_metrics_f32
+from gpwbpp.gpu.registration import (
+    refine_matrix_translation_candidates_with_metrics_f32,
+    register_triangle_descriptor_similarity_f32,
+)
 import gpwbpp_cuda
 
 
@@ -220,6 +223,12 @@ def _best_alignment_summary(payload: dict[str, Any]) -> dict[str, Any]:
             agreement_key="resident_catalog_similarity_pixel_refined_agreement_vs_astroalign",
             speedup_key="resident_catalog_similarity_pixel_refined_algorithm_speedup_vs_astroalign",
             upload_speedup_key="resident_catalog_similarity_pixel_refined_upload_plus_algorithm_speedup_vs_astroalign",
+        ),
+        _method_agreement_summary(
+            payload,
+            method_key="gpwbpp_cuda_triangle_descriptor_similarity",
+            agreement_key="triangle_descriptor_similarity_agreement_vs_astroalign",
+            speedup_key="triangle_descriptor_similarity_speedup_vs_astroalign",
         ),
     ]
 
@@ -1365,6 +1374,85 @@ def _gpu_catalog_similarity_run(
     return result, np.asarray(aligned, dtype=np.float32), valid
 
 
+def _gpu_triangle_descriptor_similarity_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    max_stars: int,
+    threshold_sigma: float,
+    tolerance_px: float,
+    descriptor_radius: float,
+    neighbors: int,
+    max_descriptors: int,
+    min_inliers: int,
+    nms_scan_candidates: int | None,
+    nms_min_separation_px: float | None,
+) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    if not hasattr(gpwbpp_cuda, "estimate_similarity_from_triangle_descriptors_f32"):
+        raise RuntimeError("native CUDA backend lacks estimate_similarity_from_triangle_descriptors_f32")
+
+    reference_threshold = _adaptive_star_threshold(reference, threshold_sigma)
+    moving_threshold = _adaptive_star_threshold(moving, threshold_sigma)
+    effective_threshold = min(reference_threshold, moving_threshold)
+    t0 = time.perf_counter()
+    aligned, coverage, diagnostics = register_triangle_descriptor_similarity_f32(
+        reference,
+        moving,
+        threshold=effective_threshold,
+        max_candidates=max_stars,
+        neighbors=neighbors,
+        max_descriptors=max_descriptors,
+        tolerance_px=tolerance_px,
+        descriptor_radius=descriptor_radius,
+        nms_scan_candidates=nms_scan_candidates,
+        nms_min_separation_px=nms_min_separation_px,
+    )
+    elapsed = time.perf_counter() - t0
+    similarity = dict(diagnostics["similarity"])
+    matrix = np.asarray(diagnostics["matrix"], dtype=np.float64)
+    valid = coverage > 0.0
+    accepted = diagnostics["status"] == "ok" and int(similarity["inliers"]) >= int(min_inliers)
+    warnings = [] if accepted else [f"triangle descriptor similarity inliers below {int(min_inliers)}"]
+    result = {
+        "elapsed_s": elapsed,
+        "matrix": matrix.tolist(),
+        "scale": float(similarity["scale"]),
+        "rotation_rad": float(similarity["rotation_rad"]),
+        "rms_px": float(similarity["rms_px"]),
+        "inliers": int(similarity["inliers"]),
+        "best_candidate_index": int(similarity["best_candidate_index"]),
+        "candidate_count": int(similarity["candidate_count"]),
+        "reference_count": int(similarity["reference_count"]),
+        "moving_count": int(similarity["moving_count"]),
+        "reference_detected": int(diagnostics["reference_detected"]),
+        "moving_detected": int(diagnostics["moving_detected"]),
+        "reference_stored": int(diagnostics["reference_stored"]),
+        "moving_stored": int(diagnostics["moving_stored"]),
+        "reference_descriptor_count": int(diagnostics["reference_descriptor_count"]),
+        "moving_descriptor_count": int(diagnostics["moving_descriptor_count"]),
+        "reference_threshold": reference_threshold,
+        "moving_threshold": moving_threshold,
+        "effective_threshold": effective_threshold,
+        "threshold_policy": "min(reference_threshold, moving_threshold)",
+        "tolerance_px": float(tolerance_px),
+        "descriptor_radius": float(descriptor_radius),
+        "neighbors": int(neighbors),
+        "max_descriptors": int(max_descriptors),
+        "nms_scan_candidates": nms_scan_candidates,
+        "nms_min_separation_px": nms_min_separation_px,
+        "catalog_selector": str(diagnostics["catalog_selector"]),
+        "coverage_pixels": int(np.sum(valid)),
+        "accepted": accepted,
+        "warnings": warnings,
+        "fit_status": str(similarity["status"]),
+        "fit_model": str(similarity["model"]),
+        "model": "pure_cuda_triangle_descriptor_similarity_seed_then_matrix_warp",
+        "rms": _rms(reference, aligned, valid),
+    }
+    return result, np.asarray(aligned, dtype=np.float32), valid
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare astroalign with GPWBPP CUDA translation alignment.")
     parser.add_argument("--reference", type=Path)
@@ -1405,6 +1493,9 @@ def main() -> int:
     parser.add_argument("--catalog-pixel-refine-fine-step", type=float, default=0.0625)
     parser.add_argument("--catalog-pixel-refine-coarse-stride", type=int, default=4)
     parser.add_argument("--catalog-pixel-refine-final-stride", type=int, default=1)
+    parser.add_argument("--triangle-descriptor-neighbors", type=int, default=5)
+    parser.add_argument("--triangle-descriptor-max-descriptors", type=int, default=1200)
+    parser.add_argument("--triangle-descriptor-radius", type=float, default=0.1)
     parser.add_argument(
         "--resident-star-core-preselect-top-k",
         type=int,
@@ -1428,6 +1519,12 @@ def main() -> int:
         raise ValueError("catalog pixel-refine strides must be positive")
     if args.catalog_similarity_top_k < 0:
         raise ValueError("--catalog-similarity-top-k must be non-negative")
+    if args.triangle_descriptor_neighbors < 3:
+        raise ValueError("--triangle-descriptor-neighbors must be at least 3")
+    if args.triangle_descriptor_max_descriptors <= 0:
+        raise ValueError("--triangle-descriptor-max-descriptors must be positive")
+    if args.triangle_descriptor_radius < 0.0:
+        raise ValueError("--triangle-descriptor-radius must be non-negative")
     if args.resident_star_core_preselect_top_k < 0:
         raise ValueError("--resident-star-core-preselect-top-k must be non-negative")
 
@@ -1544,6 +1641,23 @@ def main() -> int:
         )
     )
     (
+        gpu_triangle_descriptor_similarity_result,
+        gpu_triangle_descriptor_similarity_aligned,
+        gpu_triangle_descriptor_similarity_valid,
+    ) = _gpu_triangle_descriptor_similarity_run(
+        reference,
+        moving,
+        args.catalog_stars,
+        args.catalog_threshold_sigma,
+        args.catalog_tolerance_px,
+        args.triangle_descriptor_radius,
+        args.triangle_descriptor_neighbors,
+        args.triangle_descriptor_max_descriptors,
+        args.catalog_min_inliers,
+        args.catalog_nms_scan_stars,
+        args.catalog_nms_min_separation,
+    )
+    (
         gpu_catalog_similarity_pixel_refined_result,
         gpu_catalog_similarity_pixel_refined_aligned,
         gpu_catalog_similarity_pixel_refined_valid,
@@ -1623,6 +1737,12 @@ def main() -> int:
         astroalign_aligned,
         astroalign_valid,
     )
+    gpu_triangle_descriptor_similarity_diff = _diff_on_common_valid_pixels(
+        gpu_triangle_descriptor_similarity_aligned,
+        gpu_triangle_descriptor_similarity_valid,
+        astroalign_aligned,
+        astroalign_valid,
+    )
     gpu_resident_catalog_similarity_pixel_refined_diff = _diff_on_common_valid_pixels(
         gpu_resident_catalog_similarity_pixel_refined_aligned,
         gpu_resident_catalog_similarity_pixel_refined_valid,
@@ -1644,6 +1764,11 @@ def main() -> int:
         astroalign_matrix,
         gpu_resident_catalog_similarity_pixel_refined_diff,
     )
+    triangle_descriptor_similarity_agreement = _agreement_vs_astroalign(
+        np.asarray(gpu_triangle_descriptor_similarity_result["matrix"], dtype=np.float64),
+        astroalign_matrix,
+        gpu_triangle_descriptor_similarity_diff,
+    )
     gpu_catalog_similarity_result["benchmark_agreement"] = catalog_similarity_agreement
     gpu_catalog_similarity_result["output_consistent_with_astroalign"] = bool(
         catalog_similarity_agreement["output_passed"]
@@ -1658,6 +1783,10 @@ def main() -> int:
     gpu_resident_catalog_similarity_pixel_refined_result["output_consistent_with_astroalign"] = bool(
         resident_catalog_similarity_pixel_refined_agreement["output_passed"]
     )
+    gpu_triangle_descriptor_similarity_result["benchmark_agreement"] = triangle_descriptor_similarity_agreement
+    gpu_triangle_descriptor_similarity_result["output_consistent_with_astroalign"] = bool(
+        triangle_descriptor_similarity_agreement["output_passed"]
+    )
     gpu_catalog_similarity_pixel_refined_result["accepted"] = bool(
         catalog_similarity_pixel_refined_agreement["passed"]
     )
@@ -1671,6 +1800,12 @@ def main() -> int:
         []
         if resident_catalog_similarity_pixel_refined_agreement["passed"]
         else ["resident pixel-refined catalog similarity agreement failed"]
+    )
+    gpu_triangle_descriptor_similarity_result["accepted"] = bool(triangle_descriptor_similarity_agreement["passed"])
+    gpu_triangle_descriptor_similarity_result["warnings"] = (
+        []
+        if triangle_descriptor_similarity_agreement["passed"]
+        else ["triangle descriptor similarity agreement failed"]
     )
     gpu_catalog_similarity_matrix_metrics = _gpu_matrix_metrics_run(
         reference,
@@ -1704,11 +1839,15 @@ def main() -> int:
         "direct_output_diff_gpu_resident_catalog_similarity_pixel_refined_minus_astroalign_apply_on_common_valid_pixels": (
             gpu_resident_catalog_similarity_pixel_refined_diff
         ),
+        "direct_output_diff_gpu_triangle_descriptor_similarity_minus_astroalign_apply_on_common_valid_pixels": (
+            gpu_triangle_descriptor_similarity_diff
+        ),
         "catalog_similarity_agreement_vs_astroalign": catalog_similarity_agreement,
         "catalog_similarity_pixel_refined_agreement_vs_astroalign": catalog_similarity_pixel_refined_agreement,
         "resident_catalog_similarity_pixel_refined_agreement_vs_astroalign": (
             resident_catalog_similarity_pixel_refined_agreement
         ),
+        "triangle_descriptor_similarity_agreement_vs_astroalign": triangle_descriptor_similarity_agreement,
         "valid_pixels": {
             "astroalign": int(np.sum(astroalign_valid)),
             "gpwbpp_cuda_matrix": int(np.sum(gpu_matrix_valid)),
@@ -1720,6 +1859,7 @@ def main() -> int:
             "gpwbpp_cuda_resident_catalog_similarity_pixel_refined": int(
                 np.sum(gpu_resident_catalog_similarity_pixel_refined_valid)
             ),
+            "gpwbpp_cuda_triangle_descriptor_similarity": int(np.sum(gpu_triangle_descriptor_similarity_valid)),
             "common": int(np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_matrix_valid, dtype=bool))),
             "common_similarity_fit": int(
                 np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_similarity_valid, dtype=bool))
@@ -1742,6 +1882,12 @@ def main() -> int:
                     & np.asarray(gpu_resident_catalog_similarity_pixel_refined_valid, dtype=bool)
                 )
             ),
+            "common_triangle_descriptor_similarity": int(
+                np.sum(
+                    np.asarray(astroalign_valid, dtype=bool)
+                    & np.asarray(gpu_triangle_descriptor_similarity_valid, dtype=bool)
+                )
+            ),
         },
         "gpwbpp_cuda": gpu_result,
         "gpwbpp_cuda_subpixel": gpu_subpixel_result,
@@ -1754,6 +1900,7 @@ def main() -> int:
         "gpwbpp_cuda_resident_catalog_similarity_pixel_refined": (
             gpu_resident_catalog_similarity_pixel_refined_result
         ),
+        "gpwbpp_cuda_triangle_descriptor_similarity": gpu_triangle_descriptor_similarity_result,
         "gpwbpp_cuda_catalog_similarity_matrix_metrics": gpu_catalog_similarity_matrix_metrics,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
@@ -1807,6 +1954,10 @@ def main() -> int:
         ]
         / gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_algorithm_elapsed_s"]
         if gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_algorithm_elapsed_s"] > 0.0
+        else None,
+        "triangle_descriptor_similarity_speedup_vs_astroalign": astroalign_result["elapsed_s"]
+        / gpu_triangle_descriptor_similarity_result["elapsed_s"]
+        if gpu_triangle_descriptor_similarity_result["elapsed_s"] > 0.0
         else None,
         "subpixel_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_subpixel_result["elapsed_s"]
         if gpu_subpixel_result["elapsed_s"] > 0.0

@@ -111,7 +111,9 @@ Resident CUDA integration now supports:
   provides the triangle-descriptor orchestration helper: GPU star catalogs,
   CUDA triangle descriptors, CUDA descriptor-based similarity scoring, then
   CUDA matrix warp. It is currently validated on a controlled synthetic image
-  pair and is ready for the M38 astroalign comparison benchmark.
+  pair and is wired into `benchmarks/compare_astroalign_gpu_alignment.py` as
+  `gpwbpp_cuda_triangle_descriptor_similarity` for astroalign agreement and
+  timing comparisons.
 - `star_top_nms_candidates_f32(...)` adds a CUDA-side top-candidate selection
   plus minimum-distance suppression step. This reduces duplicated local maxima
   around saturated stars before catalog matching.
@@ -207,6 +209,8 @@ FastIntegration's robust rejection and alignment internals. The resident
 translation path is useful for diagnosis and high-VRAM timing, but it does not
 replace the star-based registration/Lanczos warp gates.
 
-For registration, the next CUDA step is to run asterism matching,
-similarity/affine scoring, and transform application on the device from bounded
-star catalogs. CPU should only orchestrate and receive compact diagnostics.
+For registration, the next CUDA step is to extend the current triangle
+asterism matcher toward quad/pentagon descriptors and resident-stack execution,
+so similarity/affine scoring and transform application stay on the device from
+bounded star catalogs. CPU should only orchestrate and receive compact
+diagnostics.

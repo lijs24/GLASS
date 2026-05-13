@@ -119,8 +119,14 @@ selection on real M38 frames and resident pipeline wiring remain open.
 the controlled image-pair loop: CUDA star catalog extraction, CUDA triangle
 descriptor generation, CUDA triangle-descriptor similarity scoring, and CUDA
 matrix warp. The current unit test validates that this loop improves alignment
-on a synthetic rotated/translated star field. The next benchmark step is to run
-the same helper on the calibrated M38 pair used for the astroalign comparison.
+on a synthetic rotated/translated star field. The astroalign comparison
+benchmark now records this path as
+`gpwbpp_cuda_triangle_descriptor_similarity`, including descriptor counts,
+candidate count, transform/output agreement versus astroalign, and speedup. A
+small synthetic benchmark smoke artifact is written under
+`runs/benchmarks/triangle_descriptor_synthetic_smoke.json`; the next validation
+step is to run the same helper on the calibrated M38 pair used for the
+astroalign comparison.
 
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
