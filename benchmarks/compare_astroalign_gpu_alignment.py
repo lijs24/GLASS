@@ -146,14 +146,17 @@ def _agreement_vs_astroalign(
     )
     rms_diff = output_diff.get("rms_diff")
     median_abs_diff = output_diff.get("median_abs_diff")
-    passed = (
+    matrix_passed = (
         translation_delta <= 0.5
         and scale_delta <= 1.0e-3
         and rotation_delta <= 1.0e-3
-        and (rms_diff is not None and float(rms_diff) <= 55.0)
     )
+    output_passed = rms_diff is not None and float(rms_diff) <= 55.0
+    passed = matrix_passed and output_passed
     return {
         "passed": bool(passed),
+        "strict_matrix_passed": bool(matrix_passed),
+        "output_passed": bool(output_passed),
         "translation_delta_px": translation_delta,
         "scale_delta": scale_delta,
         "rotation_delta_rad": rotation_delta,
@@ -166,6 +169,75 @@ def _agreement_vs_astroalign(
             "rotation_delta_rad_max": 1.0e-3,
             "output_rms_diff_max": 55.0,
         },
+    }
+
+
+def _method_agreement_summary(
+    payload: dict[str, Any],
+    *,
+    method_key: str,
+    agreement_key: str,
+    speedup_key: str,
+    upload_speedup_key: str | None = None,
+) -> dict[str, Any]:
+    method = payload[method_key]
+    agreement = payload[agreement_key]
+    return {
+        "method": method_key,
+        "strict_matrix_and_output_passed": bool(agreement["passed"]),
+        "strict_matrix_passed": bool(agreement["strict_matrix_passed"]),
+        "output_passed": bool(agreement["output_passed"]),
+        "speedup_vs_astroalign": payload.get(speedup_key),
+        "upload_inclusive_speedup_vs_astroalign": None
+        if upload_speedup_key is None
+        else payload.get(upload_speedup_key),
+        "elapsed_s": method.get("elapsed_s"),
+        "device_elapsed_s": method.get("device_elapsed_s"),
+        "selected_seed_rank": method.get("selected_seed_rank"),
+        "selected_seed_inliers": method.get("selected_seed_inliers"),
+        "translation_delta_px": agreement.get("translation_delta_px"),
+        "output_rms_diff": agreement.get("output_rms_diff"),
+    }
+
+
+def _best_alignment_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    candidates = [
+        _method_agreement_summary(
+            payload,
+            method_key="gpwbpp_cuda_catalog_similarity",
+            agreement_key="catalog_similarity_agreement_vs_astroalign",
+            speedup_key="catalog_similarity_speedup_vs_astroalign",
+        ),
+        _method_agreement_summary(
+            payload,
+            method_key="gpwbpp_cuda_catalog_similarity_pixel_refined",
+            agreement_key="catalog_similarity_pixel_refined_agreement_vs_astroalign",
+            speedup_key="catalog_similarity_pixel_refined_speedup_vs_astroalign",
+        ),
+        _method_agreement_summary(
+            payload,
+            method_key="gpwbpp_cuda_resident_catalog_similarity_pixel_refined",
+            agreement_key="resident_catalog_similarity_pixel_refined_agreement_vs_astroalign",
+            speedup_key="resident_catalog_similarity_pixel_refined_algorithm_speedup_vs_astroalign",
+            upload_speedup_key="resident_catalog_similarity_pixel_refined_upload_plus_algorithm_speedup_vs_astroalign",
+        ),
+    ]
+
+    strict = [item for item in candidates if item["strict_matrix_and_output_passed"]]
+    output_consistent = [item for item in candidates if item["output_passed"]]
+
+    def speed_key(item: dict[str, Any]) -> float:
+        speedup = item.get("speedup_vs_astroalign")
+        return float(speedup) if speedup is not None and np.isfinite(float(speedup)) else -1.0
+
+    return {
+        "strict_matrix_and_output_best": max(strict, key=speed_key) if strict else None,
+        "output_consistent_best": max(output_consistent, key=speed_key) if output_consistent else None,
+        "candidates": candidates,
+        "note": (
+            "strict_matrix_and_output_passed requires <=0.5 px translation delta versus astroalign; "
+            "output_passed only requires the aligned output RMS difference to stay within the benchmark tolerance."
+        ),
     }
 
 
@@ -661,6 +733,33 @@ def _annotate_star_core_metrics(
     }
 
 
+def _annotate_resident_star_core_metrics(
+    stack: Any,
+    reference: np.ndarray,
+    seed_metrics: list[dict[str, Any]],
+) -> dict[str, Any]:
+    threshold = _adaptive_star_threshold(reference, 6.0)
+    matrices = np.asarray([seed["matrix"] for seed in seed_metrics], dtype=np.float32)
+    t0 = time.perf_counter()
+    result = stack.star_core_metrics_candidates_to_reference(0, 1, matrices, float(threshold))
+    elapsed = time.perf_counter() - t0
+    candidate_metrics = list(result["candidate_metrics"])
+    for item in candidate_metrics:
+        seed_index = int(item["seed_index"])
+        seed_metrics[seed_index]["star_core_metric"] = dict(item["metrics"])
+    available_pixels = 0
+    for item in candidate_metrics:
+        metrics = dict(item["metrics"])
+        available_pixels = max(available_pixels, int(metrics.get("valid_pixels", 0)))
+    return {
+        "elapsed_s": elapsed,
+        "threshold": float(result["threshold"]),
+        "available_pixels": int(available_pixels),
+        "sampled_pixels": int(result["sampled_pixels"]),
+        "model": str(result["model"]),
+    }
+
+
 def _gpu_catalog_similarity_pixel_refine_run(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -853,7 +952,7 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
                 "matrix": np.asarray(seed_result["matrix"], dtype=np.float64).tolist(),
             }
         )
-    star_core_metric_summary = _annotate_star_core_metrics(reference, moving, seed_metrics)
+    star_core_metric_summary = _annotate_resident_star_core_metrics(stack, reference, seed_metrics)
     pixel_selected_index = int(refinement["selected_index"])
     selected_metric_index, star_guard = _select_star_guarded_seed(seed_metrics, pixel_selected_index)
     selected_seed = seed_metrics[selected_metric_index]
@@ -1403,6 +1502,20 @@ def main() -> int:
         astroalign_matrix,
         gpu_resident_catalog_similarity_pixel_refined_diff,
     )
+    gpu_catalog_similarity_result["benchmark_agreement"] = catalog_similarity_agreement
+    gpu_catalog_similarity_result["output_consistent_with_astroalign"] = bool(
+        catalog_similarity_agreement["output_passed"]
+    )
+    gpu_catalog_similarity_pixel_refined_result["benchmark_agreement"] = catalog_similarity_pixel_refined_agreement
+    gpu_catalog_similarity_pixel_refined_result["output_consistent_with_astroalign"] = bool(
+        catalog_similarity_pixel_refined_agreement["output_passed"]
+    )
+    gpu_resident_catalog_similarity_pixel_refined_result["benchmark_agreement"] = (
+        resident_catalog_similarity_pixel_refined_agreement
+    )
+    gpu_resident_catalog_similarity_pixel_refined_result["output_consistent_with_astroalign"] = bool(
+        resident_catalog_similarity_pixel_refined_agreement["output_passed"]
+    )
     gpu_catalog_similarity_pixel_refined_result["accepted"] = bool(
         catalog_similarity_pixel_refined_agreement["passed"]
     )
@@ -1588,6 +1701,7 @@ def main() -> int:
         else None,
         "cuda_devices": devices,
     }
+    result["best_gpwbpp_cuda_alignment_vs_astroalign"] = _best_alignment_summary(result)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(json.dumps(result, indent=2))

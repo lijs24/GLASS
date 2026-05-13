@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from tests.conftest import cuda_module_or_skip
 
@@ -314,6 +315,61 @@ def test_resident_stack_matrix_metric_multi_seed_refine_uses_loaded_frames():
     assert result["selected_index"] == 1
     assert abs(matrix[0, 2] - good_matrix[0, 2]) <= 0.125
     assert abs(matrix[1, 2] - good_matrix[1, 2]) <= 0.125
+
+
+def test_resident_stack_star_core_candidate_metrics_match_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+
+    reference = _smooth_star_field()
+    good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
+    moving, _ = module.warp_matrix_bilinear_f32(reference, np.linalg.inv(good_matrix).astype(np.float32), 0.0)
+    bad_matrix = good_matrix.copy()
+    bad_matrix[0, 2] += 2.0
+    bad_matrix[1, 2] -= 2.0
+    matrices = np.stack([good_matrix, bad_matrix]).astype(np.float32)
+    threshold = float(np.median(reference) + 4.0 * np.std(reference))
+
+    stack = module.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    result = stack.star_core_metrics_candidates_to_reference(0, 1, matrices, threshold)
+
+    def cpu_star_core_rms(matrix: np.ndarray) -> float:
+        inverse = np.linalg.inv(matrix.astype(np.float64))
+        ys, xs = np.nonzero(reference > threshold)
+        x = xs.astype(np.float64)
+        y = ys.astype(np.float64)
+        sx = inverse[0, 0] * x + inverse[0, 1] * y + inverse[0, 2]
+        sy = inverse[1, 0] * x + inverse[1, 1] * y + inverse[1, 2]
+        valid = (sx >= 0.0) & (sx <= reference.shape[1] - 1) & (sy >= 0.0) & (sy <= reference.shape[0] - 1)
+        sx = sx[valid]
+        sy = sy[valid]
+        ref_values = reference[ys[valid], xs[valid]].astype(np.float64)
+        x0 = np.floor(sx).astype(np.int64)
+        y0 = np.floor(sy).astype(np.int64)
+        x1 = np.minimum(x0 + 1, reference.shape[1] - 1)
+        y1 = np.minimum(y0 + 1, reference.shape[0] - 1)
+        tx = sx - x0
+        ty = sy - y0
+        sampled = (
+            moving[y0, x0] * (1.0 - tx) * (1.0 - ty)
+            + moving[y0, x1] * tx * (1.0 - ty)
+            + moving[y1, x0] * (1.0 - tx) * ty
+            + moving[y1, x1] * tx * ty
+        )
+        diff = sampled - ref_values
+        return float(np.sqrt(np.mean(diff * diff)))
+
+    metrics = [dict(item["metrics"]) for item in result["candidate_metrics"]]
+
+    assert result["model"] == "resident_star_core_bilinear_metric_cuda"
+    assert result["candidate_count"] == 2
+    assert metrics[0]["valid_pixels"] > 0
+    assert metrics[0]["rms"] < metrics[1]["rms"]
+    assert metrics[0]["rms"] == pytest.approx(cpu_star_core_rms(good_matrix), rel=1e-5, abs=1e-4)
+    assert metrics[1]["rms"] == pytest.approx(cpu_star_core_rms(bad_matrix), rel=1e-5, abs=1e-4)
 
 
 def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():

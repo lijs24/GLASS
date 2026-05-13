@@ -1910,6 +1910,62 @@ class ResidentCalibratedStack:
             "model": str(result.get("model", "resident_matrix_alignment_metrics_cuda")),
         }
 
+    def star_core_metrics_candidates_to_reference(
+        self,
+        reference_index: int,
+        moving_index: int,
+        matrices: Any,
+        threshold: float,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "star_core_metrics_candidates_to_reference"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.star_core_metrics_candidates_to_reference is not available"
+            )
+        if not np.isfinite(float(threshold)):
+            raise ValueError("threshold must be finite")
+        matrix_array = np.asarray(matrices, dtype=np.float32)
+        if matrix_array.shape == (3, 3):
+            matrix_array = matrix_array.reshape(1, 3, 3)
+        if matrix_array.ndim != 3 or matrix_array.shape[1:] != (3, 3):
+            raise ValueError("matrices must have shape (N, 3, 3) or (3, 3)")
+        if matrix_array.shape[0] == 0:
+            raise ValueError("matrices must contain at least one matrix")
+        result = dict(
+            self._impl.star_core_metrics_candidates_to_reference(
+                int(reference_index),
+                int(moving_index),
+                np.ascontiguousarray(matrix_array),
+                float(threshold),
+            )
+        )
+        candidate_metrics = []
+        for item in result["candidate_metrics"]:
+            raw = dict(item)
+            metrics = dict(raw["metrics"])
+            candidate_metrics.append(
+                {
+                    "seed_index": int(raw["seed_index"]),
+                    "metrics": {
+                        "valid_pixels": int(metrics["valid_pixels"]),
+                        "sampled_pixels": int(metrics["sampled_pixels"]),
+                        "sample_stride": int(metrics["sample_stride"]),
+                        "rms": float(metrics["rms"]),
+                        "mean_abs_diff": float(metrics["mean_abs_diff"]),
+                        "ncc": float(metrics["ncc"]),
+                        "model": str(metrics.get("model", "resident_star_core_bilinear_metric_cuda_candidate")),
+                    },
+                }
+            )
+        return {
+            "candidate_count": int(result["candidate_count"]),
+            "threshold": float(result["threshold"]),
+            "sampled_pixels": int(result["sampled_pixels"]),
+            "candidate_metrics": candidate_metrics,
+            "reference_index": int(result["reference_index"]),
+            "moving_index": int(result["moving_index"]),
+            "model": str(result.get("model", "resident_star_core_bilinear_metric_cuda")),
+        }
+
     def refine_matrix_translation_candidates_to_reference(
         self,
         reference_index: int,

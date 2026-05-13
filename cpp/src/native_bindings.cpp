@@ -78,6 +78,16 @@ void gpwbpp_matrix_alignment_metrics_candidates_f32_launch(
     int height,
     int sample_stride,
     int candidate_count);
+void gpwbpp_star_core_metrics_candidates_f32_launch(
+    const float* reference,
+    const float* moving,
+    const float* inverses,
+    float threshold,
+    double* partial_stats,
+    unsigned long long* partial_count,
+    int width,
+    int height,
+    int candidate_count);
 void gpwbpp_estimate_translation_search_f32_launch(
     const float* reference,
     const float* moving,
@@ -635,6 +645,94 @@ MatrixCandidateMetrics score_matrix_translation_candidates_f32(
   return best;
 }
 
+std::vector<MatrixCandidateMetrics> score_star_core_matrix_candidates_f32(
+    const float* d_reference,
+    const float* d_moving,
+    const std::vector<std::array<float, 9>>& matrices,
+    int width,
+    int height,
+    float threshold) {
+  if (matrices.empty()) {
+    throw std::invalid_argument("candidate matrices must be non-empty");
+  }
+  if (!std::isfinite(threshold)) {
+    throw std::invalid_argument("star core threshold must be finite");
+  }
+  const int candidate_count = static_cast<int>(matrices.size());
+  const int sampled_pixels = width * height;
+
+  std::vector<float> inverses(static_cast<std::size_t>(candidate_count) * 9, 0.0f);
+  for (int i = 0; i < candidate_count; ++i) {
+    const auto inverse = invert_matrix3x3(matrices[static_cast<std::size_t>(i)]);
+    std::copy(inverse.begin(), inverse.end(), inverses.begin() + static_cast<std::size_t>(i) * 9);
+  }
+
+  std::vector<double> partial_stats(static_cast<std::size_t>(candidate_count) * 7, 0.0);
+  std::vector<unsigned long long> partial_count(static_cast<std::size_t>(candidate_count), 0ULL);
+  float* d_inverses = nullptr;
+  double* d_partial_stats = nullptr;
+  unsigned long long* d_partial_count = nullptr;
+  try {
+    check_cuda(
+        cudaMalloc(&d_inverses, inverses.size() * sizeof(float)),
+        "cudaMalloc(star core metric inverses)");
+    check_cuda(
+        cudaMalloc(&d_partial_stats, partial_stats.size() * sizeof(double)),
+        "cudaMalloc(star core metric partial stats)");
+    check_cuda(
+        cudaMalloc(&d_partial_count, partial_count.size() * sizeof(unsigned long long)),
+        "cudaMalloc(star core metric partial count)");
+    check_cuda(
+        cudaMemcpy(d_inverses, inverses.data(), inverses.size() * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(star core metric inverses)");
+    gpwbpp_star_core_metrics_candidates_f32_launch(
+        d_reference,
+        d_moving,
+        d_inverses,
+        threshold,
+        d_partial_stats,
+        d_partial_count,
+        width,
+        height,
+        candidate_count);
+    check_cuda(cudaGetLastError(), "star core candidate metrics kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "star core candidate metrics synchronize");
+    check_cuda(
+        cudaMemcpy(partial_stats.data(), d_partial_stats, partial_stats.size() * sizeof(double), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(star core metric partial stats)");
+    check_cuda(
+        cudaMemcpy(
+            partial_count.data(),
+            d_partial_count,
+            partial_count.size() * sizeof(unsigned long long),
+            cudaMemcpyDeviceToHost),
+        "cudaMemcpy(star core metric partial count)");
+  } catch (...) {
+    cudaFree(d_inverses);
+    cudaFree(d_partial_stats);
+    cudaFree(d_partial_count);
+    throw;
+  }
+  cudaFree(d_inverses);
+  cudaFree(d_partial_stats);
+  cudaFree(d_partial_count);
+
+  std::vector<MatrixCandidateMetrics> results;
+  results.reserve(matrices.size());
+  for (int i = 0; i < candidate_count; ++i) {
+    const std::size_t offset = static_cast<std::size_t>(i) * 7;
+    results.push_back(metrics_from_sums(
+        matrices[static_cast<std::size_t>(i)],
+        0.0f,
+        0.0f,
+        partial_stats.data() + offset,
+        partial_count[static_cast<std::size_t>(i)],
+        sampled_pixels,
+        1));
+  }
+  return results;
+}
+
 py::dict device_info_dict(int device_id) {
   cudaDeviceProp props{};
   check_cuda(cudaGetDeviceProperties(&props, device_id), "cudaGetDeviceProperties");
@@ -985,6 +1083,45 @@ class ResidentCalibratedStack {
     result["reference_index"] = reference_index;
     result["moving_index"] = moving_index;
     result["model"] = "resident_matrix_alignment_metrics_cuda";
+    return result;
+  }
+
+  py::dict star_core_metrics_candidates_to_reference(
+      std::size_t reference_index,
+      std::size_t moving_index,
+      py::object matrices_obj,
+      float threshold) const {
+    require_loaded(reference_index, "resident star core candidate metrics");
+    require_loaded(moving_index, "resident star core candidate metrics");
+    const auto matrices = parse_matrix_stack(matrices_obj);
+    const auto* d_reference = d_stack_ + reference_index * pixels_per_frame_;
+    const auto* d_moving = d_stack_ + moving_index * pixels_per_frame_;
+    const auto metrics = score_star_core_matrix_candidates_f32(
+        d_reference,
+        d_moving,
+        matrices,
+        static_cast<int>(width_),
+        static_cast<int>(height_),
+        threshold);
+
+    py::list candidate_metrics;
+    for (std::size_t index = 0; index < metrics.size(); ++index) {
+      py::dict item;
+      item["seed_index"] = static_cast<int>(index);
+      item["metrics"] = matrix_candidate_to_dict(
+          metrics[index],
+          "resident_star_core_bilinear_metric_cuda_candidate");
+      candidate_metrics.append(item);
+    }
+
+    py::dict result;
+    result["candidate_count"] = static_cast<int>(metrics.size());
+    result["threshold"] = threshold;
+    result["sampled_pixels"] = static_cast<unsigned long long>(pixels_per_frame_);
+    result["candidate_metrics"] = candidate_metrics;
+    result["reference_index"] = reference_index;
+    result["moving_index"] = moving_index;
+    result["model"] = "resident_star_core_bilinear_metric_cuda";
     return result;
   }
 
@@ -4874,6 +5011,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("moving_index"),
           py::arg("matrix"),
           py::arg("sample_stride") = 1)
+      .def(
+          "star_core_metrics_candidates_to_reference",
+          &ResidentCalibratedStack::star_core_metrics_candidates_to_reference,
+          py::arg("reference_index"),
+          py::arg("moving_index"),
+          py::arg("matrices"),
+          py::arg("threshold"))
       .def(
           "refine_matrix_translation_candidates_to_reference",
           &ResidentCalibratedStack::refine_matrix_translation_candidates_to_reference,
