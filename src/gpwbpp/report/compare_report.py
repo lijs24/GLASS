@@ -277,6 +277,7 @@ def compare_fits(
     diagnostics_dir: str | Path | None = None,
     diagnostic_max_size: int = 1024,
     hotspot_tile_size: int = 512,
+    ignore_border_px: int = 0,
 ) -> dict[str, object]:
     gp_raw = _read_image_data(gpwbpp_path)
     gp, transform = _apply_candidate_transform(gp_raw, gpwbpp_scale, gpwbpp_offset, clip_low, clip_high)
@@ -298,16 +299,32 @@ def compare_fits(
             "timing": timing,
             "candidate_transform": transform,
         }
+    border = int(ignore_border_px)
+    if border < 0:
+        raise ValueError("ignore_border_px must be non-negative")
+    if border > 0 and (border * 2 >= gp.shape[0] or border * 2 >= gp.shape[1]):
+        raise ValueError("ignore_border_px is too large for the compared image shape")
+    gp_region = gp[border : gp.shape[0] - border, border : gp.shape[1] - border] if border else gp
+    ref_region = ref[border : ref.shape[0] - border, border : ref.shape[1] - border] if border else ref
+    stats = _diff_stats(gp_region, ref_region)
+    comparison_region = {
+        "ignore_border_px": border,
+        "full_shape": [int(gp.shape[0]), int(gp.shape[1])],
+        "compared_shape": [int(gp_region.shape[0]), int(gp_region.shape[1])],
+    }
     comparison: dict[str, object] = {
         "shape_match": True,
         "gpwbpp_format": Path(gpwbpp_path).suffix.lower().lstrip("."),
         "reference_format": Path(reference_path).suffix.lower().lstrip("."),
         "candidate_transform": transform,
-        **_diff_stats(gp, ref),
-        "linear_fit_to_reference": _linear_fit_to_reference(gp, ref),
-        "robust_linear_fit_to_reference": _robust_linear_fit_to_reference(gp, ref),
+        "comparison_region": comparison_region,
+        **stats,
+        "linear_fit_to_reference": _linear_fit_to_reference(gp_region, ref_region),
+        "robust_linear_fit_to_reference": _robust_linear_fit_to_reference(gp_region, ref_region),
         "timing": timing,
     }
+    if border:
+        comparison["full_frame_stats"] = _diff_stats(gp, ref)
     if diagnostics_dir is not None:
         comparison["diagnostics"] = _write_diagnostic_artifacts(
             diagnostics_dir,

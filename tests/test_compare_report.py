@@ -90,6 +90,26 @@ def test_compare_cli_records_candidate_transform(tmp_path: Path):
     assert payload["rms_diff"] == 0.0
 
 
+def test_compare_can_ignore_border_for_metrics(tmp_path: Path):
+    gp = tmp_path / "gp.fits"
+    ref = tmp_path / "ref.fits"
+    out = tmp_path / "compare.html"
+    candidate = np.ones((8, 8), dtype=np.float32)
+    reference = np.ones((8, 8), dtype=np.float32)
+    candidate[0, :] = 10.0
+    candidate[:, 0] = 10.0
+    write_fits_data(gp, candidate)
+    write_fits_data(ref, reference)
+
+    assert main(["compare", "--gpwbpp", str(gp), "--reference", str(ref), "--out", str(out), "--ignore-border-px", "1"]) == 0
+
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert payload["comparison_region"]["ignore_border_px"] == 1
+    assert payload["comparison_region"]["compared_shape"] == [6, 6]
+    assert payload["rms_diff"] == 0.0
+    assert payload["full_frame_stats"]["rms_diff"] > 0.0
+
+
 def test_compare_writes_diagnostic_artifacts(tmp_path: Path):
     y, x = np.mgrid[:32, :40]
     reference = (x + y).astype(np.float32)
