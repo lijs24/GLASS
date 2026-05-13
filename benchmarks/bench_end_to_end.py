@@ -15,6 +15,27 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     add_common_args(parser)
     parser.add_argument("--backend", choices=["cpu", "cuda", "auto"], default="auto")
+    parser.add_argument("--memory-mode", choices=["tile", "resident"], default="tile")
+    parser.add_argument(
+        "--resident-registration",
+        choices=[
+            "off",
+            "translation_preview",
+            "translation_ncc_subpixel",
+            "translation_star_catalog",
+            "similarity_cuda_catalog",
+            "similarity_cuda_triangle",
+            "external_matrix",
+        ],
+        default="off",
+    )
+    parser.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
+    parser.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
+    parser.add_argument(
+        "--integration-rejection",
+        choices=["auto", "none", "sigma_clip", "winsorized_sigma"],
+        default="auto",
+    )
     args = parser.parse_args()
     base = Path(args.out).with_suffix("")
     source = base / "source"
@@ -45,11 +66,22 @@ def main() -> int:
                 args.backend,
                 "--tile-size",
                 str(args.tile_size),
+                "--memory-mode",
+                args.memory_mode,
+                "--local-normalization",
+                args.local_normalization,
+                "--integration-weighting",
+                args.integration_weighting,
+                "--integration-rejection",
+                args.integration_rejection,
+                "--resident-registration",
+                args.resident_registration,
             ]
         )
     )
     integration = read_json(audit / "integration_results.json")
     output = integration["outputs"][0]
+    resident = read_json(audit / "resident_artifacts.json") if (audit / "resident_artifacts.json").exists() else {}
     write_result(
         args.out,
         name="end_to_end",
@@ -60,7 +92,18 @@ def main() -> int:
         elapsed_s=elapsed,
         peak_ram_mb=peak_ram,
         output_path=audit,
-        extra={"master_path": output["master_path"]},
+        extra={
+            "master_path": output["master_path"],
+            "memory_mode": args.memory_mode,
+            "resident_device": (resident.get("device") or {}).get("name"),
+            "resident_estimated_peak_gib": (
+                ((resident.get("artifacts") or [{}])[0].get("memory_estimate") or {}).get("estimated_peak_gib")
+                if resident.get("artifacts")
+                else None
+            ),
+            "integration_weighting": integration.get("weighting"),
+            "integration_rejection": integration.get("rejection"),
+        },
     )
     return 0
 
