@@ -491,6 +491,133 @@ def refine_matrix_translation_with_metrics_f32(
     }
 
 
+def refine_matrix_translation_candidates_with_metrics_f32(
+    reference: Any,
+    moving: Any,
+    matrices: Any,
+    search_radius_px: float = 1.0,
+    coarse_step_px: float = 0.25,
+    fine_radius_px: float = 0.25,
+    fine_step_px: float = 0.0625,
+    coarse_sample_stride: int = 4,
+    final_sample_stride: int = 1,
+) -> dict[str, Any]:
+    """Refine multiple seed matrices while uploading image data only once when native CUDA is available."""
+
+    if search_radius_px < 0.0:
+        raise ValueError("search_radius_px must be non-negative")
+    if coarse_step_px <= 0.0:
+        raise ValueError("coarse_step_px must be positive")
+    if fine_radius_px < 0.0:
+        raise ValueError("fine_radius_px must be non-negative")
+    if fine_step_px <= 0.0:
+        raise ValueError("fine_step_px must be positive")
+    if coarse_sample_stride <= 0 or final_sample_stride <= 0:
+        raise ValueError("sample strides must be positive")
+    matrix_array = np.asarray(matrices, dtype=np.float32)
+    if matrix_array.shape == (3, 3):
+        matrix_array = matrix_array.reshape(1, 3, 3)
+    if matrix_array.ndim != 3 or matrix_array.shape[1:] != (3, 3):
+        raise ValueError("matrices must have shape (N, 3, 3) or (3, 3)")
+    if matrix_array.shape[0] == 0:
+        raise ValueError("matrices must contain at least one matrix")
+
+    native = _native()
+    if native is not None and hasattr(native, "refine_matrix_translation_candidates_with_metrics_f32"):
+        result = dict(
+            native.refine_matrix_translation_candidates_with_metrics_f32(
+                reference,
+                moving,
+                np.ascontiguousarray(matrix_array, dtype=np.float32),
+                float(search_radius_px),
+                float(coarse_step_px),
+                float(fine_radius_px),
+                float(fine_step_px),
+                int(coarse_sample_stride),
+                int(final_sample_stride),
+            )
+        )
+        seed_results = []
+        for seed in list(result.get("seed_results", [])):
+            seed_result = dict(seed)
+            seed_result["seed_index"] = int(seed_result["seed_index"])
+            seed_result["matrix"] = np.asarray(seed_result["matrix"], dtype=np.float32).tolist()
+            seed_result["dx_correction"] = float(seed_result["dx_correction"])
+            seed_result["dy_correction"] = float(seed_result["dy_correction"])
+            seed_result["metrics"] = dict(seed_result["metrics"])
+            seed_result["coarse_candidates"] = int(seed_result["coarse_candidates"])
+            seed_result["fine_candidates"] = int(seed_result["fine_candidates"])
+            seed_results.append(seed_result)
+        return {
+            "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
+            "dx_correction": float(result["dx_correction"]),
+            "dy_correction": float(result["dy_correction"]),
+            "metrics": dict(result["metrics"]),
+            "selected_index": int(result["selected_index"]),
+            "seed_count": int(result["seed_count"]),
+            "seed_results": seed_results,
+            "coarse_candidates_per_seed": int(result["coarse_candidates_per_seed"]),
+            "search_radius_px": float(result["search_radius_px"]),
+            "coarse_step_px": float(result["coarse_step_px"]),
+            "fine_radius_px": float(result["fine_radius_px"]),
+            "fine_step_px": float(result["fine_step_px"]),
+            "coarse_sample_stride": int(result["coarse_sample_stride"]),
+            "final_sample_stride": int(result["final_sample_stride"]),
+            "model": str(result.get("model", "cuda_matrix_metric_translation_multi_seed_refine_grid")),
+        }
+
+    best_key: tuple[float, float] | None = None
+    best_result: dict[str, Any] | None = None
+    seed_results: list[dict[str, Any]] = []
+    for seed_index, seed_matrix in enumerate(matrix_array):
+        result = refine_matrix_translation_with_metrics_f32(
+            reference,
+            moving,
+            seed_matrix,
+            search_radius_px=search_radius_px,
+            coarse_step_px=coarse_step_px,
+            fine_radius_px=fine_radius_px,
+            fine_step_px=fine_step_px,
+            coarse_sample_stride=coarse_sample_stride,
+            final_sample_stride=final_sample_stride,
+        )
+        metrics = dict(result["metrics"])
+        rms = float(metrics.get("rms", float("inf")))
+        ncc = float(metrics.get("ncc", float("-inf")))
+        key = (rms if np.isfinite(rms) else float("inf"), -ncc if np.isfinite(ncc) else float("inf"))
+        seed_result = {
+            "seed_index": int(seed_index),
+            "matrix": result["matrix"],
+            "dx_correction": float(result["dx_correction"]),
+            "dy_correction": float(result["dy_correction"]),
+            "metrics": metrics,
+            "coarse_candidates": int(result["coarse_candidates"]),
+            "fine_candidates": int(result["fine_candidates"]),
+        }
+        seed_results.append(seed_result)
+        if best_key is None or key < best_key:
+            best_key = key
+            best_result = {**result, "selected_index": int(seed_index)}
+    assert best_result is not None
+    return {
+        "matrix": best_result["matrix"],
+        "dx_correction": float(best_result["dx_correction"]),
+        "dy_correction": float(best_result["dy_correction"]),
+        "metrics": dict(best_result["metrics"]),
+        "selected_index": int(best_result["selected_index"]),
+        "seed_count": int(matrix_array.shape[0]),
+        "seed_results": seed_results,
+        "coarse_candidates_per_seed": int(seed_results[0]["coarse_candidates"]),
+        "search_radius_px": float(search_radius_px),
+        "coarse_step_px": float(coarse_step_px),
+        "fine_radius_px": float(fine_radius_px),
+        "fine_step_px": float(fine_step_px),
+        "coarse_sample_stride": int(coarse_sample_stride),
+        "final_sample_stride": int(final_sample_stride),
+        "model": "cuda_matrix_metric_translation_multi_seed_refine_loop_fallback",
+    }
+
+
 def _translation_ncc_score(
     reference: np.ndarray,
     moving: np.ndarray,

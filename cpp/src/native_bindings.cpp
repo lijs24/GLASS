@@ -364,6 +364,43 @@ std::array<float, 9> parse_matrix3x3(py::object matrix_obj) {
   return out;
 }
 
+py::list matrix3x3_to_pylist(const std::array<float, 9>& matrix) {
+  py::list rows;
+  for (int row = 0; row < 3; ++row) {
+    py::list values;
+    for (int col = 0; col < 3; ++col) {
+      values.append(matrix[static_cast<std::size_t>(row * 3 + col)]);
+    }
+    rows.append(values);
+  }
+  return rows;
+}
+
+std::vector<std::array<float, 9>> parse_matrix_stack(py::object matrices_obj) {
+  auto matrices = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(matrices_obj);
+  if (!matrices) {
+    throw std::invalid_argument("matrices must be convertible to a float32 array");
+  }
+  const py::buffer_info info = matrices.request();
+  if (info.ndim == 2 && info.shape[0] == 3 && info.shape[1] == 3) {
+    return {parse_matrix3x3(matrices)};
+  }
+  if (info.ndim != 3 || info.shape[1] != 3 || info.shape[2] != 3) {
+    throw std::invalid_argument("matrices must have shape (N, 3, 3) or (3, 3)");
+  }
+  if (info.shape[0] <= 0) {
+    throw std::invalid_argument("matrices must contain at least one matrix");
+  }
+  const auto* values = static_cast<const float*>(info.ptr);
+  std::vector<std::array<float, 9>> out(static_cast<std::size_t>(info.shape[0]));
+  for (std::size_t matrix_index = 0; matrix_index < out.size(); ++matrix_index) {
+    for (std::size_t value_index = 0; value_index < 9; ++value_index) {
+      out[matrix_index][value_index] = values[matrix_index * 9 + value_index];
+    }
+  }
+  return out;
+}
+
 std::array<float, 9> invert_matrix3x3(const std::array<float, 9>& m) {
   const double a = m[0];
   const double b = m[1];
@@ -2558,6 +2595,137 @@ py::dict refine_matrix_translation_with_metrics_f32(
   return result;
 }
 
+py::dict refine_matrix_translation_candidates_with_metrics_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference,
+    py::array_t<float, py::array::c_style | py::array::forcecast> moving,
+    py::object matrices_obj,
+    float search_radius_px,
+    float coarse_step_px,
+    float fine_radius_px,
+    float fine_step_px,
+    int coarse_sample_stride,
+    int final_sample_stride) {
+  const py::buffer_info reference_info = reference.request();
+  const py::buffer_info moving_info = moving.request();
+  if (reference_info.ndim != 2 || moving_info.ndim != 2) {
+    throw std::invalid_argument("reference and moving must have shape (height, width)");
+  }
+  require_same_shape(reference_info, moving_info);
+  if (search_radius_px < 0.0f || fine_radius_px < 0.0f) {
+    throw std::invalid_argument("search radii must be non-negative");
+  }
+  if (coarse_step_px <= 0.0f || fine_step_px <= 0.0f) {
+    throw std::invalid_argument("search steps must be positive");
+  }
+  if (coarse_sample_stride <= 0 || final_sample_stride <= 0) {
+    throw std::invalid_argument("sample strides must be positive");
+  }
+
+  const int height = static_cast<int>(reference_info.shape[0]);
+  const int width = static_cast<int>(reference_info.shape[1]);
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  const auto seed_matrices = parse_matrix_stack(matrices_obj);
+  const auto coarse_offsets = translation_offsets(0.0f, 0.0f, search_radius_px, coarse_step_px);
+  const int coarse_candidates = static_cast<int>(coarse_offsets.size());
+
+  float* d_reference = nullptr;
+  float* d_moving = nullptr;
+  MatrixCandidateMetrics best;
+  bool have_best = false;
+  int selected_index = -1;
+  py::list seed_results;
+  try {
+    check_cuda(cudaMalloc(&d_reference, n * sizeof(float)), "cudaMalloc(matrix multi-refine reference)");
+    check_cuda(cudaMalloc(&d_moving, n * sizeof(float)), "cudaMalloc(matrix multi-refine moving)");
+    check_cuda(
+        cudaMemcpy(d_reference, reference_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix multi-refine reference)");
+    check_cuda(
+        cudaMemcpy(d_moving, moving_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(matrix multi-refine moving)");
+
+    for (std::size_t seed_index = 0; seed_index < seed_matrices.size(); ++seed_index) {
+      const auto& base_matrix = seed_matrices[seed_index];
+      const MatrixCandidateMetrics coarse_best = score_matrix_translation_candidates_f32(
+          d_reference,
+          d_moving,
+          base_matrix,
+          coarse_offsets,
+          width,
+          height,
+          coarse_sample_stride);
+      MatrixCandidateMetrics seed_best = coarse_best;
+      int fine_candidates = 0;
+      if (fine_radius_px > 0.0f) {
+        const auto fine_offsets = translation_offsets(coarse_best.dx, coarse_best.dy, fine_radius_px, fine_step_px);
+        fine_candidates = static_cast<int>(fine_offsets.size());
+        seed_best = score_matrix_translation_candidates_f32(
+            d_reference,
+            d_moving,
+            base_matrix,
+            fine_offsets,
+            width,
+            height,
+            final_sample_stride);
+      } else if (final_sample_stride != coarse_sample_stride) {
+        const std::vector<std::pair<float, float>> final_offsets{{coarse_best.dx, coarse_best.dy}};
+        fine_candidates = static_cast<int>(final_offsets.size());
+        seed_best = score_matrix_translation_candidates_f32(
+            d_reference,
+            d_moving,
+            base_matrix,
+            final_offsets,
+            width,
+            height,
+            final_sample_stride);
+      }
+
+      py::dict seed_result;
+      seed_result["seed_index"] = static_cast<int>(seed_index);
+      seed_result["matrix"] = matrix3x3_to_pylist(seed_best.matrix);
+      seed_result["dx_correction"] = seed_best.dx;
+      seed_result["dy_correction"] = seed_best.dy;
+      seed_result["metrics"] = matrix_candidate_to_dict(seed_best, "matrix_alignment_metrics_cuda_candidate_grid");
+      seed_result["coarse_candidates"] = coarse_candidates;
+      seed_result["fine_candidates"] = fine_candidates;
+      seed_results.append(seed_result);
+
+      if (!have_best || better_matrix_metric(seed_best, best)) {
+        best = seed_best;
+        selected_index = static_cast<int>(seed_index);
+        have_best = true;
+      }
+    }
+  } catch (...) {
+    cudaFree(d_reference);
+    cudaFree(d_moving);
+    throw;
+  }
+  cudaFree(d_reference);
+  cudaFree(d_moving);
+
+  if (!have_best) {
+    throw std::runtime_error("matrix multi-refine produced no candidates");
+  }
+  py::dict result;
+  result["matrix"] = matrix3x3_to_pylist(best.matrix);
+  result["dx_correction"] = best.dx;
+  result["dy_correction"] = best.dy;
+  result["metrics"] = matrix_candidate_to_dict(best, "matrix_alignment_metrics_cuda_candidate_grid");
+  result["selected_index"] = selected_index;
+  result["seed_count"] = static_cast<int>(seed_matrices.size());
+  result["seed_results"] = seed_results;
+  result["coarse_candidates_per_seed"] = coarse_candidates;
+  result["search_radius_px"] = search_radius_px;
+  result["coarse_step_px"] = coarse_step_px;
+  result["fine_radius_px"] = fine_radius_px;
+  result["fine_step_px"] = fine_step_px;
+  result["coarse_sample_stride"] = coarse_sample_stride;
+  result["final_sample_stride"] = final_sample_stride;
+  result["model"] = "cuda_matrix_metric_translation_multi_seed_refine_grid";
+  return result;
+}
+
 py::dict estimate_translation_search_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference,
     py::array_t<float, py::array::c_style | py::array::forcecast> moving,
@@ -3414,16 +3582,17 @@ py::dict estimate_similarity_from_catalogs_f32(
               candidate_rms.size() * sizeof(float),
               cudaMemcpyDeviceToHost),
           "cudaMemcpy(similarity catalog candidate rms)");
-      std::vector<int> selected;
-      selected.reserve(static_cast<std::size_t>(std::min(top_k, candidate_count)));
-      for (int i = 0; i < candidate_count; ++i) {
-        const int score = candidate_scores[static_cast<std::size_t>(i)];
-        const float rms = candidate_rms[static_cast<std::size_t>(i)];
-        if (score < 0 || !std::isfinite(rms)) {
-          continue;
+      const int per_score_limit = std::max(1, (top_k + 3) / 4);
+      const int score_bucket_count = std::max(reference_count, moving_count) + 1;
+      std::vector<std::vector<int>> per_score_best(static_cast<std::size_t>(score_bucket_count));
+      std::vector<int> global_best;
+      global_best.reserve(static_cast<std::size_t>(std::min(top_k, candidate_count)));
+      auto insert_limited = [&](std::vector<int>& selected, int candidate_index, int limit) {
+        if (limit <= 0) {
+          return;
         }
-        if (static_cast<int>(selected.size()) < top_k) {
-          selected.push_back(i);
+        if (static_cast<int>(selected.size()) < limit) {
+          selected.push_back(candidate_index);
         } else {
           int worst_pos = 0;
           for (int pos = 1; pos < static_cast<int>(selected.size()); ++pos) {
@@ -3441,9 +3610,51 @@ py::dict estimate_similarity_from_catalogs_f32(
           const int worst = selected[static_cast<std::size_t>(worst_pos)];
           const int worst_score = candidate_scores[static_cast<std::size_t>(worst)];
           const float worst_rms = candidate_rms[static_cast<std::size_t>(worst)];
+          const int score = candidate_scores[static_cast<std::size_t>(candidate_index)];
+          const float rms = candidate_rms[static_cast<std::size_t>(candidate_index)];
           if (score > worst_score || (score == worst_score && rms < worst_rms)) {
-            selected[static_cast<std::size_t>(worst_pos)] = i;
+            selected[static_cast<std::size_t>(worst_pos)] = candidate_index;
           }
+        }
+      };
+      for (int i = 0; i < candidate_count; ++i) {
+        const int score = candidate_scores[static_cast<std::size_t>(i)];
+        const float rms = candidate_rms[static_cast<std::size_t>(i)];
+        if (score < 0 || !std::isfinite(rms)) {
+          continue;
+        }
+        insert_limited(global_best, i, top_k);
+        if (score < score_bucket_count) {
+          insert_limited(per_score_best[static_cast<std::size_t>(score)], i, per_score_limit);
+        }
+      }
+      std::vector<int> selected;
+      selected.reserve(static_cast<std::size_t>(std::min(top_k, candidate_count)));
+      for (int score = score_bucket_count - 1; score >= 0 && static_cast<int>(selected.size()) < top_k; --score) {
+        auto& bucket = per_score_best[static_cast<std::size_t>(score)];
+        std::sort(bucket.begin(), bucket.end(), [&](int left, int right) {
+          const float left_rms = candidate_rms[static_cast<std::size_t>(left)];
+          const float right_rms = candidate_rms[static_cast<std::size_t>(right)];
+          if (left_rms != right_rms) {
+            return left_rms < right_rms;
+          }
+          return left < right;
+        });
+        for (const int candidate_index : bucket) {
+          if (static_cast<int>(selected.size()) >= top_k) {
+            break;
+          }
+          if (std::find(selected.begin(), selected.end(), candidate_index) == selected.end()) {
+            selected.push_back(candidate_index);
+          }
+        }
+      }
+      for (const int candidate_index : global_best) {
+        if (static_cast<int>(selected.size()) >= top_k) {
+          break;
+        }
+        if (std::find(selected.begin(), selected.end(), candidate_index) == selected.end()) {
+          selected.push_back(candidate_index);
         }
       }
       std::sort(selected.begin(), selected.end(), [&](int left, int right) {
@@ -4409,6 +4620,18 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("reference"),
       py::arg("moving"),
       py::arg("matrix"),
+      py::arg("search_radius_px") = 1.0f,
+      py::arg("coarse_step_px") = 0.25f,
+      py::arg("fine_radius_px") = 0.25f,
+      py::arg("fine_step_px") = 0.0625f,
+      py::arg("coarse_sample_stride") = 4,
+      py::arg("final_sample_stride") = 1);
+  m.def(
+      "refine_matrix_translation_candidates_with_metrics_f32",
+      &refine_matrix_translation_candidates_with_metrics_f32,
+      py::arg("reference"),
+      py::arg("moving"),
+      py::arg("matrices"),
       py::arg("search_radius_px") = 1.0f,
       py::arg("coarse_step_px") = 0.25f,
       py::arg("fine_radius_px") = 0.25f,

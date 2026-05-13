@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from astropy.io import fits
 
-from gpwbpp.gpu.registration import refine_matrix_translation_with_metrics_f32
+from gpwbpp.gpu.registration import refine_matrix_translation_candidates_with_metrics_f32
 import gpwbpp_cuda
 
 
@@ -489,62 +489,53 @@ def _gpu_catalog_similarity_pixel_refine_run(
             }
         )
 
-    best_key: tuple[float, float] | None = None
-    best_refinement: dict[str, Any] | None = None
-    seed_metrics: list[dict[str, Any]] = []
+    seed_matrices = [np.asarray(seed["matrix"], dtype=np.float32) for seed in seeds]
     t0 = time.perf_counter()
-    for seed in seeds:
-        seed_t0 = time.perf_counter()
-        refinement = refine_matrix_translation_with_metrics_f32(
-            reference,
-            moving,
-            seed["matrix"],
-            search_radius_px=search_radius_px,
-            coarse_step_px=coarse_step_px,
-            fine_radius_px=fine_radius_px,
-            fine_step_px=fine_step_px,
-            coarse_sample_stride=coarse_sample_stride,
-            final_sample_stride=final_sample_stride,
-        )
-        seed_elapsed = time.perf_counter() - seed_t0
-        metrics = dict(refinement["metrics"])
-        rms = float(metrics.get("rms", float("inf")))
-        ncc = float(metrics.get("ncc", float("-inf")))
-        key = (rms if np.isfinite(rms) else float("inf"), -ncc if np.isfinite(ncc) else float("inf"))
-        seed_record = {
-            "seed_rank": int(seed["seed_rank"]),
-            "seed_source": str(seed["seed_source"]),
-            "candidate_index": seed["candidate_index"],
-            "seed_inliers": seed["inliers"],
-            "seed_rms_px": seed["rms_px"],
-            "refine_elapsed_s": seed_elapsed,
-            "dx_correction": float(refinement["dx_correction"]),
-            "dy_correction": float(refinement["dy_correction"]),
-            "metrics": metrics,
-            "matrix": np.asarray(refinement["matrix"], dtype=np.float64).tolist(),
-        }
-        seed_metrics.append(seed_record)
-        if best_key is None or key < best_key:
-            best_key = key
-            best_refinement = {**refinement, "selected_seed": seed_record}
+    refinement = refine_matrix_translation_candidates_with_metrics_f32(
+        reference,
+        moving,
+        np.asarray(seed_matrices, dtype=np.float32),
+        search_radius_px=search_radius_px,
+        coarse_step_px=coarse_step_px,
+        fine_radius_px=fine_radius_px,
+        fine_step_px=fine_step_px,
+        coarse_sample_stride=coarse_sample_stride,
+        final_sample_stride=final_sample_stride,
+    )
     refine_elapsed = time.perf_counter() - t0
-    if best_refinement is None:
-        raise RuntimeError("catalog similarity pixel refinement produced no candidates")
+    seed_metrics: list[dict[str, Any]] = []
+    for seed_result in refinement["seed_results"]:
+        seed_index = int(seed_result["seed_index"])
+        seed = seeds[seed_index]
+        seed_metrics.append(
+            {
+                "seed_rank": int(seed["seed_rank"]),
+                "seed_source": str(seed["seed_source"]),
+                "candidate_index": seed["candidate_index"],
+                "seed_inliers": seed["inliers"],
+                "seed_rms_px": seed["rms_px"],
+                "dx_correction": float(seed_result["dx_correction"]),
+                "dy_correction": float(seed_result["dy_correction"]),
+                "metrics": dict(seed_result["metrics"]),
+                "matrix": np.asarray(seed_result["matrix"], dtype=np.float64).tolist(),
+            }
+        )
+    selected_seed = seed_metrics[int(refinement["selected_index"])]
     t1 = time.perf_counter()
-    aligned, valid = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, best_refinement["matrix"], 0.0)
+    aligned, valid = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, refinement["matrix"], 0.0)
     warp_elapsed = time.perf_counter() - t1
     result = {
-        **best_refinement,
+        **refinement,
         "elapsed_s": refine_elapsed + warp_elapsed,
         "refine_elapsed_s": refine_elapsed,
         "warp_elapsed_s": warp_elapsed,
         "seed_selection_model": "catalog_topk_fused_pixel_metric",
         "seed_count": len(seeds),
-        "selected_seed_rank": int(best_refinement["selected_seed"]["seed_rank"]),
-        "selected_seed_source": str(best_refinement["selected_seed"]["seed_source"]),
-        "selected_seed_candidate_index": best_refinement["selected_seed"]["candidate_index"],
-        "selected_seed_inliers": best_refinement["selected_seed"]["seed_inliers"],
-        "selected_seed_rms_px": best_refinement["selected_seed"]["seed_rms_px"],
+        "selected_seed_rank": int(selected_seed["seed_rank"]),
+        "selected_seed_source": str(selected_seed["seed_source"]),
+        "selected_seed_candidate_index": selected_seed["candidate_index"],
+        "selected_seed_inliers": selected_seed["seed_inliers"],
+        "selected_seed_rms_px": selected_seed["seed_rms_px"],
         "seed_metrics": seed_metrics,
         "coverage_pixels": int(np.sum(valid > 0.0)),
         "rms": _rms(reference, aligned, valid > 0.0),

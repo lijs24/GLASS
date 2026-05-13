@@ -164,6 +164,43 @@ def refine_matrix_translation_with_metrics_f32(
     )
 
 
+def refine_matrix_translation_candidates_with_metrics_f32(
+    reference: Any,
+    moving: Any,
+    matrices: Any,
+    search_radius_px: float = 1.0,
+    coarse_step_px: float = 0.25,
+    fine_radius_px: float = 0.25,
+    fine_step_px: float = 0.0625,
+    coarse_sample_stride: int = 4,
+    final_sample_stride: int = 1,
+) -> dict[str, Any]:
+    """Refine several seed matrices with CUDA pixel metrics and one image upload."""
+
+    if search_radius_px < 0.0:
+        raise ValueError("search_radius_px must be non-negative")
+    if coarse_step_px <= 0.0:
+        raise ValueError("coarse_step_px must be positive")
+    if fine_radius_px < 0.0:
+        raise ValueError("fine_radius_px must be non-negative")
+    if fine_step_px <= 0.0:
+        raise ValueError("fine_step_px must be positive")
+    if coarse_sample_stride <= 0 or final_sample_stride <= 0:
+        raise ValueError("sample strides must be positive")
+
+    return _cuda_api.refine_matrix_translation_candidates_with_metrics_f32(
+        reference,
+        moving,
+        matrices,
+        search_radius_px=search_radius_px,
+        coarse_step_px=coarse_step_px,
+        fine_radius_px=fine_radius_px,
+        fine_step_px=fine_step_px,
+        coarse_sample_stride=coarse_sample_stride,
+        final_sample_stride=final_sample_stride,
+    )
+
+
 __all__ = [
     "estimate_translation",
     "estimate_similarity_from_catalogs_f32",
@@ -171,6 +208,7 @@ __all__ = [
     "estimate_translation_from_catalogs_f32",
     "estimate_translation_search_f32",
     "matrix_alignment_metrics_f32",
+    "refine_matrix_translation_candidates_with_metrics_f32",
     "refine_matrix_translation_with_metrics_f32",
     "register_similarity_from_star_catalogs_f32",
     "star_grid_top_nms_candidates_f32",
