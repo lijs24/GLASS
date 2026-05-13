@@ -47,6 +47,12 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "read_decode_worker_s": round(float(timing.get("light_read_decode_worker") or 0.0), 3),
                 "h2d_calibrate_store_s": round(float(timing.get("light_h2d_calibrate_store") or 0.0), 3),
                 "registration_warp_s": round(float(timing.get("resident_registration_warp") or 0.0), 3),
+                "registration_accounted_s": round(
+                    float(timing.get("resident_registration_component_accounted") or 0.0), 3
+                ),
+                "registration_orchestration_s": round(
+                    float(timing.get("resident_registration_orchestration") or 0.0), 3
+                ),
                 "light_loop_unaccounted_s": round(float(timing.get("light_loop_unaccounted") or 0.0), 3),
                 "weighting_s": round(float(timing.get("resident_weighting") or 0.0), 3),
                 "local_norm_s": round(float(timing.get("resident_local_normalization") or 0.0), 3),

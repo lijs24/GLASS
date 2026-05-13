@@ -151,6 +151,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                         "light_read_decode_worker": 1.25,
                         "light_h2d_calibrate_store": 0.75,
                         "resident_registration_warp": 0.5,
+                        "resident_registration_component_accounted": 0.4,
+                        "resident_registration_orchestration": 0.1,
                         "light_loop_unaccounted": 0.25,
                         "resident_weighting": 0.1,
                         "resident_local_normalization": 0.2,
@@ -173,6 +175,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "read_decode_worker_s" in html
     assert "h2d_calibrate_store_s" in html
     assert "registration_warp_s" in html
+    assert "registration_accounted_s" in html
+    assert "registration_orchestration_s" in html
     assert "similarity_cuda_triangle" in html
     assert "lanczos3" in html
     assert "resident_grid_mean_std" in html

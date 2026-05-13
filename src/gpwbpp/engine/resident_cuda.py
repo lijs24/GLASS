@@ -88,6 +88,10 @@ def _timing_summary(values: list[float]) -> dict[str, float]:
     }
 
 
+def _add_elapsed(buckets: dict[str, float], key: str, elapsed: float) -> None:
+    buckets[key] = float(buckets.get(key, 0.0) + float(elapsed))
+
+
 def _read_light_timed(path: str | Path) -> tuple[np.ndarray, float]:
     start = perf_counter()
     data = read_fits_data(path, dtype=np.float32)
@@ -1155,6 +1159,7 @@ def run_resident_calibration_integration(
             per_frame_read_worker_s: list[float] = []
             per_frame_calibrate_s: list[float] = []
             per_frame_registration_s = []
+            registration_component_s: dict[str, float] = {}
             registration_during_load_elapsed = 0.0
             gc_elapsed = 0.0
             frame_weight_values: list[float] = []
@@ -2291,11 +2296,17 @@ def run_resident_calibration_integration(
                             inliers = 1
                             rms_px = 0.0
                         else:
+                            threshold_start = perf_counter()
                             threshold_candidates, threshold_mode = _resident_star_threshold_candidates(
                                 stack,
                                 reference_index,
                                 index,
                                 resident_star_threshold,
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_threshold_select",
+                                perf_counter() - threshold_start,
                             )
                             trial_results = []
                             selected_fit = None
@@ -2308,9 +2319,21 @@ def run_resident_calibration_integration(
                                 threshold_key = round(float(threshold), 6)
                                 reference_catalog = reference_catalogs.get(threshold_key)
                                 if reference_catalog is None:
+                                    reference_catalog_start = perf_counter()
                                     reference_catalog = detect_resident_triangle_catalog(reference_index, threshold)
+                                    _add_elapsed(
+                                        registration_component_s,
+                                        "triangle_reference_catalog",
+                                        perf_counter() - reference_catalog_start,
+                                    )
                                     reference_catalogs[threshold_key] = reference_catalog
+                                moving_catalog_start = perf_counter()
                                 moving_catalog = detect_resident_triangle_catalog(index, threshold)
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_catalog",
+                                    perf_counter() - moving_catalog_start,
+                                )
                                 if int(reference_catalog["stored_count"]) < 3 or int(moving_catalog["stored_count"]) < 3:
                                     trial_results.append(
                                         {
@@ -2323,9 +2346,21 @@ def run_resident_calibration_integration(
                                     continue
                                 reference_descriptor = reference_descriptors.get(threshold_key)
                                 if reference_descriptor is None:
+                                    reference_descriptor_start = perf_counter()
                                     reference_descriptor = triangle_descriptors(reference_catalog)
+                                    _add_elapsed(
+                                        registration_component_s,
+                                        "triangle_reference_descriptors",
+                                        perf_counter() - reference_descriptor_start,
+                                    )
                                     reference_descriptors[threshold_key] = reference_descriptor
+                                moving_descriptor_start = perf_counter()
                                 moving_descriptor = triangle_descriptors(moving_catalog)
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_descriptors",
+                                    perf_counter() - moving_descriptor_start,
+                                )
                                 if (
                                     int(reference_descriptor["count"]) <= 0
                                     or int(moving_descriptor["count"]) <= 0
@@ -2339,6 +2374,7 @@ def run_resident_calibration_integration(
                                         }
                                     )
                                     continue
+                                fit_start = perf_counter()
                                 fit = cuda_module.estimate_similarity_from_triangle_descriptors_f32(
                                     reference_catalog["x"],
                                     reference_catalog["y"],
@@ -2350,6 +2386,11 @@ def run_resident_calibration_integration(
                                     moving_descriptor["indices"],
                                     tolerance_px=tolerance_px,
                                     descriptor_radius=descriptor_radius,
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_descriptor_fit",
+                                    perf_counter() - fit_start,
                                 )
                                 trial_results.append(
                                     {
@@ -2388,11 +2429,17 @@ def run_resident_calibration_integration(
                                     stack,
                                     "refine_matrix_translation_candidates_to_reference",
                                 ):
+                                    pixel_refine_start = perf_counter()
                                     refinement = stack.refine_matrix_translation_candidates_to_reference(
                                         reference_index,
                                         index,
                                         np.asarray([matrix_array], dtype=np.float32),
                                         **refine_kwargs,
+                                    )
+                                    _add_elapsed(
+                                        registration_component_s,
+                                        "triangle_pixel_refine",
+                                        perf_counter() - pixel_refine_start,
                                     )
                                     matrix_array = np.asarray(refinement["matrix"], dtype=np.float32).reshape(3, 3)
                                     pixel_metrics = dict(refinement.get("metrics", {}))
@@ -2426,12 +2473,18 @@ def run_resident_calibration_integration(
                                         + "; ".join(quality_failures)
                                     )
                                 else:
+                                    warp_start = perf_counter()
                                     warp_model = _apply_resident_registration_matrix(
                                         stack,
                                         index,
                                         matrix,
                                         resident_warp_interpolation,
                                         resident_warp_clamping_threshold,
+                                    )
+                                    _add_elapsed(
+                                        registration_component_s,
+                                        "triangle_warp",
+                                        perf_counter() - warp_start,
                                     )
                                     warnings.append(f"resident_registration_application={warp_model}")
                                 warnings.extend(
@@ -2468,7 +2521,10 @@ def run_resident_calibration_integration(
                         frame_weight_values[index] = 0.0
                         frame_weights[frame["id"]] = 0.0
                         warnings.append(str(exc))
-                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_elapsed = perf_counter() - registration_frame_start
+                    if resident_registration == "similarity_cuda_triangle":
+                        _add_elapsed(registration_component_s, "triangle_frame_total", registration_elapsed)
+                    per_frame_registration_s.append(registration_elapsed)
                     registration_results.append(
                         RegistrationResult(
                             frame_id=str(frame["id"]),
@@ -2809,6 +2865,14 @@ def run_resident_calibration_integration(
             calibrate_timing = _timing_summary(per_frame_calibrate_s)
             registration_timing = _timing_summary(per_frame_registration_s)
             registration_total = registration_timing["total"]
+            registration_component_total = float(
+                sum(
+                    value
+                    for key, value in registration_component_s.items()
+                    if not key.endswith("_frame_total")
+                )
+            )
+            registration_orchestration_elapsed = max(0.0, registration_total - registration_component_total)
             registration_deferred_elapsed = max(0.0, registration_total - registration_during_load_elapsed)
             light_loop_accounted = (
                 read_timing["total"]
@@ -2838,6 +2902,11 @@ def run_resident_calibration_integration(
                     "h2d_calibrate_store": calibrate_timing,
                     "registration_warp": registration_timing,
                 },
+                "registration_component_seconds": {
+                    **{key: float(value) for key, value in sorted(registration_component_s.items())},
+                    "component_accounted_total": registration_component_total,
+                    "python_orchestration_or_uninstrumented": registration_orchestration_elapsed,
+                },
             }
             resident_artifacts.append(
                 {
@@ -2859,6 +2928,8 @@ def run_resident_calibration_integration(
                         "resident_registration_warp": registration_total,
                         "resident_registration_warp_during_load": registration_during_load_elapsed,
                         "resident_registration_warp_deferred": registration_deferred_elapsed,
+                        "resident_registration_component_accounted": registration_component_total,
+                        "resident_registration_orchestration": registration_orchestration_elapsed,
                         "gc": gc_elapsed,
                         "light_loop_unaccounted": light_loop_unaccounted,
                         "resident_weighting": weighting_elapsed,
