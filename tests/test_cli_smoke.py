@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from gpwbpp.cli import main
-from gpwbpp.io.json_io import write_json
+from gpwbpp.io.json_io import read_json, write_json
+from tests.conftest import cuda_module_or_skip
 
 
 def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
@@ -21,6 +22,45 @@ def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
     assert (audit / "manifest.json").exists()
     assert (audit / "processing_plan.json").exists()
     assert (audit / "report.html").exists()
+
+
+def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
+    cuda_module_or_skip()
+    audit = tmp_path / "resident_audit"
+
+    assert main(
+        [
+            "audit",
+            "--root",
+            str(small_fits_dataset),
+            "--out",
+            str(audit),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--local-normalization",
+            "off",
+            "--integration-weighting",
+            "none",
+            "--integration-rejection",
+            "none",
+            "--resident-registration",
+            "off",
+        ]
+    ) == 0
+
+    state = read_json(audit / "run_state.json")
+    timing = read_json(audit / "run_timing.json")
+    integration = read_json(audit / "integration_results.json")
+    assert (audit / "manifest.json").exists()
+    assert (audit / "processing_plan.json").exists()
+    assert (audit / "resident_artifacts.json").exists()
+    assert (audit / "report.html").exists()
+    assert state["current_stage"] == "report"
+    assert "resident_integration" in state["completed_stages"]
+    assert timing["memory_mode"] == "resident"
+    assert integration["source_stage"] == "resident_calibrated_stack"
 
 
 def test_cli_help_commands():

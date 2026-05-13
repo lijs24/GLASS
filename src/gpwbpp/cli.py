@@ -292,15 +292,41 @@ def cmd_audit(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     if args.backend == "cuda" and not capability_report()["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
+    if args.memory_mode == "resident" and args.backend != "cuda":
+        raise SystemExit("Resident audit currently requires --backend cuda.")
     manifest_path = out / "manifest.json"
     plan_path = out / "processing_plan.json"
     report_path = out / "report.html"
     timing = _new_timing("audit", args.backend, args.tile_size)
+    timing["memory_mode"] = args.memory_mode
     manifest = _timed_stage(out, timing, "scan", lambda: scan_tree(args.root))
     write_json(manifest_path, manifest)
     plan = _timed_stage(out, timing, "plan", lambda: build_processing_plan(manifest, manifest_path))
     write_json(plan_path, plan)
-    if plan.executable:
+    if plan.executable and args.memory_mode == "resident":
+        state = _timed_stage(
+            out,
+            timing,
+            "resident_calibration_integration",
+            lambda: run_resident_calibration_integration(
+                plan_path,
+                out,
+                integration_weighting=args.integration_weighting,
+                integration_rejection=args.integration_rejection,
+                flat_floor=args.flat_floor,
+                resident_registration=args.resident_registration,
+                resident_registration_max_shift=args.resident_registration_max_shift,
+                resident_registration_results=args.resident_registration_results,
+                resident_warp_interpolation=args.resident_warp_interpolation,
+                resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
+                reference_frame_id=args.reference_frame_id,
+                exclude_frame_ids=args.exclude_frame_id,
+                local_normalization=args.local_normalization,
+                resident_local_normalization_mode=args.resident_local_normalization_mode,
+                resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
+            ),
+        )
+    elif plan.executable:
         state = _run_full_pipeline(
             plan_path,
             out,
@@ -774,6 +800,12 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--backend", choices=["cpu", "cuda", "auto"], default="auto")
     audit.add_argument("--tile-size", type=int, default=512)
     audit.add_argument(
+        "--memory-mode",
+        choices=["tile", "resident"],
+        default="tile",
+        help="execution memory strategy for the run portion of audit",
+    )
+    audit.add_argument(
         "--registration-method",
         choices=["auto", "star", "astroalign", "cuda_catalog", "cuda_triangle"],
         default="auto",
@@ -786,6 +818,42 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "none", "sigma_clip", "winsorized_sigma"],
         default="auto",
     )
+    audit.add_argument("--flat-floor", type=float, help="override calibration flat floor for resident audit")
+    audit.add_argument(
+        "--resident-registration",
+        choices=[
+            "off",
+            "translation_preview",
+            "translation_ncc_subpixel",
+            "translation_star_catalog",
+            "similarity_cuda_catalog",
+            "similarity_cuda_triangle",
+            "external_matrix",
+        ],
+        default="off",
+        help="resident CUDA registration mode for --memory-mode resident",
+    )
+    audit.add_argument(
+        "--resident-registration-results",
+        help="registration_results.json consumed by resident external_matrix audit",
+    )
+    audit.add_argument(
+        "--resident-warp-interpolation",
+        choices=["bilinear", "lanczos3"],
+        default="bilinear",
+        help="resident CUDA matrix warp interpolation for resident audit",
+    )
+    audit.add_argument("--resident-warp-clamping-threshold", type=float, default=-1.0)
+    audit.add_argument("--resident-registration-max-shift", type=int, default=128)
+    audit.add_argument(
+        "--resident-local-normalization-mode",
+        choices=["global_mean_std", "grid_mean_std"],
+        default="global_mean_std",
+        help="resident CUDA LN coefficient model used when audit enables LN",
+    )
+    audit.add_argument("--resident-local-normalization-tile-size", type=int, default=512)
+    audit.add_argument("--reference-frame-id")
+    audit.add_argument("--exclude-frame-id", action="append", default=[])
     audit.set_defaults(func=cmd_audit)
 
     compare = sub.add_parser("compare", help="compare GPWBPP output to a black-box reference")
