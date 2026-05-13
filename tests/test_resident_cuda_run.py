@@ -160,6 +160,20 @@ def _two_dark_group_dataset(tmp_path: Path) -> Path:
     return root
 
 
+def _two_light_weight_dataset(tmp_path: Path) -> Path:
+    root = tmp_path / "weight_dataset"
+    shape = (16, 16)
+    yy, xx = np.indices(shape, dtype=np.float32)
+    low_noise = np.full(shape, 100.0, dtype=np.float32) + 0.05 * xx + 0.03 * yy
+    high_noise = np.full(shape, 100.0, dtype=np.float32) + 3.0 * ((xx % 4) - 1.5) + 2.0 * ((yy % 4) - 1.5)
+    _write_test_frame(root / "bias" / "bias_001.fits", "bias", np.zeros(shape, dtype=np.float32), 0.0)
+    _write_test_frame(root / "dark" / "dark_001.fits", "dark", np.zeros(shape, dtype=np.float32), 60.0)
+    _write_test_frame(root / "flat" / "flat_001.fits", "flat", np.ones(shape, dtype=np.float32), 60.0)
+    _write_test_frame(root / "light" / "light_low_noise.fits", "light", low_noise, 60.0)
+    _write_test_frame(root / "light" / "light_high_noise.fits", "light", high_noise, 60.0)
+    return root
+
+
 def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     cuda_module_or_skip()
     manifest = tmp_path / "manifest.json"
@@ -216,6 +230,53 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert resident["policy"]["flat_floor"] == 0.05
     assert resident["artifacts"][0]["resident_registration"]["mode"] == "translation_preview"
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0
+
+
+def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_simple_snr"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "simple_snr",
+            "--resident-registration",
+            "off",
+        ]
+    ) == 0
+
+    integration = read_json(run / "integration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    weights = integration["frame_weights"]
+    assert integration["weighting"] == "simple_snr"
+    assert integration["outputs"][0]["weighting"] == "simple_snr"
+    weighting = resident["artifacts"][0]["resident_integration_weighting"]
+    assert weighting["mode"] == "simple_snr"
+    assert len(weighting["frame_results"]) == 2
+    assert all(item["source_std"] is not None for item in weighting["frame_results"])
+    by_std = sorted(weighting["frame_results"], key=lambda item: item["source_std"])
+    assert by_std[0]["weight"] > by_std[-1]["weight"]
+    assert max(weights.values()) > min(weights.values())
 
 
 def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):

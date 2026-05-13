@@ -21,6 +21,7 @@ def _cuda_feature_flags() -> dict[str, bool]:
             stack is not None and hasattr(stack, "apply_grid_normalization_frame")
         ),
         "resident_grid_local_norm_stats": bool(stack is not None and hasattr(stack, "frame_pair_grid_stats")),
+        "resident_simple_snr_weighting": bool(stack is not None and hasattr(stack, "frame_global_stats")),
         "resident_sigma_rejection": bool(stack is not None and hasattr(stack, "integrate_sigma_clip")),
     }
 
@@ -60,7 +61,7 @@ def capability_report() -> dict[str, object]:
         },
         "weighted_integration": {
             "cpu": "mean, simple_snr, sigma/winsorized rejection maps",
-            "cuda": "resident weighted mean and sigma/winsorized rejection maps",
+            "cuda": "resident weighted mean, simple_snr weights, and sigma/winsorized rejection maps",
             "status": "partial WBPP-like integration",
         },
     }

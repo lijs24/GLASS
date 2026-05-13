@@ -340,8 +340,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "Resident memory mode currently supports --integration-rejection none, "
                 "sigma_clip, or winsorized_sigma."
             )
-        if args.integration_weighting not in {"auto", "none"}:
-            raise SystemExit("Resident memory mode currently supports --integration-weighting none only.")
+        if args.integration_weighting not in {"auto", "none", "simple_snr"}:
+            raise SystemExit("Resident memory mode currently supports --integration-weighting none or simple_snr.")
         out = Path(args.out)
         timing = _new_timing("run", args.backend, None)
         timing["memory_mode"] = "resident"

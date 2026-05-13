@@ -62,6 +62,7 @@ binary is ignored by git; source, CMake configuration, and tests are tracked.
 Resident CUDA integration now supports:
 
 - weighted mean for already resident calibrated frames;
+- resident `simple_snr` frame weighting from GPU frame mean/std statistics;
 - two-pass mean/std sigma clipping;
 - two-stage winsorized mean/std sigma rejection approximation;
 - output weight, coverage, low rejection, and high rejection maps.

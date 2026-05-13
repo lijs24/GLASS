@@ -27,6 +27,10 @@ Supported modes:
 - `simple_snr`: uses the per-frame quality SNR when available, falling back to
   the frame quality weight and then to 1.
 
+In resident CUDA mode, `simple_snr` is derived from per-frame device-side
+mean/std after calibration/registration and before integration. Frames excluded
+or failed during registration keep weight 0.
+
 The selected per-frame weights are recorded in `integration_results.json`.
 
 ## Rejection

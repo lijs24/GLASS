@@ -126,6 +126,16 @@ def _grid_local_norm_coefficients(stats: dict[str, Any], eps: float = 1.0e-6) ->
     }
 
 
+def _simple_snr_weight_from_stats(stats: dict[str, Any], eps: float = 1.0e-6) -> float:
+    if int(stats.get("valid_pixels") or 0) <= 0:
+        return 0.0
+    std = float(stats.get("std") or 0.0)
+    mean = abs(float(stats.get("mean") or 0.0))
+    if std <= eps:
+        return 1.0 / eps
+    return max(mean / std, eps)
+
+
 def _preview_scale(height: int, width: int, target_max_dim: int = 1024) -> int:
     return max(1, (max(int(height), int(width)) + int(target_max_dim) - 1) // int(target_max_dim))
 
@@ -936,8 +946,8 @@ def run_resident_calibration_integration(
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
-    if integration_weighting not in {"auto", "none"}:
-        raise ValueError("resident CUDA mode currently supports integration weighting=none only")
+    if integration_weighting not in {"auto", "none", "simple_snr"}:
+        raise ValueError("resident CUDA mode supports integration weighting=none or simple_snr")
     if resident_registration not in {
         "off",
         "translation_preview",
@@ -1006,6 +1016,13 @@ def run_resident_calibration_integration(
     integration_policy = plan.get("integration_policy", {})
     registration_policy = plan.get("registration_policy", {})
     excluded_tokens = {str(item) for item in (exclude_frame_ids or []) if str(item)}
+    weighting_mode = (
+        str(integration_policy.get("weighting") or "none")
+        if integration_weighting == "auto"
+        else integration_weighting
+    )
+    if weighting_mode not in {"none", "simple_snr"}:
+        raise ValueError("resident CUDA mode supports resolved integration weighting=none or simple_snr")
     rejection_mode = "none" if integration_rejection == "auto" else integration_rejection
     low_sigma = float(integration_policy.get("low_sigma", 3.0))
     high_sigma = float(integration_policy.get("high_sigma", 3.0))
@@ -2465,6 +2482,48 @@ def run_resident_calibration_integration(
                         )
                     )
 
+            weighting_start = perf_counter()
+            weighting_frame_results: list[dict[str, Any]] = []
+            weighting_warnings: list[str] = []
+            if weighting_mode == "simple_snr":
+                if not hasattr(stack, "frame_global_stats"):
+                    raise RuntimeError("resident CUDA backend does not expose frame_global_stats for simple_snr")
+                for index, frame in enumerate(light_frames):
+                    status = "ok"
+                    stats: dict[str, Any] | None = None
+                    weight = float(frame_weight_values[index])
+                    if frame_weight_values[index] <= 0.0:
+                        status = "skipped_zero_weight"
+                        weight = 0.0
+                    else:
+                        stats = stack.frame_global_stats(index)
+                        weight = _simple_snr_weight_from_stats(stats)
+                        if weight <= 0.0:
+                            status = "empty"
+                            weight = 0.0
+                        frame_weight_values[index] = float(weight)
+                        frame_weights[frame["id"]] = float(weight)
+                    weighting_frame_results.append(
+                        {
+                            "frame_id": str(frame["id"]),
+                            "weight": float(weight),
+                            "status": status,
+                            "source_mean": None if stats is None else float(stats["mean"]),
+                            "source_std": None if stats is None else float(stats["std"]),
+                            "valid_pixels": None if stats is None else int(stats["valid_pixels"]),
+                        }
+                    )
+            else:
+                weighting_frame_results = [
+                    {
+                        "frame_id": str(frame["id"]),
+                        "weight": float(frame_weight_values[index]),
+                        "status": "zero_weight" if frame_weight_values[index] <= 0.0 else "unit",
+                    }
+                    for index, frame in enumerate(light_frames)
+                ]
+            weighting_elapsed = perf_counter() - weighting_start
+
             local_norm_start = perf_counter()
             local_norm_policy = plan.get("local_normalization_policy", {})
             local_norm_enabled = local_normalization == "on" or (
@@ -2680,6 +2739,7 @@ def run_resident_calibration_integration(
                         "resident_allocate_and_master_upload": allocate_elapsed,
                         "registration_preview_setup": registration_setup_elapsed,
                         "light_read_upload_calibrate": load_calibrate_elapsed,
+                        "resident_weighting": weighting_elapsed,
                         "resident_local_normalization": local_norm_elapsed,
                         "resident_integration": integrate_elapsed,
                         "output_write": write_elapsed,
@@ -2803,6 +2863,12 @@ def run_resident_calibration_integration(
                         "reference_frame_id": str(reference_frame["id"]),
                         "warning_count": len(local_norm_warnings),
                     },
+                    "resident_integration_weighting": {
+                        "mode": weighting_mode,
+                        "frame_results": weighting_frame_results,
+                        "timing_s": weighting_elapsed,
+                        "warnings": weighting_warnings,
+                    },
                     "integration_rejection": {
                         "mode": rejection_mode,
                         "low_sigma": low_sigma,
@@ -2849,7 +2915,7 @@ def run_resident_calibration_integration(
                     "backend": "cuda_resident_stack",
                     "memory_mode": "resident",
                     "rejection": rejection_mode,
-                    "weighting": "none",
+                    "weighting": weighting_mode,
                     "resident_registration": resident_registration,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
@@ -2933,6 +2999,8 @@ def run_resident_calibration_integration(
         integration_warnings = [
             "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation",
         ]
+        if weighting_mode == "simple_snr":
+            integration_warnings.append("resident CUDA used frame-global mean/std simple_snr weights")
         if any(group["enabled"] for group in local_norm_groups):
             mode = next((group["mode"] for group in local_norm_groups if group["enabled"]), "unknown")
             integration_warnings.append(f"resident CUDA used {mode} local normalization before integration")
@@ -2944,7 +3012,7 @@ def run_resident_calibration_integration(
                 "schema_version": 1,
                 "source_stage": "resident_calibrated_stack",
                 "combine": "mean",
-                "weighting": "none",
+                "weighting": weighting_mode,
                 "rejection": rejection_mode,
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
