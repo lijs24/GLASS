@@ -11,7 +11,7 @@ import numpy as np
 
 from gpwbpp.cpu.registration import estimate_translation_phase_correlation, translation_matrix
 from gpwbpp.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
-from gpwbpp.io.fits_io import read_fits_data, write_fits_data
+from gpwbpp.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
 
@@ -92,10 +92,20 @@ def _add_elapsed(buckets: dict[str, float], key: str, elapsed: float) -> None:
     buckets[key] = float(buckets.get(key, 0.0) + float(elapsed))
 
 
-def _read_light_timed(path: str | Path) -> tuple[np.ndarray, float]:
-    start = perf_counter()
-    data = read_fits_data(path, dtype=np.float32)
-    return data, perf_counter() - start
+def _read_light_timed(path: str | Path) -> tuple[np.ndarray, dict[str, float]]:
+    total_start = perf_counter()
+    open_start = perf_counter()
+    with FitsImageReader(path) as reader:
+        open_elapsed = perf_counter() - open_start
+        materialize_start = perf_counter()
+        data = reader.read_full(dtype=np.float32)
+        materialize_elapsed = perf_counter() - materialize_start
+    total_elapsed = perf_counter() - total_start
+    return data, {
+        "total": total_elapsed,
+        "fits_open": open_elapsed,
+        "fits_materialize_decode": materialize_elapsed,
+    }
 
 
 class _LightPrefetcher:
@@ -104,7 +114,7 @@ class _LightPrefetcher:
         self.depth = max(0, int(depth))
         self.workers = max(1, int(workers))
         self.executor: ThreadPoolExecutor | None = None
-        self.pending: dict[int, Future[tuple[np.ndarray, float]]] = {}
+        self.pending: dict[int, Future[tuple[np.ndarray, dict[str, float]]]] = {}
         self.next_submit = 0
 
     def __enter__(self) -> "_LightPrefetcher":
@@ -129,16 +139,16 @@ class _LightPrefetcher:
             self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"])
             self.next_submit += 1
 
-    def result(self, index: int) -> tuple[np.ndarray, float, float]:
+    def result(self, index: int) -> tuple[np.ndarray, dict[str, float], float]:
         if self.executor is None:
-            data, read_elapsed = _read_light_timed(self.light_frames[index]["path"])
-            return data, read_elapsed, read_elapsed
+            data, read_profile = _read_light_timed(self.light_frames[index]["path"])
+            return data, read_profile, read_profile["total"]
         future = self.pending.pop(index)
         wait_start = perf_counter()
-        data, read_elapsed = future.result()
+        data, read_profile = future.result()
         wait_elapsed = perf_counter() - wait_start
         self._fill()
-        return data, read_elapsed, wait_elapsed
+        return data, read_profile, wait_elapsed
 
 
 def _grid_local_norm_coefficients(stats: dict[str, Any], eps: float = 1.0e-6) -> dict[str, Any]:
@@ -1173,6 +1183,8 @@ def run_resident_calibration_integration(
             per_frame_s = []
             per_frame_read_s: list[float] = []
             per_frame_read_worker_s: list[float] = []
+            per_frame_fits_open_s: list[float] = []
+            per_frame_fits_materialize_decode_s: list[float] = []
             per_frame_calibrate_s: list[float] = []
             per_frame_host_copy_s: list[float] = []
             per_frame_h2d_s: list[float] = []
@@ -1222,8 +1234,12 @@ def run_resident_calibration_integration(
                         gc_start = perf_counter()
                         gc.collect()
                         gc_elapsed += perf_counter() - gc_start
-                    light, read_worker_elapsed, read_wait_elapsed = light_prefetch.result(index)
-                    per_frame_read_worker_s.append(read_worker_elapsed)
+                    light, read_profile, read_wait_elapsed = light_prefetch.result(index)
+                    per_frame_read_worker_s.append(float(read_profile.get("total", 0.0)))
+                    per_frame_fits_open_s.append(float(read_profile.get("fits_open", 0.0)))
+                    per_frame_fits_materialize_decode_s.append(
+                        float(read_profile.get("fits_materialize_decode", 0.0))
+                    )
                     per_frame_read_s.append(read_wait_elapsed)
                     calibrate_start = perf_counter()
                     if resident_h2d_mode == "pinned_async":
@@ -2944,6 +2960,8 @@ def run_resident_calibration_integration(
             memory_estimate = _memory_estimate(len(light_frames), height, width)
             read_timing = _timing_summary(per_frame_read_s)
             read_worker_timing = _timing_summary(per_frame_read_worker_s)
+            fits_open_timing = _timing_summary(per_frame_fits_open_s)
+            fits_materialize_decode_timing = _timing_summary(per_frame_fits_materialize_decode_s)
             calibrate_timing = _timing_summary(per_frame_calibrate_s)
             host_copy_timing = _timing_summary(per_frame_host_copy_s)
             h2d_timing = _timing_summary(per_frame_h2d_s)
@@ -2972,6 +2990,8 @@ def run_resident_calibration_integration(
                     "light_loop_total": load_calibrate_elapsed,
                     "light_read_decode_total": read_timing["total"],
                     "light_read_decode_worker_total": read_worker_timing["total"],
+                    "light_fits_open_total": fits_open_timing["total"],
+                    "light_fits_materialize_decode_total": fits_materialize_decode_timing["total"],
                     "light_host_copy_to_pinned_total": host_copy_timing["total"],
                     "light_h2d_total": h2d_timing["total"],
                     "light_calibrate_store_total": calibrate_store_timing["total"],
@@ -2987,6 +3007,8 @@ def run_resident_calibration_integration(
                     "total": _timing_summary(per_frame_s),
                     "read_decode": read_timing,
                     "read_decode_worker": read_worker_timing,
+                    "fits_open": fits_open_timing,
+                    "fits_materialize_decode": fits_materialize_decode_timing,
                     "host_copy_to_pinned": host_copy_timing,
                     "h2d": h2d_timing,
                     "calibrate_store": calibrate_store_timing,
@@ -3015,6 +3037,8 @@ def run_resident_calibration_integration(
                         "light_read_upload_calibrate": load_calibrate_elapsed,
                         "light_read_decode": read_timing["total"],
                         "light_read_decode_worker": read_worker_timing["total"],
+                        "light_fits_open": fits_open_timing["total"],
+                        "light_fits_materialize_decode": fits_materialize_decode_timing["total"],
                         "light_host_copy_to_pinned": host_copy_timing["total"],
                         "light_h2d": h2d_timing["total"],
                         "light_calibrate_store": calibrate_store_timing["total"],
@@ -3035,6 +3059,8 @@ def run_resident_calibration_integration(
                         "per_frame_max": fine_timing["per_frame_seconds"]["total"]["max"],
                         "per_frame_read_decode_mean": read_timing["mean"],
                         "per_frame_read_decode_worker_mean": read_worker_timing["mean"],
+                        "per_frame_fits_open_mean": fits_open_timing["mean"],
+                        "per_frame_fits_materialize_decode_mean": fits_materialize_decode_timing["mean"],
                         "per_frame_host_copy_to_pinned_mean": host_copy_timing["mean"],
                         "per_frame_h2d_mean": h2d_timing["mean"],
                         "per_frame_calibrate_store_mean": calibrate_store_timing["mean"],

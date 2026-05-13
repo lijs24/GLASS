@@ -246,6 +246,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert io_pipeline["host_pinned_bytes"] > 0
     assert timing["light_read_decode"] >= 0.0
     assert timing["light_read_decode_worker"] >= 0.0
+    assert timing["light_fits_open"] >= 0.0
+    assert timing["light_fits_materialize_decode"] >= 0.0
     assert timing["light_host_copy_to_pinned"] >= 0.0
     assert timing["light_h2d"] >= 0.0
     assert timing["light_calibrate_store"] >= 0.0
@@ -254,6 +256,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert timing["light_loop_unaccounted"] >= 0.0
     assert fine_timing["seconds"]["light_read_decode_total"] == timing["light_read_decode"]
     assert fine_timing["seconds"]["light_read_decode_worker_total"] == timing["light_read_decode_worker"]
+    assert fine_timing["seconds"]["light_fits_open_total"] == timing["light_fits_open"]
+    assert fine_timing["seconds"]["light_fits_materialize_decode_total"] == timing["light_fits_materialize_decode"]
     assert fine_timing["seconds"]["light_host_copy_to_pinned_total"] == timing["light_host_copy_to_pinned"]
     assert fine_timing["seconds"]["light_h2d_total"] == timing["light_h2d"]
     assert fine_timing["seconds"]["light_calibrate_store_total"] == timing["light_calibrate_store"]
