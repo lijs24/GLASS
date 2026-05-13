@@ -7,6 +7,49 @@ record the accepted model.
 Each frame produces a registration result with matched star count, inliers,
 RMS, status, and warnings. Failed frames are never silently integrated.
 
+## Clean-room StarAlignment reference
+
+The PixInsight StarAlignment reference for GPWBPP is limited to public
+documentation, public forum discussion, user-generated logs, process settings,
+and black-box output artifacts. PixInsight/WBPP/PJSR source code is not used.
+
+Public PixInsight material describes StarAlignment as a star-reference image
+registration process built around detected stars, geometrical descriptors,
+robust match rejection, and optional local distortion correction. The relevant
+clean-room observations are:
+
+- Older StarAlignment versions used triangle-similarity matching, which is
+  invariant to translation, rotation, and uniform scale but is weaker for
+  projective or locally distorted data.
+- Newer StarAlignment material describes polygonal descriptors: quads,
+  pentagons, hexagons, heptagons, and octagons, with pentagons as the default.
+  The two most distant stars define a local coordinate system; the remaining
+  polygon stars form a compact coordinate hash. This lowers descriptor
+  ambiguity relative to single triangles and reduces false putative matches.
+- RANSAC is used to reject false star-pair matches and optimize the
+  registration model. User-visible failures such as "unable to find a valid set
+  of star pair matches" are treated in GPWBPP as failed registration rows, not
+  silent integration inputs.
+- Distortion correction is described as an iterative predictor-corrector model:
+  an initial projective/linear model predicts putative matches, RANSAC validates
+  and corrects the model, and two-dimensional surface splines/thin plates can
+  model local residual distortion.
+- Public forum guidance notes that default polygonal descriptors do not support
+  specular mirror transformations. For GPWBPP this is separate from a meridian
+  flip that is represented as a 180-degree rotation with positive determinant.
+
+Sources:
+
+- https://www.pixinsight.com/tutorials/sa-distortion/index.html
+- https://pixinsight.com/forum/index.php?threads%2Fstaralignment-of-dissimilar-images.17826%2F=
+- https://pixinsight.com/forum/index.php?threads%2Fstaralignment-confusion.17047%2F=
+
+The implementation implication is that GPWBPP should not keep extending simple
+pair-offset voting as the final registration model. The next robust path is a
+bounded GPU star catalog, quad/pentagon-style descriptor generation, batched
+GPU hypothesis scoring, CPU-orchestrated RANSAC as an interim step, and resident
+CUDA matrix/homography/thin-plate warp application.
+
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
 offsets; similarity/affine candidates come from simple triangle descriptors and
