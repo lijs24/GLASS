@@ -110,6 +110,48 @@ def test_compare_can_ignore_border_for_metrics(tmp_path: Path):
     assert payload["full_frame_stats"]["rms_diff"] > 0.0
 
 
+def test_compare_can_mask_by_gpwbpp_coverage_map(tmp_path: Path):
+    gp = tmp_path / "gp.fits"
+    ref = tmp_path / "ref.fits"
+    coverage = tmp_path / "coverage.fits"
+    out = tmp_path / "compare.html"
+    candidate = np.ones((6, 6), dtype=np.float32)
+    reference = np.ones((6, 6), dtype=np.float32)
+    candidate[0, :] = 20.0
+    candidate[:, 0] = 20.0
+    coverage_data = np.ones((6, 6), dtype=np.float32) * 5.0
+    coverage_data[0, :] = 1.0
+    coverage_data[:, 0] = 1.0
+    write_fits_data(gp, candidate)
+    write_fits_data(ref, reference)
+    write_fits_data(coverage, coverage_data)
+
+    assert (
+        main(
+            [
+                "compare",
+                "--gpwbpp",
+                str(gp),
+                "--reference",
+                str(ref),
+                "--out",
+                str(out),
+                "--gpwbpp-coverage-map",
+                str(coverage),
+                "--min-coverage",
+                "5",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert payload["comparison_region"]["coverage_valid_pixels"] == 25
+    assert payload["comparison_region"]["coverage_fraction"] == 25 / 36
+    assert payload["rms_diff"] == 0.0
+    assert payload["full_frame_stats"]["rms_diff"] > 0.0
+
+
 def test_compare_writes_diagnostic_artifacts(tmp_path: Path):
     y, x = np.mgrid[:32, :40]
     reference = (x + y).astype(np.float32)

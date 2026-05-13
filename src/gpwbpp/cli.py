@@ -525,6 +525,8 @@ def cmd_compare(args: argparse.Namespace) -> int:
         diagnostic_max_size=args.diagnostic_max_size,
         hotspot_tile_size=args.hotspot_tile_size,
         ignore_border_px=args.ignore_border_px,
+        gpwbpp_coverage_map=args.gpwbpp_coverage_map,
+        min_coverage=args.min_coverage,
     )
     write_json(Path(args.out).with_suffix(".json"), comparison)
     write_compare_report(args.out, comparison)
@@ -788,6 +790,8 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--diagnostic-max-size", type=int, default=1024, help="maximum preview PNG width or height")
     compare.add_argument("--hotspot-tile-size", type=int, default=512, help="tile size for residual hotspot ranking")
     compare.add_argument("--ignore-border-px", type=int, default=0, help="ignore this many pixels on each edge for metrics")
+    compare.add_argument("--gpwbpp-coverage-map", help="optional GPWBPP coverage map used to mask comparison metrics")
+    compare.add_argument("--min-coverage", type=float, help="minimum GPWBPP coverage required for comparison metrics")
     compare.set_defaults(func=cmd_compare)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")

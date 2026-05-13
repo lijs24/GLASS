@@ -279,6 +279,8 @@ def compare_fits(
     diagnostic_max_size: int = 1024,
     hotspot_tile_size: int = 512,
     ignore_border_px: int = 0,
+    gpwbpp_coverage_map: str | Path | None = None,
+    min_coverage: float | None = None,
 ) -> dict[str, object]:
     gp_raw = _read_image_data(gpwbpp_path)
     gp, transform = _apply_candidate_transform(gp_raw, gpwbpp_scale, gpwbpp_offset, clip_low, clip_high)
@@ -307,12 +309,47 @@ def compare_fits(
         raise ValueError("ignore_border_px is too large for the compared image shape")
     gp_region = gp[border : gp.shape[0] - border, border : gp.shape[1] - border] if border else gp
     ref_region = ref[border : ref.shape[0] - border, border : ref.shape[1] - border] if border else ref
-    stats = _diff_stats(gp_region, ref_region)
+    coverage_region = None
+    coverage_mask = None
+    if gpwbpp_coverage_map is not None:
+        coverage = _read_image_data(gpwbpp_coverage_map)
+        if coverage.shape != gp.shape:
+            raise ValueError(f"coverage map shape mismatch: {coverage.shape} != {gp.shape}")
+        coverage_region = (
+            coverage[border : coverage.shape[0] - border, border : coverage.shape[1] - border]
+            if border
+            else coverage
+        )
+        threshold = 1.0 if min_coverage is None else float(min_coverage)
+        coverage_mask = np.asarray(coverage_region, dtype=np.float32) >= np.float32(threshold)
+        gp_region_for_stats = np.where(coverage_mask, gp_region, np.nan)
+        ref_region_for_stats = np.where(coverage_mask, ref_region, np.nan)
+    else:
+        gp_region_for_stats = gp_region
+        ref_region_for_stats = ref_region
+    stats = _diff_stats(gp_region_for_stats, ref_region_for_stats)
+    compared_pixels = int(
+        np.count_nonzero(np.isfinite(gp_region_for_stats) & np.isfinite(ref_region_for_stats))
+    )
     comparison_region = {
         "ignore_border_px": border,
         "full_shape": [int(gp.shape[0]), int(gp.shape[1])],
         "compared_shape": [int(gp_region.shape[0]), int(gp_region.shape[1])],
+        "compared_pixels": compared_pixels,
     }
+    if coverage_region is not None:
+        comparison_region.update(
+            {
+                "gpwbpp_coverage_map": str(gpwbpp_coverage_map),
+                "min_coverage": 1.0 if min_coverage is None else float(min_coverage),
+                "coverage_valid_pixels": int(np.count_nonzero(coverage_mask)),
+                "coverage_fraction": float(np.count_nonzero(coverage_mask) / coverage_mask.size),
+                "coverage_min": float(np.nanmin(coverage_region)),
+                "coverage_p1": float(np.nanpercentile(coverage_region, 1)),
+                "coverage_median": float(np.nanmedian(coverage_region)),
+                "coverage_max": float(np.nanmax(coverage_region)),
+            }
+        )
     comparison: dict[str, object] = {
         "shape_match": True,
         "gpwbpp_format": Path(gpwbpp_path).suffix.lower().lstrip("."),
@@ -320,11 +357,13 @@ def compare_fits(
         "candidate_transform": transform,
         "comparison_region": comparison_region,
         **stats,
-        "linear_fit_to_reference": _linear_fit_to_reference(gp_region, ref_region),
-        "robust_linear_fit_to_reference": _robust_linear_fit_to_reference(gp_region, ref_region),
+        "linear_fit_to_reference": _linear_fit_to_reference(gp_region_for_stats, ref_region_for_stats),
+        "robust_linear_fit_to_reference": _robust_linear_fit_to_reference(
+            gp_region_for_stats, ref_region_for_stats
+        ),
         "timing": timing,
     }
-    if border:
+    if border or gpwbpp_coverage_map is not None:
         comparison["full_frame_stats"] = _diff_stats(gp, ref)
     if diagnostics_dir is not None:
         comparison["diagnostics"] = _write_diagnostic_artifacts(
