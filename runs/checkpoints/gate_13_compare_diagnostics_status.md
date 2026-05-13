@@ -29,6 +29,7 @@ Gate 13 support checkpoint: PixInsight/WBPP black-box comparison diagnostics.
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics.html" --gpwbpp-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle Lanczos3 193 WBPP-failed-excluded scaled diagnostics" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --diagnostics-dir "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics" --diagnostic-max-size 1200 --hotspot-tile-size 512
 .\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_inner32.html" --gpwbpp-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle Lanczos3 inner32 scaled" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --ignore-border-px 32
+.\.venv\Scripts\python.exe -c "<coverage hotspot audit; see checkpoint text>"
 ```
 
 ## Test Results
@@ -56,6 +57,11 @@ Gate 13 support checkpoint: PixInsight/WBPP black-box comparison diagnostics.
   - absolute difference p90: `0.00013417215086519718`;
   - absolute difference p99: `0.0004922153893858194`;
   - absolute difference p99.9: `0.007113467752119362`.
+- Coverage audit:
+  - global coverage min/max/mean: `1.0 / 193.0 / 190.4384307861328`;
+  - global coverage p1/p50: `120.0 / 192.0`;
+  - the highest residual hotspot tile had coverage min `11.0`, p1 `22.0`, median `191.0`;
+  - the top hotspot tiles are therefore dominated by low-coverage edge pixels rather than a full-frame alignment failure.
 
 ## CUDA Availability
 
