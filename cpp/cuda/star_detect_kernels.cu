@@ -321,6 +321,51 @@ __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxe
   }
 }
 
+__global__ void star_catalog_sort_desc_shared_kernel(float* xs, float* ys, float* fluxes, int max_candidates) {
+  extern __shared__ float shared_catalog[];
+  float* shared_xs = shared_catalog;
+  float* shared_ys = shared_xs + max_candidates;
+  float* shared_fluxes = shared_ys + max_candidates;
+
+  for (int i = threadIdx.x; i < max_candidates; i += blockDim.x) {
+    shared_xs[i] = xs[i];
+    shared_ys[i] = ys[i];
+    shared_fluxes[i] = fluxes[i];
+  }
+  __syncthreads();
+
+  for (int phase = 0; phase < max_candidates; ++phase) {
+    const int first = phase & 1;
+    for (int i = first + threadIdx.x * 2; i + 1 < max_candidates; i += blockDim.x * 2) {
+      const int j = i + 1;
+      if (star_candidate_weaker(
+              shared_fluxes[i],
+              shared_xs[i],
+              shared_ys[i],
+              shared_fluxes[j],
+              shared_xs[j],
+              shared_ys[j])) {
+        const float tmp_x = shared_xs[i];
+        const float tmp_y = shared_ys[i];
+        const float tmp_flux = shared_fluxes[i];
+        shared_xs[i] = shared_xs[j];
+        shared_ys[i] = shared_ys[j];
+        shared_fluxes[i] = shared_fluxes[j];
+        shared_xs[j] = tmp_x;
+        shared_ys[j] = tmp_y;
+        shared_fluxes[j] = tmp_flux;
+      }
+    }
+    __syncthreads();
+  }
+
+  for (int i = threadIdx.x; i < max_candidates; i += blockDim.x) {
+    xs[i] = shared_xs[i];
+    ys[i] = shared_ys[i];
+    fluxes[i] = shared_fluxes[i];
+  }
+}
+
 __global__ void star_catalog_nms_kernel(
     const float* scan_xs,
     const float* scan_ys,
@@ -502,7 +547,14 @@ void gpwbpp_star_grid_top_nms_candidates_f32_launch(
       grid_cols,
       grid_rows,
       candidates_per_cell);
-  star_catalog_sort_desc_kernel<<<1, 1>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  if (grid_capacity <= 4096) {
+    constexpr int sort_threads = 256;
+    const std::size_t shared_bytes = static_cast<std::size_t>(grid_capacity) * 3 * sizeof(float);
+    star_catalog_sort_desc_shared_kernel<<<1, sort_threads, shared_bytes>>>(
+        grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  } else {
+    star_catalog_sort_desc_kernel<<<1, 1>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  }
   star_catalog_nms_kernel<<<1, 1>>>(
       grid_xs,
       grid_ys,
