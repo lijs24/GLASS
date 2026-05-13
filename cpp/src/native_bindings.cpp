@@ -2235,6 +2235,162 @@ class ResidentCalibratedStack {
     }
   }
 
+  py::list star_grid_top_nms_candidates_batch(
+      const std::vector<std::size_t>& indices,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px) const {
+    if (grid_cols <= 0 || grid_rows <= 0 || candidates_per_cell <= 0 || max_output_candidates <= 0) {
+      throw std::invalid_argument("grid dimensions and candidate counts must be positive");
+    }
+    if (min_separation_px < 0.0f) {
+      throw std::invalid_argument("min_separation_px must be non-negative");
+    }
+    for (const std::size_t index : indices) {
+      require_index(index);
+      if (!loaded_[index]) {
+        throw std::runtime_error("resident frame must be loaded before batched star detection");
+      }
+    }
+
+    const int cell_count = grid_cols * grid_rows;
+    const int grid_capacity = cell_count * candidates_per_cell;
+    py::list results;
+    float* d_grid_xs = nullptr;
+    float* d_grid_ys = nullptr;
+    float* d_grid_fluxes = nullptr;
+    float* d_xs = nullptr;
+    float* d_ys = nullptr;
+    float* d_fluxes = nullptr;
+    int* d_count = nullptr;
+    int* d_locks = nullptr;
+    int* d_stored_count = nullptr;
+    try {
+      check_cuda(
+          cudaMalloc(&d_grid_xs, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms grid xs)");
+      check_cuda(
+          cudaMalloc(&d_grid_ys, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms grid ys)");
+      check_cuda(
+          cudaMalloc(&d_grid_fluxes, static_cast<std::size_t>(grid_capacity) * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms grid fluxes)");
+      check_cuda(
+          cudaMalloc(&d_xs, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms star xs)");
+      check_cuda(
+          cudaMalloc(&d_ys, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms star ys)");
+      check_cuda(
+          cudaMalloc(&d_fluxes, static_cast<std::size_t>(max_output_candidates) * sizeof(float)),
+          "cudaMalloc(resident batch grid top nms star fluxes)");
+      check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(resident batch grid top nms star count)");
+      check_cuda(
+          cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)),
+          "cudaMalloc(resident batch grid top nms locks)");
+      check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident batch grid top nms stored count)");
+
+      for (const std::size_t index : indices) {
+        py::array_t<float> xs({max_output_candidates});
+        py::array_t<float> ys({max_output_candidates});
+        py::array_t<float> fluxes({max_output_candidates});
+        const py::buffer_info xs_info = xs.request();
+        const py::buffer_info ys_info = ys.request();
+        const py::buffer_info flux_info = fluxes.request();
+        int total_count = 0;
+        int stored_count = 0;
+
+        gpwbpp_star_grid_top_nms_candidates_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_grid_xs,
+            d_grid_ys,
+            d_grid_fluxes,
+            d_xs,
+            d_ys,
+            d_fluxes,
+            d_count,
+            d_locks,
+            d_stored_count,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            threshold,
+            grid_cols,
+            grid_rows,
+            candidates_per_cell,
+            max_output_candidates,
+            min_separation_px);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch kernel launch");
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch synchronize");
+        check_cuda(
+            cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid top nms count)");
+        check_cuda(
+            cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid top nms stored count)");
+        check_cuda(
+            cudaMemcpy(
+                xs_info.ptr,
+                d_xs,
+                static_cast<std::size_t>(stored_count) * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid top nms star xs)");
+        check_cuda(
+            cudaMemcpy(
+                ys_info.ptr,
+                d_ys,
+                static_cast<std::size_t>(stored_count) * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid top nms star ys)");
+        check_cuda(
+            cudaMemcpy(
+                flux_info.ptr,
+                d_fluxes,
+                static_cast<std::size_t>(stored_count) * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(resident batch grid top nms star fluxes)");
+
+        py::dict result;
+        result["frame_index"] = index;
+        result["count"] = total_count;
+        result["stored_count"] = stored_count;
+        result["grid_cols"] = grid_cols;
+        result["grid_rows"] = grid_rows;
+        result["candidates_per_cell"] = candidates_per_cell;
+        result["max_output_candidates"] = max_output_candidates;
+        result["min_separation_px"] = min_separation_px;
+        result["x"] = xs[py::slice(0, stored_count, 1)];
+        result["y"] = ys[py::slice(0, stored_count, 1)];
+        result["flux"] = fluxes[py::slice(0, stored_count, 1)];
+        results.append(result);
+      }
+
+      cudaFree(d_grid_xs);
+      cudaFree(d_grid_ys);
+      cudaFree(d_grid_fluxes);
+      cudaFree(d_xs);
+      cudaFree(d_ys);
+      cudaFree(d_fluxes);
+      cudaFree(d_count);
+      cudaFree(d_locks);
+      cudaFree(d_stored_count);
+      return results;
+    } catch (...) {
+      cudaFree(d_grid_xs);
+      cudaFree(d_grid_ys);
+      cudaFree(d_grid_fluxes);
+      cudaFree(d_xs);
+      cudaFree(d_ys);
+      cudaFree(d_fluxes);
+      cudaFree(d_count);
+      cudaFree(d_locks);
+      cudaFree(d_stored_count);
+      throw;
+    }
+  }
+
   py::dict estimate_translation_from_stars_to_reference(
       std::size_t reference_index,
       std::size_t moving_index,
@@ -6332,6 +6488,7 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)
       .def("star_top_nms_candidates", &ResidentCalibratedStack::star_top_nms_candidates)
       .def("star_grid_top_nms_candidates", &ResidentCalibratedStack::star_grid_top_nms_candidates)
+      .def("star_grid_top_nms_candidates_batch", &ResidentCalibratedStack::star_grid_top_nms_candidates_batch)
       .def(
           "estimate_translation_from_stars_to_reference",
           &ResidentCalibratedStack::estimate_translation_from_stars_to_reference,

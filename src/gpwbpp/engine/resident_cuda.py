@@ -2243,6 +2243,14 @@ def run_resident_calibration_integration(
                 use_grid_catalog = (
                     resident_star_grid_cols > 0 and resident_star_grid_rows > 0 and has_grid_nms_catalog
                 )
+                triangle_catalog_batch_enabled = bool(
+                    use_grid_catalog
+                    and resident_star_threshold > 0.0
+                    and hasattr(native_stack, "star_grid_top_nms_candidates_batch")
+                )
+                triangle_catalog_batch_mode = (
+                    "grid_top_nms_fixed_threshold" if triangle_catalog_batch_enabled else "off"
+                )
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -2287,6 +2295,44 @@ def run_resident_calibration_integration(
 
                 reference_catalogs: dict[float, dict[str, Any]] = {}
                 reference_descriptors: dict[float, dict[str, Any]] = {}
+                moving_catalog_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
+                moving_catalog_batch_indices = [
+                    frame_index
+                    for frame_index, frame in enumerate(light_frames)
+                    if frame_index != reference_index and not _matches_any_token(frame, excluded_tokens)
+                ]
+
+                def detect_resident_triangle_moving_catalog(
+                    frame_index: int,
+                    threshold: float,
+                    _stack=stack,
+                ) -> dict[str, Any]:
+                    threshold_key = round(float(threshold), 6)
+                    if triangle_catalog_batch_enabled:
+                        cached_by_index = moving_catalog_batch_cache.get(threshold_key)
+                        if cached_by_index is None:
+                            batch_start = perf_counter()
+                            batch_results = _stack.star_grid_top_nms_candidates_batch(
+                                moving_catalog_batch_indices,
+                                threshold,
+                                resident_star_grid_cols,
+                                resident_star_grid_rows,
+                                grid_top_candidates_per_cell,
+                                resident_star_max_candidates,
+                                nms_min_separation_px,
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_moving_catalog_batch",
+                                perf_counter() - batch_start,
+                            )
+                            cached_by_index = {int(item["frame_index"]): item for item in batch_results}
+                            moving_catalog_batch_cache[threshold_key] = cached_by_index
+                        cached_catalog = cached_by_index.get(frame_index)
+                        if cached_catalog is not None:
+                            return cached_catalog
+                    return detect_resident_triangle_catalog(frame_index, threshold)
+
                 for index, frame in enumerate(light_frames):
                     registration_frame_start = perf_counter()
                     warnings = []
@@ -2338,7 +2384,7 @@ def run_resident_calibration_integration(
                                     )
                                     reference_catalogs[threshold_key] = reference_catalog
                                 moving_catalog_start = perf_counter()
-                                moving_catalog = detect_resident_triangle_catalog(index, threshold)
+                                moving_catalog = detect_resident_triangle_moving_catalog(index, threshold)
                                 _add_elapsed(
                                     registration_component_s,
                                     "triangle_moving_catalog",
@@ -2521,6 +2567,7 @@ def run_resident_calibration_integration(
                                         + ("failed" if quality_failures else "ok"),
                                         f"triangle_min_pixel_ncc={min_pixel_ncc}",
                                         f"triangle_catalog_selector={catalog_selector}",
+                                        f"triangle_catalog_batch={triangle_catalog_batch_mode}",
                                         f"triangle_nms_min_separation_px={nms_min_separation_px:.6g}",
                                         "resident CUDA triangle descriptor similarity",
                                     ]
@@ -3050,6 +3097,13 @@ def run_resident_calibration_integration(
                             "cuda_triangle_pixel_refine",
                             True,
                         ),
+                        "triangle_catalog_batch": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_catalog_batch_enabled
+                        ),
+                        "triangle_catalog_batch_mode": triangle_catalog_batch_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
                         "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])
                         if resident_registration == "similarity_cuda_triangle"
                         else None,

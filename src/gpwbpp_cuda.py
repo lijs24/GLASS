@@ -2599,6 +2599,49 @@ class ResidentCalibratedStack:
             "flux": np.asarray(result["flux"], dtype=np.float32),
         }
 
+    def star_grid_top_nms_candidates_batch(
+        self,
+        indices: list[int] | tuple[int, ...],
+        threshold: float,
+        grid_cols: int,
+        grid_rows: int,
+        candidates_per_cell: int,
+        max_output_candidates: int,
+        min_separation_px: float,
+    ) -> list[dict[str, Any]]:
+        if not hasattr(self._impl, "star_grid_top_nms_candidates_batch"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.star_grid_top_nms_candidates_batch is not available"
+            )
+        results = self._impl.star_grid_top_nms_candidates_batch(
+            [int(index) for index in indices],
+            float(threshold),
+            int(grid_cols),
+            int(grid_rows),
+            int(candidates_per_cell),
+            int(max_output_candidates),
+            float(min_separation_px),
+        )
+        catalogs: list[dict[str, Any]] = []
+        for item in results:
+            result = dict(item)
+            catalogs.append(
+                {
+                    "frame_index": int(result["frame_index"]),
+                    "count": int(result["count"]),
+                    "stored_count": int(result["stored_count"]),
+                    "grid_cols": int(result["grid_cols"]),
+                    "grid_rows": int(result["grid_rows"]),
+                    "candidates_per_cell": int(result["candidates_per_cell"]),
+                    "max_output_candidates": int(result["max_output_candidates"]),
+                    "min_separation_px": float(result["min_separation_px"]),
+                    "x": np.asarray(result["x"], dtype=np.float32),
+                    "y": np.asarray(result["y"], dtype=np.float32),
+                    "flux": np.asarray(result["flux"], dtype=np.float32),
+                }
+            )
+        return catalogs
+
     def estimate_translation_from_stars_to_reference(
         self,
         reference_index: int,

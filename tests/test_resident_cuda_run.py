@@ -672,11 +672,14 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_descriptor_radius"] == 0.08
     assert resident_registration["triangle_neighbors"] == 5
     assert resident_registration["triangle_max_descriptors"] == 256
+    assert resident_registration["triangle_catalog_batch"] is True
+    assert resident_registration["triangle_catalog_batch_mode"] == "grid_top_nms_fixed_threshold"
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
     timing = resident["artifacts"][0]["timing_s"]
     registration_components = resident["artifacts"][0]["fine_timing"]["registration_component_seconds"]
     assert timing["resident_registration_component_accounted"] >= 0.0
     assert timing["resident_registration_orchestration"] >= 0.0
+    assert registration_components["triangle_moving_catalog_batch"] >= 0.0
     assert registration_components["triangle_moving_catalog"] >= 0.0
     assert registration_components["triangle_moving_descriptors"] >= 0.0
     assert registration_components["triangle_descriptor_fit"] >= 0.0

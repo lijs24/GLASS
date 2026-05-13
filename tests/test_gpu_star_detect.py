@@ -202,6 +202,42 @@ def test_resident_stack_star_grid_top_nms_candidates_from_device_frame():
     assert points == {(6, 6), (24, 6), (6, 24), (24, 24)}
 
 
+def test_resident_stack_star_grid_top_nms_candidates_batch_matches_single_calls():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "star_grid_top_nms_candidates_batch"):
+        raise AssertionError("ResidentCalibratedStack.star_grid_top_nms_candidates_batch is missing")
+
+    first = np.zeros((32, 32), dtype=np.float32)
+    first[6, 6] = 50.0
+    first[7, 7] = 49.0
+    first[24, 6] = 48.0
+    first[6, 24] = 47.0
+    second = np.zeros((32, 32), dtype=np.float32)
+    second[5, 5] = 60.0
+    second[20, 8] = 42.0
+    second[9, 23] = 41.0
+    second[22, 22] = 40.0
+
+    stack = module.ResidentCalibratedStack(2, 32, 32)
+    stack.upload_calibrated_frame(0, first)
+    stack.upload_calibrated_frame(1, second)
+
+    batch = list(stack.star_grid_top_nms_candidates_batch([0, 1], 10.0, 2, 2, 2, 4, 4.0))
+    singles = [
+        stack.star_grid_top_nms_candidates(0, 10.0, 2, 2, 2, 4, 4.0),
+        stack.star_grid_top_nms_candidates(1, 10.0, 2, 2, 2, 4, 4.0),
+    ]
+
+    assert len(batch) == 2
+    for expected_index, batch_item, single_item in zip(range(2), batch, singles, strict=True):
+        assert int(batch_item["frame_index"]) == expected_index
+        assert int(batch_item["count"]) == int(single_item["count"])
+        assert int(batch_item["stored_count"]) == int(single_item["stored_count"])
+        assert np.array_equal(batch_item["x"], single_item["x"])
+        assert np.array_equal(batch_item["y"], single_item["y"])
+        assert np.array_equal(batch_item["flux"], single_item["flux"])
+
+
 def test_gpu_star_top_candidate_selectors_are_repeatable_under_contention():
     module = cuda_module_or_skip()
     required = [
