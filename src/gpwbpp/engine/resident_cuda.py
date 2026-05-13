@@ -1078,6 +1078,55 @@ def run_resident_calibration_integration(
                         1,
                     ),
                 }
+                nms_min_separation_px = _policy_float(
+                    registration_policy,
+                    "cuda_catalog_nms_min_separation_px",
+                    max(32.0, float(min(height, width)) / 100.0),
+                )
+                nms_scan_candidates = _policy_int(
+                    registration_policy,
+                    "cuda_catalog_nms_scan_candidates",
+                    max(resident_star_max_candidates, resident_star_max_candidates * 4),
+                )
+                grid_top_candidates_per_cell = _policy_int(
+                    registration_policy,
+                    "cuda_catalog_grid_top_per_cell",
+                    4,
+                )
+                native_stack = getattr(stack, "_impl", stack)
+                has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
+                has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
+                use_grid_catalog = (
+                    resident_star_grid_cols > 0 and resident_star_grid_rows > 0 and has_grid_nms_catalog
+                )
+                catalog_selector = (
+                    "resident_grid_top_nms"
+                    if use_grid_catalog
+                    else "resident_top_nms"
+                    if has_top_nms_catalog
+                    else "resident_top_flux"
+                )
+
+                def detect_resident_catalog(frame_index: int, threshold: float) -> dict[str, Any]:
+                    if use_grid_catalog:
+                        return stack.star_grid_top_nms_candidates(
+                            frame_index,
+                            threshold,
+                            resident_star_grid_cols,
+                            resident_star_grid_rows,
+                            grid_top_candidates_per_cell,
+                            resident_star_max_candidates,
+                            nms_min_separation_px,
+                        )
+                    if has_top_nms_catalog:
+                        return stack.star_top_nms_candidates(
+                            frame_index,
+                            threshold,
+                            nms_scan_candidates,
+                            resident_star_max_candidates,
+                            nms_min_separation_px,
+                        )
+                    return stack.star_top_candidates(frame_index, threshold, resident_star_max_candidates)
 
                 reference_catalogs: dict[float, dict[str, Any]] = {}
                 for index, frame in enumerate(light_frames):
@@ -1154,17 +1203,9 @@ def run_resident_calibration_integration(
                                 threshold_key = round(float(threshold), 6)
                                 reference_catalog = reference_catalogs.get(threshold_key)
                                 if reference_catalog is None:
-                                    reference_catalog = stack.star_top_candidates(
-                                        reference_index,
-                                        threshold,
-                                        resident_star_max_candidates,
-                                    )
+                                    reference_catalog = detect_resident_catalog(reference_index, threshold)
                                     reference_catalogs[threshold_key] = reference_catalog
-                                moving_catalog = stack.star_top_candidates(
-                                    index,
-                                    threshold,
-                                    resident_star_max_candidates,
-                                )
+                                moving_catalog = detect_resident_catalog(index, threshold)
                                 if int(reference_catalog["stored_count"]) < 2 or int(moving_catalog["stored_count"]) < 2:
                                     trial_results.append(
                                         {
@@ -1252,6 +1293,8 @@ def run_resident_calibration_integration(
                                         f"similarity_fit_rms_px={rms_px:.6g}",
                                         f"similarity_pixel_rms_adu={float(refinement['metrics'].get('rms', float('nan'))):.6g}",
                                         f"similarity_pixel_ncc={float(refinement['metrics'].get('ncc', float('nan'))):.6g}",
+                                        f"similarity_catalog_selector={catalog_selector}",
+                                        f"similarity_nms_min_separation_px={nms_min_separation_px:.6g}",
                                         "resident CUDA catalog similarity with multi-seed pixel refinement",
                                     ]
                                     + prior_warnings

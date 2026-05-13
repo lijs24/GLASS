@@ -166,6 +166,42 @@ def test_resident_stack_star_top_candidates_from_device_frame():
     ]
 
 
+def test_resident_stack_star_top_nms_candidates_from_device_frame():
+    module = cuda_module_or_skip()
+    image = np.zeros((32, 32), dtype=np.float32)
+    image[8, 8] = 50.0
+    image[9, 9] = 49.0
+    image[24, 24] = 45.0
+    stack = module.ResidentCalibratedStack(1, 32, 32)
+    stack.upload_calibrated_frame(0, image)
+
+    result = stack.star_top_nms_candidates(0, 10.0, 8, 4, 4.0)
+    points = {(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)}
+
+    assert result["count"] == 2
+    assert result["stored_count"] == 2
+    assert points == {(8, 8), (24, 24)}
+
+
+def test_resident_stack_star_grid_top_nms_candidates_from_device_frame():
+    module = cuda_module_or_skip()
+    image = np.zeros((32, 32), dtype=np.float32)
+    image[6, 6] = 50.0
+    image[7, 7] = 49.0
+    image[24, 6] = 48.0
+    image[6, 24] = 47.0
+    image[24, 24] = 46.0
+    stack = module.ResidentCalibratedStack(1, 32, 32)
+    stack.upload_calibrated_frame(0, image)
+
+    result = stack.star_grid_top_nms_candidates(0, 10.0, 2, 2, 2, 4, 4.0)
+    points = {(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)}
+
+    assert result["count"] == 4
+    assert result["stored_count"] == 4
+    assert points == {(6, 6), (24, 6), (6, 24), (24, 24)}
+
+
 def test_gpu_star_top_candidate_selectors_are_repeatable_under_contention():
     module = cuda_module_or_skip()
     required = [

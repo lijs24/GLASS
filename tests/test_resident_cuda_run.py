@@ -376,13 +376,17 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
             "--resident-registration",
             "similarity_cuda_catalog",
             "--resident-star-threshold",
-            "0",
+            "30",
             "--resident-star-max-candidates",
             "16",
             "--resident-star-tolerance-px",
             "1.5",
             "--resident-registration-max-shift",
             "8",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
             "--resident-star-prior",
             "ncc",
             "--resident-star-prior-radius-px",
@@ -403,11 +407,12 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
     assert resident_registration["mode"] == "similarity_cuda_catalog"
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_catalog"
-    assert moving["matched_stars"] >= 6
+    assert moving["matched_stars"] >= 3
     assert abs(moving["matrix"][0][2] + 3.0) < 0.5
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert any("similarity_top_k=3" in warning for warning in moving["warnings"])
     assert any("similarity_seed_count=4" in warning for warning in moving["warnings"])
+    assert any("similarity_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
     assert any("resident CUDA catalog similarity" in warning for warning in moving["warnings"])
 
 
