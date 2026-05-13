@@ -31,6 +31,25 @@ Gate 09 sub-checkpoint: resident CUDA warp interpolation support.
 - Targeted CUDA/resident tests: `20 passed in 3.01s`.
 - Full test suite: `161 passed in 7.56s`.
 
+## Real-data Subset Validation
+
+Command:
+
+```powershell
+.\.venv\Scripts\gpwbpp.exe run --plan "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_similarity_catalog_subset12_starcore8_fixed350\processing_plan.json" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_fixed350" --backend cuda --memory-mode resident --until-stage integration --local-normalization off --integration-rejection winsorized_sigma --integration-weighting none --flat-floor 0.05 --resident-registration similarity_cuda_triangle --resident-star-threshold 350 --resident-star-max-candidates 96 --resident-star-tolerance-px 3 --resident-star-grid-cols 24 --resident-star-grid-rows 16 --resident-ncc-sample-stride 4 --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.30
+.\.venv\Scripts\gpwbpp.exe report --run "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_fixed350" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_fixed350\report.html"
+```
+
+Results:
+
+- Output: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_fixed350`.
+- Total elapsed: `17.932113399961963 s`.
+- Registration statuses: 11 ok, 1 reference, 0 failed.
+- Artifact records: `resident_registration.warp_interpolation = lanczos3`.
+- Artifact records: `resident_registration.warp_clamping_threshold = 0.3`.
+- Estimated peak memory: `4.134035155177116 GiB`.
+- Report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_subset12_lanczos3_fixed350\report.html`.
+
 ## CUDA Availability
 
 - CUDA available: yes.
