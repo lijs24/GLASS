@@ -2996,9 +2996,13 @@ def run_resident_calibration_integration(
                 ],
             },
         )
-        integration_warnings = [
-            "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation",
-        ]
+        integration_warnings: list[str] = []
+        if rejection_mode == "winsorized_sigma":
+            integration_warnings.append(
+                "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation"
+            )
+        elif rejection_mode == "sigma_clip":
+            integration_warnings.append("resident CUDA used two-pass mean/std sigma clipping")
         if weighting_mode == "simple_snr":
             integration_warnings.append("resident CUDA used frame-global mean/std simple_snr weights")
         if any(group["enabled"] for group in local_norm_groups):

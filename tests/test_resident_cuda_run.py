@@ -270,6 +270,7 @@ def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
     weights = integration["frame_weights"]
     assert integration["weighting"] == "simple_snr"
     assert integration["outputs"][0]["weighting"] == "simple_snr"
+    assert not any("winsorized" in warning for warning in integration["warnings"])
     weighting = resident["artifacts"][0]["resident_integration_weighting"]
     assert weighting["mode"] == "simple_snr"
     assert len(weighting["frame_results"]) == 2
