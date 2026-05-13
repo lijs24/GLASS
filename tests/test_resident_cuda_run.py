@@ -205,6 +205,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
             "0.05",
             "--resident-prefetch-frames",
             "2",
+            "--resident-prefetch-workers",
+            "2",
             "--resident-registration",
             "translation_preview",
             "--reference-frame-id",
@@ -237,7 +239,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
     assert fine_timing["schema_version"] == 1
     assert io_pipeline["prefetch_frames"] == 2
-    assert io_pipeline["prefetch_workers"] == 1
+    assert io_pipeline["prefetch_workers"] == 2
     assert timing["light_read_decode"] >= 0.0
     assert timing["light_read_decode_worker"] >= 0.0
     assert timing["light_h2d_calibrate_store"] >= 0.0

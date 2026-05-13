@@ -99,16 +99,20 @@ def _read_light_timed(path: str | Path) -> tuple[np.ndarray, float]:
 
 
 class _LightPrefetcher:
-    def __init__(self, light_frames: list[dict[str, Any]], depth: int):
+    def __init__(self, light_frames: list[dict[str, Any]], depth: int, workers: int = 1):
         self.light_frames = light_frames
         self.depth = max(0, int(depth))
+        self.workers = max(1, int(workers))
         self.executor: ThreadPoolExecutor | None = None
         self.pending: dict[int, Future[tuple[np.ndarray, float]]] = {}
         self.next_submit = 0
 
     def __enter__(self) -> "_LightPrefetcher":
         if self.depth > 0:
-            self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gpwbpp-light-prefetch")
+            self.executor = ThreadPoolExecutor(
+                max_workers=self.workers,
+                thread_name_prefix="gpwbpp-light-prefetch",
+            )
             self._fill()
         return self
 
@@ -1008,6 +1012,7 @@ def run_resident_calibration_integration(
     resident_local_normalization_mode: str = "global_mean_std",
     resident_local_normalization_tile_size: int = 512,
     resident_prefetch_frames: int = 0,
+    resident_prefetch_workers: int = 1,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -1060,6 +1065,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_triangle_pixel_refine_final_stride must be positive when provided")
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
+    if resident_prefetch_workers <= 0:
+        raise ValueError("resident_prefetch_workers must be positive")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1171,7 +1178,7 @@ def run_resident_calibration_integration(
             frame_weight_values: list[float] = []
             current_master_key: str | None = None
             current_dark_exposure: float | None = None
-            with _LightPrefetcher(light_frames, resident_prefetch_frames) as light_prefetch:
+            with _LightPrefetcher(light_frames, resident_prefetch_frames, resident_prefetch_workers) as light_prefetch:
                 for index, frame in enumerate(light_frames):
                     frame_start = perf_counter()
                     calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
@@ -3004,7 +3011,7 @@ def run_resident_calibration_integration(
                     "fine_timing": fine_timing,
                     "resident_io_pipeline": {
                         "prefetch_frames": int(resident_prefetch_frames),
-                        "prefetch_workers": 1 if resident_prefetch_frames > 0 else 0,
+                        "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                     },
                     "resident_registration": {
                         "mode": resident_registration,
