@@ -2746,6 +2746,7 @@ def run_resident_calibration_integration(
             },
         )
         if registration_results:
+            matrix_warp_description = f"CUDA matrix {resident_warp_interpolation} warp"
             write_json(
                 run / "registration_results.json",
                 {
@@ -2756,16 +2757,16 @@ def run_resident_calibration_integration(
                     "warnings": [
                         (
                             "resident registration consumed external matrices; non-translation matrices are applied "
-                            "with CUDA matrix bilinear warp"
+                            f"with {matrix_warp_description}"
                             if resident_registration == "external_matrix"
                             else (
                                 "resident registration estimated CUDA catalog similarity matrices and applied them "
-                                "with resident matrix bilinear warp"
+                                f"with resident matrix {resident_warp_interpolation} warp"
                             )
                             if resident_registration == "similarity_cuda_catalog"
                             else (
                                 "resident registration estimated CUDA triangle descriptor matrices and applied them "
-                                "with resident matrix bilinear warp"
+                                f"with resident matrix {resident_warp_interpolation} warp"
                             )
                             if resident_registration == "similarity_cuda_triangle"
                             else "resident registration is translation-only in the current gate"

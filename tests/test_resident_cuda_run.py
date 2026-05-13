@@ -769,6 +769,7 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert integration["outputs"][0]["resident_registration"] == "external_matrix"
     assert registration["transform_model"] == "external_matrix"
     assert registration["warnings"][0].startswith("resident registration consumed external matrices")
+    assert "lanczos3" in registration["warnings"][0]
     assert resident_registration["mode"] == "external_matrix"
     assert resident_registration["warp_interpolation"] == "lanczos3"
     assert resident_registration["warp_clamping_threshold"] == 0.30
