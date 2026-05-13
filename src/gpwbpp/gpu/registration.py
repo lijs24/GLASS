@@ -9,6 +9,7 @@ from gpwbpp.cpu.registration import estimate_translation
 from gpwbpp_cuda import (
     estimate_similarity_from_catalogs_f32,
     estimate_similarity_from_pairs_f32,
+    estimate_similarity_from_triangle_descriptors_f32,
     estimate_translation_from_catalogs_f32,
     estimate_translation_search_f32,
     matrix_alignment_metrics_f32,
@@ -206,6 +207,7 @@ __all__ = [
     "estimate_translation",
     "estimate_similarity_from_catalogs_f32",
     "estimate_similarity_from_pairs_f32",
+    "estimate_similarity_from_triangle_descriptors_f32",
     "estimate_translation_from_catalogs_f32",
     "estimate_translation_search_f32",
     "matrix_alignment_metrics_f32",

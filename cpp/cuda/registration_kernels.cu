@@ -1073,6 +1073,193 @@ __global__ void catalog_similarity_score_kernel(
       inliers > 0 ? sqrtf(residual_sum / static_cast<float>(inliers)) : NAN;
 }
 
+__global__ void triangle_similarity_score_kernel(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const float* reference_descriptors,
+    const int* reference_indices,
+    const float* moving_descriptors,
+    const int* moving_indices,
+    float* candidate_params,
+    int* candidate_scores,
+    float* candidate_rms,
+    int reference_count,
+    int moving_count,
+    int reference_descriptor_count,
+    int moving_descriptor_count,
+    int candidate_count,
+    float tolerance_px,
+    float descriptor_radius) {
+  const int candidate_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (candidate_index >= candidate_count) {
+    return;
+  }
+  const int orientation = candidate_index & 1;
+  const int descriptor_pair = candidate_index / 2;
+  const int reference_descriptor_index = descriptor_pair / moving_descriptor_count;
+  const int moving_descriptor_index = descriptor_pair % moving_descriptor_count;
+  const int param_offset = candidate_index * 4;
+  candidate_params[param_offset + 0] = 1.0f;
+  candidate_params[param_offset + 1] = 0.0f;
+  candidate_params[param_offset + 2] = 0.0f;
+  candidate_params[param_offset + 3] = 0.0f;
+  candidate_scores[candidate_index] = -1;
+  candidate_rms[candidate_index] = NAN;
+
+  if (reference_descriptor_index >= reference_descriptor_count ||
+      moving_descriptor_index >= moving_descriptor_count) {
+    return;
+  }
+  const float rd0 = reference_descriptors[reference_descriptor_index * 2 + 0];
+  const float rd1 = reference_descriptors[reference_descriptor_index * 2 + 1];
+  const float md0 = moving_descriptors[moving_descriptor_index * 2 + 0];
+  const float md1 = moving_descriptors[moving_descriptor_index * 2 + 1];
+  if (!isfinite(rd0) || !isfinite(rd1) || !isfinite(md0) || !isfinite(md1)) {
+    return;
+  }
+  const float descriptor_dx = rd0 - md0;
+  const float descriptor_dy = rd1 - md1;
+  if ((descriptor_dx * descriptor_dx + descriptor_dy * descriptor_dy) >
+      descriptor_radius * descriptor_radius) {
+    return;
+  }
+
+  int r0 = reference_indices[reference_descriptor_index * 3 + 0];
+  int r1 = reference_indices[reference_descriptor_index * 3 + 1];
+  const int r2 = reference_indices[reference_descriptor_index * 3 + 2];
+  if (orientation != 0) {
+    const int tmp = r0;
+    r0 = r1;
+    r1 = tmp;
+  }
+  const int m0 = moving_indices[moving_descriptor_index * 3 + 0];
+  const int m1 = moving_indices[moving_descriptor_index * 3 + 1];
+  const int m2 = moving_indices[moving_descriptor_index * 3 + 2];
+  if (r0 < 0 || r0 >= reference_count || r1 < 0 || r1 >= reference_count ||
+      r2 < 0 || r2 >= reference_count || m0 < 0 || m0 >= moving_count ||
+      m1 < 0 || m1 >= moving_count || m2 < 0 || m2 >= moving_count) {
+    return;
+  }
+
+  const float mx0 = moving_x[m0];
+  const float my0 = moving_y[m0];
+  const float mx1 = moving_x[m1];
+  const float my1 = moving_y[m1];
+  const float mx2 = moving_x[m2];
+  const float my2 = moving_y[m2];
+  const float rx0 = reference_x[r0];
+  const float ry0 = reference_y[r0];
+  const float rx1 = reference_x[r1];
+  const float ry1 = reference_y[r1];
+  const float rx2 = reference_x[r2];
+  const float ry2 = reference_y[r2];
+  if (!isfinite(mx0) || !isfinite(my0) || !isfinite(mx1) || !isfinite(my1) ||
+      !isfinite(mx2) || !isfinite(my2) || !isfinite(rx0) || !isfinite(ry0) ||
+      !isfinite(rx1) || !isfinite(ry1) || !isfinite(rx2) || !isfinite(ry2)) {
+    return;
+  }
+
+  const double n = 3.0;
+  const double sum_mx = static_cast<double>(mx0) + mx1 + mx2;
+  const double sum_my = static_cast<double>(my0) + my1 + my2;
+  const double sum_rx = static_cast<double>(rx0) + rx1 + rx2;
+  const double sum_ry = static_cast<double>(ry0) + ry1 + ry2;
+  const double mean_mx = sum_mx / n;
+  const double mean_my = sum_my / n;
+  const double mean_rx = sum_rx / n;
+  const double mean_ry = sum_ry / n;
+  const double moving_power =
+      static_cast<double>(mx0) * mx0 + static_cast<double>(my0) * my0 +
+      static_cast<double>(mx1) * mx1 + static_cast<double>(my1) * my1 +
+      static_cast<double>(mx2) * mx2 + static_cast<double>(my2) * my2;
+  const double dot_same =
+      static_cast<double>(mx0) * rx0 + static_cast<double>(my0) * ry0 +
+      static_cast<double>(mx1) * rx1 + static_cast<double>(my1) * ry1 +
+      static_cast<double>(mx2) * rx2 + static_cast<double>(my2) * ry2;
+  const double dot_cross =
+      static_cast<double>(mx0) * ry0 - static_cast<double>(my0) * rx0 +
+      static_cast<double>(mx1) * ry1 - static_cast<double>(my1) * rx1 +
+      static_cast<double>(mx2) * ry2 - static_cast<double>(my2) * rx2;
+  const double denominator = moving_power - n * (mean_mx * mean_mx + mean_my * mean_my);
+  if (denominator <= 1.0e-20) {
+    return;
+  }
+  const double numer_a = dot_same - n * (mean_mx * mean_rx + mean_my * mean_ry);
+  const double numer_b = dot_cross - n * (mean_mx * mean_ry - mean_my * mean_rx);
+  const float a = static_cast<float>(numer_a / denominator);
+  const float b = static_cast<float>(numer_b / denominator);
+  const float tx = static_cast<float>(mean_rx - (static_cast<double>(a) * mean_mx - static_cast<double>(b) * mean_my));
+  const float ty = static_cast<float>(mean_ry - (static_cast<double>(b) * mean_mx + static_cast<double>(a) * mean_my));
+  if (!isfinite(a) || !isfinite(b) || !isfinite(tx) || !isfinite(ty)) {
+    return;
+  }
+  candidate_params[param_offset + 0] = a;
+  candidate_params[param_offset + 1] = b;
+  candidate_params[param_offset + 2] = tx;
+  candidate_params[param_offset + 3] = ty;
+
+  const float tolerance2 = tolerance_px * tolerance_px;
+  int inliers = 0;
+  float residual_sum = 0.0f;
+  for (int moving_index = 0; moving_index < moving_count; ++moving_index) {
+    const float mx = moving_x[moving_index];
+    const float my = moving_y[moving_index];
+    if (!isfinite(mx) || !isfinite(my)) {
+      continue;
+    }
+    const float transformed_x = a * mx - b * my + tx;
+    const float transformed_y = b * mx + a * my + ty;
+    float best_distance2 = tolerance2;
+    int best_reference = -1;
+    for (int reference_index = 0; reference_index < reference_count; ++reference_index) {
+      const float rx = reference_x[reference_index];
+      const float ry = reference_y[reference_index];
+      if (!isfinite(rx) || !isfinite(ry)) {
+        continue;
+      }
+      const float dx = transformed_x - rx;
+      const float dy = transformed_y - ry;
+      const float distance2 = dx * dx + dy * dy;
+      if (distance2 <= best_distance2) {
+        best_distance2 = distance2;
+        best_reference = reference_index;
+      }
+    }
+    if (best_reference < 0) {
+      continue;
+    }
+    const float best_rx = reference_x[best_reference];
+    const float best_ry = reference_y[best_reference];
+    float reverse_best_distance2 = tolerance2;
+    int reverse_best_moving = -1;
+    for (int other_moving_index = 0; other_moving_index < moving_count; ++other_moving_index) {
+      const float other_mx = moving_x[other_moving_index];
+      const float other_my = moving_y[other_moving_index];
+      if (!isfinite(other_mx) || !isfinite(other_my)) {
+        continue;
+      }
+      const float other_x = a * other_mx - b * other_my + tx;
+      const float other_y = b * other_mx + a * other_my + ty;
+      const float rdx = other_x - best_rx;
+      const float rdy = other_y - best_ry;
+      const float reverse_distance2 = rdx * rdx + rdy * rdy;
+      if (reverse_distance2 <= reverse_best_distance2) {
+        reverse_best_distance2 = reverse_distance2;
+        reverse_best_moving = other_moving_index;
+      }
+    }
+    if (reverse_best_moving == moving_index) {
+      ++inliers;
+      residual_sum += best_distance2;
+    }
+  }
+  candidate_scores[candidate_index] = inliers;
+  candidate_rms[candidate_index] =
+      inliers > 0 ? sqrtf(residual_sum / static_cast<float>(inliers)) : NAN;
+}
+
 __global__ void catalog_similarity_best_kernel(
     const float* candidate_params,
     const int* candidate_scores,
@@ -1477,6 +1664,65 @@ void gpwbpp_triangle_asterism_descriptors_f32_launch(
   const int blocks = (raw_count + threads - 1) / threads;
   triangle_asterism_descriptor_kernel<<<blocks, threads>>>(
       x, y, descriptors, indices, areas, valid, count, neighbors, combos_per_anchor);
+}
+
+void gpwbpp_estimate_similarity_from_triangle_descriptors_f32_launch(
+    const float* reference_x,
+    const float* reference_y,
+    const float* moving_x,
+    const float* moving_y,
+    const float* reference_descriptors,
+    const int* reference_indices,
+    const float* moving_descriptors,
+    const int* moving_indices,
+    float* candidate_params,
+    int* candidate_scores,
+    float* candidate_rms,
+    float* matrix,
+    float* scale,
+    float* rotation_rad,
+    float* rms_px,
+    int* best_inliers,
+    int* best_index,
+    int reference_count,
+    int moving_count,
+    int reference_descriptor_count,
+    int moving_descriptor_count,
+    int candidate_count,
+    float tolerance_px,
+    float descriptor_radius) {
+  constexpr int threads = 128;
+  const int blocks = (candidate_count + threads - 1) / threads;
+  triangle_similarity_score_kernel<<<blocks, threads>>>(
+      reference_x,
+      reference_y,
+      moving_x,
+      moving_y,
+      reference_descriptors,
+      reference_indices,
+      moving_descriptors,
+      moving_indices,
+      candidate_params,
+      candidate_scores,
+      candidate_rms,
+      reference_count,
+      moving_count,
+      reference_descriptor_count,
+      moving_descriptor_count,
+      candidate_count,
+      tolerance_px,
+      descriptor_radius);
+  catalog_similarity_best_kernel<<<1, 1>>>(
+      candidate_params,
+      candidate_scores,
+      candidate_rms,
+      matrix,
+      scale,
+      rotation_rad,
+      rms_px,
+      best_inliers,
+      best_index,
+      candidate_count);
 }
 
 void gpwbpp_estimate_translation_search_f32_launch(

@@ -107,6 +107,14 @@ or downstream matching. The current host wrapper still performs deduplication
 and area ordering after downloading compact descriptor arrays; descriptor
 matching and RANSAC-style hypothesis selection remain follow-up CUDA work.
 
+`gpwbpp_cuda.estimate_similarity_from_triangle_descriptors_f32(...)` adds the
+next device-side step: descriptor-pair candidates are filtered by side-ratio
+distance on the GPU, both triangle orientations are tried, similarity matrices
+are fitted from the triangle vertices, and compact star catalogs are scored by
+mutual nearest-neighbor inliers. The current test scope is a controlled
+synthetic catalog with a known similarity transform; robust multi-hypothesis
+selection on real M38 frames and resident pipeline wiring remain open.
+
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
 offsets; similarity/affine candidates come from simple triangle descriptors and

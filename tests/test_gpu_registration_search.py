@@ -108,6 +108,60 @@ def test_gpu_triangle_asterism_descriptors_match_cpu_bridge():
     assert np.allclose(result["areas"], np.asarray([item[2] for item in expected], dtype=np.float32))
 
 
+def test_gpu_triangle_descriptor_similarity_recovers_catalog_transform():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_similarity_from_triangle_descriptors_f32"):
+        raise AssertionError("estimate_similarity_from_triangle_descriptors_f32 is missing from gpwbpp_cuda")
+
+    angle = np.deg2rad(6.0)
+    scale = 1.015
+    linear = scale * np.asarray(
+        [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+        dtype=np.float64,
+    )
+    translation = np.asarray([3.5, -2.25], dtype=np.float64)
+    reference = _catalog_points()
+    moving = (reference - translation) @ np.linalg.inv(linear).T
+    reference_descriptors = module.triangle_asterism_descriptors_f32(
+        reference[:, 0].astype(np.float32),
+        reference[:, 1].astype(np.float32),
+        max_stars=8,
+        neighbors=5,
+        max_descriptors=64,
+    )
+    moving_descriptors = module.triangle_asterism_descriptors_f32(
+        moving[:, 0].astype(np.float32),
+        moving[:, 1].astype(np.float32),
+        max_stars=8,
+        neighbors=5,
+        max_descriptors=64,
+    )
+
+    result = module.estimate_similarity_from_triangle_descriptors_f32(
+        reference[:, 0].astype(np.float32),
+        reference[:, 1].astype(np.float32),
+        moving[:, 0].astype(np.float32),
+        moving[:, 1].astype(np.float32),
+        reference_descriptors["descriptors"],
+        reference_descriptors["indices"],
+        moving_descriptors["descriptors"],
+        moving_descriptors["indices"],
+        tolerance_px=0.1,
+        descriptor_radius=0.01,
+    )
+
+    matrix = np.asarray(result["matrix"], dtype=np.float64)
+    assert result["model"] == "triangle_descriptor_similarity_cuda"
+    assert result["status"] == "ok"
+    assert result["inliers"] == len(reference)
+    assert result["candidate_count"] == (
+        reference_descriptors["count"] * moving_descriptors["count"] * 2
+    )
+    assert result["rms_px"] < 1.0e-3
+    assert np.allclose(matrix[:2, :2], linear, atol=1.0e-4)
+    assert np.allclose(matrix[:2, 2], translation, atol=1.0e-4)
+
+
 def test_gpu_estimate_translation_search_aligns_shifted_pair():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_search_f32"):

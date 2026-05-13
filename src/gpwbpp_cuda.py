@@ -1492,6 +1492,122 @@ def triangle_asterism_descriptors_f32(
     }
 
 
+def estimate_similarity_from_triangle_descriptors_f32(
+    reference_x: Any,
+    reference_y: Any,
+    moving_x: Any,
+    moving_y: Any,
+    reference_descriptors: Any,
+    reference_indices: Any,
+    moving_descriptors: Any,
+    moving_indices: Any,
+    tolerance_px: float = 2.0,
+    descriptor_radius: float = 0.1,
+) -> dict[str, Any]:
+    """Estimate a similarity transform from matched triangle descriptor candidates."""
+
+    if tolerance_px < 0.0:
+        raise ValueError("tolerance_px must be non-negative")
+    if descriptor_radius < 0.0:
+        raise ValueError("descriptor_radius must be non-negative")
+    ref_x = np.ascontiguousarray(np.asarray(reference_x, dtype=np.float32).reshape(-1))
+    ref_y = np.ascontiguousarray(np.asarray(reference_y, dtype=np.float32).reshape(-1))
+    mov_x = np.ascontiguousarray(np.asarray(moving_x, dtype=np.float32).reshape(-1))
+    mov_y = np.ascontiguousarray(np.asarray(moving_y, dtype=np.float32).reshape(-1))
+    ref_desc = np.ascontiguousarray(np.asarray(reference_descriptors, dtype=np.float32).reshape(-1, 2))
+    mov_desc = np.ascontiguousarray(np.asarray(moving_descriptors, dtype=np.float32).reshape(-1, 2))
+    ref_idx = np.ascontiguousarray(np.asarray(reference_indices, dtype=np.int32).reshape(-1, 3))
+    mov_idx = np.ascontiguousarray(np.asarray(moving_indices, dtype=np.int32).reshape(-1, 3))
+    if ref_x.shape != ref_y.shape or mov_x.shape != mov_y.shape:
+        raise ValueError("catalog coordinate arrays must have matching x/y shapes")
+    if ref_desc.shape[0] != ref_idx.shape[0] or mov_desc.shape[0] != mov_idx.shape[0]:
+        raise ValueError("descriptor and index row counts must match")
+
+    native = _native()
+    if native is not None and hasattr(native, "estimate_similarity_from_triangle_descriptors_f32"):
+        result = dict(
+            native.estimate_similarity_from_triangle_descriptors_f32(
+                ref_x,
+                ref_y,
+                mov_x,
+                mov_y,
+                ref_desc,
+                ref_idx,
+                mov_desc,
+                mov_idx,
+                float(tolerance_px),
+                float(descriptor_radius),
+            )
+        )
+        return {
+            "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
+            "scale": float(result["scale"]),
+            "rotation_rad": float(result["rotation_rad"]),
+            "rms_px": float(result["rms_px"]),
+            "inliers": int(result["inliers"]),
+            "best_candidate_index": int(result["best_candidate_index"]),
+            "candidate_count": int(result["candidate_count"]),
+            "reference_count": int(result["reference_count"]),
+            "moving_count": int(result["moving_count"]),
+            "reference_descriptor_count": int(result["reference_descriptor_count"]),
+            "moving_descriptor_count": int(result["moving_descriptor_count"]),
+            "tolerance_px": float(result["tolerance_px"]),
+            "descriptor_radius": float(result["descriptor_radius"]),
+            "status": str(result["status"]),
+            "model": str(result.get("model", "triangle_descriptor_similarity_cuda")),
+        }
+
+    from gpwbpp.cpu.registration import _fit_similarity_matrix, _score_matrix
+
+    reference = np.column_stack([ref_x, ref_y]).astype(np.float64, copy=False)
+    moving = np.column_stack([mov_x, mov_y]).astype(np.float64, copy=False)
+    best_matrix = np.eye(3, dtype=np.float64)
+    best_pairs: list[tuple[int, int]] = []
+    best_rms = float("inf")
+    best_index = -1
+    candidate_index = 0
+    radius = float(descriptor_radius)
+    for reference_descriptor_index, reference_descriptor in enumerate(ref_desc):
+        for moving_descriptor_index, moving_descriptor in enumerate(mov_desc):
+            if float(np.linalg.norm(reference_descriptor - moving_descriptor)) > radius:
+                candidate_index += 2
+                continue
+            moving_triangle = moving[mov_idx[moving_descriptor_index]]
+            reference_triangle = reference[ref_idx[reference_descriptor_index]]
+            for ordered_reference_triangle in (reference_triangle, reference_triangle[[1, 0, 2]]):
+                try:
+                    matrix = _fit_similarity_matrix(moving_triangle, ordered_reference_triangle)
+                except ValueError:
+                    candidate_index += 1
+                    continue
+                pairs, rms = _score_matrix(reference, moving, matrix, float(tolerance_px))
+                if len(pairs) > len(best_pairs) or (len(pairs) == len(best_pairs) and rms < best_rms):
+                    best_matrix = matrix
+                    best_pairs = pairs
+                    best_rms = rms
+                    best_index = candidate_index
+                candidate_index += 1
+    a = float(best_matrix[0, 0])
+    b = float(best_matrix[1, 0])
+    return {
+        "matrix": best_matrix.astype(np.float32).tolist(),
+        "scale": float(np.sqrt(a * a + b * b)),
+        "rotation_rad": float(np.arctan2(b, a)),
+        "rms_px": float(best_rms) if np.isfinite(best_rms) else float("nan"),
+        "inliers": int(len(best_pairs)),
+        "best_candidate_index": int(best_index),
+        "candidate_count": int(ref_desc.shape[0] * mov_desc.shape[0] * 2),
+        "reference_count": int(len(reference)),
+        "moving_count": int(len(moving)),
+        "reference_descriptor_count": int(ref_desc.shape[0]),
+        "moving_descriptor_count": int(mov_desc.shape[0]),
+        "tolerance_px": float(tolerance_px),
+        "descriptor_radius": float(descriptor_radius),
+        "status": "ok" if best_pairs else "failed",
+        "model": "triangle_descriptor_similarity_cpu_fallback",
+    }
+
+
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     native = _native()
     if native is not None and hasattr(native, "local_norm_apply_f32"):

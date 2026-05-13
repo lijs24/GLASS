@@ -22,6 +22,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None, prior_dy=None, prior_radius_px=None)`
 - `estimate_similarity_from_pairs_f32(reference_x, reference_y, moving_x, moving_y)`
 - `triangle_asterism_descriptors_f32(x, y, max_stars=80, neighbors=5, max_descriptors=1200)`
+- `estimate_similarity_from_triangle_descriptors_f32(reference_x, reference_y, moving_x, moving_y, reference_descriptors, reference_indices, moving_descriptors, moving_indices, tolerance_px=2.0, descriptor_radius=0.1)`
 - `estimate_similarity_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px=2.0, min_pair_distance=2.0)`
 - `warp_translation_bilinear_f32(data, dx, dy, fill)`
 - `star_local_max_mask_f32(tile, threshold)`
@@ -92,6 +93,10 @@ Resident CUDA integration now supports:
   device and returns compact descriptor/index/area arrays. Host-side
   deduplication and ordering remain in the current wrapper while descriptor
   matching and hypothesis selection are still being migrated.
+- GPU triangle-descriptor similarity scoring. The primitive filters descriptor
+  pairs by radius on the device, tries both ordered-triangle orientations, fits
+  moving-to-reference similarity matrices from triangle vertices, and scores
+  compact catalogs with mutual nearest-neighbor inliers.
 - GPU bounded-catalog similarity seed matching. The primitive forms ordered
   two-star pair candidates from compact reference and moving catalogs, fits a
   candidate similarity transform, scores transformed moving stars against the
