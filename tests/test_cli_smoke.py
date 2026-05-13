@@ -47,12 +47,40 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
             "none",
             "--resident-registration",
             "off",
+            "--resident-registration-max-shift",
+            "9",
+            "--resident-ncc-sample-stride",
+            "2",
+            "--resident-ncc-fallback-score-threshold",
+            "0.5",
+            "--resident-subpixel-radius-steps",
+            "3",
+            "--resident-subpixel-step",
+            "0.4",
+            "--resident-star-threshold",
+            "12",
+            "--resident-star-max-candidates",
+            "11",
+            "--resident-star-tolerance-px",
+            "1.25",
+            "--resident-star-grid-cols",
+            "2",
+            "--resident-star-grid-rows",
+            "3",
+            "--resident-star-prior",
+            "ncc",
+            "--resident-star-prior-radius-px",
+            "2.5",
+            "--resident-star-core-preselect-top-k",
+            "4",
         ]
     ) == 0
 
     state = read_json(audit / "run_state.json")
     timing = read_json(audit / "run_timing.json")
     integration = read_json(audit / "integration_results.json")
+    resident = read_json(audit / "resident_artifacts.json")
+    resident_registration = resident["artifacts"][0]["resident_registration"]
     assert (audit / "manifest.json").exists()
     assert (audit / "processing_plan.json").exists()
     assert (audit / "resident_artifacts.json").exists()
@@ -61,6 +89,19 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
     assert "resident_integration" in state["completed_stages"]
     assert timing["memory_mode"] == "resident"
     assert integration["source_stage"] == "resident_calibrated_stack"
+    assert resident_registration["max_shift"] == 9
+    assert resident_registration["ncc_sample_stride"] == 2
+    assert resident_registration["ncc_fallback_score_threshold"] == 0.5
+    assert resident_registration["subpixel_radius_steps"] == 3
+    assert resident_registration["subpixel_step"] == 0.4
+    assert resident_registration["star_threshold"] == 12
+    assert resident_registration["star_max_candidates"] == 11
+    assert resident_registration["star_tolerance_px"] == 1.25
+    assert resident_registration["star_grid_cols"] == 2
+    assert resident_registration["star_grid_rows"] == 3
+    assert resident_registration["star_prior"] == "ncc"
+    assert resident_registration["star_prior_radius_px"] == 2.5
+    assert resident_registration["star_core_preselect_top_k"] == 4
 
 
 def test_cli_help_commands():

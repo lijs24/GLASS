@@ -316,6 +316,18 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 flat_floor=args.flat_floor,
                 resident_registration=args.resident_registration,
                 resident_registration_max_shift=args.resident_registration_max_shift,
+                resident_ncc_sample_stride=args.resident_ncc_sample_stride,
+                resident_ncc_fallback_score_threshold=args.resident_ncc_fallback_score_threshold,
+                resident_subpixel_radius_steps=args.resident_subpixel_radius_steps,
+                resident_subpixel_step=args.resident_subpixel_step,
+                resident_star_threshold=args.resident_star_threshold,
+                resident_star_max_candidates=args.resident_star_max_candidates,
+                resident_star_tolerance_px=args.resident_star_tolerance_px,
+                resident_star_grid_cols=args.resident_star_grid_cols,
+                resident_star_grid_rows=args.resident_star_grid_rows,
+                resident_star_prior=args.resident_star_prior,
+                resident_star_prior_radius_px=args.resident_star_prior_radius_px,
+                resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -845,6 +857,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument("--resident-warp-clamping-threshold", type=float, default=-1.0)
     audit.add_argument("--resident-registration-max-shift", type=int, default=128)
+    audit.add_argument("--resident-ncc-sample-stride", type=int, default=1)
+    audit.add_argument("--resident-ncc-fallback-score-threshold", type=float, default=0.0)
+    audit.add_argument("--resident-subpixel-radius-steps", type=int, default=4)
+    audit.add_argument("--resident-subpixel-step", type=float, default=0.25)
+    audit.add_argument(
+        "--resident-star-threshold",
+        type=float,
+        default=30.0,
+        help="fixed resident star threshold; use 0 or negative for GPU mean/std auto-threshold trials",
+    )
+    audit.add_argument("--resident-star-max-candidates", type=int, default=64)
+    audit.add_argument("--resident-star-tolerance-px", type=float, default=1.0)
+    audit.add_argument("--resident-star-grid-cols", type=int, default=0)
+    audit.add_argument("--resident-star-grid-rows", type=int, default=0)
+    audit.add_argument(
+        "--resident-star-prior",
+        choices=["none", "ncc", "auto_pierside"],
+        default="none",
+        help="optional prior for resident star-catalog voting in resident audit",
+    )
+    audit.add_argument("--resident-star-prior-radius-px", type=float, default=4.0)
+    audit.add_argument(
+        "--resident-star-core-preselect-top-k",
+        type=int,
+        default=0,
+        help="preselect resident similarity candidates with GPU star-core metrics before pixel refinement",
+    )
     audit.add_argument(
         "--resident-local-normalization-mode",
         choices=["global_mean_std", "grid_mean_std"],
