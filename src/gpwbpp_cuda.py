@@ -2453,6 +2453,26 @@ class ResidentCalibratedStack:
             raise RuntimeError("native ResidentCalibratedStack.apply_global_normalization_frame is not available")
         self._impl.apply_global_normalization_frame(int(index), float(scale), float(offset))
 
+    def apply_grid_normalization_frame(
+        self,
+        index: int,
+        scales: Any,
+        offsets: Any,
+        tile_height: int,
+        tile_width: int,
+    ) -> None:
+        if not hasattr(self._impl, "apply_grid_normalization_frame"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_grid_normalization_frame is not available")
+        scale_grid = np.asarray(scales, dtype=np.float32)
+        offset_grid = np.asarray(offsets, dtype=np.float32)
+        self._impl.apply_grid_normalization_frame(
+            int(index),
+            scale_grid,
+            offset_grid,
+            int(tile_height),
+            int(tile_width),
+        )
+
     def star_local_max_mask(self, index: int, threshold: float) -> np.ndarray:
         if not hasattr(self._impl, "star_local_max_mask"):
             raise RuntimeError("native ResidentCalibratedStack.star_local_max_mask is not available")

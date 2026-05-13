@@ -69,6 +69,13 @@ The grid model estimates a coefficient table on the CPU baseline with
 piecewise constant per tile. It validates the data model, edge tiles, and GPU
 coefficient application before adding smoother windowed/interpolated LN.
 
+The resident CUDA stack exposes the same grid application primitive as
+`ResidentCalibratedStack.apply_grid_normalization_frame`. It applies an existing
+scale/offset coefficient table directly to a resident frame in VRAM, which keeps
+the calibrated/registered hot set resident and avoids a CPU round trip during the
+apply step. Coefficient estimation for resident tile/window LN is still a later
+step.
+
 This CUDA mean/std primitive is intentionally simpler than the full future
 WBPP-like local model. It is a tested GPU building block for tile/window LN, not
 a claim of PixInsight-identical Local Normalization.

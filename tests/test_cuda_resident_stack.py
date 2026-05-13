@@ -148,6 +148,25 @@ def test_resident_stack_global_normalization_matches_reference_stats():
     assert np.allclose(weight_map, np.ones_like(reference, dtype=np.float32))
 
 
+def test_resident_stack_grid_normalization_matches_standalone_cuda():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_grid_normalization_frame"):
+        raise AssertionError("ResidentCalibratedStack.apply_grid_normalization_frame is missing from gpwbpp_cuda")
+
+    frame = np.arange(35, dtype=np.float32).reshape(5, 7)
+    scales = np.array([[1.0, 2.0], [0.5, 1.25]], dtype=np.float32)
+    offsets = np.array([[0.0, -3.0], [4.0, 10.0]], dtype=np.float32)
+    expected = module.local_norm_apply_grid_f32(frame, scales, offsets, 3, 4)
+
+    stack = module.ResidentCalibratedStack(1, frame.shape[0], frame.shape[1])
+    stack.upload_calibrated_frame(0, frame)
+    stack.apply_grid_normalization_frame(0, scales, offsets, 3, 4)
+    normalized, weight_map = stack.integrate_mean()
+
+    assert np.allclose(normalized, expected, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.ones_like(frame, dtype=np.float32))
+
+
 def test_resident_stack_translation_warp_uses_nan_coverage():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_translation_frame"):

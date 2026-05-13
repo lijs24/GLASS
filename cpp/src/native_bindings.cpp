@@ -1576,6 +1576,83 @@ class ResidentCalibratedStack {
     cudaFree(d_output);
   }
 
+  void apply_grid_normalization_frame(
+      std::size_t index,
+      py::array_t<float, py::array::c_style | py::array::forcecast> scales,
+      py::array_t<float, py::array::c_style | py::array::forcecast> offsets,
+      int tile_height,
+      int tile_width) {
+    require_loaded(index, "grid local normalization");
+    const py::buffer_info scales_info = scales.request();
+    const py::buffer_info offsets_info = offsets.request();
+    if (scales_info.ndim != 2 || offsets_info.ndim != 2) {
+      throw std::invalid_argument("scales and offsets must have shape (grid_rows, grid_cols)");
+    }
+    if (scales_info.shape[0] != offsets_info.shape[0] || scales_info.shape[1] != offsets_info.shape[1]) {
+      throw std::invalid_argument("scales and offsets shapes must match");
+    }
+    if (tile_height <= 0 || tile_width <= 0) {
+      throw std::invalid_argument("tile dimensions must be positive");
+    }
+    const int grid_rows = static_cast<int>(scales_info.shape[0]);
+    const int grid_cols = static_cast<int>(scales_info.shape[1]);
+    if (grid_rows <= 0 || grid_cols <= 0) {
+      throw std::invalid_argument("coefficient grid must not be empty");
+    }
+    const int expected_rows =
+        (static_cast<int>(height_) + tile_height - 1) / tile_height;
+    const int expected_cols =
+        (static_cast<int>(width_) + tile_width - 1) / tile_width;
+    if (grid_rows != expected_rows || grid_cols != expected_cols) {
+      throw std::invalid_argument("coefficient grid shape does not match resident frame shape and tile dimensions");
+    }
+    const std::size_t coefficient_count =
+        static_cast<std::size_t>(grid_rows) * static_cast<std::size_t>(grid_cols);
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    float* d_output = nullptr;
+    float* d_scales = nullptr;
+    float* d_offsets = nullptr;
+    try {
+      check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident grid normalization output)");
+      check_cuda(
+          cudaMalloc(&d_scales, coefficient_count * sizeof(float)),
+          "cudaMalloc(resident grid normalization scales)");
+      check_cuda(
+          cudaMalloc(&d_offsets, coefficient_count * sizeof(float)),
+          "cudaMalloc(resident grid normalization offsets)");
+      check_cuda(
+          cudaMemcpy(d_scales, scales_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident grid normalization scales)");
+      check_cuda(
+          cudaMemcpy(d_offsets, offsets_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident grid normalization offsets)");
+      gpwbpp_local_norm_apply_grid_f32_launch(
+          d_stack_ + index * pixels_per_frame_,
+          d_output,
+          d_scales,
+          d_offsets,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          tile_width,
+          tile_height,
+          grid_cols,
+          grid_rows);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_grid_normalization_frame kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_grid_normalization_frame synchronize");
+      check_cuda(
+          cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
+          "cudaMemcpy(resident grid normalized frame)");
+    } catch (...) {
+      cudaFree(d_output);
+      cudaFree(d_scales);
+      cudaFree(d_offsets);
+      throw;
+    }
+    cudaFree(d_output);
+    cudaFree(d_scales);
+    cudaFree(d_offsets);
+  }
+
   py::array_t<unsigned char> star_local_max_mask(std::size_t index, float threshold) const {
     require_index(index);
     if (!loaded_[index]) {
@@ -6080,6 +6157,14 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("index"),
           py::arg("scale"),
           py::arg("offset"))
+      .def(
+          "apply_grid_normalization_frame",
+          &ResidentCalibratedStack::apply_grid_normalization_frame,
+          py::arg("index"),
+          py::arg("scales"),
+          py::arg("offsets"),
+          py::arg("tile_height"),
+          py::arg("tile_width"))
       .def("star_local_max_mask", &ResidentCalibratedStack::star_local_max_mask)
       .def("star_candidates", &ResidentCalibratedStack::star_candidates)
       .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)
