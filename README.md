@@ -16,6 +16,8 @@ trips through disk and host memory.
   source code.
 - PixInsight/WBPP may be used only as a black-box reference through
   user-generated logs, settings, and outputs.
+- Optional PixInsight launcher for users who already own PixInsight. GLASS does
+  not require PixInsight.
 - Input image directories are treated as read-only.
 
 ## Quick Start
