@@ -4,14 +4,14 @@ import json
 from pathlib import Path
 
 import numpy as np
-from astropy.io import fits
 
 from gpwbpp.cli import main
+from gpwbpp.io.fits_io import write_fits_data
 from gpwbpp.report.compare_report import compare_fits
 
 
 def _write(path: Path, value: float) -> None:
-    fits.PrimaryHDU(np.ones((4, 4), dtype=np.float32) * value).writeto(path)
+    write_fits_data(path, np.ones((4, 4), dtype=np.float32) * value)
 
 
 def test_compare_fits_records_timing_speedup(tmp_path: Path):
@@ -88,3 +88,55 @@ def test_compare_cli_records_candidate_transform(tmp_path: Path):
     assert payload["candidate_transform"]["applied"] is True
     assert payload["candidate_transform"]["scale"] == 0.001
     assert payload["rms_diff"] == 0.0
+
+
+def test_compare_writes_diagnostic_artifacts(tmp_path: Path):
+    y, x = np.mgrid[:32, :40]
+    reference = (x + y).astype(np.float32)
+    candidate = reference.copy()
+    candidate[8:12, 10:14] += 5.0
+    candidate[20:24, 25:30] -= 3.0
+
+    gpwbpp = tmp_path / "gpwbpp.fits"
+    ref = tmp_path / "reference.fits"
+    out = tmp_path / "compare.html"
+    diagnostics = tmp_path / "diagnostics"
+    write_fits_data(gpwbpp, candidate)
+    write_fits_data(ref, reference)
+
+    assert (
+        main(
+            [
+                "compare",
+                "--gpwbpp",
+                str(gpwbpp),
+                "--reference",
+                str(ref),
+                "--out",
+                str(out),
+                "--diagnostics-dir",
+                str(diagnostics),
+                "--diagnostic-max-size",
+                "64",
+                "--hotspot-tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+
+    comparison = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    assert comparison["shape_match"] is True
+    assert comparison["diagnostics"]["directory"] == str(diagnostics)
+    for name in [
+        "gpwbpp_preview.png",
+        "reference_preview.png",
+        "abs_diff_preview.png",
+        "signed_diff_preview.png",
+        "hotspots.json",
+    ]:
+        assert (diagnostics / name).exists()
+        assert (diagnostics / name).stat().st_size > 0
+    hotspots = json.loads((diagnostics / "hotspots.json").read_text(encoding="utf-8"))
+    assert hotspots
+    assert hotspots[0]["p99_abs_diff"] >= 3.0

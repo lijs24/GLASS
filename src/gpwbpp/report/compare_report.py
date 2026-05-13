@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import struct
+import zlib
 
 import numpy as np
 
@@ -64,6 +67,144 @@ def _diff_stats(candidate: np.ndarray, reference: np.ndarray) -> dict[str, float
         "abs_diff_p999": float(np.percentile(np.abs(diff), 99.9)),
         "relative_rms_diff": float(rms / reference_rms) if reference_rms > 0 else 0.0,
     }
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+
+def _write_png_gray(path: str | Path, image: np.ndarray) -> None:
+    img = np.ascontiguousarray(image, dtype=np.uint8)
+    if img.ndim != 2:
+        raise ValueError("gray PNG image must be 2D")
+    height, width = img.shape
+    raw = b"".join(b"\x00" + img[y].tobytes() for y in range(height))
+    payload = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw, level=6)),
+        _png_chunk(b"IEND", b""),
+    ]
+    Path(path).write_bytes(b"".join(payload))
+
+
+def _write_png_rgb(path: str | Path, image: np.ndarray) -> None:
+    img = np.ascontiguousarray(image, dtype=np.uint8)
+    if img.ndim != 3 or img.shape[2] != 3:
+        raise ValueError("RGB PNG image must be HxWx3")
+    height, width, _ = img.shape
+    raw = b"".join(b"\x00" + img[y].tobytes() for y in range(height))
+    payload = [
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
+        _png_chunk(b"IDAT", zlib.compress(raw, level=6)),
+        _png_chunk(b"IEND", b""),
+    ]
+    Path(path).write_bytes(b"".join(payload))
+
+
+def _preview_stride(shape: tuple[int, int], max_size: int) -> int:
+    if max_size <= 0:
+        raise ValueError("diagnostic max size must be positive")
+    height, width = shape
+    return max(1, int(np.ceil(max(height, width) / max_size)))
+
+
+def _gray_preview(values: np.ndarray, max_size: int, low: float = 0.5, high: float = 99.5) -> np.ndarray:
+    stride = _preview_stride(values.shape, max_size)
+    sample = np.asarray(values[::stride, ::stride], dtype=np.float32)
+    finite = sample[np.isfinite(sample)]
+    if finite.size == 0:
+        return np.zeros(sample.shape, dtype=np.uint8)
+    lo, hi = np.percentile(finite, [low, high])
+    if not np.isfinite(hi) or hi <= lo:
+        hi = lo + 1.0
+    scaled = np.clip((sample - lo) / (hi - lo), 0.0, 1.0)
+    scaled[~np.isfinite(scaled)] = 0.0
+    return np.asarray(np.rint(scaled * 255.0), dtype=np.uint8)
+
+
+def _signed_diff_preview(diff: np.ndarray, max_size: int) -> np.ndarray:
+    stride = _preview_stride(diff.shape, max_size)
+    sample = np.asarray(diff[::stride, ::stride], dtype=np.float32)
+    finite = sample[np.isfinite(sample)]
+    rgb = np.zeros((*sample.shape, 3), dtype=np.uint8)
+    if finite.size == 0:
+        return rgb
+    limit = float(np.percentile(np.abs(finite), 99.5))
+    if not np.isfinite(limit) or limit <= 0:
+        limit = 1.0
+    mag = np.clip(np.abs(sample) / limit, 0.0, 1.0)
+    mag[~np.isfinite(mag)] = 0.0
+    positive = sample >= 0
+    base = np.asarray(np.rint(32.0 * (1.0 - mag)), dtype=np.uint8)
+    strong = np.asarray(np.rint(32.0 + 223.0 * mag), dtype=np.uint8)
+    rgb[..., 0] = np.where(positive, strong, base)
+    rgb[..., 1] = base
+    rgb[..., 2] = np.where(positive, base, strong)
+    return rgb
+
+
+def _diff_hotspots(diff: np.ndarray, tile_size: int = 512, limit: int = 16) -> list[dict[str, float | int]]:
+    if tile_size <= 0:
+        raise ValueError("hotspot tile size must be positive")
+    height, width = diff.shape
+    hotspots: list[dict[str, float | int]] = []
+    for y0 in range(0, height, tile_size):
+        y1 = min(height, y0 + tile_size)
+        for x0 in range(0, width, tile_size):
+            x1 = min(width, x0 + tile_size)
+            tile = np.asarray(diff[y0:y1, x0:x1], dtype=np.float64)
+            finite = tile[np.isfinite(tile)]
+            if finite.size == 0:
+                continue
+            abs_tile = np.abs(finite)
+            hotspots.append(
+                {
+                    "x0": x0,
+                    "y0": y0,
+                    "x1": x1,
+                    "y1": y1,
+                    "pixels": int(finite.size),
+                    "mean_diff": float(np.mean(finite)),
+                    "rms_diff": float(np.sqrt(np.mean(finite * finite))),
+                    "p99_abs_diff": float(np.percentile(abs_tile, 99)),
+                    "max_abs_diff": float(np.max(abs_tile)),
+                }
+            )
+    return sorted(hotspots, key=lambda item: (float(item["p99_abs_diff"]), float(item["rms_diff"])), reverse=True)[
+        :limit
+    ]
+
+
+def _write_diagnostic_artifacts(
+    diagnostics_dir: str | Path,
+    candidate: np.ndarray,
+    reference: np.ndarray,
+    max_size: int = 1024,
+    hotspot_tile_size: int = 512,
+) -> dict[str, object]:
+    out = Path(diagnostics_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    diff = np.asarray(candidate, dtype=np.float32) - np.asarray(reference, dtype=np.float32)
+    artifacts = {
+        "directory": str(out),
+        "preview_max_size": int(max_size),
+        "hotspot_tile_size": int(hotspot_tile_size),
+        "gpwbpp_preview_png": str(out / "gpwbpp_preview.png"),
+        "reference_preview_png": str(out / "reference_preview.png"),
+        "abs_diff_preview_png": str(out / "abs_diff_preview.png"),
+        "signed_diff_preview_png": str(out / "signed_diff_preview.png"),
+        "hotspots_json": str(out / "hotspots.json"),
+    }
+    _write_png_gray(out / "gpwbpp_preview.png", _gray_preview(candidate, max_size))
+    _write_png_gray(out / "reference_preview.png", _gray_preview(reference, max_size))
+    _write_png_gray(out / "abs_diff_preview.png", _gray_preview(np.abs(diff), max_size, low=0.0, high=99.5))
+    _write_png_rgb(out / "signed_diff_preview.png", _signed_diff_preview(diff, max_size))
+    hotspots = _diff_hotspots(diff, tile_size=hotspot_tile_size)
+    (out / "hotspots.json").write_text(json.dumps(hotspots, indent=2, sort_keys=True), encoding="utf-8")
+    artifacts["hotspots"] = hotspots
+    return artifacts
 
 
 def _linear_fit_to_reference(candidate: np.ndarray, reference: np.ndarray) -> dict[str, object]:
@@ -133,6 +274,9 @@ def compare_fits(
     gpwbpp_offset: float | None = None,
     clip_low: float | None = None,
     clip_high: float | None = None,
+    diagnostics_dir: str | Path | None = None,
+    diagnostic_max_size: int = 1024,
+    hotspot_tile_size: int = 512,
 ) -> dict[str, object]:
     gp_raw = _read_image_data(gpwbpp_path)
     gp, transform = _apply_candidate_transform(gp_raw, gpwbpp_scale, gpwbpp_offset, clip_low, clip_high)
@@ -154,7 +298,7 @@ def compare_fits(
             "timing": timing,
             "candidate_transform": transform,
         }
-    return {
+    comparison: dict[str, object] = {
         "shape_match": True,
         "gpwbpp_format": Path(gpwbpp_path).suffix.lower().lstrip("."),
         "reference_format": Path(reference_path).suffix.lower().lstrip("."),
@@ -164,6 +308,15 @@ def compare_fits(
         "robust_linear_fit_to_reference": _robust_linear_fit_to_reference(gp, ref),
         "timing": timing,
     }
+    if diagnostics_dir is not None:
+        comparison["diagnostics"] = _write_diagnostic_artifacts(
+            diagnostics_dir,
+            gp,
+            ref,
+            max_size=diagnostic_max_size,
+            hotspot_tile_size=hotspot_tile_size,
+        )
+    return comparison
 
 
 def write_compare_report(out_path: str | Path, comparison: dict[str, object]) -> None:

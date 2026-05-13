@@ -521,6 +521,9 @@ def cmd_compare(args: argparse.Namespace) -> int:
         gpwbpp_offset=args.gpwbpp_offset,
         clip_low=args.clip_low,
         clip_high=args.clip_high,
+        diagnostics_dir=args.diagnostics_dir,
+        diagnostic_max_size=args.diagnostic_max_size,
+        hotspot_tile_size=args.hotspot_tile_size,
     )
     write_json(Path(args.out).with_suffix(".json"), comparison)
     write_compare_report(args.out, comparison)
@@ -780,6 +783,9 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--gpwbpp-offset", type=float, help="offset GPWBPP pixels before comparison")
     compare.add_argument("--clip-low", type=float, help="clip transformed GPWBPP pixels to this lower bound")
     compare.add_argument("--clip-high", type=float, help="clip transformed GPWBPP pixels to this upper bound")
+    compare.add_argument("--diagnostics-dir", help="optional directory for compare preview PNGs and residual hotspots")
+    compare.add_argument("--diagnostic-max-size", type=int, default=1024, help="maximum preview PNG width or height")
+    compare.add_argument("--hotspot-tile-size", type=int, default=512, help="tile size for residual hotspot ranking")
     compare.set_defaults(func=cmd_compare)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")

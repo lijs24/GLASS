@@ -1,0 +1,70 @@
+# Gate 13 Compare Diagnostics Status
+
+## Gate
+
+Gate 13 support checkpoint: PixInsight/WBPP black-box comparison diagnostics.
+
+## Completed Content
+
+- Added optional compare diagnostics through `gpwbpp compare --diagnostics-dir`.
+- The diagnostics writer uses only the Python standard library and NumPy:
+  - no Pillow dependency;
+  - no matplotlib dependency;
+  - no CUDA dependency.
+- Diagnostic outputs:
+  - `gpwbpp_preview.png`;
+  - `reference_preview.png`;
+  - `abs_diff_preview.png`;
+  - `signed_diff_preview.png`;
+  - `hotspots.json`.
+- Added residual hotspot ranking by tiled p99 absolute difference and RMS difference.
+- Added pytest coverage for FITS-to-FITS compare diagnostics.
+
+## Commands Run
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\report\compare_report.py src\gpwbpp\cli.py tests\test_compare_report.py
+.\.venv\Scripts\python.exe -m pytest -q tests\test_compare_report.py tests\test_cli_smoke.py
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\gpwbpp.exe compare --gpwbpp "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits" --reference "C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf" --out "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics.html" --gpwbpp-time-seconds 111.94882199994754 --reference-time-seconds 1092.541 --gpwbpp-label "GPWBPP resident CUDA triangle Lanczos3 193 WBPP-failed-excluded scaled diagnostics" --reference-label "PixInsight WBPP FastIntegration" --gpwbpp-scale 8.764434957115609e-06 --gpwbpp-offset 0.0006274500691899127 --diagnostics-dir "C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics" --diagnostic-max-size 1200 --hotspot-tile-size 512
+```
+
+## Test Results
+
+- Ruff: passed.
+- Targeted tests: `7 passed in 0.27s`.
+- Full test suite: `162 passed in 7.86s`.
+
+## Real-data Diagnostic Results
+
+- Compare report: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_diagnostics.html`.
+- Diagnostics directory: `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_diagnostics`.
+- Top residual hotspots are concentrated along the lower image edge, especially the lower-right edge tiles.
+- The highest hotspot tile was:
+  - `x0=9216, x1=9600, y0=6144, y1=6422`;
+  - `p99_abs_diff=0.3183833146095277`;
+  - `rms_diff=0.07569983121093987`;
+  - `max_abs_diff=0.5095405578613281`.
+
+## CUDA Availability
+
+- CUDA available: yes.
+- Native backend: yes.
+- Device: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
+- Compute capability: 12.0.
+- VRAM: 97886 MiB.
+
+## Known Limitations
+
+- Diagnostic PNGs are downsampled previews intended for audit and triage, not scientific measurement.
+- Hotspot ranking uses fixed image tiles, so a boundary artifact can dominate the list if edge policies differ.
+- The current compare report records diagnostic file paths in JSON, but the generic HTML report does not yet embed thumbnail images inline.
+
+## Next Step
+
+- Investigate whether the bottom-edge residual concentration comes from coverage/crop policy, WBPP FastIntegration boundary handling, or Lanczos clamping behavior.
+
+## Clean-room Compliance
+
+- Compliant. Diagnostics compare only GPWBPP output against user-generated PixInsight/WBPP black-box output.
+- No official PixInsight/WBPP/PJSR source code was read, copied, summarized, or used as implementation input.
