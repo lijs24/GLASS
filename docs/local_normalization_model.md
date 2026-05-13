@@ -97,3 +97,5 @@ capability, but it is not the full tile/window local normalization model.
 - crop box, currently `null`
 - per-frame normalized path, coverage path, backend, tile count
 - mean scale, mean offset, valid-pixel count, status, and warnings
+- per-frame coefficient grid path, grid dimensions, per-tile scale/offset arrays,
+  per-tile valid-pixel counts, and per-tile statuses

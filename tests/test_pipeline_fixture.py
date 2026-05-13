@@ -321,6 +321,19 @@ def test_pipeline_fixture_run_local_normalization(tmp_path: Path):
         == 0
     )
     assert "Local normalization summary" in report.read_text(encoding="utf-8")
+    import json
+
+    local_norm = json.loads((run / "local_norm_results.json").read_text(encoding="utf-8"))
+    result = local_norm["local_norm_results"][0]
+    assert result["grid_rows"] == 4
+    assert result["grid_cols"] == 4
+    assert result["tile_count"] == 16
+    coefficients = json.loads(Path(result["coefficient_grid_path"]).read_text(encoding="utf-8"))
+    assert coefficients["grid_rows"] == 4
+    assert coefficients["grid_cols"] == 4
+    assert len(coefficients["scales"]) == 4
+    assert len(coefficients["scales"][0]) == 4
+    assert len(coefficients["valid_pixels"][0]) == 4
 
 
 def test_pipeline_fixture_run_integration(tmp_path: Path):

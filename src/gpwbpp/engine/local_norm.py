@@ -99,13 +99,20 @@ def local_normalize_registered_frames(
         reference["coverage_path"]
     ) as reference_coverage:
         height, width = reference_data.shape
+        grid_rows = int(np.ceil(height / tile_size))
+        grid_cols = int(np.ceil(width / tile_size))
         for item in warp.get("warp_results", []):
             frame_id = item["frame_id"]
             out_path = output_dir / f"local_norm_{frame_id}.fits"
+            coefficient_path = output_dir / f"local_norm_{frame_id}_coefficients.json"
             warnings: list[str] = []
             scales: list[float] = []
             offsets: list[float] = []
             valid_counts: list[int] = []
+            scale_grid = np.ones((grid_rows, grid_cols), dtype=np.float32)
+            offset_grid = np.zeros((grid_rows, grid_cols), dtype=np.float32)
+            valid_grid = np.zeros((grid_rows, grid_cols), dtype=np.int64)
+            status_grid: list[list[str]] = [["pending" for _ in range(grid_cols)] for _ in range(grid_rows)]
             with FitsImageReader(item["registered_path"]) as source_data, FitsImageReader(
                 item["coverage_path"]
             ) as source_coverage, FitsTileWriter(
@@ -146,19 +153,45 @@ def local_normalize_registered_frames(
                         )
                     scale = float(stats["scale"])
                     offset = float(stats["offset"])
+                    grid_y = tile.y0 // tile_size
+                    grid_x = tile.x0 // tile_size
+                    scale_grid[grid_y, grid_x] = np.float32(scale)
+                    offset_grid[grid_y, grid_x] = np.float32(offset)
+                    valid_grid[grid_y, grid_x] = int(stats["valid_pixels"])
+                    status_grid[grid_y][grid_x] = str(stats["status"])
                     writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, normalized)
                     tile_count += 1
                     scales.append(scale)
                     offsets.append(offset)
                     valid_counts.append(int(stats["valid_pixels"]))
+            write_json(
+                coefficient_path,
+                {
+                    "schema_version": 1,
+                    "frame_id": frame_id,
+                    "reference_frame_id": reference_id,
+                    "model": "tile_mean_std_cuda" if actual_backend == "cuda_mean_std" else "tile_median_std_cpu",
+                    "tile_size": tile_size,
+                    "grid_rows": grid_rows,
+                    "grid_cols": grid_cols,
+                    "scales": scale_grid.tolist(),
+                    "offsets": offset_grid.tolist(),
+                    "valid_pixels": valid_grid.tolist(),
+                    "statuses": status_grid,
+                },
+            )
             outputs.append(
                 {
                     "frame_id": frame_id,
                     "input_path": item["registered_path"],
                     "normalized_path": str(out_path),
                     "coverage_path": item["coverage_path"],
+                    "coefficient_grid_path": str(coefficient_path),
                     "backend": actual_backend,
+                    "model": "tile_mean_std_cuda" if actual_backend == "cuda_mean_std" else "tile_median_std_cpu",
                     "tile_size": tile_size,
+                    "grid_rows": grid_rows,
+                    "grid_cols": grid_cols,
                     "tile_count": tile_count,
                     "mean_scale": float(np.mean(scales)) if scales else 1.0,
                     "mean_offset": float(np.mean(offsets)) if offsets else 0.0,
