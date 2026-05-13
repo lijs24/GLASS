@@ -114,6 +114,7 @@ def test_cli_help_commands():
         "audit",
         "compare",
         "speedup-summary",
+        "acceptance-audit",
         "blackbox-package",
         "blackbox-finalize",
         "blackbox-history",

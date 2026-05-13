@@ -75,17 +75,23 @@ Measured data:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\gpwbpp.exe acceptance-audit --manifest C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_cli.json --markdown runs\benchmarks\m38_acceptance_audit_cli.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 ```
 
 Result:
 
 ```text
-176 passed in 7.94s
+178 passed in 8.24s
 ```
 
 The audit also inspected the real M38 manifest, processing plan, run timing,
 integration results, coverage-masked compare JSON, and WBPP black-box result
 JSON directly with a local Python script.
+
+Reusable CLI artifacts:
+
+- `runs\benchmarks\m38_acceptance_audit_cli.json`
+- `runs\benchmarks\m38_acceptance_audit_cli.md`
 
 ## Missing or Weakly Covered Items
 

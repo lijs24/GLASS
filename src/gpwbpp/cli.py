@@ -23,6 +23,7 @@ from gpwbpp.planner.subset import build_subset_manifest
 from gpwbpp.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from gpwbpp.report.compare_report import compare_fits, write_compare_report
 from gpwbpp.report.html_report import write_html_report
+from gpwbpp.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
 from gpwbpp.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from gpwbpp.report.wbpp_history import read_fastintegration_history
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
@@ -594,6 +595,34 @@ def cmd_speedup_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_acceptance_audit(args: argparse.Namespace) -> int:
+    audit = build_acceptance_audit(
+        manifest_path=args.manifest,
+        gpwbpp_run=args.gpwbpp_run,
+        wbpp_result=args.wbpp_result,
+        compare_json=args.compare_json,
+        min_lights=args.min_lights,
+        min_bias=args.min_bias,
+        min_dark=args.min_dark,
+        min_flat=args.min_flat,
+        min_active_frames=args.min_active_frames,
+        min_speedup=args.min_speedup,
+        min_coverage_fraction=args.min_coverage_fraction,
+        max_rms_diff=args.max_rms_diff,
+        max_abs_diff_p99=args.max_abs_diff_p99,
+    )
+    write_acceptance_audit(args.out, audit, markdown=args.markdown)
+    console.print(
+        {
+            "status": audit["status"],
+            "speedup_vs_wbpp": audit["speedup_summary"]["speedup_vs_wbpp"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if audit["passed"] else 2
+
+
 def cmd_blackbox_package(args: argparse.Namespace) -> int:
     payload = create_blackbox_package(
         args.manifest,
@@ -943,6 +972,27 @@ def build_parser() -> argparse.ArgumentParser:
     speedup.add_argument("--markdown", help="optional output Markdown summary")
     speedup.add_argument("--min-speedup", type=float, default=1.25)
     speedup.set_defaults(func=cmd_speedup_summary)
+
+    acceptance = sub.add_parser(
+        "acceptance-audit",
+        help="verify a real GPWBPP/WBPP acceptance benchmark from existing artifacts",
+    )
+    acceptance.add_argument("--manifest", required=True, help="manifest.json used for the benchmark")
+    acceptance.add_argument("--gpwbpp-run", required=True, help="GPWBPP run directory")
+    acceptance.add_argument("--wbpp-result", required=True, help="user-generated WBPP black-box result JSON")
+    acceptance.add_argument("--compare-json", required=True, help="coverage-masked or full compare JSON")
+    acceptance.add_argument("--out", required=True, help="output acceptance audit JSON")
+    acceptance.add_argument("--markdown", help="optional output Markdown summary")
+    acceptance.add_argument("--min-lights", type=int, default=200)
+    acceptance.add_argument("--min-bias", type=int, default=20)
+    acceptance.add_argument("--min-dark", type=int, default=20)
+    acceptance.add_argument("--min-flat", type=int, default=20)
+    acceptance.add_argument("--min-active-frames", type=int, default=1)
+    acceptance.add_argument("--min-speedup", type=float, default=2.0)
+    acceptance.add_argument("--min-coverage-fraction", type=float, default=0.95)
+    acceptance.add_argument("--max-rms-diff", type=float, default=0.01)
+    acceptance.add_argument("--max-abs-diff-p99", type=float, default=0.01)
+    acceptance.set_defaults(func=cmd_acceptance_audit)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")
     blackbox.add_argument("--manifest", required=True)
