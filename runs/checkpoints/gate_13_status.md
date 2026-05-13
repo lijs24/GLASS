@@ -1,69 +1,117 @@
 # Gate 13 Status: PixInsight/WBPP Black-box Comparison
 
 - Gate: 13
-- Date: 2026-05-12
-- Status: blocked
+- Date: 2026-05-13
+- Status: completed
+- Latest commit evidence: `32bc8bf gate-13: add speedup summary cli`
 
 ## Completed
 
-- Confirmed GPWBPP can run a real M5/Lum subset end to end with CUDA.
-- Recorded GPWBPP elapsed time for the real subset.
-- Verified `gpwbpp compare` works for CPU/CUDA synthetic masters in Gate 12.
-- Documented the black-box timing protocol in `docs/pixinsight_blackbox_reference.md`.
-- Added `gpwbpp compare` timing fields for GPWBPP/reference elapsed seconds and speedup reporting.
-- Added `gpwbpp blackbox-package` to export a clean-room WBPP handoff package.
-- Generated a real M5/Lum handoff package with the measured GPWBPP runtime filled in.
-- Added `gpwbpp subset` to select a small same-target/same-filter manifest without copying or modifying original files.
-- Verified `gpwbpp subset` can recreate an executable real M5/Lum subset from the 240430 manifest.
-- Added `gpwbpp blackbox-finalize` to validate a completed timing template and generate compare reports.
-- Verified `blackbox-finalize` writes a blocked summary for the current real handoff package because WBPP reference fields are missing.
-- Verified `blackbox-finalize` dry-run completion with the GPWBPP master used as a self-check reference.
+- Preserved the clean-room WBPP handoff workflow for user-generated PixInsight
+  runs.
+- Added black-box WBPP result ingestion, FastIntegration history parsing, FITS
+  / XISF compare diagnostics, coverage-masked comparison, and machine-readable
+  speedup summaries.
+- Ran the final real M38 H-alpha benchmark on a same-target data set with 200
+  planned light frames and matched calibration frames.
+- Used the WBPP FastIntegration accepted-frame set for parity: 193 active
+  frames and 7 excluded frames.
+- Verified GPWBPP resident CUDA triangle registration + Lanczos3 warp +
+  winsorized rejection produced a final master with high-coverage residuals
+  dominated by boundary/coverage policy differences.
+- Exposed the result through the user-facing command:
+  `gpwbpp speedup-summary`.
 
-## Blocker
+## Real-data Timing Result
 
-`PixInsight.exe` was not found in PATH, common `Program Files` locations, or a
-full C:/D:/E: filename search on this workstation. No user-generated WBPP output
-or log was found under `E:\摄影素材\天协远程台原始素材` by filename search. Without a
-callable local PixInsight installation or a user-generated WBPP output/log for
-the exact same selected subset, Gate 13 cannot produce a valid WBPP timing or
-numerical comparison.
+- Data root: user-provided acquisition directories under
+  `E:\摄影素材\天协远程台原始素材`.
+- Benchmark workspace: `C:\gpwbpp_runs\final_m38_h_200`.
+- WBPP black-box result:
+  `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json`.
+- WBPP elapsed time: `1092.541 s`.
+- WBPP reported time: `18:03.17`.
+- GPWBPP run:
+  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3`.
+- GPWBPP elapsed time: `111.94882199994754 s`.
+- Speedup: `9.75928982978054x`.
+- Minimum acceptance threshold used by the summary command: `2.0x`.
+- Threshold met: true.
+
+## Numerical Comparison
+
+- Compare artifact:
+  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json`.
+- Shape match: true.
+- Coverage threshold: `190`.
+- Compared pixels: `59264430`.
+- Coverage fraction: `0.9612859117097478`.
+- Coverage-masked RMS difference: `0.0017183155193652361`.
+- Coverage-masked absolute-difference p99:
+  `0.00045279982034117025`.
+- Coverage-masked absolute-difference p99.9:
+  `0.00448366389935935`.
 
 ## Commands Run
 
 ```powershell
-Get-Command PixInsight.exe -ErrorAction SilentlyContinue
-Get-ChildItem -Path 'C:\Program Files','C:\Program Files (x86)' -Filter PixInsight.exe -Recurse -ErrorAction SilentlyContinue
-Get-PSDrive -PSProvider FileSystem | ForEach-Object { Get-ChildItem -LiteralPath $_.Root -Filter PixInsight.exe -Recurse -ErrorAction SilentlyContinue }
-Get-ChildItem -LiteralPath 'E:\摄影素材\天协远程台原始素材' -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'WBPP|WeightedBatch|BatchPreprocessing|PixInsight' }
-.\.venv\Scripts\python -m pytest -q tests/test_compare_report.py
-.\.venv\Scripts\python -m pytest -q tests/test_blackbox_package.py
-.\.venv\Scripts\python -m pytest -q
-.\.venv\Scripts\gpwbpp blackbox-package --manifest runs\real_m5_lum_subset\manifest.json --plan runs\real_m5_lum_subset\processing_plan.json --gpwbpp-run runs\real_m5_lum_subset\gpwbpp_cuda_v2 --gpwbpp-time-seconds 64.061 --out runs\real_m5_lum_subset\wbpp_blackbox_handoff --reference-label "PixInsight WBPP"
-.\.venv\Scripts\gpwbpp subset --manifest runs\local_audit_240430\manifest.json --out runs\real_m5_lum_subset\subset_cli_manifest.json --plan-out runs\real_m5_lum_subset\subset_cli_processing_plan.json --object M5 --filter Lum --light-limit 2 --bias-limit 1 --dark-limit 1 --flat-limit 1
-.\.venv\Scripts\python -m pytest -q tests/test_subset.py
-.\.venv\Scripts\python -m pytest -q tests/test_blackbox_finalize.py
-.\.venv\Scripts\gpwbpp blackbox-finalize --timing runs\real_m5_lum_subset\wbpp_blackbox_handoff\timing_template.json --out runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_blocked
-.\.venv\Scripts\gpwbpp blackbox-finalize --timing runs\real_m5_lum_subset\wbpp_blackbox_handoff\timing_dryrun.json --out runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_dryrun
+.\.venv\Scripts\python.exe -m ruff check src\gpwbpp\cli.py tests\test_cli_smoke.py tests\test_speedup_report.py
+.\.venv\Scripts\python.exe -m pytest -q tests\test_speedup_report.py tests\test_cli_smoke.py::test_cli_help_commands
+.\.venv\Scripts\gpwbpp.exe speedup-summary --help
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\gpwbpp.exe speedup-summary --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_wbpp_speedup_summary_cli.json --markdown runs\benchmarks\m38_wbpp_speedup_summary_cli.md --min-speedup 2.0
 ```
 
-## Handoff Artifacts
+## Test Result
 
-- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\input_frames.csv`
-- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\wbpp_manual_run.md`
-- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\timing_template.json`
-- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\compare_command.ps1`
-- `runs\real_m5_lum_subset\subset_cli_manifest.json`
-- `runs\real_m5_lum_subset\subset_cli_processing_plan.json`
-- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_blocked\blackbox_finalize_summary.json`
-- `runs\real_m5_lum_subset\wbpp_blackbox_handoff\finalize_dryrun\blackbox_finalize_summary.json`
+- Latest focused Gate 13 CLI/report tests: `4 passed`.
+- Latest full suite: `176 passed in 8.07s`.
+- Ruff: passed.
+
+## CUDA Availability
+
+- CUDA available: yes.
+- GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
+- Compute capability: `12.0`.
+- VRAM: `97886 MiB`.
+- Native backend: true.
+
+## Artifacts
+
+- `docs/validation.md`
+- `docs/pixinsight_blackbox_reference.md`
+- `runs\benchmarks\m38_wbpp_speedup_summary.json`
+- `runs\benchmarks\m38_wbpp_speedup_summary.md`
+- `runs\benchmarks\m38_wbpp_speedup_summary_cli.json`
+- `runs\benchmarks\m38_wbpp_speedup_summary_cli.md`
+- `runs\checkpoints\gate_13_wbpp_speedup_summary_status.md`
+- `runs\checkpoints\gate_13_validation_speedup_summary_docs_status.md`
+- `runs\checkpoints\gate_13_speedup_summary_cli_status.md`
+
+## Known Limitations
+
+- GPWBPP does not claim PixInsight-equivalent algorithms. Known remaining
+  differences include star matching, boundary/crop policy, exact interpolation
+  and clamping behavior, local normalization, rejection details, and output
+  scaling.
+- The fastest validated parity run disables local normalization to match the
+  observed WBPP FastIntegration parity target more closely.
+- The comparison relies on user-generated WBPP black-box outputs and logs, not
+  on PixInsight source code.
 
 ## Next Step
 
-- Provide the PixInsight executable path, or
-- run WBPP manually on `runs\real_m5_lum_subset\manifest.json` selected files and provide the WBPP output master/log, or
-- install PixInsight in a known location, then rerun the black-box timing protocol.
+- Keep the real M38 benchmark as the current acceptance evidence.
+- Next engineering work should either harden the resident CUDA registration
+  path on additional real pairs or add the optional Gate 14 PixInsight launcher
+  front-end without modifying or copying official PixInsight scripts.
 
 ## Clean-room Compliance
 
-- No official PixInsight WBPP/PJSR source was read, copied, summarized, or modified.
-- The blocker is tool availability, not implementation dependence on PixInsight internals.
+- Compliant.
+- No official PixInsight WBPP/PJSR source was read, copied, summarized, or
+  modified.
+- The project consumed only user-generated WBPP output/timing metadata,
+  public behavioral documentation/discussion, FITS/XISF headers, and
+  project-owned/open-source code.
+- Original input directories were not modified.
