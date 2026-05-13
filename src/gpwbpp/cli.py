@@ -330,6 +330,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
+                resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
+                resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -410,6 +412,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
+                resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
+                resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -841,6 +845,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-triangle-pixel-refine-coarse-stride",
+        type=int,
+        help="override resident triangle pixel-refine coarse sample stride",
+    )
+    run.add_argument(
+        "--resident-triangle-pixel-refine-final-stride",
+        type=int,
+        help="override resident triangle pixel-refine final sample stride",
+    )
+    run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for registration",
     )
@@ -946,6 +960,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="preselect resident similarity candidates with GPU star-core metrics before pixel refinement",
+    )
+    audit.add_argument(
+        "--resident-triangle-pixel-refine-coarse-stride",
+        type=int,
+        help="override resident triangle pixel-refine coarse sample stride for resident audit",
+    )
+    audit.add_argument(
+        "--resident-triangle-pixel-refine-final-stride",
+        type=int,
+        help="override resident triangle pixel-refine final sample stride for resident audit",
     )
     audit.add_argument(
         "--resident-local-normalization-mode",

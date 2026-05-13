@@ -997,6 +997,8 @@ def run_resident_calibration_integration(
     resident_star_prior: str = "none",
     resident_star_prior_radius_px: float = 4.0,
     resident_star_core_preselect_top_k: int = 0,
+    resident_triangle_pixel_refine_coarse_stride: int | None = None,
+    resident_triangle_pixel_refine_final_stride: int | None = None,
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -1052,6 +1054,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_star_prior_radius_px must be non-negative")
     if resident_star_core_preselect_top_k < 0:
         raise ValueError("resident_star_core_preselect_top_k must be non-negative")
+    if resident_triangle_pixel_refine_coarse_stride is not None and resident_triangle_pixel_refine_coarse_stride <= 0:
+        raise ValueError("resident_triangle_pixel_refine_coarse_stride must be positive when provided")
+    if resident_triangle_pixel_refine_final_stride is not None and resident_triangle_pixel_refine_final_stride <= 0:
+        raise ValueError("resident_triangle_pixel_refine_final_stride must be positive when provided")
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
@@ -2221,6 +2227,10 @@ def run_resident_calibration_integration(
                         _policy_int(registration_policy, "cuda_catalog_pixel_refine_final_stride", 1),
                     ),
                 }
+                if resident_triangle_pixel_refine_coarse_stride is not None:
+                    refine_kwargs["coarse_sample_stride"] = int(resident_triangle_pixel_refine_coarse_stride)
+                if resident_triangle_pixel_refine_final_stride is not None:
+                    refine_kwargs["final_sample_stride"] = int(resident_triangle_pixel_refine_final_stride)
                 min_pixel_ncc = _policy_optional_float(
                     registration_policy,
                     "cuda_triangle_min_pixel_ncc",
@@ -3040,6 +3050,12 @@ def run_resident_calibration_integration(
                             "cuda_triangle_pixel_refine",
                             True,
                         ),
+                        "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_pixel_refine_final_stride": int(refine_kwargs["final_sample_stride"])
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
                         "triangle_min_pixel_ncc": _policy_optional_float(
                             registration_policy,
                             "cuda_triangle_min_pixel_ncc",
