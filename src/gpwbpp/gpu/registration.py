@@ -16,6 +16,7 @@ from gpwbpp_cuda import (
     star_grid_candidates_f32,
     star_top_nms_candidates_f32,
     star_top_candidates_f32,
+    triangle_asterism_descriptors_f32,
     warp_matrix_bilinear_f32,
 )
 
@@ -213,4 +214,5 @@ __all__ = [
     "register_similarity_from_star_catalogs_f32",
     "star_grid_top_nms_candidates_f32",
     "star_top_nms_candidates_f32",
+    "triangle_asterism_descriptors_f32",
 ]

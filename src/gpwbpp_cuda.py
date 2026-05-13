@@ -1423,6 +1423,75 @@ def estimate_similarity_from_catalogs_f32(
     return result
 
 
+def triangle_asterism_descriptors_f32(
+    x: Any,
+    y: Any,
+    max_stars: int = 80,
+    neighbors: int = 5,
+    max_descriptors: int = 1200,
+) -> dict[str, Any]:
+    """Generate local triangle asterism descriptors from a compact star catalog."""
+
+    if max_stars < 0:
+        raise ValueError("max_stars must be non-negative")
+    if max_descriptors < 0:
+        raise ValueError("max_descriptors must be non-negative")
+    native = _native()
+    x_array = np.ascontiguousarray(np.asarray(x, dtype=np.float32).reshape(-1))
+    y_array = np.ascontiguousarray(np.asarray(y, dtype=np.float32).reshape(-1))
+    if x_array.shape != y_array.shape:
+        raise ValueError("catalog coordinate arrays must have the same shape")
+    if native is not None and hasattr(native, "triangle_asterism_descriptors_f32"):
+        result = dict(
+            native.triangle_asterism_descriptors_f32(
+                x_array,
+                y_array,
+                int(max_stars),
+                int(neighbors),
+                int(max_descriptors),
+            )
+        )
+        return {
+            "count": int(result["count"]),
+            "raw_count": int(result["raw_count"]),
+            "max_stars": int(result["max_stars"]),
+            "neighbors": int(result["neighbors"]),
+            "descriptors": np.asarray(result["descriptors"], dtype=np.float32),
+            "indices": np.asarray(result["indices"], dtype=np.int32),
+            "areas": np.asarray(result["areas"], dtype=np.float32),
+            "model": str(result.get("model", "triangle_asterism_descriptors_cuda")),
+        }
+
+    from gpwbpp.cpu.registration import _local_triangle_descriptors
+
+    points = np.column_stack([x_array, y_array]).astype(np.float64, copy=False)
+    descriptors = _local_triangle_descriptors(
+        points,
+        max_points=int(max_stars),
+        neighbors=int(neighbors),
+        max_descriptors=int(max_descriptors),
+    )
+    descriptor_array = np.asarray([item[0] for item in descriptors], dtype=np.float32).reshape(-1, 2)
+    index_array = np.asarray([item[1] for item in descriptors], dtype=np.int32).reshape(-1, 3)
+    area_array = np.asarray([item[2] for item in descriptors], dtype=np.float32)
+    neighbor_count = min(len(points[: int(max_stars)]), max(3, int(neighbors)))
+    raw_count = (
+        len(points[: int(max_stars)]) * neighbor_count * (neighbor_count - 1) * (neighbor_count - 2) // 6
+        if len(points[: int(max_stars)]) >= 3
+        else 0
+    )
+    return {
+        "count": int(len(descriptors)),
+        "raw_count": int(raw_count),
+        "max_stars": int(max_stars),
+        "neighbors": int(neighbor_count),
+        "descriptors": descriptor_array,
+        "indices": index_array,
+        "areas": area_array,
+        "model": "triangle_asterism_descriptors_cpu_fallback",
+    }
+
+
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     native = _native()
     if native is not None and hasattr(native, "local_norm_apply_f32"):

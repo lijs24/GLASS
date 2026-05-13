@@ -21,6 +21,7 @@ Gate 3 introduces the `gpwbpp_cuda` Python extension with:
 - `estimate_translation_subpixel_ncc_f32(reference, moving, center_dx, center_dy, radius_steps, step)`
 - `estimate_translation_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px, max_abs_dx=None, max_abs_dy=None, prior_dx=None, prior_dy=None, prior_radius_px=None)`
 - `estimate_similarity_from_pairs_f32(reference_x, reference_y, moving_x, moving_y)`
+- `triangle_asterism_descriptors_f32(x, y, max_stars=80, neighbors=5, max_descriptors=1200)`
 - `estimate_similarity_from_catalogs_f32(reference_x, reference_y, moving_x, moving_y, tolerance_px=2.0, min_pair_distance=2.0)`
 - `warp_translation_bilinear_f32(data, dx, dy, fill)`
 - `star_local_max_mask_f32(tile, threshold)`
@@ -86,6 +87,11 @@ Resident CUDA integration now supports:
   the moving-to-reference scale, rotation, translation matrix, valid-pair count,
   and RMS on the device. It is a building block for the planned pure-GPU
   descriptor matcher; it does not by itself solve star matching.
+- GPU triangle asterism descriptor generation from compact star catalogs. The
+  kernel computes local nearest-neighbor triangle side-ratio descriptors on the
+  device and returns compact descriptor/index/area arrays. Host-side
+  deduplication and ordering remain in the current wrapper while descriptor
+  matching and hypothesis selection are still being migrated.
 - GPU bounded-catalog similarity seed matching. The primitive forms ordered
   two-star pair candidates from compact reference and moving catalogs, fits a
   candidate similarity transform, scores transformed moving stars against the

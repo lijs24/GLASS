@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from gpwbpp.cpu.registration import _local_triangle_descriptors
 from tests.conftest import cuda_module_or_skip
 
 
@@ -65,6 +66,46 @@ def _render_catalog_field(shape: tuple[int, int], stars: np.ndarray) -> np.ndarr
     for x, y, flux in stars:
         image += float(flux) * np.exp(-(((xx - float(x)) ** 2 + (yy - float(y)) ** 2) / (2.0 * 1.15**2)))
     return image.astype(np.float32)
+
+
+def _catalog_points() -> np.ndarray:
+    return np.asarray(
+        [
+            (10.0, 10.0),
+            (20.0, 11.0),
+            (13.0, 24.0),
+            (32.0, 31.0),
+            (6.0, 38.0),
+            (38.0, 7.0),
+            (27.0, 19.0),
+            (16.0, 34.0),
+        ],
+        dtype=np.float64,
+    )
+
+
+def test_gpu_triangle_asterism_descriptors_match_cpu_bridge():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "triangle_asterism_descriptors_f32"):
+        raise AssertionError("triangle_asterism_descriptors_f32 is missing from gpwbpp_cuda")
+
+    points = _catalog_points()
+    expected = _local_triangle_descriptors(points, max_points=8, neighbors=5, max_descriptors=64)
+    result = module.triangle_asterism_descriptors_f32(
+        points[:, 0].astype(np.float32),
+        points[:, 1].astype(np.float32),
+        max_stars=8,
+        neighbors=5,
+        max_descriptors=64,
+    )
+
+    assert result["model"] == "triangle_asterism_descriptors_cuda"
+    assert result["count"] == len(expected)
+    assert result["neighbors"] == 5
+    assert result["raw_count"] == 80
+    assert np.allclose(result["descriptors"], np.asarray([item[0] for item in expected], dtype=np.float32))
+    assert np.array_equal(result["indices"], np.asarray([item[1] for item in expected], dtype=np.int32))
+    assert np.allclose(result["areas"], np.asarray([item[2] for item in expected], dtype=np.float32))
 
 
 def test_gpu_estimate_translation_search_aligns_shifted_pair():

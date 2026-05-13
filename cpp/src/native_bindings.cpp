@@ -140,6 +140,16 @@ void gpwbpp_estimate_translation_from_catalogs_f32_launch(
     float prior_dx,
     float prior_dy,
     float prior_radius_px);
+void gpwbpp_triangle_asterism_descriptors_f32_launch(
+    const float* x,
+    const float* y,
+    float* descriptors,
+    int* indices,
+    float* areas,
+    unsigned char* valid,
+    int count,
+    int neighbors,
+    int raw_count);
 void gpwbpp_estimate_similarity_from_pairs_f32_launch(
     const float* reference_x,
     const float* reference_y,
@@ -3844,6 +3854,217 @@ py::dict estimate_similarity_from_pairs_f32(
   return result;
 }
 
+py::dict triangle_asterism_descriptors_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> x,
+    py::array_t<float, py::array::c_style | py::array::forcecast> y,
+    int max_stars,
+    int neighbors,
+    int max_descriptors) {
+  const py::buffer_info x_info = x.request();
+  const py::buffer_info y_info = y.request();
+  if (x_info.ndim != 1 || y_info.ndim != 1) {
+    throw std::invalid_argument("catalog coordinate arrays must be one-dimensional");
+  }
+  require_same_shape(x_info, y_info);
+  if (max_stars < 0) {
+    throw std::invalid_argument("max_stars must be non-negative");
+  }
+  if (max_descriptors < 0) {
+    throw std::invalid_argument("max_descriptors must be non-negative");
+  }
+  const int input_count = static_cast<int>(x_info.shape[0]);
+  const int count = std::min(input_count, max_stars);
+  int neighbor_count = std::min(count, neighbors);
+  neighbor_count = std::max(3, neighbor_count);
+  neighbor_count = std::min(16, neighbor_count);
+  const int combos_per_anchor = neighbor_count * (neighbor_count - 1) * (neighbor_count - 2) / 6;
+  const int raw_count = count >= 3 ? count * combos_per_anchor : 0;
+
+  py::array_t<float> descriptor_array({0, 2});
+  py::array_t<int> index_array({0, 3});
+  py::array_t<float> area_array({0});
+  py::dict empty_result;
+  if (count < 3 || max_descriptors == 0 || raw_count == 0) {
+    empty_result["count"] = 0;
+    empty_result["raw_count"] = raw_count;
+    empty_result["max_stars"] = max_stars;
+    empty_result["neighbors"] = neighbor_count;
+    empty_result["descriptors"] = descriptor_array;
+    empty_result["indices"] = index_array;
+    empty_result["areas"] = area_array;
+    empty_result["model"] = "triangle_asterism_descriptors_cuda";
+    return empty_result;
+  }
+
+  float* d_x = nullptr;
+  float* d_y = nullptr;
+  float* d_descriptors = nullptr;
+  int* d_indices = nullptr;
+  float* d_areas = nullptr;
+  unsigned char* d_valid = nullptr;
+  std::vector<float> host_descriptors(static_cast<std::size_t>(raw_count) * 2, std::numeric_limits<float>::quiet_NaN());
+  std::vector<int> host_indices(static_cast<std::size_t>(raw_count) * 3, -1);
+  std::vector<float> host_areas(static_cast<std::size_t>(raw_count), std::numeric_limits<float>::quiet_NaN());
+  std::vector<unsigned char> host_valid(static_cast<std::size_t>(raw_count), 0);
+  try {
+    check_cuda(cudaMalloc(&d_x, static_cast<std::size_t>(count) * sizeof(float)), "cudaMalloc(triangle x)");
+    check_cuda(cudaMalloc(&d_y, static_cast<std::size_t>(count) * sizeof(float)), "cudaMalloc(triangle y)");
+    check_cuda(
+        cudaMalloc(&d_descriptors, static_cast<std::size_t>(raw_count) * 2 * sizeof(float)),
+        "cudaMalloc(triangle descriptors)");
+    check_cuda(
+        cudaMalloc(&d_indices, static_cast<std::size_t>(raw_count) * 3 * sizeof(int)),
+        "cudaMalloc(triangle indices)");
+    check_cuda(cudaMalloc(&d_areas, static_cast<std::size_t>(raw_count) * sizeof(float)), "cudaMalloc(triangle areas)");
+    check_cuda(cudaMalloc(&d_valid, static_cast<std::size_t>(raw_count) * sizeof(unsigned char)), "cudaMalloc(triangle valid)");
+    check_cuda(cudaMemcpy(d_x, x_info.ptr, static_cast<std::size_t>(count) * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(triangle x)");
+    check_cuda(cudaMemcpy(d_y, y_info.ptr, static_cast<std::size_t>(count) * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(triangle y)");
+    gpwbpp_triangle_asterism_descriptors_f32_launch(
+        d_x,
+        d_y,
+        d_descriptors,
+        d_indices,
+        d_areas,
+        d_valid,
+        count,
+        neighbor_count,
+        raw_count);
+    check_cuda(cudaGetLastError(), "triangle_asterism_descriptors_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "triangle_asterism_descriptors_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(host_descriptors.data(), d_descriptors, host_descriptors.size() * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(triangle descriptors)");
+    check_cuda(
+        cudaMemcpy(host_indices.data(), d_indices, host_indices.size() * sizeof(int), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(triangle indices)");
+    check_cuda(
+        cudaMemcpy(host_areas.data(), d_areas, host_areas.size() * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(triangle areas)");
+    check_cuda(
+        cudaMemcpy(host_valid.data(), d_valid, host_valid.size() * sizeof(unsigned char), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(triangle valid)");
+  } catch (...) {
+    cudaFree(d_x);
+    cudaFree(d_y);
+    cudaFree(d_descriptors);
+    cudaFree(d_indices);
+    cudaFree(d_areas);
+    cudaFree(d_valid);
+    throw;
+  }
+  cudaFree(d_x);
+  cudaFree(d_y);
+  cudaFree(d_descriptors);
+  cudaFree(d_indices);
+  cudaFree(d_areas);
+  cudaFree(d_valid);
+
+  struct TriangleDescriptor {
+    int key0;
+    int key1;
+    int key2;
+    float descriptor0;
+    float descriptor1;
+    int index0;
+    int index1;
+    int index2;
+    float area;
+  };
+  std::vector<TriangleDescriptor> triangles;
+  triangles.reserve(static_cast<std::size_t>(raw_count));
+  for (int slot = 0; slot < raw_count; ++slot) {
+    if (host_valid[static_cast<std::size_t>(slot)] == 0) {
+      continue;
+    }
+    int index0 = host_indices[static_cast<std::size_t>(slot) * 3 + 0];
+    int index1 = host_indices[static_cast<std::size_t>(slot) * 3 + 1];
+    int index2 = host_indices[static_cast<std::size_t>(slot) * 3 + 2];
+    if (index0 < 0 || index1 < 0 || index2 < 0) {
+      continue;
+    }
+    std::array<int, 3> key{index0, index1, index2};
+    std::sort(key.begin(), key.end());
+    triangles.push_back(
+        TriangleDescriptor{
+            key[0],
+            key[1],
+            key[2],
+            host_descriptors[static_cast<std::size_t>(slot) * 2 + 0],
+            host_descriptors[static_cast<std::size_t>(slot) * 2 + 1],
+            index0,
+            index1,
+            index2,
+            host_areas[static_cast<std::size_t>(slot)]});
+  }
+  std::sort(triangles.begin(), triangles.end(), [](const TriangleDescriptor& left, const TriangleDescriptor& right) {
+    if (left.key0 != right.key0) {
+      return left.key0 < right.key0;
+    }
+    if (left.key1 != right.key1) {
+      return left.key1 < right.key1;
+    }
+    return left.key2 < right.key2;
+  });
+  std::vector<TriangleDescriptor> unique_triangles;
+  unique_triangles.reserve(triangles.size());
+  for (const auto& triangle : triangles) {
+    if (!unique_triangles.empty()) {
+      const auto& previous = unique_triangles.back();
+      if (previous.key0 == triangle.key0 && previous.key1 == triangle.key1 && previous.key2 == triangle.key2) {
+        continue;
+      }
+    }
+    unique_triangles.push_back(triangle);
+  }
+  std::sort(
+      unique_triangles.begin(),
+      unique_triangles.end(),
+      [](const TriangleDescriptor& left, const TriangleDescriptor& right) {
+        if (left.area != right.area) {
+          return left.area > right.area;
+        }
+        if (left.key0 != right.key0) {
+          return left.key0 < right.key0;
+        }
+        if (left.key1 != right.key1) {
+          return left.key1 < right.key1;
+        }
+        return left.key2 < right.key2;
+      });
+
+  const int output_count =
+      std::min(static_cast<int>(unique_triangles.size()), max_descriptors);
+  descriptor_array = py::array_t<float>({output_count, 2});
+  index_array = py::array_t<int>({output_count, 3});
+  area_array = py::array_t<float>({output_count});
+  auto descriptor_info = descriptor_array.request();
+  auto index_info = index_array.request();
+  auto area_info = area_array.request();
+  float* descriptor_ptr = static_cast<float*>(descriptor_info.ptr);
+  int* index_ptr = static_cast<int*>(index_info.ptr);
+  float* area_ptr = static_cast<float*>(area_info.ptr);
+  for (int i = 0; i < output_count; ++i) {
+    const auto& triangle = unique_triangles[static_cast<std::size_t>(i)];
+    descriptor_ptr[i * 2 + 0] = triangle.descriptor0;
+    descriptor_ptr[i * 2 + 1] = triangle.descriptor1;
+    index_ptr[i * 3 + 0] = triangle.index0;
+    index_ptr[i * 3 + 1] = triangle.index1;
+    index_ptr[i * 3 + 2] = triangle.index2;
+    area_ptr[i] = triangle.area;
+  }
+
+  py::dict result;
+  result["count"] = output_count;
+  result["raw_count"] = raw_count;
+  result["max_stars"] = max_stars;
+  result["neighbors"] = neighbor_count;
+  result["descriptors"] = descriptor_array;
+  result["indices"] = index_array;
+  result["areas"] = area_array;
+  result["model"] = "triangle_asterism_descriptors_cuda";
+  return result;
+}
+
 py::dict estimate_similarity_from_catalogs_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference_x,
     py::array_t<float, py::array::c_style | py::array::forcecast> reference_y,
@@ -5185,6 +5406,14 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("reference_y"),
       py::arg("moving_x"),
       py::arg("moving_y"));
+  m.def(
+      "triangle_asterism_descriptors_f32",
+      &triangle_asterism_descriptors_f32,
+      py::arg("x"),
+      py::arg("y"),
+      py::arg("max_stars") = 80,
+      py::arg("neighbors") = 5,
+      py::arg("max_descriptors") = 1200);
   m.def(
       "estimate_similarity_from_catalogs_f32",
       &estimate_similarity_from_catalogs_f32,

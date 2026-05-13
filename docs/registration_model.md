@@ -99,6 +99,14 @@ backend on the same small star-field image pair. This keeps the GPU port target
 auditable before the local-KNN, descriptor matching, and hypothesis scoring
 steps move fully onto CUDA.
 
+`gpwbpp_cuda.triangle_asterism_descriptors_f32(x, y, max_stars, neighbors,
+max_descriptors)` is the first CUDA primitive for that bridge. It takes compact
+catalog coordinates, computes local nearest-neighbor triangle descriptors on
+the device, and returns deduplicated descriptor/index/area arrays for comparison
+or downstream matching. The current host wrapper still performs deduplication
+and area ordering after downloading compact descriptor arrays; descriptor
+matching and RANSAC-style hypothesis selection remain follow-up CUDA work.
+
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
 offsets; similarity/affine candidates come from simple triangle descriptors and
