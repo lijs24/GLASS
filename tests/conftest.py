@@ -29,6 +29,9 @@ def small_fits_dataset(tmp_path: Path) -> Path:
         header["CCD-TEMP"] = -10.0
         header["XBINNING"] = 1
         header["YBINNING"] = 1
+        if frame_type == "light":
+            header["PIERSIDE"] = "West"
+            header["OBJCTROT"] = 92.0
         path = root / frame_type / name
         path.parent.mkdir(parents=True, exist_ok=True)
         fits.PrimaryHDU(np.ones(shape, dtype=np.float32) * value, header=header).writeto(path)

@@ -27,6 +27,9 @@ SUMMARY_KEYS = [
     "OBJECT",
     "RA",
     "DEC",
+    "PIERSIDE",
+    "OBJCTROT",
+    "ROTATOR",
     "NAXIS1",
     "NAXIS2",
 ]
@@ -74,4 +77,3 @@ def read_fits_metadata(path: str | Path, frame_id: str) -> FrameRecord:
         header_summary=summary,
         warnings=warnings,
     )
-

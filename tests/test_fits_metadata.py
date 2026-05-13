@@ -15,4 +15,5 @@ def test_scan_fits_metadata_without_pixel_load(small_fits_dataset):
     assert light["width"] == 20
     assert light["height"] == 16
     assert light["filter"] == "H"
-
+    assert light["header_summary"]["PIERSIDE"] == "West"
+    assert light["header_summary"]["OBJCTROT"] == 92.0
