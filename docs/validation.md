@@ -81,6 +81,28 @@ Coverage-masked compare:
 - Absolute difference p99: `0.00045279982034117025`.
 - Absolute difference p99.9: `0.00448366389935935`.
 
+Machine-readable speedup summary:
+
+- JSON:
+  `runs\benchmarks\m38_wbpp_speedup_summary.json`.
+- Markdown:
+  `runs\benchmarks\m38_wbpp_speedup_summary.md`.
+- Reproduction command:
+
+```powershell
+.\.venv\Scripts\python.exe benchmarks\summarize_wbpp_speedup.py `
+  --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 `
+  --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json `
+  --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json `
+  --out runs\benchmarks\m38_wbpp_speedup_summary.json `
+  --markdown runs\benchmarks\m38_wbpp_speedup_summary.md `
+  --min-speedup 2.0
+```
+
+- This summary explicitly records `200` planned frames, `193` active weighted
+  frames, and `7` zero-weight frames, matching the WBPP FastIntegration accepted
+  frame set used for the parity comparison.
+
 Residual diagnostics:
 
 - Embedded compare report:
