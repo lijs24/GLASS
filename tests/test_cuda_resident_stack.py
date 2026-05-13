@@ -167,6 +167,42 @@ def test_resident_stack_grid_normalization_matches_standalone_cuda():
     assert np.allclose(weight_map, np.ones_like(frame, dtype=np.float32))
 
 
+def test_resident_stack_grid_stats_can_drive_in_vram_normalization():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "frame_pair_grid_stats"):
+        raise AssertionError("ResidentCalibratedStack.frame_pair_grid_stats is missing from gpwbpp_cuda")
+
+    reference = np.arange(16, dtype=np.float32).reshape(4, 4) + np.float32(10.0)
+    scales_true = np.array([[2.0, 0.5], [1.5, 3.0]], dtype=np.float32)
+    offsets_true = np.array([[5.0, -2.0], [8.0, 1.0]], dtype=np.float32)
+    moving = np.empty_like(reference)
+    for row in range(2):
+        for col in range(2):
+            y0 = row * 2
+            x0 = col * 2
+            moving[y0 : y0 + 2, x0 : x0 + 2] = (
+                reference[y0 : y0 + 2, x0 : x0 + 2] * scales_true[row, col] + offsets_true[row, col]
+            )
+
+    stack = module.ResidentCalibratedStack(2, 4, 4)
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    stats = stack.frame_pair_grid_stats(0, 1, 2, 2)
+
+    assert stats["model"] == "resident_grid_pair_mean_std"
+    assert stats["grid_rows"] == 2
+    assert stats["grid_cols"] == 2
+    assert np.all(stats["valid_pixels"] == 4)
+
+    normalization_scales = stats["reference_std"] / stats["source_std"]
+    normalization_offsets = stats["reference_mean"] - stats["source_mean"] * normalization_scales
+    stack.apply_grid_normalization_frame(1, normalization_scales, normalization_offsets, 2, 2)
+    normalized, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
+
+    assert np.allclose(normalized, reference, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, np.ones_like(reference, dtype=np.float32))
+
+
 def test_resident_stack_translation_warp_uses_nan_coverage():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "apply_translation_frame"):

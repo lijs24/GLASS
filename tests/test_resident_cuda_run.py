@@ -242,6 +242,10 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
             "integration",
             "--local-normalization",
             "on",
+            "--resident-local-normalization-mode",
+            "grid_mean_std",
+            "--resident-local-normalization-tile-size",
+            "8",
             "--integration-rejection",
             "none",
             "--integration-weighting",
@@ -267,16 +271,19 @@ def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):
     resident = read_json(run / "resident_artifacts.json")
     resident_registration = resident["artifacts"][0]["resident_registration"]
     assert integration["outputs"][0]["resident_registration"] == "translation_ncc_subpixel"
-    assert integration["outputs"][0]["resident_local_normalization"] == "resident_global_mean_std"
+    assert integration["outputs"][0]["resident_local_normalization"] == "resident_grid_mean_std"
     assert registration["transform_model"] == "translation_ncc_subpixel"
     assert local_norm["source_stage"] == "resident_calibrated_stack"
     assert local_norm["enabled"] is True
-    assert local_norm["mode"] == "resident_global_mean_std"
+    assert local_norm["mode"] == "resident_grid_mean_std"
     assert local_norm["groups"][0]["frame_results"][0]["status"] == "reference"
+    assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["tile_size"] == 8
+    assert local_norm["groups"][0]["frame_results"][1]["grid_coefficients"]["valid_pixel_total"] > 0
     assert registration["results"][0]["status"] == "reference"
     assert resident_registration["mode"] == "translation_ncc_subpixel"
     assert resident["artifacts"][0]["resident_local_normalization"]["enabled"] is True
-    assert resident["artifacts"][0]["resident_local_normalization"]["mode"] == "resident_global_mean_std"
+    assert resident["artifacts"][0]["resident_local_normalization"]["mode"] == "resident_grid_mean_std"
+    assert resident["artifacts"][0]["resident_local_normalization"]["tile_size"] == 8
     assert resident_registration["max_shift"] == 4
     assert resident_registration["ncc_sample_stride"] == 2
     assert resident_registration["ncc_fallback_score_threshold"] == 1.0

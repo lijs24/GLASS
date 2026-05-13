@@ -20,6 +20,7 @@ def _cuda_feature_flags() -> dict[str, bool]:
         "resident_grid_local_norm_apply": bool(
             stack is not None and hasattr(stack, "apply_grid_normalization_frame")
         ),
+        "resident_grid_local_norm_stats": bool(stack is not None and hasattr(stack, "frame_pair_grid_stats")),
         "resident_sigma_rejection": bool(stack is not None and hasattr(stack, "integrate_sigma_clip")),
     }
 
@@ -54,7 +55,7 @@ def capability_report() -> dict[str, object]:
         },
         "local_normalization": {
             "cpu": "tile median/std baseline with coefficient artifacts",
-            "cuda": "tile mean/std primitive, grid apply, resident global mean/std, resident grid apply primitive",
+            "cuda": "tile mean/std primitive, resident global/grid mean/std, resident grid apply",
             "status": "partial; full interpolated/windowed LN is not complete",
         },
         "weighted_integration": {

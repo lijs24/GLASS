@@ -2448,6 +2448,37 @@ class ResidentCalibratedStack:
             "model": str(result["model"]),
         }
 
+    def frame_pair_grid_stats(
+        self,
+        reference_index: int,
+        source_index: int,
+        tile_height: int,
+        tile_width: int,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "frame_pair_grid_stats"):
+            raise RuntimeError("native ResidentCalibratedStack.frame_pair_grid_stats is not available")
+        result = dict(
+            self._impl.frame_pair_grid_stats(
+                int(reference_index),
+                int(source_index),
+                int(tile_height),
+                int(tile_width),
+            )
+        )
+        return {
+            "source_mean": np.asarray(result["source_mean"], dtype=np.float32),
+            "source_std": np.asarray(result["source_std"], dtype=np.float32),
+            "reference_mean": np.asarray(result["reference_mean"], dtype=np.float32),
+            "reference_std": np.asarray(result["reference_std"], dtype=np.float32),
+            "valid_pixels": np.asarray(result["valid_pixels"], dtype=np.uint64),
+            "grid_rows": int(result["grid_rows"]),
+            "grid_cols": int(result["grid_cols"]),
+            "tile_height": int(result["tile_height"]),
+            "tile_width": int(result["tile_width"]),
+            "valid_pixel_total": int(result["valid_pixel_total"]),
+            "model": str(result["model"]),
+        }
+
     def apply_global_normalization_frame(self, index: int, scale: float, offset: float) -> None:
         if not hasattr(self._impl, "apply_global_normalization_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_global_normalization_frame is not available")

@@ -375,6 +375,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
+                resident_local_normalization_mode=args.resident_local_normalization_mode,
+                resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
             ),
         )
         write_run_state(args.out, state)
@@ -722,6 +724,18 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument("--resident-star-prior-radius-px", type=float, default=4.0)
+    run.add_argument(
+        "--resident-local-normalization-mode",
+        choices=["global_mean_std", "grid_mean_std"],
+        default="global_mean_std",
+        help="resident CUDA LN coefficient model used when --local-normalization enables LN",
+    )
+    run.add_argument(
+        "--resident-local-normalization-tile-size",
+        type=int,
+        default=512,
+        help="tile size for resident grid_mean_std local normalization",
+    )
     run.add_argument(
         "--resident-star-core-preselect-top-k",
         type=int,

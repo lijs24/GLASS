@@ -13,5 +13,5 @@ def test_capability_report_records_structured_gate_flags():
     assert report["registration"]["status"].startswith("partial")
     assert "resident" in report["registration"]["cuda"]
     assert "coefficient artifacts" in report["local_normalization"]["cpu"]
-    assert "resident grid apply" in report["local_normalization"]["cuda"]
+    assert "resident global/grid mean/std" in report["local_normalization"]["cuda"]
     assert report["weighted_integration"]["status"] == "partial WBPP-like integration"

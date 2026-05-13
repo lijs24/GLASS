@@ -265,6 +265,20 @@ void gpwbpp_pair_sum_stats_f32_launch(
     unsigned long long* partial_count,
     std::size_t n,
     int blocks);
+void gpwbpp_pair_grid_sum_stats_f32_launch(
+    const float* source,
+    const float* reference,
+    double* source_sum,
+    double* source_sum2,
+    double* reference_sum,
+    double* reference_sum2,
+    unsigned long long* count,
+    int width,
+    int height,
+    int tile_width,
+    int tile_height,
+    int grid_cols,
+    int grid_rows);
 void gpwbpp_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
 void gpwbpp_integrate_resident_weighted_mean_f32_launch(
@@ -1554,6 +1568,147 @@ class ResidentCalibratedStack {
     result["total_pixels"] = pixels_per_frame_;
     result["nonfinite_pixels"] = pixels_per_frame_ - static_cast<std::size_t>(count);
     result["model"] = "resident_global_mean_std";
+    return result;
+  }
+
+  py::dict frame_pair_grid_stats(
+      std::size_t reference_index,
+      std::size_t source_index,
+      int tile_height,
+      int tile_width) const {
+    require_loaded(reference_index, "grid local normalization reference statistics");
+    require_loaded(source_index, "grid local normalization source statistics");
+    if (tile_height <= 0 || tile_width <= 0) {
+      throw std::invalid_argument("tile dimensions must be positive");
+    }
+    const int grid_rows =
+        (static_cast<int>(height_) + tile_height - 1) / tile_height;
+    const int grid_cols =
+        (static_cast<int>(width_) + tile_width - 1) / tile_width;
+    if (grid_rows <= 0 || grid_cols <= 0) {
+      throw std::runtime_error("resident frame shape produced an empty local-normalization grid");
+    }
+    const std::size_t grid_count =
+        static_cast<std::size_t>(grid_rows) * static_cast<std::size_t>(grid_cols);
+    double* d_source_sum = nullptr;
+    double* d_source_sum2 = nullptr;
+    double* d_reference_sum = nullptr;
+    double* d_reference_sum2 = nullptr;
+    unsigned long long* d_count = nullptr;
+    std::vector<double> source_sum(grid_count, 0.0);
+    std::vector<double> source_sum2(grid_count, 0.0);
+    std::vector<double> reference_sum(grid_count, 0.0);
+    std::vector<double> reference_sum2(grid_count, 0.0);
+    std::vector<unsigned long long> count(grid_count, 0);
+    try {
+      check_cuda(cudaMalloc(&d_source_sum, grid_count * sizeof(double)), "cudaMalloc(resident grid source sum)");
+      check_cuda(cudaMalloc(&d_source_sum2, grid_count * sizeof(double)), "cudaMalloc(resident grid source sum2)");
+      check_cuda(
+          cudaMalloc(&d_reference_sum, grid_count * sizeof(double)),
+          "cudaMalloc(resident grid reference sum)");
+      check_cuda(
+          cudaMalloc(&d_reference_sum2, grid_count * sizeof(double)),
+          "cudaMalloc(resident grid reference sum2)");
+      check_cuda(
+          cudaMalloc(&d_count, grid_count * sizeof(unsigned long long)),
+          "cudaMalloc(resident grid valid count)");
+      gpwbpp_pair_grid_sum_stats_f32_launch(
+          d_stack_ + source_index * pixels_per_frame_,
+          d_stack_ + reference_index * pixels_per_frame_,
+          d_source_sum,
+          d_source_sum2,
+          d_reference_sum,
+          d_reference_sum2,
+          d_count,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          tile_width,
+          tile_height,
+          grid_cols,
+          grid_rows);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.frame_pair_grid_stats kernel launch");
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.frame_pair_grid_stats synchronize");
+      check_cuda(
+          cudaMemcpy(source_sum.data(), d_source_sum, grid_count * sizeof(double), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident grid source sum)");
+      check_cuda(
+          cudaMemcpy(source_sum2.data(), d_source_sum2, grid_count * sizeof(double), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident grid source sum2)");
+      check_cuda(
+          cudaMemcpy(reference_sum.data(), d_reference_sum, grid_count * sizeof(double), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident grid reference sum)");
+      check_cuda(
+          cudaMemcpy(reference_sum2.data(), d_reference_sum2, grid_count * sizeof(double), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident grid reference sum2)");
+      check_cuda(
+          cudaMemcpy(count.data(), d_count, grid_count * sizeof(unsigned long long), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident grid valid count)");
+    } catch (...) {
+      cudaFree(d_source_sum);
+      cudaFree(d_source_sum2);
+      cudaFree(d_reference_sum);
+      cudaFree(d_reference_sum2);
+      cudaFree(d_count);
+      throw;
+    }
+    cudaFree(d_source_sum);
+    cudaFree(d_source_sum2);
+    cudaFree(d_reference_sum);
+    cudaFree(d_reference_sum2);
+    cudaFree(d_count);
+
+    py::array_t<float> source_mean({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+    py::array_t<float> source_std({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+    py::array_t<float> reference_mean({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+    py::array_t<float> reference_std({static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+    py::array_t<unsigned long long> valid_pixels(
+        {static_cast<py::ssize_t>(grid_rows), static_cast<py::ssize_t>(grid_cols)});
+    float* source_mean_ptr = static_cast<float*>(source_mean.request().ptr);
+    float* source_std_ptr = static_cast<float*>(source_std.request().ptr);
+    float* reference_mean_ptr = static_cast<float*>(reference_mean.request().ptr);
+    float* reference_std_ptr = static_cast<float*>(reference_std.request().ptr);
+    auto* valid_ptr = static_cast<unsigned long long*>(valid_pixels.request().ptr);
+    unsigned long long total_count = 0;
+    for (std::size_t i = 0; i < grid_count; ++i) {
+      const unsigned long long c = count[i];
+      total_count += c;
+      valid_ptr[i] = c;
+      if (c == 0) {
+        source_mean_ptr[i] = 0.0f;
+        source_std_ptr[i] = 0.0f;
+        reference_mean_ptr[i] = 0.0f;
+        reference_std_ptr[i] = 0.0f;
+        continue;
+      }
+      const double inv_count = 1.0 / static_cast<double>(c);
+      const double s_mean = source_sum[i] * inv_count;
+      const double r_mean = reference_sum[i] * inv_count;
+      double s_var = source_sum2[i] * inv_count - s_mean * s_mean;
+      double r_var = reference_sum2[i] * inv_count - r_mean * r_mean;
+      if (s_var < 0.0) {
+        s_var = 0.0;
+      }
+      if (r_var < 0.0) {
+        r_var = 0.0;
+      }
+      source_mean_ptr[i] = static_cast<float>(s_mean);
+      source_std_ptr[i] = static_cast<float>(std::sqrt(s_var));
+      reference_mean_ptr[i] = static_cast<float>(r_mean);
+      reference_std_ptr[i] = static_cast<float>(std::sqrt(r_var));
+    }
+
+    py::dict result;
+    result["source_mean"] = source_mean;
+    result["source_std"] = source_std;
+    result["reference_mean"] = reference_mean;
+    result["reference_std"] = reference_std;
+    result["valid_pixels"] = valid_pixels;
+    result["grid_rows"] = grid_rows;
+    result["grid_cols"] = grid_cols;
+    result["tile_height"] = tile_height;
+    result["tile_width"] = tile_width;
+    result["valid_pixel_total"] = total_count;
+    result["model"] = "resident_grid_pair_mean_std";
     return result;
   }
 
@@ -6151,6 +6306,13 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
           py::arg("step"),
           py::arg("sample_stride") = 1)
       .def("frame_global_stats", &ResidentCalibratedStack::frame_global_stats)
+      .def(
+          "frame_pair_grid_stats",
+          &ResidentCalibratedStack::frame_pair_grid_stats,
+          py::arg("reference_index"),
+          py::arg("source_index"),
+          py::arg("tile_height"),
+          py::arg("tile_width"))
       .def(
           "apply_global_normalization_frame",
           &ResidentCalibratedStack::apply_global_normalization_frame,

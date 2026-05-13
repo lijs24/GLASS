@@ -70,11 +70,12 @@ piecewise constant per tile. It validates the data model, edge tiles, and GPU
 coefficient application before adding smoother windowed/interpolated LN.
 
 The resident CUDA stack exposes the same grid application primitive as
-`ResidentCalibratedStack.apply_grid_normalization_frame`. It applies an existing
-scale/offset coefficient table directly to a resident frame in VRAM, which keeps
-the calibrated/registered hot set resident and avoids a CPU round trip during the
-apply step. Coefficient estimation for resident tile/window LN is still a later
-step.
+`ResidentCalibratedStack.apply_grid_normalization_frame`, plus resident
+`frame_pair_grid_stats` for per-tile paired source/reference mean/std estimates.
+The CLI path `--memory-mode resident --local-normalization on
+--resident-local-normalization-mode grid_mean_std` computes tile coefficients on
+the GPU, copies only the small coefficient table to host for audit JSON, and
+applies the coefficients directly to frames that are already in VRAM.
 
 This CUDA mean/std primitive is intentionally simpler than the full future
 WBPP-like local model. It is a tested GPU building block for tile/window LN, not

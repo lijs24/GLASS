@@ -75,6 +75,57 @@ def _memory_estimate(frame_count: int, height: int, width: int, master_count: in
     }
 
 
+def _grid_local_norm_coefficients(stats: dict[str, Any], eps: float = 1.0e-6) -> dict[str, Any]:
+    source_mean = np.asarray(stats["source_mean"], dtype=np.float32)
+    source_std = np.asarray(stats["source_std"], dtype=np.float32)
+    reference_mean = np.asarray(stats["reference_mean"], dtype=np.float32)
+    reference_std = np.asarray(stats["reference_std"], dtype=np.float32)
+    valid_pixels = np.asarray(stats["valid_pixels"], dtype=np.uint64)
+    scales = np.ones_like(source_mean, dtype=np.float32)
+    offsets = np.zeros_like(source_mean, dtype=np.float32)
+    statuses: list[list[str]] = []
+    empty_tiles = 0
+    offset_only_tiles = 0
+    ok_tiles = 0
+    for row in range(source_mean.shape[0]):
+        status_row: list[str] = []
+        for col in range(source_mean.shape[1]):
+            if int(valid_pixels[row, col]) == 0:
+                empty_tiles += 1
+                status_row.append("empty")
+                continue
+            if float(source_std[row, col]) <= eps or float(reference_std[row, col]) <= eps:
+                offset_only_tiles += 1
+                offsets[row, col] = np.float32(reference_mean[row, col] - source_mean[row, col])
+                status_row.append("offset_only")
+                continue
+            scale = np.float32(reference_std[row, col] / source_std[row, col])
+            scales[row, col] = scale
+            offsets[row, col] = np.float32(reference_mean[row, col] - source_mean[row, col] * scale)
+            ok_tiles += 1
+            status_row.append("ok")
+        statuses.append(status_row)
+    active = valid_pixels > 0
+    active_scales = scales[active]
+    active_offsets = offsets[active]
+    return {
+        "scales": scales,
+        "offsets": offsets,
+        "valid_pixels": valid_pixels,
+        "statuses": statuses,
+        "empty_tiles": empty_tiles,
+        "offset_only_tiles": offset_only_tiles,
+        "ok_tiles": ok_tiles,
+        "scale_mean": float(np.mean(active_scales)) if active_scales.size else 1.0,
+        "scale_min": float(np.min(active_scales)) if active_scales.size else 1.0,
+        "scale_max": float(np.max(active_scales)) if active_scales.size else 1.0,
+        "offset_mean": float(np.mean(active_offsets)) if active_offsets.size else 0.0,
+        "offset_min": float(np.min(active_offsets)) if active_offsets.size else 0.0,
+        "offset_max": float(np.max(active_offsets)) if active_offsets.size else 0.0,
+        "valid_pixel_total": int(np.sum(valid_pixels, dtype=np.uint64)),
+    }
+
+
 def _preview_scale(height: int, width: int, target_max_dim: int = 1024) -> int:
     return max(1, (max(int(height), int(width)) + int(target_max_dim) - 1) // int(target_max_dim))
 
@@ -880,6 +931,8 @@ def run_resident_calibration_integration(
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
+    resident_local_normalization_mode: str = "global_mean_std",
+    resident_local_normalization_tile_size: int = 512,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -900,6 +953,10 @@ def run_resident_calibration_integration(
         )
     if local_normalization not in {"auto", "on", "off"}:
         raise ValueError("local_normalization must be auto, on, or off")
+    if resident_local_normalization_mode not in {"global_mean_std", "grid_mean_std"}:
+        raise ValueError("resident_local_normalization_mode must be global_mean_std or grid_mean_std")
+    if resident_local_normalization_tile_size <= 0:
+        raise ValueError("resident_local_normalization_tile_size must be positive")
     if resident_registration_max_shift < 0:
         raise ValueError("resident_registration_max_shift must be non-negative")
     if resident_warp_interpolation not in {"bilinear", "lanczos3"}:
@@ -2413,33 +2470,45 @@ def run_resident_calibration_integration(
             local_norm_enabled = local_normalization == "on" or (
                 local_normalization == "auto" and bool(local_norm_policy.get("enabled", False))
             )
-            local_norm_mode = "resident_global_mean_std" if local_norm_enabled else "off"
+            local_norm_mode = (
+                f"resident_{resident_local_normalization_mode}" if local_norm_enabled else "off"
+            )
             local_norm_frame_results: list[dict[str, Any]] = []
             local_norm_warnings: list[str] = []
             if local_norm_enabled:
-                if not hasattr(stack, "frame_global_stats") or not hasattr(stack, "apply_global_normalization_frame"):
-                    raise RuntimeError("resident CUDA backend does not expose global local normalization")
-                reference_stats = stack.frame_global_stats(reference_index)
-                reference_mean = float(reference_stats["mean"])
-                reference_std = float(reference_stats["std"])
+                if resident_local_normalization_mode == "global_mean_std":
+                    if not hasattr(stack, "frame_global_stats") or not hasattr(stack, "apply_global_normalization_frame"):
+                        raise RuntimeError("resident CUDA backend does not expose global local normalization")
+                    reference_stats = stack.frame_global_stats(reference_index)
+                    reference_mean = float(reference_stats["mean"])
+                    reference_std = float(reference_stats["std"])
+                else:
+                    if not hasattr(stack, "frame_pair_grid_stats") or not hasattr(
+                        stack, "apply_grid_normalization_frame"
+                    ):
+                        raise RuntimeError("resident CUDA backend does not expose grid local normalization")
+                    reference_stats = None
+                    reference_mean = 0.0
+                    reference_std = 0.0
                 eps = 1.0e-6
-                local_norm_warnings.append(
-                    "resident CUDA local normalization currently uses one global mean/std model per frame; "
-                    "full tile/window LN remains a later gate"
-                )
+                if resident_local_normalization_mode == "global_mean_std":
+                    local_norm_warnings.append(
+                        "resident CUDA local normalization uses one global mean/std model per frame"
+                    )
                 for index, frame in enumerate(light_frames):
                     status = "ok"
                     warnings: list[str] = []
                     scale = 1.0
                     offset = 0.0
                     source_stats: dict[str, Any] | None = None
+                    grid_coefficients: dict[str, Any] | None = None
                     if frame_weight_values[index] <= 0.0:
                         status = "skipped_zero_weight"
                         warnings.append("frame was excluded or failed registration before local normalization")
                     elif index == reference_index:
                         status = "reference"
                         source_stats = reference_stats
-                    else:
+                    elif resident_local_normalization_mode == "global_mean_std":
                         source_stats = stack.frame_global_stats(index)
                         source_mean = float(source_stats["mean"])
                         source_std = float(source_stats["std"])
@@ -2457,10 +2526,59 @@ def run_resident_calibration_integration(
                             scale = reference_std / source_std
                             offset = reference_mean - source_mean * scale
                             stack.apply_global_normalization_frame(index, scale, offset)
+                    else:
+                        grid_stats = stack.frame_pair_grid_stats(
+                            reference_index,
+                            index,
+                            resident_local_normalization_tile_size,
+                            resident_local_normalization_tile_size,
+                        )
+                        coeffs = _grid_local_norm_coefficients(grid_stats, eps=eps)
+                        if coeffs["valid_pixel_total"] == 0:
+                            status = "empty"
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("frame had no finite paired pixels for resident grid LN")
+                        else:
+                            stack.apply_grid_normalization_frame(
+                                index,
+                                coeffs["scales"],
+                                coeffs["offsets"],
+                                resident_local_normalization_tile_size,
+                                resident_local_normalization_tile_size,
+                            )
+                            if coeffs["empty_tiles"]:
+                                status = "partial"
+                                warnings.append(
+                                    f"{coeffs['empty_tiles']} local-normalization tiles had no paired finite pixels"
+                                )
+                        scale = float(coeffs["scale_mean"])
+                        offset = float(coeffs["offset_mean"])
+                        grid_coefficients = {
+                            "model": str(grid_stats["model"]),
+                            "tile_size": resident_local_normalization_tile_size,
+                            "grid_rows": int(grid_stats["grid_rows"]),
+                            "grid_cols": int(grid_stats["grid_cols"]),
+                            "scale_mean": float(coeffs["scale_mean"]),
+                            "scale_min": float(coeffs["scale_min"]),
+                            "scale_max": float(coeffs["scale_max"]),
+                            "offset_mean": float(coeffs["offset_mean"]),
+                            "offset_min": float(coeffs["offset_min"]),
+                            "offset_max": float(coeffs["offset_max"]),
+                            "valid_pixel_total": int(coeffs["valid_pixel_total"]),
+                            "empty_tiles": int(coeffs["empty_tiles"]),
+                            "offset_only_tiles": int(coeffs["offset_only_tiles"]),
+                            "ok_tiles": int(coeffs["ok_tiles"]),
+                            "scales": coeffs["scales"].tolist(),
+                            "offsets": coeffs["offsets"].tolist(),
+                            "valid_pixels": coeffs["valid_pixels"].astype(np.uint64).tolist(),
+                            "statuses": coeffs["statuses"],
+                        }
                     local_norm_frame_results.append(
                         {
                             "frame_id": str(frame["id"]),
                             "reference_frame_id": str(reference_frame["id"]),
+                            "model": local_norm_mode,
                             "scale": float(scale),
                             "offset": float(offset),
                             "source_mean": None if source_stats is None else float(source_stats["mean"]),
@@ -2468,13 +2586,14 @@ def run_resident_calibration_integration(
                             "reference_mean": reference_mean,
                             "reference_std": reference_std,
                             "valid_pixels": None if source_stats is None else int(source_stats["valid_pixels"]),
+                            "grid_coefficients": grid_coefficients,
                             "status": status,
                             "warnings": warnings,
                         }
                     )
             else:
                 local_norm_warnings.append(
-                    "resident CUDA local normalization disabled; use --local-normalization on for global LN"
+                    "resident CUDA local normalization disabled; use --local-normalization on to enable it"
                 )
             local_norm_elapsed = perf_counter() - local_norm_start
             local_norm_groups.append(
@@ -2482,6 +2601,11 @@ def run_resident_calibration_integration(
                     "filter": filter_name,
                     "enabled": local_norm_enabled,
                     "mode": local_norm_mode,
+                    "tile_size": (
+                        resident_local_normalization_tile_size
+                        if resident_local_normalization_mode == "grid_mean_std" and local_norm_enabled
+                        else None
+                    ),
                     "reference_frame_id": str(reference_frame["id"]),
                     "reference_index": reference_index,
                     "crop_box": None,
@@ -2671,6 +2795,11 @@ def run_resident_calibration_integration(
                     "resident_local_normalization": {
                         "enabled": local_norm_enabled,
                         "mode": local_norm_mode,
+                        "tile_size": (
+                            resident_local_normalization_tile_size
+                            if resident_local_normalization_mode == "grid_mean_std" and local_norm_enabled
+                            else None
+                        ),
                         "reference_frame_id": str(reference_frame["id"]),
                         "warning_count": len(local_norm_warnings),
                     },
@@ -2701,7 +2830,7 @@ def run_resident_calibration_integration(
                             else "Resident registration is optional and currently limited to translation."
                         ),
                         (
-                            "Resident local normalization uses a global mean/std model per frame."
+                            f"Resident local normalization uses {local_norm_mode}."
                             if local_norm_enabled
                             else "Local normalization was disabled for this resident run."
                         ),
@@ -2792,14 +2921,12 @@ def run_resident_calibration_integration(
             {
                 "schema_version": 1,
                 "source_stage": "resident_calibrated_stack",
-                "mode": "resident_global_mean_std"
-                if any(group["enabled"] for group in local_norm_groups)
-                else "off",
+                "mode": next((group["mode"] for group in local_norm_groups if group["enabled"]), "off"),
                 "enabled": any(group["enabled"] for group in local_norm_groups),
                 "crop_box": None,
                 "groups": local_norm_groups,
                 "warnings": [
-                    "resident global LN is an early high-VRAM capability; full tile/window LN is not claimed here"
+                    "resident local normalization runs before integration while frames remain in VRAM"
                 ],
             },
         )
@@ -2807,7 +2934,8 @@ def run_resident_calibration_integration(
             "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation",
         ]
         if any(group["enabled"] for group in local_norm_groups):
-            integration_warnings.append("resident CUDA used global mean/std local normalization before integration")
+            mode = next((group["mode"] for group in local_norm_groups if group["enabled"]), "unknown")
+            integration_warnings.append(f"resident CUDA used {mode} local normalization before integration")
         else:
             integration_warnings.append("resident CUDA mode skipped local normalization")
         write_json(
@@ -2863,7 +2991,8 @@ def run_resident_calibration_integration(
                 if resident_registration == "similarity_cuda_catalog"
                 else "resident CUDA triangle descriptor similarity matrices are estimated and applied in VRAM"
                 if resident_registration == "similarity_cuda_triangle"
-                else "registration is translation only and local normalization is global mean/std when enabled"
+                else f"registration is translation only and local normalization is {resident_local_normalization_mode}"
+                " when enabled"
             )
         )
         return state
