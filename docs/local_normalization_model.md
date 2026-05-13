@@ -48,9 +48,10 @@ resume and later gates can still determine what happened.
 
 ## CUDA Scope
 
-CUDA can now be used for a per-tile mean/std statistics primitive as well as the
-pixel-wise apply kernel. The standalone primitive computes source/reference
-finite-pixel mean and standard deviation for a tile, derives:
+CUDA can now be used for a per-tile mean/std statistics primitive, a global
+pixel-wise apply kernel, and a piecewise grid apply kernel. The standalone
+primitive computes source/reference finite-pixel mean and standard deviation for
+a tile, derives:
 
 ```text
 scale = reference_std / source_std
@@ -61,6 +62,12 @@ and applies it with `local_norm_estimate_apply_mean_std_f32`. A valid mask can b
 provided by marking invalid pixels as `NaN` before the CUDA statistics pass; mask
 outside pixels are restored to the source value after apply. The CPU median/std
 baseline remains available and is still used when CUDA is unavailable.
+
+The grid model estimates a coefficient table on the CPU baseline with
+`estimate_grid_normalization_mean_std`, then applies that coefficient table with
+`local_norm_apply_grid_f32` on the CUDA backend. This first grid implementation is
+piecewise constant per tile. It validates the data model, edge tiles, and GPU
+coefficient application before adding smoother windowed/interpolated LN.
 
 This CUDA mean/std primitive is intentionally simpler than the full future
 WBPP-like local model. It is a tested GPU building block for tile/window LN, not

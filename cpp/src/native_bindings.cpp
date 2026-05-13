@@ -237,6 +237,17 @@ void gpwbpp_estimate_similarity_from_catalogs_f32_launch(
     float max_abs_rotation_rad);
 void gpwbpp_local_norm_apply_f32_launch(
     const float* input, float* output, std::size_t n, float scale, float offset);
+void gpwbpp_local_norm_apply_grid_f32_launch(
+    const float* input,
+    float* output,
+    const float* scales,
+    const float* offsets,
+    int width,
+    int height,
+    int tile_width,
+    int tile_height,
+    int grid_cols,
+    int grid_rows);
 void gpwbpp_frame_sum_stats_f32_launch(
     const float* input,
     double* partial_sum,
@@ -4946,6 +4957,98 @@ py::array_t<float> local_norm_apply_f32(
   return output;
 }
 
+py::array_t<float> local_norm_apply_grid_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> input,
+    py::array_t<float, py::array::c_style | py::array::forcecast> scales,
+    py::array_t<float, py::array::c_style | py::array::forcecast> offsets,
+    int tile_height,
+    int tile_width) {
+  const py::buffer_info input_info = input.request();
+  const py::buffer_info scales_info = scales.request();
+  const py::buffer_info offsets_info = offsets.request();
+  if (input_info.ndim != 2) {
+    throw std::invalid_argument("input must have shape (height, width)");
+  }
+  if (scales_info.ndim != 2 || offsets_info.ndim != 2) {
+    throw std::invalid_argument("scales and offsets must have shape (grid_rows, grid_cols)");
+  }
+  if (scales_info.shape[0] != offsets_info.shape[0] || scales_info.shape[1] != offsets_info.shape[1]) {
+    throw std::invalid_argument("scales and offsets shapes must match");
+  }
+  if (tile_height <= 0 || tile_width <= 0) {
+    throw std::invalid_argument("tile dimensions must be positive");
+  }
+  const int height = static_cast<int>(input_info.shape[0]);
+  const int width = static_cast<int>(input_info.shape[1]);
+  const int grid_rows = static_cast<int>(scales_info.shape[0]);
+  const int grid_cols = static_cast<int>(scales_info.shape[1]);
+  if (grid_rows <= 0 || grid_cols <= 0) {
+    throw std::invalid_argument("coefficient grid must not be empty");
+  }
+  const int expected_rows = (height + tile_height - 1) / tile_height;
+  const int expected_cols = (width + tile_width - 1) / tile_width;
+  if (grid_rows != expected_rows || grid_cols != expected_cols) {
+    throw std::invalid_argument("coefficient grid shape does not match image shape and tile dimensions");
+  }
+
+  const std::size_t n = static_cast<std::size_t>(height) * static_cast<std::size_t>(width);
+  const std::size_t coefficient_count =
+      static_cast<std::size_t>(grid_rows) * static_cast<std::size_t>(grid_cols);
+  py::array_t<float> output({input_info.shape[0], input_info.shape[1]});
+  const py::buffer_info output_info = output.request();
+
+  float* d_input = nullptr;
+  float* d_output = nullptr;
+  float* d_scales = nullptr;
+  float* d_offsets = nullptr;
+  try {
+    check_cuda(cudaMalloc(&d_input, n * sizeof(float)), "cudaMalloc(local_norm_grid input)");
+    check_cuda(cudaMalloc(&d_output, n * sizeof(float)), "cudaMalloc(local_norm_grid output)");
+    check_cuda(
+        cudaMalloc(&d_scales, coefficient_count * sizeof(float)),
+        "cudaMalloc(local_norm_grid scales)");
+    check_cuda(
+        cudaMalloc(&d_offsets, coefficient_count * sizeof(float)),
+        "cudaMalloc(local_norm_grid offsets)");
+    check_cuda(
+        cudaMemcpy(d_input, input_info.ptr, n * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(local_norm_grid input)");
+    check_cuda(
+        cudaMemcpy(d_scales, scales_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(local_norm_grid scales)");
+    check_cuda(
+        cudaMemcpy(d_offsets, offsets_info.ptr, coefficient_count * sizeof(float), cudaMemcpyHostToDevice),
+        "cudaMemcpy(local_norm_grid offsets)");
+    gpwbpp_local_norm_apply_grid_f32_launch(
+        d_input,
+        d_output,
+        d_scales,
+        d_offsets,
+        width,
+        height,
+        tile_width,
+        tile_height,
+        grid_cols,
+        grid_rows);
+    check_cuda(cudaGetLastError(), "local_norm_apply_grid_f32 kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "local_norm_apply_grid_f32 synchronize");
+    check_cuda(
+        cudaMemcpy(output_info.ptr, d_output, n * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(local_norm_grid output)");
+  } catch (...) {
+    cudaFree(d_input);
+    cudaFree(d_output);
+    cudaFree(d_scales);
+    cudaFree(d_offsets);
+    throw;
+  }
+  cudaFree(d_input);
+  cudaFree(d_output);
+  cudaFree(d_scales);
+  cudaFree(d_offsets);
+  return output;
+}
+
 py::dict local_norm_pair_stats_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> source,
     py::array_t<float, py::array::c_style | py::array::forcecast> reference) {
@@ -5844,6 +5947,14 @@ PYBIND11_MODULE(_gpwbpp_cuda_native, m) {
       py::arg("max_abs_rotation_rad") = -1.0f,
       py::arg("top_k") = 0);
   m.def("local_norm_apply_f32", &local_norm_apply_f32);
+  m.def(
+      "local_norm_apply_grid_f32",
+      &local_norm_apply_grid_f32,
+      py::arg("input"),
+      py::arg("scales"),
+      py::arg("offsets"),
+      py::arg("tile_height"),
+      py::arg("tile_width"));
   m.def("local_norm_pair_stats_f32", &local_norm_pair_stats_f32);
   m.def("integrate_accumulate_mean_tile_f32", &integrate_accumulate_mean_tile_f32);
   m.def("star_local_max_mask_f32", &star_local_max_mask_f32);

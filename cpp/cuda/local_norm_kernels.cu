@@ -27,6 +27,49 @@ void gpwbpp_local_norm_apply_f32_launch(
   gpwbpp_local_norm_apply_f32_kernel<<<blocks, threads>>>(input, output, n, scale, offset);
 }
 
+__global__ void gpwbpp_local_norm_apply_grid_f32_kernel(
+    const float* input,
+    float* output,
+    const float* scales,
+    const float* offsets,
+    int width,
+    int height,
+    int tile_width,
+    int tile_height,
+    int grid_cols,
+    int grid_rows) {
+  const int x = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  const int y = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+  if (x >= width || y >= height) {
+    return;
+  }
+  const int tile_x = min(x / tile_width, grid_cols - 1);
+  const int tile_y = min(y / tile_height, grid_rows - 1);
+  const int tile_index = tile_y * grid_cols + tile_x;
+  const std::size_t pixel_index = static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+                                  static_cast<std::size_t>(x);
+  output[pixel_index] = input[pixel_index] * scales[tile_index] + offsets[tile_index];
+}
+
+void gpwbpp_local_norm_apply_grid_f32_launch(
+    const float* input,
+    float* output,
+    const float* scales,
+    const float* offsets,
+    int width,
+    int height,
+    int tile_width,
+    int tile_height,
+    int grid_cols,
+    int grid_rows) {
+  dim3 threads(16, 16);
+  dim3 blocks(
+      static_cast<unsigned int>((width + static_cast<int>(threads.x) - 1) / static_cast<int>(threads.x)),
+      static_cast<unsigned int>((height + static_cast<int>(threads.y) - 1) / static_cast<int>(threads.y)));
+  gpwbpp_local_norm_apply_grid_f32_kernel<<<blocks, threads>>>(
+      input, output, scales, offsets, width, height, tile_width, tile_height, grid_cols, grid_rows);
+}
+
 __global__ void gpwbpp_frame_sum_stats_f32_kernel(
     const float* input,
     double* partial_sum,

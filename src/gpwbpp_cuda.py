@@ -1693,6 +1693,45 @@ def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
     return (image * np.float32(scale) + np.float32(offset)).astype(np.float32)
 
 
+def local_norm_apply_grid_f32(
+    data: Any,
+    scales: Any,
+    offsets: Any,
+    tile_height: int,
+    tile_width: int,
+) -> np.ndarray:
+    image = np.asarray(data, dtype=np.float32)
+    scale_grid = np.asarray(scales, dtype=np.float32)
+    offset_grid = np.asarray(offsets, dtype=np.float32)
+    if image.ndim != 2:
+        raise ValueError("data must have shape (height, width)")
+    if scale_grid.shape != offset_grid.shape:
+        raise ValueError("scales and offsets must have the same shape")
+    if tile_height <= 0 or tile_width <= 0:
+        raise ValueError("tile dimensions must be positive")
+    expected_shape = (
+        int(np.ceil(image.shape[0] / int(tile_height))),
+        int(np.ceil(image.shape[1] / int(tile_width))),
+    )
+    if scale_grid.shape != expected_shape:
+        raise ValueError("coefficient grid shape does not match data shape and tile dimensions")
+    native = _native()
+    if native is not None and hasattr(native, "local_norm_apply_grid_f32"):
+        return np.asarray(
+            native.local_norm_apply_grid_f32(image, scale_grid, offset_grid, int(tile_height), int(tile_width)),
+            dtype=np.float32,
+        )
+    out = np.empty_like(image, dtype=np.float32)
+    for gy in range(scale_grid.shape[0]):
+        y0 = gy * int(tile_height)
+        y1 = min(image.shape[0], y0 + int(tile_height))
+        for gx in range(scale_grid.shape[1]):
+            x0 = gx * int(tile_width)
+            x1 = min(image.shape[1], x0 + int(tile_width))
+            out[y0:y1, x0:x1] = image[y0:y1, x0:x1] * scale_grid[gy, gx] + offset_grid[gy, gx]
+    return out
+
+
 def local_norm_pair_stats_f32(data: Any, reference: Any) -> dict[str, Any]:
     src = np.asarray(data, dtype=np.float32)
     ref = np.asarray(reference, dtype=np.float32)
