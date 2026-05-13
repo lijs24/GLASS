@@ -647,6 +647,7 @@ def build_parser() -> argparse.ArgumentParser:
             "translation_ncc_subpixel",
             "translation_star_catalog",
             "similarity_cuda_catalog",
+            "similarity_cuda_triangle",
             "external_matrix",
         ],
         default="off",
@@ -655,6 +656,7 @@ def build_parser() -> argparse.ArgumentParser:
             "translation_ncc_subpixel uses resident GPU NCC plus subpixel refinement, "
             "translation_star_catalog uses GPU star candidates plus pair-offset voting, "
             "similarity_cuda_catalog uses resident GPU star catalogs plus CUDA similarity refinement, "
+            "similarity_cuda_triangle uses resident GPU star catalogs plus CUDA triangle descriptors, "
             "external_matrix applies matrices from a prior registration_results.json"
         ),
     )

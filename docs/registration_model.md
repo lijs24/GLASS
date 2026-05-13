@@ -449,3 +449,12 @@ translation bilinear warp, and accepted similarity/affine matrices use the
 resident CUDA matrix bilinear warp. This is intended for staged validation,
 for example running tile-mode `--registration-method astroalign` first, then
 using the resulting matrices to test pure GPU pixel resampling and integration.
+
+Resident runs can now use `--resident-registration similarity_cuda_triangle` as
+the first high-VRAM bridge for the triangle descriptor route. Calibrated frames
+remain in the `ResidentCalibratedStack`; the stack detects compact star
+catalogs on the GPU, GPWBPP builds/matches CUDA triangle descriptors from those
+catalogs, and the selected similarity matrix is applied in place with resident
+CUDA matrix bilinear warp. This still downloads compact catalogs/diagnostics,
+so it is not the final fully resident descriptor primitive, but it avoids
+materializing calibrated or registered full frames on the host.

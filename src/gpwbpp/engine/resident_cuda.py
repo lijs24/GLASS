@@ -875,11 +875,12 @@ def run_resident_calibration_integration(
         "translation_ncc_subpixel",
         "translation_star_catalog",
         "similarity_cuda_catalog",
+        "similarity_cuda_triangle",
         "external_matrix",
     }:
         raise ValueError(
             "resident_registration must be off, translation_preview, translation_ncc_subpixel, "
-            "translation_star_catalog, similarity_cuda_catalog, or external_matrix"
+            "translation_star_catalog, similarity_cuda_catalog, similarity_cuda_triangle, or external_matrix"
         )
     if local_normalization not in {"auto", "on", "off"}:
         raise ValueError("local_normalization must be auto, on, or off")
@@ -1496,9 +1497,13 @@ def run_resident_calibration_integration(
                     else "resident_top_flux"
                 )
 
-                def detect_resident_catalog(frame_index: int, threshold: float) -> dict[str, Any]:
+                def detect_resident_catalog(
+                    frame_index: int,
+                    threshold: float,
+                    _stack=stack,
+                ) -> dict[str, Any]:
                     if use_grid_catalog:
-                        return stack.star_grid_top_nms_candidates(
+                        return _stack.star_grid_top_nms_candidates(
                             frame_index,
                             threshold,
                             resident_star_grid_cols,
@@ -1508,14 +1513,14 @@ def run_resident_calibration_integration(
                             nms_min_separation_px,
                         )
                     if has_top_nms_catalog:
-                        return stack.star_top_nms_candidates(
+                        return _stack.star_top_nms_candidates(
                             frame_index,
                             threshold,
                             nms_scan_candidates,
                             resident_star_max_candidates,
                             nms_min_separation_px,
                         )
-                    return stack.star_top_candidates(frame_index, threshold, resident_star_max_candidates)
+                    return _stack.star_top_candidates(frame_index, threshold, resident_star_max_candidates)
 
                 reference_catalogs: dict[float, dict[str, Any]] = {}
                 for index, frame in enumerate(light_frames):
@@ -1939,6 +1944,361 @@ def run_resident_calibration_integration(
                         )
                     )
 
+            if resident_registration == "similarity_cuda_triangle":
+                required_methods = [
+                    "star_top_candidates",
+                    "apply_matrix_bilinear_frame",
+                ]
+                missing_methods = [name for name in required_methods if not hasattr(stack, name)]
+                if missing_methods:
+                    raise RuntimeError(
+                        "resident CUDA backend lacks triangle registration primitive(s): "
+                        + ", ".join(missing_methods)
+                    )
+                required_cuda = [
+                    "estimate_similarity_from_triangle_descriptors_f32",
+                    "triangle_asterism_descriptors_f32",
+                ]
+                missing_cuda = [name for name in required_cuda if not hasattr(cuda_module, name)]
+                if missing_cuda:
+                    raise RuntimeError(
+                        "CUDA backend lacks triangle descriptor primitive(s): "
+                        + ", ".join(missing_cuda)
+                    )
+
+                tolerance_px = _policy_float(
+                    registration_policy,
+                    "cuda_triangle_tolerance_px",
+                    _policy_float(registration_policy, "cuda_catalog_tolerance_px", resident_star_tolerance_px),
+                )
+                descriptor_radius = _policy_float(registration_policy, "cuda_triangle_descriptor_radius", 0.1)
+                descriptor_neighbors = _policy_int(registration_policy, "cuda_triangle_neighbors", 5)
+                max_descriptors = _policy_int(registration_policy, "cuda_triangle_max_descriptors", 1200)
+                nms_min_separation_px = _policy_float(
+                    registration_policy,
+                    "cuda_triangle_nms_min_separation_px",
+                    _policy_float(
+                        registration_policy,
+                        "cuda_catalog_nms_min_separation_px",
+                        max(32.0, float(min(height, width)) / 100.0),
+                    ),
+                )
+                nms_scan_candidates = _policy_int(
+                    registration_policy,
+                    "cuda_triangle_nms_scan_candidates",
+                    _policy_int(
+                        registration_policy,
+                        "cuda_catalog_nms_scan_candidates",
+                        max(resident_star_max_candidates, resident_star_max_candidates * 4),
+                    ),
+                )
+                grid_top_candidates_per_cell = _policy_int(
+                    registration_policy,
+                    "cuda_triangle_grid_top_per_cell",
+                    _policy_int(registration_policy, "cuda_catalog_grid_top_per_cell", 4),
+                )
+                refine_kwargs = {
+                    "search_radius_px": _policy_float(
+                        registration_policy,
+                        "cuda_triangle_pixel_refine_radius",
+                        _policy_float(registration_policy, "cuda_catalog_pixel_refine_radius", 1.0),
+                    ),
+                    "coarse_step_px": _policy_float(
+                        registration_policy,
+                        "cuda_triangle_pixel_refine_coarse_step",
+                        _policy_float(registration_policy, "cuda_catalog_pixel_refine_coarse_step", 0.25),
+                    ),
+                    "fine_radius_px": _policy_float(
+                        registration_policy,
+                        "cuda_triangle_pixel_refine_fine_radius",
+                        _policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_radius", 0.25),
+                    ),
+                    "fine_step_px": _policy_float(
+                        registration_policy,
+                        "cuda_triangle_pixel_refine_fine_step",
+                        _policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_step", 0.0625),
+                    ),
+                    "coarse_sample_stride": _policy_int(
+                        registration_policy,
+                        "cuda_triangle_pixel_refine_coarse_stride",
+                        _policy_int(
+                            registration_policy,
+                            "cuda_catalog_pixel_refine_coarse_stride",
+                            resident_ncc_sample_stride,
+                        ),
+                    ),
+                    "final_sample_stride": _policy_int(
+                        registration_policy,
+                        "cuda_triangle_pixel_refine_final_stride",
+                        _policy_int(registration_policy, "cuda_catalog_pixel_refine_final_stride", 1),
+                    ),
+                }
+                min_pixel_ncc = _policy_optional_float(
+                    registration_policy,
+                    "cuda_triangle_min_pixel_ncc",
+                    _policy_optional_float(registration_policy, "cuda_catalog_min_pixel_ncc", None),
+                )
+                pixel_refine_enabled = _policy_bool(registration_policy, "cuda_triangle_pixel_refine", True)
+                native_stack = getattr(stack, "_impl", stack)
+                has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
+                has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
+                use_grid_catalog = (
+                    resident_star_grid_cols > 0 and resident_star_grid_rows > 0 and has_grid_nms_catalog
+                )
+                catalog_selector = (
+                    "resident_grid_top_nms"
+                    if use_grid_catalog
+                    else "resident_top_nms"
+                    if has_top_nms_catalog
+                    else "resident_top_flux"
+                )
+
+                def detect_resident_triangle_catalog(
+                    frame_index: int,
+                    threshold: float,
+                    _stack=stack,
+                ) -> dict[str, Any]:
+                    if use_grid_catalog:
+                        return _stack.star_grid_top_nms_candidates(
+                            frame_index,
+                            threshold,
+                            resident_star_grid_cols,
+                            resident_star_grid_rows,
+                            grid_top_candidates_per_cell,
+                            resident_star_max_candidates,
+                            nms_min_separation_px,
+                        )
+                    if has_top_nms_catalog:
+                        return _stack.star_top_nms_candidates(
+                            frame_index,
+                            threshold,
+                            nms_scan_candidates,
+                            resident_star_max_candidates,
+                            nms_min_separation_px,
+                        )
+                    return _stack.star_top_candidates(frame_index, threshold, resident_star_max_candidates)
+
+                def triangle_descriptors(catalog: dict[str, Any]) -> dict[str, Any]:
+                    return cuda_module.triangle_asterism_descriptors_f32(
+                        catalog["x"],
+                        catalog["y"],
+                        max_stars=resident_star_max_candidates,
+                        neighbors=descriptor_neighbors,
+                        max_descriptors=max_descriptors,
+                    )
+
+                reference_catalogs: dict[float, dict[str, Any]] = {}
+                reference_descriptors: dict[float, dict[str, Any]] = {}
+                for index, frame in enumerate(light_frames):
+                    registration_frame_start = perf_counter()
+                    warnings = []
+                    status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
+                    matrix = translation_matrix(0.0, 0.0)
+                    matched = 0
+                    inliers = 0
+                    rms_px = float("nan")
+                    try:
+                        if status == "excluded":
+                            frame_weight_values[index] = 0.0
+                            frame_weights[frame["id"]] = 0.0
+                            warnings.append("excluded by resident frame mask")
+                        elif frame["id"] == reference_frame["id"]:
+                            status = "reference"
+                            matched = 1
+                            inliers = 1
+                            rms_px = 0.0
+                        else:
+                            threshold_candidates, threshold_mode = _resident_star_threshold_candidates(
+                                stack,
+                                reference_index,
+                                index,
+                                resident_star_threshold,
+                            )
+                            trial_results = []
+                            selected_fit = None
+                            selected_threshold = None
+                            selected_reference_catalog = None
+                            selected_moving_catalog = None
+                            selected_reference_descriptors = None
+                            selected_moving_descriptors = None
+                            for threshold in threshold_candidates:
+                                threshold_key = round(float(threshold), 6)
+                                reference_catalog = reference_catalogs.get(threshold_key)
+                                if reference_catalog is None:
+                                    reference_catalog = detect_resident_triangle_catalog(reference_index, threshold)
+                                    reference_catalogs[threshold_key] = reference_catalog
+                                moving_catalog = detect_resident_triangle_catalog(index, threshold)
+                                if int(reference_catalog["stored_count"]) < 3 or int(moving_catalog["stored_count"]) < 3:
+                                    trial_results.append(
+                                        {
+                                            "threshold": float(threshold),
+                                            "status": "too_few_stars",
+                                            "reference_stored": int(reference_catalog["stored_count"]),
+                                            "moving_stored": int(moving_catalog["stored_count"]),
+                                        }
+                                    )
+                                    continue
+                                reference_descriptor = reference_descriptors.get(threshold_key)
+                                if reference_descriptor is None:
+                                    reference_descriptor = triangle_descriptors(reference_catalog)
+                                    reference_descriptors[threshold_key] = reference_descriptor
+                                moving_descriptor = triangle_descriptors(moving_catalog)
+                                if (
+                                    int(reference_descriptor["count"]) <= 0
+                                    or int(moving_descriptor["count"]) <= 0
+                                ):
+                                    trial_results.append(
+                                        {
+                                            "threshold": float(threshold),
+                                            "status": "too_few_descriptors",
+                                            "reference_descriptors": int(reference_descriptor["count"]),
+                                            "moving_descriptors": int(moving_descriptor["count"]),
+                                        }
+                                    )
+                                    continue
+                                fit = cuda_module.estimate_similarity_from_triangle_descriptors_f32(
+                                    reference_catalog["x"],
+                                    reference_catalog["y"],
+                                    moving_catalog["x"],
+                                    moving_catalog["y"],
+                                    reference_descriptor["descriptors"],
+                                    reference_descriptor["indices"],
+                                    moving_descriptor["descriptors"],
+                                    moving_descriptor["indices"],
+                                    tolerance_px=tolerance_px,
+                                    descriptor_radius=descriptor_radius,
+                                )
+                                trial_results.append(
+                                    {
+                                        "threshold": float(threshold),
+                                        "status": str(fit.get("status", "failed")),
+                                        "inliers": int(fit.get("inliers", 0)),
+                                        "rms_px": _float_or_nan(fit.get("rms_px")),
+                                        "reference_stored": int(reference_catalog["stored_count"]),
+                                        "moving_stored": int(moving_catalog["stored_count"]),
+                                        "reference_descriptors": int(reference_descriptor["count"]),
+                                        "moving_descriptors": int(moving_descriptor["count"]),
+                                        "candidate_count": int(fit.get("candidate_count", 0)),
+                                    }
+                                )
+                                if str(fit.get("status")) != "ok":
+                                    continue
+                                if selected_fit is None or _resident_similarity_score(fit) > _resident_similarity_score(
+                                    selected_fit
+                                ):
+                                    selected_fit = fit
+                                    selected_threshold = float(threshold)
+                                    selected_reference_catalog = reference_catalog
+                                    selected_moving_catalog = moving_catalog
+                                    selected_reference_descriptors = reference_descriptor
+                                    selected_moving_descriptors = moving_descriptor
+
+                            if selected_fit is None:
+                                status = "failed"
+                                frame_weight_values[index] = 0.0
+                                frame_weights[frame["id"]] = 0.0
+                                warnings.append("resident triangle descriptor registration found no accepted fit")
+                            else:
+                                matrix_array = np.asarray(selected_fit["matrix"], dtype=np.float32).reshape(3, 3)
+                                pixel_metrics: dict[str, Any] | None = None
+                                if pixel_refine_enabled and hasattr(
+                                    stack,
+                                    "refine_matrix_translation_candidates_to_reference",
+                                ):
+                                    refinement = stack.refine_matrix_translation_candidates_to_reference(
+                                        reference_index,
+                                        index,
+                                        np.asarray([matrix_array], dtype=np.float32),
+                                        **refine_kwargs,
+                                    )
+                                    matrix_array = np.asarray(refinement["matrix"], dtype=np.float32).reshape(3, 3)
+                                    pixel_metrics = dict(refinement.get("metrics", {}))
+                                matrix = matrix_array.tolist()
+                                matched = int(selected_fit.get("inliers", 0))
+                                inliers = matched
+                                rms_px = _float_or_nan(selected_fit.get("rms_px"))
+                                selected_pixel_ncc = (
+                                    float("nan")
+                                    if pixel_metrics is None
+                                    else _float_or_nan(pixel_metrics.get("ncc"))
+                                )
+                                selected_pixel_rms = (
+                                    float("nan")
+                                    if pixel_metrics is None
+                                    else _float_or_nan(pixel_metrics.get("rms"))
+                                )
+                                quality_failures: list[str] = []
+                                if min_pixel_ncc is not None and (
+                                    not np.isfinite(selected_pixel_ncc) or selected_pixel_ncc < float(min_pixel_ncc)
+                                ):
+                                    quality_failures.append(
+                                        f"pixel_ncc {selected_pixel_ncc:.6g} < {float(min_pixel_ncc):.6g}"
+                                    )
+                                if quality_failures:
+                                    status = "failed"
+                                    frame_weight_values[index] = 0.0
+                                    frame_weights[frame["id"]] = 0.0
+                                    warnings.append(
+                                        "resident triangle descriptor registration failed quality gate: "
+                                        + "; ".join(quality_failures)
+                                    )
+                                else:
+                                    stack.apply_matrix_bilinear_frame(index, matrix, np.nan)
+                                warnings.extend(
+                                    [
+                                        f"triangle_threshold_mode={threshold_mode}",
+                                        f"selected_triangle_threshold={float(selected_threshold or 0.0):.6g}",
+                                        "triangle_threshold_candidates="
+                                        + ",".join(f"{float(item):.6g}" for item in threshold_candidates),
+                                        f"reference_stars={int(selected_reference_catalog['stored_count'])}",
+                                        f"moving_stars={int(selected_moving_catalog['stored_count'])}",
+                                        f"reference_descriptors={int(selected_reference_descriptors['count'])}",
+                                        f"moving_descriptors={int(selected_moving_descriptors['count'])}",
+                                        f"triangle_neighbors={descriptor_neighbors}",
+                                        f"triangle_max_descriptors={max_descriptors}",
+                                        f"triangle_descriptor_radius={descriptor_radius:.6g}",
+                                        f"triangle_candidate_count={int(selected_fit.get('candidate_count', 0))}",
+                                        f"triangle_scale={float(selected_fit.get('scale', float('nan'))):.9g}",
+                                        f"triangle_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
+                                        f"triangle_fit_rms_px={rms_px:.6g}",
+                                        f"triangle_pixel_refine_enabled={pixel_refine_enabled}",
+                                        f"triangle_pixel_rms_adu={selected_pixel_rms:.6g}",
+                                        f"triangle_pixel_ncc={selected_pixel_ncc:.6g}",
+                                        "triangle_quality_gate_status="
+                                        + ("failed" if quality_failures else "ok"),
+                                        f"triangle_min_pixel_ncc={min_pixel_ncc}",
+                                        f"triangle_catalog_selector={catalog_selector}",
+                                        f"triangle_nms_min_separation_px={nms_min_separation_px:.6g}",
+                                        "resident CUDA triangle descriptor similarity",
+                                    ]
+                                )
+                            warnings.append("triangle_trials=" + str(trial_results))
+                    except Exception as exc:
+                        status = "failed"
+                        frame_weight_values[index] = 0.0
+                        frame_weights[frame["id"]] = 0.0
+                        warnings.append(str(exc))
+                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_results.append(
+                        RegistrationResult(
+                            frame_id=str(frame["id"]),
+                            reference_frame_id=str(reference_frame["id"]),
+                            transform_model="similarity_cuda_triangle",
+                            matrix=matrix,
+                            matched_stars=matched,
+                            inliers=inliers,
+                            rms_px=rms_px,
+                            status=status,
+                            warnings=warnings
+                            + [
+                                f"max_shift={resident_registration_max_shift}",
+                                f"star_max_candidates={resident_star_max_candidates}",
+                                f"star_tolerance_px={resident_star_tolerance_px}",
+                                "resident CUDA triangle descriptor registration",
+                            ],
+                        )
+                    )
+
             if resident_registration == "external_matrix":
                 for index, frame in enumerate(light_frames):
                     registration_frame_start = perf_counter()
@@ -2232,6 +2592,31 @@ def run_resident_calibration_integration(
                             "cuda_catalog_min_selected_seed_inliers",
                             0,
                         ),
+                        "triangle_descriptor_radius": _policy_float(
+                            registration_policy,
+                            "cuda_triangle_descriptor_radius",
+                            0.1,
+                        ),
+                        "triangle_neighbors": _policy_int(
+                            registration_policy,
+                            "cuda_triangle_neighbors",
+                            5,
+                        ),
+                        "triangle_max_descriptors": _policy_int(
+                            registration_policy,
+                            "cuda_triangle_max_descriptors",
+                            1200,
+                        ),
+                        "triangle_pixel_refine": _policy_bool(
+                            registration_policy,
+                            "cuda_triangle_pixel_refine",
+                            True,
+                        ),
+                        "triangle_min_pixel_ncc": _policy_optional_float(
+                            registration_policy,
+                            "cuda_triangle_min_pixel_ncc",
+                            _policy_optional_float(registration_policy, "cuda_catalog_min_pixel_ncc", None),
+                        ),
                         "external_registration_results_path": None
                         if external_registration_path is None
                         else str(external_registration_path),
@@ -2265,6 +2650,9 @@ def run_resident_calibration_integration(
                             if resident_registration == "external_matrix"
                             else "Resident registration estimated CUDA similarity matrices and applied resident matrix warp."
                             if resident_registration == "similarity_cuda_catalog"
+                            else "Resident registration estimated CUDA triangle-descriptor similarity matrices and "
+                            "applied resident matrix warp."
+                            if resident_registration == "similarity_cuda_triangle"
                             else "Resident registration is optional and currently limited to translation."
                         ),
                         (
@@ -2330,11 +2718,18 @@ def run_resident_calibration_integration(
                                 "with resident matrix bilinear warp"
                             )
                             if resident_registration == "similarity_cuda_catalog"
+                            else (
+                                "resident registration estimated CUDA triangle descriptor matrices and applied them "
+                                "with resident matrix bilinear warp"
+                            )
+                            if resident_registration == "similarity_cuda_triangle"
                             else "resident registration is translation-only in the current gate"
                         ),
                         (
                             "similarity-catalog mode records CUDA fit/refine diagnostics in warnings"
                             if resident_registration == "similarity_cuda_catalog"
+                            else "triangle-descriptor mode records CUDA descriptor fit/refine diagnostics in warnings"
+                            if resident_registration == "similarity_cuda_triangle"
                             else "star-catalog mode records GPU mutual-inlier diagnostics; preview/NCC modes still use "
                             "placeholder matched_stars/inliers/rms"
                             if resident_registration == "translation_star_catalog"
@@ -2420,6 +2815,8 @@ def run_resident_calibration_integration(
                 if resident_registration == "external_matrix"
                 else "resident CUDA catalog similarity matrices are estimated and applied in VRAM"
                 if resident_registration == "similarity_cuda_catalog"
+                else "resident CUDA triangle descriptor similarity matrices are estimated and applied in VRAM"
+                if resident_registration == "similarity_cuda_triangle"
                 else "registration is translation only and local normalization is global mean/std when enabled"
             )
         )

@@ -513,6 +513,89 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
     assert any("resident CUDA catalog similarity" in warning for warning in moving["warnings"])
 
 
+def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_similarity_triangle"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+
+    registration = read_json(run / "registration_results.json")
+    integration = read_json(run / "integration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    moving = [item for item in registration["results"] if item["status"] != "reference"][0]
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+
+    assert registration["transform_model"] == "similarity_cuda_triangle"
+    assert integration["outputs"][0]["resident_registration"] == "similarity_cuda_triangle"
+    assert resident_registration["mode"] == "similarity_cuda_triangle"
+    assert resident_registration["triangle_descriptor_radius"] == 0.08
+    assert resident_registration["triangle_neighbors"] == 5
+    assert resident_registration["triangle_max_descriptors"] == 256
+    assert moving["status"] == "ok"
+    assert moving["transform_model"] == "similarity_cuda_triangle"
+    assert moving["matched_stars"] >= 3
+    assert abs(moving["matrix"][0][2] + 3.0) < 0.5
+    assert abs(moving["matrix"][1][2] - 2.0) < 0.5
+    assert any("reference_descriptors=" in warning for warning in moving["warnings"])
+    assert any("moving_descriptors=" in warning for warning in moving["warnings"])
+    assert any("triangle_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
+    assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
+    assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
+
+
 def test_cli_resident_cuda_run_similarity_catalog_rejects_low_quality_matrix(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_star_dataset(tmp_path)

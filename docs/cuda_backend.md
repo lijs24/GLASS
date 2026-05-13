@@ -207,6 +207,13 @@ Resident CUDA integration now supports:
   construction, descriptor matching, and bilinear matrix warp on bounded
   streaming previews, then writes the source-pixel similarity matrix and compact
   descriptor diagnostics to `registration_results.json`.
+- Resident `--resident-registration similarity_cuda_triangle` keeps calibrated
+  frames in the high-VRAM `ResidentCalibratedStack`, reuses resident GPU star
+  catalog detection, runs CUDA triangle descriptor construction/matching on the
+  compact catalogs, and applies the selected similarity matrix with resident
+  matrix bilinear warp. The current bridge still returns compact catalogs to
+  host-side Python orchestration; a later native primitive should keep descriptor
+  assembly and matching fully resident.
 - Resident similarity registration can use `--resident-star-prior auto_pierside`.
   This reads only `PIERSIDE` metadata from `header_summary` or FITS headers: same
   pier side uses the fast NCC-constrained prior, while opposite pier side disables
