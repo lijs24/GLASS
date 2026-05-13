@@ -19,3 +19,84 @@ Validation is gate-driven:
   it reports shape match, median absolute difference around 0.00137 ADU, p99
   around 0.01164 ADU, relative RMS around 9.43e-5, and a 35.1x speedup over
   tile-mode astroalign registration plus tile warp/integration.
+
+## M38 193-frame PixInsight/WBPP Black-box Compare
+
+The current strongest real-data validation uses the M38 H-alpha run in
+`C:\gpwbpp_runs\final_m38_h_200`.
+
+Input scale:
+
+- 200 light frames were planned.
+- PixInsight/WBPP FastIntegration integrated 193 of 200 frames.
+- GPWBPP excludes the same 7 WBPP-failed frames for the parity comparison.
+- Calibration groups come from the project processing plan; source data is read
+  only from user-provided acquisition directories.
+
+PixInsight/WBPP black-box reference:
+
+- Reference master:
+  `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\master\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf`
+- External elapsed time: `1092.541 s`.
+- WBPP reported time: `18:03.17`.
+- Observed settings include FastIntegration, Lanczos3 interpolation,
+  Winsorized Sigma Clipping, sigma low/high `3.0`, and weighting disabled.
+
+GPWBPP resident CUDA reference run:
+
+- Output directory:
+  `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3`
+- Master:
+  `integration\resident_master_H.fits`
+- Registration: resident CUDA triangle descriptors, 192 ok, 1 reference,
+  7 excluded, 0 failed.
+- Warp: resident CUDA Lanczos3 matrix warp with local clamping threshold `0.30`.
+- Rejection: two-stage winsorized mean/std approximation.
+- Local normalization: disabled for this parity run.
+- Elapsed time: `111.94882199994754 s`.
+- Speedup vs WBPP black-box elapsed time: `9.75928982978054x`.
+- Estimated peak VRAM: about `47.31 GiB`.
+
+Scaled full-frame compare:
+
+- Scale: `8.764434957115609e-06`.
+- Offset: `0.0006274500691899127`.
+- Shape match: true.
+- RMS difference: `0.012474273859075652`.
+- Absolute difference p50: `7.260881830006838e-05`.
+- Absolute difference p90: `0.00013712106738239527`.
+- Absolute difference p99: `0.0021627108892425632`.
+- Absolute difference p99.9: `0.20893197426822768`.
+
+Coverage-masked compare:
+
+- Coverage map:
+  `integration\resident_coverage_map_H.fits`.
+- Minimum coverage threshold: `190`.
+- Compared pixels: `59264430`.
+- Coverage fraction: `0.9612859117097478`.
+- RMS difference: `0.0017183155193652361`.
+- Absolute difference p50: `7.188005838543177e-05`.
+- Absolute difference p90: `0.00013341044541448355`.
+- Absolute difference p99: `0.00045279982034117025`.
+- Absolute difference p99.9: `0.00448366389935935`.
+
+Residual diagnostics:
+
+- Embedded compare report:
+  `compare_vs_wbpp_fastintegration_scaled_diagnostics_embedded.html`.
+- Coverage-masked report:
+  `compare_vs_wbpp_fastintegration_scaled_coverage190.html`.
+- Diagnostic previews show most high residuals along low-coverage edge regions,
+  especially the lower image edge. Interior and high-coverage statistics are
+  substantially tighter than the full-frame statistics.
+
+Interpretation:
+
+- The current evidence supports a clear speedup on this data set.
+- The high-percentile full-frame residuals are dominated by coverage/boundary
+  policy differences rather than a full-frame registration failure.
+- GPWBPP does not claim PixInsight-equivalent algorithms. Known remaining
+  differences include star matching, boundary/crop policy, exact interpolation
+  and clamping behavior, local normalization, rejection details, and output
+  scaling.
