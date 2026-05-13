@@ -50,6 +50,45 @@ bounded GPU star catalog, quad/pentagon-style descriptor generation, batched
 GPU hypothesis scoring, CPU-orchestrated RANSAC as an interim step, and resident
 CUDA matrix/homography/thin-plate warp application.
 
+## Open-source astroalign bridge
+
+GPWBPP also keeps `astroalign` as an open-source correctness bridge for
+asterism matching. The installed local package inspected during Gate 08 was
+`astroalign 2.6.2`, with MIT license metadata. Its implementation is small
+enough to serve as a clear migration target:
+
+- `sep.Background` and `sep.extract` detect source centroids, sorted by flux.
+- At most `max_control_points` sources are kept for matching.
+- For each source, a KD-tree query keeps a local nearest-neighbor set. The
+  implementation's default is five neighbors including the source.
+- All 3-point combinations from that local neighborhood form triangle
+  asterisms. Each triangle is ordered consistently by side lengths.
+- A triangle invariant is the ratio of the longest to middle side and the
+  middle to shortest side. These two numbers are matched with a KD-tree radius.
+- Matched triangle pairs are fed to a RANSAC loop. A candidate similarity
+  transform is fitted from one triangle pair, other triangle pairs are accepted
+  when their maximum vertex residual is below the pixel tolerance, and the
+  transform is refit from inliers.
+- Duplicate source-to-target point assignments are reduced by keeping the pair
+  with the lowest reprojection error.
+
+This is less general than PixInsight's public polygonal descriptor model, but
+it is a practical bridge because the code is open, compact, and already passes
+our tile-mode real-data registration tests. The GPU migration should happen in
+three explicit stages:
+
+1. Keep astroalign/SEP as the CPU baseline and write golden star-pair and matrix
+   artifacts for representative real frames.
+2. Port the triangle asterism pipeline to CUDA with resident star catalogs:
+   local KNN, triangle invariant generation, invariant radius matching, batched
+   similarity fit, and batched inlier scoring.
+3. Extend the descriptor generator from triangles to quads/pentagons, then use
+   the same batched GPU hypothesis scoring and resident matrix warp.
+
+The short-term target is not source-level compatibility with astroalign, but
+behavioral equivalence on a fixed set of star catalogs and a much faster
+resident CUDA implementation for high-VRAM WBPP-like runs.
+
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
 offsets; similarity/affine candidates come from simple triangle descriptors and
