@@ -217,6 +217,56 @@ def test_gpu_triangle_descriptor_image_registration_improves_alignment():
     assert np.allclose(matrix[:2, 2], translation, atol=0.75)
 
 
+def test_gpu_triangle_descriptor_image_registration_supports_grid_top_selector():
+    cuda_module_or_skip()
+    from gpwbpp.gpu.registration import register_triangle_descriptor_similarity_f32
+
+    shape = (96, 112)
+    stars = np.asarray(
+        [
+            (12.0, 17.0, 100.0),
+            (30.0, 42.0, 220.0),
+            (71.0, 15.0, 160.0),
+            (88.0, 63.0, 180.0),
+            (45.0, 79.0, 250.0),
+            (19.0, 86.0, 130.0),
+            (101.0, 33.0, 145.0),
+            (53.0, 55.0, 190.0),
+        ],
+        dtype=np.float64,
+    )
+    translation = np.asarray([2.0, -1.0], dtype=np.float64)
+    reference = _render_catalog_field(shape, stars)
+    moving = _render_catalog_field(shape, np.column_stack([stars[:, :2] - translation, stars[:, 2]]))
+
+    aligned, coverage, diagnostics = register_triangle_descriptor_similarity_f32(
+        reference,
+        moving,
+        threshold=25.0,
+        max_candidates=32,
+        neighbors=5,
+        max_descriptors=256,
+        tolerance_px=2.0,
+        descriptor_radius=0.08,
+        grid_top_cols=4,
+        grid_top_rows=3,
+        grid_top_candidates_per_cell=3,
+        nms_min_separation_px=3.0,
+    )
+
+    valid = coverage > 0.0
+    before_rms = float(np.sqrt(np.mean((moving[valid] - reference[valid]) ** 2)))
+    after_rms = float(np.sqrt(np.mean((aligned[valid] - reference[valid]) ** 2)))
+    matrix = np.asarray(diagnostics["matrix"], dtype=np.float64)
+    assert diagnostics["catalog_selector"] == "grid_top_nms"
+    assert diagnostics["status"] == "ok"
+    assert diagnostics["reference_stored"] >= len(stars)
+    assert diagnostics["moving_stored"] >= len(stars)
+    assert diagnostics["similarity"]["inliers"] >= len(stars)
+    assert after_rms < before_rms * 0.5
+    assert np.allclose(matrix[:2, 2], translation, atol=0.75)
+
+
 def test_gpu_estimate_translation_search_aligns_shifted_pair():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_search_f32"):

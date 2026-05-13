@@ -124,9 +124,21 @@ benchmark now records this path as
 `gpwbpp_cuda_triangle_descriptor_similarity`, including descriptor counts,
 candidate count, transform/output agreement versus astroalign, and speedup. A
 small synthetic benchmark smoke artifact is written under
-`runs/benchmarks/triangle_descriptor_synthetic_smoke.json`; the next validation
-step is to run the same helper on the calibrated M38 pair used for the
-astroalign comparison.
+`runs/benchmarks/triangle_descriptor_synthetic_smoke.json`.
+
+The first real M38 pair rerun exposed an important selector problem: applying
+NMS after scanning only `max_candidates` brightest stars reduced the descriptor
+catalog to 10/10 stars and selected an identity-like false match. The helper now
+uses the same grid-top NMS selector as the catalog-similarity benchmark when
+grid parameters are provided, and defaults top-NMS scanning to 4096 candidates
+when no explicit scan count is provided. With the full calibrated M38
+`S000061`/`S000062` pair, artifact
+`C:\gpwbpp_runs\final_m38_h_200\astroalign_vs_gpwbpp_gpu_pair_S000061_S000062_full_benchmark_v47_triangle_gridtop.json`
+records `gpwbpp_cuda_triangle_descriptor_similarity` passing the agreement gate:
+64/64 stored stars, 341/335 triangle descriptors, 47 inliers,
+`translation_delta_px=0.295`, output RMS difference about 38.27 ADU, and
+elapsed time about 0.327 s versus astroalign's 9.72 s. This is the first
+accepted pure CUDA descriptor path on the representative real pair.
 
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair

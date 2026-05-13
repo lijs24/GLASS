@@ -113,7 +113,11 @@ Resident CUDA integration now supports:
   CUDA matrix warp. It is currently validated on a controlled synthetic image
   pair and is wired into `benchmarks/compare_astroalign_gpu_alignment.py` as
   `gpwbpp_cuda_triangle_descriptor_similarity` for astroalign agreement and
-  timing comparisons.
+  timing comparisons. The helper supports grid-top NMS catalog selection and
+  defaults global top-NMS scanning to 4096 candidates when only a minimum
+  separation is provided. This avoids the real-frame failure mode where NMS
+  scans only the first `max_candidates` bright structures and leaves too sparse
+  a descriptor catalog.
 - `star_top_nms_candidates_f32(...)` adds a CUDA-side top-candidate selection
   plus minimum-distance suppression step. This reduces duplicated local maxima
   around saturated stars before catalog matching.

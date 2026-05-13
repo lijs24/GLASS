@@ -139,23 +139,48 @@ def register_triangle_descriptor_similarity_f32(
     tolerance_px: float = 2.0,
     descriptor_radius: float = 0.1,
     fill: float = 0.0,
+    grid_top_cols: int | None = None,
+    grid_top_rows: int | None = None,
+    grid_top_candidates_per_cell: int | None = None,
     nms_scan_candidates: int | None = None,
     nms_min_separation_px: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
     """Register two images with CUDA triangle descriptors from GPU star catalogs."""
 
-    if nms_scan_candidates is not None or nms_min_separation_px is not None:
+    if (grid_top_cols is None) != (grid_top_rows is None):
+        raise ValueError("grid_top_cols and grid_top_rows must be provided together")
+    if grid_top_cols is not None and grid_top_rows is not None:
+        reference_catalog = star_grid_top_nms_candidates_f32(
+            reference,
+            threshold,
+            int(grid_top_cols),
+            int(grid_top_rows),
+            int(1 if grid_top_candidates_per_cell is None else grid_top_candidates_per_cell),
+            int(max_candidates),
+            float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
+        )
+        moving_catalog = star_grid_top_nms_candidates_f32(
+            moving,
+            threshold,
+            int(grid_top_cols),
+            int(grid_top_rows),
+            int(1 if grid_top_candidates_per_cell is None else grid_top_candidates_per_cell),
+            int(max_candidates),
+            float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
+        )
+        selector = "grid_top_nms"
+    elif nms_scan_candidates is not None or nms_min_separation_px is not None:
         reference_catalog = star_top_nms_candidates_f32(
             reference,
             threshold,
-            int(max_candidates if nms_scan_candidates is None else nms_scan_candidates),
+            int(4096 if nms_scan_candidates is None else nms_scan_candidates),
             int(max_candidates),
             float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
         )
         moving_catalog = star_top_nms_candidates_f32(
             moving,
             threshold,
-            int(max_candidates if nms_scan_candidates is None else nms_scan_candidates),
+            int(4096 if nms_scan_candidates is None else nms_scan_candidates),
             int(max_candidates),
             float(32.0 if nms_min_separation_px is None else nms_min_separation_px),
         )
