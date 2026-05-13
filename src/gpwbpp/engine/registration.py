@@ -11,7 +11,10 @@ from gpwbpp.cpu.registration import (
     estimate_translation_phase_correlation,
     translation_matrix,
 )
-from gpwbpp.gpu.registration import refine_matrix_translation_with_metrics_f32
+from gpwbpp.gpu.registration import (
+    refine_matrix_translation_candidates_with_metrics_f32,
+    refine_matrix_translation_with_metrics_f32,
+)
 from gpwbpp.gpu.tile_scheduler import iter_tiles
 from gpwbpp.io.fits_io import FitsImageReader
 from gpwbpp.io.json_io import read_json, write_json
@@ -156,6 +159,7 @@ def _cuda_catalog_similarity_preview(
         "cuda_catalog_min_pair_distance",
         default_min_pair_distance,
     )
+    similarity_top_k = max(0, _policy_int(registration_policy, "cuda_catalog_similarity_top_k", 0))
     nms_min_separation_px = _policy_float(
         registration_policy,
         "cuda_catalog_nms_min_separation_px",
@@ -269,25 +273,42 @@ def _cuda_catalog_similarity_preview(
             "cuda_catalog_max_abs_rotation_rad",
             0.01,
         ),
+        top_k=similarity_top_k,
     )
     preview_matrix = np.asarray(fit["matrix"], dtype=np.float32).reshape(3, 3)
     pixel_refine: dict[str, Any] | None = None
     if bool(registration_policy.get("cuda_catalog_pixel_refine", True)) and str(fit["status"]) == "ok":
-        pixel_refine = refine_matrix_translation_with_metrics_f32(
-            reference_preview,
-            moving_preview,
-            preview_matrix,
-            search_radius_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_radius", 1.0),
-            coarse_step_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_coarse_step", 0.25),
-            fine_radius_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_radius", 0.25),
-            fine_step_px=_policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_step", 0.0625),
-            coarse_sample_stride=_policy_int(
+        refine_kwargs = {
+            "search_radius_px": _policy_float(registration_policy, "cuda_catalog_pixel_refine_radius", 1.0),
+            "coarse_step_px": _policy_float(registration_policy, "cuda_catalog_pixel_refine_coarse_step", 0.25),
+            "fine_radius_px": _policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_radius", 0.25),
+            "fine_step_px": _policy_float(registration_policy, "cuda_catalog_pixel_refine_fine_step", 0.0625),
+            "coarse_sample_stride": _policy_int(
                 registration_policy,
                 "cuda_catalog_pixel_refine_coarse_stride",
                 4,
             ),
-            final_sample_stride=_policy_int(registration_policy, "cuda_catalog_pixel_refine_final_stride", 1),
-        )
+            "final_sample_stride": _policy_int(registration_policy, "cuda_catalog_pixel_refine_final_stride", 1),
+        }
+        top_candidate_matrices = [
+            np.asarray(candidate["matrix"], dtype=np.float32).reshape(3, 3)
+            for candidate in fit.get("top_candidates", [])
+        ]
+        if top_candidate_matrices and bool(registration_policy.get("cuda_catalog_pixel_refine_multi_seed", True)):
+            seed_matrices = np.stack([preview_matrix, *top_candidate_matrices], axis=0)
+            pixel_refine = refine_matrix_translation_candidates_with_metrics_f32(
+                reference_preview,
+                moving_preview,
+                seed_matrices,
+                **refine_kwargs,
+            )
+        else:
+            pixel_refine = refine_matrix_translation_with_metrics_f32(
+                reference_preview,
+                moving_preview,
+                preview_matrix,
+                **refine_kwargs,
+            )
         preview_matrix = np.asarray(pixel_refine["matrix"], dtype=np.float32).reshape(3, 3)
 
     fit_rms_preview = float(fit.get("rms_px", float("nan")))
@@ -312,7 +333,10 @@ def _cuda_catalog_similarity_preview(
         )
     warnings.append("cuda catalog similarity estimated on streaming preview")
     if pixel_refine is not None:
-        warnings.append("cuda pixel metrics refined catalog matrix translation")
+        if int(pixel_refine.get("seed_count", 1)) > 1:
+            warnings.append("cuda pixel metrics refined catalog matrix translation from multiple top-k seeds")
+        else:
+            warnings.append("cuda pixel metrics refined catalog matrix translation")
 
     metrics = None if pixel_refine is None else pixel_refine.get("metrics")
     return {
@@ -345,6 +369,9 @@ def _cuda_catalog_similarity_preview(
             "rotation_rad": float(fit.get("rotation_rad", float("nan"))),
             "candidate_count": int(fit.get("candidate_count", 0)),
             "best_candidate_index": int(fit.get("best_candidate_index", -1)),
+            "similarity_top_k": int(fit.get("top_k", similarity_top_k)),
+            "top_candidate_count": len(fit.get("top_candidates", [])),
+            "top_candidates": fit.get("top_candidates", []),
             "refit_status": str(fit.get("refit_status", "not_run")),
             "refit_rms_px_preview": float(fit.get("refit_rms_px", fit_rms_preview)),
             "pixel_refine": pixel_refine,

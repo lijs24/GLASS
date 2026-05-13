@@ -885,6 +885,7 @@ def test_register_calibrated_frames_can_use_cuda_catalog_backend(tmp_path: Path)
                 "cuda_catalog_min_scale": 0.99,
                 "cuda_catalog_max_scale": 1.01,
                 "cuda_catalog_max_abs_rotation_rad": 0.02,
+                "cuda_catalog_similarity_top_k": 4,
                 "cuda_catalog_pixel_refine_coarse_stride": 1,
                 "cuda_catalog_pixel_refine_final_stride": 1,
             },
@@ -900,7 +901,11 @@ def test_register_calibrated_frames_can_use_cuda_catalog_backend(tmp_path: Path)
     assert moving_result["status"] == "ok"
     assert moving_result["registration_solution_source"] == "cuda_catalog_similarity_preview"
     assert moving_result["cuda_catalog"]["selection_model"] == "global_top_flux_local_maximum_nms"
+    assert moving_result["cuda_catalog"]["similarity_top_k"] == 4
+    assert moving_result["cuda_catalog"]["top_candidate_count"] == 4
+    assert len(moving_result["cuda_catalog"]["top_candidates"]) == 4
     assert moving_result["cuda_catalog"]["pixel_refine"] is not None
+    assert moving_result["cuda_catalog"]["pixel_refine"]["seed_count"] == 5
     assert moving_result["cuda_catalog"]["prior"]["model"].startswith("translation_")
     assert moving_result["inliers"] >= 6
     assert abs(moving_result["matrix"][0][2] + 4.0) < 0.75
