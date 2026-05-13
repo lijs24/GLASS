@@ -49,7 +49,8 @@ against `C:\gpwbpp_runs\final_m38_h_200`.
 
 ## Known Limitations
 
-- Optional Gate 14 PixInsight front-end is not implemented.
+- Optional Gate 14 PixInsight launcher exists as `pixinsight/GPWBPP.js`, but
+  PixInsight-side execution is not part of the automated pytest suite.
 - Phase B advanced gates are not implemented.
 - Local normalization is validated separately but disabled in the fastest
   real-data WBPP parity run.

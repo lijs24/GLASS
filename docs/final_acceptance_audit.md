@@ -95,7 +95,8 @@ Reusable CLI artifacts:
 
 ## Missing or Weakly Covered Items
 
-- Optional Gate 14 PixInsight front-end is not implemented.
+- Optional Gate 14 PixInsight launcher exists as `pixinsight/GPWBPP.js`, but
+  the tested and supported automation entry point remains the CLI.
 - Phase B advanced gates such as drizzle, OSC advanced workflows, mosaic, comet
   alignment, and richer astrometric integration are not implemented.
 - The accepted real-data parity run disables local normalization; local
@@ -108,6 +109,5 @@ Reusable CLI artifacts:
 ## Decision
 
 The final real-data speedup target is achieved for the M38 H-alpha benchmark.
-The broader engineering program should remain open for optional Gate 14 and
-Phase B hardening. The project should not be described as a complete
-drop-in PixInsight/WBPP clone.
+The broader engineering program should remain open for Phase B hardening. The
+project should not be described as a complete drop-in PixInsight/WBPP clone.

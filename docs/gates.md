@@ -41,9 +41,9 @@ CUDA with CPU comparison on small data.
 Gate 13: PixInsight/WBPP black-box comparison. User-generated references are
 compared without using official source.
 
-Gate 14: optional PixInsight front-end. A separate GUI may call the open GPWBPP
-CLI without modifying or copying official WBPP.
+Gate 14: optional PixInsight front-end. `pixinsight/GPWBPP.js` is a separate
+clean-room launcher that calls the open GPWBPP CLI without modifying or copying
+official preprocessing scripts.
 
 Phase B gates are advanced features such as drizzle, OSC CFA workflows, mosaic,
 comet alignment, astrometric integration, and richer front-ends.
-
