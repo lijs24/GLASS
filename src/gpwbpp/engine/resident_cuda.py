@@ -75,6 +75,18 @@ def _memory_estimate(frame_count: int, height: int, width: int, master_count: in
     }
 
 
+def _timing_summary(values: list[float]) -> dict[str, float]:
+    if not values:
+        return {"total": 0.0, "mean": 0.0, "min": 0.0, "max": 0.0}
+    data = np.asarray(values, dtype=np.float64)
+    return {
+        "total": float(np.sum(data)),
+        "mean": float(np.mean(data)),
+        "min": float(np.min(data)),
+        "max": float(np.max(data)),
+    }
+
+
 def _grid_local_norm_coefficients(stats: dict[str, Any], eps: float = 1.0e-6) -> dict[str, Any]:
     source_mean = np.asarray(stats["source_mean"], dtype=np.float32)
     source_std = np.asarray(stats["source_std"], dtype=np.float32)
@@ -1090,7 +1102,11 @@ def run_resident_calibration_integration(
 
             load_calibrate_start = perf_counter()
             per_frame_s = []
+            per_frame_read_s: list[float] = []
+            per_frame_calibrate_s: list[float] = []
             per_frame_registration_s = []
+            registration_during_load_elapsed = 0.0
+            gc_elapsed = 0.0
             frame_weight_values: list[float] = []
             current_master_key: str | None = None
             current_dark_exposure: float | None = None
@@ -1128,8 +1144,13 @@ def run_resident_calibration_integration(
                     current_master_key = master_key
                     current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
                     del master_bias, master_dark, master_flat
+                    gc_start = perf_counter()
                     gc.collect()
+                    gc_elapsed += perf_counter() - gc_start
+                read_start = perf_counter()
                 light = read_fits_data(frame["path"], dtype=np.float32)
+                per_frame_read_s.append(perf_counter() - read_start)
+                calibrate_start = perf_counter()
                 stack.calibrate_frame(
                     index,
                     light,
@@ -1137,6 +1158,7 @@ def run_resident_calibration_integration(
                     current_dark_exposure,
                     asdict(policy),
                 )
+                per_frame_calibrate_s.append(perf_counter() - calibrate_start)
                 frame_weight = 1.0
                 if resident_registration == "translation_preview":
                     registration_frame_start = perf_counter()
@@ -1162,7 +1184,9 @@ def run_resident_calibration_integration(
                         status = "failed"
                         frame_weight = 0.0
                         warnings.append(str(exc))
-                    per_frame_registration_s.append(perf_counter() - registration_frame_start)
+                    registration_elapsed = perf_counter() - registration_frame_start
+                    registration_during_load_elapsed += registration_elapsed
+                    per_frame_registration_s.append(registration_elapsed)
                     registration_results.append(
                         RegistrationResult(
                             frame_id=str(frame["id"]),
@@ -1187,7 +1211,9 @@ def run_resident_calibration_integration(
                 frame_weight_values.append(frame_weight)
                 del light
                 if index % 10 == 9:
+                    gc_start = perf_counter()
                     gc.collect()
+                    gc_elapsed += perf_counter() - gc_start
             load_calibrate_elapsed = perf_counter() - load_calibrate_start
 
             if resident_registration == "translation_ncc_subpixel":
@@ -2725,6 +2751,38 @@ def run_resident_calibration_integration(
                 "sets": master_stats_sets,
             }
             memory_estimate = _memory_estimate(len(light_frames), height, width)
+            read_timing = _timing_summary(per_frame_read_s)
+            calibrate_timing = _timing_summary(per_frame_calibrate_s)
+            registration_timing = _timing_summary(per_frame_registration_s)
+            registration_total = registration_timing["total"]
+            registration_deferred_elapsed = max(0.0, registration_total - registration_during_load_elapsed)
+            light_loop_accounted = (
+                read_timing["total"]
+                + calibrate_timing["total"]
+                + registration_during_load_elapsed
+                + gc_elapsed
+            )
+            light_loop_unaccounted = max(0.0, load_calibrate_elapsed - light_loop_accounted)
+            fine_timing = {
+                "schema_version": 1,
+                "seconds": {
+                    "light_loop_total": load_calibrate_elapsed,
+                    "light_read_decode_total": read_timing["total"],
+                    "light_h2d_calibrate_store_total": calibrate_timing["total"],
+                    "resident_registration_warp_total": registration_total,
+                    "resident_registration_warp_during_load_total": registration_during_load_elapsed,
+                    "resident_registration_warp_deferred_total": registration_deferred_elapsed,
+                    "gc_total": gc_elapsed,
+                    "light_loop_accounted": light_loop_accounted,
+                    "light_loop_unaccounted": light_loop_unaccounted,
+                },
+                "per_frame_seconds": {
+                    "total": _timing_summary(per_frame_s),
+                    "read_decode": read_timing,
+                    "h2d_calibrate_store": calibrate_timing,
+                    "registration_warp": registration_timing,
+                },
+            }
             resident_artifacts.append(
                 {
                     "filter": filter_name,
@@ -2739,17 +2797,25 @@ def run_resident_calibration_integration(
                         "resident_allocate_and_master_upload": allocate_elapsed,
                         "registration_preview_setup": registration_setup_elapsed,
                         "light_read_upload_calibrate": load_calibrate_elapsed,
+                        "light_read_decode": read_timing["total"],
+                        "light_h2d_calibrate_store": calibrate_timing["total"],
+                        "resident_registration_warp": registration_total,
+                        "resident_registration_warp_during_load": registration_during_load_elapsed,
+                        "resident_registration_warp_deferred": registration_deferred_elapsed,
+                        "gc": gc_elapsed,
+                        "light_loop_unaccounted": light_loop_unaccounted,
                         "resident_weighting": weighting_elapsed,
                         "resident_local_normalization": local_norm_elapsed,
                         "resident_integration": integrate_elapsed,
                         "output_write": write_elapsed,
-                        "per_frame_mean": float(np.mean(per_frame_s)) if per_frame_s else 0.0,
-                        "per_frame_min": float(np.min(per_frame_s)) if per_frame_s else 0.0,
-                        "per_frame_max": float(np.max(per_frame_s)) if per_frame_s else 0.0,
-                        "per_frame_registration_mean": (
-                            float(np.mean(per_frame_registration_s)) if per_frame_registration_s else 0.0
-                        ),
+                        "per_frame_mean": fine_timing["per_frame_seconds"]["total"]["mean"],
+                        "per_frame_min": fine_timing["per_frame_seconds"]["total"]["min"],
+                        "per_frame_max": fine_timing["per_frame_seconds"]["total"]["max"],
+                        "per_frame_read_decode_mean": read_timing["mean"],
+                        "per_frame_h2d_calibrate_store_mean": calibrate_timing["mean"],
+                        "per_frame_registration_mean": registration_timing["mean"],
                     },
+                    "fine_timing": fine_timing,
                     "resident_registration": {
                         "mode": resident_registration,
                         "reference_frame_id": str(reference_frame["id"]),
