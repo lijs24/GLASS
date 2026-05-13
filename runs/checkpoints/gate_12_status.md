@@ -1,50 +1,55 @@
 # Gate 12 Status: End-to-End CUDA WBPP-like Pipeline
 
 - Gate: 12
-- Date: 2026-05-12
+- Date: 2026-05-13
 - Status: completed
-- Commit: pending
+- Commit evidence:
+  - `44637ef gate-12: add resident audit entry`
+  - `15cbace gate-12: report resident strategy fields`
+  - `876359c gate-12: add resident end-to-end benchmark option`
+  - `b8c1d7f gate-12: expose resident audit registration tuning`
 
 ## Completed
 
-- Upgraded `gpwbpp audit` to run scan -> plan -> calibration -> quality -> registration -> warp -> local normalization -> integration -> report when the plan is executable.
-- Preserved diagnostic-only audit behavior when the plan is not executable.
-- Added audit options for tile size, local normalization, integration weighting, and integration rejection.
-- Added resume no-op behavior for completed integration runs.
-- Added resume continuation behavior for executable run directories with `processing_plan.json`.
-- Updated smoke fixture values so full calibration is scientifically valid.
-- Added end-to-end pipeline fixture coverage for full audit and resume.
-- Verified CUDA audit produces final master and maps through one command.
-- Verified CPU/CUDA small-sample output agreement through `gpwbpp compare`.
+- `gpwbpp audit` supports scan -> plan -> run -> report for executable plans.
+- The tile-mode pipeline covers calibration, quality, registration, warp,
+  local normalization, integration, resume behavior, and reports.
+- The resident CUDA path supports a high-VRAM end-to-end benchmark mode using a
+  VRAM-resident calibrated stack.
+- Resident CUDA mode records strategy fields in `resident_artifacts.json` and
+  report output, including registration mode, warp interpolation, local
+  normalization, weighting, rejection, timing, and memory estimates.
+- Resident CUDA audit/run options expose the registration tuning used by the
+  final real-data benchmark.
+- CPU/CUDA small-sample tests and real M38 resident benchmark evidence both
+  exist.
 
-## Commands Run
+## Representative Commands
 
 ```powershell
-.\.venv\Scripts\python -m pytest -q tests/test_cli_smoke.py tests/test_pipeline_fixture.py
 .\.venv\Scripts\gpwbpp synthetic --out runs\gate_12_synth\source --frames 5 --width 48 --height 48 --filter H --known-shift
 .\.venv\Scripts\gpwbpp audit --root runs\gate_12_synth\source --out runs\gate_12_synth\cuda_audit --backend cuda --tile-size 12 --local-normalization on --integration-weighting none --integration-rejection none
 .\.venv\Scripts\gpwbpp resume --run runs\gate_12_synth\cuda_audit
 .\.venv\Scripts\gpwbpp audit --root runs\gate_12_synth\source --out runs\gate_12_synth\cpu_audit --backend cpu --tile-size 12 --local-normalization on --integration-weighting none --integration-rejection none
 .\.venv\Scripts\gpwbpp compare --gpwbpp runs\gate_12_synth\cuda_audit\integration\master_H.fits --reference runs\gate_12_synth\cpu_audit\integration\master_H.fits --out runs\gate_12_synth\cuda_vs_cpu_compare.html
-.\.venv\Scripts\python -m pytest -q
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## Test Result
+## Latest Test Result
 
-- End-to-end focused tests: 10 passed.
-- Full suite: 40 passed.
-- CUDA audit check: `audit_cuda cuda runs\gate_12_synth\cuda_audit\integration\master_H.fits`.
-- CUDA vs CPU compare: `rms_diff = 3.11302428599447e-05`, `max_abs_diff = 0.000244140625`.
+- Latest full suite after checkpoint refresh: `178 passed in 7.95s`.
 
 ## CUDA Availability
 
-- CUDA native extension: available.
+- CUDA available: yes.
 - GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
-- Compute capability: 12.0.
-- VRAM: 97886 MiB.
+- Compute capability: `12.0`.
+- VRAM: `97886 MiB`.
 - Native backend: true.
 
 ## Artifacts
+
+Synthetic Gate 12 artifacts:
 
 - `runs/gate_12_synth/source/`
 - `runs/gate_12_synth/cuda_audit/manifest.json`
@@ -60,20 +65,32 @@
 - `runs/gate_12_synth/cuda_vs_cpu_compare.html`
 - `runs/gate_12_synth/cuda_vs_cpu_compare.json`
 
+Real resident CUDA artifacts:
+
+- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\run_timing.json`
+- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\resident_artifacts.json`
+- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_master_H.fits`
+- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_coverage_map_H.fits`
+- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_low_rejection_map_H.fits`
+- `C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\integration\resident_high_rejection_map_H.fits`
+
 ## Known Limitations
 
-- Resume no-op is implemented for completed integration results; checksum-based per-stage skip is still future work.
-- Audit uses the current gated science baseline; registration is still translation-only and warp is nearest-neighbor.
-- Local normalization is tile baseline and optional.
-- CUDA acceleration covers calibration, simple warp helper tests, local-normalization apply, and non-rejection integration accumulator; rejection remains CPU baseline.
-- Real PixInsight/WBPP timing comparison is not part of Gate 12 and remains the newer final goal.
+- Resume no-op works for completed integration results; checksum-based
+  per-stage skipping remains future hardening.
+- Resident CUDA is a high-VRAM execution strategy, not the replacement for the
+  tile/out-of-core path.
+- The fastest validated real-data parity run disables local normalization.
+- GPWBPP remains WBPP-like and clean-room; exact PixInsight/WBPP algorithmic
+  equivalence is not claimed.
 
 ## Next Step
 
-- Gate 13: PixInsight/WBPP black-box comparison and timing harness, using user-generated WBPP output/logs only and no official WBPP/PJSR source.
+- Gate 13 remains the comparison/acceptance evidence layer, now backed by
+  `gpwbpp speedup-summary` and `gpwbpp acceptance-audit`.
 
 ## Clean-room Compliance
 
-- No official PixInsight WBPP/PJSR source was read, copied, summarized, or modified.
-- The implementation is based on project-owned code, synthetic data, FITS IO, and clean-room astronomical processing behavior.
+- No official PixInsight WBPP/PJSR source was read, copied, summarized, or
+  modified.
 - Input data directories were not modified.
