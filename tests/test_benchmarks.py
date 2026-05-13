@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -130,10 +131,11 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     assert catalog_similarity["accepted"]
     assert catalog_similarity["top_k"] == 4
     assert len(catalog_similarity["top_candidates"]) == 4
-    assert catalog_similarity_pixel_refined["seed_selection_model"] == "catalog_topk_fused_pixel_metric"
+    assert catalog_similarity_pixel_refined["seed_selection_model"] == "catalog_topk_star_guarded_pixel_metric"
     assert catalog_similarity_pixel_refined["seed_count"] == 5
     assert len(catalog_similarity_pixel_refined["seed_metrics"]) == 5
     assert catalog_similarity_pixel_refined["selected_seed_rank"] >= 0
+    assert catalog_similarity_pixel_refined["star_guard"]["selection_key"]
     assert catalog_similarity_matrix_metrics["model"] == "matrix_alignment_metrics_cuda"
     assert catalog_similarity_matrix_metrics["valid_pixels"] > 0
     assert catalog_similarity_matrix_metrics["rms"] is not None
@@ -147,3 +149,85 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
     assert catalog_similarity["coverage_pixels"] > 0
     assert payload["catalog_similarity_speedup_vs_astroalign"] is not None
     assert payload["resident_matrix_device_speedup_vs_astroalign_apply_transform"] is not None
+
+
+def test_star_guarded_seed_selection_prefers_star_supported_seed():
+    pytest.importorskip("gpwbpp_cuda")
+    spec = importlib.util.spec_from_file_location(
+        "compare_astroalign_gpu_alignment",
+        Path("benchmarks/compare_astroalign_gpu_alignment.py"),
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    seed_metrics = [
+        {
+            "seed_index": 0,
+            "seed_rank": 0,
+            "seed_inliers": 12,
+            "seed_rms_px": 1.3,
+            "metrics": {"rms": 78.5},
+        },
+        {
+            "seed_index": 1,
+            "seed_rank": 1,
+            "seed_inliers": 11,
+            "seed_rms_px": 1.2,
+            "metrics": {"rms": 77.0},
+        },
+    ]
+
+    selected_index, guard = module._select_star_guarded_seed(seed_metrics, pixel_selected_index=1)
+
+    assert selected_index == 0
+    assert guard["status"] == "replaced_pixel_metric"
+    assert guard["star_max_inliers"] == 12
+    assert guard["pixel_selected_seed_inliers"] == 11
+
+
+def test_star_guarded_seed_selection_uses_star_core_metric_with_inlier_slack():
+    pytest.importorskip("gpwbpp_cuda")
+    spec = importlib.util.spec_from_file_location(
+        "compare_astroalign_gpu_alignment",
+        Path("benchmarks/compare_astroalign_gpu_alignment.py"),
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    seed_metrics = [
+        {
+            "seed_index": 0,
+            "seed_rank": 0,
+            "seed_inliers": 15,
+            "seed_rms_px": 1.2,
+            "metrics": {"rms": 82.0},
+            "star_core_metric": {"rms": 640.0},
+        },
+        {
+            "seed_index": 5,
+            "seed_rank": 5,
+            "seed_inliers": 13,
+            "seed_rms_px": 1.3,
+            "metrics": {"rms": 78.0},
+            "star_core_metric": {"rms": 600.0},
+        },
+        {
+            "seed_index": 8,
+            "seed_rank": 8,
+            "seed_inliers": 10,
+            "seed_rms_px": 1.0,
+            "metrics": {"rms": 76.0},
+            "star_core_metric": {"rms": 590.0},
+        },
+    ]
+
+    selected_index, guard = module._select_star_guarded_seed(seed_metrics, pixel_selected_index=2)
+
+    assert selected_index == 1
+    assert guard["status"] == "replaced_pixel_metric_with_star_core_metric"
+    assert guard["star_max_inliers"] == 15
+    assert guard["star_min_inliers_for_core_metric"] == 13

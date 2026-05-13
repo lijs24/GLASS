@@ -455,11 +455,219 @@ def _gpu_resident_matrix_metrics_run(
     }
 
 
+def _finite_float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(result):
+        return None
+    return result
+
+
+def _select_star_guarded_seed(
+    seed_metrics: list[dict[str, Any]],
+    pixel_selected_index: int,
+) -> tuple[int, dict[str, Any]]:
+    pixel_selected_index = int(pixel_selected_index)
+    if pixel_selected_index < 0 or pixel_selected_index >= len(seed_metrics):
+        pixel_selected_index = 0
+
+    star_core_candidates: list[tuple[int, dict[str, Any]]] = []
+    for index, seed in enumerate(seed_metrics):
+        star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+        if star_core_rms is None:
+            continue
+        star_core_candidates.append((index, seed))
+
+    if star_core_candidates:
+        inlier_values = [
+            int(seed["seed_inliers"])
+            for _, seed in star_core_candidates
+            if seed.get("seed_inliers") is not None
+        ]
+        if inlier_values:
+            max_inliers = max(inlier_values)
+            min_inliers = max(0, max_inliers - 2)
+            eligible = [
+                (index, seed)
+                for index, seed in star_core_candidates
+                if seed.get("seed_inliers") is None or int(seed["seed_inliers"]) >= min_inliers
+            ]
+        else:
+            max_inliers = None
+            min_inliers = None
+            eligible = star_core_candidates
+
+        def star_core_key(item: tuple[int, dict[str, Any]]) -> tuple[float, int, float, int]:
+            index, seed = item
+            star_core_rms = _finite_float_or_none(seed.get("star_core_metric", {}).get("rms"))
+            inliers = int(seed["seed_inliers"]) if seed.get("seed_inliers") is not None else -1
+            seed_rms = _finite_float_or_none(seed.get("seed_rms_px"))
+            return (
+                float("inf") if star_core_rms is None else star_core_rms,
+                -inliers,
+                float("inf") if seed_rms is None else seed_rms,
+                index,
+            )
+
+        selected_index, _selected = min(eligible, key=star_core_key)
+        pixel_seed = seed_metrics[pixel_selected_index]
+        return selected_index, {
+            "status": "kept_star_core_metric"
+            if selected_index == pixel_selected_index
+            else "replaced_pixel_metric_with_star_core_metric",
+            "pixel_selected_index": pixel_selected_index,
+            "pixel_selected_seed_rank": int(pixel_seed.get("seed_rank", pixel_selected_index)),
+            "pixel_selected_seed_inliers": pixel_seed.get("seed_inliers"),
+            "pixel_selected_seed_rms_px": pixel_seed.get("seed_rms_px"),
+            "selected_index": selected_index,
+            "star_max_inliers": None if max_inliers is None else int(max_inliers),
+            "star_min_inliers_for_core_metric": None if min_inliers is None else int(min_inliers),
+            "eligible_seed_count": len(eligible),
+            "selection_key": "star_core_rms_with_two_inlier_slack",
+        }
+
+    star_candidates: list[tuple[int, dict[str, Any]]] = []
+    for index, seed in enumerate(seed_metrics):
+        inliers = seed.get("seed_inliers")
+        rms_px = _finite_float_or_none(seed.get("seed_rms_px"))
+        if inliers is None or rms_px is None:
+            continue
+        star_candidates.append((index, seed))
+
+    if not star_candidates:
+        return pixel_selected_index, {
+            "status": "pixel_metric_only_no_star_metadata",
+            "pixel_selected_index": pixel_selected_index,
+            "selected_index": pixel_selected_index,
+            "eligible_seed_count": 0,
+            "selection_key": "pixel_metric_rms",
+        }
+
+    max_inliers = max(int(seed["seed_inliers"]) for _, seed in star_candidates)
+    eligible = [(index, seed) for index, seed in star_candidates if int(seed["seed_inliers"]) == max_inliers]
+
+    def key(item: tuple[int, dict[str, Any]]) -> tuple[float, float, int]:
+        index, seed = item
+        metric_rms = _finite_float_or_none(seed.get("metrics", {}).get("rms"))
+        seed_rms = _finite_float_or_none(seed.get("seed_rms_px"))
+        return (
+            float("inf") if metric_rms is None else metric_rms,
+            float("inf") if seed_rms is None else seed_rms,
+            index,
+        )
+
+    selected_index, _selected = min(eligible, key=key)
+    pixel_seed = seed_metrics[pixel_selected_index]
+    return selected_index, {
+        "status": "kept_pixel_metric" if selected_index == pixel_selected_index else "replaced_pixel_metric",
+        "pixel_selected_index": pixel_selected_index,
+        "pixel_selected_seed_rank": int(pixel_seed.get("seed_rank", pixel_selected_index)),
+        "pixel_selected_seed_inliers": pixel_seed.get("seed_inliers"),
+        "pixel_selected_seed_rms_px": pixel_seed.get("seed_rms_px"),
+        "selected_index": selected_index,
+        "star_max_inliers": int(max_inliers),
+        "eligible_seed_count": len(eligible),
+        "selection_key": "max_seed_inliers_then_pixel_rms_then_seed_rms",
+    }
+
+
+def _star_core_sample(reference: np.ndarray, threshold_sigma: float = 6.0, max_points: int = 200_000) -> dict[str, Any]:
+    threshold = _adaptive_star_threshold(reference, threshold_sigma)
+    mask = np.isfinite(reference) & (reference > threshold)
+    ys, xs = np.nonzero(mask)
+    if xs.size == 0:
+        return {
+            "x": np.empty(0, dtype=np.float64),
+            "y": np.empty(0, dtype=np.float64),
+            "values": np.empty(0, dtype=np.float64),
+            "threshold": float(threshold),
+            "available_pixels": 0,
+            "sampled_pixels": 0,
+        }
+    if xs.size > max_points:
+        take = np.linspace(0, xs.size - 1, max_points, dtype=np.int64)
+        xs = xs[take]
+        ys = ys[take]
+    values = reference[ys, xs].astype(np.float64, copy=False)
+    return {
+        "x": xs.astype(np.float64, copy=False),
+        "y": ys.astype(np.float64, copy=False),
+        "values": values,
+        "threshold": float(threshold),
+        "available_pixels": int(mask.sum()),
+        "sampled_pixels": int(xs.size),
+    }
+
+
+def _matrix_star_core_metric(
+    moving: np.ndarray,
+    matrix: Any,
+    sample: dict[str, Any],
+) -> dict[str, Any]:
+    x = np.asarray(sample["x"], dtype=np.float64)
+    y = np.asarray(sample["y"], dtype=np.float64)
+    reference_values = np.asarray(sample["values"], dtype=np.float64)
+    if x.size == 0:
+        return {"rms": None, "mean_abs_diff": None, "valid_pixels": 0}
+
+    inverse = np.linalg.inv(np.asarray(matrix, dtype=np.float64).reshape(3, 3))
+    sx = inverse[0, 0] * x + inverse[0, 1] * y + inverse[0, 2]
+    sy = inverse[1, 0] * x + inverse[1, 1] * y + inverse[1, 2]
+    height, width = moving.shape
+    valid = (sx >= 0.0) & (sx < width - 1) & (sy >= 0.0) & (sy < height - 1)
+    if not np.any(valid):
+        return {"rms": None, "mean_abs_diff": None, "valid_pixels": 0}
+
+    sxv = sx[valid]
+    syv = sy[valid]
+    x0 = np.floor(sxv).astype(np.int64)
+    y0 = np.floor(syv).astype(np.int64)
+    fx = sxv - x0
+    fy = syv - y0
+    moving64 = moving.astype(np.float64, copy=False)
+    sampled = (
+        moving64[y0, x0] * (1.0 - fx) * (1.0 - fy)
+        + moving64[y0, x0 + 1] * fx * (1.0 - fy)
+        + moving64[y0 + 1, x0] * (1.0 - fx) * fy
+        + moving64[y0 + 1, x0 + 1] * fx * fy
+    )
+    diff = reference_values[valid] - sampled
+    return {
+        "rms": float(np.sqrt(np.mean(diff * diff))),
+        "mean_abs_diff": float(np.mean(np.abs(diff))),
+        "valid_pixels": int(diff.size),
+    }
+
+
+def _annotate_star_core_metrics(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    seed_metrics: list[dict[str, Any]],
+) -> dict[str, Any]:
+    t0 = time.perf_counter()
+    sample = _star_core_sample(reference)
+    for seed in seed_metrics:
+        seed["star_core_metric"] = _matrix_star_core_metric(moving, seed["matrix"], sample)
+    return {
+        "elapsed_s": time.perf_counter() - t0,
+        "threshold": float(sample["threshold"]),
+        "available_pixels": int(sample["available_pixels"]),
+        "sampled_pixels": int(sample["sampled_pixels"]),
+        "model": "cpu_star_core_bilinear_metric_for_cuda_candidates",
+    }
+
+
 def _gpu_catalog_similarity_pixel_refine_run(
     reference: np.ndarray,
     moving: np.ndarray,
     matrix: Any,
     seed_candidates: list[dict[str, Any]] | None,
+    refit_inliers: int | None,
+    refit_rms_px: float | None,
     search_radius_px: float,
     coarse_step_px: float,
     fine_radius_px: float,
@@ -472,8 +680,8 @@ def _gpu_catalog_similarity_pixel_refine_run(
             "seed_rank": 0,
             "seed_source": "catalog_similarity_refit",
             "candidate_index": None,
-            "inliers": None,
-            "rms_px": None,
+            "inliers": None if refit_inliers is None else int(refit_inliers),
+            "rms_px": _finite_float_or_none(refit_rms_px),
             "matrix": np.asarray(matrix, dtype=np.float64).tolist(),
         }
     ]
@@ -509,6 +717,7 @@ def _gpu_catalog_similarity_pixel_refine_run(
         seed = seeds[seed_index]
         seed_metrics.append(
             {
+                "seed_index": seed_index,
                 "seed_rank": int(seed["seed_rank"]),
                 "seed_source": str(seed["seed_source"]),
                 "candidate_index": seed["candidate_index"],
@@ -520,22 +729,43 @@ def _gpu_catalog_similarity_pixel_refine_run(
                 "matrix": np.asarray(seed_result["matrix"], dtype=np.float64).tolist(),
             }
         )
-    selected_seed = seed_metrics[int(refinement["selected_index"])]
+    star_core_metric_summary = _annotate_star_core_metrics(reference, moving, seed_metrics)
+    pixel_selected_index = int(refinement["selected_index"])
+    selected_metric_index, star_guard = _select_star_guarded_seed(seed_metrics, pixel_selected_index)
+    selected_seed = seed_metrics[selected_metric_index]
+    selected_matrix = np.asarray(selected_seed["matrix"], dtype=np.float32)
+    selection_elapsed = float(star_core_metric_summary["elapsed_s"])
+    refinement = {
+        **refinement,
+        "matrix": selected_matrix.tolist(),
+        "metrics": dict(selected_seed["metrics"]),
+        "selected_index": int(selected_seed["seed_index"]),
+        "pixel_metric_selected_index": pixel_selected_index,
+        "star_guard": star_guard,
+    }
     t1 = time.perf_counter()
     aligned, valid = gpwbpp_cuda.warp_matrix_bilinear_f32(moving, refinement["matrix"], 0.0)
     warp_elapsed = time.perf_counter() - t1
+    device_elapsed = refine_elapsed + warp_elapsed
+    algorithm_elapsed = device_elapsed + selection_elapsed
     result = {
         **refinement,
-        "elapsed_s": refine_elapsed + warp_elapsed,
+        "elapsed_s": algorithm_elapsed,
+        "device_elapsed_s": device_elapsed,
         "refine_elapsed_s": refine_elapsed,
+        "selection_elapsed_s": selection_elapsed,
         "warp_elapsed_s": warp_elapsed,
-        "seed_selection_model": "catalog_topk_fused_pixel_metric",
+        "seed_selection_model": "catalog_topk_star_guarded_pixel_metric",
         "seed_count": len(seeds),
+        "selected_seed_index": int(selected_seed["seed_index"]),
         "selected_seed_rank": int(selected_seed["seed_rank"]),
         "selected_seed_source": str(selected_seed["seed_source"]),
         "selected_seed_candidate_index": selected_seed["candidate_index"],
         "selected_seed_inliers": selected_seed["seed_inliers"],
         "selected_seed_rms_px": selected_seed["seed_rms_px"],
+        "pixel_metric_selected_index": pixel_selected_index,
+        "star_guard": star_guard,
+        "star_core_metric_summary": star_core_metric_summary,
         "seed_metrics": seed_metrics,
         "coverage_pixels": int(np.sum(valid > 0.0)),
         "rms": _rms(reference, aligned, valid > 0.0),
@@ -548,6 +778,8 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
     moving: np.ndarray,
     matrix: Any,
     seed_candidates: list[dict[str, Any]] | None,
+    refit_inliers: int | None,
+    refit_rms_px: float | None,
     search_radius_px: float,
     coarse_step_px: float,
     fine_radius_px: float,
@@ -565,8 +797,8 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
             "seed_rank": 0,
             "seed_source": "catalog_similarity_refit",
             "candidate_index": None,
-            "inliers": None,
-            "rms_px": None,
+            "inliers": None if refit_inliers is None else int(refit_inliers),
+            "rms_px": _finite_float_or_none(refit_rms_px),
             "matrix": np.asarray(matrix, dtype=np.float64).tolist(),
         }
     ]
@@ -609,6 +841,7 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
         seed = seeds[seed_index]
         seed_metrics.append(
             {
+                "seed_index": seed_index,
                 "seed_rank": int(seed["seed_rank"]),
                 "seed_source": str(seed["seed_source"]),
                 "candidate_index": seed["candidate_index"],
@@ -620,7 +853,20 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
                 "matrix": np.asarray(seed_result["matrix"], dtype=np.float64).tolist(),
             }
         )
-    selected_seed = seed_metrics[int(refinement["selected_index"])]
+    star_core_metric_summary = _annotate_star_core_metrics(reference, moving, seed_metrics)
+    pixel_selected_index = int(refinement["selected_index"])
+    selected_metric_index, star_guard = _select_star_guarded_seed(seed_metrics, pixel_selected_index)
+    selected_seed = seed_metrics[selected_metric_index]
+    selected_matrix = np.asarray(selected_seed["matrix"], dtype=np.float32)
+    selection_elapsed = float(star_core_metric_summary["elapsed_s"])
+    refinement = {
+        **refinement,
+        "matrix": selected_matrix.tolist(),
+        "metrics": dict(selected_seed["metrics"]),
+        "selected_index": int(selected_seed["seed_index"]),
+        "pixel_metric_selected_index": pixel_selected_index,
+        "star_guard": star_guard,
+    }
 
     t2 = time.perf_counter()
     stack.apply_matrix_bilinear_frame(1, refinement["matrix"], np.nan)
@@ -631,21 +877,29 @@ def _gpu_resident_catalog_similarity_pixel_refine_run(
     inspection_elapsed = time.perf_counter() - t3
     valid = weight_map > 0.0
     device_elapsed = refine_elapsed + warp_elapsed
+    algorithm_elapsed = device_elapsed + selection_elapsed
     result = {
         **refinement,
-        "elapsed_s": device_elapsed,
+        "elapsed_s": algorithm_elapsed,
+        "device_elapsed_s": device_elapsed,
         "upload_elapsed_s": upload_elapsed,
         "inspection_download_elapsed_s": inspection_elapsed,
         "upload_plus_device_elapsed_s": upload_elapsed + device_elapsed,
+        "upload_plus_algorithm_elapsed_s": upload_elapsed + algorithm_elapsed,
         "refine_elapsed_s": refine_elapsed,
+        "selection_elapsed_s": selection_elapsed,
         "warp_elapsed_s": warp_elapsed,
-        "seed_selection_model": "resident_catalog_topk_fused_pixel_metric",
+        "seed_selection_model": "resident_catalog_topk_star_guarded_pixel_metric",
         "seed_count": len(seeds),
+        "selected_seed_index": int(selected_seed["seed_index"]),
         "selected_seed_rank": int(selected_seed["seed_rank"]),
         "selected_seed_source": str(selected_seed["seed_source"]),
         "selected_seed_candidate_index": selected_seed["candidate_index"],
         "selected_seed_inliers": selected_seed["seed_inliers"],
         "selected_seed_rms_px": selected_seed["seed_rms_px"],
+        "pixel_metric_selected_index": pixel_selected_index,
+        "star_guard": star_guard,
+        "star_core_metric_summary": star_core_metric_summary,
         "seed_metrics": seed_metrics,
         "coverage_pixels": int(np.sum(valid)),
         "bytes_allocated": int(stack.bytes_allocated),
@@ -1058,6 +1312,8 @@ def main() -> int:
         moving,
         gpu_catalog_similarity_result["matrix"],
         gpu_catalog_similarity_result["top_candidates"],
+        gpu_catalog_similarity_result.get("refined_inliers"),
+        gpu_catalog_similarity_result.get("refit_rms_px"),
         args.catalog_pixel_refine_radius,
         args.catalog_pixel_refine_coarse_step,
         args.catalog_pixel_refine_fine_radius,
@@ -1074,6 +1330,8 @@ def main() -> int:
         moving,
         gpu_catalog_similarity_result["matrix"],
         gpu_catalog_similarity_result["top_candidates"],
+        gpu_catalog_similarity_result.get("refined_inliers"),
+        gpu_catalog_similarity_result.get("refit_rms_px"),
         args.catalog_pixel_refine_radius,
         args.catalog_pixel_refine_coarse_step,
         args.catalog_pixel_refine_fine_radius,
@@ -1274,6 +1532,12 @@ def main() -> int:
         if gpu_catalog_similarity_pixel_refined_result["elapsed_s"] > 0.0
         else None,
         "resident_catalog_similarity_pixel_refined_device_speedup_vs_astroalign": astroalign_result["elapsed_s"]
+        / gpu_resident_catalog_similarity_pixel_refined_result["device_elapsed_s"]
+        if gpu_resident_catalog_similarity_pixel_refined_result["device_elapsed_s"] > 0.0
+        else None,
+        "resident_catalog_similarity_pixel_refined_algorithm_speedup_vs_astroalign": astroalign_result[
+            "elapsed_s"
+        ]
         / gpu_resident_catalog_similarity_pixel_refined_result["elapsed_s"]
         if gpu_resident_catalog_similarity_pixel_refined_result["elapsed_s"] > 0.0
         else None,
@@ -1282,6 +1546,12 @@ def main() -> int:
         ]
         / gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_device_elapsed_s"]
         if gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_device_elapsed_s"] > 0.0
+        else None,
+        "resident_catalog_similarity_pixel_refined_upload_plus_algorithm_speedup_vs_astroalign": astroalign_result[
+            "elapsed_s"
+        ]
+        / gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_algorithm_elapsed_s"]
+        if gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_algorithm_elapsed_s"] > 0.0
         else None,
         "subpixel_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_subpixel_result["elapsed_s"]
         if gpu_subpixel_result["elapsed_s"] > 0.0
