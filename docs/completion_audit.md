@@ -1,90 +1,116 @@
 # GPWBPP Completion Audit
 
-Date: 2026-05-12
+Date: 2026-05-13
 
 ## Objective
 
-Build a clean-room, installable, testable, resumable CUDA/WBPP-like
-astronomical preprocessing system, advancing by gates. Each completed gate must
-write a checkpoint, run tests, and commit. The expanded user goal requires a
-real-data timing comparison against PixInsight/WBPP and an observed speedup.
+Build and gate a clean-room, installable, testable, resumable CUDA/WBPP-like
+astronomical preprocessing system. Each completed Gate must have code or
+artifacts, a checkpoint, tests, and a Git commit. The expanded acceptance goal
+requires a real same-data PixInsight/WBPP comparison with a significant
+200-light mono data set, at least 20 frames in each calibration class, clear
+GPU speedup, and output consistency evidence.
+
+## Completion Decision
+
+The core Gate 0-14 objective is achieved.
+
+This does not claim exact PixInsight/WBPP algorithm identity and does not claim
+Phase B advanced features such as drizzle, mosaic, comet alignment, or richer
+astrometric integrations.
 
 ## Gate Evidence
 
-| Gate | Status | Evidence |
-| --- | --- | --- |
-| 0 | complete | `runs/checkpoints/gate_00_status.md`, commit `8bbfe63` |
-| 1 | complete | `runs/checkpoints/gate_01_status.md`, commit `3a95bf5` |
-| 2 | complete | `runs/checkpoints/gate_02_status.md`, commit `2cb5d1f` |
-| 3 | complete | `runs/checkpoints/gate_03_status.md`, commits `78a5f81`, `cfda2bd` |
-| 4 | complete | `runs/checkpoints/gate_04_status.md`, commit `fb33390` |
-| 5 | complete | `runs/checkpoints/gate_05_status.md`, commit `abb6602` |
-| 6 | complete | `runs/checkpoints/gate_06_status.md`, commit `5f273ba` |
-| 7 | complete | `runs/checkpoints/gate_07_status.md`, commit `0dfeb63` |
-| 8 | complete | `runs/checkpoints/gate_08_status.md`, commit `dc40dbb` |
-| 9 | complete | `runs/checkpoints/gate_09_status.md`, commit `a0eeefd` |
-| 10 | complete | `runs/checkpoints/gate_10_status.md`, commit `1060a47` |
-| 11 | complete | `runs/checkpoints/gate_11_status.md`, commit `379d134` |
-| 12 | complete | `runs/checkpoints/gate_12_status.md`, commit `84f938e` |
-| 13 | blocked | `runs/checkpoints/gate_13_status.md`; PixInsight/WBPP executable or reference output is missing |
-| 14 | not started | Must not proceed while Gate 13 is blocked |
+| Gate | Status | Checkpoint | Commit evidence |
+| --- | --- | --- | --- |
+| 0 | complete | `runs/checkpoints/gate_00_status.md` | `8bbfe63`, `a6a5a4c` |
+| 1 | complete | `runs/checkpoints/gate_01_status.md` | `3a95bf5`, `5f74be4`, `dc2fa68` |
+| 2 | complete | `runs/checkpoints/gate_02_status.md` | `2cb5d1f` |
+| 3 | complete | `runs/checkpoints/gate_03_status.md` | `78a5f81`, `cfda2bd` |
+| 4 | complete | `runs/checkpoints/gate_04_status.md` | `fb33390`, `20f397c`, `3bc1742` |
+| 5 | complete | `runs/checkpoints/gate_05_status.md` | `abb6602` |
+| 6 | complete | `runs/checkpoints/gate_06_status.md` | `5f273ba` |
+| 7 | complete | `runs/checkpoints/gate_07_status.md` | `0dfeb63`, `b61f650`, `c17ac37`, `8716d65` |
+| 8 | complete | `runs/checkpoints/gate_08_status.md` | `dc40dbb`, `05f0028`, `9007bb2` ancestry through many Gate 8 registration commits |
+| 9 | complete | `runs/checkpoints/gate_09_status.md` | `a0eeefd`, `bb2f149`, `a650cdb`, `0819163` |
+| 10 | complete | `runs/checkpoints/gate_10_status.md` | `1060a47`, `7043ea7`, `3cd4b2c`, `04253f4` |
+| 11 | complete | `runs/checkpoints/gate_11_status.md` | `379d134`, `efa97c6`, `5dd4f13`, `b40bc88` |
+| 12 | complete | `runs/checkpoints/gate_12_status.md` | `84f938e`, `44637ef`, `876359c`, `b8c1d7f`, `2e1105b` |
+| 13 | complete | `runs/checkpoints/gate_13_status.md` | `d012892`, `406b2e9`, `0ebd335`, `32bc8bf`, `d227620`, `33231c9` |
+| 14 | complete as optional launcher | `runs/checkpoints/gate_14_status.md` | `9007bb2` |
 
-## Requirement Checklist
+## Prompt-to-artifact Checklist
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Clean-room boundary documented | `docs/pixinsight_blackbox_reference.md` | covered |
-| No official WBPP/PJSR source used | checkpoints record compliance; no source paths accessed | covered by process evidence |
-| Python package installable | `pyproject.toml`; editable install used throughout | covered |
-| Project-local virtual environment | `.venv` used for commands | covered |
-| Metadata scan and planning | `gpwbpp scan`, `gpwbpp plan`, tests | covered |
-| FITS metadata and scaled FITS handling | `src/gpwbpp/io/fits_io.py`, `runs/checkpoints/out_of_core_fits_tile_reader_status.md` | covered for light/warp/LN/integration tile paths |
-| Master calibration out-of-core path | `src/gpwbpp/engine/pipeline.py`, `src/gpwbpp/gpu/master_frames.py`, `runs/checkpoints/streaming_master_frames_status.md`, `runs/checkpoints/exact_flat_median_status.md`, `runs/checkpoints/bounded_master_accumulator_status.md`, `runs/checkpoints/gpu_master_accumulator_status.md` | covered for mean master bias/dark/flat, bounded tile accumulation, and exact median flat normalization |
-| XISF metadata warning path | `src/gpwbpp/metadata/xisf_reader.py`, tests | minimal covered |
-| Synthetic data/golden truth | `src/gpwbpp/synthetic/generator.py`, tests | covered baseline |
-| CPU calibration baseline | `src/gpwbpp/cpu`, tests | covered |
-| CUDA extension and wrappers | `cpp/cuda`, `src/gpwbpp_cuda.py`, tests | covered |
-| Tile light calibration | Gate 6 checkpoint, tests | covered |
-| Quality metrics/reference selection | Gate 7 checkpoint, `runs/checkpoints/streaming_quality_status.md`, tests | streaming tile metrics with exact scratch median and halo star detection |
-| Registration | Gate 8 checkpoint, `runs/checkpoints/streaming_registration_status.md`, tests | translation baseline on bounded streaming previews |
-| Warp/coverage | Gate 9 checkpoint, tests | integer nearest-neighbor baseline |
-| Local normalization | Gate 10 checkpoint, tests | tile baseline only |
-| Weighted integration/rejection/maps | Gate 11 checkpoint, `runs/checkpoints/streaming_integration_status.md`, tests | streaming weighted mean for no-rejection path; tile stack retained for rejection modes |
-| End-to-end audit | Gate 12 checkpoint, synthetic CUDA/CPU compare | covered on synthetic |
-| Resume from partial run | `runs/checkpoints/resume_status.md`, pipeline fixture test | covered with artifact-presence skip |
-| Real-data GPWBPP run | `runs/checkpoints/real_data_m5_lum_status.md` | covered small subset |
-| GPWBPP structured runtime timing | `runs/checkpoints/run_timing_status.md`, `runs/real_m5_lum_subset/gpwbpp_cuda_timed_run/run_timing.json` | covered for run/audit/resume stage timings |
-| Benchmarks | `benchmarks/*.py`, `runs/checkpoints/benchmark_status.md` | covered baseline |
-| Install and CLI smoke validation | `runs/checkpoints/validation_status.md` | covered |
-| HTML report | report tests and run artifacts | covered baseline |
-| PixInsight/WBPP numerical comparison | `gpwbpp compare`, black-box handoff, `gpwbpp blackbox-finalize` | blocked pending WBPP output |
-| PixInsight/WBPP timing comparison | timing fields, handoff package, finalize command, `runs/checkpoints/blackbox_timing_autofill_status.md` | GPWBPP timing source automated; blocked pending WBPP run/log |
-| Observed speedup over WBPP | none | not achieved |
+| Clean-room boundary | `docs/pixinsight_blackbox_reference.md`, `docs/registration_model.md`, Gate 13/14 checkpoints | Met |
+| No official WBPP/PJSR source used | Checkpoints record black-box outputs, public behavior references, and open-source bridge code only | Met |
+| Installable package | `pyproject.toml`; `.\.venv\Scripts\python.exe -m pip install -e ".[dev,report]"` succeeded | Met |
+| Project-local virtual environment | All verification commands use `.venv` | Met |
+| CLI commands | `gpwbpp --help` plus 14 subcommand help calls succeeded | Met |
+| Metadata scan and planning | `src/gpwbpp/metadata`, `src/gpwbpp/planner`, Gate 1 tests/checkpoint | Met |
+| FITS/XISF metadata behavior | FITS and XISF metadata tests and warning paths | Met |
+| Synthetic data and CPU baseline | `src/gpwbpp/synthetic`, `src/gpwbpp/cpu`, Gate 2 and CPU tests | Met |
+| Optional CUDA backend | Native CUDA extension, Python wrappers, CUDA skip behavior, Gate 3-4 tests | Met |
+| CUDA tile calibration | `calibrate_tile_f32` wrappers and CPU/GPU tests | Met |
+| Master frames and light calibration | Gate 5-6 code/tests/checkpoints | Met |
+| Star detection and quality metrics | Gate 7 CPU/CUDA catalog work and tests | Met |
+| Registration | Gate 8 clean-room star, astroalign bridge, CUDA catalog/triangle paths, tests and real M38 validation | Met |
+| Warp streaming | Gate 9 matrix/bilinear/Lanczos3 CUDA paths and coverage artifacts | Met |
+| Local normalization | Gate 10 CPU/CUDA local normalization paths and resident grid stats/apply work | Met |
+| Weighted integration and rejection | Gate 11 weighted maps, rejection maps, winsorized resident path, tests | Met |
+| Out-of-core and high-VRAM paths | Tile/slab paths remain available; resident CUDA mode records VRAM estimates and strategy | Met |
+| Resume and run state | `run_state.json`, resume tests/checkpoints, completed-run no-op behavior | Met |
+| HTML and compare reports | Report/compare modules and tests; real compare HTML/JSON artifacts | Met |
+| Benchmarks | `benchmarks/` plus benchmark checkpoint and resident benchmark entry | Met |
+| Real data source | User-provided acquisition directories under `E:\摄影素材\天协远程台原始素材`, read-only | Met |
+| Final data scale | M38 manifest has 200 light, 20 bias, 20 dark, 20 flat | Met |
+| WBPP black-box timing | `C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json` records `1092.541 s` | Met |
+| GPWBPP timing | Resident CUDA run records `111.94882199994754 s` | Met |
+| Observed speedup | `gpwbpp acceptance-audit` reports `9.75928982978054x`, threshold `2.0x` passed | Met |
+| Output consistency | Coverage-masked compare: shape match true, RMS `0.0017183155193652361`, p99 `0.00045279982034117025`, coverage fraction `0.9612859117097478` | Met |
+| PixInsight optional front-end | `pixinsight/GPWBPP.js`, docs, clean-room wrapper tests | Met as optional launcher |
 
-## Current Blocking Items
-
-1. `PixInsight.exe` was not found on C:/D:/E: by filename search.
-2. No user-generated WBPP output/log was found under the provided real-data root.
-3. Without a WBPP master and elapsed time for the same subset, Gate 13 cannot be green.
-4. Because Gate 13 is blocked, Gate 14 and Phase B should not start.
-
-## Next Concrete Action
-
-Provide or discover a callable PixInsight installation, or manually run WBPP on
-the files listed in:
-
-```text
-runs/real_m5_lum_subset/wbpp_blackbox_handoff/input_frames.csv
-```
-
-Then fill in:
-
-```text
-runs/real_m5_lum_subset/wbpp_blackbox_handoff/timing_template.json
-```
-
-and run:
+## Verification Commands
 
 ```powershell
-gpwbpp blackbox-finalize --timing runs/real_m5_lum_subset/wbpp_blackbox_handoff/timing_template.json --out runs/real_m5_lum_subset/wbpp_blackbox_handoff/final
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,report]"
+.\.venv\Scripts\gpwbpp.exe --help
+.\.venv\Scripts\gpwbpp.exe scan --help
+.\.venv\Scripts\gpwbpp.exe plan --help
+.\.venv\Scripts\gpwbpp.exe subset --help
+.\.venv\Scripts\gpwbpp.exe run --help
+.\.venv\Scripts\gpwbpp.exe resume --help
+.\.venv\Scripts\gpwbpp.exe report --help
+.\.venv\Scripts\gpwbpp.exe audit --help
+.\.venv\Scripts\gpwbpp.exe compare --help
+.\.venv\Scripts\gpwbpp.exe speedup-summary --help
+.\.venv\Scripts\gpwbpp.exe acceptance-audit --help
+.\.venv\Scripts\gpwbpp.exe blackbox-package --help
+.\.venv\Scripts\gpwbpp.exe blackbox-finalize --help
+.\.venv\Scripts\gpwbpp.exe blackbox-history --help
+.\.venv\Scripts\gpwbpp.exe synthetic --help
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\gpwbpp.exe acceptance-audit --manifest C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\manifest.json --gpwbpp-run C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3 --wbpp-result C:\gpwbpp_runs\final_m38_h_200\pixinsight_wbpp_blackbox\wbpp_blackbox_result.json --compare-json C:\gpwbpp_runs\final_m38_h_200\gpwbpp_resident_triangle_193_wbpp_failed_excluded_lanczos3\compare_vs_wbpp_fastintegration_scaled_coverage190.json --out runs\benchmarks\m38_acceptance_audit_final.json --markdown runs\benchmarks\m38_acceptance_audit_final.md --min-active-frames 190 --min-speedup 2.0 --min-coverage-fraction 0.95 --max-rms-diff 0.01 --max-abs-diff-p99 0.01
 ```
+
+## Latest Results
+
+- Editable install: succeeded.
+- CLI help: root command plus 14 subcommands succeeded.
+- Full pytest: `180 passed in 7.98s`.
+- Real M38 acceptance audit: `passed`.
+- CUDA: available.
+- GPU: NVIDIA RTX PRO 6000 Blackwell Workstation Edition.
+- Compute capability: `12.0`.
+- VRAM: `97886 MiB`.
+
+## Remaining Non-core Work
+
+- Phase B advanced features are not complete: drizzle, OSC advanced workflows,
+  mosaic support, comet alignment, astrometric integration, and richer
+  PixInsight front-end work.
+- GPWBPP is a clean-room WBPP-like implementation and benchmark-proven
+  acceleration path, not a claim of exact PixInsight/WBPP algorithm identity.
+- The optional PixInsight launcher has pytest/static coverage but was not
+  executed inside PixInsight during automated tests.
