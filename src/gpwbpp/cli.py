@@ -23,6 +23,7 @@ from gpwbpp.planner.subset import build_subset_manifest
 from gpwbpp.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from gpwbpp.report.compare_report import compare_fits, write_compare_report
 from gpwbpp.report.html_report import write_html_report
+from gpwbpp.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from gpwbpp.report.wbpp_history import read_fastintegration_history
 from gpwbpp.synthetic.generator import generate_synthetic_dataset
 from gpwbpp.models import now_iso
@@ -574,6 +575,25 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_speedup_summary(args: argparse.Namespace) -> int:
+    summary = summarize_wbpp_speedup(
+        args.gpwbpp_run,
+        args.wbpp_result,
+        compare_json=args.compare_json,
+        min_speedup=args.min_speedup,
+    )
+    write_speedup_summary(args.out, summary, markdown=args.markdown)
+    console.print(
+        {
+            "speedup_vs_wbpp": summary["speedup_vs_wbpp"],
+            "meets_min_speedup": summary["meets_min_speedup"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
 def cmd_blackbox_package(args: argparse.Namespace) -> int:
     payload = create_blackbox_package(
         args.manifest,
@@ -914,6 +934,15 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--gpwbpp-coverage-map", help="optional GPWBPP coverage map used to mask comparison metrics")
     compare.add_argument("--min-coverage", type=float, help="minimum GPWBPP coverage required for comparison metrics")
     compare.set_defaults(func=cmd_compare)
+
+    speedup = sub.add_parser("speedup-summary", help="summarize GPWBPP timing against WBPP black-box timing")
+    speedup.add_argument("--gpwbpp-run", required=True, help="GPWBPP run directory containing run_timing.json")
+    speedup.add_argument("--wbpp-result", required=True, help="user-generated PixInsight/WBPP black-box result JSON")
+    speedup.add_argument("--compare-json", help="optional GPWBPP compare JSON with image-difference metrics")
+    speedup.add_argument("--out", required=True, help="output summary JSON")
+    speedup.add_argument("--markdown", help="optional output Markdown summary")
+    speedup.add_argument("--min-speedup", type=float, default=1.25)
+    speedup.set_defaults(func=cmd_speedup_summary)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")
     blackbox.add_argument("--manifest", required=True)

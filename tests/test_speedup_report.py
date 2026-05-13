@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from gpwbpp.cli import main
 from gpwbpp.io.json_io import write_json
 from gpwbpp.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 
@@ -109,3 +110,39 @@ def test_write_speedup_summary_writes_json_and_markdown(tmp_path: Path):
     assert "Speedup: 2.000x" in markdown
     assert "Active weighted frames: 2" in markdown
     assert "clean-room note" in markdown
+
+
+def test_speedup_summary_cli_writes_outputs(tmp_path: Path):
+    gp_run = tmp_path / "gpwbpp_run"
+    gp_run.mkdir()
+    write_json(gp_run / "run_timing.json", {"total_elapsed_s": 5.0, "command": "run", "memory_mode": "resident"})
+    write_json(
+        gp_run / "integration_results.json",
+        {
+            "frame_weights": {"F1": 1.0},
+            "outputs": [{"backend": "cuda_resident_stack", "memory_mode": "resident", "frame_count": 1}],
+        },
+    )
+    wbpp_result = tmp_path / "wbpp_result.json"
+    write_json(wbpp_result, {"elapsed_s": 20.0, "dataset": "fixture"})
+    out_json = tmp_path / "summary.json"
+    out_md = tmp_path / "summary.md"
+
+    assert main(
+        [
+            "speedup-summary",
+            "--gpwbpp-run",
+            str(gp_run),
+            "--wbpp-result",
+            str(wbpp_result),
+            "--out",
+            str(out_json),
+            "--markdown",
+            str(out_md),
+            "--min-speedup",
+            "2.0",
+        ]
+    ) == 0
+
+    assert json.loads(out_json.read_text(encoding="utf-8"))["speedup_vs_wbpp"] == 4.0
+    assert "Speedup: 4.000x" in out_md.read_text(encoding="utf-8")
