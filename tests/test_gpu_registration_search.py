@@ -911,3 +911,41 @@ def test_gpu_star_grid_top_nms_candidates_keeps_spatial_candidates():
     assert (40, 8) in points
     assert (8, 40) in points
     assert (40, 40) in points
+
+
+def test_gpu_star_top_candidates_tie_breaks_saturated_plateau_deterministically():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_top_candidates_f32"):
+        raise AssertionError("star_top_candidates_f32 is missing from gpwbpp_cuda")
+
+    image = np.zeros((12, 12), dtype=np.float32)
+    image[4:6, 4:6] = 100.0
+
+    expected = [(4, 4), (5, 4)]
+    for _ in range(5):
+        result = module.star_top_candidates_f32(image, threshold=10.0, max_candidates=2)
+        points = [(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)]
+        assert points == expected
+
+
+def test_gpu_star_grid_top_nms_candidates_tie_breaks_saturated_plateau_deterministically():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_grid_top_nms_candidates_f32"):
+        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from gpwbpp_cuda")
+
+    image = np.zeros((12, 12), dtype=np.float32)
+    image[4:6, 4:6] = 100.0
+
+    expected = [(4, 4), (5, 4), (4, 5), (5, 5)]
+    for _ in range(5):
+        result = module.star_grid_top_nms_candidates_f32(
+            image,
+            threshold=10.0,
+            grid_cols=1,
+            grid_rows=1,
+            candidates_per_cell=4,
+            max_output_candidates=4,
+            min_separation_px=0.0,
+        )
+        points = [(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)]
+        assert points == expected

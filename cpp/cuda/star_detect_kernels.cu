@@ -68,6 +68,38 @@ __device__ bool is_local_maximum(
   return true;
 }
 
+__device__ bool star_candidate_better(float flux, float x, float y, float current_flux, float current_x, float current_y) {
+  if (flux > current_flux) {
+    return true;
+  }
+  if (flux < current_flux) {
+    return false;
+  }
+  if (y < current_y) {
+    return true;
+  }
+  if (y > current_y) {
+    return false;
+  }
+  return x < current_x;
+}
+
+__device__ bool star_candidate_weaker(float flux, float x, float y, float current_flux, float current_x, float current_y) {
+  if (flux < current_flux) {
+    return true;
+  }
+  if (flux > current_flux) {
+    return false;
+  }
+  if (y > current_y) {
+    return true;
+  }
+  if (y < current_y) {
+    return false;
+  }
+  return x > current_x;
+}
+
 __global__ void star_candidate_compact_kernel(
     const float* input,
     float* xs,
@@ -144,12 +176,12 @@ __global__ void star_candidate_topn_kernel(
   int weakest_index = 0;
   float weakest_flux = fluxes[0];
   for (int i = 1; i < max_candidates; ++i) {
-    if (fluxes[i] < weakest_flux) {
+    if (star_candidate_weaker(fluxes[i], xs[i], ys[i], weakest_flux, xs[weakest_index], ys[weakest_index])) {
       weakest_flux = fluxes[i];
       weakest_index = i;
     }
   }
-  if (center > weakest_flux) {
+  if (star_candidate_better(center, static_cast<float>(x), static_cast<float>(y), weakest_flux, xs[weakest_index], ys[weakest_index])) {
     xs[weakest_index] = static_cast<float>(x);
     ys[weakest_index] = static_cast<float>(y);
     fluxes[weakest_index] = center;
@@ -185,7 +217,13 @@ __global__ void star_candidate_grid_kernel(
 
   while (atomicCAS(locks + cell_index, 0, 1) != 0) {
   }
-  if (center > fluxes[cell_index]) {
+  if (star_candidate_better(
+          center,
+          static_cast<float>(x),
+          static_cast<float>(y),
+          fluxes[cell_index],
+          xs[cell_index],
+          ys[cell_index])) {
     xs[cell_index] = static_cast<float>(x);
     ys[cell_index] = static_cast<float>(y);
     fluxes[cell_index] = center;
@@ -227,12 +265,24 @@ __global__ void star_candidate_grid_topk_kernel(
   float weakest_flux = fluxes[base];
   for (int i = 1; i < candidates_per_cell; ++i) {
     const int candidate_index = base + i;
-    if (fluxes[candidate_index] < weakest_flux) {
+    if (star_candidate_weaker(
+            fluxes[candidate_index],
+            xs[candidate_index],
+            ys[candidate_index],
+            weakest_flux,
+            xs[weakest_index],
+            ys[weakest_index])) {
       weakest_flux = fluxes[candidate_index];
       weakest_index = candidate_index;
     }
   }
-  if (center > weakest_flux) {
+  if (star_candidate_better(
+          center,
+          static_cast<float>(x),
+          static_cast<float>(y),
+          weakest_flux,
+          xs[weakest_index],
+          ys[weakest_index])) {
     xs[weakest_index] = static_cast<float>(x);
     ys[weakest_index] = static_cast<float>(y);
     fluxes[weakest_index] = center;
@@ -248,7 +298,7 @@ __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxe
     int best_index = i;
     float best_flux = fluxes[i];
     for (int j = i + 1; j < max_candidates; ++j) {
-      if (fluxes[j] > best_flux) {
+      if (star_candidate_better(fluxes[j], xs[j], ys[j], best_flux, xs[best_index], ys[best_index])) {
         best_flux = fluxes[j];
         best_index = j;
       }
