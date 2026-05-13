@@ -543,6 +543,117 @@ def _gpu_catalog_similarity_pixel_refine_run(
     return result, np.asarray(aligned, dtype=np.float32), np.asarray(valid > 0.0, dtype=bool)
 
 
+def _gpu_resident_catalog_similarity_pixel_refine_run(
+    reference: np.ndarray,
+    moving: np.ndarray,
+    matrix: Any,
+    seed_candidates: list[dict[str, Any]] | None,
+    search_radius_px: float,
+    coarse_step_px: float,
+    fine_radius_px: float,
+    fine_step_px: float,
+    coarse_sample_stride: int,
+    final_sample_stride: int,
+) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is not available")
+    if not hasattr(gpwbpp_cuda, "ResidentCalibratedStack"):
+        raise RuntimeError("native CUDA backend lacks ResidentCalibratedStack")
+
+    seeds: list[dict[str, Any]] = [
+        {
+            "seed_rank": 0,
+            "seed_source": "catalog_similarity_refit",
+            "candidate_index": None,
+            "inliers": None,
+            "rms_px": None,
+            "matrix": np.asarray(matrix, dtype=np.float64).tolist(),
+        }
+    ]
+    for rank, candidate in enumerate(seed_candidates or [], start=1):
+        seeds.append(
+            {
+                "seed_rank": rank,
+                "seed_source": "catalog_similarity_top_candidate",
+                "candidate_index": int(candidate["candidate_index"]),
+                "inliers": int(candidate["inliers"]),
+                "rms_px": float(candidate["rms_px"]),
+                "matrix": np.asarray(candidate["matrix"], dtype=np.float64).tolist(),
+            }
+        )
+    seed_matrices = [np.asarray(seed["matrix"], dtype=np.float32) for seed in seeds]
+
+    t0 = time.perf_counter()
+    stack = gpwbpp_cuda.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    upload_elapsed = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    refinement = stack.refine_matrix_translation_candidates_to_reference(
+        0,
+        1,
+        np.asarray(seed_matrices, dtype=np.float32),
+        search_radius_px=search_radius_px,
+        coarse_step_px=coarse_step_px,
+        fine_radius_px=fine_radius_px,
+        fine_step_px=fine_step_px,
+        coarse_sample_stride=coarse_sample_stride,
+        final_sample_stride=final_sample_stride,
+    )
+    refine_elapsed = time.perf_counter() - t1
+
+    seed_metrics: list[dict[str, Any]] = []
+    for seed_result in refinement["seed_results"]:
+        seed_index = int(seed_result["seed_index"])
+        seed = seeds[seed_index]
+        seed_metrics.append(
+            {
+                "seed_rank": int(seed["seed_rank"]),
+                "seed_source": str(seed["seed_source"]),
+                "candidate_index": seed["candidate_index"],
+                "seed_inliers": seed["inliers"],
+                "seed_rms_px": seed["rms_px"],
+                "dx_correction": float(seed_result["dx_correction"]),
+                "dy_correction": float(seed_result["dy_correction"]),
+                "metrics": dict(seed_result["metrics"]),
+                "matrix": np.asarray(seed_result["matrix"], dtype=np.float64).tolist(),
+            }
+        )
+    selected_seed = seed_metrics[int(refinement["selected_index"])]
+
+    t2 = time.perf_counter()
+    stack.apply_matrix_bilinear_frame(1, refinement["matrix"], np.nan)
+    warp_elapsed = time.perf_counter() - t2
+
+    t3 = time.perf_counter()
+    aligned, weight_map = stack.integrate_mean(np.array([0.0, 1.0], dtype=np.float32))
+    inspection_elapsed = time.perf_counter() - t3
+    valid = weight_map > 0.0
+    device_elapsed = refine_elapsed + warp_elapsed
+    result = {
+        **refinement,
+        "elapsed_s": device_elapsed,
+        "upload_elapsed_s": upload_elapsed,
+        "inspection_download_elapsed_s": inspection_elapsed,
+        "upload_plus_device_elapsed_s": upload_elapsed + device_elapsed,
+        "refine_elapsed_s": refine_elapsed,
+        "warp_elapsed_s": warp_elapsed,
+        "seed_selection_model": "resident_catalog_topk_fused_pixel_metric",
+        "seed_count": len(seeds),
+        "selected_seed_rank": int(selected_seed["seed_rank"]),
+        "selected_seed_source": str(selected_seed["seed_source"]),
+        "selected_seed_candidate_index": selected_seed["candidate_index"],
+        "selected_seed_inliers": selected_seed["seed_inliers"],
+        "selected_seed_rms_px": selected_seed["seed_rms_px"],
+        "seed_metrics": seed_metrics,
+        "coverage_pixels": int(np.sum(valid)),
+        "bytes_allocated": int(stack.bytes_allocated),
+        "rms": _rms(reference, aligned, valid),
+    }
+    return result, np.asarray(aligned, dtype=np.float32), np.asarray(valid, dtype=bool)
+
+
 def _gpu_catalog_run(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -954,6 +1065,22 @@ def main() -> int:
         args.catalog_pixel_refine_coarse_stride,
         args.catalog_pixel_refine_final_stride,
     )
+    (
+        gpu_resident_catalog_similarity_pixel_refined_result,
+        gpu_resident_catalog_similarity_pixel_refined_aligned,
+        gpu_resident_catalog_similarity_pixel_refined_valid,
+    ) = _gpu_resident_catalog_similarity_pixel_refine_run(
+        reference,
+        moving,
+        gpu_catalog_similarity_result["matrix"],
+        gpu_catalog_similarity_result["top_candidates"],
+        args.catalog_pixel_refine_radius,
+        args.catalog_pixel_refine_coarse_step,
+        args.catalog_pixel_refine_fine_radius,
+        args.catalog_pixel_refine_fine_step,
+        args.catalog_pixel_refine_coarse_stride,
+        args.catalog_pixel_refine_final_stride,
+    )
     if (
         gpu_catalog_result["accepted"]
         and np.isfinite(gpu_catalog_result["rms"])
@@ -997,6 +1124,12 @@ def main() -> int:
         astroalign_aligned,
         astroalign_valid,
     )
+    gpu_resident_catalog_similarity_pixel_refined_diff = _diff_on_common_valid_pixels(
+        gpu_resident_catalog_similarity_pixel_refined_aligned,
+        gpu_resident_catalog_similarity_pixel_refined_valid,
+        astroalign_aligned,
+        astroalign_valid,
+    )
     catalog_similarity_agreement = _agreement_vs_astroalign(
         np.asarray(gpu_catalog_similarity_result["matrix"], dtype=np.float64),
         astroalign_matrix,
@@ -1007,11 +1140,24 @@ def main() -> int:
         astroalign_matrix,
         gpu_catalog_similarity_pixel_refined_diff,
     )
+    resident_catalog_similarity_pixel_refined_agreement = _agreement_vs_astroalign(
+        np.asarray(gpu_resident_catalog_similarity_pixel_refined_result["matrix"], dtype=np.float64),
+        astroalign_matrix,
+        gpu_resident_catalog_similarity_pixel_refined_diff,
+    )
     gpu_catalog_similarity_pixel_refined_result["accepted"] = bool(
         catalog_similarity_pixel_refined_agreement["passed"]
     )
     gpu_catalog_similarity_pixel_refined_result["warnings"] = (
         [] if catalog_similarity_pixel_refined_agreement["passed"] else ["pixel-refined catalog similarity agreement failed"]
+    )
+    gpu_resident_catalog_similarity_pixel_refined_result["accepted"] = bool(
+        resident_catalog_similarity_pixel_refined_agreement["passed"]
+    )
+    gpu_resident_catalog_similarity_pixel_refined_result["warnings"] = (
+        []
+        if resident_catalog_similarity_pixel_refined_agreement["passed"]
+        else ["resident pixel-refined catalog similarity agreement failed"]
     )
     gpu_catalog_similarity_matrix_metrics = _gpu_matrix_metrics_run(
         reference,
@@ -1042,8 +1188,14 @@ def main() -> int:
         "direct_output_diff_gpu_catalog_similarity_pixel_refined_minus_astroalign_apply_on_common_valid_pixels": (
             gpu_catalog_similarity_pixel_refined_diff
         ),
+        "direct_output_diff_gpu_resident_catalog_similarity_pixel_refined_minus_astroalign_apply_on_common_valid_pixels": (
+            gpu_resident_catalog_similarity_pixel_refined_diff
+        ),
         "catalog_similarity_agreement_vs_astroalign": catalog_similarity_agreement,
         "catalog_similarity_pixel_refined_agreement_vs_astroalign": catalog_similarity_pixel_refined_agreement,
+        "resident_catalog_similarity_pixel_refined_agreement_vs_astroalign": (
+            resident_catalog_similarity_pixel_refined_agreement
+        ),
         "valid_pixels": {
             "astroalign": int(np.sum(astroalign_valid)),
             "gpwbpp_cuda_matrix": int(np.sum(gpu_matrix_valid)),
@@ -1051,6 +1203,9 @@ def main() -> int:
             "gpwbpp_cuda_catalog_similarity": int(np.sum(gpu_catalog_similarity_valid)),
             "gpwbpp_cuda_catalog_similarity_pixel_refined": int(
                 np.sum(gpu_catalog_similarity_pixel_refined_valid)
+            ),
+            "gpwbpp_cuda_resident_catalog_similarity_pixel_refined": int(
+                np.sum(gpu_resident_catalog_similarity_pixel_refined_valid)
             ),
             "common": int(np.sum(np.asarray(astroalign_valid, dtype=bool) & np.asarray(gpu_matrix_valid, dtype=bool))),
             "common_similarity_fit": int(
@@ -1068,6 +1223,12 @@ def main() -> int:
                     & np.asarray(gpu_catalog_similarity_pixel_refined_valid, dtype=bool)
                 )
             ),
+            "common_resident_catalog_similarity_pixel_refined": int(
+                np.sum(
+                    np.asarray(astroalign_valid, dtype=bool)
+                    & np.asarray(gpu_resident_catalog_similarity_pixel_refined_valid, dtype=bool)
+                )
+            ),
         },
         "gpwbpp_cuda": gpu_result,
         "gpwbpp_cuda_subpixel": gpu_subpixel_result,
@@ -1077,6 +1238,9 @@ def main() -> int:
         "gpwbpp_cuda_catalog": gpu_catalog_result,
         "gpwbpp_cuda_catalog_similarity": gpu_catalog_similarity_result,
         "gpwbpp_cuda_catalog_similarity_pixel_refined": gpu_catalog_similarity_pixel_refined_result,
+        "gpwbpp_cuda_resident_catalog_similarity_pixel_refined": (
+            gpu_resident_catalog_similarity_pixel_refined_result
+        ),
         "gpwbpp_cuda_catalog_similarity_matrix_metrics": gpu_catalog_similarity_matrix_metrics,
         "speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_result["elapsed_s"]
         if gpu_result["elapsed_s"] > 0.0
@@ -1108,6 +1272,16 @@ def main() -> int:
         "catalog_similarity_pixel_refined_speedup_vs_astroalign": astroalign_result["elapsed_s"]
         / gpu_catalog_similarity_pixel_refined_result["elapsed_s"]
         if gpu_catalog_similarity_pixel_refined_result["elapsed_s"] > 0.0
+        else None,
+        "resident_catalog_similarity_pixel_refined_device_speedup_vs_astroalign": astroalign_result["elapsed_s"]
+        / gpu_resident_catalog_similarity_pixel_refined_result["elapsed_s"]
+        if gpu_resident_catalog_similarity_pixel_refined_result["elapsed_s"] > 0.0
+        else None,
+        "resident_catalog_similarity_pixel_refined_upload_plus_device_speedup_vs_astroalign": astroalign_result[
+            "elapsed_s"
+        ]
+        / gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_device_elapsed_s"]
+        if gpu_resident_catalog_similarity_pixel_refined_result["upload_plus_device_elapsed_s"] > 0.0
         else None,
         "subpixel_speedup_vs_astroalign": astroalign_result["elapsed_s"] / gpu_subpixel_result["elapsed_s"]
         if gpu_subpixel_result["elapsed_s"] > 0.0

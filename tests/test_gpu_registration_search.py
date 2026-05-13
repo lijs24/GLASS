@@ -276,6 +276,46 @@ def test_gpu_matrix_metric_multi_seed_refine_selects_best_seed():
     assert abs(matrix[1, 2] - good_matrix[1, 2]) <= 0.125
 
 
+def test_resident_stack_matrix_metric_multi_seed_refine_uses_loaded_frames():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from gpwbpp_cuda")
+
+    reference = _smooth_star_field()
+    good_matrix = np.asarray([[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]], dtype=np.float32)
+    moving, _ = module.warp_matrix_bilinear_f32(reference, np.linalg.inv(good_matrix).astype(np.float32), 0.0)
+    bad_seed = good_matrix.copy()
+    bad_seed[0, 2] += 3.0
+    bad_seed[1, 2] -= 3.0
+    close_seed = good_matrix.copy()
+    close_seed[0, 2] += 0.5
+    close_seed[1, 2] -= 0.375
+
+    stack = module.ResidentCalibratedStack(2, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    stack.upload_calibrated_frame(1, moving)
+    result = stack.refine_matrix_translation_candidates_to_reference(
+        0,
+        1,
+        np.stack([bad_seed, close_seed]),
+        search_radius_px=0.75,
+        coarse_step_px=0.25,
+        fine_radius_px=0.125,
+        fine_step_px=0.125,
+        coarse_sample_stride=1,
+        final_sample_stride=1,
+    )
+    matrix = np.asarray(result["matrix"], dtype=np.float32)
+
+    assert result["model"] == "resident_cuda_matrix_metric_translation_multi_seed_refine_grid"
+    assert result["reference_index"] == 0
+    assert result["moving_index"] == 1
+    assert result["seed_count"] == 2
+    assert result["selected_index"] == 1
+    assert abs(matrix[0, 2] - good_matrix[0, 2]) <= 0.125
+    assert abs(matrix[1, 2] - good_matrix[1, 2]) <= 0.125
+
+
 def test_gpu_estimate_translation_from_catalogs_votes_pair_offsets():
     module = cuda_module_or_skip()
     if not hasattr(module, "estimate_translation_from_catalogs_f32"):
