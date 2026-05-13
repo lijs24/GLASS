@@ -611,11 +611,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--tile-size", type=int, default=512)
     run.add_argument(
         "--registration-method",
-        choices=["auto", "star", "astroalign", "cuda_catalog"],
+        choices=["auto", "star", "astroalign", "cuda_catalog", "cuda_triangle"],
         default="auto",
         help=(
             "tile-mode registration method; astroalign uses the optional open-source gpwbpp[align] backend, "
-            "cuda_catalog requires the native CUDA backend"
+            "cuda_catalog and cuda_triangle require the native CUDA backend"
         ),
     )
     run.add_argument(
@@ -739,7 +739,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--tile-size", type=int, default=512)
     audit.add_argument(
         "--registration-method",
-        choices=["auto", "star", "astroalign", "cuda_catalog"],
+        choices=["auto", "star", "astroalign", "cuda_catalog", "cuda_triangle"],
         default="auto",
         help="registration method passed to the gated run portion of audit",
     )

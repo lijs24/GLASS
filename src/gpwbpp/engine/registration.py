@@ -14,6 +14,7 @@ from gpwbpp.cpu.registration import (
 from gpwbpp.gpu.registration import (
     refine_matrix_translation_candidates_with_metrics_f32,
     refine_matrix_translation_with_metrics_f32,
+    register_triangle_descriptor_similarity_f32,
 )
 from gpwbpp.gpu.tile_scheduler import iter_tiles
 from gpwbpp.io.fits_io import FitsImageReader
@@ -136,6 +137,24 @@ def _cuda_catalog_backend() -> Any:
     missing = [name for name in required if not hasattr(gpwbpp_cuda, name)]
     if missing:
         raise RuntimeError(f"native CUDA backend lacks registration primitive(s): {', '.join(missing)}")
+    return gpwbpp_cuda
+
+
+def _cuda_triangle_backend() -> Any:
+    import gpwbpp_cuda
+
+    if not gpwbpp_cuda.cuda_available():
+        raise RuntimeError("native CUDA backend is required for registration method cuda_triangle")
+    required = [
+        "estimate_similarity_from_triangle_descriptors_f32",
+        "star_grid_top_nms_candidates_f32",
+        "star_top_nms_candidates_f32",
+        "triangle_asterism_descriptors_f32",
+        "warp_matrix_bilinear_f32",
+    ]
+    missing = [name for name in required if not hasattr(gpwbpp_cuda, name)]
+    if missing:
+        raise RuntimeError(f"native CUDA backend lacks triangle registration primitive(s): {', '.join(missing)}")
     return gpwbpp_cuda
 
 
@@ -381,6 +400,163 @@ def _cuda_catalog_similarity_preview(
     }
 
 
+def _cuda_triangle_descriptor_preview(
+    reference_preview: np.ndarray,
+    moving_preview: np.ndarray,
+    registration_policy: dict[str, Any],
+    reference_scale: int,
+    min_inliers: int,
+    max_rms_px: float,
+) -> dict[str, Any]:
+    _cuda_triangle_backend()
+
+    threshold_sigma = _policy_float(
+        registration_policy,
+        "cuda_triangle_threshold_sigma",
+        _policy_float(registration_policy, "cuda_catalog_threshold_sigma", 6.0),
+    )
+    max_candidates = _policy_int(
+        registration_policy,
+        "cuda_triangle_max_stars",
+        _policy_int(registration_policy, "cuda_catalog_max_stars", 64),
+    )
+    neighbors = _policy_int(registration_policy, "cuda_triangle_neighbors", 5)
+    max_descriptors = _policy_int(registration_policy, "cuda_triangle_max_descriptors", 1200)
+    tolerance_px = _policy_float(
+        registration_policy,
+        "cuda_triangle_tolerance_px",
+        _policy_float(registration_policy, "cuda_catalog_tolerance_px", 3.0),
+    )
+    descriptor_radius = _policy_float(registration_policy, "cuda_triangle_descriptor_radius", 0.1)
+    h, w = reference_preview.shape
+    nms_min_separation_px = _policy_float(
+        registration_policy,
+        "cuda_triangle_nms_min_separation_px",
+        _policy_float(
+            registration_policy,
+            "cuda_catalog_nms_min_separation_px",
+            max(4.0, float(min(h, w)) / 24.0),
+        ),
+    )
+    candidates_per_cell = _policy_int(
+        registration_policy,
+        "cuda_triangle_grid_top_per_cell",
+        _policy_int(registration_policy, "cuda_catalog_grid_top_per_cell", 4),
+    )
+    grid_top_cols = _policy_int(
+        registration_policy,
+        "cuda_triangle_grid_top_cols",
+        _policy_int(
+            registration_policy,
+            "cuda_catalog_grid_top_cols",
+            0 if min(h, w) < 64 else max(2, min(24, int(np.ceil(w / 64.0)))),
+        ),
+    )
+    grid_top_rows = _policy_int(
+        registration_policy,
+        "cuda_triangle_grid_top_rows",
+        _policy_int(
+            registration_policy,
+            "cuda_catalog_grid_top_rows",
+            0 if min(h, w) < 64 else max(2, min(16, int(np.ceil(h / 64.0)))),
+        ),
+    )
+
+    reference_threshold = _adaptive_star_threshold(reference_preview, threshold_sigma)
+    moving_threshold = _adaptive_star_threshold(moving_preview, threshold_sigma)
+    threshold = min(reference_threshold, moving_threshold)
+    if grid_top_cols > 0 and grid_top_rows > 0:
+        selector_kwargs = {
+            "grid_top_cols": grid_top_cols,
+            "grid_top_rows": grid_top_rows,
+            "grid_top_candidates_per_cell": candidates_per_cell,
+            "nms_min_separation_px": nms_min_separation_px,
+        }
+        selection_model = "grid_topk_local_maximum_nms"
+    else:
+        nms_scan_candidates = _policy_int(
+            registration_policy,
+            "cuda_triangle_nms_scan_candidates",
+            _policy_int(registration_policy, "cuda_catalog_nms_scan_candidates", 4096),
+        )
+        selector_kwargs = {
+            "nms_scan_candidates": nms_scan_candidates,
+            "nms_min_separation_px": nms_min_separation_px,
+        }
+        selection_model = "global_top_flux_local_maximum_nms"
+
+    _, coverage, diagnostics = register_triangle_descriptor_similarity_f32(
+        reference_preview,
+        moving_preview,
+        threshold,
+        max_candidates=max_candidates,
+        neighbors=neighbors,
+        max_descriptors=max_descriptors,
+        tolerance_px=tolerance_px,
+        descriptor_radius=descriptor_radius,
+        **selector_kwargs,
+    )
+    fit = diagnostics.get("similarity", {})
+    preview_matrix = np.asarray(diagnostics["matrix"], dtype=np.float32).reshape(3, 3)
+    fit_rms_preview = float(fit.get("rms_px", float("nan")))
+    rms_limit_preview = _policy_float(
+        registration_policy,
+        "cuda_triangle_max_rms_preview_px",
+        max(tolerance_px, float(max_rms_px) / max(float(reference_scale), 1.0)),
+    )
+    inliers = int(fit.get("inliers", 0))
+    accepted = str(diagnostics.get("status")) == "ok" and inliers >= int(min_inliers)
+    if np.isfinite(fit_rms_preview):
+        accepted = accepted and fit_rms_preview <= rms_limit_preview
+
+    warnings: list[str] = []
+    if str(diagnostics.get("status")) != "ok":
+        warnings.append(f"cuda triangle descriptor fit status: {diagnostics.get('status')}")
+    if inliers < int(min_inliers):
+        warnings.append(f"cuda triangle descriptor inliers below {int(min_inliers)}")
+    if np.isfinite(fit_rms_preview) and fit_rms_preview > rms_limit_preview:
+        warnings.append(
+            f"cuda triangle descriptor preview RMS {fit_rms_preview:.3f}px exceeds "
+            f"limit {rms_limit_preview:.3f}px"
+        )
+    warnings.append("cuda triangle descriptor similarity estimated on streaming preview")
+
+    return {
+        "status": "ok" if accepted else "failed",
+        "matrix": _preview_matrix_to_source_pixels(preview_matrix, reference_scale),
+        "matched_stars": int(fit.get("inliers", 0)),
+        "inliers": inliers,
+        "rms_px": fit_rms_preview * float(reference_scale) if np.isfinite(fit_rms_preview) else float("nan"),
+        "warnings": warnings,
+        "diagnostics": {
+            "model": "cuda_triangle_descriptor_similarity_preview",
+            "selection_model": selection_model,
+            "catalog_selector": diagnostics.get("catalog_selector"),
+            "reference_detected": int(diagnostics.get("reference_detected", 0)),
+            "moving_detected": int(diagnostics.get("moving_detected", 0)),
+            "reference_stored": int(diagnostics.get("reference_stored", 0)),
+            "moving_stored": int(diagnostics.get("moving_stored", 0)),
+            "reference_descriptor_count": int(diagnostics.get("reference_descriptor_count", 0)),
+            "moving_descriptor_count": int(diagnostics.get("moving_descriptor_count", 0)),
+            "reference_threshold": float(reference_threshold),
+            "moving_threshold": float(moving_threshold),
+            "threshold_used": float(threshold),
+            "tolerance_px_preview": float(tolerance_px),
+            "rms_px_preview": fit_rms_preview,
+            "rms_limit_px_preview": float(rms_limit_preview),
+            "descriptor_radius": float(descriptor_radius),
+            "neighbors": int(neighbors),
+            "max_descriptors": int(max_descriptors),
+            "grid_top_cols": int(grid_top_cols),
+            "grid_top_rows": int(grid_top_rows),
+            "nms_min_separation_px": float(nms_min_separation_px),
+            "candidate_count": int(fit.get("candidate_count", 0)),
+            "coverage_pixels": int(np.sum(coverage > 0.0)),
+            "similarity": fit,
+        },
+    }
+
+
 def register_calibrated_frames(
     run_dir: str | Path,
     out_path: str | Path | None = None,
@@ -404,12 +580,14 @@ def register_calibrated_frames(
     astroalign_min_area = int(registration_policy.get("astroalign_min_area") or 5)
     if transform_model not in {"translation", "similarity", "affine"}:
         transform_model = "translation"
-    if method in {"astroalign", "cuda_catalog"}:
+    if method in {"astroalign", "cuda_catalog", "cuda_triangle"}:
         transform_model = "similarity"
-    if method not in {"auto", "star", "astroalign", "cuda_catalog"}:
-        raise ValueError("registration method must be auto, star, astroalign, or cuda_catalog")
+    if method not in {"auto", "star", "astroalign", "cuda_catalog", "cuda_triangle"}:
+        raise ValueError("registration method must be auto, star, astroalign, cuda_catalog, or cuda_triangle")
     if method == "cuda_catalog":
         _cuda_catalog_backend()
+    if method == "cuda_triangle":
+        _cuda_triangle_backend()
     calibrated = {item["frame_id"]: item for item in artifacts.get("calibrated_lights", [])}
     plan_frames = {frame["id"]: frame for frame in plan.get("frames", [])}
     reference_id = _select_reference_id(
@@ -451,6 +629,8 @@ def register_calibrated_frames(
             preview_shape = list(reference_preview.shape)
             if method == "cuda_catalog":
                 row_source = "cuda_catalog_similarity_preview"
+            elif method == "cuda_triangle":
+                row_source = "cuda_triangle_descriptor_similarity_preview"
         else:
             moving_preview, moving_scale, tile_count = _registration_preview(
                 item["path"],
@@ -494,6 +674,32 @@ def register_calibrated_frames(
                     status = "failed"
                     warnings.append(f"cuda catalog registration failed: {exc}")
                     row_source = "cuda_catalog_similarity_preview"
+            if method == "cuda_triangle":
+                try:
+                    cuda_triangle_result = _cuda_triangle_descriptor_preview(
+                        reference_preview,
+                        moving_preview,
+                        registration_policy,
+                        reference_scale,
+                        min_inliers,
+                        max_rms_px,
+                    )
+                    matrix = cuda_triangle_result["matrix"]
+                    matched = int(cuda_triangle_result["matched_stars"])
+                    inliers = int(cuda_triangle_result["inliers"])
+                    rms = float(cuda_triangle_result["rms_px"])
+                    status = str(cuda_triangle_result["status"])
+                    warnings.extend(cuda_triangle_result["warnings"])
+                    extra_fields["cuda_triangle"] = cuda_triangle_result["diagnostics"]
+                    row_source = "cuda_triangle_descriptor_similarity_preview"
+                except Exception as exc:
+                    matrix = translation_matrix(0.0, 0.0)
+                    matched = 0
+                    inliers = 0
+                    rms = float("nan")
+                    status = "failed"
+                    warnings.append(f"cuda triangle descriptor registration failed: {exc}")
+                    row_source = "cuda_triangle_descriptor_similarity_preview"
             if method == "astroalign":
                 try:
                     astroalign_result = estimate_astroalign_transform(
@@ -607,6 +813,12 @@ def register_calibrated_frames(
             "native_cuda_required": True,
             "model": "cuda_catalog_similarity_preview",
             "pixel_refine_default": True,
+        },
+        "cuda_triangle": {
+            "available": method == "cuda_triangle",
+            "native_cuda_required": True,
+            "model": "cuda_triangle_descriptor_similarity_preview",
+            "descriptor": "triangle_similarity",
         },
         "min_inliers": min_inliers,
         "max_rms_px": max_rms_px,

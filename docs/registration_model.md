@@ -186,6 +186,19 @@ consume it. Each row records `cuda_catalog` diagnostics including candidate
 counts, thresholds, prior details, preview RMS, pixel metric RMS/NCC, and
 refit status.
 
+Tile-mode registration also exposes the GPU triangle-descriptor path with
+`gpwbpp run --registration-method cuda_triangle` or
+`gpwbpp audit --registration-method cuda_triangle`. This method uses bounded
+streaming previews, GPU top-N or grid-top NMS star selection, GPU triangle
+asterism descriptor construction, and CUDA descriptor matching to estimate a
+similarity matrix. The matrix translation is scaled from preview pixels back to
+source pixels before `registration_results.json` is written. Each non-reference
+row records `cuda_triangle` diagnostics including star counts, descriptor
+counts, descriptor radius, neighbor count, candidate count, preview RMS, and the
+selector used. This is the first formal pipeline entry for the pure-GPU
+descriptor route that was validated against astroalign on the representative
+full-size M38 pair.
+
 Warp skips non-reference frames with failed registration status and writes them
 to `warp_results.json` under `skipped_frames`; they do not enter local
 normalization or integration.

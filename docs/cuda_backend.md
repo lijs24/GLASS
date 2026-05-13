@@ -202,6 +202,11 @@ Resident CUDA integration now supports:
   with `--resident-star-prior ncc`. The prior is computed from resident
   integer/subpixel NCC kernels and passed to the catalog pair-offset scorer as a
   compact `(dx, dy, radius)` search window.
+- Tile-mode `--registration-method cuda_triangle` is now a first-class pipeline
+  entry. It uses the native CUDA star candidate selector, triangle descriptor
+  construction, descriptor matching, and bilinear matrix warp on bounded
+  streaming previews, then writes the source-pixel similarity matrix and compact
+  descriptor diagnostics to `registration_results.json`.
 - Resident similarity registration can use `--resident-star-prior auto_pierside`.
   This reads only `PIERSIDE` metadata from `header_summary` or FITS headers: same
   pier side uses the fast NCC-constrained prior, while opposite pier side disables

@@ -1113,6 +1113,82 @@ def test_register_calibrated_frames_can_use_cuda_catalog_backend(tmp_path: Path)
     assert any("cuda catalog similarity" in warning for warning in moving_result["warnings"])
 
 
+def test_register_calibrated_frames_can_use_cuda_triangle_backend(tmp_path: Path):
+    cuda_module_or_skip()
+    from gpwbpp.engine.registration import register_calibrated_frames
+    from gpwbpp.io.fits_io import write_fits_data
+    from gpwbpp.io.json_io import write_json
+
+    reference = _star_field()
+    moving = _shift_image(reference, 4, -3)
+    run = tmp_path / "run"
+    cache = run / "calibrated_cache"
+    cache.mkdir(parents=True)
+    ref_path = cache / "ref.fits"
+    moving_path = cache / "moving.fits"
+    write_fits_data(ref_path, reference)
+    write_fits_data(moving_path, moving)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "schema_version": 1,
+            "calibrated_lights": [
+                {"frame_id": "ref", "path": str(ref_path)},
+                {"frame_id": "moving", "path": str(moving_path)},
+            ],
+        },
+    )
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "ref",
+            "frame_quality": [
+                {"frame_id": "ref", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+                {"frame_id": "moving", "background_median": 10.0, "background_rms": 1.0, "star_count": 8},
+            ],
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {
+            "schema_version": 1,
+            "registration_policy": {
+                "transform_model": "similarity",
+                "min_inliers": 6,
+                "cuda_triangle_threshold_sigma": 3.0,
+                "cuda_triangle_max_stars": 32,
+                "cuda_triangle_tolerance_px": 2.0,
+                "cuda_triangle_descriptor_radius": 0.08,
+                "cuda_triangle_neighbors": 5,
+                "cuda_triangle_max_descriptors": 256,
+                "cuda_triangle_grid_top_cols": 0,
+                "cuda_triangle_grid_top_rows": 0,
+                "cuda_triangle_nms_scan_candidates": 128,
+                "cuda_triangle_nms_min_separation_px": 4.0,
+            },
+        },
+    )
+
+    payload = register_calibrated_frames(run, tile_size=64, preview_max_dimension=256, method="cuda_triangle")
+    moving_result = next(item for item in payload["registration_results"] if item["frame_id"] == "moving")
+
+    assert payload["method"] == "cuda_triangle"
+    assert payload["transform_model"] == "similarity"
+    assert payload["cuda_triangle"]["native_cuda_required"] is True
+    assert payload["cuda_triangle"]["descriptor"] == "triangle_similarity"
+    assert moving_result["status"] == "ok"
+    assert moving_result["registration_solution_source"] == "cuda_triangle_descriptor_similarity_preview"
+    assert moving_result["cuda_triangle"]["selection_model"] == "global_top_flux_local_maximum_nms"
+    assert moving_result["cuda_triangle"]["reference_descriptor_count"] > 0
+    assert moving_result["cuda_triangle"]["moving_descriptor_count"] > 0
+    assert moving_result["cuda_triangle"]["similarity"]["model"] == "triangle_descriptor_similarity_cuda"
+    assert moving_result["inliers"] >= 6
+    assert abs(moving_result["matrix"][0][2] + 4.0) < 0.75
+    assert abs(moving_result["matrix"][1][2] - 3.0) < 0.75
+    assert any("cuda triangle descriptor similarity" in warning for warning in moving_result["warnings"])
+
+
 def test_gpu_star_top_nms_candidates_suppresses_close_peaks():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_top_nms_candidates_f32"):
