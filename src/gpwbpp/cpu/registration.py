@@ -213,6 +213,76 @@ def _translation_candidates(reference: np.ndarray, moving: np.ndarray, brightest
     return candidates
 
 
+def _triangle_area(triangle: np.ndarray) -> float:
+    edge_a = triangle[1] - triangle[0]
+    edge_b = triangle[2] - triangle[0]
+    return abs(float(edge_a[0] * edge_b[1] - edge_a[1] * edge_b[0])) * 0.5
+
+
+def _ordered_triangle_by_sides(
+    points: np.ndarray,
+    indices: tuple[int, int, int],
+) -> tuple[np.ndarray, tuple[int, int, int], np.ndarray]:
+    triangle = points[list(indices)]
+    pairs = ((0, 1), (1, 2), (2, 0))
+    side_lengths = np.asarray([np.linalg.norm(triangle[a] - triangle[b]) for a, b in pairs], dtype=np.float64)
+    ordered_lengths = np.sort(side_lengths)
+    shortest = float(ordered_lengths[0])
+    middle = float(ordered_lengths[1])
+    longest = float(ordered_lengths[2])
+    if shortest <= 1.0e-6 or middle <= 1.0e-6:
+        raise ValueError("degenerate triangle")
+
+    longest_pair = pairs[int(np.argmax(side_lengths))]
+    local_indices = set(range(3))
+    local_indices.remove(longest_pair[0])
+    local_indices.remove(longest_pair[1])
+    third = local_indices.pop()
+    first, second = longest_pair
+    if np.linalg.norm(triangle[first] - triangle[third]) < np.linalg.norm(
+        triangle[second] - triangle[third]
+    ):
+        first, second = second, first
+
+    order = (first, second, third)
+    ordered_global = tuple(indices[index] for index in order)
+    descriptor = np.asarray([longest / middle, middle / shortest], dtype=np.float64)
+    return points[list(ordered_global)], ordered_global, descriptor
+
+
+def _local_triangle_descriptors(
+    points: np.ndarray,
+    max_points: int,
+    neighbors: int,
+    max_descriptors: int,
+) -> list[tuple[np.ndarray, tuple[int, int, int], float]]:
+    limited = points[: min(len(points), max_points)]
+    if len(limited) < 3:
+        return []
+    neighbor_count = min(len(limited), max(3, int(neighbors)))
+    seen: set[tuple[int, int, int]] = set()
+    descriptors: list[tuple[np.ndarray, tuple[int, int, int], float]] = []
+    for anchor in range(len(limited)):
+        distances = np.sqrt(np.sum((limited - limited[anchor]) ** 2, axis=1))
+        local_indices = np.argsort(distances, kind="stable")[:neighbor_count]
+        for raw_indices in combinations((int(index) for index in local_indices), 3):
+            key = tuple(sorted(raw_indices))
+            if key in seen:
+                continue
+            seen.add(key)
+            triangle = limited[list(raw_indices)]
+            area = _triangle_area(triangle)
+            if area < 2.0:
+                continue
+            try:
+                _ordered_triangle, ordered_indices, descriptor = _ordered_triangle_by_sides(limited, raw_indices)
+            except ValueError:
+                continue
+            descriptors.append((descriptor, ordered_indices, area))
+    descriptors.sort(key=lambda item: item[2], reverse=True)
+    return descriptors[:max_descriptors]
+
+
 def _triangle_descriptors(points: np.ndarray, max_points: int, max_triangles: int) -> list[tuple[np.ndarray, tuple[int, int, int]]]:
     limited = points[: min(len(points), max_points)]
     triangles: list[tuple[np.ndarray, tuple[int, int, int], float]] = []
@@ -266,6 +336,121 @@ def _asterism_candidates(
             if len(candidates) >= max_triangles:
                 return candidates
     return candidates
+
+
+def estimate_triangle_asterism_transform(
+    reference: list[Star],
+    moving: list[Star],
+    transform_model: str = "similarity",
+    min_inliers: int = 6,
+    tolerance_px: float = 3.0,
+    max_stars: int = 80,
+    neighbors: int = 5,
+    descriptor_radius: float = 0.1,
+    max_descriptors: int = 1200,
+    max_candidates: int = 1500,
+) -> StarRegistration:
+    if transform_model not in {"similarity", "affine"}:
+        raise ValueError("triangle asterism registration supports similarity or affine transforms")
+    reference_points = _points(reference, max_stars)
+    moving_points = _points(moving, max_stars)
+    warnings: list[str] = []
+    minimum_points = 3
+    if len(reference_points) < minimum_points or len(moving_points) < minimum_points:
+        return StarRegistration(
+            transform_model=transform_model,
+            matrix=translation_matrix(0.0, 0.0),
+            matched_stars=0,
+            inliers=0,
+            rms_px=float("nan"),
+            status="failed",
+            warnings=[f"not enough stars for {transform_model} triangle asterism registration"],
+            pairs=[],
+        )
+
+    reference_descriptors = _local_triangle_descriptors(reference_points, max_stars, neighbors, max_descriptors)
+    moving_descriptors = _local_triangle_descriptors(moving_points, max_stars, neighbors, max_descriptors)
+    warnings.extend(
+        [
+            f"triangle_asterism_reference_descriptors={len(reference_descriptors)}",
+            f"triangle_asterism_moving_descriptors={len(moving_descriptors)}",
+            f"triangle_asterism_neighbors={neighbors}",
+        ]
+    )
+    if not reference_descriptors or not moving_descriptors:
+        return StarRegistration(
+            transform_model=transform_model,
+            matrix=translation_matrix(0.0, 0.0),
+            matched_stars=0,
+            inliers=0,
+            rms_px=float("nan"),
+            status="failed",
+            warnings=warnings + ["no nondegenerate local triangle descriptors"],
+            pairs=[],
+        )
+
+    descriptor_matches: list[tuple[float, tuple[int, int, int], tuple[int, int, int]]] = []
+    reference_vectors = np.asarray([item[0] for item in reference_descriptors], dtype=np.float64)
+    for moving_descriptor, moving_indices, _moving_area in moving_descriptors:
+        distances = np.sqrt(np.sum((reference_vectors - moving_descriptor) ** 2, axis=1))
+        matched_indices = np.nonzero(distances <= descriptor_radius)[0]
+        for reference_descriptor_index in matched_indices:
+            _reference_descriptor, reference_indices, _reference_area = reference_descriptors[
+                int(reference_descriptor_index)
+            ]
+            descriptor_matches.append(
+                (float(distances[int(reference_descriptor_index)]), moving_indices, reference_indices)
+            )
+    descriptor_matches.sort(key=lambda item: item[0])
+    descriptor_matches = descriptor_matches[:max_candidates]
+    warnings.append(f"triangle_asterism_descriptor_matches={len(descriptor_matches)}")
+
+    best_matrix = np.eye(3, dtype=np.float64)
+    best_pairs: list[tuple[int, int]] = []
+    best_rms = float("inf")
+    for _descriptor_distance, moving_indices, reference_indices in descriptor_matches:
+        moving_triangle = moving_points[list(moving_indices)]
+        reference_triangle = reference_points[list(reference_indices)]
+        reference_orders = (reference_triangle, reference_triangle[[1, 0, 2]])
+        for ordered_reference_triangle in reference_orders:
+            try:
+                matrix = _fit_model_matrix(transform_model, moving_triangle, ordered_reference_triangle)
+            except ValueError:
+                continue
+            pairs, rms = _score_matrix(reference_points, moving_points, matrix, tolerance_px)
+            if len(pairs) > len(best_pairs) or (len(pairs) == len(best_pairs) and rms < best_rms):
+                best_matrix = matrix
+                best_pairs = pairs
+                best_rms = rms
+
+    for _iteration in range(3):
+        if len(best_pairs) < minimum_points:
+            break
+        moving_fit = moving_points[[pair[0] for pair in best_pairs]]
+        reference_fit = reference_points[[pair[1] for pair in best_pairs]]
+        try:
+            refined = _fit_model_matrix(transform_model, moving_fit, reference_fit)
+        except ValueError:
+            break
+        pairs, rms = _score_matrix(reference_points, moving_points, refined, tolerance_px)
+        if len(pairs) > len(best_pairs) or (len(pairs) == len(best_pairs) and rms <= best_rms):
+            best_matrix = refined
+            best_pairs = pairs
+            best_rms = rms
+
+    status = "ok" if len(best_pairs) >= min_inliers else "failed"
+    if status != "ok":
+        warnings.append(f"registration has {len(best_pairs)} inliers, below min_inliers={min_inliers}")
+    return StarRegistration(
+        transform_model=transform_model,
+        matrix=_matrix_to_list(best_matrix),
+        matched_stars=len(best_pairs),
+        inliers=len(best_pairs),
+        rms_px=float(best_rms) if np.isfinite(best_rms) else float("nan"),
+        status=status,
+        warnings=warnings,
+        pairs=best_pairs,
+    )
 
 
 def estimate_star_transform(

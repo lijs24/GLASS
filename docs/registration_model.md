@@ -89,6 +89,16 @@ The short-term target is not source-level compatibility with astroalign, but
 behavioral equivalence on a fixed set of star catalogs and a much faster
 resident CUDA implementation for high-VRAM WBPP-like runs.
 
+`gpwbpp.cpu.registration.estimate_triangle_asterism_transform` is the current
+owned CPU bridge for that migration. It builds local nearest-neighbor triangle
+descriptors from bounded star catalogs, matches scale-invariant side-ratio
+descriptors, fits similarity or affine hypotheses, scores one-to-one inliers,
+and refits from accepted pairs. Tests compare it against synthetic known
+similarity transforms and against the optional MIT-licensed `astroalign`
+backend on the same small star-field image pair. This keeps the GPU port target
+auditable before the local-KNN, descriptor matching, and hypothesis scoring
+steps move fully onto CUDA.
+
 The current pipeline registration path first uses GPWBPP's own streaming star
 detector and a clean-room matcher. Translation candidates come from star-pair
 offsets; similarity/affine candidates come from simple triangle descriptors and

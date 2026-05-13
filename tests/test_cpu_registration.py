@@ -6,9 +6,11 @@ import pytest
 from gpwbpp.cpu.registration import (
     estimate_astroalign_transform,
     estimate_star_transform,
+    estimate_triangle_asterism_transform,
     estimate_translation,
     estimate_translation_phase_correlation,
 )
+from gpwbpp.cpu.star_detect import detect_stars
 from gpwbpp.cpu.star_detect import Star
 from gpwbpp.engine.registration import _registration_preview
 from gpwbpp.engine.registration import register_calibrated_frames
@@ -107,6 +109,43 @@ def test_estimate_star_transform_similarity():
     assert np.allclose(np.asarray(result.matrix)[:2, 2], translation, atol=1.0e-6)
 
 
+def test_estimate_triangle_asterism_transform_similarity_with_outlier():
+    import math
+
+    points = np.array(
+        [(10, 10), (20, 10), (10, 25), (30, 30), (5, 35), (35, 5), (25, 18), (14, 32)],
+        dtype=np.float64,
+    )
+    reference = [Star(float(x), float(y), 1000.0 - i) for i, (x, y) in enumerate(points)]
+    angle = math.radians(-7.0)
+    scale = 0.98
+    linear = scale * np.array(
+        [[math.cos(angle), -math.sin(angle)], [math.sin(angle), math.cos(angle)]],
+        dtype=np.float64,
+    )
+    translation = np.array([-4.0, 3.0], dtype=np.float64)
+    moving_points = (points - translation) @ np.linalg.inv(linear).T
+    moving = [Star(float(x), float(y), 1000.0 - i) for i, (x, y) in enumerate(moving_points)]
+    moving.append(Star(100.0, 100.0, 1.0))
+
+    result = estimate_triangle_asterism_transform(
+        reference,
+        moving,
+        "similarity",
+        min_inliers=8,
+        tolerance_px=0.5,
+        neighbors=5,
+        descriptor_radius=0.1,
+    )
+
+    assert result.status == "ok"
+    assert result.inliers == 8
+    assert result.rms_px < 1.0e-5
+    assert np.allclose(np.asarray(result.matrix)[:2, :2], linear, atol=1.0e-6)
+    assert np.allclose(np.asarray(result.matrix)[:2, 2], translation, atol=1.0e-6)
+    assert any("triangle_asterism_descriptor_matches" in warning for warning in result.warnings)
+
+
 def test_estimate_astroalign_transform_translation_like_similarity():
     pytest.importorskip("astroalign")
     reference = _star_field()
@@ -121,6 +160,37 @@ def test_estimate_astroalign_transform_translation_like_similarity():
     assert abs(result.matrix[0][2] + 4.0) < 0.1
     assert abs(result.matrix[1][2] - 3.0) < 0.1
     assert any("astroalign" in warning for warning in result.warnings)
+
+
+def test_triangle_asterism_transform_agrees_with_astroalign_on_star_field():
+    pytest.importorskip("astroalign")
+    reference_image = _star_field()
+    moving_image = _shift_image(reference_image, 4, -3)
+    reference_stars = detect_stars(reference_image, threshold_sigma=3, max_stars=50)
+    moving_stars = detect_stars(moving_image, threshold_sigma=3, max_stars=50)
+
+    result = estimate_triangle_asterism_transform(
+        reference_stars,
+        moving_stars,
+        "similarity",
+        min_inliers=6,
+        tolerance_px=0.5,
+        neighbors=5,
+        descriptor_radius=0.1,
+    )
+    astroalign_result = estimate_astroalign_transform(
+        reference_image,
+        moving_image,
+        max_control_points=50,
+        detection_sigma=3,
+        min_area=3,
+    )
+
+    assert result.status == "ok"
+    assert result.inliers >= 6
+    assert result.rms_px < 0.1
+    assert abs(result.matrix[0][2] - astroalign_result.matrix[0][2]) < 0.25
+    assert abs(result.matrix[1][2] - astroalign_result.matrix[1][2]) < 0.25
 
 
 def test_register_calibrated_frames_can_use_astroalign_backend(tmp_path):
