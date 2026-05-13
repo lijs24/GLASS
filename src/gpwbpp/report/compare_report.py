@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from html import escape
 import json
+import os
 from pathlib import Path
 import struct
 import zlib
@@ -9,7 +11,6 @@ import numpy as np
 
 from gpwbpp.io.fits_io import read_fits_data
 from gpwbpp.io.xisf_io import read_xisf_data
-from gpwbpp.report.html_report import write_html_report
 
 
 def _read_image_data(path: str | Path) -> np.ndarray:
@@ -336,5 +337,155 @@ def compare_fits(
     return comparison
 
 
+def _format_value(value: object) -> str:
+    if isinstance(value, float):
+        return f"{value:.12g}"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(_format_value(item) for item in value)
+    return str(value)
+
+
+def _summary_rows(comparison: dict[str, object]) -> list[tuple[str, object]]:
+    timing = comparison.get("timing", {})
+    region = comparison.get("comparison_region", {})
+    rows: list[tuple[str, object]] = [
+        ("shape_match", comparison.get("shape_match")),
+        ("gpwbpp_format", comparison.get("gpwbpp_format")),
+        ("reference_format", comparison.get("reference_format")),
+        ("ignore_border_px", region.get("ignore_border_px") if isinstance(region, dict) else None),
+        ("compared_shape", region.get("compared_shape") if isinstance(region, dict) else None),
+        ("mean_diff", comparison.get("mean_diff")),
+        ("rms_diff", comparison.get("rms_diff")),
+        ("abs_diff_p50", comparison.get("abs_diff_p50")),
+        ("abs_diff_p90", comparison.get("abs_diff_p90")),
+        ("abs_diff_p99", comparison.get("abs_diff_p99")),
+        ("abs_diff_p999", comparison.get("abs_diff_p999")),
+        ("max_abs_diff", comparison.get("max_abs_diff")),
+    ]
+    if isinstance(timing, dict):
+        rows.extend(
+            [
+                ("gpwbpp_time_seconds", timing.get("gpwbpp_time_seconds")),
+                ("reference_time_seconds", timing.get("reference_time_seconds")),
+                ("speedup_vs_reference", timing.get("speedup_vs_reference")),
+                ("gpwbpp_faster", timing.get("gpwbpp_faster")),
+            ]
+        )
+    return rows
+
+
+def _rows_table(rows: list[tuple[str, object]]) -> str:
+    body = []
+    for key, value in rows:
+        body.append(
+            "<tr>"
+            f"<th>{escape(str(key))}</th>"
+            f"<td>{escape(_format_value(value))}</td>"
+            "</tr>"
+        )
+    return f"<table><tbody>{''.join(body)}</tbody></table>"
+
+
+def _path_href(path: str | Path, report_dir: Path) -> str:
+    target = Path(path)
+    try:
+        href = os.path.relpath(target, report_dir)
+    except ValueError:
+        href = str(target)
+    return href.replace("\\", "/")
+
+
+def _diagnostic_images(comparison: dict[str, object], report_dir: Path) -> str:
+    diagnostics = comparison.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        return "<p>No diagnostic images were generated.</p>"
+    keys = [
+        ("gpwbpp_preview_png", "GPWBPP preview"),
+        ("reference_preview_png", "Reference preview"),
+        ("abs_diff_preview_png", "Absolute difference"),
+        ("signed_diff_preview_png", "Signed difference"),
+    ]
+    cards = []
+    for key, label in keys:
+        path = diagnostics.get(key)
+        if not path:
+            continue
+        href = _path_href(str(path), report_dir)
+        cards.append(
+            "<figure>"
+            f'<a href="{escape(href)}"><img src="{escape(href)}" alt="{escape(label)}"></a>'
+            f"<figcaption>{escape(label)}</figcaption>"
+            "</figure>"
+        )
+    if not cards:
+        return "<p>No diagnostic images were generated.</p>"
+    return f"<div class=\"diagnostic-grid\">{''.join(cards)}</div>"
+
+
+def _hotspot_table(comparison: dict[str, object]) -> str:
+    diagnostics = comparison.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        return "<p>No hotspot diagnostics.</p>"
+    hotspots = diagnostics.get("hotspots")
+    if not isinstance(hotspots, list) or not hotspots:
+        return "<p>No hotspot diagnostics.</p>"
+    keys = ["x0", "x1", "y0", "y1", "pixels", "p99_abs_diff", "rms_diff", "mean_diff", "max_abs_diff"]
+    head = "".join(f"<th>{escape(key)}</th>" for key in keys)
+    rows = []
+    for item in hotspots[:16]:
+        if not isinstance(item, dict):
+            continue
+        cells = "".join(f"<td>{escape(_format_value(item.get(key)))}</td>" for key in keys)
+        rows.append(f"<tr>{cells}</tr>")
+    return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
 def write_compare_report(out_path: str | Path, comparison: dict[str, object]) -> None:
-    write_html_report(out_path, manifest={"summary": comparison, "frames": []}, plan=None, title="GPWBPP Compare")
+    target = Path(out_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    report_dir = target.parent
+    transform = comparison.get("candidate_transform", {})
+    full_frame_stats = comparison.get("full_frame_stats")
+    linear_fit = comparison.get("linear_fit_to_reference", {})
+    robust_fit = comparison.get("robust_linear_fit_to_reference", {})
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GPWBPP Compare</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; margin: 2rem; color: #202124; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }}
+    th, td {{ border: 1px solid #d0d7de; padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }}
+    th {{ background: #f6f8fa; }}
+    code, pre {{ background: #f6f8fa; padding: 0.1rem 0.25rem; }}
+    pre {{ overflow: auto; padding: 0.75rem; }}
+    .diagnostic-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }}
+    figure {{ margin: 0; border: 1px solid #d0d7de; padding: 0.5rem; }}
+    img {{ display: block; max-width: 100%; height: auto; background: #111; }}
+    figcaption {{ margin-top: 0.35rem; font-size: 0.9rem; color: #57606a; }}
+  </style>
+</head>
+<body>
+  <h1>GPWBPP Compare</h1>
+  <h2>Summary</h2>
+  {_rows_table(_summary_rows(comparison))}
+  <h2>Candidate Transform</h2>
+  <pre>{escape(json.dumps(transform, indent=2, sort_keys=True))}</pre>
+  <h2>Diagnostic Images</h2>
+  {_diagnostic_images(comparison, report_dir)}
+  <h2>Residual Hotspots</h2>
+  {_hotspot_table(comparison)}
+  <h2>Linear Fit To Reference</h2>
+  <pre>{escape(json.dumps(linear_fit, indent=2, sort_keys=True))}</pre>
+  <h2>Robust Linear Fit To Reference</h2>
+  <pre>{escape(json.dumps(robust_fit, indent=2, sort_keys=True))}</pre>
+  <h2>Full Frame Stats</h2>
+  <pre>{escape(json.dumps(full_frame_stats, indent=2, sort_keys=True))}</pre>
+  <h2>Clean-room Note</h2>
+  <p>This report compares GPWBPP output to a user-provided black-box reference artifact.
+  It does not use or claim access to PixInsight/WBPP implementation source.</p>
+</body>
+</html>
+"""
+    target.write_text(html, encoding="utf-8")

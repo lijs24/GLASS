@@ -160,3 +160,8 @@ def test_compare_writes_diagnostic_artifacts(tmp_path: Path):
     hotspots = json.loads((diagnostics / "hotspots.json").read_text(encoding="utf-8"))
     assert hotspots
     assert hotspots[0]["p99_abs_diff"] >= 3.0
+    html = out.read_text(encoding="utf-8")
+    assert "Diagnostic Images" in html
+    assert "Residual Hotspots" in html
+    assert "signed_diff_preview.png" in html
+    assert "<img" in html
