@@ -180,6 +180,10 @@ Resident CUDA integration now supports:
   with `--resident-star-prior ncc`. The prior is computed from resident
   integer/subpixel NCC kernels and passed to the catalog pair-offset scorer as a
   compact `(dx, dy, radius)` search window.
+- Resident similarity registration can use `--resident-star-prior auto_pierside`.
+  This reads only `PIERSIDE` metadata from `header_summary` or FITS headers: same
+  pier side uses the fast NCC-constrained prior, while opposite pier side disables
+  that prior and widens the rotation search for meridian-flip frames.
 
 The current resident rejection kernel is an engineering baseline for the
 high-VRAM path. It is not yet a byte-for-byte reproduction of PixInsight

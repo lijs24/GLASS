@@ -692,9 +692,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resident-star-grid-rows", type=int, default=0)
     run.add_argument(
         "--resident-star-prior",
-        choices=["none", "ncc"],
+        choices=["none", "ncc", "auto_pierside"],
         default="none",
-        help="optional GPU NCC prior to constrain resident star-catalog translation voting",
+        help=(
+            "optional prior for resident star-catalog voting: none, ncc, or auto_pierside "
+            "to use PIERSIDE metadata for same-side NCC and flipped-side wide rotation search"
+        ),
     )
     run.add_argument("--resident-star-prior-radius-px", type=float, default=4.0)
     run.add_argument(

@@ -89,6 +89,88 @@ def _frame_reference_tokens(frame: dict[str, Any]) -> set[str]:
     return {str(frame.get("id", "")), path.name, path.stem}
 
 
+def _frame_header_value(
+    frame: dict[str, Any],
+    key: str,
+    cache: dict[tuple[str, str], Any] | None = None,
+) -> Any | None:
+    key_upper = str(key).upper()
+    summary = frame.get("header_summary", {})
+    if isinstance(summary, dict):
+        for candidate in (key, key_upper, key_upper.lower()):
+            if candidate in summary:
+                return summary[candidate]
+
+    path = str(frame.get("path") or "")
+    if not path:
+        return None
+    cache_key = (path, key_upper)
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+    value = None
+    try:
+        from astropy.io import fits
+
+        header = fits.getheader(path, 0)
+        value = header.get(key_upper)
+    except Exception:
+        value = None
+    if cache is not None:
+        cache[cache_key] = value
+    return value
+
+
+def _normalize_pierside(value: Any | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in {"e", "east", "pier east", "east side", "east-of-pier"}:
+        return "east"
+    if text in {"w", "west", "pier west", "west side", "west-of-pier"}:
+        return "west"
+    return text
+
+
+def _resident_similarity_frame_dispatch(
+    resident_star_prior: str,
+    reference_frame: dict[str, Any],
+    moving_frame: dict[str, Any],
+    header_cache: dict[tuple[str, str], Any] | None = None,
+) -> dict[str, Any]:
+    if resident_star_prior != "auto_pierside":
+        return {
+            "prior": resident_star_prior,
+            "orientation_mode": "manual",
+            "reference_pierside": None,
+            "moving_pierside": None,
+        }
+
+    reference_pierside = _normalize_pierside(_frame_header_value(reference_frame, "PIERSIDE", header_cache))
+    moving_pierside = _normalize_pierside(_frame_header_value(moving_frame, "PIERSIDE", header_cache))
+    if reference_pierside and moving_pierside:
+        if reference_pierside == moving_pierside:
+            return {
+                "prior": "ncc",
+                "orientation_mode": "pierside_same",
+                "reference_pierside": reference_pierside,
+                "moving_pierside": moving_pierside,
+            }
+        return {
+            "prior": "none",
+            "orientation_mode": "pierside_flipped",
+            "reference_pierside": reference_pierside,
+            "moving_pierside": moving_pierside,
+        }
+    return {
+        "prior": "ncc",
+        "orientation_mode": "pierside_unknown",
+        "reference_pierside": reference_pierside,
+        "moving_pierside": moving_pierside,
+    }
+
+
 def _find_reference_frame(light_frames: list[dict[str, Any]], reference_frame_id: str | None) -> dict[str, Any]:
     if reference_frame_id:
         for frame in light_frames:
@@ -815,8 +897,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_star_max_candidates must be positive")
     if resident_star_tolerance_px < 0:
         raise ValueError("resident_star_tolerance_px must be non-negative")
-    if resident_star_prior not in {"none", "ncc"}:
-        raise ValueError("resident_star_prior must be none or ncc")
+    if resident_star_prior not in {"none", "ncc", "auto_pierside"}:
+        raise ValueError("resident_star_prior must be none, ncc, or auto_pierside")
     if resident_star_prior_radius_px < 0:
         raise ValueError("resident_star_prior_radius_px must be non-negative")
     if resident_star_core_preselect_top_k < 0:
@@ -865,6 +947,7 @@ def run_resident_calibration_integration(
             external_reference_frame_id = str(external_registration_payload["reference_frame_id"])
     output_dir = run / "integration"
     output_dir.mkdir(parents=True, exist_ok=True)
+    header_cache: dict[tuple[str, str], Any] = {}
 
     resident_artifacts: list[dict[str, Any]] = []
     outputs: list[dict[str, Any]] = []
@@ -1299,6 +1382,32 @@ def run_resident_calibration_integration(
                     "cuda_catalog_max_abs_rotation_rad",
                     0.01,
                 )
+                pierside_same_similarity_top_k = max(
+                    0,
+                    _policy_int(
+                        registration_policy,
+                        "cuda_catalog_pierside_same_similarity_top_k",
+                        similarity_top_k,
+                    ),
+                )
+                pierside_flip_similarity_top_k = max(
+                    0,
+                    _policy_int(
+                        registration_policy,
+                        "cuda_catalog_pierside_flip_similarity_top_k",
+                        max(similarity_top_k, 64),
+                    ),
+                )
+                pierside_same_max_abs_rotation_rad = _policy_optional_float(
+                    registration_policy,
+                    "cuda_catalog_pierside_same_max_abs_rotation_rad",
+                    max_abs_rotation_rad,
+                )
+                pierside_flip_max_abs_rotation_rad = _policy_optional_float(
+                    registration_policy,
+                    "cuda_catalog_pierside_flip_max_abs_rotation_rad",
+                    3.2,
+                )
                 refine_kwargs = {
                     "search_radius_px": _policy_float(
                         registration_policy,
@@ -1428,11 +1537,42 @@ def run_resident_calibration_integration(
                             inliers = 1
                             rms_px = 0.0
                         else:
+                            dispatch = _resident_similarity_frame_dispatch(
+                                resident_star_prior,
+                                reference_frame,
+                                frame,
+                                header_cache,
+                            )
+                            frame_star_prior = str(dispatch["prior"])
+                            orientation_mode = str(dispatch["orientation_mode"])
+                            frame_similarity_top_k = similarity_top_k
+                            frame_max_abs_rotation_rad = max_abs_rotation_rad
+                            if resident_star_prior == "auto_pierside":
+                                if orientation_mode == "pierside_flipped":
+                                    frame_similarity_top_k = pierside_flip_similarity_top_k
+                                    frame_max_abs_rotation_rad = pierside_flip_max_abs_rotation_rad
+                                elif orientation_mode == "pierside_same":
+                                    frame_similarity_top_k = pierside_same_similarity_top_k
+                                    frame_max_abs_rotation_rad = pierside_same_max_abs_rotation_rad
                             prior_dx = 0.0
                             prior_dy = 0.0
                             prior_radius = -1.0
                             prior_warnings: list[str] = []
-                            if resident_star_prior == "ncc":
+                            prior_warnings.extend(
+                                [
+                                    f"similarity_prior_requested={resident_star_prior}",
+                                    f"similarity_prior_effective={frame_star_prior}",
+                                    f"similarity_orientation_mode={orientation_mode}",
+                                    "similarity_reference_pierside="
+                                    + str(dispatch.get("reference_pierside") or "unknown"),
+                                    "similarity_frame_pierside="
+                                    + str(dispatch.get("moving_pierside") or "unknown"),
+                                    f"similarity_frame_top_k={frame_similarity_top_k}",
+                                    "similarity_frame_max_abs_rotation_rad="
+                                    + str(frame_max_abs_rotation_rad),
+                                ]
+                            )
+                            if frame_star_prior == "ncc":
                                 if not hasattr(stack, "estimate_translation_to_reference") or not hasattr(
                                     stack,
                                     "estimate_translation_subpixel_to_reference",
@@ -1467,6 +1607,8 @@ def run_resident_calibration_integration(
                                         f"similarity_prior_subpixel_score={float(refined_prior['score']):.6g}",
                                     ]
                                 )
+                            else:
+                                prior_warnings.append("similarity_prior_model=none")
 
                             threshold_candidates, threshold_mode = _resident_star_threshold_candidates(
                                 stack,
@@ -1508,8 +1650,8 @@ def run_resident_calibration_integration(
                                     prior_radius_px=prior_radius,
                                     min_scale=min_scale,
                                     max_scale=max_scale,
-                                    max_abs_rotation_rad=max_abs_rotation_rad,
-                                    top_k=similarity_top_k,
+                                    max_abs_rotation_rad=frame_max_abs_rotation_rad,
+                                    top_k=frame_similarity_top_k,
                                 )
                                 trial_results.append(
                                     {
@@ -1728,7 +1870,9 @@ def run_resident_calibration_integration(
                                         + ",".join(f"{float(item):.6g}" for item in threshold_candidates),
                                         f"reference_stars={int(selected_reference_catalog['stored_count'])}",
                                         f"moving_stars={int(selected_moving_catalog['stored_count'])}",
-                                        f"similarity_top_k={int(selected_fit.get('top_k', similarity_top_k))}",
+                                        f"similarity_top_k={int(selected_fit.get('top_k', frame_similarity_top_k))}",
+                                        "similarity_max_abs_rotation_rad="
+                                        + str(frame_max_abs_rotation_rad),
                                         f"similarity_top_candidate_count={len(selected_fit.get('top_candidates', []))}",
                                         f"similarity_seed_count={int(refinement['seed_count'])}",
                                         f"similarity_refined_seed_count={len(selected_seed_indices)}",
@@ -2039,6 +2183,30 @@ def run_resident_calibration_integration(
                         "star_grid_rows": resident_star_grid_rows,
                         "star_prior": resident_star_prior,
                         "star_prior_radius_px": resident_star_prior_radius_px,
+                        "pierside_same_similarity_top_k": _policy_int(
+                            registration_policy,
+                            "cuda_catalog_pierside_same_similarity_top_k",
+                            _policy_int(registration_policy, "cuda_catalog_similarity_top_k", 8),
+                        ),
+                        "pierside_flip_similarity_top_k": _policy_int(
+                            registration_policy,
+                            "cuda_catalog_pierside_flip_similarity_top_k",
+                            max(_policy_int(registration_policy, "cuda_catalog_similarity_top_k", 8), 64),
+                        ),
+                        "pierside_same_max_abs_rotation_rad": _policy_optional_float(
+                            registration_policy,
+                            "cuda_catalog_pierside_same_max_abs_rotation_rad",
+                            _policy_optional_float(
+                                registration_policy,
+                                "cuda_catalog_max_abs_rotation_rad",
+                                0.01,
+                            ),
+                        ),
+                        "pierside_flip_max_abs_rotation_rad": _policy_optional_float(
+                            registration_policy,
+                            "cuda_catalog_pierside_flip_max_abs_rotation_rad",
+                            3.2,
+                        ),
                         "star_core_preselect_top_k": _policy_int(
                             registration_policy,
                             "cuda_catalog_star_core_preselect_top_k",

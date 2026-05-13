@@ -9,6 +9,7 @@ from gpwbpp.cli import main
 from gpwbpp.io.json_io import read_json, write_json
 from gpwbpp.engine.resident_cuda import (
     _matches_any_token,
+    _resident_similarity_frame_dispatch,
     _select_star_core_preselected_seed_indices,
     _select_star_guarded_seed,
 )
@@ -122,6 +123,29 @@ def test_resident_star_guarded_seed_prefers_star_core_metric_with_inlier_slack()
     assert guard["status"] == "replaced_pixel_metric_with_star_core_metric"
     assert guard["star_max_inliers"] == 15
     assert guard["star_min_inliers_for_core_metric"] == 13
+
+
+def test_resident_similarity_auto_pierside_dispatches_prior_and_orientation():
+    reference = {"path": "", "header_summary": {"PIERSIDE": "West"}}
+    same_side = {"path": "", "header_summary": {"PIERSIDE": "W"}}
+    flipped = {"path": "", "header_summary": {"PIERSIDE": "East"}}
+    unknown = {"path": "", "header_summary": {}}
+
+    same = _resident_similarity_frame_dispatch("auto_pierside", reference, same_side, {})
+    flip = _resident_similarity_frame_dispatch("auto_pierside", reference, flipped, {})
+    fallback = _resident_similarity_frame_dispatch("auto_pierside", reference, unknown, {})
+    manual = _resident_similarity_frame_dispatch("ncc", reference, flipped, {})
+
+    assert same["prior"] == "ncc"
+    assert same["orientation_mode"] == "pierside_same"
+    assert same["reference_pierside"] == "west"
+    assert same["moving_pierside"] == "west"
+    assert flip["prior"] == "none"
+    assert flip["orientation_mode"] == "pierside_flipped"
+    assert fallback["prior"] == "ncc"
+    assert fallback["orientation_mode"] == "pierside_unknown"
+    assert manual["prior"] == "ncc"
+    assert manual["orientation_mode"] == "manual"
 
 
 def _two_dark_group_dataset(tmp_path: Path) -> Path:
@@ -397,6 +421,9 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
     plan_payload = read_json(plan)
+    for frame in plan_payload["frames"]:
+        if frame["frame_type"] == "light":
+            frame.setdefault("header_summary", {})["PIERSIDE"] = "West"
     plan_payload.setdefault("registration_policy", {}).update(
         {
             "cuda_catalog_tolerance_px": 1.5,
@@ -447,7 +474,7 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
             "--resident-star-grid-rows",
             "4",
             "--resident-star-prior",
-            "ncc",
+            "auto_pierside",
             "--resident-star-prior-radius-px",
             "2",
             "--resident-star-core-preselect-top-k",
@@ -474,6 +501,9 @@ def test_cli_resident_cuda_run_similarity_catalog_aligns_shifted_pair(tmp_path: 
     assert abs(moving["matrix"][0][2] + 3.0) < 0.5
     assert abs(moving["matrix"][1][2] - 2.0) < 0.5
     assert any("similarity_top_k=3" in warning for warning in moving["warnings"])
+    assert any("similarity_prior_requested=auto_pierside" in warning for warning in moving["warnings"])
+    assert any("similarity_prior_effective=ncc" in warning for warning in moving["warnings"])
+    assert any("similarity_orientation_mode=pierside_same" in warning for warning in moving["warnings"])
     assert any("similarity_seed_count=2" in warning for warning in moving["warnings"])
     assert any("similarity_refined_seed_count=2" in warning for warning in moving["warnings"])
     assert any("similarity_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
