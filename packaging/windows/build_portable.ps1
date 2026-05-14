@@ -70,6 +70,8 @@ if ($BuildCuda) {
 
     Invoke-Native -FilePath $Py -Arguments @("-m", "pip", "install", "cmake", "ninja", "pybind11")
     $CMake = Join-Path $Runtime "Scripts\cmake.exe"
+    $Ninja = Join-Path $Runtime "Scripts\ninja.exe"
+    $env:PATH = (Join-Path $Runtime "Scripts") + ";" + $env:PATH
     $Pybind11Dir = & $Py -c "import pybind11; print(pybind11.get_cmake_dir())"
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Pybind11Dir)) {
         throw "Unable to resolve pybind11 CMake directory from the portable runtime."
@@ -92,6 +94,7 @@ if ($BuildCuda) {
         "-DCMAKE_CUDA_ARCHITECTURES=$CudaArchitectures",
         "-DCUDAToolkit_ROOT=$ResolvedCudaRoot",
         "-DCMAKE_CUDA_COMPILER=$Nvcc",
+        "-DCMAKE_MAKE_PROGRAM=$Ninja",
         "-DPython3_EXECUTABLE=$Py",
         "-Dpybind11_DIR=$Pybind11Dir"
     )
@@ -104,8 +107,21 @@ if ($BuildCuda) {
     if (-not $Native) {
         throw "CUDA build completed, but _glass_cuda_native*.pyd was not found in src."
     }
-    $SitePackages = & $Py -c "import site; print(site.getsitepackages()[0])"
+    $SitePackageCandidates = & $Py -c "import site; print('\n'.join(site.getsitepackages()))"
+    $SitePackages = $SitePackageCandidates |
+        Where-Object { $_ -like "*site-packages" } |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($SitePackages)) {
+        $SitePackages = $SitePackageCandidates | Select-Object -First 1
+    }
+    if ([string]::IsNullOrWhiteSpace($SitePackages)) {
+        throw "Unable to resolve Python site-packages for the portable runtime."
+    }
     Copy-Item $Native.FullName $SitePackages -Force
+    $PackagedNative = Get-ChildItem -Path $SitePackages -Filter "_glass_cuda_native*.pyd" | Select-Object -First 1
+    if (-not $PackagedNative) {
+        throw "CUDA build completed, but _glass_cuda_native*.pyd was not copied to $SitePackages."
+    }
 }
 
 @"
