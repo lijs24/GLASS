@@ -1,6 +1,6 @@
 # GLASS
 
-**GLASS** is the **GPU-Accelerated Lightframe Alignment and Stacking System**:
+**GLASS** is the **GPU-accelerated Lightframe Alignment and Stacking System**:
 a deep-sky image calibration, alignment, rejection, and integration engine with
 a CPU baseline and an optional CUDA resident backend.
 
