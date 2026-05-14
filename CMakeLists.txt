@@ -5,6 +5,7 @@ option(GLASS_BUILD_CUDA "Build optional CUDA extension" OFF)
 option(GLASS_BUILD_PYTHON_CUDA "Build native Python CUDA module" OFF)
 set(GLASS_CUDA_RUNTIME_LIBRARY "Shared" CACHE STRING "CUDA runtime linkage for the native module")
 set_property(CACHE GLASS_CUDA_RUNTIME_LIBRARY PROPERTY STRINGS Shared Static)
+option(GLASS_CUDA_ALLOW_UNSUPPORTED_COMPILER "Pass --allow-unsupported-compiler to NVCC" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerWarnings)
@@ -42,5 +43,10 @@ if(GLASS_BUILD_PYTHON_CUDA)
     CUDA_RUNTIME_LIBRARY "${GLASS_CUDA_RUNTIME_LIBRARY}"
     CUDA_SEPARABLE_COMPILATION OFF
   )
+  if(GLASS_CUDA_ALLOW_UNSUPPORTED_COMPILER)
+    target_compile_options(_glass_cuda_native PRIVATE
+      $<$<COMPILE_LANGUAGE:CUDA>:--allow-unsupported-compiler>
+    )
+  endif()
   glass_enable_warnings(_glass_cuda_native)
 endif()

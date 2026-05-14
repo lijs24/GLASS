@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
-    name: Build Windows artifacts
+  build-cpu:
+    name: Build CPU portable package
     runs-on: windows-latest
 
     steps:
@@ -34,7 +34,7 @@ jobs:
       - name: Build Python distributions
         run: python -m build --wheel --sdist
 
-      - name: Build portable Windows package
+      - name: Build CPU portable Windows package
         shell: pwsh
         run: |
           .\packaging\windows\build_portable.ps1 -Python python
@@ -42,17 +42,101 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($tag) -or $tag -eq "main") {
             $tag = "manual"
           }
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item ".release\windows\GLASS-Portable-win64.zip" "dist\GLASS-$tag-Portable-win64.zip" -Force
+          New-Item -ItemType Directory -Force release-out | Out-Null
+          Copy-Item -Path ".release\windows\GLASS-Portable-win64.zip" -Destination "release-out\GLASS-$tag-Portable-win64-cpu.zip" -Force
+          Copy-Item -Path "dist\glass_stack-*.whl" -Destination release-out -Force
+          Copy-Item -Path "dist\glass_stack-*.tar.gz" -Destination release-out -Force
+
+      - name: Upload CPU artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: glass-windows-cpu
+          path: release-out/*
+
+  build-cuda:
+    name: Build CUDA ${{ matrix.label }} portable package
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: cuda11
+            cuda: "11.8.0"
+            arch: "52;61;75;86"
+          - label: cuda12
+            cuda: "12.9.0"
+            arch: "75;86;89;90"
+          - label: cuda13
+            cuda: "13.0.2"
+            arch: "86;89;90;120"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install CUDA Toolkit ${{ matrix.cuda }}
+        uses: Jimver/cuda-toolkit@v0.2.29
+        with:
+          cuda: ${{ matrix.cuda }}
+          method: network
+          log-file-suffix: windows-${{ matrix.label }}.txt
+
+      - name: Build CUDA portable Windows package
+        shell: pwsh
+        run: |
+          nvcc --version
+          .\packaging\windows\build_portable.ps1 `
+            -Python python `
+            -BuildCuda `
+            -StaticCudaRuntime `
+            -CudaArchitectures "${{ matrix.arch }}"
+          .\.release\windows\GLASS\runtime\Scripts\python.exe -c "import glass_cuda; assert glass_cuda.native_extension_loaded(), 'native CUDA extension did not load'; print(glass_cuda.native_extension_loaded())"
+          $tag = "${{ github.ref_name }}"
+          if ([string]::IsNullOrWhiteSpace($tag) -or $tag -eq "main") {
+            $tag = "manual"
+          }
+          New-Item -ItemType Directory -Force release-out | Out-Null
+          Copy-Item -Path ".release\windows\GLASS-Portable-win64.zip" -Destination "release-out\GLASS-$tag-Portable-win64-${{ matrix.label }}.zip" -Force
+
+      - name: Upload CUDA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: glass-windows-${{ matrix.label }}
+          path: release-out/*
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: windows-latest
+    needs:
+      - build-cpu
+      - build-cuda
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           name: GLASS ${{ github.ref_name }}
           body_path: docs/releases/${{ github.ref_name }}.md
           prerelease: true
           files: |
-            dist/GLASS-${{ github.ref_name }}-Portable-win64.zip
+            dist/GLASS-${{ github.ref_name }}-Portable-win64-cpu.zip
+            dist/GLASS-${{ github.ref_name }}-Portable-win64-cuda11.zip
+            dist/GLASS-${{ github.ref_name }}-Portable-win64-cuda12.zip
+            dist/GLASS-${{ github.ref_name }}-Portable-win64-cuda13.zip
             dist/glass_stack-*.whl
             dist/glass_stack-*.tar.gz
