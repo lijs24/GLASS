@@ -1,0 +1,58 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows artifacts
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build wheel
+
+      - name: Run smoke tests
+        run: |
+          python -m pip install -e .[dev,report]
+          python -m pytest -q tests/test_cli_smoke.py tests/test_synthetic_generator.py tests/test_cpu_calibration.py
+
+      - name: Build Python distributions
+        run: python -m build --wheel --sdist
+
+      - name: Build portable Windows package
+        shell: pwsh
+        run: |
+          .\packaging\windows\build_portable.ps1 -Python python
+          $tag = "${{ github.ref_name }}"
+          if ([string]::IsNullOrWhiteSpace($tag) -or $tag -eq "main") {
+            $tag = "manual"
+          }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item ".release\windows\GLASS-Portable-win64.zip" "dist\GLASS-$tag-Portable-win64.zip" -Force
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: GLASS ${{ github.ref_name }}
+          body_path: docs/releases/${{ github.ref_name }}.md
+          prerelease: true
+          files: |
+            dist/GLASS-${{ github.ref_name }}-Portable-win64.zip
+            dist/glass_stack-*.whl
+            dist/glass_stack-*.tar.gz

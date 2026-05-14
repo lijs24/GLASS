@@ -56,7 +56,11 @@ setlocal
 
 Copy-Item (Join-Path $Root "README.md") $AppRoot -Force
 Copy-Item (Join-Path $Root "LICENSE") $AppRoot -Force
-Copy-Item (Join-Path $Root "docs") (Join-Path $AppRoot "docs") -Recurse -Force
+
+$PublicDocs = Join-Path $AppRoot "docs"
+New-Item -ItemType Directory -Force $PublicDocs | Out-Null
+Copy-Item (Join-Path $Root "docs\project_overview.md") $PublicDocs -Force
+Copy-Item (Join-Path $Root "docs\windows_release.md") $PublicDocs -Force
 
 git -C $Root rev-parse --short HEAD | Set-Content -Encoding ASCII $SourceStamp
 
