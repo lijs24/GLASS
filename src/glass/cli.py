@@ -697,6 +697,7 @@ def _doctor_payload() -> dict:
             )
             cuda_info["cuda_available"] = bool(getattr(glass_cuda, "cuda_available", lambda: False)())
             cuda_info["devices"] = list(getattr(glass_cuda, "list_devices", lambda: [])())
+            cuda_info["error"] = getattr(glass_cuda, "native_import_error", lambda: None)()
         except Exception as exc:  # pragma: no cover - environment-specific diagnostic path
             cuda_info["error"] = str(exc)
     return {

@@ -21,11 +21,29 @@ from glass.cpu.calibration import calibrate_light
 from glass.models import CalibrationPolicy
 
 
+_NATIVE_ATTEMPTED = False
+_NATIVE_MODULE = None
+_NATIVE_IMPORT_ERROR: str | None = None
+
+
 def _native():
+    global _NATIVE_ATTEMPTED, _NATIVE_MODULE, _NATIVE_IMPORT_ERROR
+    if _NATIVE_ATTEMPTED:
+        return _NATIVE_MODULE
+    _NATIVE_ATTEMPTED = True
     try:
-        return importlib.import_module("_glass_cuda_native")
-    except Exception:
+        _NATIVE_MODULE = importlib.import_module("_glass_cuda_native")
+        _NATIVE_IMPORT_ERROR = None
+    except Exception as exc:
+        _NATIVE_MODULE = None
+        _NATIVE_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
         return None
+    return _NATIVE_MODULE
+
+
+def native_import_error() -> str | None:
+    _native()
+    return _NATIVE_IMPORT_ERROR
 
 
 def native_extension_loaded() -> bool:

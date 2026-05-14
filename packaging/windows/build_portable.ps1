@@ -166,6 +166,11 @@ if ($BuildCuda) {
     if (-not $PackagedNative) {
         throw "CUDA build completed, but _glass_cuda_native*.pyd was not copied to $SitePackages."
     }
+
+    $CudaRuntimeDlls = Get-ChildItem -Path (Join-Path $ResolvedCudaRoot "bin") -Filter "cudart64_*.dll" -ErrorAction SilentlyContinue
+    foreach ($Dll in $CudaRuntimeDlls) {
+        Copy-Item $Dll.FullName $SitePackages -Force
+    }
 }
 
 @"

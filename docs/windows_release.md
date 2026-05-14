@@ -65,6 +65,10 @@ CUDA runtime linkage:
 
 For broad public releases, prefer static CUDA runtime linkage unless testing
 shows a strong reason to ship dynamic CUDA DLLs.
+The builder also copies any `cudart64_*.dll` from the selected CUDA Toolkit into
+the package. Some Toolkit/MSVC combinations still leave a runtime DLL import
+even when static linkage is requested, so the portable zip must carry that
+redistributable DLL for reliable loading.
 
 The portable builder copies the base Python runtime into the package before
 installing GLASS and its dependencies. This avoids non-relocatable virtual
