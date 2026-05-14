@@ -1,24 +1,15 @@
 # GLASS
 
 **GLASS** is the **GPU-Accelerated Lightframe Alignment and Stacking System**:
-a clean-room deep-sky image calibration, alignment, rejection, and integration
-engine with a CPU baseline and an optional CUDA resident backend.
+a deep-sky image calibration, alignment, rejection, and integration engine with
+a CPU baseline and an optional CUDA resident backend.
 
 The project is designed for large FITS/XISF datasets. It uses staged manifests,
 processing plans, resumable run state, diagnostic artifacts, HTML reports, and
 out-of-core or full-VRAM execution modes. On suitable NVIDIA hardware, the
 resident CUDA path keeps calibrated light frames in VRAM and minimizes round
-trips through disk and host memory.
-
-## Clean-Room Boundary
-
-- GLASS does not read, copy, summarize, or rework official PixInsight WBPP/PJSR
-  source code.
-- PixInsight/WBPP may be used only as a black-box reference through
-  user-generated logs, settings, and outputs.
-- Optional PixInsight launcher for users who already own PixInsight. GLASS does
-  not require PixInsight.
-- Input image directories are treated as read-only.
+trips through disk and host memory. Input image directories are treated as
+read-only.
 
 ## Quick Start
 
@@ -47,7 +38,7 @@ python -c "from glass.capabilities import capability_report; print(capability_re
 - `glass resume`: summarize and resume-safe state for an existing run directory.
 - `glass report`: generate an HTML report from run artifacts.
 - `glass audit`: scan, plan, run, and report in one command.
-- `glass compare`: compare a GLASS master with a black-box reference master.
+- `glass compare`: compare a GLASS master with a reference master.
 - `glass synthetic`: generate controlled FITS fixtures for correctness tests.
 
 ## Windows Distribution Strategy

@@ -70,7 +70,7 @@ Installer:
 
 ## Release Checklist
 
-- Legacy project-token checks return no tracked matches.
+- Branding and package-name checks return no stale tracked matches.
 - `python -m pytest -q` passes.
 - `glass doctor --allow-cpu-only` succeeds.
 - CUDA machine: `glass doctor` reports native CUDA available.
