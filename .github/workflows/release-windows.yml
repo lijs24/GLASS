@@ -98,7 +98,11 @@ jobs:
             -BuildCuda `
             -StaticCudaRuntime `
             -CudaArchitectures "${{ matrix.arch }}"
-          .\.release\windows\GLASS\runtime\Scripts\python.exe -c "import glass_cuda; assert glass_cuda.native_extension_loaded(), 'native CUDA extension did not load'; print(glass_cuda.native_extension_loaded())"
+          $native = Get-ChildItem ".release\windows\GLASS\runtime\Lib\site-packages" -Filter "_glass_cuda_native*.pyd" -Recurse | Select-Object -First 1
+          if (-not $native) {
+            throw "native CUDA extension was not packaged"
+          }
+          .\.release\windows\GLASS\glass-doctor.cmd
           $tag = "${{ github.ref_name }}"
           if ([string]::IsNullOrWhiteSpace($tag) -or $tag -eq "main") {
             $tag = "manual"

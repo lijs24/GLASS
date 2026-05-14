@@ -87,6 +87,7 @@ if ($BuildCuda) {
         "-DGLASS_BUILD_CUDA=OFF",
         "-DGLASS_CUDA_RUNTIME_LIBRARY=$RuntimeLinkage",
         "-DGLASS_CUDA_ALLOW_UNSUPPORTED_COMPILER=ON",
+        "-DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler",
         "-DCMAKE_BUILD_TYPE=$Configuration",
         "-DCMAKE_CUDA_ARCHITECTURES=$CudaArchitectures",
         "-DCUDAToolkit_ROOT=$ResolvedCudaRoot",
