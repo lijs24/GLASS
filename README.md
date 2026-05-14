@@ -11,6 +11,28 @@ resident CUDA path keeps calibrated light frames in VRAM and minimizes round
 trips through disk and host memory. Input image directories are treated as
 read-only.
 
+## Real Dataset Benchmark
+
+On a 200-light H-alpha M38 dataset with 20 bias, 20 dark, and 20 flat frames
+at 9600x6422 pixels, the resident CUDA backend completed calibration,
+alignment, rejection, and integration in about 30-32 seconds on an NVIDIA RTX
+PRO 6000 Blackwell workstation. The WBPP reference run on the same data took
+1092.541 seconds.
+
+| Run | Time | Speedup vs WBPP | RMS vs reference | P99 abs diff | Shape |
+| --- | ---: | ---: | ---: | ---: | --- |
+| WBPP reference | 1092.541 s | 1.00x | reference | reference | 9600x6422 |
+| GLASS CUDA 11 package | 30.361 s | 35.98x | 0.00155829 | 0.000430955 | match |
+| GLASS CUDA 12 package | 30.515 s | 35.80x | 0.00155829 | 0.000430955 | match |
+| GLASS CUDA 13 package | 32.004 s | 34.14x | 0.00155911 | 0.000430912 | match |
+
+The CUDA 11 and CUDA 12 outputs were bit-identical in this run. CUDA 13 showed
+only small floating-point/code-generation differences while keeping the same
+reference-level image agreement. These numbers are a single workstation
+measurement, but they show the intended GLASS execution model: keep the stack
+resident in VRAM, reduce disk round trips, and make heavy alignment and stacking
+work GPU-bound instead of storage-bound.
+
 ## Quick Start
 
 ```powershell
