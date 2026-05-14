@@ -79,6 +79,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install CUDA Toolkit ${{ matrix.cuda }}
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
