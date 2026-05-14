@@ -56,13 +56,7 @@ def _run_nvidia_smi() -> list[str]:
     return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
 
 
-def list_devices() -> list[dict[str, Any]]:
-    native = _native()
-    if native is not None:
-        try:
-            return list(native.list_devices())
-        except Exception:
-            pass
+def _nvidia_smi_devices() -> list[dict[str, Any]]:
     devices: list[dict[str, Any]] = []
     for line in _run_nvidia_smi():
         parts = [part.strip() for part in line.split(",")]
@@ -89,6 +83,27 @@ def list_devices() -> list[dict[str, Any]]:
             }
         )
     return devices
+
+
+def list_devices() -> list[dict[str, Any]]:
+    native = _native()
+    smi_devices = _nvidia_smi_devices()
+    if native is not None:
+        try:
+            native_devices = [dict(device) for device in native.list_devices()]
+            smi_by_id = {device.get("device_id"): device for device in smi_devices}
+            for device in native_devices:
+                smi = smi_by_id.get(device.get("device_id"))
+                if smi is None:
+                    continue
+                for key in ("driver_version", "compute_capability", "memory_total_mib", "name"):
+                    value = device.get(key)
+                    if value in (None, "", "unknown"):
+                        device[key] = smi.get(key)
+            return native_devices
+        except Exception:
+            pass
+    return smi_devices
 
 
 def get_device_info(device_id: int) -> dict[str, Any]:

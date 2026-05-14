@@ -6,7 +6,7 @@ This document describes the first Windows-only distribution plan for GLASS.
 
 | Artifact | Audience | Notes |
 | --- | --- | --- |
-| `GLASS-Portable-win64.zip` | Most beta testers | Unpack and run `glass.cmd` or `glass-doctor.cmd`. |
+| `GLASS-Portable-win64.zip` | Most beta testers | Unpack and run `glass.cmd` or `glass-doctor.cmd`; the package contains its own relocatable Python runtime. |
 | `GLASS-Setup-win64.exe` | Ordinary Windows users | Installer built from the portable folder with Inno Setup. |
 | `glass-stack` wheel/sdist | Python users | CPU-capable package, useful for scripts and development. |
 | Future `glass-cuda-cu12` wheel | NVIDIA users | CUDA native module package once binary wheel build is separated. |
@@ -30,17 +30,45 @@ Those tools are only for source builds.
 
 ## CUDA Compatibility Strategy
 
-The first public CUDA track should target CUDA 12 on Windows x64. The portable
-builder can build the native module with either shared or static CUDA runtime
-linkage:
+Windows releases are split into CPU, CUDA 11, CUDA 12, and CUDA 13 portable
+packages. GPU users should not need the CUDA Toolkit, Visual Studio, CMake, or
+Ninja. Each CUDA portable package includes the GLASS native module plus the CUDA
+runtime components that are redistributable for that toolkit line; the installed
+NVIDIA display driver still provides the kernel driver and PTX JIT.
+
+The preferred package is the newest package with native GPU code for the target
+card. Newer GPUs can also try older CUDA packages when their NVIDIA driver
+supports the bundled runtime: those packages use PTX forward JIT instead of a
+native cubin for the newest architecture. This gives a practical fallback path,
+although first launch may be slower and peak performance can be lower than the
+native package.
+
+Current Windows CUDA package intent:
+
+| Package | Toolkit | Native targets | Compatibility fallback |
+| --- | --- | --- | --- |
+| `cuda11` | 11.8 | 5.0, 5.2, 6.0, 6.1, 7.0, 7.5, 8.0, 8.6 | Newer GPUs through PTX JIT if the installed driver supports CUDA 11.8 runtime loading. |
+| `cuda12` | 12.4 | 7.5, 8.0, 8.6, 8.9, 9.0 | Newer GPUs through PTX JIT if the installed driver supports CUDA 12.4 runtime loading. |
+| `cuda13` | 13.0 | 8.6, 8.9, 9.0, 10.0, 12.0 | Preferred for Blackwell-class cards and later CUDA 13-era systems. |
+
+For example, an RTX PRO 6000 Blackwell machine should try `cuda13` first for
+native `sm_120` performance, but `cuda12` and `cuda11` are valid fallback
+attempts on a sufficiently new driver. `glass doctor` reports this package try
+order on the target machine.
+
+The portable builder can build the native module with either shared or static
+CUDA runtime linkage:
 
 ```powershell
 .\packaging\windows\build_portable.ps1 -BuildCuda -StaticCudaRuntime
 ```
 
 For broad public releases, prefer static CUDA runtime linkage unless testing
-shows a strong reason to ship dynamic CUDA DLLs. GLASS still relies on the
-installed NVIDIA display driver.
+shows a strong reason to ship dynamic CUDA DLLs.
+
+The portable builder copies the base Python runtime into the package before
+installing GLASS and its dependencies. This avoids non-relocatable virtual
+environment launchers that point back to a build-machine Python path.
 
 ## Build Commands
 

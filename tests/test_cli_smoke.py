@@ -135,6 +135,8 @@ def test_cli_doctor_cpu_only_success(tmp_path: Path):
     assert payload["full_name"] == "GPU-Accelerated Lightframe Alignment and Stacking System"
     assert "cuda" in payload
     assert "capabilities" in payload
+    assert "windows_cuda_packages" in payload
+    assert "ordered_try_list" in payload["windows_cuda_packages"]
 
 
 def test_cli_report_includes_resident_artifacts(tmp_path: Path):

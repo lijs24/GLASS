@@ -10,6 +10,7 @@ from pathlib import Path
 from rich.console import Console
 
 from glass.capabilities import capability_report
+from glass.gpu.compatibility import recommend_windows_cuda_packages
 from glass.engine.integration import integrate_registered_frames
 from glass.engine.local_norm import local_normalize_registered_frames
 from glass.engine.pipeline import initialize_run, run_calibration_stages
@@ -709,6 +710,7 @@ def _doctor_payload() -> dict:
         },
         "capabilities": capability_report(),
         "cuda": cuda_info,
+        "windows_cuda_packages": recommend_windows_cuda_packages(cuda_info["devices"]),
         "recommendation": (
             "cuda"
             if cuda_info["cuda_available"]
@@ -740,6 +742,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             console.print(f"GPU {device.get('device_id', '?')}: {name}, cc={cc}, VRAM={memory} MiB, driver={driver}")
     else:
         console.print("GPU: none detected by GLASS")
+    package_recommendation = payload["windows_cuda_packages"]
+    console.print(f"Windows package try order: {', '.join(package_recommendation['ordered_try_list'])}")
+    console.print(f"Package guidance: {package_recommendation['guidance']}")
     console.print(f"Recommendation: {payload['recommendation']}")
     return 0 if cuda["cuda_available"] or args.allow_cpu_only else 2
 

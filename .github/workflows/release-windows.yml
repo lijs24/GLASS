@@ -62,13 +62,13 @@ jobs:
         include:
           - label: cuda11
             cuda: "11.8.0"
-            arch: "52;61;75;86"
+            arch: "50;52;60;61;70;75;80;86"
           - label: cuda12
             cuda: "12.4.1"
-            arch: "75;86;89;90"
+            arch: "75;80;86;89;90"
           - label: cuda13
             cuda: "13.0.2"
-            arch: "86;89;90;120"
+            arch: "86;89;90;100;120"
 
     steps:
       - name: Check out source

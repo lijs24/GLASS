@@ -22,6 +22,35 @@ function Invoke-Native {
     }
 }
 
+function Invoke-Robocopy {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Source,
+        [Parameter(Mandatory = $true)]
+        [string]$Destination,
+        [string[]]$ExtraArguments = @()
+    )
+
+    robocopy $Source $Destination @ExtraArguments | Out-Host
+    if ($LASTEXITCODE -gt 7) {
+        throw "robocopy failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Resolve-PythonHome {
+    param([string]$PythonExecutable)
+
+    $InfoJson = & $PythonExecutable -c "import json, sys; print(json.dumps({'base_prefix': sys.base_prefix, 'executable': sys.executable}))"
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($InfoJson)) {
+        throw "Unable to resolve Python home from $PythonExecutable"
+    }
+    $Info = $InfoJson | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace($Info.base_prefix) -or -not (Test-Path $Info.base_prefix)) {
+        throw "Resolved Python home does not exist: $($Info.base_prefix)"
+    }
+    return (Resolve-Path $Info.base_prefix).ProviderPath
+}
+
 function Resolve-CudaRoot {
     param([string]$RequestedRoot)
 
@@ -53,8 +82,23 @@ $SourceStamp = Join-Path $AppRoot "source"
 Remove-Item -Recurse -Force $AppRoot -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $AppRoot | Out-Null
 
-Invoke-Native -FilePath $Python -Arguments @("-m", "venv", $Runtime)
-$Py = Join-Path $Runtime "Scripts\python.exe"
+$PythonHome = Resolve-PythonHome $Python
+Invoke-Robocopy -Source $PythonHome -Destination $Runtime -ExtraArguments @(
+    "/MIR",
+    "/NFL",
+    "/NDL",
+    "/NJH",
+    "/NJS",
+    "/NP",
+    "/XD",
+    "__pycache__",
+    "/XF",
+    "*.pyc"
+)
+$Py = Join-Path $Runtime "python.exe"
+if (-not (Test-Path $Py)) {
+    throw "Portable Python executable was not copied to $Py"
+}
 Invoke-Native -FilePath $Py -Arguments @("-m", "pip", "install", "--upgrade", "pip", "wheel")
 $ProjectSpec = "$Root[report,align,zarr]"
 Invoke-Native -FilePath $Py -Arguments @("-m", "pip", "install", $ProjectSpec)
@@ -127,13 +171,13 @@ if ($BuildCuda) {
 @"
 @echo off
 setlocal
-"%~dp0runtime\Scripts\python.exe" -m glass.cli %*
+"%~dp0runtime\python.exe" -m glass.cli %*
 "@ | Set-Content -Encoding ASCII (Join-Path $AppRoot "glass.cmd")
 
 @"
 @echo off
 setlocal
-"%~dp0runtime\Scripts\python.exe" -m glass.cli doctor --allow-cpu-only %*
+"%~dp0runtime\python.exe" -m glass.cli doctor --allow-cpu-only %*
 "@ | Set-Content -Encoding ASCII (Join-Path $AppRoot "glass-doctor.cmd")
 
 Copy-Item (Join-Path $Root "README.md") $AppRoot -Force
