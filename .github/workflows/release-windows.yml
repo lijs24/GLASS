@@ -102,7 +102,6 @@ jobs:
           if (-not $native) {
             throw "native CUDA extension was not packaged"
           }
-          .\.release\windows\GLASS\glass-doctor.cmd
           $tag = "${{ github.ref_name }}"
           if ([string]::IsNullOrWhiteSpace($tag) -or $tag -eq "main") {
             $tag = "manual"
