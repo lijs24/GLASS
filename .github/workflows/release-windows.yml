@@ -55,7 +55,7 @@ jobs:
 
   build-cuda:
     name: Build CUDA ${{ matrix.label }} portable package
-    runs-on: ${{ matrix.runner }}
+    runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
@@ -63,21 +63,12 @@ jobs:
           - label: cuda11
             cuda: "11.8.0"
             arch: "52;61;75;86"
-            runner: windows-2022
-            msvc_toolset: "14.39"
-            legacy_msvc_component: "Microsoft.VisualStudio.Component.VC.14.39.17.9.x86.x64"
           - label: cuda12
             cuda: "12.4.1"
             arch: "75;86;89;90"
-            runner: windows-latest
-            msvc_toolset: ""
-            legacy_msvc_component: ""
           - label: cuda13
             cuda: "13.0.2"
             arch: "86;89;90;120"
-            runner: windows-latest
-            msvc_toolset: ""
-            legacy_msvc_component: ""
 
     steps:
       - name: Check out source
@@ -88,38 +79,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install legacy MSVC toolset
-        if: matrix.legacy_msvc_component != ''
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-          $installPath = & $vswhere -latest -products * -property installationPath
-          if ([string]::IsNullOrWhiteSpace($installPath)) {
-            throw "Visual Studio installation path was not found."
-          }
-          $args = @(
-            "modify",
-            "--installPath", $installPath,
-            "--add", "${{ matrix.legacy_msvc_component }}",
-            "--quiet",
-            "--norestart",
-            "--nocache"
-          )
-          $process = Start-Process -FilePath $installer -ArgumentList $args -Wait -PassThru
-          if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
-            throw "Visual Studio Installer failed with exit code $($process.ExitCode)."
-          }
-
       - name: Set up MSVC developer environment
-        if: matrix.msvc_toolset == ''
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Set up MSVC developer environment with pinned toolset
-        if: matrix.msvc_toolset != ''
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          toolset: ${{ matrix.msvc_toolset }}
 
       - name: Install CUDA Toolkit ${{ matrix.cuda }}
         uses: Jimver/cuda-toolkit@v0.2.29
