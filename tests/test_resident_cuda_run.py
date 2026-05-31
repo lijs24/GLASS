@@ -12,6 +12,7 @@ from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
     _matches_any_token,
     _resident_dq_map,
+    _resident_output_map_selection,
     _resident_similarity_frame_dispatch,
     _select_star_core_preselected_seed_indices,
     _select_star_guarded_seed,
@@ -94,6 +95,33 @@ def test_resident_dq_map_marks_no_data_and_rejections():
     assert summary["no_data"] == 3
     assert summary["low_rejected"] == 1
     assert summary["high_rejected"] == 1
+
+
+def test_resident_output_map_selection_modes():
+    assert _resident_output_map_selection("audit") == {
+        "master": True,
+        "weight": True,
+        "coverage": True,
+        "low_rejection": True,
+        "high_rejection": True,
+        "dq": True,
+    }
+    assert _resident_output_map_selection("science") == {
+        "master": True,
+        "weight": True,
+        "coverage": True,
+        "low_rejection": False,
+        "high_rejection": False,
+        "dq": True,
+    }
+    assert _resident_output_map_selection("minimal") == {
+        "master": True,
+        "weight": False,
+        "coverage": False,
+        "low_rejection": False,
+        "high_rejection": False,
+        "dq": False,
+    }
 
 
 def test_resident_star_core_preselection_keeps_refit_seed_and_rejects_low_inlier_trap():
@@ -363,6 +391,64 @@ def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
     by_std = sorted(weighting["frame_results"], key=lambda item: item["source_std"])
     assert by_std[0]["weight"] > by_std[-1]["weight"]
     assert max(weights.values()) > min(weights.values())
+
+
+def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_science_maps"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--memory-mode",
+                "resident",
+                "--until-stage",
+                "integration",
+                "--local-normalization",
+                "off",
+                "--integration-rejection",
+                "sigma_clip",
+                "--integration-weighting",
+                "none",
+                "--resident-registration",
+                "off",
+                "--resident-output-maps",
+                "science",
+            ]
+        )
+        == 0
+    )
+
+    integration = read_json(run / "integration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    output = integration["outputs"][0]
+    artifact = resident["artifacts"][0]
+    assert output["output_map_policy"]["mode"] == "science"
+    assert artifact["output_map_policy"]["mode"] == "science"
+    assert Path(output["master_path"]).exists()
+    assert Path(output["weight_map_path"]).exists()
+    assert Path(output["coverage_map_path"]).exists()
+    assert Path(output["dq_map_path"]).exists()
+    assert output["low_rejection_map_path"] is None
+    assert output["high_rejection_map_path"] is None
+    assert not list((run / "integration").glob("resident_low_rejection_map_*.fits"))
+    assert not list((run / "integration").glob("resident_high_rejection_map_*.fits"))
+    assert "low_rejection" in output["output_map_policy"]["skipped"]
+    assert "high_rejection" in output["output_map_policy"]["skipped"]
+    assert "dq" in output["output_map_policy"]["written"]
+    assert "valid" in output["dq_summary"]
 
 
 def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):

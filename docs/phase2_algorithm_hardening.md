@@ -345,6 +345,21 @@ integration where applicable.
 - Validate small CUDA tests and the 200-light benchmark contract again because
   the resident output set now includes one more diagnostic map.
 
+### S2-Gate 18: Resident Output Map Policy
+
+- Add an explicit `--resident-output-maps` policy for `glass run` and
+  `glass audit`.
+- Keep `audit` as the default policy and preserve the full diagnostic output
+  set: master, weight, coverage, DQ, low rejection, and high rejection maps
+  when those maps are available.
+- Add `science` mode for normal validated output: master, weight, coverage, and
+  DQ maps while skipping low/high rejection count FITS files.
+- Add `minimal` mode for maximum-speed exploratory runs: master FITS only.
+- Record available, written, and skipped maps in `resident_artifacts.json` and
+  `integration_results.json` so output choices are auditable and reproducible.
+- Validate the policy on small CUDA fixtures and rerun a 200-light science-mode
+  benchmark because the output set now affects wall-clock performance.
+
 ## Gate Rules
 
 Each gate requires:

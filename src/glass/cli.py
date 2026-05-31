@@ -366,6 +366,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
+                resident_output_maps=args.resident_output_maps,
             ),
         )
     elif plan.executable:
@@ -453,6 +454,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
+                resident_output_maps=args.resident_output_maps,
             ),
         )
         write_run_state(args.out, state)
@@ -880,6 +882,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across output directories",
     )
+    run.add_argument(
+        "--resident-output-maps",
+        choices=["audit", "science", "minimal"],
+        default="audit",
+        help=(
+            "resident output map set: audit writes all diagnostic maps, science keeps coverage and DQ, "
+            "minimal writes only the master"
+        ),
+    )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument(
         "--integration-weighting",
@@ -1054,6 +1065,15 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across audit output directories",
+    )
+    audit.add_argument(
+        "--resident-output-maps",
+        choices=["audit", "science", "minimal"],
+        default="audit",
+        help=(
+            "resident output map set for audit: audit writes all diagnostic maps, science keeps coverage "
+            "and DQ, minimal writes only the master"
+        ),
     )
     audit.add_argument(
         "--registration-method",

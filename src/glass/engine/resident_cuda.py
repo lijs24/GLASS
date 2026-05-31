@@ -20,6 +20,7 @@ from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult
 
 
 _AUTO_STAR_THRESHOLD_SIGMAS = (0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
+_RESIDENT_OUTPUT_MAP_POLICIES = {"audit", "science", "minimal"}
 
 
 def _cuda_module_required():
@@ -585,6 +586,19 @@ def _resident_dq_map(
         high = np.asarray(high_rejection_map, dtype=np.float32)
         dq[np.isfinite(high) & (high > 0.0)] |= np.uint32(int(DQFlag.HIGH_REJECTED))
     return dq, DQMask(dq).summary()
+
+
+def _resident_output_map_selection(policy: str) -> dict[str, bool]:
+    if policy not in _RESIDENT_OUTPUT_MAP_POLICIES:
+        raise ValueError("resident_output_maps must be audit, science, or minimal")
+    return {
+        "master": True,
+        "weight": policy in {"audit", "science"},
+        "coverage": policy in {"audit", "science"},
+        "low_rejection": policy == "audit",
+        "high_rejection": policy == "audit",
+        "dq": policy in {"audit", "science"},
+    }
 
 
 def _count_map_for_write(data: np.ndarray, dtype: Any) -> np.ndarray:
@@ -1260,11 +1274,14 @@ def run_resident_calibration_integration(
     resident_prefetch_workers: int = 1,
     resident_h2d_mode: str = "pageable",
     resident_master_cache_dir: str | Path | None = None,
+    resident_output_maps: str = "audit",
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
     if integration_weighting not in {"auto", "none", "simple_snr"}:
         raise ValueError("resident CUDA mode supports integration weighting=none or simple_snr")
+    if resident_output_maps not in _RESIDENT_OUTPUT_MAP_POLICIES:
+        raise ValueError("resident_output_maps must be audit, science, or minimal")
     if resident_registration not in {
         "off",
         "translation_preview",
@@ -3190,24 +3207,45 @@ def run_resident_calibration_integration(
                 ) = stack.integrate_sigma_clip(weights_arg, low_sigma, high_sigma, winsorize)
             integrate_elapsed = perf_counter() - integrate_start
             output_diagnostics = _output_diagnostics(master, weight_map)
+            output_map_selection = _resident_output_map_selection(resident_output_maps)
             master_path = output_dir / f"resident_master_{filt}.fits"
-            weight_path = output_dir / f"resident_weight_map_{filt}.fits"
-            coverage_path = output_dir / f"resident_coverage_map_{filt}.fits" if coverage_map is not None else None
+            weight_path = (
+                output_dir / f"resident_weight_map_{filt}.fits" if output_map_selection["weight"] else None
+            )
+            coverage_path = (
+                output_dir / f"resident_coverage_map_{filt}.fits"
+                if coverage_map is not None and output_map_selection["coverage"]
+                else None
+            )
             low_rejection_path = (
-                output_dir / f"resident_low_rejection_map_{filt}.fits" if low_rejection_map is not None else None
+                output_dir / f"resident_low_rejection_map_{filt}.fits"
+                if low_rejection_map is not None and output_map_selection["low_rejection"]
+                else None
             )
             high_rejection_path = (
-                output_dir / f"resident_high_rejection_map_{filt}.fits" if high_rejection_map is not None else None
+                output_dir / f"resident_high_rejection_map_{filt}.fits"
+                if high_rejection_map is not None and output_map_selection["high_rejection"]
+                else None
             )
-            dq_map, dq_summary = _resident_dq_map(
-                master,
-                weight_map,
-                coverage_map,
-                low_rejection_map,
-                high_rejection_map,
-            )
-            dq_path = output_dir / f"resident_dq_map_{filt}.fits"
+            dq_map = None
+            dq_summary = None
+            dq_path = output_dir / f"resident_dq_map_{filt}.fits" if output_map_selection["dq"] else None
+            if output_map_selection["dq"]:
+                dq_map, dq_summary = _resident_dq_map(
+                    master,
+                    weight_map,
+                    coverage_map,
+                    low_rejection_map,
+                    high_rejection_map,
+                )
             count_dtype = _count_map_dtype(len(light_frames))
+            available_output_maps = ["master", "weight", "dq"]
+            if coverage_map is not None:
+                available_output_maps.append("coverage")
+            if low_rejection_map is not None:
+                available_output_maps.append("low_rejection")
+            if high_rejection_map is not None:
+                available_output_maps.append("high_rejection")
             output_specs: list[dict[str, Any]] = [
                 {
                     "name": "master",
@@ -3216,27 +3254,33 @@ def run_resident_calibration_integration(
                     "header": {"IMAGETYP": "master", "FILTER": filter_name},
                     "dtype": np.float32,
                 },
-                {
-                    "name": "weight",
-                    "path": weight_path,
-                    "data": weight_map,
-                    "header": {"IMAGETYP": "weight", "FILTER": filter_name},
-                    "dtype": np.float32,
-                },
-                {
-                    "name": "dq",
-                    "path": dq_path,
-                    "data": dq_map,
-                    "header": {
-                        "IMAGETYP": "dq_mask",
-                        "FILTER": filter_name,
-                        "DQSTAGE": "integration",
-                        "DQFLAGS": "NO_DATA,LOW_REJECTED,HIGH_REJECTED",
-                    },
-                    "dtype": np.int16,
-                    "round_counts": True,
-                },
             ]
+            if weight_path is not None:
+                output_specs.append(
+                    {
+                        "name": "weight",
+                        "path": weight_path,
+                        "data": weight_map,
+                        "header": {"IMAGETYP": "weight", "FILTER": filter_name},
+                        "dtype": np.float32,
+                    }
+                )
+            if dq_map is not None and dq_path is not None:
+                output_specs.append(
+                    {
+                        "name": "dq",
+                        "path": dq_path,
+                        "data": dq_map,
+                        "header": {
+                            "IMAGETYP": "dq_mask",
+                            "FILTER": filter_name,
+                            "DQSTAGE": "integration",
+                            "DQFLAGS": "NO_DATA,LOW_REJECTED,HIGH_REJECTED",
+                        },
+                        "dtype": np.int16,
+                        "round_counts": True,
+                    }
+                )
             if coverage_map is not None and coverage_path is not None:
                 output_specs.append(
                     {
@@ -3270,6 +3314,10 @@ def run_resident_calibration_integration(
                         "round_counts": True,
                     }
                 )
+            written_output_maps = [str(spec["name"]) for spec in output_specs]
+            skipped_output_maps = [
+                name for name in available_output_maps if name not in set(written_output_maps)
+            ]
             write_elapsed, write_breakdown, write_storage, output_write_workers = _write_resident_outputs(output_specs)
 
             first_master_stats = next(iter(master_stats_sets.values()), {})
@@ -3384,7 +3432,17 @@ def run_resident_calibration_integration(
                     "shape": {"height": height, "width": width},
                     "master_stats": master_stats,
                     "output_diagnostics": output_diagnostics,
-                    "dq_map_path": str(dq_path),
+                    "output_map_policy": {
+                        "mode": resident_output_maps,
+                        "available": available_output_maps,
+                        "written": written_output_maps,
+                        "skipped": skipped_output_maps,
+                        "description": (
+                            "audit writes all available diagnostic maps; science writes master, "
+                            "weight, coverage, and DQ maps; minimal writes only master."
+                        ),
+                    },
+                    "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
                     "dq_flag_bits": {
                         "no_data": int(DQFlag.NO_DATA),
@@ -3626,12 +3684,18 @@ def run_resident_calibration_integration(
                     "filter": filt,
                     "frame_count": len(light_frames),
                     "master_path": str(master_path),
-                    "weight_map_path": str(weight_path),
+                    "weight_map_path": None if weight_path is None else str(weight_path),
                     "coverage_map_path": None if coverage_path is None else str(coverage_path),
                     "low_rejection_map_path": None if low_rejection_path is None else str(low_rejection_path),
                     "high_rejection_map_path": None if high_rejection_path is None else str(high_rejection_path),
-                    "dq_map_path": str(dq_path),
+                    "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
+                    "output_map_policy": {
+                        "mode": resident_output_maps,
+                        "available": available_output_maps,
+                        "written": written_output_maps,
+                        "skipped": skipped_output_maps,
+                    },
                     "backend": "cuda_resident_stack",
                     "memory_mode": "resident",
                     "rejection": rejection_mode,
