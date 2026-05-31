@@ -991,11 +991,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-calibration-release-mode",
-        choices=["sync", "h2d_event"],
+        choices=["sync", "h2d_event", "auto"],
         default="sync",
         help=(
-            "resident batch host-slot release mode; h2d_event releases pinned slots after native H2D "
-            "completion before waiting for calibration kernels"
+            "resident batch host-slot release mode; auto enables h2d_event only when the calibration "
+            "wave fills all native stream lanes"
         ),
     )
     run.add_argument(
@@ -1217,7 +1217,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-calibration-release-mode",
-        choices=["sync", "h2d_event"],
+        choices=["sync", "h2d_event", "auto"],
         default="sync",
         help="resident audit batch host-slot release mode",
     )

@@ -1250,6 +1250,21 @@ integration where applicable.
   full pytest, and 200-light benchmark comparison against the previous
   resident event-reuse baseline.
 
+### S2-Gate 75: Resident Calibration Release Auto Policy
+
+- Add an opt-in `auto` resident calibration release mode that chooses
+  `h2d_event` only when the effective wave size fills the available native
+  calibration stream lanes.
+- Keep explicit `sync` and `h2d_event` requests available for controlled
+  benchmark experiments.
+- Record requested release mode, effective release mode, capability,
+  recommendation, policy rule, and reason in `resident_io_pipeline` so tuning
+  runs cannot confuse an underfilled-lane experiment with the recommended fast
+  path.
+- Validate the policy with resident CLI coverage, ruff, full pytest, and a
+  200-light benchmark comparison that checks output identity against the prior
+  GLASS resident baseline.
+
 ## Gate Rules
 
 Each gate requires:

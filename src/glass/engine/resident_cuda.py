@@ -1722,8 +1722,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_calibration_streams must be positive")
     if resident_calibration_wave_frames < 0:
         raise ValueError("resident_calibration_wave_frames must be non-negative")
-    if resident_calibration_release_mode not in {"sync", "h2d_event"}:
-        raise ValueError("resident_calibration_release_mode must be one of: sync, h2d_event")
+    if resident_calibration_release_mode not in {"sync", "h2d_event", "auto"}:
+        raise ValueError("resident_calibration_release_mode must be one of: sync, h2d_event, auto")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1887,12 +1887,39 @@ def run_resident_calibration_integration(
                 and resident_calibration_streams > 1
                 and calibration_batch_multistream_supported
             )
-            calibration_h2d_release_enabled = bool(
+            calibration_h2d_release_capable = bool(
                 calibration_batch_multistream_enabled
-                and resident_calibration_release_mode == "h2d_event"
                 and calibration_h2d_release_supported
                 and calibration_wave_effective_frames <= resident_calibration_streams
             )
+            if not calibration_batch_multistream_enabled:
+                calibration_h2d_release_reason = "multistream_batch_disabled"
+            elif not calibration_h2d_release_supported:
+                calibration_h2d_release_reason = "native_h2d_release_unavailable"
+            elif calibration_wave_effective_frames > resident_calibration_streams:
+                calibration_h2d_release_reason = "wave_effective_exceeds_stream_count"
+            elif calibration_wave_effective_frames == resident_calibration_streams:
+                calibration_h2d_release_reason = "wave_effective_matches_stream_count"
+            else:
+                calibration_h2d_release_reason = "wave_effective_below_stream_count"
+            calibration_h2d_release_recommended = bool(
+                calibration_h2d_release_capable
+                and calibration_wave_effective_frames == resident_calibration_streams
+            )
+            calibration_release_mode_effective = "sync"
+            if resident_calibration_release_mode == "h2d_event" and calibration_h2d_release_capable:
+                calibration_release_mode_effective = "h2d_event"
+                calibration_h2d_release_reason = "explicit_h2d_event_requested"
+            elif resident_calibration_release_mode == "h2d_event":
+                calibration_h2d_release_reason = f"explicit_h2d_event_not_capable:{calibration_h2d_release_reason}"
+            elif resident_calibration_release_mode == "auto" and calibration_h2d_release_recommended:
+                calibration_release_mode_effective = "h2d_event"
+                calibration_h2d_release_reason = "auto_h2d_event_wave_effective_matches_stream_count"
+            elif resident_calibration_release_mode == "auto":
+                calibration_h2d_release_reason = f"auto_sync:{calibration_h2d_release_reason}"
+            elif resident_calibration_release_mode == "sync":
+                calibration_h2d_release_reason = "explicit_sync_requested"
+            calibration_h2d_release_enabled = calibration_release_mode_effective == "h2d_event"
             calibration_batch_count = 0
             calibration_batch_frame_count = 0
             calibration_batch_native_total_s = 0.0
@@ -4947,7 +4974,14 @@ def run_resident_calibration_integration(
                             & set(unique_calibration_event_modes)
                         ),
                         "calibration_release_mode_requested": resident_calibration_release_mode,
+                        "calibration_release_mode_effective": calibration_release_mode_effective,
                         "calibration_h2d_release_supported": bool(calibration_h2d_release_supported),
+                        "calibration_h2d_release_capable": bool(calibration_h2d_release_capable),
+                        "calibration_h2d_release_recommended": bool(calibration_h2d_release_recommended),
+                        "calibration_h2d_release_policy": (
+                            "auto enables h2d_event only when wave_effective_frames equals stream_count"
+                        ),
+                        "calibration_h2d_release_reason": calibration_h2d_release_reason,
                         "calibration_h2d_release_enabled": bool(calibration_h2d_release_enabled),
                         "calibration_h2d_release_count": int(calibration_h2d_release_count),
                         "calibration_h2d_release_s": float(calibration_h2d_release_s),
