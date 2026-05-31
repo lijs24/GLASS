@@ -1889,6 +1889,26 @@ class ResidentCalibratedStack {
           run_fine_metric ? native_fine_total_s / static_cast<double>(moving_count) : 0.0;
       const int batch_metric_kernel_launches = run_fine_metric ? 2 : 1;
       const int coarse_total_candidates = static_cast<int>(coarse_total_candidate_capacity);
+      const int coarse_stride = coarse_sample_stride > 1 ? coarse_sample_stride : 1;
+      const int fine_stride = final_sample_stride > 1 ? final_sample_stride : 1;
+      const unsigned long long coarse_sampled_pixels_per_candidate =
+          static_cast<unsigned long long>((width_ + coarse_stride - 1) / coarse_stride) *
+          static_cast<unsigned long long>((height_ + coarse_stride - 1) / coarse_stride);
+      const unsigned long long fine_sampled_pixels_per_candidate =
+          static_cast<unsigned long long>((width_ + fine_stride - 1) / fine_stride) *
+          static_cast<unsigned long long>((height_ + fine_stride - 1) / fine_stride);
+      const unsigned long long coarse_metric_sample_evaluations =
+          static_cast<unsigned long long>(coarse_total_candidates) * coarse_sampled_pixels_per_candidate;
+      const unsigned long long fine_metric_sample_evaluations =
+          static_cast<unsigned long long>(fine_total_candidates) * fine_sampled_pixels_per_candidate;
+      const double coarse_metric_megasamples_per_s =
+          native_coarse_total_s > 0.0
+              ? static_cast<double>(coarse_metric_sample_evaluations) / (native_coarse_total_s * 1.0e6)
+              : 0.0;
+      const double fine_metric_megasamples_per_s =
+          native_fine_total_s > 0.0
+              ? static_cast<double>(fine_metric_sample_evaluations) / (native_fine_total_s * 1.0e6)
+              : 0.0;
 
       for (std::size_t batch_index = 0; batch_index < moving_indices.size(); ++batch_index) {
         const std::size_t moving_index = moving_indices[batch_index];
@@ -1928,8 +1948,15 @@ class ResidentCalibratedStack {
         result["batch_model"] = "resident_cuda_matrix_metric_translation_batch_refine_grid";
         result["batch_metric_mode"] = "flattened_frame_candidate_grid";
         result["batch_metric_kernel_launches"] = batch_metric_kernel_launches;
+        result["metric_workload_model"] = "candidate_count_x_sampled_pixels";
         result["coarse_total_candidates"] = coarse_total_candidates;
         result["fine_total_candidates"] = fine_total_candidates;
+        result["coarse_sampled_pixels_per_candidate"] = coarse_sampled_pixels_per_candidate;
+        result["fine_sampled_pixels_per_candidate"] = fine_sampled_pixels_per_candidate;
+        result["coarse_metric_sample_evaluations"] = coarse_metric_sample_evaluations;
+        result["fine_metric_sample_evaluations"] = fine_metric_sample_evaluations;
+        result["coarse_metric_megasamples_per_s"] = coarse_metric_megasamples_per_s;
+        result["fine_metric_megasamples_per_s"] = fine_metric_megasamples_per_s;
         result["workspace_mode"] = "shared_flattened_candidate_metric_buffers";
         result["workspace_candidate_capacity"] = workspace_candidate_capacity;
         result["workspace_bytes"] = static_cast<unsigned long long>(workspace_bytes);

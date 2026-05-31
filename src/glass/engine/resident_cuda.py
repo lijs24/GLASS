@@ -2933,6 +2933,13 @@ def run_resident_calibration_integration(
                 triangle_pixel_refine_batch_metric_kernel_launches = 0
                 triangle_pixel_refine_coarse_total_candidates = 0
                 triangle_pixel_refine_fine_total_candidates = 0
+                triangle_pixel_refine_metric_workload_model = "off"
+                triangle_pixel_refine_coarse_sampled_pixels_per_candidate = 0
+                triangle_pixel_refine_fine_sampled_pixels_per_candidate = 0
+                triangle_pixel_refine_coarse_metric_sample_evaluations = 0
+                triangle_pixel_refine_fine_metric_sample_evaluations = 0
+                triangle_pixel_refine_coarse_metric_megasamples_per_s = 0.0
+                triangle_pixel_refine_fine_metric_megasamples_per_s = 0.0
                 triangle_pixel_refine_native_coarse_s = 0.0
                 triangle_pixel_refine_native_fine_s = 0.0
                 triangle_descriptor_fit_batch_enabled = bool(
@@ -3725,6 +3732,27 @@ def run_resident_calibration_integration(
                             triangle_pixel_refine_fine_total_candidates = int(
                                 first_refinement.get("fine_total_candidates", 0) or 0
                             )
+                            triangle_pixel_refine_metric_workload_model = str(
+                                first_refinement.get("metric_workload_model", "unavailable")
+                            )
+                            triangle_pixel_refine_coarse_sampled_pixels_per_candidate = int(
+                                first_refinement.get("coarse_sampled_pixels_per_candidate", 0) or 0
+                            )
+                            triangle_pixel_refine_fine_sampled_pixels_per_candidate = int(
+                                first_refinement.get("fine_sampled_pixels_per_candidate", 0) or 0
+                            )
+                            triangle_pixel_refine_coarse_metric_sample_evaluations = int(
+                                first_refinement.get("coarse_metric_sample_evaluations", 0) or 0
+                            )
+                            triangle_pixel_refine_fine_metric_sample_evaluations = int(
+                                first_refinement.get("fine_metric_sample_evaluations", 0) or 0
+                            )
+                            triangle_pixel_refine_coarse_metric_megasamples_per_s = float(
+                                first_refinement.get("coarse_metric_megasamples_per_s", 0.0) or 0.0
+                            )
+                            triangle_pixel_refine_fine_metric_megasamples_per_s = float(
+                                first_refinement.get("fine_metric_megasamples_per_s", 0.0) or 0.0
+                            )
                             triangle_pixel_refine_native_coarse_s = float(
                                 first_refinement.get(
                                     "native_coarse_total_s",
@@ -3781,6 +3809,20 @@ def run_resident_calibration_integration(
                                 + str(int(refinement.get("batch_metric_kernel_launches", 0) or 0)),
                                 f"triangle_pixel_refine_coarse_total_candidates={int(refinement.get('coarse_total_candidates', 0) or 0)}",
                                 f"triangle_pixel_refine_fine_total_candidates={int(refinement.get('fine_total_candidates', 0) or 0)}",
+                                "triangle_pixel_refine_metric_workload_model="
+                                + str(refinement.get("metric_workload_model", "unavailable")),
+                                "triangle_pixel_refine_coarse_sampled_pixels_per_candidate="
+                                + str(int(refinement.get("coarse_sampled_pixels_per_candidate", 0) or 0)),
+                                "triangle_pixel_refine_fine_sampled_pixels_per_candidate="
+                                + str(int(refinement.get("fine_sampled_pixels_per_candidate", 0) or 0)),
+                                "triangle_pixel_refine_coarse_metric_sample_evaluations="
+                                + str(int(refinement.get("coarse_metric_sample_evaluations", 0) or 0)),
+                                "triangle_pixel_refine_fine_metric_sample_evaluations="
+                                + str(int(refinement.get("fine_metric_sample_evaluations", 0) or 0)),
+                                "triangle_pixel_refine_coarse_metric_megasamples_per_s="
+                                + f"{float(refinement.get('coarse_metric_megasamples_per_s', 0.0) or 0.0):.6g}",
+                                "triangle_pixel_refine_fine_metric_megasamples_per_s="
+                                + f"{float(refinement.get('fine_metric_megasamples_per_s', 0.0) or 0.0):.6g}",
                                 f"triangle_pixel_refine_workspace_mode={refinement.get('workspace_mode', 'unavailable')}",
                                 f"triangle_pixel_refine_workspace_bytes={int(refinement.get('workspace_bytes', 0) or 0)}",
                                 "triangle_pixel_refine_workspace_candidate_capacity="
@@ -4710,6 +4752,39 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
+                        "triangle_pixel_refine_metric_workload_model": triangle_pixel_refine_metric_workload_model
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_pixel_refine_coarse_sampled_pixels_per_candidate": int(
+                            triangle_pixel_refine_coarse_sampled_pixels_per_candidate
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_fine_sampled_pixels_per_candidate": int(
+                            triangle_pixel_refine_fine_sampled_pixels_per_candidate
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_coarse_metric_sample_evaluations": int(
+                            triangle_pixel_refine_coarse_metric_sample_evaluations
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_fine_metric_sample_evaluations": int(
+                            triangle_pixel_refine_fine_metric_sample_evaluations
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_coarse_metric_megasamples_per_s": float(
+                            triangle_pixel_refine_coarse_metric_megasamples_per_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_pixel_refine_fine_metric_megasamples_per_s": float(
+                            triangle_pixel_refine_fine_metric_megasamples_per_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
                         "triangle_pixel_refine_workspace_bytes": int(triangle_pixel_refine_workspace_bytes)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,

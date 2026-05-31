@@ -1072,6 +1072,23 @@ integration where applicable.
   200-light resident CUDA runs pass artifact, registration, frame-accounting,
   and output-pixel determinism audits.
 
+### S2-Gate 63: Pixel-Refine Workload Ledger
+
+- Add a resident CUDA pixel-refine workload ledger for the batched
+  coarse/fine metric passes without changing registration decisions, matrices,
+  warp behavior, accepted frames, or output pixels.
+- Record the workload model, sampled pixels per candidate, total candidate
+  sample evaluations, native coarse/fine timings, and effective metric
+  throughput for both coarse and fine passes.
+- Surface the ledger in native batch-refine results, per-frame registration
+  warnings, `resident_artifacts.json`, and fine timing diagnostics so the next
+  optimization gate can target measured pixel-refine work rather than only the
+  aggregate registration/warp wall time.
+- Validate with native resident stack batch/single refine tests, resident
+  triangle-registration smoke tests, ruff, full pytest, and a repeated
+  200-light resident determinism plus output-pixel audit because this gate is
+  diagnostic-only and must not change image pixels.
+
 ## Gate Rules
 
 Each gate requires:

@@ -142,12 +142,18 @@ def _normalize_matrix_refinement_result(result: dict[str, Any]) -> dict[str, Any
         normalized["batch_model"] = str(result["batch_model"])
     if "batch_metric_mode" in result:
         normalized["batch_metric_mode"] = str(result["batch_metric_mode"])
+    if "metric_workload_model" in result:
+        normalized["metric_workload_model"] = str(result["metric_workload_model"])
     if "workspace_mode" in result:
         normalized["workspace_mode"] = str(result["workspace_mode"])
     for key in (
         "batch_metric_kernel_launches",
         "coarse_total_candidates",
         "fine_total_candidates",
+        "coarse_sampled_pixels_per_candidate",
+        "fine_sampled_pixels_per_candidate",
+        "coarse_metric_sample_evaluations",
+        "fine_metric_sample_evaluations",
         "workspace_candidate_capacity",
         "workspace_bytes",
     ):
@@ -156,6 +162,8 @@ def _normalize_matrix_refinement_result(result: dict[str, Any]) -> dict[str, Any
     for key in (
         "coarse_metric_s",
         "fine_metric_s",
+        "coarse_metric_megasamples_per_s",
+        "fine_metric_megasamples_per_s",
         "native_coarse_total_s",
         "native_fine_total_s",
     ):

@@ -1124,6 +1124,21 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_pixel_refine_batch_metric_kernel_launches"] == 2
     assert resident_registration["triangle_pixel_refine_coarse_total_candidates"] > 0
     assert resident_registration["triangle_pixel_refine_fine_total_candidates"] > 0
+    assert resident_registration["triangle_pixel_refine_metric_workload_model"] == (
+        "candidate_count_x_sampled_pixels"
+    )
+    assert resident_registration["triangle_pixel_refine_coarse_sampled_pixels_per_candidate"] > 0
+    assert resident_registration["triangle_pixel_refine_fine_sampled_pixels_per_candidate"] > 0
+    assert resident_registration["triangle_pixel_refine_coarse_metric_sample_evaluations"] == (
+        resident_registration["triangle_pixel_refine_coarse_total_candidates"]
+        * resident_registration["triangle_pixel_refine_coarse_sampled_pixels_per_candidate"]
+    )
+    assert resident_registration["triangle_pixel_refine_fine_metric_sample_evaluations"] == (
+        resident_registration["triangle_pixel_refine_fine_total_candidates"]
+        * resident_registration["triangle_pixel_refine_fine_sampled_pixels_per_candidate"]
+    )
+    assert resident_registration["triangle_pixel_refine_coarse_metric_megasamples_per_s"] >= 0.0
+    assert resident_registration["triangle_pixel_refine_fine_metric_megasamples_per_s"] >= 0.0
     assert resident_registration["triangle_pixel_refine_workspace_mode"] == "shared_flattened_candidate_metric_buffers"
     assert resident_registration["triangle_pixel_refine_workspace_bytes"] > 0
     assert resident_registration["triangle_pixel_refine_workspace_candidate_capacity"] > 0
@@ -1192,6 +1207,14 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_pixel_refine_mode=native_batch" in warning for warning in moving["warnings"])
     assert any(
         "triangle_pixel_refine_batch_metric_mode=flattened_frame_candidate_grid" in warning
+        for warning in moving["warnings"]
+    )
+    assert any(
+        "triangle_pixel_refine_metric_workload_model=candidate_count_x_sampled_pixels" in warning
+        for warning in moving["warnings"]
+    )
+    assert any(
+        "triangle_pixel_refine_coarse_metric_sample_evaluations=" in warning
         for warning in moving["warnings"]
     )
     assert any(

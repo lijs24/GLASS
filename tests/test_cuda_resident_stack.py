@@ -585,8 +585,19 @@ def test_resident_stack_batches_matrix_translation_refine():
     assert batch[0]["batch_count"] == 2
     assert batch[0]["batch_metric_mode"] == "flattened_frame_candidate_grid"
     assert batch[0]["batch_metric_kernel_launches"] == 2
+    assert batch[0]["metric_workload_model"] == "candidate_count_x_sampled_pixels"
     assert batch[0]["coarse_total_candidates"] == batch[0]["batch_count"] * batch[0]["coarse_candidates_per_seed"]
     assert batch[0]["fine_total_candidates"] > 0
+    assert batch[0]["coarse_sampled_pixels_per_candidate"] > 0
+    assert batch[0]["fine_sampled_pixels_per_candidate"] > 0
+    assert batch[0]["coarse_metric_sample_evaluations"] == (
+        batch[0]["coarse_total_candidates"] * batch[0]["coarse_sampled_pixels_per_candidate"]
+    )
+    assert batch[0]["fine_metric_sample_evaluations"] == (
+        batch[0]["fine_total_candidates"] * batch[0]["fine_sampled_pixels_per_candidate"]
+    )
+    assert batch[0]["coarse_metric_megasamples_per_s"] >= 0.0
+    assert batch[0]["fine_metric_megasamples_per_s"] >= 0.0
     assert batch[0]["workspace_mode"] == "shared_flattened_candidate_metric_buffers"
     assert batch[0]["workspace_candidate_capacity"] >= batch[0]["coarse_candidates_per_seed"]
     assert batch[0]["workspace_bytes"] > 0
@@ -594,6 +605,7 @@ def test_resident_stack_batches_matrix_translation_refine():
         assert batch_result["model"] == single_result["model"]
         assert batch_result["batch_metric_mode"] == "flattened_frame_candidate_grid"
         assert batch_result["batch_metric_kernel_launches"] == 2
+        assert batch_result["metric_workload_model"] == "candidate_count_x_sampled_pixels"
         assert batch_result["workspace_mode"] == "shared_flattened_candidate_metric_buffers"
         assert batch_result["workspace_candidate_capacity"] >= batch_result["coarse_candidates_per_seed"]
         assert batch_result["workspace_bytes"] == batch[0]["workspace_bytes"]
