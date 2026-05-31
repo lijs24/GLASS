@@ -5,6 +5,39 @@ from pathlib import Path
 from typing import Any
 
 
+_RESIDENT_OUTPUT_MAP_FIELDS = [
+    ("master", "master_path"),
+    ("weight", "weight_map_path"),
+    ("coverage", "coverage_map_path"),
+    ("low_rejection", "low_rejection_map_path"),
+    ("high_rejection", "high_rejection_map_path"),
+    ("dq", "dq_map_path"),
+]
+
+
+def _resolve_report_path(path: Any, run_root: str | Path | None) -> Path | None:
+    if not path:
+        return None
+    candidate = Path(str(path))
+    if candidate.is_absolute() or run_root is None:
+        return candidate
+    return Path(run_root) / candidate
+
+
+def _path_exists(path: Any, run_root: str | Path | None) -> bool | None:
+    resolved = _resolve_report_path(path, run_root)
+    if resolved is None:
+        return None
+    return resolved.exists()
+
+
+def _estimated_mib(storage: dict[str, Any]) -> float | None:
+    bytes_value = storage.get("estimated_data_bytes")
+    if bytes_value is None:
+        return None
+    return round(float(bytes_value) / (1024.0 * 1024.0), 3)
+
+
 def _table(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "<p>No rows.</p>"
@@ -199,6 +232,49 @@ def _output_policy_rows(
     return rows
 
 
+def _resident_output_map_rows(
+    resident: dict[str, Any] | None,
+    run_root: str | Path | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (resident or {}).get("artifacts", []):
+        policy = item.get("output_map_policy") or {}
+        available = {str(name) for name in policy.get("available", [])}
+        written = {str(name) for name in policy.get("written", [])}
+        skipped = {str(name) for name in policy.get("skipped", [])}
+        output_write = item.get("output_write") or {}
+        storage = item.get("output_write_storage") or output_write.get("storage") or {}
+        breakdown = output_write.get("breakdown_s") or {}
+        for map_name, path_key in _RESIDENT_OUTPUT_MAP_FIELDS:
+            path = item.get(path_key)
+            if not path and map_name not in available and map_name not in written and map_name not in skipped:
+                continue
+            map_storage = storage.get(map_name) or {}
+            if map_name in written:
+                policy_status = "written"
+            elif map_name in skipped:
+                policy_status = "skipped"
+            elif map_name in available:
+                policy_status = "available"
+            else:
+                policy_status = "not_available"
+            rows.append(
+                {
+                    "filter": item.get("filter"),
+                    "map": map_name,
+                    "policy": policy_status,
+                    "path": path,
+                    "exists": _path_exists(path, run_root),
+                    "dtype": map_storage.get("dtype"),
+                    "estimated_mib": _estimated_mib(map_storage),
+                    "write_s": round(float(breakdown.get(map_name) or 0.0), 3)
+                    if map_name in breakdown
+                    else None,
+                }
+            )
+    return rows
+
+
 def _stack_engine_dq_rows(
     calibration: dict[str, Any] | None,
     integration: dict[str, Any] | None,
@@ -346,6 +422,7 @@ def write_html_report(
     timing: dict[str, Any] | None = None,
     resident: dict[str, Any] | None = None,
     title: str = "GLASS Report",
+    run_root: str | Path | None = None,
 ) -> None:
     frames = (manifest or {}).get("frames", [])
     light_plans = (plan or {}).get("light_plans", [])
@@ -442,6 +519,7 @@ def write_html_report(
     resident_summary = _resident_rows(resident)
     geometric_warp_coverage_rows = _geometric_warp_coverage_rows(integration, resident)
     output_policy_rows = _output_policy_rows(integration, resident)
+    resident_output_map_rows = _resident_output_map_rows(resident, run_root)
     stack_engine_dq_rows = _stack_engine_dq_rows(calibration, integration)
     dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
@@ -496,6 +574,10 @@ def write_html_report(
   {_table(integration_map_rows)}
   <h2>Output map policy</h2>
   {_table(output_policy_rows)}
+  <h2>Resident output maps</h2>
+  <p>Resident artifact records expose map paths, write policy status, storage
+  dtype, estimated payload size, and per-map write timing for audit review.</p>
+  {_table(resident_output_map_rows)}
   <h2>DQ/mask summary</h2>
   {_table(dq_rows)}
   <h2>StackEngine DQ provenance</h2>

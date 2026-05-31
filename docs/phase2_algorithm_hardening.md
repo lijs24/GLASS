@@ -563,6 +563,18 @@ integration where applicable.
 - Validate with focused resident/audit tests, ruff, full pytest, real-data
   compare, acceptance-audit, checkpoint, and commit.
 
+### S2-Gate 33: Resident Output Map Report Provenance
+
+- Surface resident output map paths as a first-class HTML report table.
+- For each resident map, show policy status, path, existence, storage dtype,
+  estimated payload size, and per-map write timing when available.
+- Resolve relative artifact paths against the run directory so report output
+  can distinguish missing files from policy-skipped maps.
+- Keep the report path read-only and diagnostic-only; this gate must not change
+  image math or resident execution routing.
+- Validate with CLI report tests, ruff, full pytest, and a report regeneration
+  on the latest 200-light resident audit-map run.
+
 ## Gate Rules
 
 Each gate requires:

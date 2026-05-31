@@ -103,6 +103,7 @@ def _write_run_report(run: Path, report_path: Path, manifest_path: Path, plan_pa
         integration=_read_json_if_exists(run / "integration_results.json"),
         timing=_read_json_if_exists(run / "run_timing.json"),
         resident=_read_json_if_exists(run / "resident_artifacts.json"),
+        run_root=run,
     )
 
 
@@ -305,6 +306,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         integration=integration,
         timing=timing,
         resident=resident,
+        run_root=run,
     )
     console.print(f"Wrote report: {args.out}")
     return 0

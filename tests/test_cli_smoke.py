@@ -145,6 +145,15 @@ def test_cli_doctor_cpu_only_success(tmp_path: Path):
 def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
+    integration_dir = run / "integration"
+    integration_dir.mkdir()
+    for name in [
+        "resident_master_H.fits",
+        "resident_weight_map_H.fits",
+        "resident_coverage_map_H.fits",
+        "resident_dq_map_H.fits",
+    ]:
+        (integration_dir / name).write_text("placeholder", encoding="utf-8")
     write_json(
         run / "resident_artifacts.json",
         {
@@ -174,12 +183,29 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "resident_local_normalization": {"mode": "resident_grid_mean_std"},
                     "resident_integration_weighting": {"mode": "simple_snr"},
                     "integration_rejection": {"mode": "winsorized_sigma"},
+                    "master_path": "integration/resident_master_H.fits",
+                    "weight_map_path": "integration/resident_weight_map_H.fits",
+                    "coverage_map_path": "integration/resident_coverage_map_H.fits",
+                    "low_rejection_map_path": None,
+                    "high_rejection_map_path": None,
+                    "dq_map_path": "integration/resident_dq_map_H.fits",
                     "output_map_policy": {
                         "mode": "science",
                         "available": ["master", "weight", "dq", "coverage", "low_rejection", "high_rejection"],
                         "written": ["master", "weight", "dq", "coverage"],
                         "skipped": ["low_rejection", "high_rejection"],
                         "description": "science keeps comparison maps and skips rejection count FITS files",
+                    },
+                    "output_write": {
+                        "breakdown_s": {"master": 0.125, "weight": 0.25, "coverage": 0.375, "dq": 0.5},
+                        "mode": "threaded",
+                        "workers": 4,
+                    },
+                    "output_write_storage": {
+                        "master": {"dtype": "float32", "estimated_data_bytes": 1048576},
+                        "weight": {"dtype": "float32", "estimated_data_bytes": 2097152},
+                        "coverage": {"dtype": "int16", "estimated_data_bytes": 524288},
+                        "dq": {"dtype": "int16", "estimated_data_bytes": 524288},
                     },
                     "dq_provenance_summary": {
                         "schema_version": 1,
@@ -284,6 +310,14 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "science" in html
     assert "master, weight, dq, coverage" in html
     assert "low_rejection, high_rejection" in html
+    assert "Resident output maps" in html
+    assert "integration/resident_master_H.fits" in html
+    assert "resident_weight_map_H.fits" in html
+    assert "estimated_mib" in html
+    assert "float32" in html
+    assert "int16" in html
+    assert "0.125" in html
+    assert "skipped" in html
     assert "Geometric warp coverage" in html
     assert "DQ provenance contract" in html
     assert "resident_dq_coverage_provenance" in html
