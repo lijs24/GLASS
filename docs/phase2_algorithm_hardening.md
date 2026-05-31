@@ -575,6 +575,20 @@ integration where applicable.
 - Validate with CLI report tests, ruff, full pytest, and a report regeneration
   on the latest 200-light resident audit-map run.
 
+### S2-Gate 34: Report Noise Reduction With Focused Summaries
+
+- Replace broad nested integration-output and DQ provenance dumps in the HTML
+  report with focused summary tables.
+- Add a compact integration-output table that keeps source stage, backend,
+  memory mode, frame counts, weighting/rejection, master path, StackEngine flag,
+  resident integration time, and peak memory.
+- Add a flattened output-diagnostics table for range, clipping, finite-pixel,
+  and normalization-probe values from integration and resident artifacts.
+- Keep detailed JSON artifacts on disk for audit, but avoid rendering large
+  dictionaries directly into report table cells.
+- Validate with CLI report tests, ruff, full pytest, and a report regeneration
+  on the latest 200-light resident audit-map run.
+
 ## Gate Rules
 
 Each gate requires:

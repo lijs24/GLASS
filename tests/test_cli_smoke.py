@@ -207,6 +207,26 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                         "coverage": {"dtype": "int16", "estimated_data_bytes": 524288},
                         "dq": {"dtype": "int16", "estimated_data_bytes": 524288},
                     },
+                    "output_diagnostics": {
+                        "total_pixels": 4,
+                        "finite_pixels": 4,
+                        "nonfinite_pixels": 0,
+                        "statistics": {"mean": 0.25, "p50": 0.2, "std": 0.1, "min": 0.0, "max": 1.0},
+                        "clipping_probe": {
+                            "lt_0_count": 0,
+                            "gt_1_count": 0,
+                            "gt_65535_count": 0,
+                            "positive_weight_pixels": 4,
+                            "zero_weight_pixels": 0,
+                        },
+                        "normalization_probe": {
+                            "method": "diagnostic_only_p0_1_to_p99_9",
+                            "scale": 1.5,
+                            "offset": -0.1,
+                            "black": 0.0,
+                            "white": 1.0,
+                        },
+                    },
                     "dq_provenance_summary": {
                         "schema_version": 1,
                         "source_schema": "resident_dq_coverage_provenance",
@@ -318,10 +338,15 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "int16" in html
     assert "0.125" in html
     assert "skipped" in html
+    assert "Output diagnostics" in html
+    assert "normalization_scale" in html
+    assert "1.5" in html
+    assert "gt_65535_count" in html
+    assert "clipping_probe" not in html
+    assert "output_diagnostics" not in html
     assert "Geometric warp coverage" in html
     assert "DQ provenance contract" in html
     assert "resident_dq_coverage_provenance" in html
     assert "available_from_geometric_warp_coverage" in html
     assert "geometric_partial_pixels" in html
-    assert "partial_pixels" in html
     assert "ResidentCalibratedStack warp coverage accumulator" in html

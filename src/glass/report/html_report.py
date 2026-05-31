@@ -131,6 +131,78 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
     return rows
 
 
+def _active_frame_count(item: dict[str, Any]) -> Any:
+    summary = item.get("dq_provenance_summary") or {}
+    provenance = item.get("dq_coverage_provenance") or {}
+    return summary.get("active_frame_count", provenance.get("active_frame_count"))
+
+
+def _integration_output_rows(integration: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    source_stage = (integration or {}).get("source_stage")
+    for item in (integration or {}).get("outputs", []):
+        rows.append(
+            {
+                "filter": item.get("filter"),
+                "source_stage": source_stage,
+                "backend": item.get("backend"),
+                "memory_mode": item.get("memory_mode"),
+                "frame_count": item.get("frame_count"),
+                "active_frames": _active_frame_count(item),
+                "weighting": item.get("weighting", (integration or {}).get("weighting")),
+                "rejection": item.get("rejection", (integration or {}).get("rejection")),
+                "master": item.get("master_path"),
+                "stack_engine": item.get("stack_engine_enabled"),
+                "resident_integration_s": item.get("resident_integration_s"),
+                "estimated_peak_gib": item.get("estimated_peak_gib"),
+            }
+        )
+    return rows
+
+
+def _output_diagnostic_rows(
+    integration: dict[str, Any] | None,
+    resident: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for source, items in [
+        ("integration", (integration or {}).get("outputs", [])),
+        ("resident", (resident or {}).get("artifacts", [])),
+    ]:
+        for item in items:
+            diagnostics = item.get("output_diagnostics") or {}
+            if not diagnostics:
+                continue
+            stats = diagnostics.get("statistics") or {}
+            clipping = diagnostics.get("clipping_probe") or {}
+            normalization = diagnostics.get("normalization_probe") or {}
+            rows.append(
+                {
+                    "source": source,
+                    "filter": item.get("filter"),
+                    "total_pixels": diagnostics.get("total_pixels"),
+                    "finite_pixels": diagnostics.get("finite_pixels"),
+                    "nonfinite_pixels": diagnostics.get("nonfinite_pixels"),
+                    "mean": stats.get("mean"),
+                    "p50": stats.get("p50"),
+                    "std": stats.get("std"),
+                    "min": stats.get("min"),
+                    "max": stats.get("max"),
+                    "lt_0_count": clipping.get("lt_0_count"),
+                    "gt_1_count": clipping.get("gt_1_count"),
+                    "gt_65535_count": clipping.get("gt_65535_count"),
+                    "positive_weight_pixels": clipping.get("positive_weight_pixels"),
+                    "zero_weight_pixels": clipping.get("zero_weight_pixels"),
+                    "normalization_method": normalization.get("method"),
+                    "normalization_scale": normalization.get("scale"),
+                    "normalization_offset": normalization.get("offset"),
+                    "normalization_black": normalization.get("black"),
+                    "normalization_white": normalization.get("white"),
+                }
+            )
+    return rows
+
+
 def _geometric_warp_coverage_rows(
     integration: dict[str, Any] | None,
     resident: dict[str, Any] | None,
@@ -160,9 +232,9 @@ def _geometric_warp_coverage_rows(
                 "min": geometric_stats.get("min"),
                 "max": geometric_stats.get("max"),
                 "mean": geometric_stats.get("mean"),
-                "zero_pixels": provenance.get("geometric_zero_pixels"),
-                "partial_pixels": provenance.get("geometric_partial_pixels"),
-                "full_pixels": provenance.get("geometric_full_pixels"),
+                "geometric_zero_pixels": provenance.get("geometric_zero_pixels"),
+                "geometric_partial_pixels": provenance.get("geometric_partial_pixels"),
+                "geometric_full_pixels": provenance.get("geometric_full_pixels"),
                 "dq_warp_edge": dq_summary.get("warp_edge"),
                 "dq_no_data": dq_summary.get("no_data"),
                 "inference": provenance.get("partial_edge_inference"),
@@ -191,6 +263,41 @@ def _geometric_warp_coverage_rows(
                 "native_source": coverage.get("native_source"),
             }
         )
+    return rows
+
+
+def _dq_summary_rows(
+    integration_outputs: list[dict[str, Any]],
+    registration_results: list[dict[str, Any]],
+    local_norm_results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for source_name, items in [
+        ("registration/warp", registration_results),
+        ("local_normalization", local_norm_results),
+        ("integration", integration_outputs),
+    ]:
+        for item in items:
+            summary = item.get("dq_summary") or {}
+            dq_path = item.get("dq_mask_path") or item.get("dq_map_path")
+            if not summary and not dq_path:
+                continue
+            provenance = item.get("dq_coverage_provenance") or {}
+            rows.append(
+                {
+                    "stage": source_name,
+                    "frame_or_filter": item.get("frame_id") or item.get("filter"),
+                    "path": dq_path,
+                    "valid": summary.get("valid"),
+                    "no_data": summary.get("no_data"),
+                    "warp_edge": summary.get("warp_edge"),
+                    "low_rejected": summary.get("low_rejected"),
+                    "high_rejected": summary.get("high_rejected"),
+                    "source_terms": ", ".join(str(name) for name in provenance.get("source_terms", [])),
+                    "active_frames": provenance.get("active_frame_count"),
+                    "coverage_inference": provenance.get("partial_edge_inference"),
+                }
+            )
     return rows
 
 
@@ -447,6 +554,8 @@ def write_html_report(
     registration_results = (registration or {}).get("registration_results", [])
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
     integration_outputs = (integration or {}).get("outputs", [])
+    integration_summary_rows = _integration_output_rows(integration)
+    output_diagnostic_rows = _output_diagnostic_rows(integration, resident)
     integration_map_rows = [
         {
             "filter": item.get("filter"),
@@ -460,23 +569,7 @@ def write_html_report(
         }
         for item in integration_outputs
     ]
-    dq_rows = []
-    for source_name, rows in [
-        ("registration/warp", registration_results),
-        ("local_normalization", local_norm_results),
-        ("integration", integration_outputs),
-    ]:
-        for row in rows:
-            if row.get("dq_summary") or row.get("dq_mask_path") or row.get("dq_map_path"):
-                dq_rows.append(
-                    {
-                        "stage": source_name,
-                        "frame_or_filter": row.get("frame_id") or row.get("filter"),
-                        "summary": row.get("dq_summary", {}),
-                        "coverage_provenance": row.get("dq_coverage_provenance", {}),
-                        "path": row.get("dq_mask_path") or row.get("dq_map_path"),
-                    }
-                )
+    dq_rows = _dq_summary_rows(integration_outputs, registration_results, local_norm_results)
     timing_rows = (timing or {}).get("stages", [])
     timing_overview = [
         {
@@ -569,7 +662,11 @@ def write_html_report(
   <p>Combine: <code>{escape(str((integration or {}).get("combine", "pending")))}</code>.
   Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
   Rejection: <code>{escape(str((integration or {}).get("rejection", "pending")))}</code>.</p>
-  {_table(integration_outputs)}
+  {_table(integration_summary_rows)}
+  <h2>Output diagnostics</h2>
+  <p>Output diagnostics are flattened from integration and resident artifacts to
+  avoid dumping nested JSON into the report.</p>
+  {_table(output_diagnostic_rows)}
   <h2>Integration output maps</h2>
   {_table(integration_map_rows)}
   <h2>Output map policy</h2>
