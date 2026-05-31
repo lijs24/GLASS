@@ -119,6 +119,7 @@ def test_cli_help_commands():
         "compare",
         "speedup-summary",
         "acceptance-audit",
+        "resident-determinism",
         "blackbox-package",
         "blackbox-finalize",
         "blackbox-history",

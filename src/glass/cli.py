@@ -29,6 +29,10 @@ from glass.report.blackbox_package import create_blackbox_package, finalize_blac
 from glass.report.compare_report import compare_fits, write_compare_report
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
+from glass.report.resident_determinism import (
+    build_resident_determinism_audit,
+    write_resident_determinism_audit,
+)
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.wbpp_history import read_fastintegration_history
 from glass.synthetic.generator import generate_synthetic_dataset
@@ -721,6 +725,22 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
     return 0 if audit["passed"] else 2
 
 
+def cmd_resident_determinism(args: argparse.Namespace) -> int:
+    audit = build_resident_determinism_audit(args.baseline_run, args.candidate_run)
+    write_resident_determinism_audit(args.out, audit, markdown=args.markdown)
+    console.print(
+        {
+            "passed": audit["summary"]["passed"],
+            "frame_signature_differences": audit["summary"]["frame_signature_difference_count"],
+            "registration_differences": audit["summary"]["registration_difference_count"],
+            "frame_accounting_differences": audit["summary"]["frame_accounting_difference_count"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_mismatch and not audit["summary"]["passed"] else 0
+
+
 def cmd_blackbox_package(args: argparse.Namespace) -> int:
     payload = create_blackbox_package(
         args.manifest,
@@ -1278,6 +1298,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional JSON contract that pins real-data benchmark parameters and regression limits",
     )
     acceptance.set_defaults(func=cmd_acceptance_audit)
+
+    resident_det = sub.add_parser(
+        "resident-determinism",
+        help="compare resident CUDA registration signatures from two GLASS runs",
+    )
+    resident_det.add_argument("--baseline-run", required=True, help="baseline run directory or resident_artifacts.json")
+    resident_det.add_argument("--candidate-run", required=True, help="candidate run directory or resident_artifacts.json")
+    resident_det.add_argument("--out", required=True, help="output determinism audit JSON")
+    resident_det.add_argument("--markdown", help="optional output Markdown summary")
+    resident_det.add_argument(
+        "--fail-on-mismatch",
+        action="store_true",
+        help="return exit code 2 when signatures, registration, or frame accounting differ",
+    )
+    resident_det.set_defaults(func=cmd_resident_determinism)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")
     blackbox.add_argument("--manifest", required=True)

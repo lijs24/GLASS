@@ -970,6 +970,24 @@ integration where applicable.
   full pytest. A fresh 200-light benchmark is optional unless the diagnostic
   change alters image artifacts or registration decisions.
 
+### S2-Gate 57: Resident Determinism Audit
+
+- Add a first-class audit command that compares two resident CUDA runs using
+  the S2-Gate 56 triangle-registration signatures, resident registration
+  results, frame accounting, and timing artifacts.
+- Report artifact-level combined-hash drift, per-frame catalog/descriptor/fit
+  hash drift, registration status/matrix drift, frame-accounting drift, and
+  candidate/baseline timing ratio in machine-readable JSON and compact
+  Markdown.
+- Use this audit on repeated 200-light resident runs to decide whether the
+  observed Gate55 acceptance swing is catalog extraction, descriptor
+  generation, fit selection, pixel refinement, or later accounting.
+- If repeated 200-light signatures differ at the catalog level, follow with a
+  strict deterministic resident catalog mode or deterministic candidate
+  compaction gate before accepting more registration scheduling changes.
+- Keep this gate diagnostic-only unless the audit proves a specific
+  nondeterministic stage that must be fixed immediately.
+
 ## Gate Rules
 
 Each gate requires:
