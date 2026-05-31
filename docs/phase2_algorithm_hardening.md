@@ -692,6 +692,26 @@ integration where applicable.
   pytest, and a report regeneration on the latest preserved 200-light resident
   artifacts.
 
+### S2-Gate 42: Frame Accounting Acceptance Contract
+
+- Add `frame_accounting` requirements to benchmark contracts so real-data
+  acceptance cannot pass without the per-light ledger.
+- Verify that `frame_accounting.json` exists, uses the expected resident source
+  stage, and records the required input, integrated, zero-weight, and
+  registration-accepted frame counts.
+- Cross-check accounting against `integration_results.json` frame weights,
+  speedup summary active/zero-weight counts, DQ provenance active-frame counts,
+  and resident registration status counts.
+- Update the M38 H-alpha 200-light science and audit-map contracts to require
+  200 input lights, 193 integrated lights, and 7 zero-weight lights.
+- Include frame-accounting evidence in acceptance-audit JSON/Markdown output so
+  benchmark failures explain which count drifted.
+- Keep this gate audit-only: it must not alter image math, GPU kernels, or
+  runtime scheduling.
+- Validate with acceptance-audit tests for pass and mismatch cases, ruff, full
+  pytest, and a strict acceptance audit against the latest preserved 200-light
+  resident artifacts.
+
 ## Gate Rules
 
 Each gate requires:

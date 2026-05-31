@@ -28,6 +28,7 @@ def _write_glass_run(
     command: str | None = None,
     resident_timing: dict[str, float] | None = None,
     resident_dq: bool = False,
+    frame_accounting: bool = False,
 ) -> None:
     path.mkdir()
     write_json(path / "run_timing.json", {"total_elapsed_s": elapsed_s, "memory_mode": "resident"})
@@ -141,6 +142,61 @@ def _write_glass_run(
     )
     if resident_artifact:
         write_json(path / "resident_artifacts.json", {"artifacts": [resident_artifact]})
+    if frame_accounting:
+        write_json(
+            path / "registration_results.json",
+            {
+                "source_stage": "resident_calibrated_stack",
+                "results": [
+                    *[
+                        {"frame_id": f"L{idx:04d}", "status": "ok"}
+                        for idx in range(active)
+                    ],
+                    *[
+                        {"frame_id": f"Z{idx:04d}", "status": "excluded"}
+                        for idx in range(zero)
+                    ],
+                ],
+            },
+        )
+        write_json(
+            path / "frame_accounting.json",
+            {
+                "schema_version": 1,
+                "artifact": "frame_accounting",
+                "integration_source_stage": "resident_calibrated_stack",
+                "summary": {
+                    "input_light_frames": active + zero,
+                    "resident_calibrated_frames": active + zero,
+                    "registration_accepted_frames": active,
+                    "integrated_frames": active,
+                    "zero_weight_frames": zero,
+                    "final_status_counts": {"integrated": active, "zero_weight": zero},
+                },
+                "frames": [
+                    *[
+                        {
+                            "frame_id": f"L{idx:04d}",
+                            "final_status": "integrated",
+                            "integration_status": "used",
+                            "integration_weight": 1.0,
+                            "registration_status": "ok",
+                        }
+                        for idx in range(active)
+                    ],
+                    *[
+                        {
+                            "frame_id": f"Z{idx:04d}",
+                            "final_status": "zero_weight",
+                            "integration_status": "zero_weight",
+                            "integration_weight": 0.0,
+                            "registration_status": "excluded",
+                        }
+                        for idx in range(zero)
+                    ],
+                ],
+            },
+        )
 
 
 def _write_wbpp_result(path: Path, *, elapsed_s: float = 1000.0) -> None:
@@ -260,6 +316,28 @@ def _add_dq_contract(path: Path) -> None:
         ],
         "positive_output_dq_flags": ["valid", "warp_edge"],
         "required_source_terms": ["geometric_warp_coverage"],
+    }
+    write_json(path, payload)
+
+
+def _add_frame_accounting_contract(path: Path, *, active: int = 193, zero: int = 7) -> None:
+    payload = read_json(path)
+    payload["frame_accounting"] = {
+        "required": True,
+        "required_input_light_frames": active + zero,
+        "required_integrated_frames": active,
+        "required_zero_weight_frames": zero,
+        "required_registration_accepted_frames": active,
+        "min_integrated_frames": 190,
+        "required_integration_source_stage": "resident_calibrated_stack",
+        "required_final_status_counts": {
+            "integrated": active,
+            "zero_weight": zero,
+        },
+        "match_integration_frame_weights": True,
+        "match_speedup_summary": True,
+        "match_dq_active_frame_count": True,
+        "match_registration_accepted_frames": True,
     }
     write_json(path, payload)
 
@@ -420,6 +498,105 @@ def test_acceptance_audit_applies_dq_provenance_contract(tmp_path: Path):
     assert count_maps["coverage"]["result"]["finite_pixels"] == 6
     assert count_maps["low_rejection"]["result"]["positive_pixels"] == 1
     assert count_maps["high_rejection"]["result"]["rounded_sum"] == 3
+
+
+def test_acceptance_audit_applies_frame_accounting_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        active=193,
+        zero=7,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_dq=True,
+        frame_accounting=True,
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_dq_contract(contract)
+    _add_frame_accounting_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert audit["frame_accounting"]["exists"] is True
+    assert audit["frame_accounting"]["summary"]["integrated_frames"] == 193
+    assert checks["contract_frame_accounting_present"] is True
+    assert checks["contract_frame_accounting_input_light_frames"] is True
+    assert checks["contract_frame_accounting_integrated_frames"] is True
+    assert checks["contract_frame_accounting_zero_weight_frames"] is True
+    assert checks["contract_frame_accounting_final_status:integrated"] is True
+    assert checks["contract_frame_accounting_final_status:zero_weight"] is True
+    assert checks["contract_frame_accounting_matches_integration_weights"] is True
+    assert checks["contract_frame_accounting_matches_speedup_summary"] is True
+    assert checks["contract_frame_accounting_matches_dq_active_frames"] is True
+    assert checks["contract_frame_accounting_matches_registration"] is True
+
+
+def test_acceptance_audit_frame_accounting_contract_catches_mismatch(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        active=193,
+        zero=7,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_dq=True,
+        frame_accounting=True,
+    )
+    accounting = read_json(gp_run / "frame_accounting.json")
+    accounting["summary"]["integrated_frames"] = 192
+    accounting["summary"]["final_status_counts"]["integrated"] = 192
+    write_json(gp_run / "frame_accounting.json", accounting)
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_dq_contract(contract)
+    _add_frame_accounting_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert checks["contract_frame_accounting_integrated_frames"] is False
+    assert checks["contract_frame_accounting_final_status:integrated"] is False
+    assert checks["contract_frame_accounting_matches_integration_weights"] is False
+    assert checks["contract_frame_accounting_matches_speedup_summary"] is False
+    assert checks["contract_frame_accounting_matches_dq_active_frames"] is False
 
 
 def test_acceptance_audit_rejection_sum_uses_explicit_tolerance(tmp_path: Path):

@@ -8,6 +8,7 @@ from glass.report.benchmark_contract import (
     build_benchmark_contract_checks,
     build_benchmark_performance_diagnostics,
     collect_dq_provenance_records,
+    collect_frame_accounting_record,
     load_benchmark_contract,
 )
 from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
@@ -136,6 +137,7 @@ def build_acceptance_audit(
         glass_run,
         dq_contract=(contract_payload or {}).get("dq_provenance"),
     )
+    frame_accounting_record = collect_frame_accounting_record(glass_run)
     if benchmark_contract is not None:
         checks.extend(
             build_benchmark_contract_checks(
@@ -145,6 +147,7 @@ def build_acceptance_audit(
                 compare_payload=compare_payload,
                 frame_type_counts=counts,
                 dq_provenance_records=dq_provenance_records,
+                frame_accounting_record=frame_accounting_record,
             )
         )
         performance_regression = build_benchmark_performance_diagnostics(
@@ -177,6 +180,7 @@ def build_acceptance_audit(
             "records": dq_provenance_records,
             "contract": (contract_payload or {}).get("dq_provenance") if contract_payload else None,
         },
+        "frame_accounting": frame_accounting_record,
         "speedup_summary": speedup,
         "clean_room": {
             "status": "compliant",
@@ -197,6 +201,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         f"- Status: {audit['status']}",
         f"- Benchmark contract: {(audit.get('benchmark_contract') or {}).get('name')}",
         f"- DQ provenance records: {(audit.get('dq_provenance') or {}).get('record_count')}",
+        f"- Frame accounting artifact: {(audit.get('frame_accounting') or {}).get('path')}",
         f"- Speedup vs WBPP: {speedup.get('speedup_vs_wbpp')}",
         f"- Frame counts: {audit.get('frame_type_counts')}",
         f"- Shape match: {comparison.get('shape_match')}",
@@ -227,6 +232,19 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                 f"pixel_verification={verification.get('status')} "
                 f"coverage_verification={(output_maps.get('coverage') or {}).get('status')}"
             )
+    accounting = audit.get("frame_accounting") or {}
+    if accounting:
+        summary = accounting.get("summary") or {}
+        weights = accounting.get("integration_weight_counts") or {}
+        registration = accounting.get("registration_counts") or {}
+        lines.extend(["", "## Frame Accounting", ""])
+        lines.append(f"- Exists: {accounting.get('exists')}")
+        lines.append(f"- Input lights: {summary.get('input_light_frames')}")
+        lines.append(f"- Integrated frames: {summary.get('integrated_frames')}")
+        lines.append(f"- Zero-weight frames: {summary.get('zero_weight_frames')}")
+        lines.append(f"- Final status counts: {summary.get('final_status_counts')}")
+        lines.append(f"- Integration weight counts: {weights}")
+        lines.append(f"- Registration counts: {registration}")
     regression = audit.get("performance_regression")
     if regression:
         lines.extend(["", "## Performance Regression Diagnostics", ""])

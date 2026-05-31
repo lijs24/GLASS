@@ -73,6 +73,80 @@ def _load_json_object_if_present(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _weight_count_summary(weights: Any) -> dict[str, int]:
+    if not isinstance(weights, dict):
+        return {"total": 0, "positive": 0, "zero": 0, "invalid": 0}
+    positive = 0
+    zero = 0
+    invalid = 0
+    for value in weights.values():
+        try:
+            weight = float(value)
+        except (TypeError, ValueError):
+            invalid += 1
+            continue
+        if weight > 0.0:
+            positive += 1
+        else:
+            zero += 1
+    return {
+        "total": len(weights),
+        "positive": positive,
+        "zero": zero,
+        "invalid": invalid,
+    }
+
+
+def _registration_rows(registration: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = registration.get("registration_results")
+    if rows is None:
+        rows = registration.get("results")
+    return [item for item in rows if isinstance(item, dict)] if isinstance(rows, list) else []
+
+
+def _registration_count_summary(registration: dict[str, Any]) -> dict[str, Any]:
+    rows = _registration_rows(registration)
+    status_counts: dict[str, int] = {}
+    for row in rows:
+        status = str(row.get("status") or "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    return {
+        "total": len(rows),
+        "accepted": sum(status_counts.get(status, 0) for status in ("ok", "reference")),
+        "zero_weight_statuses": sum(
+            status_counts.get(status, 0) for status in ("excluded", "failed", "quality_rejected")
+        ),
+        "status_counts": status_counts,
+    }
+
+
+def collect_frame_accounting_record(glass_run: str | Path) -> dict[str, Any]:
+    run_root = Path(glass_run)
+    accounting_path = run_root / "frame_accounting.json"
+    accounting = _load_json_object_if_present(accounting_path)
+    integration = _load_json_object_if_present(run_root / "integration_results.json")
+    registration = _load_json_object_if_present(run_root / "registration_results.json")
+    frames = accounting.get("frames") if isinstance(accounting.get("frames"), list) else []
+    calculated_final_counts: dict[str, int] = {}
+    for row in frames:
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("final_status") or "unknown")
+        calculated_final_counts[status] = calculated_final_counts.get(status, 0) + 1
+    return {
+        "schema_version": 1,
+        "path": str(accounting_path),
+        "exists": accounting_path.exists(),
+        "summary": accounting.get("summary") if isinstance(accounting.get("summary"), dict) else {},
+        "frame_count": len(frames),
+        "calculated_final_status_counts": calculated_final_counts,
+        "integration_source_stage": accounting.get("integration_source_stage"),
+        "sources": accounting.get("sources") if isinstance(accounting.get("sources"), dict) else {},
+        "integration_weight_counts": _weight_count_summary(integration.get("frame_weights")),
+        "registration_counts": _registration_count_summary(registration),
+    }
+
+
 def _path_exists_maybe_relative(path_value: Any, run_root: Path) -> bool:
     if not path_value:
         return False
@@ -693,6 +767,181 @@ def _build_dq_provenance_contract_checks(
     return checks
 
 
+def _frame_accounting_count(
+    record: dict[str, Any],
+    key: str,
+) -> int | None:
+    value = (record.get("summary") or {}).get(key)
+    try:
+        return None if value is None else int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_frame_accounting_contract_checks(
+    frame_contract: dict[str, Any],
+    *,
+    record: dict[str, Any],
+    speedup_summary: dict[str, Any],
+    dq_provenance_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    if frame_contract.get("required"):
+        checks.append(
+            _check(
+                "contract_frame_accounting_present",
+                bool(record.get("exists")),
+                {"path": record.get("path"), "exists": bool(record.get("exists"))},
+            )
+        )
+
+    summary = record.get("summary") or {}
+    if not isinstance(summary, dict):
+        summary = {}
+    required_counts = {
+        "input_light_frames": "required_input_light_frames",
+        "integrated_frames": "required_integrated_frames",
+        "zero_weight_frames": "required_zero_weight_frames",
+        "quality_rejected_frames": "required_quality_rejected_frames",
+        "registration_accepted_frames": "required_registration_accepted_frames",
+    }
+    for summary_key, contract_key in required_counts.items():
+        if contract_key not in frame_contract:
+            continue
+        actual = _frame_accounting_count(record, summary_key)
+        required = int(frame_contract[contract_key])
+        checks.append(
+            _check(
+                f"contract_frame_accounting_{summary_key}",
+                actual == required,
+                {"actual": actual, "required": required},
+            )
+        )
+
+    min_integrated = frame_contract.get("min_integrated_frames")
+    if min_integrated is not None:
+        actual = _frame_accounting_count(record, "integrated_frames")
+        checks.append(
+            _check(
+                "contract_frame_accounting_min_integrated_frames",
+                actual is not None and actual >= int(min_integrated),
+                {"actual": actual, "required_min": int(min_integrated)},
+            )
+        )
+
+    expected_source_stage = frame_contract.get("required_integration_source_stage")
+    if expected_source_stage is not None:
+        checks.append(
+            _check(
+                "contract_frame_accounting_integration_source_stage",
+                record.get("integration_source_stage") == str(expected_source_stage),
+                {"actual": record.get("integration_source_stage"), "required": str(expected_source_stage)},
+            )
+        )
+
+    required_final_counts = frame_contract.get("required_final_status_counts") or {}
+    if isinstance(required_final_counts, dict):
+        final_counts = summary.get("final_status_counts") if isinstance(summary.get("final_status_counts"), dict) else {}
+        calculated_counts = record.get("calculated_final_status_counts") or {}
+        for status, required in required_final_counts.items():
+            status_text = str(status)
+            actual = final_counts.get(status_text)
+            calculated = calculated_counts.get(status_text)
+            required_int = int(required)
+            checks.append(
+                _check(
+                    f"contract_frame_accounting_final_status:{status_text}",
+                    actual == required_int and calculated == required_int,
+                    {
+                        "actual": actual,
+                        "calculated_from_rows": calculated,
+                        "required": required_int,
+                    },
+                )
+            )
+
+    if frame_contract.get("match_integration_frame_weights"):
+        weights = record.get("integration_weight_counts") or {}
+        matches = [
+            {
+                "field": "input_light_frames",
+                "accounting": _frame_accounting_count(record, "input_light_frames"),
+                "weights": weights.get("total"),
+            },
+            {
+                "field": "integrated_frames",
+                "accounting": _frame_accounting_count(record, "integrated_frames"),
+                "weights": weights.get("positive"),
+            },
+            {
+                "field": "zero_weight_frames",
+                "accounting": _frame_accounting_count(record, "zero_weight_frames"),
+                "weights": weights.get("zero"),
+            },
+        ]
+        checks.append(
+            _check(
+                "contract_frame_accounting_matches_integration_weights",
+                bool(matches) and all(item["accounting"] == item["weights"] for item in matches),
+                {"matches": matches, "invalid_weights": weights.get("invalid")},
+            )
+        )
+
+    if frame_contract.get("match_speedup_summary"):
+        glass = speedup_summary.get("glass") or {}
+        matches = [
+            {
+                "field": "integrated_frames",
+                "accounting": _frame_accounting_count(record, "integrated_frames"),
+                "speedup_summary": glass.get("weighted_frame_count"),
+            },
+            {
+                "field": "zero_weight_frames",
+                "accounting": _frame_accounting_count(record, "zero_weight_frames"),
+                "speedup_summary": glass.get("zero_weight_frame_count"),
+            },
+        ]
+        checks.append(
+            _check(
+                "contract_frame_accounting_matches_speedup_summary",
+                bool(matches) and all(item["accounting"] == item["speedup_summary"] for item in matches),
+                {"matches": matches},
+            )
+        )
+
+    if frame_contract.get("match_dq_active_frame_count"):
+        active_counts = [
+            _summary_number(record_item.get("summary") or {}, "active_frame_count")
+            for record_item in dq_provenance_records
+        ]
+        active_counts = [item for item in active_counts if item is not None]
+        actual = _frame_accounting_count(record, "integrated_frames")
+        checks.append(
+            _check(
+                "contract_frame_accounting_matches_dq_active_frames",
+                bool(active_counts) and all(int(item) == actual for item in active_counts),
+                {"accounting_integrated_frames": actual, "dq_active_frame_counts": active_counts},
+            )
+        )
+
+    if frame_contract.get("match_registration_accepted_frames"):
+        registration = record.get("registration_counts") or {}
+        actual = _frame_accounting_count(record, "registration_accepted_frames")
+        checks.append(
+            _check(
+                "contract_frame_accounting_matches_registration",
+                actual == registration.get("accepted"),
+                {
+                    "accounting_registration_accepted_frames": actual,
+                    "registration_accepted_frames": registration.get("accepted"),
+                    "registration_status_counts": registration.get("status_counts"),
+                },
+            )
+        )
+
+    return checks
+
+
 def build_benchmark_performance_diagnostics(
     contract: dict[str, Any],
     *,
@@ -777,6 +1026,7 @@ def build_benchmark_contract_checks(
     compare_payload: dict[str, Any],
     frame_type_counts: dict[str, int],
     dq_provenance_records: list[dict[str, Any]] | None = None,
+    frame_accounting_record: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     dataset = contract.get("dataset_requirements") or {}
@@ -916,6 +1166,18 @@ def build_benchmark_contract_checks(
             _build_dq_provenance_contract_checks(
                 dq_contract,
                 records=records,
+            )
+        )
+    else:
+        records = dq_provenance_records or []
+    frame_contract = contract.get("frame_accounting") or {}
+    if isinstance(frame_contract, dict) and frame_contract:
+        checks.extend(
+            _build_frame_accounting_contract_checks(
+                frame_contract,
+                record=frame_accounting_record or collect_frame_accounting_record(glass_run),
+                speedup_summary=speedup_summary,
+                dq_provenance_records=records,
             )
         )
     return checks

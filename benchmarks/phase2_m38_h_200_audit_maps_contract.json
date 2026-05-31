@@ -83,6 +83,23 @@
       "high_rejection"
     ]
   },
+  "frame_accounting": {
+    "required": true,
+    "required_input_light_frames": 200,
+    "required_integrated_frames": 193,
+    "required_zero_weight_frames": 7,
+    "required_registration_accepted_frames": 193,
+    "min_integrated_frames": 190,
+    "required_integration_source_stage": "resident_calibrated_stack",
+    "required_final_status_counts": {
+      "integrated": 193,
+      "zero_weight": 7
+    },
+    "match_integration_frame_weights": true,
+    "match_speedup_summary": true,
+    "match_dq_active_frame_count": true,
+    "match_registration_accepted_frames": true
+  },
   "required_command_tokens": [
     "--backend cuda",
     "--until-stage integration",
