@@ -568,6 +568,48 @@ def _array_storage_bytes(data: np.ndarray, dtype: Any) -> int:
     return int(np.asarray(data).size * np.dtype(dtype).itemsize)
 
 
+def _write_one_resident_output(spec: dict[str, Any]) -> tuple[str, float, dict[str, Any]]:
+    name = str(spec["name"])
+    dtype = spec.get("dtype", np.float32)
+    data = spec["data"]
+    if spec.get("round_counts"):
+        data = _count_map_for_write(data, dtype)
+    start = perf_counter()
+    write_fits_data(spec["path"], data, spec.get("header"), dtype=dtype)
+    elapsed = perf_counter() - start
+    storage = {
+        "dtype": np.dtype(dtype).name,
+        "estimated_data_bytes": _array_storage_bytes(data, dtype),
+    }
+    return name, elapsed, storage
+
+
+def _write_resident_outputs(
+    specs: list[dict[str, Any]],
+    *,
+    max_workers: int | None = None,
+) -> tuple[float, dict[str, float], dict[str, dict[str, Any]], int]:
+    if not specs:
+        return 0.0, {}, {}, 0
+    worker_count = max(1, min(len(specs), int(max_workers or len(specs))))
+    start = perf_counter()
+    breakdown: dict[str, float] = {}
+    storage: dict[str, dict[str, Any]] = {}
+    if worker_count == 1:
+        for spec in specs:
+            name, elapsed, entry = _write_one_resident_output(spec)
+            breakdown[name] = elapsed
+            storage[name] = entry
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="glass-output") as executor:
+            futures = [executor.submit(_write_one_resident_output, spec) for spec in specs]
+            for future in futures:
+                name, elapsed, entry = future.result()
+                breakdown[name] = elapsed
+                storage[name] = entry
+    return perf_counter() - start, breakdown, storage, worker_count
+
+
 def _resident_star_threshold_candidates(
     stack: Any,
     reference_index: int,
@@ -3022,53 +3064,57 @@ def run_resident_calibration_integration(
             high_rejection_path = (
                 output_dir / f"resident_high_rejection_map_{filt}.fits" if high_rejection_map is not None else None
             )
-            write_breakdown: dict[str, float] = {}
-            write_storage: dict[str, dict[str, Any]] = {}
             count_dtype = _count_map_dtype(len(light_frames))
-
-            def _write_output_map(
-                name: str,
-                path: Path,
-                data: np.ndarray,
-                header: dict[str, Any],
-                dtype: Any = np.float32,
-            ) -> None:
-                map_start = perf_counter()
-                write_fits_data(path, data, header, dtype=dtype)
-                write_breakdown[name] = perf_counter() - map_start
-                write_storage[name] = {
-                    "dtype": np.dtype(dtype).name,
-                    "estimated_data_bytes": _array_storage_bytes(data, dtype),
-                }
-
-            write_start = perf_counter()
-            _write_output_map("master", master_path, master, {"IMAGETYP": "master", "FILTER": filter_name})
-            _write_output_map("weight", weight_path, weight_map, {"IMAGETYP": "weight", "FILTER": filter_name})
+            output_specs: list[dict[str, Any]] = [
+                {
+                    "name": "master",
+                    "path": master_path,
+                    "data": master,
+                    "header": {"IMAGETYP": "master", "FILTER": filter_name},
+                    "dtype": np.float32,
+                },
+                {
+                    "name": "weight",
+                    "path": weight_path,
+                    "data": weight_map,
+                    "header": {"IMAGETYP": "weight", "FILTER": filter_name},
+                    "dtype": np.float32,
+                },
+            ]
             if coverage_map is not None and coverage_path is not None:
-                _write_output_map(
-                    "coverage",
-                    coverage_path,
-                    _count_map_for_write(coverage_map, count_dtype),
-                    {"IMAGETYP": "coverage", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
-                    dtype=count_dtype,
+                output_specs.append(
+                    {
+                        "name": "coverage",
+                        "path": coverage_path,
+                        "data": coverage_map,
+                        "header": {"IMAGETYP": "coverage", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
+                        "dtype": count_dtype,
+                        "round_counts": True,
+                    }
                 )
             if low_rejection_map is not None and low_rejection_path is not None:
-                _write_output_map(
-                    "low_rejection",
-                    low_rejection_path,
-                    _count_map_for_write(low_rejection_map, count_dtype),
-                    {"IMAGETYP": "rej_low", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
-                    dtype=count_dtype,
+                output_specs.append(
+                    {
+                        "name": "low_rejection",
+                        "path": low_rejection_path,
+                        "data": low_rejection_map,
+                        "header": {"IMAGETYP": "rej_low", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
+                        "dtype": count_dtype,
+                        "round_counts": True,
+                    }
                 )
             if high_rejection_map is not None and high_rejection_path is not None:
-                _write_output_map(
-                    "high_rejection",
-                    high_rejection_path,
-                    _count_map_for_write(high_rejection_map, count_dtype),
-                    {"IMAGETYP": "rej_high", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
-                    dtype=count_dtype,
+                output_specs.append(
+                    {
+                        "name": "high_rejection",
+                        "path": high_rejection_path,
+                        "data": high_rejection_map,
+                        "header": {"IMAGETYP": "rej_high", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
+                        "dtype": count_dtype,
+                        "round_counts": True,
+                    }
                 )
-            write_elapsed = perf_counter() - write_start
+            write_elapsed, write_breakdown, write_storage, output_write_workers = _write_resident_outputs(output_specs)
 
             first_master_stats = next(iter(master_stats_sets.values()), {})
             master_stats = {
@@ -3190,6 +3236,8 @@ def run_resident_calibration_integration(
                         "per_frame_registration_mean": registration_timing["mean"],
                     },
                     "output_write": {
+                        "mode": "threaded" if output_write_workers > 1 else "serial",
+                        "workers": output_write_workers,
                         "breakdown_s": write_breakdown,
                         "storage": write_storage,
                     },

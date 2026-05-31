@@ -293,6 +293,16 @@ integration where applicable.
 - Validate the 200-light benchmark again and compare image agreement against
   the release reference output.
 
+### S2-Gate 14: Resident Parallel Output Write Diagnostics
+
+- Write independent resident FITS outputs through a bounded worker pool.
+- Preserve the S2-Gate 13 dtype contract for master, weight, coverage, and
+  rejection maps.
+- Record output-write mode, worker count, per-file timing, and storage
+  diagnostics in `resident_artifacts.json`.
+- Run a cold-output 200-light benchmark and acceptance audit to separate
+  output-write recovery from hot-cache master reuse.
+
 ## Gate Rules
 
 Each gate requires:
