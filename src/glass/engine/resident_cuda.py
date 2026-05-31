@@ -577,7 +577,9 @@ def _resident_dq_map(
     invalid = (~np.isfinite(master_values)) | (~np.isfinite(weights)) | (weights <= 0.0)
     if coverage_map is not None:
         coverage = np.asarray(coverage_map, dtype=np.float32)
-        invalid |= (~np.isfinite(coverage)) | (coverage <= 0.5)
+        coverage_invalid = (~np.isfinite(coverage)) | (coverage <= 0.5)
+        invalid |= coverage_invalid
+        dq[coverage_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
     dq[invalid] |= np.uint32(int(DQFlag.NO_DATA))
     if low_rejection_map is not None:
         low = np.asarray(low_rejection_map, dtype=np.float32)
@@ -3274,8 +3276,8 @@ def run_resident_calibration_integration(
                         "header": {
                             "IMAGETYP": "dq_mask",
                             "FILTER": filter_name,
-                            "DQSTAGE": "integration",
-                            "DQFLAGS": "NO_DATA,LOW_REJECTED,HIGH_REJECTED",
+                        "DQSTAGE": "integration",
+                        "DQFLAGS": "NO_DATA,WARP_EDGE,LOW_REJECTED,HIGH_REJECTED",
                         },
                         "dtype": np.int16,
                         "round_counts": True,
@@ -3446,6 +3448,7 @@ def run_resident_calibration_integration(
                     "dq_summary": dq_summary,
                     "dq_flag_bits": {
                         "no_data": int(DQFlag.NO_DATA),
+                        "warp_edge": int(DQFlag.WARP_EDGE),
                         "low_rejected": int(DQFlag.LOW_REJECTED),
                         "high_rejected": int(DQFlag.HIGH_REJECTED),
                     },

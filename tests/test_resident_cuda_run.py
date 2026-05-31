@@ -91,8 +91,10 @@ def test_resident_dq_map_marks_no_data_and_rejections():
     assert dq[1, 0] & int(DQFlag.NO_DATA)
     assert dq[1, 0] & int(DQFlag.HIGH_REJECTED)
     assert dq[1, 1] & int(DQFlag.NO_DATA)
+    assert dq[1, 1] & int(DQFlag.WARP_EDGE)
     assert summary["valid"] == 1
     assert summary["no_data"] == 3
+    assert summary["warp_edge"] == 1
     assert summary["low_rejected"] == 1
     assert summary["high_rejected"] == 1
 
@@ -286,7 +288,12 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     shape = resident["artifacts"][0]["shape"]
     assert dq_data.shape == (shape["height"], shape["width"])
     assert np.all(np.isfinite(dq_data))
-    assert np.nanmax(dq_data) <= int(DQFlag.NO_DATA | DQFlag.LOW_REJECTED | DQFlag.HIGH_REJECTED)
+    assert np.nanmax(dq_data) <= int(
+        DQFlag.NO_DATA | DQFlag.WARP_EDGE | DQFlag.LOW_REJECTED | DQFlag.HIGH_REJECTED
+    )
+    with fits.open(integration["outputs"][0]["dq_map_path"]) as hdul:
+        assert "WARP_EDGE" in hdul[0].header["DQFLAGS"]
+    assert resident["artifacts"][0]["dq_flag_bits"]["warp_edge"] == int(DQFlag.WARP_EDGE)
     assert "valid" in integration["outputs"][0]["dq_summary"]
     assert registration["source_stage"] == "resident_calibrated_stack"
     assert registration["results"][0]["status"] == "reference"

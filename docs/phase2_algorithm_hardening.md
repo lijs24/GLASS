@@ -370,6 +370,19 @@ integration where applicable.
 - Validate with CLI report smoke tests; this is a reporting-only gate and does
   not require rerunning the 200-light benchmark unless compute artifacts change.
 
+### S2-Gate 20: Resident Warp-Edge DQ Semantics
+
+- Extend the resident CUDA integration DQ map to encode `WARP_EDGE` when the
+  resident coverage map proves that a pixel has no valid contributing warp
+  footprint.
+- Preserve `NO_DATA`, `LOW_REJECTED`, and `HIGH_REJECTED` behavior.
+- Record the `WARP_EDGE` bit in DQ FITS headers and resident artifact
+  `dq_flag_bits`.
+- Keep the first resident implementation conservative: do not infer partial
+  edge pixels from reduced coverage when rejection maps may also reduce
+  coverage.
+- Validate with direct DQ helper tests and resident CUDA smoke tests.
+
 ## Gate Rules
 
 Each gate requires:
