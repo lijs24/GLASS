@@ -423,7 +423,7 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
         deterministic_singles,
         strict=True,
     ):
-        assert batch_item["catalog_topk_mode"] == "deterministic_serial_per_cell"
+        assert batch_item["catalog_topk_mode"] == "deterministic_parallel_per_cell"
         assert batch_item["count"] == repeat_item["count"]
         assert batch_item["stored_count"] == repeat_item["stored_count"]
         assert np.array_equal(batch_item["x"], repeat_item["x"])

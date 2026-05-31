@@ -375,6 +375,128 @@ __global__ void star_candidate_grid_topk_deterministic_cell_kernel(
   }
 }
 
+__global__ void star_candidate_grid_topk_deterministic_block_kernel(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int* count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell) {
+  const int cell_index = static_cast<int>(blockIdx.x);
+  const int cell_count = grid_cols * grid_rows;
+  if (cell_index >= cell_count) {
+    return;
+  }
+
+  extern __shared__ float shared_catalog[];
+  const int local_capacity = static_cast<int>(blockDim.x) * candidates_per_cell;
+  float* local_xs = shared_catalog;
+  float* local_ys = local_xs + local_capacity;
+  float* local_fluxes = local_ys + local_capacity;
+
+  const int lane_base = static_cast<int>(threadIdx.x) * candidates_per_cell;
+  for (int i = 0; i < candidates_per_cell; ++i) {
+    const int local_index = lane_base + i;
+    local_xs[local_index] = 0.0f;
+    local_ys[local_index] = 0.0f;
+    local_fluxes[local_index] = -1.0e30f;
+  }
+  __syncthreads();
+
+  const int cell_x = cell_index % grid_cols;
+  const int cell_y = cell_index / grid_cols;
+  const int x0 = (cell_x * width) / grid_cols;
+  const int x1 = ((cell_x + 1) * width) / grid_cols;
+  const int y0 = (cell_y * height) / grid_rows;
+  const int y1 = ((cell_y + 1) * height) / grid_rows;
+  const int cell_width = x1 - x0;
+  const int cell_pixels = cell_width * (y1 - y0);
+  for (int offset = static_cast<int>(threadIdx.x); offset < cell_pixels; offset += static_cast<int>(blockDim.x)) {
+    const int y = y0 + offset / cell_width;
+    const int x = x0 + offset - (offset / cell_width) * cell_width;
+    float center = 0.0f;
+    if (!is_local_maximum(input, x, y, width, height, threshold, &center)) {
+      continue;
+    }
+    atomicAdd(count, 1);
+    int weakest_index = lane_base;
+    float weakest_flux = local_fluxes[lane_base];
+    for (int i = 1; i < candidates_per_cell; ++i) {
+      const int candidate_index = lane_base + i;
+      if (star_candidate_weaker(
+              local_fluxes[candidate_index],
+              local_xs[candidate_index],
+              local_ys[candidate_index],
+              weakest_flux,
+              local_xs[weakest_index],
+              local_ys[weakest_index])) {
+        weakest_flux = local_fluxes[candidate_index];
+        weakest_index = candidate_index;
+      }
+    }
+    if (star_candidate_better(
+            center,
+            static_cast<float>(x),
+            static_cast<float>(y),
+            weakest_flux,
+            local_xs[weakest_index],
+            local_ys[weakest_index])) {
+      local_xs[weakest_index] = static_cast<float>(x);
+      local_ys[weakest_index] = static_cast<float>(y);
+      local_fluxes[weakest_index] = center;
+    }
+  }
+  __syncthreads();
+
+  if (threadIdx.x != 0) {
+    return;
+  }
+  const int output_base = cell_index * candidates_per_cell;
+  for (int i = 0; i < candidates_per_cell; ++i) {
+    const int output_index = output_base + i;
+    xs[output_index] = 0.0f;
+    ys[output_index] = 0.0f;
+    fluxes[output_index] = -1.0e30f;
+  }
+  for (int local_index = 0; local_index < local_capacity; ++local_index) {
+    const float candidate_flux = local_fluxes[local_index];
+    if (!isfinite(candidate_flux) || candidate_flux <= -1.0e30f) {
+      continue;
+    }
+    int weakest_index = output_base;
+    float weakest_flux = fluxes[output_base];
+    for (int i = 1; i < candidates_per_cell; ++i) {
+      const int candidate_index = output_base + i;
+      if (star_candidate_weaker(
+              fluxes[candidate_index],
+              xs[candidate_index],
+              ys[candidate_index],
+              weakest_flux,
+              xs[weakest_index],
+              ys[weakest_index])) {
+        weakest_flux = fluxes[candidate_index];
+        weakest_index = candidate_index;
+      }
+    }
+    if (star_candidate_better(
+            candidate_flux,
+            local_xs[local_index],
+            local_ys[local_index],
+            weakest_flux,
+            xs[weakest_index],
+            ys[weakest_index])) {
+      xs[weakest_index] = local_xs[local_index];
+      ys[weakest_index] = local_ys[local_index];
+      fluxes[weakest_index] = candidate_flux;
+    }
+  }
+}
+
 __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxes, int max_candidates) {
   if (blockIdx.x != 0 || threadIdx.x != 0) {
     return;
@@ -715,19 +837,37 @@ void glass_star_grid_top_nms_candidates_deterministic_f32_launch(
   star_catalog_init_kernel<<<grid_init_blocks, init_threads>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
   const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
   star_catalog_init_kernel<<<out_init_blocks, init_threads>>>(out_xs, out_ys, out_fluxes, max_output_candidates);
-  const int cell_blocks = (cell_count + init_threads - 1) / init_threads;
-  star_candidate_grid_topk_deterministic_cell_kernel<<<cell_blocks, init_threads>>>(
-      input,
-      grid_xs,
-      grid_ys,
-      grid_fluxes,
-      count,
-      width,
-      height,
-      threshold,
-      grid_cols,
-      grid_rows,
-      candidates_per_cell);
+  if (candidates_per_cell <= 16) {
+    constexpr int cell_threads = 128;
+    const std::size_t shared_bytes =
+        static_cast<std::size_t>(cell_threads) * static_cast<std::size_t>(candidates_per_cell) * 3 * sizeof(float);
+    star_candidate_grid_topk_deterministic_block_kernel<<<cell_count, cell_threads, shared_bytes>>>(
+        input,
+        grid_xs,
+        grid_ys,
+        grid_fluxes,
+        count,
+        width,
+        height,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell);
+  } else {
+    const int cell_blocks = (cell_count + init_threads - 1) / init_threads;
+    star_candidate_grid_topk_deterministic_cell_kernel<<<cell_blocks, init_threads>>>(
+        input,
+        grid_xs,
+        grid_ys,
+        grid_fluxes,
+        count,
+        width,
+        height,
+        threshold,
+        grid_cols,
+        grid_rows,
+        candidates_per_cell);
+  }
   const int sort_count = next_power_of_two_int(grid_capacity);
   if (sort_count <= 4096) {
     constexpr int sort_threads = 256;

@@ -480,8 +480,11 @@ const char* grid_catalog_sort_mode(int grid_capacity) {
   return grid_capacity <= 4096 ? "shared_bitonic_power2" : "single_thread_selection";
 }
 
-const char* grid_catalog_topk_mode(bool deterministic = false) {
-  return deterministic ? "deterministic_serial_per_cell" : "strict_flux_precheck_per_cell_lock";
+const char* grid_catalog_topk_mode(bool deterministic = false, int candidates_per_cell = 0) {
+  if (!deterministic) {
+    return "strict_flux_precheck_per_cell_lock";
+  }
+  return candidates_per_cell <= 16 ? "deterministic_parallel_per_cell" : "deterministic_serial_per_cell";
 }
 
 struct CalibrationParameters {
@@ -2843,7 +2846,7 @@ class ResidentCalibratedStack {
       result["max_output_candidates"] = max_output_candidates;
       result["min_separation_px"] = min_separation_px;
       result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
-      result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic);
+      result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic, candidates_per_cell);
       result["x"] = xs[py::slice(0, stored_count, 1)];
       result["y"] = ys[py::slice(0, stored_count, 1)];
       result["flux"] = fluxes[py::slice(0, stored_count, 1)];
@@ -3065,7 +3068,7 @@ class ResidentCalibratedStack {
         result["max_output_candidates"] = max_output_candidates;
         result["min_separation_px"] = min_separation_px;
         result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
-        result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic);
+        result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic, candidates_per_cell);
         result["catalog_timing_model"] = "per_frame_launch_sync_download";
         result["catalog_enqueue_s"] = enqueue_s;
         result["catalog_sync_s"] = sync_s;

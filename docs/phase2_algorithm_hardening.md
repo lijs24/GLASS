@@ -1025,6 +1025,23 @@ integration where applicable.
 - Validate with synthetic FITS audit fixtures, CLI smoke coverage, ruff, full
   pytest, and the repeated 200-light resident CUDA runs produced by S2-Gate 58.
 
+### S2-Gate 60: Parallel Deterministic Resident Grid Top-K
+
+- Replace the deterministic resident grid top-k catalog scan's one-thread-per
+  cell fallback with a one-block-per-cell deterministic parallel scan for the
+  standard small `candidates_per_cell` cases.
+- Preserve the GLASS catalog comparator exactly: flux descending, then y
+  ascending, then x ascending. The parallel path may change scheduling, but not
+  catalog contents relative to the deterministic single-frame/batch contract.
+- Keep a serial deterministic fallback for unusually large per-cell candidate
+  budgets where shared-memory usage would be excessive.
+- Surface the top-k mode as `deterministic_parallel_per_cell` so real-data
+  artifacts distinguish the optimized deterministic path from the Gate58
+  serial path.
+- Validate with resident CUDA catalog batch/single/repeat tests, resident
+  triangle-registration smoke tests, ruff, full pytest, and repeated 200-light
+  resident determinism plus output-pixel audits.
+
 ## Gate Rules
 
 Each gate requires:
