@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from glass.cpu.calibration import calibrate_light
-from glass.engine.contracts import CombinePolicy, DQFlag, OutputMapPolicy, StackRequest
+from glass.cpu.cosmetic import correct_cosmetic_defects
+from glass.engine.contracts import CombinePolicy, DQFlag, DQMask, OutputMapPolicy, RejectionPolicy, StackRequest, TileWindow
 from glass.engine.dq import add_summary_counts, dq_header, dq_mask_from_invalid, write_dq_tile
 from glass.engine.stack_engine import CPUStackEngine
 from glass.gpu.tile_scheduler import iter_tiles
@@ -23,7 +24,8 @@ def initialize_run(run_dir: str | Path) -> RunState:
 def _policy_from_plan(plan: dict[str, Any]) -> CalibrationPolicy:
     raw = plan.get("calibration_plan", {}).get("calibration_policy", {})
     if isinstance(raw, dict):
-        return CalibrationPolicy(**raw)
+        allowed = set(CalibrationPolicy.__dataclass_fields__.keys())
+        return CalibrationPolicy(**{key: value for key, value in raw.items() if key in allowed})
     return CalibrationPolicy()
 
 
@@ -159,17 +161,31 @@ def _stream_mean_master(
     return stats.as_dict()
 
 
+def _master_rejection_policy(policy: CalibrationPolicy | None) -> RejectionPolicy:
+    policy = policy or CalibrationPolicy()
+    return RejectionPolicy(
+        method=policy.master_rejection,  # type: ignore[arg-type]
+        iterations=policy.master_rejection_iterations,
+        low_sigma=policy.master_rejection_low_sigma,
+        high_sigma=policy.master_rejection_high_sigma,
+        min_samples=policy.master_rejection_min_samples,
+        max_reject_fraction=policy.master_rejection_max_fraction,
+    )
+
+
 def _stack_mean_master_with_engine(
     paths: list[str],
     out_path: Path,
     tile_size: int,
     header: dict[str, Any],
     subtract_path: str | None = None,
-) -> dict[str, float]:
+) -> tuple[dict[str, float], dict[str, float | int | str]]:
     import numpy as np
 
     if not paths:
         raise ValueError("cannot stack an empty frame list")
+    policy = header.pop("_calibration_policy", None)
+    rejection = _master_rejection_policy(policy if isinstance(policy, CalibrationPolicy) else None)
     with ExitStack() as stack:
         sources = {
             f"frame-{index}": stack.enter_context(FitsImageSource(path))
@@ -179,6 +195,7 @@ def _stack_mean_master_with_engine(
             frame_ids=tuple(sources.keys()),
             source_kind="unknown",
             combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
+            rejection=rejection,
             output_maps=OutputMapPolicy(
                 coverage=False,
                 weight=False,
@@ -202,7 +219,7 @@ def _stack_mean_master_with_engine(
                     ).astype(np.float32)
                 writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, data)
                 stats.update(data)
-    return stats.as_dict()
+    return stats.as_dict(), result.metrics
 
 
 def _stack_mean_master(
@@ -212,21 +229,32 @@ def _stack_mean_master(
     header: dict[str, Any],
     subtract_path: str | None = None,
     use_stack_engine: bool = True,
-) -> tuple[dict[str, float], str, str | None]:
+    policy: CalibrationPolicy | None = None,
+) -> tuple[dict[str, float], str, str | None, dict[str, float | int | str]]:
+    header = dict(header)
+    if policy is not None:
+        header["_calibration_policy"] = policy
     if use_stack_engine:
         try:
+            stats, metrics = _stack_mean_master_with_engine(paths, out_path, tile_size, header, subtract_path)
             return (
-                _stack_mean_master_with_engine(paths, out_path, tile_size, header, subtract_path),
+                stats,
                 "stack_engine_cpu",
                 None,
+                metrics,
             )
         except Exception as exc:
             fallback_stats = _stream_mean_master(paths, out_path, tile_size, header, subtract_path)
-            return fallback_stats, "legacy_streaming_accumulator", str(exc)
+            return fallback_stats, "legacy_streaming_accumulator", str(exc), {
+                "combine": "mean",
+                "rejection": "none",
+                "frame_count": len(paths),
+            }
     return (
         _stream_mean_master(paths, out_path, tile_size, header, subtract_path),
         "legacy_streaming_accumulator",
         None,
+        {"combine": "mean", "rejection": "none", "frame_count": len(paths)},
     )
 
 
@@ -239,6 +267,187 @@ def _normalization_scalar(path: Path, normalization: str, tile_size: int) -> tup
             stats.update(reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
     values = stats.as_dict()
     return float(values["mean"]), "mean"
+
+
+def _normalization_scalar_for_frame(
+    path: str | Path,
+    subtract_path: str | Path | None,
+    normalization: str,
+    tile_size: int,
+) -> tuple[float, str]:
+    import gc
+    import numpy as np
+
+    source_path = Path(path)
+    if normalization != "median":
+        stats = _StreamingStats()
+        with FitsImageReader(source_path) as reader, ExitStack() as stack:
+            subtract_reader = stack.enter_context(FitsImageReader(subtract_path)) if subtract_path else None
+            for tile in iter_tiles(width=reader.width, height=reader.height, tile_size=tile_size):
+                data = reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                if subtract_reader is not None:
+                    data = data - subtract_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                stats.update(data)
+        return float(stats.as_dict()["mean"]), "mean_streaming"
+
+    scratch_target = Path(str(source_path) + ".flat_norm_scratch.bin")
+    scratch = None
+    work = None
+    try:
+        with FitsImageReader(source_path) as reader, ExitStack() as stack:
+            subtract_reader = stack.enter_context(FitsImageReader(subtract_path)) if subtract_path else None
+            total_pixels = reader.width * reader.height
+            scratch = np.memmap(scratch_target, dtype=np.float32, mode="w+", shape=(total_pixels,))
+            finite_count = 0
+            for tile in iter_tiles(width=reader.width, height=reader.height, tile_size=tile_size):
+                values = reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                if subtract_reader is not None:
+                    values = values - subtract_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                finite = values.ravel()[np.isfinite(values.ravel())]
+                count = int(finite.size)
+                if count:
+                    scratch[finite_count : finite_count + count] = finite
+                    finite_count += count
+        if finite_count == 0:
+            raise ValueError("cannot normalize flat frame: no finite pixels")
+        work = scratch[:finite_count]
+        mid = finite_count // 2
+        work.partition(mid)
+        upper = float(work[mid])
+        if finite_count % 2 == 1:
+            return upper, "median_scratch_memmap_per_flat"
+        return (float(np.max(work[:mid])) + upper) / 2.0, "median_scratch_memmap_per_flat"
+    finally:
+        if scratch is not None:
+            scratch.flush()
+        del work
+        del scratch
+        gc.collect()
+        scratch_target.unlink(missing_ok=True)
+
+
+class _NormalizedFlatSource:
+    def __init__(self, path: str | Path, normalization_scalar: float, subtract_path: str | Path | None = None):
+        self.path = Path(path)
+        self.normalization_scalar = float(normalization_scalar)
+        self.subtract_path = None if subtract_path is None else Path(subtract_path)
+        self.metadata: dict[str, Any] = {"normalization_scalar": self.normalization_scalar}
+        self.channels = 1
+        self.dtype = "float32"
+        self.width = 0
+        self.height = 0
+        self._reader: FitsImageReader | None = None
+        self._subtract_reader: FitsImageReader | None = None
+
+    def __enter__(self) -> "_NormalizedFlatSource":
+        self._reader = FitsImageReader(self.path)
+        self._reader.__enter__()
+        self.height, self.width = self._reader.shape
+        if self.subtract_path is not None:
+            self._subtract_reader = FitsImageReader(self.subtract_path)
+            self._subtract_reader.__enter__()
+            if self._subtract_reader.shape != (self.height, self.width):
+                raise ValueError("flat bias/dark subtraction shape mismatch")
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._subtract_reader is not None:
+            self._subtract_reader.__exit__(exc_type, exc, tb)
+        if self._reader is not None:
+            self._reader.__exit__(exc_type, exc, tb)
+        self._subtract_reader = None
+        self._reader = None
+
+    def read_tile(self, window: TileWindow, dtype: Any = None) -> Any:
+        import numpy as np
+
+        if self._reader is None:
+            raise RuntimeError("normalized flat source is not open")
+        data = self._reader.read_tile(window.y0, window.y1, window.x0, window.x1)
+        if self._subtract_reader is not None:
+            data = data - self._subtract_reader.read_tile(window.y0, window.y1, window.x0, window.x1)
+        data = data / np.float32(self.normalization_scalar)
+        return np.asarray(data, dtype=dtype or np.float32)
+
+    def read_mask_tile(self, window: TileWindow) -> DQMask:
+        tile = self.read_tile(window, dtype=None)
+        return dq_mask_from_invalid(tile.shape, ~np.isfinite(tile), DQFlag.NO_DATA)
+
+
+def _stack_normalized_flat_master(
+    paths: list[str],
+    out_path: Path,
+    tile_size: int,
+    flat_floor: float,
+    normalization: str,
+    header: dict[str, Any],
+    subtract_path: str | None,
+    policy: CalibrationPolicy,
+) -> tuple[dict[str, float], list[dict[str, Any]], str, str | None, dict[str, float | int | str]]:
+    import numpy as np
+
+    per_flat: list[dict[str, Any]] = []
+    try:
+        scalars: list[float] = []
+        for index, path in enumerate(paths):
+            scalar, method = _normalization_scalar_for_frame(path, subtract_path, normalization, tile_size)
+            if abs(scalar) < flat_floor:
+                raise ValueError(f"flat normalization is below flat_floor for {path}")
+            scalars.append(scalar)
+            per_flat.append({"path": str(path), "normalization_scalar": scalar, "normalization_method": method})
+        with ExitStack() as stack:
+            sources = {
+                f"flat-{index}": stack.enter_context(_NormalizedFlatSource(path, scalars[index], subtract_path))
+                for index, path in enumerate(paths)
+            }
+            request = StackRequest(
+                frame_ids=tuple(sources.keys()),
+                source_kind="flat",
+                combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
+                rejection=_master_rejection_policy(policy),
+                output_maps=OutputMapPolicy(
+                    coverage=False,
+                    weight=False,
+                    variance=False,
+                    low_rejection=False,
+                    high_rejection=False,
+                    dq=False,
+                ),
+                metadata={"stage": "master_flat", "normalization": "per_flat"},
+            )
+            result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+        data = np.maximum(result.master, np.float32(flat_floor)).astype(np.float32)
+        stats = _StreamingStats()
+        height, width = data.shape
+        with FitsTileWriter(out_path, width=width, height=height, header=header) as writer:
+            for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
+                tile_data = data[tile.y0 : tile.y1, tile.x0 : tile.x1]
+                writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_data)
+                stats.update(tile_data)
+        return stats.as_dict(), per_flat, "stack_engine_cpu_per_flat_normalized", None, result.metrics
+    except Exception as exc:
+        raw_path = out_path.with_name(f"raw_{out_path.name}")
+        _raw_stats, tile_stack_mode, fallback_reason, metrics = _stack_mean_master(
+            paths,
+            raw_path,
+            tile_size,
+            {"IMAGETYP": "raw_flat", "FILTER": header.get("FILTER")},
+            subtract_path=subtract_path,
+            policy=policy,
+        )
+        stats, norm, norm_method = _normalize_flat_master(
+            raw_path, out_path, tile_size, flat_floor, normalization, header
+        )
+        raw_path.unlink(missing_ok=True)
+        per_flat.append(
+            {
+                "path": "fallback_master_normalization",
+                "normalization_scalar": norm,
+                "normalization_method": norm_method,
+            }
+        )
+        reason = f"{exc}; fallback={fallback_reason}" if fallback_reason else str(exc)
+        return stats, per_flat, tile_stack_mode, reason, metrics
 
 
 def _exact_median_scratch(path: Path, tile_size: int, scratch_path: Path | None = None) -> float:
@@ -322,6 +531,7 @@ def _calibrate_light_to_cache_streaming(
     dq_dir.mkdir(parents=True, exist_ok=True)
     dq_path = dq_dir / f"dq_calibrated_{frame['id']}.fits"
     dq_summary: dict[str, int] = {}
+    cosmetic_summary = {"hot_pixels": 0, "cold_pixels": 0}
     with ExitStack() as stack:
         light_reader = stack.enter_context(FitsImageReader(frame["path"]))
         bias_reader = stack.enter_context(FitsImageReader(bias_path)) if bias_path else None
@@ -382,12 +592,21 @@ def _calibrate_light_to_cache_streaming(
                         policy,
                     )
                     actual_backend = "cpu"
+                tile_dq = DQMask.empty(calibrated_tile.shape)
+                if policy.saturation_level is not None:
+                    tile_dq.mark(DQFlag.SATURATED, light_tile >= np.float32(policy.saturation_level))
+                if policy.cosmetic_correction_enabled:
+                    cosmetic = correct_cosmetic_defects(
+                        calibrated_tile,
+                        hot_sigma=policy.cosmetic_hot_sigma,
+                        cold_sigma=policy.cosmetic_cold_sigma,
+                    )
+                    calibrated_tile = cosmetic.data
+                    tile_dq.data |= cosmetic.dq_mask.data
+                    cosmetic_summary["hot_pixels"] += int(cosmetic.metrics["hot_pixels"])
+                    cosmetic_summary["cold_pixels"] += int(cosmetic.metrics["cold_pixels"])
                 writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, calibrated_tile)
-                tile_dq = dq_mask_from_invalid(
-                    calibrated_tile.shape,
-                    ~np.isfinite(calibrated_tile),
-                    DQFlag.NO_DATA,
-                )
+                tile_dq.mark(DQFlag.NO_DATA, ~np.isfinite(calibrated_tile))
                 write_dq_tile(dq_writer, tile, tile_dq)
                 add_summary_counts(dq_summary, tile_dq.summary())
                 tile_count += 1
@@ -396,6 +615,12 @@ def _calibrate_light_to_cache_streaming(
         "path": str(path),
         "dq_mask_path": str(dq_path),
         "dq_summary": dq_summary,
+        "cosmetic_correction": {
+            "enabled": policy.cosmetic_correction_enabled,
+            "hot_sigma": policy.cosmetic_hot_sigma,
+            "cold_sigma": policy.cosmetic_cold_sigma,
+            **cosmetic_summary,
+        },
         "backend": actual_backend,
         "tile_size": tile_size,
         "tile_count": tile_count,
@@ -435,11 +660,12 @@ def run_calibration_stages(
             if group_type != "bias":
                 continue
             path = master_dir / f"master_bias_{group_id}.fits"
-            stats, tile_stack_mode, fallback_reason = _stack_mean_master(
+            stats, tile_stack_mode, fallback_reason, stack_metrics = _stack_mean_master(
                 _paths_for_group(group, frames),
                 path,
                 tile_size,
                 {"IMAGETYP": "master_bias"},
+                policy=policy,
             )
             master_metadata[group_id] = {
                 "path": str(path),
@@ -449,6 +675,8 @@ def run_calibration_stages(
                 "tile_stack_mode": tile_stack_mode,
                 "stack_engine_enabled": tile_stack_mode == "stack_engine_cpu",
                 "stack_engine_fallback_reason": fallback_reason,
+                "stack_engine_metrics": stack_metrics,
+                "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
             }
 
@@ -463,12 +691,13 @@ def run_calibration_stages(
                 else None
             )
             path = master_dir / f"master_dark_{group_id}.fits"
-            stats, tile_stack_mode, fallback_reason = _stack_mean_master(
+            stats, tile_stack_mode, fallback_reason, stack_metrics = _stack_mean_master(
                 _paths_for_group(group, frames),
                 path,
                 tile_size,
                 {"IMAGETYP": "master_dark", "EXPTIME": group.get("exposure_s")},
                 subtract_path=bias_path,
+                policy=policy,
             )
             master_metadata[group_id] = {
                 "path": str(path),
@@ -482,6 +711,8 @@ def run_calibration_stages(
                 "tile_stack_mode": tile_stack_mode,
                 "stack_engine_enabled": tile_stack_mode == "stack_engine_cpu",
                 "stack_engine_fallback_reason": fallback_reason,
+                "stack_engine_metrics": stack_metrics,
+                "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
             }
 
@@ -495,24 +726,17 @@ def run_calibration_stages(
                 if bias_group is not None
                 else None
             )
-            raw_path = master_dir / f"raw_master_flat_{group_id}.fits"
-            _raw_stats, raw_tile_stack_mode, raw_fallback_reason = _stack_mean_master(
-                _paths_for_group(group, frames),
-                raw_path,
-                tile_size,
-                {"IMAGETYP": "raw_flat", "FILTER": group.get("filter")},
-                subtract_path=bias_path,
-            )
             path = master_dir / f"master_flat_{group_id}.fits"
-            stats, norm, norm_method = _normalize_flat_master(
-                raw_path,
+            stats, per_flat_normalization, raw_tile_stack_mode, raw_fallback_reason, raw_stack_metrics = _stack_normalized_flat_master(
+                _paths_for_group(group, frames),
                 path,
                 tile_size,
                 policy.flat_floor,
                 policy.flat_normalization,
                 {"IMAGETYP": "master_flat", "FILTER": group.get("filter")},
+                subtract_path=bias_path,
+                policy=policy,
             )
-            raw_path.unlink(missing_ok=True)
             master_metadata[group_id] = {
                 "path": str(path),
                 "stats": stats,
@@ -521,13 +745,17 @@ def run_calibration_stages(
                 "bias_group": bias_group,
                 "bias_subtracted_from_source": bias_path is not None,
                 "normalization": policy.flat_normalization,
-                "normalization_scalar": norm,
-                "normalization_method": norm_method,
+                "normalization_stage": "per_flat",
+                "per_flat_normalization": per_flat_normalization,
+                "normalization_scalar": per_flat_normalization[0]["normalization_scalar"] if per_flat_normalization else None,
+                "normalization_method": per_flat_normalization[0]["normalization_method"] if per_flat_normalization else None,
                 "flat_floor": policy.flat_floor,
                 "streaming": True,
                 "tile_stack_mode": raw_tile_stack_mode,
                 "stack_engine_enabled": raw_tile_stack_mode == "stack_engine_cpu",
                 "stack_engine_fallback_reason": raw_fallback_reason,
+                "stack_engine_metrics": raw_stack_metrics,
+                "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
             }
 

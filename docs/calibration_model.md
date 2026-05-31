@@ -2,8 +2,11 @@
 
 This document records the independent calibration semantics used by GLASS.
 
-Master bias is the mean or median of bias frames. Gate 2 uses mean stacking as a
-CPU baseline.
+Master bias is built through the Phase 2 StackEngine. The default master-frame
+policy uses `winsorized_sigma` rejection with conservative sigma limits; tests
+also cover explicit min/max rejection to verify that extreme samples are removed
+before combining. The legacy streaming mean accumulator remains as a diagnostic
+fallback.
 
 Master dark records its exposure and whether it includes bias. If a master dark
 is made directly from raw dark frames, `master_dark_includes_bias=true`. If the
@@ -12,7 +15,9 @@ This flag changes the light calibration formula and is always exposed in plan,
 state, and report artifacts.
 
 Master flat is calibrated by subtracting either bias or flat-dark data, then
-normalizing by median or mean. A `flat_floor` avoids division by zero.
+normalizing each source flat by its own median or mean before StackEngine
+combination. A `flat_floor` avoids division by zero and is applied to the final
+normalized master flat.
 Both tile-mode and resident-mode `glass run` honor `--flat-floor`, and the
 effective value is written into `calibration_artifacts.json` or
 `resident_artifacts.json`. This is scientifically important for real flat
@@ -46,3 +51,32 @@ calibrated = (light - master_bias - scaled_dark) / normalized_flat
 
 Dark scaling is controlled by policy and can be disabled. Pedestal is applied
 after flat division.
+
+## Additional Phase 2 Calibration Controls
+
+Overscan/trim first pass:
+
+- `overscan_enabled`
+- `overscan_columns`
+- `overscan_rows`
+- `trim_overscan`
+
+The CPU baseline subtracts the median of the configured overscan samples and can
+trim the overscan rows/columns. Pipeline-wide tile integration of this transform
+is a later hardening step.
+
+Cosmetic correction first pass:
+
+- `cosmetic_correction_enabled`
+- `cosmetic_hot_sigma`
+- `cosmetic_cold_sigma`
+- `saturation_level`
+
+When enabled, calibrated-light tiles are scanned for hot and cold outliers using
+a robust median/MAD scale estimate. Corrected pixels are replaced by the local
+tile median and marked in the DQ mask as `HOT_PIXEL`, `COLD_PIXEL`, and
+`COSMETIC_CORRECTED`. Pixels at or above `saturation_level` are marked
+`SATURATED`.
+
+All calibrated light artifacts now record `dq_mask_path`, `dq_summary`, and
+`cosmetic_correction` metadata.

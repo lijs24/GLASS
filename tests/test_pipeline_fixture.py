@@ -11,6 +11,8 @@ from glass.engine.pipeline import (
     _stream_mean_master,
 )
 from glass.io.fits_io import read_fits_data, write_fits_data
+from glass.io.json_io import read_json, write_json
+from glass.models import CalibrationPolicy
 from glass.synthetic.generator import generate_synthetic_dataset
 
 
@@ -37,7 +39,10 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert all(Path(output["dq_map_path"]).exists() for output in integration["outputs"])
     assert all("valid" in output["dq_summary"] for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
-    assert "DQ/mask summary" in (run / "report.html").read_text(encoding="utf-8")
+    report_text = (run / "report.html").read_text(encoding="utf-8")
+    assert "DQ/mask summary" in report_text
+    assert "Master frame statistics" in report_text
+    assert "winsorized_sigma" in report_text
     assert main(["resume", "--run", str(run)]) == 0
 
 
@@ -81,6 +86,11 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
     assert all(Path(item["dq_mask_path"]).exists() for item in artifacts["calibrated_lights"])
     assert all("valid" in item["dq_summary"] for item in artifacts["calibrated_lights"])
+    flat_masters = [master for master in artifacts["masters"].values() if master["type"] == "flat"]
+    assert flat_masters
+    assert all(master["normalization_stage"] == "per_flat" for master in flat_masters)
+    assert all(len(master["per_flat_normalization"]) >= 1 for master in flat_masters)
+    assert all(master["master_rejection"] == "winsorized_sigma" for master in artifacts["masters"].values())
 
 
 def test_streaming_exact_median_scratch_matches_numpy(tmp_path: Path):
@@ -159,14 +169,46 @@ def test_stack_engine_master_matches_legacy_streaming(tmp_path: Path):
     stack_engine = tmp_path / "stack_engine.fits"
 
     legacy_stats = _stream_mean_master(paths, legacy, tile_size=3, header={}, subtract_path=str(subtract))
-    stack_stats, mode, fallback_reason = _stack_mean_master(
+    stack_stats, mode, fallback_reason, metrics = _stack_mean_master(
         paths, stack_engine, tile_size=3, header={}, subtract_path=str(subtract)
     )
 
     assert mode == "stack_engine_cpu"
     assert fallback_reason is None
+    assert metrics["combine"] == "mean"
     assert np.allclose(read_fits_data(stack_engine), read_fits_data(legacy))
     assert stack_stats["mean"] == legacy_stats["mean"]
+
+
+def test_stack_engine_master_rejection_removes_extreme_samples(tmp_path: Path):
+    import numpy as np
+
+    paths = []
+    for index, value in enumerate([1.0, 2.0, 3.0, 100.0]):
+        path = tmp_path / f"frame_{index}.fits"
+        write_fits_data(path, np.full((4, 4), value, dtype=np.float32))
+        paths.append(str(path))
+    out = tmp_path / "robust_master.fits"
+    policy = CalibrationPolicy(
+        master_rejection="minmax",
+        master_rejection_min_samples=2,
+        master_rejection_max_fraction=0.5,
+    )
+
+    stats, mode, fallback_reason, metrics = _stack_mean_master(
+        paths,
+        out,
+        tile_size=2,
+        header={},
+        policy=policy,
+    )
+
+    assert mode == "stack_engine_cpu"
+    assert fallback_reason is None
+    assert metrics["low_rejected"] == 16
+    assert metrics["high_rejected"] == 16
+    assert np.allclose(read_fits_data(out), 2.5)
+    assert stats["mean"] == 2.5
 
 
 def test_stack_engine_master_fallback_preserves_legacy_streaming(tmp_path: Path, monkeypatch):
@@ -184,12 +226,63 @@ def test_stack_engine_master_fallback_preserves_legacy_streaming(tmp_path: Path,
         raise RuntimeError("forced stack engine failure")
 
     monkeypatch.setattr(pipeline_module, "_stack_mean_master_with_engine", fail_stack_engine)
-    stats, mode, fallback_reason = _stack_mean_master(paths, out, tile_size=2, header={})
+    stats, mode, fallback_reason, metrics = _stack_mean_master(paths, out, tile_size=2, header={})
 
     assert mode == "legacy_streaming_accumulator"
     assert "forced stack engine failure" in str(fallback_reason)
+    assert metrics["rejection"] == "none"
     assert np.allclose(read_fits_data(out), 4.0)
     assert stats["mean"] == 4.0
+
+
+def test_pipeline_calibration_cosmetic_writes_dq_flags(tmp_path: Path):
+    import json
+    import numpy as np
+    from astropy.io import fits
+
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    generate_synthetic_dataset(data, frames=3, width=24, height=24)
+    light_path = sorted((data / "light").glob("*.fits"))[0]
+    with fits.open(light_path, mode="update", memmap=False) as hdul:
+        hdul[0].data = np.asarray(hdul[0].data, dtype=np.float32)
+        hdul[0].data[3, 4] = 65000.0
+        hdul.flush()
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    plan_path = audit / "processing_plan.json"
+    plan = read_json(plan_path)
+    policy = plan["calibration_plan"]["calibration_policy"]
+    policy["cosmetic_correction_enabled"] = True
+    policy["cosmetic_hot_sigma"] = 2.0
+    policy["cosmetic_cold_sigma"] = 8.0
+    policy["saturation_level"] = 60000.0
+    write_json(plan_path, plan)
+
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan_path),
+                "--out",
+                str(run),
+                "--backend",
+                "cpu",
+                "--until-stage",
+                "calibration",
+                "--tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+    artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
+    summaries = [item["dq_summary"] for item in artifacts["calibrated_lights"]]
+    assert any(summary.get("saturated", 0) > 0 for summary in summaries)
+    assert any(summary.get("hot_pixel", 0) > 0 for summary in summaries)
+    assert any(summary.get("cosmetic_corrected", 0) > 0 for summary in summaries)
+    assert any(item["cosmetic_correction"]["enabled"] for item in artifacts["calibrated_lights"])
 
 
 def test_pipeline_fixture_run_calibration_cuda_streaming(tmp_path: Path):

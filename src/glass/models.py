@@ -69,7 +69,20 @@ class CalibrationPolicy:
     flat_normalization: str = "median"
     flat_floor: float = 1.0e-6
     overscan_enabled: bool = False
+    overscan_columns: int = 0
+    overscan_rows: int = 0
+    trim_overscan: bool = True
     pedestal: float = 0.0
+    master_rejection: str = "winsorized_sigma"
+    master_rejection_low_sigma: float = 3.0
+    master_rejection_high_sigma: float = 3.0
+    master_rejection_iterations: int = 1
+    master_rejection_min_samples: int = 3
+    master_rejection_max_fraction: float = 0.5
+    cosmetic_correction_enabled: bool = False
+    cosmetic_hot_sigma: float = 8.0
+    cosmetic_cold_sigma: float = 8.0
+    saturation_level: float | None = None
 
 
 @dataclass(slots=True)
@@ -195,4 +208,3 @@ class RunState:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     resume_supported: bool = True
-

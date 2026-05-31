@@ -89,6 +89,7 @@ def _write_run_report(run: Path, report_path: Path, manifest_path: Path, plan_pa
         report_path,
         manifest=_read_json_if_exists(manifest_path),
         plan=_read_json_if_exists(plan_path),
+        calibration=_read_json_if_exists(run / "calibration_artifacts.json"),
         quality=_read_json_if_exists(run / "frame_quality.json"),
         registration=_read_json_if_exists(run / "registration_results.json"),
         local_norm=_read_json_if_exists(run / "local_norm_results.json"),
@@ -267,11 +268,13 @@ def cmd_report(args: argparse.Namespace) -> int:
     manifest = _read_json_if_exists(manifest_path)
     plan = _read_json_if_exists(plan_path)
     quality_path = run / "frame_quality.json"
+    calibration_path = run / "calibration_artifacts.json"
     registration_path = run / "registration_results.json"
     local_norm_path = run / "local_norm_results.json"
     integration_path = run / "integration_results.json"
     timing_path = run / "run_timing.json"
     resident_path = run / "resident_artifacts.json"
+    calibration = _read_json_if_exists(calibration_path)
     quality = _read_json_if_exists(quality_path)
     registration = _read_json_if_exists(registration_path)
     local_norm = _read_json_if_exists(local_norm_path)
@@ -282,6 +285,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         args.out,
         manifest=manifest,
         plan=plan,
+        calibration=calibration,
         quality=quality,
         registration=registration,
         local_norm=local_norm,

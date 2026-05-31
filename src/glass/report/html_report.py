@@ -67,6 +67,7 @@ def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
     plan: dict[str, Any] | None = None,
+    calibration: dict[str, Any] | None = None,
     quality: dict[str, Any] | None = None,
     registration: dict[str, Any] | None = None,
     local_norm: dict[str, Any] | None = None,
@@ -77,6 +78,22 @@ def write_html_report(
 ) -> None:
     frames = (manifest or {}).get("frames", [])
     light_plans = (plan or {}).get("light_plans", [])
+    master_rows = []
+    for group_id, master in (calibration or {}).get("masters", {}).items():
+        stats = master.get("stats", {})
+        master_rows.append(
+            {
+                "group_id": group_id,
+                "type": master.get("type"),
+                "filter": master.get("filter"),
+                "mean": stats.get("mean"),
+                "median": stats.get("median"),
+                "std": stats.get("std"),
+                "rejection": master.get("master_rejection"),
+                "stack": master.get("tile_stack_mode"),
+            }
+        )
+    calibration_policy = (calibration or {}).get("policy", {})
     frame_quality = (quality or {}).get("frame_quality", [])
     registration_results = (registration or {}).get("registration_results", [])
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
@@ -126,7 +143,8 @@ def write_html_report(
   <h2>Calibration group matching</h2>
   {_table(light_plans)}
   <h2>Master frame statistics</h2>
-  <p>Pending until calibration stages run.</p>
+  <pre>{escape(str(calibration_policy))}</pre>
+  {_table(master_rows)}
   <h2>Frame quality table</h2>
   {_table(frame_quality)}
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
