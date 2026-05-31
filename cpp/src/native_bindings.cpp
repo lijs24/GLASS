@@ -5095,13 +5095,18 @@ class ResidentCalibratedStack {
       py::object matrices_obj,
       py::object weights_obj,
       const std::string& interpolation,
-      float clamping_threshold) const {
+      float clamping_threshold,
+      const std::string& download_mode) const {
     if (loaded_count_ != frame_count_) {
       throw std::runtime_error("all resident frames must be loaded before fused matrix-warped integration");
     }
     if (interpolation != "bilinear" && interpolation != "lanczos3") {
       throw std::invalid_argument("interpolation must be bilinear or lanczos3");
     }
+    if (download_mode != "full" && download_mode != "master_weight") {
+      throw std::invalid_argument("download_mode must be full or master_weight");
+    }
+    const bool download_diagnostics = download_mode == "full";
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (matrices.size() != frame_count_) {
       throw std::invalid_argument("matrices must have shape (frame_count, 3, 3)");
@@ -5121,12 +5126,24 @@ class ResidentCalibratedStack {
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> geometric_coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     const py::buffer_info master_info = master.request();
     const py::buffer_info weight_map_info = weight_map.request();
-    const py::buffer_info coverage_info = coverage_map.request();
-    const py::buffer_info geometric_info = geometric_coverage_map.request();
+    py::object coverage_obj = py::none();
+    py::object geometric_obj = py::none();
+    float* coverage_host_ptr = nullptr;
+    float* geometric_host_ptr = nullptr;
+    py::array_t<float> coverage_map;
+    py::array_t<float> geometric_coverage_map;
+    if (download_diagnostics) {
+      coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      geometric_coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      const py::buffer_info coverage_info = coverage_map.request();
+      const py::buffer_info geometric_info = geometric_coverage_map.request();
+      coverage_host_ptr = static_cast<float*>(coverage_info.ptr);
+      geometric_host_ptr = static_cast<float*>(geometric_info.ptr);
+      coverage_obj = coverage_map;
+      geometric_obj = geometric_coverage_map;
+    }
 
     const auto total_start = Clock::now();
     const auto inverse_prepare_start = Clock::now();
@@ -5155,10 +5172,12 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_inverses, inverse_host.size() * sizeof(float)), "cudaMalloc(fused matrix inverses)");
       check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(fused matrix master)");
       check_cuda(cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)), "cudaMalloc(fused matrix weight map)");
-      check_cuda(cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)), "cudaMalloc(fused matrix coverage)");
-      check_cuda(
-          cudaMalloc(&d_geometric_coverage_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(fused matrix geometric coverage)");
+      if (download_diagnostics) {
+        check_cuda(cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)), "cudaMalloc(fused matrix coverage)");
+        check_cuda(
+            cudaMalloc(&d_geometric_coverage_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(fused matrix geometric coverage)");
+      }
       device_alloc_s = seconds_since(alloc_start);
 
       const auto weights_upload_start = Clock::now();
@@ -5210,20 +5229,22 @@ class ResidentCalibratedStack {
               pixels_per_frame_ * sizeof(float),
               cudaMemcpyDeviceToHost),
           "cudaMemcpy(fused matrix weight map)");
-      check_cuda(
-          cudaMemcpy(
-              coverage_info.ptr,
-              d_coverage_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix coverage map)");
-      check_cuda(
-          cudaMemcpy(
-              geometric_info.ptr,
-              d_geometric_coverage_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix geometric coverage map)");
+      if (download_diagnostics) {
+        check_cuda(
+            cudaMemcpy(
+                coverage_host_ptr,
+                d_coverage_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix coverage map)");
+        check_cuda(
+            cudaMemcpy(
+                geometric_host_ptr,
+                d_geometric_coverage_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix geometric coverage map)");
+      }
       download_s = seconds_since(download_start);
     } catch (...) {
       cudaFree(d_weights);
@@ -5257,10 +5278,13 @@ class ResidentCalibratedStack {
     timing["total_s"] = seconds_since(total_start);
     timing["inverse_batch_bytes"] = static_cast<unsigned long long>(inverse_host.size() * sizeof(float));
     timing["weights_bytes"] = static_cast<unsigned long long>(frame_count_ * sizeof(float));
-    timing["output_bytes"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float) * 4);
+    timing["download_mode"] = download_mode;
+    timing["diagnostic_maps_downloaded"] = download_diagnostics;
+    timing["output_bytes"] = static_cast<unsigned long long>(
+        pixels_per_frame_ * sizeof(float) * (download_diagnostics ? 4 : 2));
     timing["avoids_stack_scatter"] = true;
     timing["modifies_resident_stack"] = false;
-    return py::make_tuple(master, weight_map, coverage_map, geometric_coverage_map, timing);
+    return py::make_tuple(master, weight_map, coverage_obj, geometric_obj, timing);
   }
 
   py::tuple integrate_matrix_warped_sigma_clip(
@@ -5270,7 +5294,8 @@ class ResidentCalibratedStack {
       float clamping_threshold,
       float low_sigma,
       float high_sigma,
-      bool winsorize) const {
+      bool winsorize,
+      const std::string& download_mode) const {
     if (loaded_count_ != frame_count_) {
       throw std::runtime_error("all resident frames must be loaded before fused matrix-warped sigma integration");
     }
@@ -5280,6 +5305,10 @@ class ResidentCalibratedStack {
     if (low_sigma <= 0.0f || high_sigma <= 0.0f) {
       throw std::invalid_argument("sigma thresholds must be positive");
     }
+    if (download_mode != "full" && download_mode != "master_weight") {
+      throw std::invalid_argument("download_mode must be full or master_weight");
+    }
+    const bool download_diagnostics = download_mode == "full";
     const auto matrices = parse_matrix_stack(matrices_obj);
     if (matrices.size() != frame_count_) {
       throw std::invalid_argument("matrices must have shape (frame_count, 3, 3)");
@@ -5299,16 +5328,38 @@ class ResidentCalibratedStack {
 
     py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> low_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> high_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
-    py::array_t<float> geometric_coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
     const py::buffer_info master_info = master.request();
     const py::buffer_info weight_map_info = weight_map.request();
-    const py::buffer_info coverage_info = coverage_map.request();
-    const py::buffer_info low_info = low_rejection_map.request();
-    const py::buffer_info high_info = high_rejection_map.request();
-    const py::buffer_info geometric_info = geometric_coverage_map.request();
+    py::object coverage_obj = py::none();
+    py::object low_obj = py::none();
+    py::object high_obj = py::none();
+    py::object geometric_obj = py::none();
+    float* coverage_host_ptr = nullptr;
+    float* low_host_ptr = nullptr;
+    float* high_host_ptr = nullptr;
+    float* geometric_host_ptr = nullptr;
+    py::array_t<float> coverage_map;
+    py::array_t<float> low_rejection_map;
+    py::array_t<float> high_rejection_map;
+    py::array_t<float> geometric_coverage_map;
+    if (download_diagnostics) {
+      coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      low_rejection_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      high_rejection_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      geometric_coverage_map = py::array_t<float>({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+      const py::buffer_info coverage_info = coverage_map.request();
+      const py::buffer_info low_info = low_rejection_map.request();
+      const py::buffer_info high_info = high_rejection_map.request();
+      const py::buffer_info geometric_info = geometric_coverage_map.request();
+      coverage_host_ptr = static_cast<float*>(coverage_info.ptr);
+      low_host_ptr = static_cast<float*>(low_info.ptr);
+      high_host_ptr = static_cast<float*>(high_info.ptr);
+      geometric_host_ptr = static_cast<float*>(geometric_info.ptr);
+      coverage_obj = coverage_map;
+      low_obj = low_rejection_map;
+      high_obj = high_rejection_map;
+      geometric_obj = geometric_coverage_map;
+    }
 
     const auto total_start = Clock::now();
     const auto inverse_prepare_start = Clock::now();
@@ -5343,18 +5394,20 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
           "cudaMalloc(fused matrix sigma weight map)");
-      check_cuda(
-          cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(fused matrix sigma coverage)");
-      check_cuda(
-          cudaMalloc(&d_low_rejection_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(fused matrix sigma low rejection)");
-      check_cuda(
-          cudaMalloc(&d_high_rejection_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(fused matrix sigma high rejection)");
-      check_cuda(
-          cudaMalloc(&d_geometric_coverage_map, pixels_per_frame_ * sizeof(float)),
-          "cudaMalloc(fused matrix sigma geometric coverage)");
+      if (download_diagnostics) {
+        check_cuda(
+            cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(fused matrix sigma coverage)");
+        check_cuda(
+            cudaMalloc(&d_low_rejection_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(fused matrix sigma low rejection)");
+        check_cuda(
+            cudaMalloc(&d_high_rejection_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(fused matrix sigma high rejection)");
+        check_cuda(
+            cudaMalloc(&d_geometric_coverage_map, pixels_per_frame_ * sizeof(float)),
+            "cudaMalloc(fused matrix sigma geometric coverage)");
+      }
       device_alloc_s = seconds_since(alloc_start);
 
       const auto weights_upload_start = Clock::now();
@@ -5413,34 +5466,36 @@ class ResidentCalibratedStack {
               pixels_per_frame_ * sizeof(float),
               cudaMemcpyDeviceToHost),
           "cudaMemcpy(fused matrix sigma weight map)");
-      check_cuda(
-          cudaMemcpy(
-              coverage_info.ptr,
-              d_coverage_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix sigma coverage map)");
-      check_cuda(
-          cudaMemcpy(
-              low_info.ptr,
-              d_low_rejection_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix sigma low rejection map)");
-      check_cuda(
-          cudaMemcpy(
-              high_info.ptr,
-              d_high_rejection_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix sigma high rejection map)");
-      check_cuda(
-          cudaMemcpy(
-              geometric_info.ptr,
-              d_geometric_coverage_map,
-              pixels_per_frame_ * sizeof(float),
-              cudaMemcpyDeviceToHost),
-          "cudaMemcpy(fused matrix sigma geometric coverage map)");
+      if (download_diagnostics) {
+        check_cuda(
+            cudaMemcpy(
+                coverage_host_ptr,
+                d_coverage_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix sigma coverage map)");
+        check_cuda(
+            cudaMemcpy(
+                low_host_ptr,
+                d_low_rejection_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix sigma low rejection map)");
+        check_cuda(
+            cudaMemcpy(
+                high_host_ptr,
+                d_high_rejection_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix sigma high rejection map)");
+        check_cuda(
+            cudaMemcpy(
+                geometric_host_ptr,
+                d_geometric_coverage_map,
+                pixels_per_frame_ * sizeof(float),
+                cudaMemcpyDeviceToHost),
+            "cudaMemcpy(fused matrix sigma geometric coverage map)");
+      }
       download_s = seconds_since(download_start);
     } catch (...) {
       cudaFree(d_weights);
@@ -5481,16 +5536,19 @@ class ResidentCalibratedStack {
     timing["total_s"] = seconds_since(total_start);
     timing["inverse_batch_bytes"] = static_cast<unsigned long long>(inverse_host.size() * sizeof(float));
     timing["weights_bytes"] = static_cast<unsigned long long>(frame_count_ * sizeof(float));
-    timing["output_bytes"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float) * 6);
+    timing["download_mode"] = download_mode;
+    timing["diagnostic_maps_downloaded"] = download_diagnostics;
+    timing["output_bytes"] = static_cast<unsigned long long>(
+        pixels_per_frame_ * sizeof(float) * (download_diagnostics ? 6 : 2));
     timing["avoids_stack_scatter"] = true;
     timing["modifies_resident_stack"] = false;
     return py::make_tuple(
         master,
         weight_map,
-        coverage_map,
-        low_rejection_map,
-        high_rejection_map,
-        geometric_coverage_map,
+        coverage_obj,
+        low_obj,
+        high_obj,
+        geometric_obj,
         timing);
   }
 
@@ -10093,7 +10151,8 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("matrices"),
           py::arg("weights") = py::none(),
           py::arg("interpolation") = "bilinear",
-          py::arg("clamping_threshold") = -1.0f)
+          py::arg("clamping_threshold") = -1.0f,
+          py::arg("download_mode") = "full")
       .def(
           "integrate_matrix_warped_sigma_clip",
           &ResidentCalibratedStack::integrate_matrix_warped_sigma_clip,
@@ -10103,5 +10162,6 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("clamping_threshold") = -1.0f,
           py::arg("low_sigma") = 3.0f,
           py::arg("high_sigma") = 3.0f,
-          py::arg("winsorize") = true);
+          py::arg("winsorize") = true,
+          py::arg("download_mode") = "full");
 }

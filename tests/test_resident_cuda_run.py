@@ -1013,6 +1013,78 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert artifact["resident_registration"]["warp_coverage"]["available"] is True
 
 
+def test_cli_resident_cuda_fused_minimal_output_maps_skip_diagnostic_downloads(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    stack_run = tmp_path / "resident_run_minimal_stack"
+    fused_run = tmp_path / "resident_run_minimal_fused"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    common_args = [
+        "--plan",
+        str(plan),
+        "--backend",
+        "cuda",
+        "--memory-mode",
+        "resident",
+        "--until-stage",
+        "integration",
+        "--local-normalization",
+        "off",
+        "--integration-rejection",
+        "winsorized_sigma",
+        "--integration-weighting",
+        "none",
+        "--resident-registration",
+        "off",
+        "--resident-output-maps",
+        "minimal",
+    ]
+
+    assert main(["run", "--out", str(stack_run), *common_args]) == 0
+    assert main(
+        [
+            "run",
+            "--out",
+            str(fused_run),
+            *common_args,
+            "--resident-integration-dispatch",
+            "fused_matrix",
+        ]
+    ) == 0
+
+    stack_master = read_fits_data(stack_run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    fused_master = read_fits_data(fused_run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    integration = read_json(fused_run / "integration_results.json")
+    resident = read_json(fused_run / "resident_artifacts.json")
+    output = integration["outputs"][0]
+    artifact = resident["artifacts"][0]
+    dispatch = artifact["resident_integration_dispatch"]
+    timing = dispatch["native_timing_s"]
+
+    assert np.allclose(stack_master, fused_master, rtol=2e-5, atol=2e-4, equal_nan=True)
+    assert output["output_map_policy"]["mode"] == "minimal"
+    assert Path(output["master_path"]).exists()
+    assert output["weight_map_path"] is None
+    assert output["coverage_map_path"] is None
+    assert output["low_rejection_map_path"] is None
+    assert output["high_rejection_map_path"] is None
+    assert output["dq_map_path"] is None
+    assert output["dq_summary"] is None
+    assert output["dq_coverage_provenance"]["available"] is False
+    assert output["geometric_warp_coverage"]["available"] is False
+    assert dispatch["mode"] == "fused_matrix"
+    assert dispatch["download_mode"] == "master_weight"
+    assert dispatch["diagnostic_maps_downloaded"] is False
+    assert timing["download_mode"] == "master_weight"
+    assert timing["diagnostic_maps_downloaded"] is False
+    assert timing["output_bytes"] == 16 * 16 * 4 * 2
+
+
 def test_cli_resident_cuda_audit_output_maps_mirror_paths(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_weight_dataset(tmp_path)

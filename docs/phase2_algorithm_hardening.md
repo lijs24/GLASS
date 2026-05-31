@@ -1413,6 +1413,22 @@ integration where applicable.
   200-light external-registration A/B run when local benchmark artifacts are
   available.
 
+### S2-Gate 85: Fused Minimal Diagnostic Download Mode
+
+- Reduce fused resident matrix integration output traffic when
+  `--resident-output-maps minimal` is selected by downloading only the master
+  and weight maps from the native fused primitive.
+- Keep `audit` and `science` modes on full diagnostic downloads so coverage,
+  rejection, DQ, and geometric footprint provenance remain complete when those
+  modes are requested.
+- Support the same download policy for fused matrix-warp weighted mean and
+  fused matrix-warp sigma/winsorized-sigma rejection.
+- Record native `download_mode`, `diagnostic_maps_downloaded`, and reduced
+  output byte counts in fused timing and resident artifacts.
+- Validate that minimal fused dispatch matches the stack route numerically,
+  does not write or report unavailable diagnostic maps, and reduces 200-light
+  fused output traffic without changing the master.
+
 ## Gate Rules
 
 Each gate requires:

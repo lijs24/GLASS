@@ -4839,6 +4839,7 @@ def run_resident_calibration_integration(
             geometric_warp_coverage_frame_count = 0
             fused_matrix_integration_used = resident_integration_dispatch == "fused_matrix"
             fused_matrix_integration_timing: dict[str, Any] = {}
+            fused_matrix_download_mode = "master_weight" if resident_output_maps == "minimal" else "full"
             if resident_warp_coverage_supported and not fused_matrix_integration_used:
                 for index, weight in enumerate(frame_weight_values):
                     if weight > 0.0 and index not in warped_frame_indices:
@@ -4864,6 +4865,7 @@ def run_resident_calibration_integration(
                         fused_weights_arg,
                         interpolation=resident_warp_interpolation,
                         clamping_threshold=resident_warp_clamping_threshold,
+                        download_mode=fused_matrix_download_mode,
                     )
                 else:
                     if not hasattr(stack, "integrate_matrix_warped_sigma_clip"):
@@ -4887,8 +4889,11 @@ def run_resident_calibration_integration(
                         low_sigma=low_sigma,
                         high_sigma=high_sigma,
                         winsorize=winsorize,
+                        download_mode=fused_matrix_download_mode,
                     )
-                geometric_warp_coverage_frame_count = active_frame_count
+                geometric_warp_coverage_frame_count = (
+                    active_frame_count if geometric_warp_coverage_map is not None else 0
+                )
             elif rejection_mode == "none":
                 master, weight_map = stack.integrate_mean(weights_arg)
             else:
@@ -5901,6 +5906,13 @@ def run_resident_calibration_integration(
                         "deferred_matrix_frame_count": len(fused_matrix_deferred_frame_indices),
                         "interpolation": resident_warp_interpolation,
                         "clamping_threshold": resident_warp_clamping_threshold,
+                        "download_mode": fused_matrix_download_mode if fused_matrix_integration_used else "full",
+                        "diagnostic_maps_downloaded": bool(
+                            fused_matrix_integration_timing.get(
+                                "diagnostic_maps_downloaded",
+                                not fused_matrix_integration_used or fused_matrix_download_mode == "full",
+                            )
+                        ),
                         "native_timing_s": fused_matrix_integration_timing,
                         "notes": (
                             "fused_matrix samples unwarped resident frames through the registration matrix during "

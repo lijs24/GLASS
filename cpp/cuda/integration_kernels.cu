@@ -417,8 +417,12 @@ __global__ void glass_integrate_matrix_warped_mean_f32_kernel(
   }
   master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
   weight_map[pixel] = weight_sum;
-  coverage_map[pixel] = finite_coverage;
-  geometric_coverage_map[pixel] = geometric_coverage;
+  if (coverage_map != nullptr) {
+    coverage_map[pixel] = finite_coverage;
+  }
+  if (geometric_coverage_map != nullptr) {
+    geometric_coverage_map[pixel] = geometric_coverage;
+  }
 }
 
 void glass_integrate_matrix_warped_mean_f32_launch(
@@ -503,10 +507,18 @@ __global__ void glass_integrate_matrix_warped_sigma_clip_f32_kernel(
   if (count <= 0.0f) {
     master[pixel] = 0.0f;
     weight_map[pixel] = 0.0f;
-    coverage_map[pixel] = 0.0f;
-    low_rejection_map[pixel] = 0.0f;
-    high_rejection_map[pixel] = 0.0f;
-    geometric_coverage_map[pixel] = geometric_coverage;
+    if (coverage_map != nullptr) {
+      coverage_map[pixel] = 0.0f;
+    }
+    if (low_rejection_map != nullptr) {
+      low_rejection_map[pixel] = 0.0f;
+    }
+    if (high_rejection_map != nullptr) {
+      high_rejection_map[pixel] = 0.0f;
+    }
+    if (geometric_coverage_map != nullptr) {
+      geometric_coverage_map[pixel] = geometric_coverage;
+    }
     return;
   }
   mean /= count;
@@ -628,10 +640,18 @@ __global__ void glass_integrate_matrix_warped_sigma_clip_f32_kernel(
 
   master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
   weight_map[pixel] = weight_sum;
-  coverage_map[pixel] = coverage;
-  low_rejection_map[pixel] = low_reject;
-  high_rejection_map[pixel] = high_reject;
-  geometric_coverage_map[pixel] = geometric_coverage;
+  if (coverage_map != nullptr) {
+    coverage_map[pixel] = coverage;
+  }
+  if (low_rejection_map != nullptr) {
+    low_rejection_map[pixel] = low_reject;
+  }
+  if (high_rejection_map != nullptr) {
+    high_rejection_map[pixel] = high_reject;
+  }
+  if (geometric_coverage_map != nullptr) {
+    geometric_coverage_map[pixel] = geometric_coverage;
+  }
 }
 
 void glass_integrate_matrix_warped_sigma_clip_f32_launch(
