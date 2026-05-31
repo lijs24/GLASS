@@ -2752,6 +2752,17 @@ def run_resident_calibration_integration(
                 triangle_catalog_batch_mode = (
                     "grid_top_nms_fixed_threshold" if triangle_catalog_batch_enabled else "off"
                 )
+                triangle_pixel_refine_batch_enabled = bool(
+                    pixel_refine_enabled
+                    and hasattr(native_stack, "refine_matrix_translation_candidates_batch_to_reference")
+                )
+                triangle_pixel_refine_batch_mode = (
+                    "native_batch_one_seed_per_frame"
+                    if triangle_pixel_refine_batch_enabled
+                    else "per_frame"
+                    if pixel_refine_enabled
+                    else "off"
+                )
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -2797,6 +2808,7 @@ def run_resident_calibration_integration(
                 reference_catalogs: dict[float, dict[str, Any]] = {}
                 reference_descriptors: dict[float, dict[str, Any]] = {}
                 moving_catalog_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
+                pending_triangle_pixel_refines: list[dict[str, Any]] = []
                 moving_catalog_batch_indices = [
                     frame_index
                     for frame_index, frame in enumerate(light_frames)
@@ -2842,6 +2854,7 @@ def run_resident_calibration_integration(
                     matched = 0
                     inliers = 0
                     rms_px = float("nan")
+                    deferred_triangle_refine: dict[str, Any] | None = None
                     try:
                         if status == "excluded":
                             frame_weight_values[index] = 0.0
@@ -2986,20 +2999,28 @@ def run_resident_calibration_integration(
                                     stack,
                                     "refine_matrix_translation_candidates_to_reference",
                                 ):
-                                    pixel_refine_start = perf_counter()
-                                    refinement = stack.refine_matrix_translation_candidates_to_reference(
-                                        reference_index,
-                                        index,
-                                        np.asarray([matrix_array], dtype=np.float32),
-                                        **refine_kwargs,
-                                    )
-                                    _add_elapsed(
-                                        registration_component_s,
-                                        "triangle_pixel_refine",
-                                        perf_counter() - pixel_refine_start,
-                                    )
-                                    matrix_array = np.asarray(refinement["matrix"], dtype=np.float32).reshape(3, 3)
-                                    pixel_metrics = dict(refinement.get("metrics", {}))
+                                    if triangle_pixel_refine_batch_enabled:
+                                        deferred_triangle_refine = {
+                                            "index": index,
+                                            "frame_id": str(frame["id"]),
+                                            "matrix": matrix_array.copy(),
+                                        }
+                                        warnings.append("triangle_pixel_refine_mode=native_batch_pending")
+                                    else:
+                                        pixel_refine_start = perf_counter()
+                                        refinement = stack.refine_matrix_translation_candidates_to_reference(
+                                            reference_index,
+                                            index,
+                                            np.asarray([matrix_array], dtype=np.float32),
+                                            **refine_kwargs,
+                                        )
+                                        _add_elapsed(
+                                            registration_component_s,
+                                            "triangle_pixel_refine",
+                                            perf_counter() - pixel_refine_start,
+                                        )
+                                        matrix_array = np.asarray(refinement["matrix"], dtype=np.float32).reshape(3, 3)
+                                        pixel_metrics = dict(refinement.get("metrics", {}))
                                 matrix = matrix_array.tolist()
                                 matched = int(selected_fit.get("inliers", 0))
                                 inliers = matched
@@ -3015,7 +3036,7 @@ def run_resident_calibration_integration(
                                     else _float_or_nan(pixel_metrics.get("rms"))
                                 )
                                 quality_failures: list[str] = []
-                                if min_pixel_ncc is not None and (
+                                if deferred_triangle_refine is None and min_pixel_ncc is not None and (
                                     not np.isfinite(selected_pixel_ncc) or selected_pixel_ncc < float(min_pixel_ncc)
                                 ):
                                     quality_failures.append(
@@ -3029,6 +3050,8 @@ def run_resident_calibration_integration(
                                         "resident triangle descriptor registration failed quality gate: "
                                         + "; ".join(quality_failures)
                                     )
+                                elif deferred_triangle_refine is not None:
+                                    warnings.append("triangle_pixel_refine_quality_gate=deferred_batch")
                                 else:
                                     warp_start = perf_counter()
                                     warp_model = _apply_resident_registration_matrix(
@@ -3084,6 +3107,7 @@ def run_resident_calibration_integration(
                     if resident_registration == "similarity_cuda_triangle":
                         _add_elapsed(registration_component_s, "triangle_frame_total", registration_elapsed)
                     per_frame_registration_s.append(registration_elapsed)
+                    result_index = len(registration_results)
                     registration_results.append(
                         RegistrationResult(
                             frame_id=str(frame["id"]),
@@ -3103,6 +3127,78 @@ def run_resident_calibration_integration(
                             ],
                         )
                     )
+                    if deferred_triangle_refine is not None and status == "ok":
+                        deferred_triangle_refine["result_index"] = result_index
+                        pending_triangle_pixel_refines.append(deferred_triangle_refine)
+
+                if pending_triangle_pixel_refines:
+                    batch_post_start = perf_counter()
+                    try:
+                        batch_refine_start = perf_counter()
+                        batch_refinements = stack.refine_matrix_translation_candidates_batch_to_reference(
+                            reference_index,
+                            [int(item["index"]) for item in pending_triangle_pixel_refines],
+                            np.asarray([item["matrix"] for item in pending_triangle_pixel_refines], dtype=np.float32),
+                            **refine_kwargs,
+                        )
+                        batch_refine_elapsed = perf_counter() - batch_refine_start
+                        _add_elapsed(registration_component_s, "triangle_pixel_refine", batch_refine_elapsed)
+                        _add_elapsed(registration_component_s, "triangle_pixel_refine_batch", batch_refine_elapsed)
+                    except Exception as exc:
+                        batch_refinements = []
+                        for item in pending_triangle_pixel_refines:
+                            result = registration_results[int(item["result_index"])]
+                            result.status = "failed"
+                            frame_weight_values[int(item["index"])] = 0.0
+                            frame_weights[str(item["frame_id"])] = 0.0
+                            result.warnings.append(f"triangle_pixel_refine_batch_failed={exc}")
+                    for item, refinement in zip(pending_triangle_pixel_refines, batch_refinements, strict=True):
+                        result = registration_results[int(item["result_index"])]
+                        matrix_array = np.asarray(refinement["matrix"], dtype=np.float32).reshape(3, 3)
+                        pixel_metrics = dict(refinement.get("metrics", {}))
+                        selected_pixel_ncc = _float_or_nan(pixel_metrics.get("ncc"))
+                        selected_pixel_rms = _float_or_nan(pixel_metrics.get("rms"))
+                        result.matrix = matrix_array.tolist()
+                        result.warnings.extend(
+                            [
+                                "triangle_pixel_refine_mode=native_batch",
+                                f"triangle_pixel_refine_batch_index={int(refinement.get('batch_index', -1))}",
+                                f"triangle_pixel_refine_batch_count={int(refinement.get('batch_count', 0))}",
+                                f"triangle_pixel_refine_batch_model={refinement.get('batch_model')}",
+                                f"triangle_pixel_rms_adu_batch={selected_pixel_rms:.6g}",
+                                f"triangle_pixel_ncc_batch={selected_pixel_ncc:.6g}",
+                            ]
+                        )
+                        quality_failures: list[str] = []
+                        if min_pixel_ncc is not None and (
+                            not np.isfinite(selected_pixel_ncc) or selected_pixel_ncc < float(min_pixel_ncc)
+                        ):
+                            quality_failures.append(
+                                f"pixel_ncc {selected_pixel_ncc:.6g} < {float(min_pixel_ncc):.6g}"
+                            )
+                        if quality_failures:
+                            result.status = "failed"
+                            frame_weight_values[int(item["index"])] = 0.0
+                            frame_weights[str(item["frame_id"])] = 0.0
+                            result.warnings.append(
+                                "resident triangle descriptor registration failed batch quality gate: "
+                                + "; ".join(quality_failures)
+                            )
+                            continue
+                        warp_start = perf_counter()
+                        warp_model = _apply_resident_registration_matrix(
+                            stack,
+                            int(item["index"]),
+                            result.matrix,
+                            resident_warp_interpolation,
+                            resident_warp_clamping_threshold,
+                        )
+                        warped_frame_indices.add(int(item["index"]))
+                        _add_elapsed(registration_component_s, "triangle_warp", perf_counter() - warp_start)
+                        result.warnings.append(f"resident_registration_application={warp_model}")
+                    batch_post_elapsed = perf_counter() - batch_post_start
+                    per_frame_registration_s.append(batch_post_elapsed)
+                    _add_elapsed(registration_component_s, "triangle_frame_total", batch_post_elapsed)
 
             if resident_registration == "external_matrix":
                 for index, frame in enumerate(light_frames):
@@ -3552,7 +3648,7 @@ def run_resident_calibration_integration(
                 sum(
                     value
                     for key, value in registration_component_s.items()
-                    if not key.endswith("_frame_total")
+                    if not key.endswith("_frame_total") and not key.endswith("_batch")
                 )
             )
             registration_orchestration_elapsed = max(0.0, registration_total - registration_component_total)
@@ -3842,6 +3938,13 @@ def run_resident_calibration_integration(
                         "triangle_pixel_refine_final_stride": int(refine_kwargs["final_sample_stride"])
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
+                        "triangle_pixel_refine_batch": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_pixel_refine_batch_enabled
+                        ),
+                        "triangle_pixel_refine_batch_mode": triangle_pixel_refine_batch_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
                         "triangle_min_pixel_ncc": _policy_optional_float(
                             registration_policy,
                             "cuda_triangle_min_pixel_ncc",

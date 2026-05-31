@@ -444,6 +444,66 @@ def test_resident_stack_matrix_alignment_metrics_match_standalone_cuda():
     assert resident["ncc"] > bad["ncc"]
 
 
+def test_resident_stack_batches_matrix_translation_refine():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "refine_matrix_translation_candidates_batch_to_reference"):
+        raise AssertionError(
+            "ResidentCalibratedStack.refine_matrix_translation_candidates_batch_to_reference is missing"
+        )
+
+    reference = _resident_star_field()
+    matrices = np.asarray(
+        [
+            [[1.0, 0.0, 2.25], [0.0, 1.0, -1.5], [0.0, 0.0, 1.0]],
+            [[1.0, 0.0, -1.75], [0.0, 1.0, 2.0], [0.0, 0.0, 1.0]],
+        ],
+        dtype=np.float32,
+    )
+    moving_frames = [
+        module.warp_matrix_bilinear_f32(reference, np.linalg.inv(matrix).astype(np.float32), 0.0)[0]
+        for matrix in matrices
+    ]
+    stack = module.ResidentCalibratedStack(3, reference.shape[0], reference.shape[1])
+    stack.upload_calibrated_frame(0, reference)
+    for offset, frame in enumerate(moving_frames, start=1):
+        stack.upload_calibrated_frame(offset, frame)
+
+    batch = stack.refine_matrix_translation_candidates_batch_to_reference(
+        0,
+        [1, 2],
+        matrices,
+        search_radius_px=0.5,
+        coarse_step_px=0.25,
+        fine_radius_px=0.25,
+        fine_step_px=0.125,
+        coarse_sample_stride=2,
+        final_sample_stride=2,
+    )
+    singles = [
+        stack.refine_matrix_translation_candidates_to_reference(
+            0,
+            index,
+            np.asarray([matrix], dtype=np.float32),
+            search_radius_px=0.5,
+            coarse_step_px=0.25,
+            fine_radius_px=0.25,
+            fine_step_px=0.125,
+            coarse_sample_stride=2,
+            final_sample_stride=2,
+        )
+        for index, matrix in zip([1, 2], matrices, strict=True)
+    ]
+
+    assert [item["moving_index"] for item in batch] == [1, 2]
+    assert batch[0]["batch_model"] == "resident_cuda_matrix_metric_translation_batch_refine_grid"
+    assert batch[0]["batch_count"] == 2
+    for batch_result, single_result in zip(batch, singles, strict=True):
+        assert batch_result["model"] == single_result["model"]
+        assert np.allclose(batch_result["matrix"], single_result["matrix"], rtol=1e-6, atol=1e-6)
+        assert abs(batch_result["metrics"]["ncc"] - single_result["metrics"]["ncc"]) < 1.0e-6
+        assert abs(batch_result["metrics"]["rms"] - single_result["metrics"]["rms"]) < 1.0e-5
+
+
 def test_resident_stack_star_catalog_registration_stays_on_device():
     module = cuda_module_or_skip()
     if not hasattr(module.ResidentCalibratedStack, "estimate_translation_from_stars_to_reference"):

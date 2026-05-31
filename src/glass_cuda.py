@@ -103,6 +103,46 @@ def _nvidia_smi_devices() -> list[dict[str, Any]]:
     return devices
 
 
+def _normalize_matrix_refinement_result(result: dict[str, Any]) -> dict[str, Any]:
+    seed_results = []
+    for seed in list(result.get("seed_results", [])):
+        seed_result = dict(seed)
+        seed_result["seed_index"] = int(seed_result["seed_index"])
+        seed_result["matrix"] = np.asarray(seed_result["matrix"], dtype=np.float32).tolist()
+        seed_result["dx_correction"] = float(seed_result["dx_correction"])
+        seed_result["dy_correction"] = float(seed_result["dy_correction"])
+        seed_result["metrics"] = dict(seed_result["metrics"])
+        seed_result["coarse_candidates"] = int(seed_result["coarse_candidates"])
+        seed_result["fine_candidates"] = int(seed_result["fine_candidates"])
+        seed_results.append(seed_result)
+    normalized = {
+        "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
+        "dx_correction": float(result["dx_correction"]),
+        "dy_correction": float(result["dy_correction"]),
+        "metrics": dict(result["metrics"]),
+        "selected_index": int(result["selected_index"]),
+        "seed_count": int(result["seed_count"]),
+        "seed_results": seed_results,
+        "coarse_candidates_per_seed": int(result["coarse_candidates_per_seed"]),
+        "search_radius_px": float(result["search_radius_px"]),
+        "coarse_step_px": float(result["coarse_step_px"]),
+        "fine_radius_px": float(result["fine_radius_px"]),
+        "fine_step_px": float(result["fine_step_px"]),
+        "coarse_sample_stride": int(result["coarse_sample_stride"]),
+        "final_sample_stride": int(result["final_sample_stride"]),
+        "reference_index": int(result["reference_index"]),
+        "moving_index": int(result["moving_index"]),
+        "model": str(result.get("model", "resident_cuda_matrix_metric_translation_multi_seed_refine_grid")),
+    }
+    if "batch_index" in result:
+        normalized["batch_index"] = int(result["batch_index"])
+    if "batch_count" in result:
+        normalized["batch_count"] = int(result["batch_count"])
+    if "batch_model" in result:
+        normalized["batch_model"] = str(result["batch_model"])
+    return normalized
+
+
 def list_devices() -> list[dict[str, Any]]:
     native = _native()
     smi_devices = _nvidia_smi_devices()
@@ -2495,36 +2535,65 @@ class ResidentCalibratedStack:
                 int(final_sample_stride),
             )
         )
-        seed_results = []
-        for seed in list(result.get("seed_results", [])):
-            seed_result = dict(seed)
-            seed_result["seed_index"] = int(seed_result["seed_index"])
-            seed_result["matrix"] = np.asarray(seed_result["matrix"], dtype=np.float32).tolist()
-            seed_result["dx_correction"] = float(seed_result["dx_correction"])
-            seed_result["dy_correction"] = float(seed_result["dy_correction"])
-            seed_result["metrics"] = dict(seed_result["metrics"])
-            seed_result["coarse_candidates"] = int(seed_result["coarse_candidates"])
-            seed_result["fine_candidates"] = int(seed_result["fine_candidates"])
-            seed_results.append(seed_result)
-        return {
-            "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
-            "dx_correction": float(result["dx_correction"]),
-            "dy_correction": float(result["dy_correction"]),
-            "metrics": dict(result["metrics"]),
-            "selected_index": int(result["selected_index"]),
-            "seed_count": int(result["seed_count"]),
-            "seed_results": seed_results,
-            "coarse_candidates_per_seed": int(result["coarse_candidates_per_seed"]),
-            "search_radius_px": float(result["search_radius_px"]),
-            "coarse_step_px": float(result["coarse_step_px"]),
-            "fine_radius_px": float(result["fine_radius_px"]),
-            "fine_step_px": float(result["fine_step_px"]),
-            "coarse_sample_stride": int(result["coarse_sample_stride"]),
-            "final_sample_stride": int(result["final_sample_stride"]),
-            "reference_index": int(result["reference_index"]),
-            "moving_index": int(result["moving_index"]),
-            "model": str(result.get("model", "resident_cuda_matrix_metric_translation_multi_seed_refine_grid")),
-        }
+        return _normalize_matrix_refinement_result(result)
+
+    def refine_matrix_translation_candidates_batch_to_reference(
+        self,
+        reference_index: int,
+        moving_indices: list[int] | np.ndarray,
+        matrices: Any,
+        search_radius_px: float = 1.0,
+        coarse_step_px: float = 0.25,
+        fine_radius_px: float = 0.25,
+        fine_step_px: float = 0.0625,
+        coarse_sample_stride: int = 4,
+        final_sample_stride: int = 1,
+    ) -> list[dict[str, Any]]:
+        if not hasattr(self._impl, "refine_matrix_translation_candidates_batch_to_reference"):
+            return [
+                self.refine_matrix_translation_candidates_to_reference(
+                    reference_index,
+                    int(moving_index),
+                    np.asarray([matrix], dtype=np.float32),
+                    search_radius_px,
+                    coarse_step_px,
+                    fine_radius_px,
+                    fine_step_px,
+                    coarse_sample_stride,
+                    final_sample_stride,
+                )
+                for moving_index, matrix in zip(list(moving_indices), np.asarray(matrices, dtype=np.float32), strict=True)
+            ]
+        moving_index_list = [int(item) for item in list(moving_indices)]
+        matrix_array = np.asarray(matrices, dtype=np.float32)
+        if matrix_array.ndim != 3 or matrix_array.shape[1:] != (3, 3):
+            raise ValueError("batch matrices must have shape (N, 3, 3)")
+        if matrix_array.shape[0] != len(moving_index_list):
+            raise ValueError("batch matrices must contain one matrix per moving index")
+        if search_radius_px < 0.0:
+            raise ValueError("search_radius_px must be non-negative")
+        if coarse_step_px <= 0.0:
+            raise ValueError("coarse_step_px must be positive")
+        if fine_radius_px < 0.0:
+            raise ValueError("fine_radius_px must be non-negative")
+        if fine_step_px <= 0.0:
+            raise ValueError("fine_step_px must be positive")
+        if coarse_sample_stride <= 0 or final_sample_stride <= 0:
+            raise ValueError("sample strides must be positive")
+        if not moving_index_list:
+            return []
+        results = self._impl.refine_matrix_translation_candidates_batch_to_reference(
+            int(reference_index),
+            moving_index_list,
+            np.ascontiguousarray(matrix_array, dtype=np.float32),
+            float(search_radius_px),
+            float(coarse_step_px),
+            float(fine_radius_px),
+            float(fine_step_px),
+            int(coarse_sample_stride),
+            int(final_sample_stride),
+        )
+        return [_normalize_matrix_refinement_result(dict(result)) for result in list(results)]
 
     def estimate_translation_to_reference(
         self,

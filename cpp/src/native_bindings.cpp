@@ -1520,6 +1520,115 @@ class ResidentCalibratedStack {
     return result;
   }
 
+  py::list refine_matrix_translation_candidates_batch_to_reference(
+      std::size_t reference_index,
+      const std::vector<std::size_t>& moving_indices,
+      py::object matrices_obj,
+      float search_radius_px,
+      float coarse_step_px,
+      float fine_radius_px,
+      float fine_step_px,
+      int coarse_sample_stride,
+      int final_sample_stride) const {
+    require_loaded(reference_index, "resident matrix batch refine");
+    if (search_radius_px < 0.0f || fine_radius_px < 0.0f) {
+      throw std::invalid_argument("search radii must be non-negative");
+    }
+    if (coarse_step_px <= 0.0f || fine_step_px <= 0.0f) {
+      throw std::invalid_argument("search steps must be positive");
+    }
+    if (coarse_sample_stride <= 0 || final_sample_stride <= 0) {
+      throw std::invalid_argument("sample strides must be positive");
+    }
+    const auto matrices = parse_matrix_stack(matrices_obj);
+    if (moving_indices.empty()) {
+      return py::list();
+    }
+    if (matrices.size() != moving_indices.size()) {
+      throw std::invalid_argument("batch refine requires one seed matrix per moving frame");
+    }
+    const auto coarse_offsets = translation_offsets(0.0f, 0.0f, search_radius_px, coarse_step_px);
+    const int coarse_candidates = static_cast<int>(coarse_offsets.size());
+    const auto* d_reference = d_stack_ + reference_index * pixels_per_frame_;
+    py::list results;
+
+    for (std::size_t batch_index = 0; batch_index < moving_indices.size(); ++batch_index) {
+      const std::size_t moving_index = moving_indices[batch_index];
+      require_loaded(moving_index, "resident matrix batch refine");
+      const auto* d_moving = d_stack_ + moving_index * pixels_per_frame_;
+      const auto& base_matrix = matrices[batch_index];
+      const MatrixCandidateMetrics coarse_best = score_matrix_translation_candidates_f32(
+          d_reference,
+          d_moving,
+          base_matrix,
+          coarse_offsets,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          coarse_sample_stride);
+      MatrixCandidateMetrics best = coarse_best;
+      int fine_candidates = 0;
+      if (fine_radius_px > 0.0f) {
+        const auto fine_offsets = translation_offsets(coarse_best.dx, coarse_best.dy, fine_radius_px, fine_step_px);
+        fine_candidates = static_cast<int>(fine_offsets.size());
+        best = score_matrix_translation_candidates_f32(
+            d_reference,
+            d_moving,
+            base_matrix,
+            fine_offsets,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            final_sample_stride);
+      } else if (final_sample_stride != coarse_sample_stride) {
+        const std::vector<std::pair<float, float>> final_offsets{{coarse_best.dx, coarse_best.dy}};
+        fine_candidates = static_cast<int>(final_offsets.size());
+        best = score_matrix_translation_candidates_f32(
+            d_reference,
+            d_moving,
+            base_matrix,
+            final_offsets,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            final_sample_stride);
+      }
+
+      py::dict seed_result;
+      seed_result["seed_index"] = 0;
+      seed_result["matrix"] = matrix3x3_to_pylist(best.matrix);
+      seed_result["dx_correction"] = best.dx;
+      seed_result["dy_correction"] = best.dy;
+      seed_result["metrics"] = matrix_candidate_to_dict(best, "matrix_alignment_metrics_cuda_candidate_grid");
+      seed_result["coarse_candidates"] = coarse_candidates;
+      seed_result["fine_candidates"] = fine_candidates;
+
+      py::list seed_results;
+      seed_results.append(seed_result);
+
+      py::dict result;
+      result["matrix"] = matrix3x3_to_pylist(best.matrix);
+      result["dx_correction"] = best.dx;
+      result["dy_correction"] = best.dy;
+      result["metrics"] = matrix_candidate_to_dict(best, "matrix_alignment_metrics_cuda_candidate_grid");
+      result["selected_index"] = 0;
+      result["seed_count"] = 1;
+      result["seed_results"] = seed_results;
+      result["coarse_candidates_per_seed"] = coarse_candidates;
+      result["search_radius_px"] = search_radius_px;
+      result["coarse_step_px"] = coarse_step_px;
+      result["fine_radius_px"] = fine_radius_px;
+      result["fine_step_px"] = fine_step_px;
+      result["coarse_sample_stride"] = coarse_sample_stride;
+      result["final_sample_stride"] = final_sample_stride;
+      result["reference_index"] = reference_index;
+      result["moving_index"] = moving_index;
+      result["batch_index"] = static_cast<int>(batch_index);
+      result["batch_count"] = static_cast<int>(moving_indices.size());
+      result["batch_model"] = "resident_cuda_matrix_metric_translation_batch_refine_grid";
+      result["model"] = "resident_cuda_matrix_metric_translation_multi_seed_refine_grid";
+      results.append(result);
+    }
+    return results;
+  }
+
   py::dict estimate_translation_to_reference(
       std::size_t reference_index,
       std::size_t moving_index,
@@ -6893,6 +7002,18 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           &ResidentCalibratedStack::refine_matrix_translation_candidates_to_reference,
           py::arg("reference_index"),
           py::arg("moving_index"),
+          py::arg("matrices"),
+          py::arg("search_radius_px") = 1.0f,
+          py::arg("coarse_step_px") = 0.25f,
+          py::arg("fine_radius_px") = 0.25f,
+          py::arg("fine_step_px") = 0.0625f,
+          py::arg("coarse_sample_stride") = 4,
+          py::arg("final_sample_stride") = 1)
+      .def(
+          "refine_matrix_translation_candidates_batch_to_reference",
+          &ResidentCalibratedStack::refine_matrix_translation_candidates_batch_to_reference,
+          py::arg("reference_index"),
+          py::arg("moving_indices"),
           py::arg("matrices"),
           py::arg("search_radius_px") = 1.0f,
           py::arg("coarse_step_px") = 0.25f,

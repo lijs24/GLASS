@@ -782,6 +782,24 @@ integration where applicable.
   smoke tests, full pytest, and a 200-light benchmark rerun because this changes
   the resident registration/warp fast path.
 
+### S2-Gate 47: Batch Resident Triangle Pixel Refinement
+
+- Add a native resident CUDA batch API that refines one seed matrix for each
+  moving frame against a shared reference frame, reusing the same search
+  parameters and reducing Python/native call count in triangle registration.
+- Route resident `similarity_cuda_triangle` through deferred batch pixel
+  refinement when the native API is available, then apply quality gates and
+  resident warp after the batch returns.
+- Record `triangle_pixel_refine_batch` and
+  `triangle_pixel_refine_batch_mode` in resident artifacts, and emit timing for
+  `triangle_pixel_refine_batch`.
+- Preserve per-frame registration results, weights, frame accounting, image
+  dimensions, geometric coverage, and output pixels within the existing
+  benchmark tolerance family.
+- Validate with direct resident CUDA stack batch/single equivalence tests,
+  resident triangle-registration smoke tests, full pytest, and the 200-light
+  benchmark.
+
 ## Gate Rules
 
 Each gate requires:
