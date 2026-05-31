@@ -399,6 +399,7 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "resident_base_gib": round(float(memory.get("resident_base_gib") or 0.0), 3),
                 "estimated_peak_gib": round(float(memory.get("estimated_peak_gib") or 0.0), 3),
                 "warp_scratch_mib": round(float(item.get("resident_warp_scratch_bytes") or 0.0) / (1024.0**2), 3),
+                "warp_copy_mode": item.get("resident_warp_copy_mode"),
                 "light_calibrate_s": round(float(timing.get("light_read_upload_calibrate") or 0.0), 3),
                 "prefetch_frames": io_pipeline.get("prefetch_frames", 0),
                 "read_decode_s": round(float(timing.get("light_read_decode") or 0.0), 3),

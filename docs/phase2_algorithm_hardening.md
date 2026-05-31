@@ -764,6 +764,24 @@ integration where applicable.
   smoke tests, full pytest, and a 200-light benchmark rerun because this changes
   the resident registration/warp fast path.
 
+### S2-Gate 46: Async Resident Warp Copy Dispatch
+
+- Remove per-frame host synchronization from resident CUDA translation, matrix
+  bilinear, and matrix Lanczos warp application after successful kernel launch.
+- Copy the reusable warp scratch buffer back into the resident frame stack with
+  default-stream asynchronous device-to-device copies so subsequent same-stream
+  registration/integration operations preserve ordering without blocking Python
+  after every frame.
+- Expose and report the warp copy mode as
+  `default_stream_async_device_to_device` in native/Python APIs,
+  `resident_artifacts.json`, and the HTML resident summary.
+- Keep error handling clear: launch errors are checked immediately, while later
+  synchronization points in integration/download surface asynchronous execution
+  failures.
+- Validate with direct resident CUDA stack tests, resident triangle-registration
+  smoke tests, full pytest, and a 200-light benchmark rerun because this changes
+  the resident registration/warp fast path.
+
 ## Gate Rules
 
 Each gate requires:

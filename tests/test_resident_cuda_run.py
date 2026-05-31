@@ -395,6 +395,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert io_pipeline["stack_host_pinned_bytes"] == 0
     assert resident["artifacts"][0]["resident_warp_scratch_bytes"] >= 0
     assert io_pipeline["warp_scratch_bytes"] == resident["artifacts"][0]["resident_warp_scratch_bytes"]
+    assert resident["artifacts"][0]["resident_warp_copy_mode"] == "default_stream_async_device_to_device"
+    assert io_pipeline["warp_copy_mode"] == "default_stream_async_device_to_device"
     assert timing["light_read_decode"] >= 0.0
     assert timing["light_read_wait_wall"] == timing["light_read_decode"]
     assert timing["light_read_decode_worker"] >= 0.0
@@ -1007,6 +1009,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert registration_components["triangle_warp"] >= 0.0
     assert resident["artifacts"][0]["resident_warp_scratch_bytes"] > 0
     assert resident["artifacts"][0]["resident_io_pipeline"]["warp_scratch_bytes"] > 0
+    assert resident["artifacts"][0]["resident_warp_copy_mode"] == "default_stream_async_device_to_device"
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity_cuda_triangle"
     assert moving["matched_stars"] >= 3

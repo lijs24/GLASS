@@ -972,6 +972,10 @@ class ResidentCalibratedStack {
     return total;
   }
 
+  std::string warp_copy_mode() const {
+    return "default_stream_async_device_to_device";
+  }
+
   std::size_t bytes_allocated() const {
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     std::size_t total = frame_count_ * frame_bytes + frame_bytes;
@@ -1151,10 +1155,14 @@ class ResidentCalibratedStack {
         fill,
         d_warp_coverage_);
     check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_translation_frame kernel launch");
-    check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_translation_frame synchronize");
     check_cuda(
-        cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_warp_output_, frame_bytes, cudaMemcpyDeviceToDevice),
-        "cudaMemcpy(resident translated frame)");
+        cudaMemcpyAsync(
+            d_stack_ + index * pixels_per_frame_,
+            d_warp_output_,
+            frame_bytes,
+            cudaMemcpyDeviceToDevice,
+            0),
+        "cudaMemcpyAsync(resident translated frame)");
     ++warp_coverage_frame_count_;
   }
 
@@ -1174,10 +1182,14 @@ class ResidentCalibratedStack {
         fill,
         d_warp_coverage_);
     check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_translation_bilinear_frame kernel launch");
-    check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_translation_bilinear_frame synchronize");
     check_cuda(
-        cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_warp_output_, frame_bytes, cudaMemcpyDeviceToDevice),
-        "cudaMemcpy(resident bilinear translated frame)");
+        cudaMemcpyAsync(
+            d_stack_ + index * pixels_per_frame_,
+            d_warp_output_,
+            frame_bytes,
+            cudaMemcpyDeviceToDevice,
+            0),
+        "cudaMemcpyAsync(resident bilinear translated frame)");
     ++warp_coverage_frame_count_;
   }
 
@@ -1200,10 +1212,14 @@ class ResidentCalibratedStack {
         fill,
         d_warp_coverage_);
     check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frame kernel launch");
-    check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_bilinear_frame synchronize");
     check_cuda(
-        cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_warp_output_, frame_bytes, cudaMemcpyDeviceToDevice),
-        "cudaMemcpy(resident matrix warped frame)");
+        cudaMemcpyAsync(
+            d_stack_ + index * pixels_per_frame_,
+            d_warp_output_,
+            frame_bytes,
+            cudaMemcpyDeviceToDevice,
+            0),
+        "cudaMemcpyAsync(resident matrix warped frame)");
     ++warp_coverage_frame_count_;
   }
 
@@ -1231,10 +1247,14 @@ class ResidentCalibratedStack {
         clamping_threshold,
         d_warp_coverage_);
     check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frame kernel launch");
-    check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_lanczos3_frame synchronize");
     check_cuda(
-        cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_warp_output_, frame_bytes, cudaMemcpyDeviceToDevice),
-        "cudaMemcpy(resident matrix Lanczos3 warped frame)");
+        cudaMemcpyAsync(
+            d_stack_ + index * pixels_per_frame_,
+            d_warp_output_,
+            frame_bytes,
+            cudaMemcpyDeviceToDevice,
+            0),
+        "cudaMemcpyAsync(resident matrix Lanczos3 warped frame)");
     ++warp_coverage_frame_count_;
   }
 
@@ -6774,6 +6794,7 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       .def_property_readonly("loaded_count", &ResidentCalibratedStack::loaded_count)
       .def_property_readonly("host_pinned_bytes", &ResidentCalibratedStack::host_pinned_bytes)
       .def_property_readonly("warp_scratch_bytes", &ResidentCalibratedStack::warp_scratch_bytes)
+      .def_property_readonly("warp_copy_mode", &ResidentCalibratedStack::warp_copy_mode)
       .def_property_readonly("bytes_allocated", &ResidentCalibratedStack::bytes_allocated)
       .def_property_readonly("warp_coverage_frame_count", &ResidentCalibratedStack::warp_coverage_frame_count)
       .def(

@@ -3668,6 +3668,9 @@ def run_resident_calibration_integration(
                     "memory_estimate": memory_estimate,
                     "resident_bytes_allocated_after_master_upload": stack.bytes_allocated,
                     "resident_warp_scratch_bytes": int(getattr(stack, "warp_scratch_bytes", 0)),
+                    "resident_warp_copy_mode": str(
+                        getattr(stack, "warp_copy_mode", "legacy_synchronous_device_to_device")
+                    ),
                     "timing_s": {
                         "master_build_or_load": master_elapsed,
                         "resident_allocate_and_master_upload": allocate_elapsed,
@@ -3731,6 +3734,9 @@ def run_resident_calibration_integration(
                         "prefetch_host_pinned_bytes": int(prefetch_host_pinned_bytes),
                         "stack_host_pinned_bytes": int(getattr(stack, "host_pinned_bytes", 0)),
                         "warp_scratch_bytes": int(getattr(stack, "warp_scratch_bytes", 0)),
+                        "warp_copy_mode": str(
+                            getattr(stack, "warp_copy_mode", "legacy_synchronous_device_to_device")
+                        ),
                     },
                     "resident_registration": {
                         "mode": resident_registration,

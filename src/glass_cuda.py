@@ -2179,6 +2179,12 @@ class ResidentCalibratedStack:
         return int(self._impl.warp_scratch_bytes)
 
     @property
+    def warp_copy_mode(self) -> str:
+        if not hasattr(self._impl, "warp_copy_mode"):
+            return "legacy_synchronous_device_to_device"
+        return str(self._impl.warp_copy_mode)
+
+    @property
     def host_pinned_bytes(self) -> int:
         if not hasattr(self._impl, "host_pinned_bytes"):
             return 0

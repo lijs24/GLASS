@@ -315,6 +315,7 @@ def test_resident_stack_reuses_warp_scratch_buffers():
         "apply_translation_frame",
         "apply_matrix_bilinear_frame",
         "warp_scratch_bytes",
+        "warp_copy_mode",
     ]
     missing = [name for name in required if not hasattr(module.ResidentCalibratedStack, name)]
     if missing:
@@ -325,6 +326,7 @@ def test_resident_stack_reuses_warp_scratch_buffers():
     stack.upload_calibrated_frame(0, frame)
     stack.upload_calibrated_frame(1, frame)
 
+    assert stack.warp_copy_mode == "default_stream_async_device_to_device"
     assert stack.warp_scratch_bytes == 0
     before = stack.bytes_allocated
     stack.apply_translation_frame(0, 1, 0, np.nan)
