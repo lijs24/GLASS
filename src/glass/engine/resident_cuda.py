@@ -2763,6 +2763,15 @@ def run_resident_calibration_integration(
                     if pixel_refine_enabled
                     else "off"
                 )
+                triangle_descriptor_fit_batch_enabled = bool(
+                    triangle_catalog_batch_enabled
+                    and hasattr(cuda_module, "estimate_similarity_from_triangle_descriptors_batch_f32")
+                )
+                triangle_descriptor_fit_batch_mode = (
+                    "native_batch_shared_reference_descriptor"
+                    if triangle_descriptor_fit_batch_enabled
+                    else "per_frame"
+                )
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -2808,6 +2817,8 @@ def run_resident_calibration_integration(
                 reference_catalogs: dict[float, dict[str, Any]] = {}
                 reference_descriptors: dict[float, dict[str, Any]] = {}
                 moving_catalog_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
+                moving_descriptor_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
+                descriptor_fit_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
                 pending_triangle_pixel_refines: list[dict[str, Any]] = []
                 moving_catalog_batch_indices = [
                     frame_index
@@ -2845,6 +2856,123 @@ def run_resident_calibration_integration(
                         if cached_catalog is not None:
                             return cached_catalog
                     return detect_resident_triangle_catalog(frame_index, threshold)
+
+                def moving_triangle_descriptor(
+                    frame_index: int,
+                    threshold_key: float,
+                    catalog: dict[str, Any],
+                ) -> dict[str, Any]:
+                    cached_by_index = moving_descriptor_batch_cache.get(threshold_key, {})
+                    cached_descriptor = cached_by_index.get(frame_index)
+                    if cached_descriptor is not None:
+                        return cached_descriptor
+                    moving_descriptor_start = perf_counter()
+                    descriptor = triangle_descriptors(catalog)
+                    _add_elapsed(
+                        registration_component_s,
+                        "triangle_moving_descriptors",
+                        perf_counter() - moving_descriptor_start,
+                    )
+                    moving_descriptor_batch_cache.setdefault(threshold_key, {})[frame_index] = descriptor
+                    return descriptor
+
+                def triangle_descriptor_fit(
+                    frame_index: int,
+                    threshold: float,
+                    reference_catalog: dict[str, Any],
+                    reference_descriptor: dict[str, Any],
+                    moving_catalog: dict[str, Any],
+                    moving_descriptor: dict[str, Any],
+                ) -> dict[str, Any]:
+                    threshold_key = round(float(threshold), 6)
+                    if triangle_descriptor_fit_batch_enabled:
+                        cached_fits = descriptor_fit_batch_cache.get(threshold_key)
+                        if cached_fits is None:
+                            descriptor_by_index = moving_descriptor_batch_cache.setdefault(threshold_key, {})
+                            fit_indices: list[int] = []
+                            moving_x_list: list[Any] = []
+                            moving_y_list: list[Any] = []
+                            moving_descriptors_list: list[Any] = []
+                            moving_indices_list: list[Any] = []
+                            descriptor_batch_elapsed = 0.0
+                            for moving_index in moving_catalog_batch_indices:
+                                catalog = detect_resident_triangle_moving_catalog(moving_index, threshold)
+                                if int(catalog["stored_count"]) < 3:
+                                    continue
+                                descriptor = descriptor_by_index.get(moving_index)
+                                if descriptor is None:
+                                    descriptor_start = perf_counter()
+                                    descriptor = triangle_descriptors(catalog)
+                                    descriptor_batch_elapsed += perf_counter() - descriptor_start
+                                    descriptor_by_index[moving_index] = descriptor
+                                if int(descriptor["count"]) <= 0:
+                                    continue
+                                fit_indices.append(int(moving_index))
+                                moving_x_list.append(catalog["x"])
+                                moving_y_list.append(catalog["y"])
+                                moving_descriptors_list.append(descriptor["descriptors"])
+                                moving_indices_list.append(descriptor["indices"])
+                            if descriptor_batch_elapsed > 0.0:
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_descriptors",
+                                    descriptor_batch_elapsed,
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_descriptors_batch",
+                                    descriptor_batch_elapsed,
+                                )
+                            fit_batch_start = perf_counter()
+                            if fit_indices:
+                                batch_fits = cuda_module.estimate_similarity_from_triangle_descriptors_batch_f32(
+                                    reference_catalog["x"],
+                                    reference_catalog["y"],
+                                    reference_descriptor["descriptors"],
+                                    reference_descriptor["indices"],
+                                    moving_x_list,
+                                    moving_y_list,
+                                    moving_descriptors_list,
+                                    moving_indices_list,
+                                    tolerance_px=tolerance_px,
+                                    descriptor_radius=descriptor_radius,
+                                )
+                            else:
+                                batch_fits = []
+                            fit_batch_elapsed = perf_counter() - fit_batch_start
+                            _add_elapsed(registration_component_s, "triangle_descriptor_fit", fit_batch_elapsed)
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_descriptor_fit_batch",
+                                fit_batch_elapsed,
+                            )
+                            cached_fits = {
+                                int(index): dict(fit)
+                                for index, fit in zip(fit_indices, batch_fits, strict=True)
+                            }
+                            descriptor_fit_batch_cache[threshold_key] = cached_fits
+                        cached_fit = cached_fits.get(frame_index)
+                        if cached_fit is not None:
+                            return cached_fit
+                    fit_start = perf_counter()
+                    fit = cuda_module.estimate_similarity_from_triangle_descriptors_f32(
+                        reference_catalog["x"],
+                        reference_catalog["y"],
+                        moving_catalog["x"],
+                        moving_catalog["y"],
+                        reference_descriptor["descriptors"],
+                        reference_descriptor["indices"],
+                        moving_descriptor["descriptors"],
+                        moving_descriptor["indices"],
+                        tolerance_px=tolerance_px,
+                        descriptor_radius=descriptor_radius,
+                    )
+                    _add_elapsed(
+                        registration_component_s,
+                        "triangle_descriptor_fit",
+                        perf_counter() - fit_start,
+                    )
+                    return fit
 
                 for index, frame in enumerate(light_frames):
                     registration_frame_start = perf_counter()
@@ -2924,12 +3052,10 @@ def run_resident_calibration_integration(
                                         perf_counter() - reference_descriptor_start,
                                     )
                                     reference_descriptors[threshold_key] = reference_descriptor
-                                moving_descriptor_start = perf_counter()
-                                moving_descriptor = triangle_descriptors(moving_catalog)
-                                _add_elapsed(
-                                    registration_component_s,
-                                    "triangle_moving_descriptors",
-                                    perf_counter() - moving_descriptor_start,
+                                moving_descriptor = moving_triangle_descriptor(
+                                    index,
+                                    threshold_key,
+                                    moving_catalog,
                                 )
                                 if (
                                     int(reference_descriptor["count"]) <= 0
@@ -2944,23 +3070,13 @@ def run_resident_calibration_integration(
                                         }
                                     )
                                     continue
-                                fit_start = perf_counter()
-                                fit = cuda_module.estimate_similarity_from_triangle_descriptors_f32(
-                                    reference_catalog["x"],
-                                    reference_catalog["y"],
-                                    moving_catalog["x"],
-                                    moving_catalog["y"],
-                                    reference_descriptor["descriptors"],
-                                    reference_descriptor["indices"],
-                                    moving_descriptor["descriptors"],
-                                    moving_descriptor["indices"],
-                                    tolerance_px=tolerance_px,
-                                    descriptor_radius=descriptor_radius,
-                                )
-                                _add_elapsed(
-                                    registration_component_s,
-                                    "triangle_descriptor_fit",
-                                    perf_counter() - fit_start,
+                                fit = triangle_descriptor_fit(
+                                    index,
+                                    threshold,
+                                    reference_catalog,
+                                    reference_descriptor,
+                                    moving_catalog,
+                                    moving_descriptor,
                                 )
                                 trial_results.append(
                                     {
@@ -2973,6 +3089,8 @@ def run_resident_calibration_integration(
                                         "reference_descriptors": int(reference_descriptor["count"]),
                                         "moving_descriptors": int(moving_descriptor["count"]),
                                         "candidate_count": int(fit.get("candidate_count", 0)),
+                                        "fit_batch_index": int(fit.get("batch_index", -1)),
+                                        "fit_batch_count": int(fit.get("batch_count", 0)),
                                     }
                                 )
                                 if str(fit.get("status")) != "ok":
@@ -3082,6 +3200,10 @@ def run_resident_calibration_integration(
                                         f"triangle_max_descriptors={max_descriptors}",
                                         f"triangle_descriptor_radius={descriptor_radius:.6g}",
                                         f"triangle_candidate_count={int(selected_fit.get('candidate_count', 0))}",
+                                        "triangle_descriptor_fit_batch="
+                                        + str(bool("batch_model" in selected_fit)).lower(),
+                                        "triangle_descriptor_fit_batch_mode="
+                                        + str(selected_fit.get("batch_model", triangle_descriptor_fit_batch_mode)),
                                         f"triangle_scale={float(selected_fit.get('scale', float('nan'))):.9g}",
                                         f"triangle_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
                                         f"triangle_fit_rms_px={rms_px:.6g}",
@@ -3930,6 +4052,13 @@ def run_resident_calibration_integration(
                             and triangle_catalog_batch_enabled
                         ),
                         "triangle_catalog_batch_mode": triangle_catalog_batch_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_descriptor_fit_batch": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_descriptor_fit_batch_enabled
+                        ),
+                        "triangle_descriptor_fit_batch_mode": triangle_descriptor_fit_batch_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])

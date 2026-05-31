@@ -162,6 +162,86 @@ def test_gpu_triangle_descriptor_similarity_recovers_catalog_transform():
     assert np.allclose(matrix[:2, 2], translation, atol=1.0e-4)
 
 
+def test_gpu_triangle_descriptor_similarity_batch_matches_single_fits():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "estimate_similarity_from_triangle_descriptors_batch_f32"):
+        raise AssertionError(
+            "estimate_similarity_from_triangle_descriptors_batch_f32 is missing from glass_cuda"
+        )
+
+    reference = _catalog_points()
+    transforms = [
+        (np.deg2rad(4.0), 1.01, np.asarray([2.5, -1.25], dtype=np.float64)),
+        (np.deg2rad(-3.0), 0.992, np.asarray([-1.75, 3.0], dtype=np.float64)),
+    ]
+    reference_descriptors = module.triangle_asterism_descriptors_f32(
+        reference[:, 0].astype(np.float32),
+        reference[:, 1].astype(np.float32),
+        max_stars=8,
+        neighbors=5,
+        max_descriptors=64,
+    )
+    moving_catalogs = []
+    moving_descriptors = []
+    for angle, scale, translation in transforms:
+        linear = scale * np.asarray(
+            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]],
+            dtype=np.float64,
+        )
+        moving = (reference - translation) @ np.linalg.inv(linear).T
+        moving_catalogs.append(moving)
+        moving_descriptors.append(
+            module.triangle_asterism_descriptors_f32(
+                moving[:, 0].astype(np.float32),
+                moving[:, 1].astype(np.float32),
+                max_stars=8,
+                neighbors=5,
+                max_descriptors=64,
+            )
+        )
+
+    batch = module.estimate_similarity_from_triangle_descriptors_batch_f32(
+        reference[:, 0].astype(np.float32),
+        reference[:, 1].astype(np.float32),
+        reference_descriptors["descriptors"],
+        reference_descriptors["indices"],
+        [moving[:, 0].astype(np.float32) for moving in moving_catalogs],
+        [moving[:, 1].astype(np.float32) for moving in moving_catalogs],
+        [item["descriptors"] for item in moving_descriptors],
+        [item["indices"] for item in moving_descriptors],
+        tolerance_px=0.1,
+        descriptor_radius=0.01,
+    )
+    singles = [
+        module.estimate_similarity_from_triangle_descriptors_f32(
+            reference[:, 0].astype(np.float32),
+            reference[:, 1].astype(np.float32),
+            moving[:, 0].astype(np.float32),
+            moving[:, 1].astype(np.float32),
+            reference_descriptors["descriptors"],
+            reference_descriptors["indices"],
+            descriptor["descriptors"],
+            descriptor["indices"],
+            tolerance_px=0.1,
+            descriptor_radius=0.01,
+        )
+        for moving, descriptor in zip(moving_catalogs, moving_descriptors, strict=True)
+    ]
+
+    assert len(batch) == len(singles) == 2
+    assert batch[0]["batch_model"] == "triangle_descriptor_similarity_cuda_batch_shared_reference"
+    assert [item["batch_index"] for item in batch] == [0, 1]
+    assert [item["batch_count"] for item in batch] == [2, 2]
+    for batch_result, single_result in zip(batch, singles, strict=True):
+        assert batch_result["model"] == single_result["model"]
+        assert batch_result["status"] == "ok"
+        assert batch_result["inliers"] == single_result["inliers"]
+        assert batch_result["best_candidate_index"] == single_result["best_candidate_index"]
+        assert batch_result["candidate_count"] == single_result["candidate_count"]
+        assert abs(batch_result["rms_px"] - single_result["rms_px"]) < 1.0e-6
+        assert np.allclose(batch_result["matrix"], single_result["matrix"], rtol=1e-6, atol=1e-6)
+
+
 def test_gpu_triangle_descriptor_image_registration_improves_alignment():
     cuda_module_or_skip()
     from glass.gpu.registration import register_triangle_descriptor_similarity_f32

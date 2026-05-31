@@ -800,6 +800,25 @@ integration where applicable.
   resident triangle-registration smoke tests, full pytest, and the 200-light
   benchmark.
 
+### S2-Gate 48: Batch Resident Triangle Descriptor Fit
+
+- Add a native CUDA batch API that estimates triangle-descriptor similarity
+  fits for multiple moving catalogs against one shared reference catalog and
+  reference descriptor set.
+- Route resident `similarity_cuda_triangle` through the batch fit path when the
+  fixed-threshold resident catalog batch path is available, while preserving the
+  per-frame fallback for auto-threshold or unsupported native builds.
+- Record `triangle_descriptor_fit_batch` and
+  `triangle_descriptor_fit_batch_mode` in resident artifacts, surface the mode
+  in the HTML resident summary, and emit timing for
+  `triangle_descriptor_fit_batch`.
+- Preserve per-frame selected fit, registration results, batch pixel refine,
+  frame accounting, image dimensions, geometric coverage, and output pixels
+  within the existing benchmark tolerance family.
+- Validate with direct CUDA batch/single descriptor-fit equivalence tests,
+  resident triangle-registration smoke tests, full pytest, and the 200-light
+  benchmark because this changes resident registration scheduling.
+
 ## Gate Rules
 
 Each gate requires:

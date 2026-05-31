@@ -393,6 +393,8 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "flat": master_stats.get("flat_count"),
                 "registration": registration.get("mode"),
                 "warp": registration.get("warp_interpolation"),
+                "descriptor_fit_batch": registration.get("triangle_descriptor_fit_batch"),
+                "descriptor_fit_batch_mode": registration.get("triangle_descriptor_fit_batch_mode"),
                 "local_norm": local_norm.get("mode"),
                 "weighting": weighting.get("mode"),
                 "rejection": rejection.get("mode"),

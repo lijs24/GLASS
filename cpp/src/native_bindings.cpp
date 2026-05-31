@@ -5383,6 +5383,55 @@ py::dict estimate_similarity_from_triangle_descriptors_f32(
   return result;
 }
 
+py::list estimate_similarity_from_triangle_descriptors_batch_f32(
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference_x,
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference_y,
+    py::array_t<float, py::array::c_style | py::array::forcecast> reference_descriptors,
+    py::array_t<int, py::array::c_style | py::array::forcecast> reference_indices,
+    py::sequence moving_x_list,
+    py::sequence moving_y_list,
+    py::sequence moving_descriptors_list,
+    py::sequence moving_indices_list,
+    float tolerance_px,
+    float descriptor_radius) {
+  const py::ssize_t batch_count = py::len(moving_x_list);
+  if (static_cast<py::ssize_t>(py::len(moving_y_list)) != batch_count ||
+      static_cast<py::ssize_t>(py::len(moving_descriptors_list)) != batch_count ||
+      static_cast<py::ssize_t>(py::len(moving_indices_list)) != batch_count) {
+    throw std::invalid_argument("moving batch lists must have the same length");
+  }
+  py::list results;
+  for (py::ssize_t batch_index = 0; batch_index < batch_count; ++batch_index) {
+    auto moving_x = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(
+        moving_x_list[batch_index]);
+    auto moving_y = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(
+        moving_y_list[batch_index]);
+    auto moving_descriptors = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(
+        moving_descriptors_list[batch_index]);
+    auto moving_indices = py::array_t<int, py::array::c_style | py::array::forcecast>::ensure(
+        moving_indices_list[batch_index]);
+    if (!moving_x || !moving_y || !moving_descriptors || !moving_indices) {
+      throw std::invalid_argument("moving batch items must be convertible to arrays");
+    }
+    py::dict result = estimate_similarity_from_triangle_descriptors_f32(
+        reference_x,
+        reference_y,
+        moving_x,
+        moving_y,
+        reference_descriptors,
+        reference_indices,
+        moving_descriptors,
+        moving_indices,
+        tolerance_px,
+        descriptor_radius);
+    result["batch_index"] = static_cast<int>(batch_index);
+    result["batch_count"] = static_cast<int>(batch_count);
+    result["batch_model"] = "triangle_descriptor_similarity_cuda_batch_shared_reference";
+    results.append(result);
+  }
+  return results;
+}
+
 py::dict estimate_similarity_from_catalogs_f32(
     py::array_t<float, py::array::c_style | py::array::forcecast> reference_x,
     py::array_t<float, py::array::c_style | py::array::forcecast> reference_y,
@@ -6843,6 +6892,19 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       py::arg("reference_indices"),
       py::arg("moving_descriptors"),
       py::arg("moving_indices"),
+      py::arg("tolerance_px") = 2.0f,
+      py::arg("descriptor_radius") = 0.1f);
+  m.def(
+      "estimate_similarity_from_triangle_descriptors_batch_f32",
+      &estimate_similarity_from_triangle_descriptors_batch_f32,
+      py::arg("reference_x"),
+      py::arg("reference_y"),
+      py::arg("reference_descriptors"),
+      py::arg("reference_indices"),
+      py::arg("moving_x_list"),
+      py::arg("moving_y_list"),
+      py::arg("moving_descriptors_list"),
+      py::arg("moving_indices_list"),
       py::arg("tolerance_px") = 2.0f,
       py::arg("descriptor_radius") = 0.1f);
   m.def(

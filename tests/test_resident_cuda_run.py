@@ -997,6 +997,10 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_max_descriptors"] == 256
     assert resident_registration["triangle_catalog_batch"] is True
     assert resident_registration["triangle_catalog_batch_mode"] == "grid_top_nms_fixed_threshold"
+    assert resident_registration["triangle_descriptor_fit_batch"] is True
+    assert resident_registration["triangle_descriptor_fit_batch_mode"] == (
+        "native_batch_shared_reference_descriptor"
+    )
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_batch"] is True
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "native_batch_one_seed_per_frame"
@@ -1008,6 +1012,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert registration_components["triangle_moving_catalog"] >= 0.0
     assert registration_components["triangle_moving_descriptors"] >= 0.0
     assert registration_components["triangle_descriptor_fit"] >= 0.0
+    assert registration_components["triangle_descriptor_fit_batch"] >= 0.0
     assert registration_components["triangle_warp"] >= 0.0
     assert registration_components["triangle_pixel_refine_batch"] >= 0.0
     assert resident["artifacts"][0]["resident_warp_scratch_bytes"] > 0
@@ -1022,6 +1027,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("moving_descriptors=" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
     assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
+    assert any("triangle_descriptor_fit_batch=true" in warning for warning in moving["warnings"])
     assert any("triangle_pixel_refine_mode=native_batch" in warning for warning in moving["warnings"])
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
 

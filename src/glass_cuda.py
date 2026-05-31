@@ -1649,6 +1649,33 @@ def triangle_asterism_descriptors_f32(
     }
 
 
+def _normalize_triangle_similarity_result(result: dict[str, Any]) -> dict[str, Any]:
+    normalized = {
+        "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
+        "scale": float(result["scale"]),
+        "rotation_rad": float(result["rotation_rad"]),
+        "rms_px": float(result["rms_px"]),
+        "inliers": int(result["inliers"]),
+        "best_candidate_index": int(result["best_candidate_index"]),
+        "candidate_count": int(result["candidate_count"]),
+        "reference_count": int(result["reference_count"]),
+        "moving_count": int(result["moving_count"]),
+        "reference_descriptor_count": int(result["reference_descriptor_count"]),
+        "moving_descriptor_count": int(result["moving_descriptor_count"]),
+        "tolerance_px": float(result["tolerance_px"]),
+        "descriptor_radius": float(result["descriptor_radius"]),
+        "status": str(result["status"]),
+        "model": str(result.get("model", "triangle_descriptor_similarity_cuda")),
+    }
+    if "batch_index" in result:
+        normalized["batch_index"] = int(result["batch_index"])
+    if "batch_count" in result:
+        normalized["batch_count"] = int(result["batch_count"])
+    if "batch_model" in result:
+        normalized["batch_model"] = str(result["batch_model"])
+    return normalized
+
+
 def estimate_similarity_from_triangle_descriptors_f32(
     reference_x: Any,
     reference_y: Any,
@@ -1696,23 +1723,7 @@ def estimate_similarity_from_triangle_descriptors_f32(
                 float(descriptor_radius),
             )
         )
-        return {
-            "matrix": np.asarray(result["matrix"], dtype=np.float32).tolist(),
-            "scale": float(result["scale"]),
-            "rotation_rad": float(result["rotation_rad"]),
-            "rms_px": float(result["rms_px"]),
-            "inliers": int(result["inliers"]),
-            "best_candidate_index": int(result["best_candidate_index"]),
-            "candidate_count": int(result["candidate_count"]),
-            "reference_count": int(result["reference_count"]),
-            "moving_count": int(result["moving_count"]),
-            "reference_descriptor_count": int(result["reference_descriptor_count"]),
-            "moving_descriptor_count": int(result["moving_descriptor_count"]),
-            "tolerance_px": float(result["tolerance_px"]),
-            "descriptor_radius": float(result["descriptor_radius"]),
-            "status": str(result["status"]),
-            "model": str(result.get("model", "triangle_descriptor_similarity_cuda")),
-        }
+        return _normalize_triangle_similarity_result(result)
 
     from glass.cpu.registration import _fit_similarity_matrix, _score_matrix
 
@@ -1763,6 +1774,96 @@ def estimate_similarity_from_triangle_descriptors_f32(
         "status": "ok" if best_pairs else "failed",
         "model": "triangle_descriptor_similarity_cpu_fallback",
     }
+
+
+def estimate_similarity_from_triangle_descriptors_batch_f32(
+    reference_x: Any,
+    reference_y: Any,
+    reference_descriptors: Any,
+    reference_indices: Any,
+    moving_x_list: list[Any],
+    moving_y_list: list[Any],
+    moving_descriptors_list: list[Any],
+    moving_indices_list: list[Any],
+    tolerance_px: float = 2.0,
+    descriptor_radius: float = 0.1,
+) -> list[dict[str, Any]]:
+    """Batch triangle descriptor similarity fits against one shared reference catalog."""
+
+    if tolerance_px < 0.0:
+        raise ValueError("tolerance_px must be non-negative")
+    if descriptor_radius < 0.0:
+        raise ValueError("descriptor_radius must be non-negative")
+    lengths = {
+        len(moving_x_list),
+        len(moving_y_list),
+        len(moving_descriptors_list),
+        len(moving_indices_list),
+    }
+    if len(lengths) != 1:
+        raise ValueError("moving batch lists must have the same length")
+    if not moving_x_list:
+        return []
+
+    ref_x = np.ascontiguousarray(np.asarray(reference_x, dtype=np.float32).reshape(-1))
+    ref_y = np.ascontiguousarray(np.asarray(reference_y, dtype=np.float32).reshape(-1))
+    ref_desc = np.ascontiguousarray(np.asarray(reference_descriptors, dtype=np.float32).reshape(-1, 2))
+    ref_idx = np.ascontiguousarray(np.asarray(reference_indices, dtype=np.int32).reshape(-1, 3))
+    mov_xs = [
+        np.ascontiguousarray(np.asarray(item, dtype=np.float32).reshape(-1))
+        for item in moving_x_list
+    ]
+    mov_ys = [
+        np.ascontiguousarray(np.asarray(item, dtype=np.float32).reshape(-1))
+        for item in moving_y_list
+    ]
+    mov_descs = [
+        np.ascontiguousarray(np.asarray(item, dtype=np.float32).reshape(-1, 2))
+        for item in moving_descriptors_list
+    ]
+    mov_indices = [
+        np.ascontiguousarray(np.asarray(item, dtype=np.int32).reshape(-1, 3))
+        for item in moving_indices_list
+    ]
+
+    native = _native()
+    if native is not None and hasattr(native, "estimate_similarity_from_triangle_descriptors_batch_f32"):
+        results = native.estimate_similarity_from_triangle_descriptors_batch_f32(
+            ref_x,
+            ref_y,
+            ref_desc,
+            ref_idx,
+            mov_xs,
+            mov_ys,
+            mov_descs,
+            mov_indices,
+            float(tolerance_px),
+            float(descriptor_radius),
+        )
+        return [_normalize_triangle_similarity_result(dict(result)) for result in list(results)]
+
+    output = []
+    batch_count = len(mov_xs)
+    for batch_index, (mov_x, mov_y, mov_desc, mov_idx) in enumerate(
+        zip(mov_xs, mov_ys, mov_descs, mov_indices, strict=True)
+    ):
+        result = estimate_similarity_from_triangle_descriptors_f32(
+            ref_x,
+            ref_y,
+            mov_x,
+            mov_y,
+            ref_desc,
+            ref_idx,
+            mov_desc,
+            mov_idx,
+            tolerance_px=tolerance_px,
+            descriptor_radius=descriptor_radius,
+        )
+        result["batch_index"] = int(batch_index)
+        result["batch_count"] = int(batch_count)
+        result["batch_model"] = "triangle_descriptor_similarity_cpu_batch_fallback"
+        output.append(result)
+    return output
 
 
 def local_norm_apply_f32(data: Any, scale: float, offset: float) -> np.ndarray:
