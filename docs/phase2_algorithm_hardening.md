@@ -426,6 +426,20 @@ integration where applicable.
 - Validate with CLI report tests, ruff, full pytest, and a report regeneration
   on the most recent 200-light resident run.
 
+### S2-Gate 24: Fused Resident Warp Coverage Accumulation
+
+- Fuse geometric warp coverage accumulation into resident CUDA translation,
+  matrix bilinear, and matrix Lanczos warp kernels.
+- Preserve the standalone warp wrapper API by passing a null accumulator for
+  one-off Python calls.
+- Keep full-frame coverage accounting for unwarped active frames on its
+  existing resident method.
+- Validate that the fused path preserves geometric coverage frame counts,
+  partial warp-edge DQ semantics, and 200-light numerical agreement while
+  removing the extra per-warp coverage-accumulation launch.
+- Validate with resident CUDA stack tests, CUDA smoke tests, ruff, full pytest,
+  and the 200-light benchmark because this changes the resident fast path.
+
 ## Gate Rules
 
 Each gate requires:

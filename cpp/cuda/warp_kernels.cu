@@ -38,6 +38,17 @@ void glass_coverage_accumulate_full_f32_launch(float* accumulator, std::size_t n
   glass_coverage_accumulate_full_f32_kernel<<<blocks, threads>>>(accumulator, n);
 }
 
+__device__ void glass_store_warp_coverage_f32(
+    float* coverage,
+    float* coverage_accumulator,
+    int i,
+    float value) {
+  coverage[i] = value;
+  if (coverage_accumulator != nullptr && isfinite(value) && value > 0.5f) {
+    coverage_accumulator[i] += 1.0f;
+  }
+}
+
 __global__ void glass_warp_translation_f32_kernel(
     const float* input,
     float* output,
@@ -46,7 +57,8 @@ __global__ void glass_warp_translation_f32_kernel(
     int height,
     int dx,
     int dy,
-    float fill) {
+    float fill,
+    float* coverage_accumulator) {
   const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   const int n = width * height;
   if (i >= n) {
@@ -58,10 +70,10 @@ __global__ void glass_warp_translation_f32_kernel(
   const int sy = y - dy;
   if (sx >= 0 && sx < width && sy >= 0 && sy < height) {
     output[i] = input[sy * width + sx];
-    coverage[i] = 1.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 1.0f);
   } else {
     output[i] = fill;
-    coverage[i] = 0.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 0.0f);
   }
 }
 
@@ -73,11 +85,12 @@ void glass_warp_translation_f32_launch(
     int height,
     int dx,
     int dy,
-    float fill) {
+    float fill,
+    float* coverage_accumulator) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
   glass_warp_translation_f32_kernel<<<blocks, threads>>>(
-      input, output, coverage, width, height, dx, dy, fill);
+      input, output, coverage, width, height, dx, dy, fill, coverage_accumulator);
 }
 
 __global__ void glass_warp_translation_bilinear_f32_kernel(
@@ -88,7 +101,8 @@ __global__ void glass_warp_translation_bilinear_f32_kernel(
     int height,
     float dx,
     float dy,
-    float fill) {
+    float fill,
+    float* coverage_accumulator) {
   const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   const int n = width * height;
   if (i >= n) {
@@ -101,7 +115,7 @@ __global__ void glass_warp_translation_bilinear_f32_kernel(
   if (sx < 0.0f || sx > static_cast<float>(width - 1) ||
       sy < 0.0f || sy > static_cast<float>(height - 1)) {
     output[i] = fill;
-    coverage[i] = 0.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 0.0f);
     return;
   }
 
@@ -119,7 +133,7 @@ __global__ void glass_warp_translation_bilinear_f32_kernel(
   const float top = v00 * (1.0f - tx) + v10 * tx;
   const float bottom = v01 * (1.0f - tx) + v11 * tx;
   output[i] = top * (1.0f - ty) + bottom * ty;
-  coverage[i] = 1.0f;
+  glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 1.0f);
 }
 
 void glass_warp_translation_bilinear_f32_launch(
@@ -130,11 +144,12 @@ void glass_warp_translation_bilinear_f32_launch(
     int height,
     float dx,
     float dy,
-    float fill) {
+    float fill,
+    float* coverage_accumulator) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
   glass_warp_translation_bilinear_f32_kernel<<<blocks, threads>>>(
-      input, output, coverage, width, height, dx, dy, fill);
+      input, output, coverage, width, height, dx, dy, fill, coverage_accumulator);
 }
 
 __global__ void glass_warp_matrix_bilinear_f32_kernel(
@@ -144,7 +159,8 @@ __global__ void glass_warp_matrix_bilinear_f32_kernel(
     const float* inverse,
     int width,
     int height,
-    float fill) {
+    float fill,
+    float* coverage_accumulator) {
   const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   const int n = width * height;
   if (i >= n) {
@@ -157,7 +173,7 @@ __global__ void glass_warp_matrix_bilinear_f32_kernel(
   const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
   if (fabsf(denom) <= 1.0e-12f) {
     output[i] = fill;
-    coverage[i] = 0.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 0.0f);
     return;
   }
   const float sx = (inverse[0] * fx + inverse[1] * fy + inverse[2]) / denom;
@@ -165,7 +181,7 @@ __global__ void glass_warp_matrix_bilinear_f32_kernel(
   if (sx < 0.0f || sx > static_cast<float>(width - 1) ||
       sy < 0.0f || sy > static_cast<float>(height - 1)) {
     output[i] = fill;
-    coverage[i] = 0.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 0.0f);
     return;
   }
 
@@ -183,7 +199,7 @@ __global__ void glass_warp_matrix_bilinear_f32_kernel(
   const float top = v00 * (1.0f - tx) + v10 * tx;
   const float bottom = v01 * (1.0f - tx) + v11 * tx;
   output[i] = top * (1.0f - ty) + bottom * ty;
-  coverage[i] = 1.0f;
+  glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 1.0f);
 }
 
 void glass_warp_matrix_bilinear_f32_launch(
@@ -193,11 +209,12 @@ void glass_warp_matrix_bilinear_f32_launch(
     const float* inverse,
     int width,
     int height,
-    float fill) {
+    float fill,
+    float* coverage_accumulator) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
   glass_warp_matrix_bilinear_f32_kernel<<<blocks, threads>>>(
-      input, output, coverage, inverse, width, height, fill);
+      input, output, coverage, inverse, width, height, fill, coverage_accumulator);
 }
 
 __device__ float glass_sinc_f32(float x) {
@@ -225,7 +242,8 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
     int width,
     int height,
     float fill,
-    float clamping_threshold) {
+    float clamping_threshold,
+    float* coverage_accumulator) {
   const int i = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
   const int n = width * height;
   if (i >= n) {
@@ -238,7 +256,7 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
   const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
   if (fabsf(denom) <= 1.0e-12f) {
     output[i] = fill;
-    coverage[i] = 0.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 0.0f);
     return;
   }
 
@@ -247,7 +265,7 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
   if (sx < 2.0f || sx >= static_cast<float>(width - 3) ||
       sy < 2.0f || sy >= static_cast<float>(height - 3)) {
     output[i] = fill;
-    coverage[i] = 0.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 0.0f);
     return;
   }
 
@@ -283,7 +301,7 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
 
   if (fabsf(weight_sum) <= 1.0e-12f) {
     output[i] = fill;
-    coverage[i] = 0.0f;
+    glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 0.0f);
     return;
   }
   float value = weighted_sum / weight_sum;
@@ -294,7 +312,7 @@ __global__ void glass_warp_matrix_lanczos3_f32_kernel(
     value = fminf(hi, fmaxf(lo, value));
   }
   output[i] = value;
-  coverage[i] = 1.0f;
+  glass_store_warp_coverage_f32(coverage, coverage_accumulator, i, 1.0f);
 }
 
 void glass_warp_matrix_lanczos3_f32_launch(
@@ -305,11 +323,12 @@ void glass_warp_matrix_lanczos3_f32_launch(
     int width,
     int height,
     float fill,
-    float clamping_threshold) {
+    float clamping_threshold,
+    float* coverage_accumulator) {
   constexpr int threads = 256;
   const int blocks = (width * height + threads - 1) / threads;
   glass_warp_matrix_lanczos3_f32_kernel<<<blocks, threads>>>(
-      input, output, coverage, inverse, width, height, fill, clamping_threshold);
+      input, output, coverage, inverse, width, height, fill, clamping_threshold, coverage_accumulator);
 }
 
 __global__ void glass_matrix_alignment_metrics_f32_kernel(

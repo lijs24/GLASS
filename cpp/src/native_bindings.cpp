@@ -57,7 +57,8 @@ void glass_warp_translation_f32_launch(
     int height,
     int dx,
     int dy,
-    float fill);
+    float fill,
+    float* coverage_accumulator);
 void glass_warp_translation_bilinear_f32_launch(
     const float* input,
     float* output,
@@ -66,7 +67,8 @@ void glass_warp_translation_bilinear_f32_launch(
     int height,
     float dx,
     float dy,
-    float fill);
+    float fill,
+    float* coverage_accumulator);
 void glass_warp_matrix_bilinear_f32_launch(
     const float* input,
     float* output,
@@ -74,7 +76,8 @@ void glass_warp_matrix_bilinear_f32_launch(
     const float* inverse,
     int width,
     int height,
-    float fill);
+    float fill,
+    float* coverage_accumulator);
 void glass_warp_matrix_lanczos3_f32_launch(
     const float* input,
     float* output,
@@ -83,7 +86,8 @@ void glass_warp_matrix_lanczos3_f32_launch(
     int width,
     int height,
     float fill,
-    float clamping_threshold);
+    float clamping_threshold,
+    float* coverage_accumulator);
 void glass_coverage_accumulate_f32_launch(const float* coverage, float* accumulator, std::size_t n);
 void glass_coverage_accumulate_full_f32_launch(float* accumulator, std::size_t n);
 void glass_matrix_alignment_metrics_f32_launch(
@@ -1120,6 +1124,7 @@ class ResidentCalibratedStack {
     try {
       check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident translation output)");
       check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident translation coverage)");
+      allocate_warp_coverage_if_needed();
       glass_warp_translation_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_output,
@@ -1128,13 +1133,14 @@ class ResidentCalibratedStack {
           static_cast<int>(height_),
           dx,
           dy,
-          fill);
+          fill,
+          d_warp_coverage_);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_translation_frame kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_translation_frame synchronize");
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident translated frame)");
-      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_translation_frame");
+      ++warp_coverage_frame_count_;
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -1152,6 +1158,7 @@ class ResidentCalibratedStack {
     try {
       check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident bilinear translation output)");
       check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident bilinear translation coverage)");
+      allocate_warp_coverage_if_needed();
       glass_warp_translation_bilinear_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_output,
@@ -1160,13 +1167,14 @@ class ResidentCalibratedStack {
           static_cast<int>(height_),
           dx,
           dy,
-          fill);
+          fill,
+          d_warp_coverage_);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_translation_bilinear_frame kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_translation_bilinear_frame synchronize");
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident bilinear translated frame)");
-      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_translation_bilinear_frame");
+      ++warp_coverage_frame_count_;
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -1187,6 +1195,7 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident matrix warp output)");
       check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident matrix warp coverage)");
       check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(resident matrix warp inverse)");
+      allocate_warp_coverage_if_needed();
       check_cuda(
           cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident matrix warp inverse)");
@@ -1197,13 +1206,14 @@ class ResidentCalibratedStack {
           d_inverse,
           static_cast<int>(width_),
           static_cast<int>(height_),
-          fill);
+          fill,
+          d_warp_coverage_);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_bilinear_frame kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_bilinear_frame synchronize");
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident matrix warped frame)");
-      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_matrix_bilinear_frame");
+      ++warp_coverage_frame_count_;
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -1230,6 +1240,7 @@ class ResidentCalibratedStack {
       check_cuda(cudaMalloc(&d_output, frame_bytes), "cudaMalloc(resident matrix Lanczos3 warp output)");
       check_cuda(cudaMalloc(&d_coverage, frame_bytes), "cudaMalloc(resident matrix Lanczos3 warp coverage)");
       check_cuda(cudaMalloc(&d_inverse, inverse.size() * sizeof(float)), "cudaMalloc(resident matrix Lanczos3 inverse)");
+      allocate_warp_coverage_if_needed();
       check_cuda(
           cudaMemcpy(d_inverse, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
           "cudaMemcpy(resident matrix Lanczos3 inverse)");
@@ -1241,13 +1252,14 @@ class ResidentCalibratedStack {
           static_cast<int>(width_),
           static_cast<int>(height_),
           fill,
-          clamping_threshold);
+          clamping_threshold,
+          d_warp_coverage_);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_matrix_lanczos3_frame kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_matrix_lanczos3_frame synchronize");
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident matrix Lanczos3 warped frame)");
-      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_matrix_lanczos3_frame");
+      ++warp_coverage_frame_count_;
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -3298,16 +3310,6 @@ class ResidentCalibratedStack {
     warp_coverage_frame_count_ = 0;
   }
 
-  void accumulate_warp_coverage_device(const float* d_coverage, const char* context) {
-    allocate_warp_coverage_if_needed();
-    glass_coverage_accumulate_f32_launch(d_coverage, d_warp_coverage_, pixels_per_frame_);
-    const std::string launch_operation = std::string(context) + " coverage accumulation kernel launch";
-    const std::string synchronize_operation = std::string(context) + " coverage accumulation synchronize";
-    check_cuda(cudaGetLastError(), launch_operation.c_str());
-    check_cuda(cudaDeviceSynchronize(), synchronize_operation.c_str());
-    ++warp_coverage_frame_count_;
-  }
-
   std::size_t frame_count_;
   std::size_t height_;
   std::size_t width_;
@@ -3607,7 +3609,8 @@ py::tuple warp_translation_f32(
         height,
         static_cast<int>(std::lround(dx)),
         static_cast<int>(std::lround(dy)),
-        fill);
+        fill,
+        nullptr);
     check_cuda(cudaGetLastError(), "warp_translation_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "warp_translation_f32 synchronize");
     check_cuda(
@@ -3663,7 +3666,8 @@ py::tuple warp_translation_bilinear_f32(
         height,
         dx,
         dy,
-        fill);
+        fill,
+        nullptr);
     check_cuda(cudaGetLastError(), "warp_translation_bilinear_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "warp_translation_bilinear_f32 synchronize");
     check_cuda(
@@ -3723,7 +3727,8 @@ py::tuple warp_matrix_bilinear_f32(
         d_inverse,
         width,
         height,
-        fill);
+        fill,
+        nullptr);
     check_cuda(cudaGetLastError(), "warp_matrix_bilinear_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "warp_matrix_bilinear_f32 synchronize");
     check_cuda(
@@ -3787,7 +3792,8 @@ py::tuple warp_matrix_lanczos3_f32(
         width,
         height,
         fill,
-        clamping_threshold);
+        clamping_threshold,
+        nullptr);
     check_cuda(cudaGetLastError(), "warp_matrix_lanczos3_f32 kernel launch");
     check_cuda(cudaDeviceSynchronize(), "warp_matrix_lanczos3_f32 synchronize");
     check_cuda(
