@@ -751,6 +751,19 @@ integration where applicable.
   report/audit regeneration on the latest preserved 200-light resident
   artifacts.
 
+### S2-Gate 45: Resident Warp Scratch Reuse
+
+- Remove per-frame `cudaMalloc`/`cudaFree` churn from resident CUDA translation,
+  matrix bilinear, and matrix Lanczos warp application by allocating reusable
+  device scratch buffers inside `ResidentCalibratedStack`.
+- Keep resident warp output pixels, geometric coverage accumulation, and DQ
+  semantics unchanged.
+- Expose `warp_scratch_bytes` through the native binding and Python wrapper, and
+  record the value in `resident_artifacts.json` and the HTML resident summary.
+- Validate with direct resident CUDA stack tests, resident triangle-registration
+  smoke tests, full pytest, and a 200-light benchmark rerun because this changes
+  the resident registration/warp fast path.
+
 ## Gate Rules
 
 Each gate requires:

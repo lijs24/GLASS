@@ -309,6 +309,45 @@ def test_resident_stack_accumulates_geometric_warp_coverage():
     assert np.allclose(coverage, expected)
 
 
+def test_resident_stack_reuses_warp_scratch_buffers():
+    module = cuda_module_or_skip()
+    required = [
+        "apply_translation_frame",
+        "apply_matrix_bilinear_frame",
+        "warp_scratch_bytes",
+    ]
+    missing = [name for name in required if not hasattr(module.ResidentCalibratedStack, name)]
+    if missing:
+        raise AssertionError(f"ResidentCalibratedStack is missing {missing}")
+
+    frame = np.arange(30, dtype=np.float32).reshape(5, 6)
+    stack = module.ResidentCalibratedStack(2, 5, 6)
+    stack.upload_calibrated_frame(0, frame)
+    stack.upload_calibrated_frame(1, frame)
+
+    assert stack.warp_scratch_bytes == 0
+    before = stack.bytes_allocated
+    stack.apply_translation_frame(0, 1, 0, np.nan)
+    translation_scratch = stack.warp_scratch_bytes
+    after_translation = stack.bytes_allocated
+
+    assert translation_scratch == 2 * frame.nbytes
+    assert after_translation == before + translation_scratch + frame.nbytes
+    stack.apply_translation_frame(1, -1, 0, np.nan)
+    assert stack.warp_scratch_bytes == translation_scratch
+    assert stack.bytes_allocated == after_translation
+
+    matrix = [[1.0, 0.0, 0.0], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]]
+    stack.apply_matrix_bilinear_frame(1, matrix, np.nan)
+    matrix_scratch = stack.warp_scratch_bytes
+
+    assert matrix_scratch == translation_scratch + 9 * np.dtype(np.float32).itemsize
+    assert stack.bytes_allocated == after_translation + 9 * np.dtype(np.float32).itemsize
+    stack.apply_matrix_bilinear_frame(0, matrix, np.nan)
+    assert stack.warp_scratch_bytes == matrix_scratch
+    assert stack.bytes_allocated == after_translation + 9 * np.dtype(np.float32).itemsize
+
+
 def test_resident_stack_estimates_and_warps_subpixel_translation_on_device():
     module = cuda_module_or_skip()
     required = [

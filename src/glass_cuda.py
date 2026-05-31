@@ -2173,6 +2173,12 @@ class ResidentCalibratedStack:
         return int(self._impl.bytes_allocated)
 
     @property
+    def warp_scratch_bytes(self) -> int:
+        if not hasattr(self._impl, "warp_scratch_bytes"):
+            return 0
+        return int(self._impl.warp_scratch_bytes)
+
+    @property
     def host_pinned_bytes(self) -> int:
         if not hasattr(self._impl, "host_pinned_bytes"):
             return 0
