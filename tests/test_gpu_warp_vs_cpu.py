@@ -236,6 +236,121 @@ def test_resident_stack_matrix_lanczos3_warp_matches_cpu_reference():
     assert np.array_equal(weight_map, expected_coverage)
 
 
+def test_resident_stack_matrix_bilinear_batch_warp_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_bilinear_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_bilinear_frames is missing")
+
+    data0 = np.arange(64, dtype=np.float32).reshape(8, 8)
+    data1 = np.flipud(data0) + np.float32(3.5)
+    angle0 = np.deg2rad(2.0)
+    angle1 = np.deg2rad(-1.5)
+    matrices = np.asarray(
+        [
+            [
+                [np.cos(angle0), -np.sin(angle0), 0.75],
+                [np.sin(angle0), np.cos(angle0), -0.35],
+                [0.0, 0.0, 1.0],
+            ],
+            [
+                [np.cos(angle1), -np.sin(angle1), -0.45],
+                [np.sin(angle1), np.cos(angle1), 0.60],
+                [0.0, 0.0, 1.0],
+            ],
+        ],
+        dtype=np.float32,
+    )
+    stack = module.ResidentCalibratedStack(2, data0.shape[0], data0.shape[1])
+    stack.upload_calibrated_frame(0, data0)
+    stack.upload_calibrated_frame(1, data1)
+
+    timing = stack.apply_matrix_bilinear_frames([0, 1], matrices, np.nan)
+    warped, weight_map = stack.integrate_mean()
+    expected0, coverage0 = _warp_matrix_bilinear_cpu(data0, matrices[0], np.nan)
+    expected1, coverage1 = _warp_matrix_bilinear_cpu(data1, matrices[1], np.nan)
+    expected_weight = coverage0 + coverage1
+    expected_sum = np.where(coverage0 > 0, expected0, 0.0) + np.where(
+        coverage1 > 0,
+        expected1,
+        0.0,
+    )
+    expected = np.divide(
+        expected_sum,
+        expected_weight,
+        out=np.zeros_like(expected_sum, dtype=np.float32),
+        where=expected_weight > 0,
+    )
+
+    assert timing["timing_model"] == "native_loop_single_scratch_one_sync"
+    assert timing["frame_count"] == 2
+    assert timing["interpolation"] == "bilinear"
+    assert timing["inverse_upload_s"] >= 0.0
+    assert timing["kernel_enqueue_s"] >= 0.0
+    assert timing["device_copy_enqueue_s"] >= 0.0
+    assert timing["sync_s"] >= 0.0
+    assert timing["total_s"] >= timing["kernel_enqueue_s"]
+    assert np.allclose(warped, expected, atol=1.0e-5)
+    assert np.array_equal(weight_map, expected_weight)
+
+
+def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_matrix_lanczos3_frames"):
+        raise AssertionError("ResidentCalibratedStack.apply_matrix_lanczos3_frames is missing")
+
+    yy, xx = np.indices((14, 15), dtype=np.float32)
+    data0 = np.sin(xx * 0.17) + np.cos(yy * 0.11) + 0.02 * xx
+    data1 = np.cos(xx * 0.13) - np.sin(yy * 0.19) + 0.01 * yy
+    angle0 = np.deg2rad(0.75)
+    angle1 = np.deg2rad(-0.50)
+    matrices = np.asarray(
+        [
+            [
+                [np.cos(angle0), -np.sin(angle0), 0.20],
+                [np.sin(angle0), np.cos(angle0), -0.15],
+                [0.0, 0.0, 1.0],
+            ],
+            [
+                [np.cos(angle1), -np.sin(angle1), -0.25],
+                [np.sin(angle1), np.cos(angle1), 0.18],
+                [0.0, 0.0, 1.0],
+            ],
+        ],
+        dtype=np.float32,
+    )
+    stack = module.ResidentCalibratedStack(2, data0.shape[0], data0.shape[1])
+    stack.upload_calibrated_frame(0, data0)
+    stack.upload_calibrated_frame(1, data1)
+
+    timing = stack.apply_matrix_lanczos3_frames([0, 1], matrices, np.nan, 0.30)
+    warped, weight_map = stack.integrate_mean()
+    expected0, coverage0 = _warp_matrix_lanczos3_cpu(data0, matrices[0], np.nan, 0.30)
+    expected1, coverage1 = _warp_matrix_lanczos3_cpu(data1, matrices[1], np.nan, 0.30)
+    expected_weight = coverage0 + coverage1
+    expected_sum = np.where(coverage0 > 0, expected0, 0.0) + np.where(
+        coverage1 > 0,
+        expected1,
+        0.0,
+    )
+    expected = np.divide(
+        expected_sum,
+        expected_weight,
+        out=np.zeros_like(expected_sum, dtype=np.float32),
+        where=expected_weight > 0,
+    )
+
+    assert timing["timing_model"] == "native_loop_single_scratch_one_sync"
+    assert timing["frame_count"] == 2
+    assert timing["interpolation"] == "lanczos3"
+    assert timing["inverse_upload_s"] >= 0.0
+    assert timing["kernel_enqueue_s"] >= 0.0
+    assert timing["device_copy_enqueue_s"] >= 0.0
+    assert timing["sync_s"] >= 0.0
+    assert timing["total_s"] >= timing["kernel_enqueue_s"]
+    assert np.allclose(warped, expected, atol=3.0e-5)
+    assert np.array_equal(weight_map, expected_weight)
+
+
 def test_gpu_catalog_refined_translation_drives_bilinear_warp():
     module = cuda_module_or_skip()
     reference = np.zeros((64, 64), dtype=np.float32)

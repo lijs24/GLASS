@@ -1164,6 +1164,19 @@ integration where applicable.
   against the Gate65 resident drift artifact plus the established 200-light
   WBPP/GLASS comparison.
 
+### S2-Gate 69: Native Batch Matrix Warp Dispatch
+
+- Add resident CUDA native batch dispatch for matrix bilinear and Lanczos3 warp
+  application after triangle pixel refinement.
+- Keep the existing per-frame warp path as a fallback for translation-only
+  matrices, old native extensions, and unsupported interpolation modes.
+- Record batch warp frame count, fallback count, timing model, inverse upload,
+  kernel enqueue, device copy enqueue, sync, and native total timing in
+  `resident_artifacts.json` plus per-frame registration warnings.
+- Validate with resident CUDA triangle-registration smoke tests, ruff, full
+  pytest, and the 200-light benchmark contract because this gate changes native
+  registration scheduling and synchronization behavior.
+
 ## Gate Rules
 
 Each gate requires:

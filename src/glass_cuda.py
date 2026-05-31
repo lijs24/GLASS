@@ -2546,6 +2546,21 @@ class ResidentCalibratedStack:
             raise RuntimeError("native ResidentCalibratedStack.apply_matrix_bilinear_frame is not available")
         self._impl.apply_matrix_bilinear_frame(int(index), np.asarray(matrix, dtype=np.float32), float(fill))
 
+    def apply_matrix_bilinear_frames(
+        self,
+        indices: Any,
+        matrices: Any,
+        fill: float = np.nan,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "apply_matrix_bilinear_frames"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_matrix_bilinear_frames is not available")
+        result = self._impl.apply_matrix_bilinear_frames(
+            np.asarray(indices, dtype=np.int64),
+            np.asarray(matrices, dtype=np.float32),
+            float(fill),
+        )
+        return dict(result)
+
     def apply_matrix_lanczos3_frame(
         self,
         index: int,
@@ -2561,6 +2576,23 @@ class ResidentCalibratedStack:
             float(fill),
             float(clamping_threshold),
         )
+
+    def apply_matrix_lanczos3_frames(
+        self,
+        indices: Any,
+        matrices: Any,
+        fill: float = np.nan,
+        clamping_threshold: float = -1.0,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "apply_matrix_lanczos3_frames"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_matrix_lanczos3_frames is not available")
+        result = self._impl.apply_matrix_lanczos3_frames(
+            np.asarray(indices, dtype=np.int64),
+            np.asarray(matrices, dtype=np.float32),
+            float(fill),
+            float(clamping_threshold),
+        )
+        return dict(result)
 
     def matrix_alignment_metrics_to_reference(
         self,

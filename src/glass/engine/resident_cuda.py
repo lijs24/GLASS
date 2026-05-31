@@ -618,6 +618,74 @@ def _apply_resident_registration_matrix(
     return "matrix_bilinear"
 
 
+def _apply_resident_registration_matrix_batch(
+    stack: Any,
+    items: list[tuple[int, list[list[float]]]],
+    interpolation: str = "bilinear",
+    clamping_threshold: float = -1.0,
+) -> tuple[list[str], dict[str, Any]]:
+    if not items:
+        return [], {"batched": False, "frame_count": 0}
+    models: list[str | None] = [None] * len(items)
+    matrix_positions: list[int] = []
+    matrix_indices: list[int] = []
+    matrix_values: list[list[list[float]]] = []
+    for position, (index, matrix) in enumerate(items):
+        if _matrix_is_translation(matrix):
+            if interpolation == "lanczos3" and hasattr(stack, "apply_matrix_lanczos3_frame"):
+                stack.apply_matrix_lanczos3_frame(index, matrix, np.nan, float(clamping_threshold))
+                models[position] = "matrix_lanczos3"
+            else:
+                stack.apply_translation_bilinear_frame(index, float(matrix[0][2]), float(matrix[1][2]), np.nan)
+                models[position] = "translation_bilinear"
+            continue
+        matrix_positions.append(position)
+        matrix_indices.append(index)
+        matrix_values.append(matrix)
+
+    timing: dict[str, Any] = {
+        "batched": False,
+        "frame_count": 0,
+        "fallback_frame_count": len(items) - len(matrix_positions),
+    }
+    if matrix_positions:
+        if interpolation == "lanczos3" and hasattr(stack, "apply_matrix_lanczos3_frames"):
+            timing = dict(
+                stack.apply_matrix_lanczos3_frames(
+                    matrix_indices,
+                    np.asarray(matrix_values, dtype=np.float32),
+                    np.nan,
+                    float(clamping_threshold),
+                )
+            )
+            for position in matrix_positions:
+                models[position] = "matrix_lanczos3_batch"
+        elif interpolation == "bilinear" and hasattr(stack, "apply_matrix_bilinear_frames"):
+            timing = dict(
+                stack.apply_matrix_bilinear_frames(
+                    matrix_indices,
+                    np.asarray(matrix_values, dtype=np.float32),
+                    np.nan,
+                )
+            )
+            for position in matrix_positions:
+                models[position] = "matrix_bilinear_batch"
+        else:
+            for position in matrix_positions:
+                index, matrix = items[position]
+                models[position] = _apply_resident_registration_matrix(
+                    stack,
+                    index,
+                    matrix,
+                    interpolation,
+                    clamping_threshold,
+                )
+            timing = {"batched": False, "frame_count": 0, "fallback_frame_count": len(items)}
+        timing["batched"] = bool(timing.get("frame_count", 0))
+        timing["fallback_frame_count"] = len(items) - int(timing.get("frame_count", 0) or 0)
+    return [str(model or "unavailable") for model in models], timing
+
+
 def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) -> dict[str, Any]:
     values = np.asarray(data, dtype=np.float32)
     total_pixels = int(values.size)
@@ -2987,6 +3055,29 @@ def run_resident_calibration_integration(
                 triangle_descriptor_fit_native_output_download_s = 0.0
                 triangle_descriptor_fit_native_frame_total_s = 0.0
                 triangle_descriptor_fit_native_total_s = 0.0
+                triangle_warp_batch_enabled = bool(
+                    (
+                        resident_warp_interpolation == "bilinear"
+                        and hasattr(native_stack, "apply_matrix_bilinear_frames")
+                    )
+                    or (
+                        resident_warp_interpolation == "lanczos3"
+                        and hasattr(native_stack, "apply_matrix_lanczos3_frames")
+                    )
+                )
+                triangle_warp_batch_mode = (
+                    f"native_matrix_{resident_warp_interpolation}_frames"
+                    if triangle_warp_batch_enabled
+                    else "per_frame"
+                )
+                triangle_warp_batch_timing_model = "off"
+                triangle_warp_batch_frame_count = 0
+                triangle_warp_batch_fallback_frame_count = 0
+                triangle_warp_batch_native_inverse_upload_s = 0.0
+                triangle_warp_batch_native_kernel_enqueue_s = 0.0
+                triangle_warp_batch_native_device_copy_enqueue_s = 0.0
+                triangle_warp_batch_native_sync_s = 0.0
+                triangle_warp_batch_native_total_s = 0.0
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -3822,6 +3913,7 @@ def run_resident_calibration_integration(
                             frame_weight_values[int(item["index"])] = 0.0
                             frame_weights[str(item["frame_id"])] = 0.0
                             result.warnings.append(f"triangle_pixel_refine_batch_failed={exc}")
+                    valid_triangle_batch_warps: list[tuple[dict[str, Any], RegistrationResult]] = []
                     for item, refinement in zip(pending_triangle_pixel_refines, batch_refinements, strict=True):
                         result = registration_results[int(item["result_index"])]
                         matrix_array = np.asarray(refinement["matrix"], dtype=np.float32).reshape(3, 3)
@@ -3892,17 +3984,68 @@ def run_resident_calibration_integration(
                                 + "; ".join(quality_failures)
                             )
                             continue
+                        valid_triangle_batch_warps.append((item, result))
+                    if valid_triangle_batch_warps:
                         warp_start = perf_counter()
-                        warp_model = _apply_resident_registration_matrix(
+                        warp_models, warp_timing = _apply_resident_registration_matrix_batch(
                             stack,
-                            int(item["index"]),
-                            result.matrix,
+                            [
+                                (int(item["index"]), result.matrix)
+                                for item, result in valid_triangle_batch_warps
+                            ],
                             resident_warp_interpolation,
                             resident_warp_clamping_threshold,
                         )
-                        warped_frame_indices.add(int(item["index"]))
-                        _add_elapsed(registration_component_s, "triangle_warp", perf_counter() - warp_start)
-                        result.warnings.append(f"resident_registration_application={warp_model}")
+                        warp_elapsed = perf_counter() - warp_start
+                        _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
+                        if bool(warp_timing.get("batched", False)):
+                            triangle_warp_batch_timing_model = str(
+                                warp_timing.get("timing_model", "unavailable")
+                            )
+                            triangle_warp_batch_frame_count += int(warp_timing.get("frame_count", 0) or 0)
+                            triangle_warp_batch_fallback_frame_count += int(
+                                warp_timing.get("fallback_frame_count", 0) or 0
+                            )
+                            triangle_warp_batch_native_inverse_upload_s += float(
+                                warp_timing.get("inverse_upload_s", 0.0) or 0.0
+                            )
+                            triangle_warp_batch_native_kernel_enqueue_s += float(
+                                warp_timing.get("kernel_enqueue_s", 0.0) or 0.0
+                            )
+                            triangle_warp_batch_native_device_copy_enqueue_s += float(
+                                warp_timing.get("device_copy_enqueue_s", 0.0) or 0.0
+                            )
+                            triangle_warp_batch_native_sync_s += float(warp_timing.get("sync_s", 0.0) or 0.0)
+                            triangle_warp_batch_native_total_s += float(warp_timing.get("total_s", 0.0) or 0.0)
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_warp_native_batch",
+                                float(warp_timing.get("total_s", warp_elapsed) or 0.0),
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_warp_native_sync",
+                                float(warp_timing.get("sync_s", 0.0) or 0.0),
+                            )
+                        else:
+                            triangle_warp_batch_fallback_frame_count += int(
+                                warp_timing.get("fallback_frame_count", len(valid_triangle_batch_warps)) or 0
+                            )
+                        for (item, result), warp_model in zip(
+                            valid_triangle_batch_warps,
+                            warp_models,
+                            strict=True,
+                        ):
+                            warped_frame_indices.add(int(item["index"]))
+                            result.warnings.extend(
+                                [
+                                    f"resident_registration_application={warp_model}",
+                                    "triangle_warp_batch=" + str(bool(warp_timing.get("batched", False))).lower(),
+                                    f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
+                                    "triangle_warp_batch_timing_model="
+                                    + str(warp_timing.get("timing_model", "per_frame")),
+                                ]
+                            )
                     batch_post_elapsed = perf_counter() - batch_post_start
                     per_frame_registration_s.append(batch_post_elapsed)
                     _add_elapsed(registration_component_s, "triangle_frame_total", batch_post_elapsed)
@@ -4759,6 +4902,45 @@ def run_resident_calibration_integration(
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
                         "triangle_descriptor_fit_native_total_s": float(triangle_descriptor_fit_native_total_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_warp_batch_enabled
+                        ),
+                        "triangle_warp_batch_mode": triangle_warp_batch_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_warp_batch_timing_model": triangle_warp_batch_timing_model
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_warp_batch_frame_count": int(triangle_warp_batch_frame_count)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_fallback_frame_count": int(
+                            triangle_warp_batch_fallback_frame_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_inverse_upload_s": float(
+                            triangle_warp_batch_native_inverse_upload_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_kernel_enqueue_s": float(
+                            triangle_warp_batch_native_kernel_enqueue_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_device_copy_enqueue_s": float(
+                            triangle_warp_batch_native_device_copy_enqueue_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_sync_s": float(triangle_warp_batch_native_sync_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_total_s": float(triangle_warp_batch_native_total_s)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
                         "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])
