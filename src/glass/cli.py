@@ -424,6 +424,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_calibration_streams=args.resident_calibration_streams,
                 resident_calibration_wave_frames=args.resident_calibration_wave_frames,
+                resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -517,6 +518,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_calibration_streams=args.resident_calibration_streams,
                 resident_calibration_wave_frames=args.resident_calibration_wave_frames,
+                resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -988,6 +990,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-calibration-release-mode",
+        choices=["sync", "h2d_event"],
+        default="sync",
+        help=(
+            "resident batch host-slot release mode; h2d_event releases pinned slots after native H2D "
+            "completion before waiting for calibration kernels"
+        ),
+    )
+    run.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across output directories",
     )
@@ -1203,6 +1214,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="optional wave size for resident audit batch calibration",
+    )
+    audit.add_argument(
+        "--resident-calibration-release-mode",
+        choices=["sync", "h2d_event"],
+        default="sync",
+        help="resident audit batch host-slot release mode",
     )
     audit.add_argument(
         "--resident-master-cache-dir",

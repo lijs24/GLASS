@@ -637,6 +637,8 @@ def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):
             "2",
             "--resident-calibration-wave-frames",
             "1",
+            "--resident-calibration-release-mode",
+            "h2d_event",
         ]
     ) == 0
 
@@ -648,10 +650,23 @@ def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):
     assert io_pipeline["calibration_wave_requested_frames"] == 1
     assert io_pipeline["calibration_wave_effective_frames"] == 1
     assert io_pipeline["calibration_wave_release_mode"] == "after_wave_sync"
+    assert io_pipeline["calibration_release_mode_requested"] == "h2d_event"
+    assert io_pipeline["calibration_h2d_release_supported"] is True
+    assert io_pipeline["calibration_h2d_release_enabled"] is True
+    assert io_pipeline["calibration_h2d_release_count"] == 2
+    assert io_pipeline["calibration_h2d_release_s"] >= 0.0
+    assert io_pipeline["calibration_h2d_event_sync_s"] >= 0.0
+    assert io_pipeline["calibration_h2d_event_elapsed_s"] >= 0.0
+    assert io_pipeline["calibration_pending_wait_sync_s"] >= 0.0
     assert io_pipeline["calibration_batch_requested_frames"] == 2
     assert io_pipeline["calibration_batch_count"] == 2
     assert io_pipeline["calibration_batch_frame_count"] == 2
     assert io_pipeline["calibration_batch_actual_stream_count"] == 1
+    assert io_pipeline["calibration_batch_mode"] == "host_async_multistream_h2d_release_batch"
+    assert io_pipeline["calibration_batch_timing_model"] == (
+        "multi_stream_one_frame_per_lane_h2d_release_then_wait"
+    )
+    assert io_pipeline["calibration_event_mode"] == "reused_stack_lane_h2d_events"
     assert io_pipeline["prefetch_release_count"] == 2
     assert io_pipeline["prefetch_max_inflight_slots"] == 2
 

@@ -1233,6 +1233,23 @@ integration where applicable.
 - Validate with resident CLI coverage, ruff, full pytest, and 200-light
   benchmark comparison against the previous resident baseline.
 
+### S2-Gate 74: Resident H2D Completion Release
+
+- Add an opt-in resident calibration release mode that returns pinned host
+  prefetch slots after native H2D completion events instead of waiting for the
+  calibration kernel/store path to finish.
+- Restrict the first implementation to one frame per native calibration lane
+  so each host buffer is released only after the lane-specific copy-complete
+  event has synchronized.
+- Keep the default synchronized release path unchanged until real 200-light
+  evidence shows the H2D-event path is worth promoting.
+- Record requested release mode, support, enablement, release count,
+  H2D-release timing, H2D event timing, and pending-calibration wait timing in
+  `resident_io_pipeline`.
+- Validate with native resident-stack tests, resident CLI smoke coverage, ruff,
+  full pytest, and 200-light benchmark comparison against the previous
+  resident event-reuse baseline.
+
 ## Gate Rules
 
 Each gate requires:
