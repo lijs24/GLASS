@@ -146,6 +146,8 @@ def write_html_report(
   <pre>{escape(str(calibration_policy))}</pre>
   {_table(master_rows)}
   <h2>Frame quality table</h2>
+  <p>Detector: <code>{escape(str((quality or {}).get("star_detector", "pending")))}</code>.
+  Weight source: <code>{escape(str((quality or {}).get("weight_source", "pending")))}</code>.</p>
   {_table(frame_quality)}
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
   <h2>Registration table</h2>

@@ -26,10 +26,17 @@ Supported modes:
 - `none`: every valid frame contributes weight 1.
 - `simple_snr`: uses the per-frame quality SNR when available, falling back to
   the frame quality weight and then to 1.
+- `combined`: uses the S2-Gate 6 quality score, combining median star SNR,
+  star count, FWHM penalty, eccentricity penalty, background-noise penalty, and
+  saturation penalty. Tile-mode weights are normalized by their median positive
+  value so the integrated master is invariant to global score scale and the
+  weight map stays readable.
 
 In resident CUDA mode, `simple_snr` is derived from per-frame device-side
 mean/std after calibration/registration and before integration. Frames excluded
 or failed during registration keep weight 0.
+Resident CUDA does not yet implement `combined`; it is rejected explicitly until
+resident PSF-quality metrics are available.
 
 The selected per-frame weights are recorded in `integration_results.json`.
 

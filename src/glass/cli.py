@@ -843,7 +843,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
-    run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
+    run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr", "combined"], default="auto")
     run.add_argument(
         "--integration-rejection",
         choices=["auto", "none", "sigma_clip", "winsorized_sigma"],
@@ -1016,7 +1016,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="registration method passed to the gated run portion of audit",
     )
     audit.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
-    audit.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr"], default="auto")
+    audit.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr", "combined"], default="auto")
     audit.add_argument(
         "--integration-rejection",
         choices=["auto", "none", "sigma_clip", "winsorized_sigma"],

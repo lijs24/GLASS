@@ -74,18 +74,23 @@ def _source_records(run: Path) -> tuple[str, list[dict[str, Any]]]:
 def _quality_weights(run: Path, records: list[dict[str, Any]], weighting: str) -> dict[str, float]:
     if weighting == "none":
         return {item["frame_id"]: 1.0 for item in records}
+    if weighting not in {"simple_snr", "combined"}:
+        raise ValueError(f"unsupported integration weighting mode: {weighting}")
     quality_path = run / "frame_quality.json"
     quality = read_json(quality_path) if quality_path.exists() else {}
     quality_by_id = {item["frame_id"]: item for item in quality.get("frame_quality", [])}
-    weights: dict[str, float] = {}
+    raw_weights: dict[str, float] = {}
     for item in records:
         q = quality_by_id.get(item["frame_id"], {})
         if weighting == "simple_snr":
             value = float(q.get("snr") or q.get("weight") or 1.0)
         else:
-            value = float(q.get("weight") or 1.0)
-        weights[item["frame_id"]] = max(value, 1.0e-6)
-    return weights
+            value = float(q.get("quality_score") or q.get("weight") or 1.0)
+        raw_weights[item["frame_id"]] = max(value, 1.0e-6)
+    positive = np.asarray([value for value in raw_weights.values() if np.isfinite(value) and value > 0.0], dtype=np.float32)
+    scale = float(np.median(positive)) if positive.size else 1.0
+    scale = max(scale, 1.0e-6)
+    return {frame_id: max(float(value) / scale, 1.0e-6) for frame_id, value in raw_weights.items()}
 
 
 def _policy_value(policy: dict[str, Any], key: str, override: str | None, default: str) -> str:

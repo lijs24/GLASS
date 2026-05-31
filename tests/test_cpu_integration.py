@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 
 from glass.cpu.integration import mean_integrate, sigma_clip_integrate, weighted_integrate_stack
+from glass.engine.integration import _quality_weights
+from glass.io.json_io import write_json
 
 
 def test_mean_integrate():
@@ -48,3 +50,24 @@ def test_winsorized_sigma_outputs_rejection_maps():
     assert np.all(cov == 4)
     assert np.sum(low) == 0
     assert np.sum(high) > 0
+
+
+def test_quality_weight_modes_are_normalized(tmp_path):
+    write_json(
+        tmp_path / "frame_quality.json",
+        {
+            "frame_quality": [
+                {"frame_id": "A", "snr": 20.0, "quality_score": 10.0, "weight": 10.0},
+                {"frame_id": "B", "snr": 10.0, "quality_score": 5.0, "weight": 5.0},
+            ]
+        },
+    )
+    records = [{"frame_id": "A"}, {"frame_id": "B"}]
+
+    simple = _quality_weights(tmp_path, records, "simple_snr")
+    combined = _quality_weights(tmp_path, records, "combined")
+
+    assert simple["A"] > simple["B"]
+    assert combined["A"] > combined["B"]
+    assert np.isclose(np.median(list(simple.values())), 1.0)
+    assert np.isclose(np.median(list(combined.values())), 1.0)

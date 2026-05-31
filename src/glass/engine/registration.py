@@ -608,7 +608,7 @@ def register_calibrated_frames(
     reference_stars = detect_stars_streaming(
         calibrated[reference_id]["path"],
         float(reference_quality.get("background_median") or 0.0),
-        float(reference_quality.get("background_rms") or 0.0),
+        float(reference_quality.get("noise_mad") or reference_quality.get("background_rms") or 0.0),
         tile_size=tile_size,
     )
 
@@ -733,7 +733,7 @@ def register_calibrated_frames(
                 moving_stars = detect_stars_streaming(
                     item["path"],
                     float(moving_quality.get("background_median") or 0.0),
-                    float(moving_quality.get("background_rms") or 0.0),
+                    float(moving_quality.get("noise_mad") or moving_quality.get("background_rms") or 0.0),
                     tile_size=tile_size,
                 )
                 star_result = estimate_star_transform(

@@ -171,6 +171,14 @@ class FrameQuality:
     snr: float
     weight: float
     warnings: list[str] = field(default_factory=list)
+    background_mean: float | None = None
+    background_mad: float | None = None
+    noise_mad: float | None = None
+    saturation_fraction: float = 0.0
+    quality_score: float = 0.0
+    weight_source: str = "legacy_inverse_variance"
+    weight_components: dict[str, float] = field(default_factory=dict)
+    star_metrics: dict[str, float | None] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

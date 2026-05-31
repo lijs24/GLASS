@@ -351,7 +351,12 @@ def test_pipeline_fixture_run_quality_and_report(tmp_path: Path):
     quality = json.loads((run / "frame_quality.json").read_text(encoding="utf-8"))
     assert quality["metric_source"] == "streaming_tile_reader"
     assert quality["tile_size"] == 8
+    assert quality["star_detector"] == "robust_local_maximum_moments_v1"
+    assert quality["weight_source"] == "combined_psf_snr_v1"
     assert all(item["metric_source"] == "streaming_tile_reader" for item in quality["frame_quality"])
+    assert all(item["fwhm_px"] is not None for item in quality["frame_quality"])
+    assert all(item["star_metrics"]["star_snr_median"] is not None for item in quality["frame_quality"])
+    assert all(item["weight_source"] == "combined_psf_snr_v1" for item in quality["frame_quality"])
     assert not (run / "quality_scratch").exists()
     assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
@@ -521,7 +526,7 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
                 "--local-normalization",
                 "on",
                 "--integration-weighting",
-                "simple_snr",
+                "combined",
                 "--integration-rejection",
                 "winsorized_sigma",
                 "--tile-size",
@@ -534,6 +539,8 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
     import json
 
     integration = json.loads((run / "integration_results.json").read_text(encoding="utf-8"))
+    assert integration["weighting"] == "combined"
+    assert len(set(round(float(weight), 6) for weight in integration["frame_weights"].values())) > 1
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
     assert all(output["stack_engine_enabled"] for output in integration["outputs"])
     assert all(output["stack_engine_rejection_method"] == "winsorized_sigma" for output in integration["outputs"])

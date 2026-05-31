@@ -6,7 +6,8 @@ from typing import Any
 
 import numpy as np
 
-from glass.cpu.star_detect import Star
+from glass.cpu.metrics import combined_quality_weight, summarize_stars
+from glass.cpu.star_detect import Star, detect_stars
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.fits_io import FitsImageReader
 from glass.io.json_io import read_json, write_json
@@ -18,6 +19,8 @@ class _QualityScan:
     median: float
     mean: float
     rms: float
+    mad: float
+    noise_mad: float
     pixel_count: int
     tile_count: int
     median_method: str
@@ -60,12 +63,24 @@ def _scan_quality_stats(path: str | Path, tile_size: int, scratch_path: Path) ->
         median = float(work[mid])
         if count % 2 == 0:
             median = (float(np.max(work[:mid])) + median) / 2.0
+        np.subtract(work, np.float32(median), out=work)
+        np.abs(work, out=work)
+        work.partition(mid)
+        mad = float(work[mid])
+        if count % 2 == 0:
+            mad = (float(np.max(work[:mid])) + mad) / 2.0
         mean = total / count
         variance = max(total_sq / count - mean * mean, 0.0)
+        rms = float(np.sqrt(variance))
+        noise_mad = float(1.4826 * mad)
+        if noise_mad <= 0.0:
+            noise_mad = rms
         return _QualityScan(
             median=median,
             mean=float(mean),
-            rms=float(np.sqrt(variance)),
+            rms=rms,
+            mad=mad,
+            noise_mad=noise_mad,
             pixel_count=count,
             tile_count=tile_count,
             median_method="median_scratch_memmap",
@@ -86,15 +101,15 @@ def _detect_stars_streaming(
     tile_size: int,
     threshold_sigma: float = 5.0,
     max_stars: int = 500,
+    window_radius: int = 4,
 ) -> list[Star]:
-    threshold = median + threshold_sigma * max(rms, 1.0e-6)
     stars: list[Star] = []
     with FitsImageReader(path) as reader:
         for tile in iter_tiles(width=reader.width, height=reader.height, tile_size=tile_size):
-            y0 = max(tile.y0 - 1, 0)
-            y1 = min(tile.y1 + 1, reader.height)
-            x0 = max(tile.x0 - 1, 0)
-            x1 = min(tile.x1 + 1, reader.width)
+            y0 = max(tile.y0 - window_radius, 0)
+            y1 = min(tile.y1 + window_radius, reader.height)
+            x0 = max(tile.x0 - window_radius, 0)
+            x1 = min(tile.x1 + window_radius, reader.width)
             data = reader.read_tile(y0, y1, x0, x1)
             source_y0 = max(tile.y0, 1)
             source_y1 = min(tile.y1, reader.height - 1)
@@ -102,40 +117,19 @@ def _detect_stars_streaming(
             source_x1 = min(tile.x1, reader.width - 1)
             if source_y0 >= source_y1 or source_x0 >= source_x1:
                 continue
-            local_y0 = source_y0 - y0
-            local_y1 = source_y1 - y0
-            local_x0 = source_x0 - x0
-            local_x1 = source_x1 - x0
-            core = data[local_y0:local_y1, local_x0:local_x1]
-            mask = np.isfinite(core) & (core > threshold)
-            for dy in (-1, 0, 1):
-                for dx in (-1, 0, 1):
-                    if dx == 0 and dy == 0:
-                        continue
-                    neighbor = data[
-                        local_y0 + dy : local_y1 + dy,
-                        local_x0 + dx : local_x1 + dx,
-                    ]
-                    mask &= core >= neighbor
-            ys, xs = np.nonzero(mask)
-            for candidate_y, candidate_x in zip(ys, xs, strict=True):
-                local_y = int(local_y0 + candidate_y)
-                local_x = int(local_x0 + candidate_x)
-                y = int(y0 + local_y)
-                x = int(x0 + local_x)
-                patch = data[local_y - 1 : local_y + 2, local_x - 1 : local_x + 2]
-                yy, xx = np.mgrid[y - 1 : y + 2, x - 1 : x + 2]
-                weights = np.maximum(patch - median, 0.0)
-                total = float(np.sum(weights))
-                if total <= 0:
-                    continue
-                stars.append(
-                    Star(
-                        x=float(np.sum(xx * weights) / total),
-                        y=float(np.sum(yy * weights) / total),
-                        flux=total,
-                    )
-                )
+            tile_stars = detect_stars(
+                data,
+                threshold_sigma=threshold_sigma,
+                max_stars=max_stars,
+                background=median,
+                noise=rms,
+                window_radius=window_radius,
+                origin_x=x0,
+                origin_y=y0,
+            )
+            for star in tile_stars:
+                if source_x0 <= star.x < source_x1 and source_y0 <= star.y < source_y1:
+                    stars.append(star)
             if len(stars) > max_stars * 4:
                 stars.sort(key=lambda star: star.flux, reverse=True)
                 del stars[max_stars:]
@@ -167,24 +161,43 @@ def measure_quality_streaming(
     path: str | Path,
     tile_size: int = 512,
     scratch_dir: str | Path | None = None,
+    saturated_pixels: int = 0,
 ) -> dict[str, Any]:
     scratch_root = Path(scratch_dir) if scratch_dir is not None else Path(path).parent
     scratch_root.mkdir(parents=True, exist_ok=True)
     scratch_path = scratch_root / f".quality_{frame_id}.median_scratch.bin"
     stats = _scan_quality_stats(path, tile_size, scratch_path)
-    stars = _detect_stars_streaming(path, stats.median, stats.rms, tile_size)
-    snr = 0.0 if stats.rms == 0 else float(max((stats.mean - stats.median) / stats.rms, 0.0))
+    stars = _detect_stars_streaming(path, stats.median, stats.noise_mad or stats.rms, tile_size)
+    star_metrics = summarize_stars(stars)
+    snr = float(star_metrics["star_snr_median"] or 0.0)
+    saturation_fraction = 0.0 if stats.pixel_count == 0 else float(max(saturated_pixels, 0) / stats.pixel_count)
+    weight, components = combined_quality_weight(
+        star_count=len(stars),
+        star_snr=snr,
+        fwhm_px=star_metrics["fwhm_median_px"],
+        eccentricity=star_metrics["eccentricity_median"],
+        background_rms=stats.rms,
+        saturation_fraction=saturation_fraction,
+    )
     quality = FrameQuality(
         frame_id=frame_id,
         filter=filt,
         background_median=stats.median,
         background_rms=stats.rms,
         star_count=len(stars),
-        fwhm_px=3.0 if stars else None,
-        eccentricity=0.0 if stars else None,
+        fwhm_px=star_metrics["fwhm_median_px"],
+        eccentricity=star_metrics["eccentricity_median"],
         snr=snr,
-        weight=1.0 / max(stats.rms * stats.rms, 1.0e-6),
+        weight=weight,
         warnings=[] if stars else ["no stars detected"],
+        background_mean=stats.mean,
+        background_mad=stats.mad,
+        noise_mad=stats.noise_mad,
+        saturation_fraction=saturation_fraction,
+        quality_score=weight,
+        weight_source="combined_psf_snr_v1",
+        weight_components=components,
+        star_metrics=star_metrics,
     )
     payload = to_jsonable(quality)
     payload.update(
@@ -194,6 +207,7 @@ def measure_quality_streaming(
             "tile_count": stats.tile_count,
             "pixel_count": stats.pixel_count,
             "median_method": stats.median_method,
+            "star_detector": "robust_local_maximum_moments_v1",
         }
     )
     return payload
@@ -209,12 +223,14 @@ def measure_calibrated_quality(
     scratch_dir = run / "quality_scratch"
     qualities = []
     for item in artifacts.get("calibrated_lights", []):
+        dq_summary = item.get("dq_summary", {}) if isinstance(item, dict) else {}
         quality = measure_quality_streaming(
             item["frame_id"],
             None,
             item["path"],
             tile_size=tile_size,
             scratch_dir=scratch_dir,
+            saturated_pixels=int(dq_summary.get("saturated") or 0),
         )
         qualities.append(quality)
     if scratch_dir.exists() and not any(scratch_dir.iterdir()):
@@ -225,7 +241,9 @@ def measure_calibrated_quality(
             qualities,
             key=lambda q: (
                 int(q.get("star_count") or 0),
-                float(q.get("weight") or 0.0),
+                float(q.get("quality_score") or q.get("weight") or 0.0),
+                -float(q.get("fwhm_px") or 999.0),
+                -float(q.get("eccentricity") or 1.0),
                 -float(q.get("background_rms") or 0.0),
             ),
         )["frame_id"]
@@ -233,9 +251,11 @@ def measure_calibrated_quality(
         "schema_version": 1,
         "frame_quality": qualities,
         "reference_frame_id": reference,
-        "reference_selection": "max star_count, then max weight, then min background_rms",
+        "reference_selection": "max star_count, then max combined quality, min FWHM/eccentricity/background_rms",
         "metric_source": "streaming_tile_reader",
         "tile_size": tile_size,
+        "star_detector": "robust_local_maximum_moments_v1",
+        "weight_source": "combined_psf_snr_v1",
     }
     write_json(out_path or (run / "frame_quality.json"), result)
     return result
