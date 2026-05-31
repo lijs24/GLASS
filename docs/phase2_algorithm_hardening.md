@@ -729,6 +729,28 @@ integration where applicable.
   tests, ruff, full pytest, and a report/audit regeneration on the latest
   preserved 200-light resident artifacts.
 
+### S2-Gate 44: Optimization Guidance Contract
+
+- Add a machine-readable `optimization_guidance` section to acceptance-audit
+  output that joins benchmark timing diagnostics with frame-accounting exception
+  context.
+- Name the primary optimization target from resident wall-clock stages, with
+  special focus on:
+  - I/O + upload + calibration overlap
+  - resident registration/warp batching
+  - output-map write policy
+  - resident master-frame cache
+- Keep cumulative worker-thread FITS/decode timings informational so they do
+  not outrank true wall-clock bottlenecks.
+- Surface the guidance in acceptance-audit Markdown and the main HTML report,
+  including target rank, stage timing, baseline factor, exception context, and
+  concrete next action.
+- Keep this diagnostic-only: it must not alter image math, accepted frame
+  counts, GPU kernels, scheduling, or output pixels.
+- Validate with acceptance-audit tests, report tests, ruff, full pytest, and a
+  report/audit regeneration on the latest preserved 200-light resident
+  artifacts.
+
 ## Gate Rules
 
 Each gate requires:

@@ -354,11 +354,16 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert 'class="section-anchor"' in html
     assert 'href="#benchmark-comparison"' in html
     assert 'id="benchmark-comparison"' in html
+    assert 'href="#optimization-guidance"' in html
+    assert 'id="optimization-guidance"' in html
     assert 'href="#resident-output-maps"' in html
     assert 'id="resident-output-maps"' in html
     assert 'href="#acceptance-check-failures"' in html
     assert 'id="acceptance-check-failures"' in html
     assert "Benchmark comparison" in html
+    assert "Optimization guidance" in html
+    assert "I/O + upload + calibration overlap" in html
+    assert "Resident registration/warp batching" in html
     assert "Acceptance check failures" in html
     assert "Only failed acceptance-audit checks" in html
     assert "fixture_contract" in html

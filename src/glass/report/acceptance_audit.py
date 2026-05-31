@@ -11,6 +11,7 @@ from glass.report.benchmark_contract import (
     collect_frame_accounting_record,
     load_benchmark_contract,
 )
+from glass.report.optimization_guide import build_optimization_guidance
 from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
 
 
@@ -154,6 +155,11 @@ def build_acceptance_audit(
             contract_payload,
             glass_run=glass_run,
         )
+    optimization_guidance = build_optimization_guidance(
+        performance_regression=performance_regression,
+        frame_accounting=frame_accounting_record,
+        glass_run=glass_run,
+    )
 
     passed = all(item["passed"] for item in checks)
     return {
@@ -174,6 +180,7 @@ def build_acceptance_audit(
         "frame_type_counts": counts,
         "checks": checks,
         "performance_regression": performance_regression,
+        "optimization_guidance": optimization_guidance,
         "dq_provenance": {
             "schema_version": 1,
             "record_count": len(dq_provenance_records),
@@ -271,6 +278,21 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                 f"{item.get('status')}: {item.get('stage')} "
                 f"actual={item.get('actual_s')}s baseline={item.get('baseline_s')}s "
                 f"delta={item.get('delta_s')}s factor={item.get('factor')}"
+            )
+    guidance = audit.get("optimization_guidance") or {}
+    targets = guidance.get("targets") if isinstance(guidance.get("targets"), list) else []
+    if targets:
+        exception_context = guidance.get("exception_context") or {}
+        lines.extend(["", "## Optimization Guidance", ""])
+        lines.append(f"- Primary target: {guidance.get('primary_target')}")
+        lines.append(f"- Exception context: {exception_context}")
+        for target in targets[:4]:
+            lines.append(
+                "- "
+                f"#{target.get('rank')} {target.get('label')} "
+                f"stage={target.get('primary_stage')} current={target.get('current_s')}s "
+                f"baseline={target.get('baseline_s')}s factor={target.get('factor')} "
+                f"action={target.get('next_action')}"
             )
     lines.extend(["", "## Clean-room", "", f"- {audit['clean_room']['note']}", ""])
     target = Path(path)

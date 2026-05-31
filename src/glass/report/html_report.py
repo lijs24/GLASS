@@ -4,6 +4,8 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from glass.report.optimization_guide import build_optimization_guidance
+
 
 _RESIDENT_OUTPUT_MAP_FIELDS = [
     ("master", "master_path"),
@@ -19,6 +21,7 @@ _REPORT_TABLE_ROW_LIMIT = 200
 _REPORT_SECTIONS = [
     ("project-summary", "Project summary"),
     ("benchmark-comparison", "Benchmark comparison"),
+    ("optimization-guidance", "Optimization guidance"),
     ("acceptance-check-failures", "Acceptance check failures"),
     ("stage-coverage-summary", "Stage coverage summary"),
     ("input-frame-table", "Input frame table"),
@@ -280,6 +283,63 @@ def _acceptance_failure_rows(acceptance_audit: dict[str, Any] | None) -> list[di
             }
         )
     return rows
+
+
+def _optimization_target_rows(guidance: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (guidance or {}).get("targets") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "rank": item.get("rank"),
+                "target": item.get("label"),
+                "primary_stage": item.get("primary_stage"),
+                "current_s": item.get("current_s"),
+                "baseline_s": item.get("baseline_s"),
+                "factor": item.get("factor"),
+                "share_of_selected_wall": item.get("share_of_selected_wall"),
+                "status": item.get("status"),
+                "next_action": item.get("next_action"),
+            }
+        )
+    return rows
+
+
+def _optimization_stage_rows(guidance: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (guidance or {}).get("stage_timing_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "stage": item.get("stage"),
+                "actual_key": item.get("actual_key"),
+                "actual_s": item.get("actual_s"),
+                "baseline_s": item.get("baseline_s"),
+                "delta_s": item.get("delta_s"),
+                "factor": item.get("factor"),
+                "status": item.get("status"),
+                "timing_kind": item.get("timing_kind"),
+            }
+        )
+    return rows[:12]
+
+
+def _optimization_exception_rows(guidance: dict[str, Any] | None) -> list[dict[str, Any]]:
+    context = (guidance or {}).get("exception_context") or {}
+    if not context:
+        return []
+    return [
+        {
+            "exception_frames": context.get("count"),
+            "dominant_stage": context.get("dominant_stage"),
+            "primary_stage_counts": context.get("primary_stage_counts"),
+            "final_status_counts": context.get("final_status_counts"),
+            "sample_frame_ids": ", ".join(str(item) for item in context.get("sample_frame_ids") or []),
+            "note": context.get("note"),
+        }
+    ]
 
 
 def _warning_rows(
@@ -766,6 +826,16 @@ def write_html_report(
     frames = (manifest or {}).get("frames", [])
     light_plans = (plan or {}).get("light_plans", [])
     benchmark_comparison_rows = _benchmark_comparison_rows(compare, acceptance_audit)
+    optimization_guidance = (acceptance_audit or {}).get("optimization_guidance")
+    if not isinstance(optimization_guidance, dict) or not optimization_guidance.get("targets"):
+        optimization_guidance = build_optimization_guidance(
+            performance_regression=(acceptance_audit or {}).get("performance_regression"),
+            frame_accounting=frame_accounting,
+            resident=resident,
+        )
+    optimization_target_rows = _optimization_target_rows(optimization_guidance)
+    optimization_stage_rows = _optimization_stage_rows(optimization_guidance)
+    optimization_exception_rows = _optimization_exception_rows(optimization_guidance)
     acceptance_failure_rows = _acceptance_failure_rows(acceptance_audit)
     master_rows = []
     for group_id, master in (calibration or {}).get("masters", {}).items():
@@ -893,6 +963,13 @@ def write_html_report(
   brings speed, image-difference, frame-count, and pass/fail evidence into the
   main report.</p>
   {_table(benchmark_comparison_rows)}
+  {_h2("optimization-guidance", "Optimization guidance")}
+  <p>This diagnostic view joins benchmark stage timings with rejected-frame
+  accounting so the next optimization target is explicit instead of inferred
+  from scattered artifacts.</p>
+  {_table(optimization_target_rows)}
+  {_table(optimization_exception_rows)}
+  {_limited_table(optimization_stage_rows, label="optimization timing rows", artifact="acceptance-audit JSON or resident_artifacts.json")}
   {_h2("acceptance-check-failures", "Acceptance check failures")}
   <p>Only failed acceptance-audit checks are listed here. A green run reports no
   rows while retaining the authoritative check list in the audit JSON.</p>

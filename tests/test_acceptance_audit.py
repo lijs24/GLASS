@@ -443,6 +443,12 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert regression["status"] == "regressed"
     assert regression["worst_regression"]["stage"] == "output_write"
     assert regression["regressed_count"] == 1
+    guidance = audit["optimization_guidance"]
+    assert guidance["primary_target"] == "io_upload_calibration_pipeline"
+    targets = {item["target_id"]: item for item in guidance["targets"]}
+    assert targets["io_upload_calibration_pipeline"]["current_s"] == 16.0
+    assert targets["resident_registration_warp"]["current_s"] == 12.0
+    assert targets["output_write_policy"]["status"] == "regressed"
     cumulative = {
         item["stage"]: item
         for item in regression["items"]
@@ -560,6 +566,8 @@ def test_acceptance_audit_applies_frame_accounting_contract(tmp_path: Path):
     assert audit["frame_accounting"]["summary"]["integrated_frames"] == 193
     assert audit["frame_accounting"]["exception_summary"]["count"] == 7
     assert audit["frame_accounting"]["exception_frames"][0]["primary_reason"] == "integration weight is zero"
+    assert audit["optimization_guidance"]["exception_context"]["count"] == 7
+    assert audit["optimization_guidance"]["exception_context"]["dominant_stage"] == "integration"
     assert checks["contract_frame_accounting_present"] is True
     assert checks["contract_frame_accounting_input_light_frames"] is True
     assert checks["contract_frame_accounting_integrated_frames"] is True
