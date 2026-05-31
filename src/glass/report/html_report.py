@@ -14,6 +14,8 @@ _RESIDENT_OUTPUT_MAP_FIELDS = [
     ("dq", "dq_map_path"),
 ]
 
+_REPORT_TABLE_ROW_LIMIT = 200
+
 _REPORT_SECTIONS = [
     ("project-summary", "Project summary"),
     ("benchmark-comparison", "Benchmark comparison"),
@@ -83,6 +85,24 @@ def _table(rows: list[dict[str, Any]]) -> str:
     for row in rows:
         body.append("<tr>" + "".join(f"<td>{escape(str(row.get(k, '')))}</td>" for k in keys) + "</tr>")
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
+
+
+def _limited_table(
+    rows: list[dict[str, Any]],
+    *,
+    label: str,
+    artifact: str,
+    limit: int = _REPORT_TABLE_ROW_LIMIT,
+) -> str:
+    total = len(rows)
+    if total <= limit:
+        return _table(rows)
+    shown = rows[:limit]
+    note = (
+        f'<p class="table-limit-note">Showing first {limit} of {total} '
+        f"{escape(label)}. Full details remain in <code>{escape(artifact)}</code>.</p>"
+    )
+    return note + _table(shown)
 
 
 def _report_toc() -> str:
@@ -746,6 +766,7 @@ def write_html_report(
     .report-toc h2 {{ margin-top: 0; }}
     .report-toc ol {{ columns: 2; padding-left: 1.25rem; }}
     .section-anchor {{ color: #57606a; text-decoration: none; font-size: 0.8em; }}
+    .table-limit-note {{ color: #57606a; font-size: 0.9rem; }}
   </style>
 </head>
 <body>
@@ -765,11 +786,11 @@ def write_html_report(
   {_h2("stage-coverage-summary", "Stage coverage summary")}
   {_table(stage_coverage_rows)}
   {_h2("input-frame-table", "Input frame table")}
-  {_table(frames)}
+  {_limited_table(frames, label="input frames", artifact="manifest.json")}
   {_h2("frame-type-distribution", "Frame type distribution")}
   <pre>{escape(str((manifest or {}).get("summary", {})))}</pre>
   {_h2("calibration-group-matching", "Calibration group matching")}
-  {_table(light_plans)}
+  {_limited_table(light_plans, label="light plans", artifact="processing_plan.json")}
   {_h2("master-frame-statistics", "Master frame statistics")}
   <pre>{escape(str(calibration_policy))}</pre>
   {_table(master_rows)}
@@ -779,14 +800,14 @@ def write_html_report(
   {_h2("frame-quality-table", "Frame quality table")}
   <p>Detector: <code>{escape(str((quality or {}).get("star_detector", "pending")))}</code>.
   Weight source: <code>{escape(str((quality or {}).get("weight_source", "pending")))}</code>.</p>
-  {_table(frame_quality)}
+  {_limited_table(frame_quality, label="frame quality rows", artifact="frame_quality.json")}
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
   {_h2("registration-table", "Registration table")}
-  {_table(registration_results)}
+  {_limited_table(registration_results, label="registration rows", artifact="registration_results.json")}
   {_h2("local-normalization-summary", "Local normalization summary")}
   <p>Enabled: <code>{escape(str((local_norm or {}).get("enabled", "pending")))}</code>.
   Reference frame: <code>{escape(str((local_norm or {}).get("reference_frame_id", "pending")))}</code>.</p>
-  {_table(local_norm_results)}
+  {_limited_table(local_norm_results, label="local normalization rows", artifact="local_norm_results.json")}
   {_h2("integration-summary", "Integration summary")}
   <p>Combine: <code>{escape(str((integration or {}).get("combine", "pending")))}</code>.
   Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
@@ -832,7 +853,7 @@ def write_html_report(
   {_h2("runtime-summary", "Runtime summary")}
   <p>Total elapsed seconds: <code>{escape(str((timing or {}).get("total_elapsed_s", "pending")))}</code>.</p>
   {_table(timing_overview)}
-  {_table(timing_rows)}
+  {_limited_table(timing_rows, label="timing rows", artifact="run_timing.json")}
   {_h2("warnings-errors", "Warnings/errors")}
   {_table(warning_rows)}
   {_h2("pixinsight-comparison-if-available", "PixInsight comparison if available")}

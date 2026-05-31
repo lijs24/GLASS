@@ -467,3 +467,48 @@ def test_cli_report_lists_failed_acceptance_checks(tmp_path: Path):
     assert "0.01" in html
     assert "source=compare" in html
     assert "minimum_speedup" not in html
+
+
+def test_cli_report_limits_large_audit_tables(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    frames = [
+        {
+            "id": f"frame_{index:04d}",
+            "path": f"lights/frame_{index:04d}.fits",
+            "frame_type": "light",
+        }
+        for index in range(205)
+    ]
+    quality_rows = [
+        {
+            "frame_id": f"quality_{index:04d}",
+            "star_count": 20,
+            "background_rms": 1.0,
+            "weight": 1.0,
+        }
+        for index in range(202)
+    ]
+    write_json(run / "manifest.json", {"frames": frames, "summary": {"count": len(frames)}})
+    write_json(
+        run / "frame_quality.json",
+        {
+            "frame_quality": quality_rows,
+            "reference_frame_id": "quality_0000",
+            "star_detector": "fixture_detector",
+            "weight_source": "fixture_weight",
+        },
+    )
+
+    report = tmp_path / "large_table_report.html"
+    assert main(["report", "--run", str(run), "--out", str(report)]) == 0
+    html = report.read_text(encoding="utf-8")
+
+    assert "Showing first 200 of 205 input frames" in html
+    assert "Full details remain in <code>manifest.json</code>" in html
+    assert "frame_0199" in html
+    assert "frame_0200" not in html
+    assert "Showing first 200 of 202 frame quality rows" in html
+    assert "Full details remain in <code>frame_quality.json</code>" in html
+    assert "quality_0199" in html
+    assert "quality_0200" not in html

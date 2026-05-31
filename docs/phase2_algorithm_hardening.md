@@ -627,6 +627,20 @@ integration where applicable.
 - Validate with CLI report tests, ruff, full pytest, and a report regeneration
   on the latest 200-light resident audit-map run.
 
+### S2-Gate 38: Large Report Table Limits
+
+- Keep large HTML reports responsive by limiting high-cardinality tables to a
+  fixed first-page preview in the rendered report.
+- Apply the preview limit to input frames, light plans, frame quality,
+  registration, local normalization, and timing rows.
+- Show the displayed row count, total row count, and authoritative artifact
+  path so the HTML report remains auditable without pretending to contain every
+  row.
+- Do not truncate or rewrite JSON/FITS artifacts; this is a report-only
+  presentation limit.
+- Validate with CLI report tests, ruff, full pytest, and a report regeneration
+  on the latest 200-light resident audit-map run.
+
 ## Gate Rules
 
 Each gate requires:
