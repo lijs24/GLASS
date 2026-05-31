@@ -603,6 +603,19 @@ integration where applicable.
 - Validate with CLI report tests, ruff, full pytest, and a report regeneration
   on the latest 200-light resident audit-map run.
 
+### S2-Gate 36: Acceptance Failure Triage In Main Report
+
+- Add a compact acceptance-check failure table to the main HTML report.
+- Only failed checks should appear; green runs should show an empty table and
+  keep the full authoritative check list in the audit JSON.
+- For each failed check, show the check name, note, actual value, required
+  threshold/value, and compact remaining evidence fields.
+- Keep this as a report-only diagnostic path that does not alter compare,
+  acceptance-audit, or image artifacts.
+- Validate with CLI report tests for both green and failed audit fixtures, ruff,
+  full pytest, and a report regeneration on the latest 200-light resident
+  audit-map run.
+
 ## Gate Rules
 
 Each gate requires:

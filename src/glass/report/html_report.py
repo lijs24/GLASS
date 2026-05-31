@@ -96,6 +96,28 @@ def _benchmark_comparison_rows(
     ]
 
 
+def _acceptance_failure_rows(acceptance_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (acceptance_audit or {}).get("checks") or []:
+        if item.get("passed"):
+            continue
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        rows.append(
+            {
+                "check": item.get("name"),
+                "note": item.get("note", ""),
+                "actual": evidence.get("actual"),
+                "required": evidence.get("required", evidence.get("required_min", evidence.get("required_max"))),
+                "details": ", ".join(
+                    f"{key}={value}"
+                    for key, value in evidence.items()
+                    if key not in {"actual", "required", "required_min", "required_max"}
+                ),
+            }
+        )
+    return rows
+
+
 def _warning_rows(
     manifest: dict[str, Any] | None,
     plan: dict[str, Any] | None,
@@ -579,6 +601,7 @@ def write_html_report(
     frames = (manifest or {}).get("frames", [])
     light_plans = (plan or {}).get("light_plans", [])
     benchmark_comparison_rows = _benchmark_comparison_rows(compare, acceptance_audit)
+    acceptance_failure_rows = _acceptance_failure_rows(acceptance_audit)
     master_rows = []
     for group_id, master in (calibration or {}).get("masters", {}).items():
         stats = master.get("stats", {})
@@ -684,6 +707,10 @@ def write_html_report(
   brings speed, image-difference, frame-count, and pass/fail evidence into the
   main report.</p>
   {_table(benchmark_comparison_rows)}
+  <h2>Acceptance check failures</h2>
+  <p>Only failed acceptance-audit checks are listed here. A green run reports no
+  rows while retaining the authoritative check list in the audit JSON.</p>
+  {_table(acceptance_failure_rows)}
   <h2>Stage coverage summary</h2>
   {_table(stage_coverage_rows)}
   <h2>Input frame table</h2>

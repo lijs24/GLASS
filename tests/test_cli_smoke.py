@@ -350,6 +350,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert main(["report", "--run", str(run), "--out", str(report)]) == 0
     html = report.read_text(encoding="utf-8")
     assert "Benchmark comparison" in html
+    assert "Acceptance check failures" in html
+    assert "Only failed acceptance-audit checks" in html
     assert "fixture_contract" in html
     assert "fixture_compare.json" in html
     assert "fixture_acceptance_audit.json" in html
@@ -396,3 +398,63 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "available_from_geometric_warp_coverage" in html
     assert "geometric_partial_pixels" in html
     assert "ResidentCalibratedStack warp coverage accumulator" in html
+
+
+def test_cli_report_lists_failed_acceptance_checks(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    write_json(run / "run_timing.json", {"command": "run", "backend": "cuda", "total_elapsed_s": 12.0, "stages": []})
+    write_json(run / "integration_results.json", {"outputs": [], "frame_weights": {}})
+    write_json(
+        run / "failure_compare.json",
+        {
+            "shape_match": True,
+            "rms_diff": 0.25,
+            "abs_diff_p99": 0.5,
+            "timing": {"glass_time_seconds": 12.0, "reference_time_seconds": 120.0, "speedup_vs_reference": 10.0},
+            "comparison_region": {"coverage_fraction": 0.8, "compared_pixels": 99},
+        },
+    )
+    write_json(
+        run / "failure_acceptance_audit.json",
+        {
+            "status": "failed",
+            "passed": False,
+            "benchmark_contract": {"name": "failure_contract"},
+            "frame_type_counts": {"light": 200, "bias": 20, "dark": 20, "flat": 20},
+            "checks": [
+                {
+                    "name": "maximum_rms_diff",
+                    "passed": False,
+                    "evidence": {"actual": 0.25, "required_max": 0.01, "source": "compare"},
+                    "note": "RMS exceeded benchmark contract",
+                },
+                {
+                    "name": "minimum_speedup",
+                    "passed": True,
+                    "evidence": {"actual": 10.0, "required": 2.0},
+                },
+            ],
+            "speedup_summary": {
+                "speedup_vs_wbpp": 10.0,
+                "glass": {"elapsed_s": 12.0, "weighted_frame_count": 190, "zero_weight_frame_count": 10},
+                "wbpp_blackbox": {"elapsed_s": 120.0},
+                "comparison": {"shape_match": True, "rms_diff": 0.25, "abs_diff_p99": 0.5, "coverage_fraction": 0.8},
+            },
+        },
+    )
+
+    report = tmp_path / "failure_report.html"
+    assert main(["report", "--run", str(run), "--out", str(report)]) == 0
+    html = report.read_text(encoding="utf-8")
+
+    assert "Benchmark comparison" in html
+    assert "failure_contract" in html
+    assert "checks_failed" in html
+    assert "Acceptance check failures" in html
+    assert "maximum_rms_diff" in html
+    assert "RMS exceeded benchmark contract" in html
+    assert "0.25" in html
+    assert "0.01" in html
+    assert "source=compare" in html
+    assert "minimum_speedup" not in html
