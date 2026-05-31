@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from glass.cli import main
@@ -15,6 +16,7 @@ def _write_run(
     registration_status: str = "ok",
     final_status: str = "integrated",
     elapsed_s: float = 10.0,
+    rms_px: float = 0.5,
 ) -> None:
     path.mkdir(parents=True, exist_ok=True)
     write_json(
@@ -78,7 +80,7 @@ def _write_run(
                     "status": registration_status,
                     "matched_stars": 4,
                     "inliers": 4,
-                    "rms_px": 0.5,
+                    "rms_px": rms_px,
                     "matrix": [[1.0, 0.0, 1.0], [0.0, 1.0, 2.0], [0.0, 0.0, 1.0]],
                 }
             ]
@@ -139,6 +141,20 @@ def test_resident_determinism_audit_reports_signature_and_status_drift(tmp_path:
     assert diff["frame_id"] == "F002"
     assert "moving_catalog_hash" in diff["difference_types"]
     assert "selected_fit_hash" in diff["difference_types"]
+
+
+def test_resident_determinism_audit_treats_matching_nan_registration_values_as_equal(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, registration_status="failed", final_status="zero_weight", rms_px=math.nan)
+    _write_run(candidate, registration_status="failed", final_status="zero_weight", rms_px=math.nan)
+
+    audit = build_resident_determinism_audit(baseline, candidate)
+
+    assert audit["summary"]["passed"] is True
+    assert audit["summary"]["registration_difference_count"] == 0
 
 
 def test_resident_determinism_cli_writes_json_and_markdown(tmp_path: Path):

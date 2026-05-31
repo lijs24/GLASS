@@ -1058,6 +1058,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
             "4",
             "--resident-star-grid-rows",
             "4",
+            "--resident-star-catalog-deterministic",
             "--resident-triangle-pixel-refine-final-stride",
             "2",
             "--reference-frame-id",
@@ -1081,7 +1082,8 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_catalog_batch_mode"] == "grid_top_nms_fixed_threshold"
     assert resident_registration["triangle_catalog_timing_model"] == "per_frame_launch_sync_download"
     assert resident_registration["triangle_catalog_sort_mode"] == "shared_bitonic_power2"
-    assert resident_registration["triangle_catalog_topk_mode"] == "strict_flux_precheck_per_cell_lock"
+    assert resident_registration["star_catalog_deterministic"] is True
+    assert resident_registration["triangle_catalog_topk_mode"] == "deterministic_serial_per_cell"
     assert resident_registration["triangle_catalog_native_total_s"] >= 0.0
     assert resident_registration["triangle_catalog_native_sync_s"] >= 0.0
     assert resident_registration["triangle_catalog_native_output_download_s"] >= 0.0
@@ -1146,7 +1148,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_timing_model=per_frame_launch_sync_download" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_sort_mode=shared_bitonic_power2" in warning for warning in moving["warnings"])
-    assert any("triangle_catalog_topk_mode=strict_flux_precheck_per_cell_lock" in warning for warning in moving["warnings"])
+    assert any("triangle_catalog_topk_mode=deterministic_serial_per_cell" in warning for warning in moving["warnings"])
     assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
     assert any("triangle_descriptor_fit_batch=true" in warning for warning in moving["warnings"])
     assert any(

@@ -400,6 +400,24 @@ void glass_star_grid_top_nms_candidates_f32_launch(
     int candidates_per_cell,
     int max_output_candidates,
     float min_separation_px);
+void glass_star_grid_top_nms_candidates_deterministic_f32_launch(
+    const float* input,
+    float* grid_xs,
+    float* grid_ys,
+    float* grid_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell,
+    int max_output_candidates,
+    float min_separation_px);
 void glass_star_grid_candidates_f32_launch(
     const float* input,
     float* xs,
@@ -462,8 +480,8 @@ const char* grid_catalog_sort_mode(int grid_capacity) {
   return grid_capacity <= 4096 ? "shared_bitonic_power2" : "single_thread_selection";
 }
 
-const char* grid_catalog_topk_mode() {
-  return "strict_flux_precheck_per_cell_lock";
+const char* grid_catalog_topk_mode(bool deterministic = false) {
+  return deterministic ? "deterministic_serial_per_cell" : "strict_flux_precheck_per_cell_lock";
 }
 
 struct CalibrationParameters {
@@ -2687,14 +2705,15 @@ class ResidentCalibratedStack {
     }
   }
 
-  py::dict star_grid_top_nms_candidates(
+  py::dict star_grid_top_nms_candidates_impl(
       std::size_t index,
       float threshold,
       int grid_cols,
       int grid_rows,
       int candidates_per_cell,
       int max_output_candidates,
-      float min_separation_px) const {
+      float min_separation_px,
+      bool deterministic) const {
     require_index(index);
     if (!loaded_[index]) {
       throw std::runtime_error("resident frame must be loaded before star detection");
@@ -2753,26 +2772,47 @@ class ResidentCalibratedStack {
           cudaMalloc(&d_cell_counts, static_cast<std::size_t>(cell_count) * sizeof(int)),
           "cudaMalloc(resident grid top nms cell counts)");
       check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident grid top nms stored count)");
-      glass_star_grid_top_nms_candidates_f32_launch(
-          d_stack_ + index * pixels_per_frame_,
-          d_grid_xs,
-          d_grid_ys,
-          d_grid_fluxes,
-          d_xs,
-          d_ys,
-          d_fluxes,
-          d_count,
-          d_locks,
-          d_cell_counts,
-          d_stored_count,
-          static_cast<int>(width_),
-          static_cast<int>(height_),
-          threshold,
-          grid_cols,
-          grid_rows,
-          candidates_per_cell,
-          max_output_candidates,
-          min_separation_px);
+      if (deterministic) {
+        glass_star_grid_top_nms_candidates_deterministic_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_grid_xs,
+            d_grid_ys,
+            d_grid_fluxes,
+            d_xs,
+            d_ys,
+            d_fluxes,
+            d_count,
+            d_stored_count,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            threshold,
+            grid_cols,
+            grid_rows,
+            candidates_per_cell,
+            max_output_candidates,
+            min_separation_px);
+      } else {
+        glass_star_grid_top_nms_candidates_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_grid_xs,
+            d_grid_ys,
+            d_grid_fluxes,
+            d_xs,
+            d_ys,
+            d_fluxes,
+            d_count,
+            d_locks,
+            d_cell_counts,
+            d_stored_count,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            threshold,
+            grid_cols,
+            grid_rows,
+            candidates_per_cell,
+            max_output_candidates,
+            min_separation_px);
+      }
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates kernel launch");
       check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates synchronize");
       check_cuda(
@@ -2803,7 +2843,7 @@ class ResidentCalibratedStack {
       result["max_output_candidates"] = max_output_candidates;
       result["min_separation_px"] = min_separation_px;
       result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
-      result["catalog_topk_mode"] = grid_catalog_topk_mode();
+      result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic);
       result["x"] = xs[py::slice(0, stored_count, 1)];
       result["y"] = ys[py::slice(0, stored_count, 1)];
       result["flux"] = fluxes[py::slice(0, stored_count, 1)];
@@ -2833,14 +2873,39 @@ class ResidentCalibratedStack {
     }
   }
 
-  py::list star_grid_top_nms_candidates_batch(
-      const std::vector<std::size_t>& indices,
+  py::dict star_grid_top_nms_candidates(
+      std::size_t index,
       float threshold,
       int grid_cols,
       int grid_rows,
       int candidates_per_cell,
       int max_output_candidates,
       float min_separation_px) const {
+    return star_grid_top_nms_candidates_impl(
+        index, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, false);
+  }
+
+  py::dict star_grid_top_nms_candidates_deterministic(
+      std::size_t index,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px) const {
+    return star_grid_top_nms_candidates_impl(
+        index, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, true);
+  }
+
+  py::list star_grid_top_nms_candidates_batch_impl(
+      const std::vector<std::size_t>& indices,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px,
+      bool deterministic) const {
     if (grid_cols <= 0 || grid_rows <= 0 || candidates_per_cell <= 0 || max_output_candidates <= 0) {
       throw std::invalid_argument("grid dimensions and candidate counts must be positive");
     }
@@ -2906,26 +2971,47 @@ class ResidentCalibratedStack {
         int stored_count = 0;
 
         const auto enqueue_start = std::chrono::steady_clock::now();
-        glass_star_grid_top_nms_candidates_f32_launch(
-            d_stack_ + index * pixels_per_frame_,
-            d_grid_xs,
-            d_grid_ys,
-            d_grid_fluxes,
-            d_xs,
-            d_ys,
-            d_fluxes,
-            d_count,
-            d_locks,
-            d_cell_counts,
-            d_stored_count,
-            static_cast<int>(width_),
-            static_cast<int>(height_),
-            threshold,
-            grid_cols,
-            grid_rows,
-            candidates_per_cell,
-            max_output_candidates,
-            min_separation_px);
+        if (deterministic) {
+          glass_star_grid_top_nms_candidates_deterministic_f32_launch(
+              d_stack_ + index * pixels_per_frame_,
+              d_grid_xs,
+              d_grid_ys,
+              d_grid_fluxes,
+              d_xs,
+              d_ys,
+              d_fluxes,
+              d_count,
+              d_stored_count,
+              static_cast<int>(width_),
+              static_cast<int>(height_),
+              threshold,
+              grid_cols,
+              grid_rows,
+              candidates_per_cell,
+              max_output_candidates,
+              min_separation_px);
+        } else {
+          glass_star_grid_top_nms_candidates_f32_launch(
+              d_stack_ + index * pixels_per_frame_,
+              d_grid_xs,
+              d_grid_ys,
+              d_grid_fluxes,
+              d_xs,
+              d_ys,
+              d_fluxes,
+              d_count,
+              d_locks,
+              d_cell_counts,
+              d_stored_count,
+              static_cast<int>(width_),
+              static_cast<int>(height_),
+              threshold,
+              grid_cols,
+              grid_rows,
+              candidates_per_cell,
+              max_output_candidates,
+              min_separation_px);
+        }
         check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch kernel launch");
         const auto enqueue_end = std::chrono::steady_clock::now();
         check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch synchronize");
@@ -2979,7 +3065,7 @@ class ResidentCalibratedStack {
         result["max_output_candidates"] = max_output_candidates;
         result["min_separation_px"] = min_separation_px;
         result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
-        result["catalog_topk_mode"] = grid_catalog_topk_mode();
+        result["catalog_topk_mode"] = grid_catalog_topk_mode(deterministic);
         result["catalog_timing_model"] = "per_frame_launch_sync_download";
         result["catalog_enqueue_s"] = enqueue_s;
         result["catalog_sync_s"] = sync_s;
@@ -3016,6 +3102,30 @@ class ResidentCalibratedStack {
       cudaFree(d_stored_count);
       throw;
     }
+  }
+
+  py::list star_grid_top_nms_candidates_batch(
+      const std::vector<std::size_t>& indices,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px) const {
+    return star_grid_top_nms_candidates_batch_impl(
+        indices, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, false);
+  }
+
+  py::list star_grid_top_nms_candidates_batch_deterministic(
+      const std::vector<std::size_t>& indices,
+      float threshold,
+      int grid_cols,
+      int grid_rows,
+      int candidates_per_cell,
+      int max_output_candidates,
+      float min_separation_px) const {
+    return star_grid_top_nms_candidates_batch_impl(
+        indices, threshold, grid_cols, grid_rows, candidates_per_cell, max_output_candidates, min_separation_px, true);
   }
 
   py::dict estimate_translation_from_stars_to_reference(
@@ -7803,7 +7913,13 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       .def("star_top_candidates", &ResidentCalibratedStack::star_top_candidates)
       .def("star_top_nms_candidates", &ResidentCalibratedStack::star_top_nms_candidates)
       .def("star_grid_top_nms_candidates", &ResidentCalibratedStack::star_grid_top_nms_candidates)
+      .def(
+          "star_grid_top_nms_candidates_deterministic",
+          &ResidentCalibratedStack::star_grid_top_nms_candidates_deterministic)
       .def("star_grid_top_nms_candidates_batch", &ResidentCalibratedStack::star_grid_top_nms_candidates_batch)
+      .def(
+          "star_grid_top_nms_candidates_batch_deterministic",
+          &ResidentCalibratedStack::star_grid_top_nms_candidates_batch_deterministic)
       .def(
           "estimate_translation_from_stars_to_reference",
           &ResidentCalibratedStack::estimate_translation_from_stars_to_reference,

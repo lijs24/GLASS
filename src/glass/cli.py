@@ -403,6 +403,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_star_tolerance_px=args.resident_star_tolerance_px,
                 resident_star_grid_cols=args.resident_star_grid_cols,
                 resident_star_grid_rows=args.resident_star_grid_rows,
+                resident_star_catalog_deterministic=args.resident_star_catalog_deterministic,
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
@@ -491,6 +492,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_tolerance_px=args.resident_star_tolerance_px,
                 resident_star_grid_cols=args.resident_star_grid_cols,
                 resident_star_grid_rows=args.resident_star_grid_rows,
+                resident_star_catalog_deterministic=args.resident_star_catalog_deterministic,
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
@@ -1040,6 +1042,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--resident-star-grid-cols", type=int, default=0)
     run.add_argument("--resident-star-grid-rows", type=int, default=0)
     run.add_argument(
+        "--resident-star-catalog-deterministic",
+        action="store_true",
+        help="use deterministic resident CUDA grid star cataloging when grid cataloging is enabled",
+    )
+    run.add_argument(
         "--resident-star-prior",
         choices=["none", "ncc", "auto_pierside"],
         default="none",
@@ -1211,6 +1218,11 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--resident-star-tolerance-px", type=float, default=1.0)
     audit.add_argument("--resident-star-grid-cols", type=int, default=0)
     audit.add_argument("--resident-star-grid-rows", type=int, default=0)
+    audit.add_argument(
+        "--resident-star-catalog-deterministic",
+        action="store_true",
+        help="use deterministic resident CUDA grid star cataloging when grid cataloging is enabled",
+    )
     audit.add_argument(
         "--resident-star-prior",
         choices=["none", "ncc", "auto_pierside"],

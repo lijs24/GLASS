@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,20 @@ def _hash_value(item: dict[str, Any], key: str) -> str | None:
         digest = value.get("sha256")
         return str(digest) if digest else None
     return None
+
+
+def _values_equal(left: Any, right: Any) -> bool:
+    if isinstance(left, float) and isinstance(right, float):
+        if math.isnan(left) and math.isnan(right):
+            return True
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            _values_equal(left_item, right_item) for left_item, right_item in zip(left, right, strict=True)
+        )
+    if isinstance(left, dict) and isinstance(right, dict):
+        keys = set(left) | set(right)
+        return all(_values_equal(left.get(key), right.get(key)) for key in keys)
+    return left == right
 
 
 def _index_artifact_determinism(payload: dict[str, Any]) -> dict[str, Any]:
@@ -181,7 +196,7 @@ def _diff_mapping(
         changed = {
             field: {"baseline": left.get(field), "candidate": right.get(field)}
             for field in fields
-            if left.get(field) != right.get(field)
+            if not _values_equal(left.get(field), right.get(field))
         }
         if changed:
             diffs.append({"key": key, "difference": "field_mismatch", "fields": changed})
@@ -210,7 +225,7 @@ def _diff_frames(
         difference_types: list[str] = []
         field_changes: dict[str, Any] = {}
         for field in ("status", "threshold_mode", "selected_threshold", "threshold_candidates"):
-            if left.get(field) != right.get(field):
+            if not _values_equal(left.get(field), right.get(field)):
                 difference_types.append(field)
                 field_changes[field] = {"baseline": left.get(field), "candidate": right.get(field)}
         hash_changes = {
@@ -219,7 +234,7 @@ def _diff_frames(
                 "candidate": right.get("hashes", {}).get(field),
             }
             for field in _HASH_FIELDS
-            if left.get("hashes", {}).get(field) != right.get("hashes", {}).get(field)
+            if not _values_equal(left.get("hashes", {}).get(field), right.get("hashes", {}).get(field))
         }
         if hash_changes:
             difference_types.extend(f"{field}_hash" for field in hash_changes)
@@ -229,7 +244,7 @@ def _diff_frames(
                 "candidate": right.get("counts", {}).get(field),
             }
             for field in sorted(set(left.get("counts", {})) | set(right.get("counts", {})))
-            if left.get("counts", {}).get(field) != right.get("counts", {}).get(field)
+            if not _values_equal(left.get("counts", {}).get(field), right.get("counts", {}).get(field))
         }
         if count_changes:
             difference_types.extend(f"{field}_count" for field in count_changes)

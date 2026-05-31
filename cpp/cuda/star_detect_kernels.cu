@@ -314,6 +314,67 @@ __global__ void star_candidate_grid_topk_kernel(
   atomicExch(locks + cell_index, 0);
 }
 
+__global__ void star_candidate_grid_topk_deterministic_cell_kernel(
+    const float* input,
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int* count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell) {
+  const int cell_index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+  const int cell_count = grid_cols * grid_rows;
+  if (cell_index >= cell_count) {
+    return;
+  }
+  const int cell_x = cell_index % grid_cols;
+  const int cell_y = cell_index / grid_cols;
+  const int x0 = (cell_x * width) / grid_cols;
+  const int x1 = ((cell_x + 1) * width) / grid_cols;
+  const int y0 = (cell_y * height) / grid_rows;
+  const int y1 = ((cell_y + 1) * height) / grid_rows;
+  const int base = cell_index * candidates_per_cell;
+  for (int y = y0; y < y1; ++y) {
+    for (int x = x0; x < x1; ++x) {
+      float center = 0.0f;
+      if (!is_local_maximum(input, x, y, width, height, threshold, &center)) {
+        continue;
+      }
+      atomicAdd(count, 1);
+      int weakest_index = base;
+      float weakest_flux = fluxes[base];
+      for (int i = 1; i < candidates_per_cell; ++i) {
+        const int candidate_index = base + i;
+        if (star_candidate_weaker(
+                fluxes[candidate_index],
+                xs[candidate_index],
+                ys[candidate_index],
+                weakest_flux,
+                xs[weakest_index],
+                ys[weakest_index])) {
+          weakest_flux = fluxes[candidate_index];
+          weakest_index = candidate_index;
+        }
+      }
+      if (star_candidate_better(
+              center,
+              static_cast<float>(x),
+              static_cast<float>(y),
+              weakest_flux,
+              xs[weakest_index],
+              ys[weakest_index])) {
+        xs[weakest_index] = static_cast<float>(x);
+        ys[weakest_index] = static_cast<float>(y);
+        fluxes[weakest_index] = center;
+      }
+    }
+  }
+}
+
 __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxes, int max_candidates) {
   if (blockIdx.x != 0 || threadIdx.x != 0) {
     return;
@@ -598,6 +659,68 @@ void glass_star_grid_top_nms_candidates_f32_launch(
       grid_fluxes,
       locks,
       cell_counts,
+      count,
+      width,
+      height,
+      threshold,
+      grid_cols,
+      grid_rows,
+      candidates_per_cell);
+  const int sort_count = next_power_of_two_int(grid_capacity);
+  if (sort_count <= 4096) {
+    constexpr int sort_threads = 256;
+    const std::size_t shared_bytes = static_cast<std::size_t>(sort_count) * 3 * sizeof(float);
+    star_catalog_sort_desc_shared_kernel<<<1, sort_threads, shared_bytes>>>(
+        grid_xs, grid_ys, grid_fluxes, grid_capacity, sort_count);
+  } else {
+    star_catalog_sort_desc_kernel<<<1, 1>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  }
+  star_catalog_nms_kernel<<<1, 1>>>(
+      grid_xs,
+      grid_ys,
+      grid_fluxes,
+      out_xs,
+      out_ys,
+      out_fluxes,
+      stored_count,
+      grid_capacity,
+      max_output_candidates,
+      min_separation_px);
+}
+
+void glass_star_grid_top_nms_candidates_deterministic_f32_launch(
+    const float* input,
+    float* grid_xs,
+    float* grid_ys,
+    float* grid_fluxes,
+    float* out_xs,
+    float* out_ys,
+    float* out_fluxes,
+    int* count,
+    int* stored_count,
+    int width,
+    int height,
+    float threshold,
+    int grid_cols,
+    int grid_rows,
+    int candidates_per_cell,
+    int max_output_candidates,
+    float min_separation_px) {
+  cudaMemset(count, 0, sizeof(int));
+  cudaMemset(stored_count, 0, sizeof(int));
+  const int cell_count = grid_cols * grid_rows;
+  const int grid_capacity = cell_count * candidates_per_cell;
+  constexpr int init_threads = 256;
+  const int grid_init_blocks = (grid_capacity + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<grid_init_blocks, init_threads>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
+  const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
+  star_catalog_init_kernel<<<out_init_blocks, init_threads>>>(out_xs, out_ys, out_fluxes, max_output_candidates);
+  const int cell_blocks = (cell_count + init_threads - 1) / init_threads;
+  star_candidate_grid_topk_deterministic_cell_kernel<<<cell_blocks, init_threads>>>(
+      input,
+      grid_xs,
+      grid_ys,
+      grid_fluxes,
       count,
       width,
       height,

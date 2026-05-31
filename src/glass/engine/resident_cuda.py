@@ -1557,6 +1557,7 @@ def run_resident_calibration_integration(
     resident_star_tolerance_px: float = 1.0,
     resident_star_grid_cols: int = 0,
     resident_star_grid_rows: int = 0,
+    resident_star_catalog_deterministic: bool = False,
     resident_star_prior: str = "none",
     resident_star_prior_radius_px: float = 4.0,
     resident_star_core_preselect_top_k: int = 0,
@@ -2281,9 +2282,16 @@ def run_resident_calibration_integration(
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
                 has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
+                has_grid_nms_catalog_deterministic = hasattr(
+                    native_stack,
+                    "star_grid_top_nms_candidates_deterministic",
+                )
                 has_star_core_metrics = hasattr(native_stack, "star_core_metrics_candidates_to_reference")
                 use_grid_catalog = (
-                    resident_star_grid_cols > 0 and resident_star_grid_rows > 0 and has_grid_nms_catalog
+                    resident_star_grid_cols > 0
+                    and resident_star_grid_rows > 0
+                    and has_grid_nms_catalog
+                    and (not resident_star_catalog_deterministic or has_grid_nms_catalog_deterministic)
                 )
                 star_core_preselect_top_k = max(
                     0,
@@ -2333,6 +2341,7 @@ def run_resident_calibration_integration(
                             grid_top_candidates_per_cell,
                             resident_star_max_candidates,
                             nms_min_separation_px,
+                            deterministic=resident_star_catalog_deterministic,
                         )
                     if has_top_nms_catalog:
                         return _stack.star_top_nms_candidates(
@@ -2876,13 +2885,24 @@ def run_resident_calibration_integration(
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
                 has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
+                has_grid_nms_catalog_deterministic = hasattr(
+                    native_stack,
+                    "star_grid_top_nms_candidates_deterministic",
+                )
                 use_grid_catalog = (
-                    resident_star_grid_cols > 0 and resident_star_grid_rows > 0 and has_grid_nms_catalog
+                    resident_star_grid_cols > 0
+                    and resident_star_grid_rows > 0
+                    and has_grid_nms_catalog
+                    and (not resident_star_catalog_deterministic or has_grid_nms_catalog_deterministic)
                 )
                 triangle_catalog_batch_enabled = bool(
                     use_grid_catalog
                     and resident_star_threshold > 0.0
                     and hasattr(native_stack, "star_grid_top_nms_candidates_batch")
+                    and (
+                        not resident_star_catalog_deterministic
+                        or hasattr(native_stack, "star_grid_top_nms_candidates_batch_deterministic")
+                    )
                 )
                 triangle_catalog_batch_mode = (
                     "grid_top_nms_fixed_threshold" if triangle_catalog_batch_enabled else "off"
@@ -2952,6 +2972,7 @@ def run_resident_calibration_integration(
                             grid_top_candidates_per_cell,
                             resident_star_max_candidates,
                             nms_min_separation_px,
+                            deterministic=resident_star_catalog_deterministic,
                         )
                     if has_top_nms_catalog:
                         return _stack.star_top_nms_candidates(
@@ -3017,6 +3038,7 @@ def run_resident_calibration_integration(
                                 grid_top_candidates_per_cell,
                                 resident_star_max_candidates,
                                 nms_min_separation_px,
+                                deterministic=resident_star_catalog_deterministic,
                             )
                             _add_elapsed(
                                 registration_component_s,
@@ -4376,6 +4398,7 @@ def run_resident_calibration_integration(
                         "star_tolerance_px": resident_star_tolerance_px,
                         "star_grid_cols": resident_star_grid_cols,
                         "star_grid_rows": resident_star_grid_rows,
+                        "star_catalog_deterministic": bool(resident_star_catalog_deterministic),
                         "star_prior": resident_star_prior,
                         "star_prior_radius_px": resident_star_prior_radius_px,
                         "pierside_same_similarity_top_k": _policy_int(

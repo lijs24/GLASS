@@ -70,6 +70,7 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
             "2",
             "--resident-star-grid-rows",
             "3",
+            "--resident-star-catalog-deterministic",
             "--resident-star-prior",
             "ncc",
             "--resident-star-prior-radius-px",
@@ -102,6 +103,7 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
     assert resident_registration["star_tolerance_px"] == 1.25
     assert resident_registration["star_grid_cols"] == 2
     assert resident_registration["star_grid_rows"] == 3
+    assert resident_registration["star_catalog_deterministic"] is True
     assert resident_registration["star_prior"] == "ncc"
     assert resident_registration["star_prior_radius_px"] == 2.5
     assert resident_registration["star_core_preselect_top_k"] == 4

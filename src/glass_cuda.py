@@ -2944,11 +2944,18 @@ class ResidentCalibratedStack:
         candidates_per_cell: int,
         max_output_candidates: int,
         min_separation_px: float,
+        deterministic: bool = False,
     ) -> dict[str, Any]:
-        if not hasattr(self._impl, "star_grid_top_nms_candidates"):
-            raise RuntimeError("native ResidentCalibratedStack.star_grid_top_nms_candidates is not available")
+        method_name = (
+            "star_grid_top_nms_candidates_deterministic"
+            if deterministic
+            else "star_grid_top_nms_candidates"
+        )
+        if not hasattr(self._impl, method_name):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
+        method = getattr(self._impl, method_name)
         result = dict(
-            self._impl.star_grid_top_nms_candidates(
+            method(
                 int(index),
                 float(threshold),
                 int(grid_cols),
@@ -2982,12 +2989,17 @@ class ResidentCalibratedStack:
         candidates_per_cell: int,
         max_output_candidates: int,
         min_separation_px: float,
+        deterministic: bool = False,
     ) -> list[dict[str, Any]]:
-        if not hasattr(self._impl, "star_grid_top_nms_candidates_batch"):
-            raise RuntimeError(
-                "native ResidentCalibratedStack.star_grid_top_nms_candidates_batch is not available"
-            )
-        results = self._impl.star_grid_top_nms_candidates_batch(
+        method_name = (
+            "star_grid_top_nms_candidates_batch_deterministic"
+            if deterministic
+            else "star_grid_top_nms_candidates_batch"
+        )
+        if not hasattr(self._impl, method_name):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
+        method = getattr(self._impl, method_name)
+        results = method(
             [int(index) for index in indices],
             float(threshold),
             int(grid_cols),

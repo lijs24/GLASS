@@ -988,6 +988,27 @@ integration where applicable.
 - Keep this gate diagnostic-only unless the audit proves a specific
   nondeterministic stage that must be fixed immediately.
 
+### S2-Gate 58: Deterministic Resident Grid Top-K Catalog Mode
+
+- Add an opt-in deterministic resident grid top-k catalog path for
+  `similarity_cuda_triangle` so repeated full-frame resident runs can produce
+  identical reference and moving catalog signatures.
+- Use a serial per-cell CUDA candidate scan for the deterministic mode,
+  preserving the existing flux/y/x tie-break semantics while avoiding atomic
+  lock scheduling drift in saturated grid cells.
+- Wire deterministic single-frame and batch catalog wrappers through the
+  native binding, `glass_cuda.py`, resident CUDA run/audit CLI flags,
+  `resident_artifacts.json`, registration warnings, and smoke tests.
+- Keep the default fast lock-based catalog path available for throughput
+  comparisons; the deterministic path is selected only with
+  `--resident-star-catalog-deterministic`.
+- Treat matching non-finite registration diagnostics such as `NaN` RMS on
+  failed or excluded frames as equal in the determinism audit so the audit
+  reports scientific/result drift rather than sentinel-value artifacts.
+- Validate with focused CUDA resident stack tests, CLI smoke tests, the
+  resident determinism unit tests, ruff, full pytest, and a repeated 200-light
+  resident CUDA determinism audit.
+
 ## Gate Rules
 
 Each gate requires:
