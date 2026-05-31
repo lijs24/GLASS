@@ -47,7 +47,9 @@ def test_bench_end_to_end_cpu_outputs_required_fields(tmp_path: Path):
     )
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["benchmark"] == "end_to_end"
-    assert payload["frame_count"] == 2
+    assert payload["input_light_frame_count"] == 2
+    assert payload["frame_count"] + payload["quality_gate_rejected_frames"] == 2
+    assert payload["quality_gate_enforced"] is True
     assert payload["backend"] == "cpu"
     assert Path(payload["master_path"]).exists()
 

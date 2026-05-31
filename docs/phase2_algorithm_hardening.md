@@ -654,6 +654,21 @@ integration where applicable.
   pytest, and a report regeneration on the latest 200-light resident audit-map
   run.
 
+### S2-Gate 40: Registration Honors Quality Gate
+
+- Make registration consume `frame_quality.json` quality-gate status.
+- When `reject_quality_gate_failed_frames` is enabled, skip non-reference
+  frames with `quality_gate_status=rejected` before star matching or preview
+  registration.
+- Record quality-gate status, warnings, enforcement state, and rejected-frame
+  counts in `registration_results.json`.
+- Let warp/integration continue using the existing accepted-registration
+  contract so quality-rejected frames do not silently enter downstream stages.
+- Preserve backward compatibility for older quality artifacts that do not have
+  quality-gate fields.
+- Validate with registration and pipeline tests, ruff, full pytest, and a
+  report regeneration on the latest 200-light resident audit-map run.
+
 ## Gate Rules
 
 Each gate requires:

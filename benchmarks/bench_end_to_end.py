@@ -80,8 +80,10 @@ def main() -> int:
         )
     )
     integration = read_json(audit / "integration_results.json")
+    registration = read_json(audit / "registration_results.json") if (audit / "registration_results.json").exists() else {}
     output = integration["outputs"][0]
     resident = read_json(audit / "resident_artifacts.json") if (audit / "resident_artifacts.json").exists() else {}
+    quality_gate_rejected_frames = int(registration.get("quality_gate_rejected_frames") or 0)
     write_result(
         args.out,
         name="end_to_end",
@@ -103,6 +105,11 @@ def main() -> int:
             ),
             "integration_weighting": integration.get("weighting"),
             "integration_rejection": integration.get("rejection"),
+            "input_light_frame_count": args.frames,
+            "quality_gate_enforced": registration.get("quality_gate_enforced"),
+            "quality_gate_rejected_frames": quality_gate_rejected_frames,
+            "registration_reference_frame_id": registration.get("reference_frame_id"),
+            "registered_or_integrated_frame_count": int(output["frame_count"]),
         },
     )
     return 0

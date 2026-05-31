@@ -484,6 +484,8 @@ def test_pipeline_fixture_run_registration(tmp_path: Path):
     assert registration["registration_image_source"] == "streaming_star_detector"
     assert registration["method"] == "auto"
     assert registration["tile_size"] == 10
+    assert registration["quality_gate_enforced"] is True
+    assert registration["quality_gate_rejected_frames"] >= 0
     assert all(item["registration_image_source"] == "streaming_preview" for item in registration["registration_results"])
     assert all(item["matched_stars"] >= 1 for item in registration["registration_results"])
     assert all(item["status"] in {"reference", "ok"} for item in registration["registration_results"])

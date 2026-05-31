@@ -115,6 +115,15 @@ def _policy_float(policy: dict[str, Any], key: str, default: float) -> float:
     return float(value)
 
 
+def _policy_bool(policy: dict[str, Any], key: str, default: bool) -> bool:
+    value = policy.get(key)
+    if value is None:
+        return bool(default)
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return bool(value)
+
+
 def _policy_optional_float(policy: dict[str, Any], key: str, default: float | None) -> float | None:
     value = policy.get(key)
     if value is None:
@@ -666,6 +675,8 @@ def register_calibrated_frames(
         float(reference_quality.get("noise_mad") or reference_quality.get("background_rms") or 0.0),
         tile_size=tile_size,
     )
+    quality_gate_enforced = _policy_bool(registration_policy, "reject_quality_gate_failed_frames", True)
+    quality_gate_rejected_frames = 0
 
     results = []
     for frame_id, item in calibrated.items():
@@ -673,6 +684,9 @@ def register_calibrated_frames(
         extra_fields: dict[str, Any] = {}
         tile_count = reference_tile_count
         row_source = "streaming_star_detector"
+        quality_row = quality_by_id.get(frame_id, {})
+        quality_gate_status = str(quality_row.get("quality_gate_status") or "unknown")
+        quality_gate_warnings = [str(warning) for warning in quality_row.get("quality_gate_warnings", [])]
         if frame_id == reference_id:
             dx, dy = 0.0, 0.0
             status = "reference"
@@ -682,10 +696,25 @@ def register_calibrated_frames(
             inliers = len(reference_stars)
             preview_scale = reference_scale
             preview_shape = list(reference_preview.shape)
+            if quality_gate_enforced and quality_gate_status == "rejected":
+                warnings.append("reference frame failed quality gate but is required as registration reference")
             if method == "cuda_catalog":
                 row_source = "cuda_catalog_similarity_preview"
             elif method == "cuda_triangle":
                 row_source = "cuda_triangle_descriptor_similarity_preview"
+        elif quality_gate_enforced and quality_gate_status == "rejected":
+            matrix = translation_matrix(0.0, 0.0)
+            matched = 0
+            inliers = 0
+            rms = float("nan")
+            status = "quality_rejected"
+            preview_scale = reference_scale
+            preview_shape = list(reference_preview.shape)
+            tile_count = 0
+            row_source = "quality_gate"
+            quality_gate_rejected_frames += 1
+            warnings.append("registration skipped because frame failed the quality gate")
+            warnings.extend(quality_gate_warnings)
         else:
             moving_preview, moving_scale, tile_count = _registration_preview(
                 item["path"],
@@ -860,6 +889,9 @@ def register_calibrated_frames(
                 "preview_shape": preview_shape,
                 "tile_size": tile_size,
                 "tile_count": tile_count,
+                "quality_gate_status": quality_gate_status,
+                "quality_gate_warnings": quality_gate_warnings,
+                "quality_gate_enforced": quality_gate_enforced,
             }
         )
         row.update(to_jsonable(extra_fields))
@@ -896,6 +928,9 @@ def register_calibrated_frames(
         "quality_reference_frame_id": quality.get("reference_frame_id"),
         "requested_reference_frame_id": reference_frame_id,
         "tile_size": tile_size,
+        "quality_gate_enforced": quality_gate_enforced,
+        "quality_gate_rejected_frames": quality_gate_rejected_frames,
+        "quality_gate_summary": quality.get("quality_gate_summary"),
         "registration_results": results,
     }
     write_json(out_path or (run / "registration_results.json"), payload)
