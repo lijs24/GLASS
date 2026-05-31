@@ -423,6 +423,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_calibration_streams=args.resident_calibration_streams,
+                resident_calibration_wave_frames=args.resident_calibration_wave_frames,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -515,6 +516,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_calibration_streams=args.resident_calibration_streams,
+                resident_calibration_wave_frames=args.resident_calibration_wave_frames,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -977,6 +979,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-calibration-wave-frames",
+        type=int,
+        default=0,
+        help=(
+            "optional wave size for resident batch calibration; values above 0 process smaller "
+            "native waves and release pinned prefetch slots more frequently"
+        ),
+    )
+    run.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across output directories",
     )
@@ -1186,6 +1197,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="opt-in resident calibration stream count for resident audit batch calibration",
+    )
+    audit.add_argument(
+        "--resident-calibration-wave-frames",
+        type=int,
+        default=0,
+        help="optional wave size for resident audit batch calibration",
     )
     audit.add_argument(
         "--resident-master-cache-dir",

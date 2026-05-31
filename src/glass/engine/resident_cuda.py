@@ -138,6 +138,9 @@ class _LightPrefetcher:
         self.free_slots: list[int] = []
         self.inflight_slots: dict[int, int] = {}
         self.next_submit = 0
+        self.fill_blocked_no_slot_count = 0
+        self.release_count = 0
+        self.max_inflight_slots = 0
 
     def __enter__(self) -> "_LightPrefetcher":
         if self.depth > 0:
@@ -170,6 +173,8 @@ class _LightPrefetcher:
             slot_id: int | None = None
             if self.pinned_ring:
                 if not self.free_slots:
+                    if self.next_submit < len(self.light_frames):
+                        self.fill_blocked_no_slot_count += 1
                     return
                 slot_id = self.free_slots.pop()
                 slot = self.pinned_slots[slot_id]
@@ -177,6 +182,7 @@ class _LightPrefetcher:
             self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"], slot)
             if slot_id is not None:
                 self.inflight_slots[self.next_submit] = slot_id
+                self.max_inflight_slots = max(self.max_inflight_slots, len(self.inflight_slots))
             self.next_submit += 1
 
     def result(self, index: int) -> tuple[np.ndarray, dict[str, float], float]:
@@ -198,6 +204,7 @@ class _LightPrefetcher:
         if slot_id is None:
             return
         self.free_slots.append(slot_id)
+        self.release_count += 1
         self._fill()
 
     @property
@@ -1645,6 +1652,7 @@ def run_resident_calibration_integration(
     resident_h2d_mode: str = "pageable",
     resident_calibration_batch_frames: int = 1,
     resident_calibration_streams: int = 1,
+    resident_calibration_wave_frames: int = 0,
     resident_master_cache_dir: str | Path | None = None,
     resident_output_maps: str = "audit",
 ) -> RunState:
@@ -1711,6 +1719,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_calibration_batch_frames must be positive")
     if resident_calibration_streams <= 0:
         raise ValueError("resident_calibration_streams must be positive")
+    if resident_calibration_wave_frames < 0:
+        raise ValueError("resident_calibration_wave_frames must be non-negative")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1854,6 +1864,17 @@ def run_resident_calibration_integration(
                 and resident_calibration_batch_frames > 1
                 and calibration_batch_supported
             )
+            calibration_wave_effective_frames = int(resident_calibration_batch_frames)
+            if calibration_batch_enabled and resident_calibration_wave_frames > 0:
+                calibration_wave_effective_frames = min(
+                    int(resident_calibration_batch_frames),
+                    int(resident_calibration_wave_frames),
+                )
+            calibration_wave_enabled = bool(
+                calibration_batch_enabled
+                and resident_calibration_wave_frames > 0
+                and calibration_wave_effective_frames < int(resident_calibration_batch_frames)
+            )
             calibration_batch_multistream_enabled = bool(
                 calibration_batch_enabled
                 and resident_calibration_streams > 1
@@ -1866,6 +1887,9 @@ def run_resident_calibration_integration(
             calibration_batch_sync_s = 0.0
             calibration_batch_lane_buffer_bytes = 0
             calibration_batch_actual_stream_count = 0
+            prefetch_fill_blocked_no_slot_count = 0
+            prefetch_release_count = 0
+            prefetch_max_inflight_slots = 0
             with _LightPrefetcher(
                 light_frames,
                 resident_prefetch_frames,
@@ -1880,7 +1904,7 @@ def run_resident_calibration_integration(
                     while index < len(light_frames):
                         batch_items: list[tuple[int, dict[str, Any], np.ndarray, float]] = []
                         batch_frame_starts: list[float] = []
-                        while index < len(light_frames) and len(batch_items) < resident_calibration_batch_frames:
+                        while index < len(light_frames) and len(batch_items) < calibration_wave_effective_frames:
                             frame = light_frames[index]
                             frame_start = perf_counter()
                             calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
@@ -2138,6 +2162,9 @@ def run_resident_calibration_integration(
                             gc_start = perf_counter()
                             gc.collect()
                             gc_elapsed += perf_counter() - gc_start
+                prefetch_fill_blocked_no_slot_count = int(light_prefetch.fill_blocked_no_slot_count)
+                prefetch_release_count = int(light_prefetch.release_count)
+                prefetch_max_inflight_slots = int(light_prefetch.max_inflight_slots)
             load_calibrate_elapsed = perf_counter() - load_calibrate_start
 
             if resident_registration == "translation_ncc_subpixel":
@@ -4858,6 +4885,12 @@ def run_resident_calibration_integration(
                         ),
                         "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
                         "calibration_batch_requested_streams": int(resident_calibration_streams),
+                        "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
+                        "calibration_wave_effective_frames": int(calibration_wave_effective_frames),
+                        "calibration_wave_enabled": bool(calibration_wave_enabled),
+                        "calibration_wave_release_mode": (
+                            "after_wave_sync" if calibration_wave_enabled else "after_native_batch_sync"
+                        ),
                         "calibration_batch_enabled": bool(calibration_batch_enabled),
                         "calibration_batch_supported": bool(calibration_batch_supported),
                         "calibration_batch_multistream_enabled": bool(calibration_batch_multistream_enabled),
@@ -4883,6 +4916,9 @@ def run_resident_calibration_integration(
                         "calibration_batch_native_total_s": float(calibration_batch_native_total_s),
                         "calibration_batch_stream_h2d_calibrate_store_s": float(calibration_batch_stream_s),
                         "calibration_batch_sync_s": float(calibration_batch_sync_s),
+                        "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
+                        "prefetch_release_count": int(prefetch_release_count),
+                        "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
                         "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",
                         "host_pinned_bytes": int(

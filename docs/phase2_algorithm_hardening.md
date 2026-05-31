@@ -1220,6 +1220,19 @@ integration where applicable.
 - Validate with resident stack CUDA tests, resident CLI smoke coverage, ruff,
   full pytest, and 200-light benchmark comparison.
 
+### S2-Gate 73: Resident Calibration Wave Scheduler
+
+- Add an optional resident calibration wave size that can split a larger
+  requested batch into smaller native waves.
+- Release pinned prefetch slots after each wave synchronization so the reader
+  can refill the ring more frequently.
+- Preserve the default no-wave behavior unless the user opts in.
+- Record requested wave size, effective wave size, release mode, prefetch slot
+  release count, prefetch no-slot blocked count, and maximum in-flight pinned
+  slots in `resident_io_pipeline`.
+- Validate with resident CLI coverage, ruff, full pytest, and 200-light
+  benchmark comparison against the previous resident baseline.
+
 ## Gate Rules
 
 Each gate requires:

@@ -575,6 +575,10 @@ def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
     assert io_pipeline["calibration_batch_mode"] == "host_async_multistream_batch"
     assert io_pipeline["calibration_batch_requested_frames"] == 2
     assert io_pipeline["calibration_batch_requested_streams"] == 2
+    assert io_pipeline["calibration_wave_requested_frames"] == 0
+    assert io_pipeline["calibration_wave_effective_frames"] == 2
+    assert io_pipeline["calibration_wave_enabled"] is False
+    assert io_pipeline["calibration_wave_release_mode"] == "after_native_batch_sync"
     assert io_pipeline["calibration_batch_actual_stream_count"] == 2
     assert io_pipeline["calibration_batch_lane_buffer_bytes"] > 0
     assert io_pipeline["calibration_batch_frame_count"] == 2
@@ -589,6 +593,67 @@ def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
     by_std = sorted(weighting["frame_results"], key=lambda item: item["source_std"])
     assert by_std[0]["weight"] > by_std[-1]["weight"]
     assert max(weights.values()) > min(weights.values())
+
+
+def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_batch_wave"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-calibration-wave-frames",
+            "1",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
+    assert io_pipeline["calibration_batch_enabled"] is True
+    assert io_pipeline["calibration_batch_multistream_enabled"] is True
+    assert io_pipeline["calibration_wave_enabled"] is True
+    assert io_pipeline["calibration_wave_requested_frames"] == 1
+    assert io_pipeline["calibration_wave_effective_frames"] == 1
+    assert io_pipeline["calibration_wave_release_mode"] == "after_wave_sync"
+    assert io_pipeline["calibration_batch_requested_frames"] == 2
+    assert io_pipeline["calibration_batch_count"] == 2
+    assert io_pipeline["calibration_batch_frame_count"] == 2
+    assert io_pipeline["calibration_batch_actual_stream_count"] == 1
+    assert io_pipeline["prefetch_release_count"] == 2
+    assert io_pipeline["prefetch_max_inflight_slots"] == 2
 
 
 def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_path: Path):
