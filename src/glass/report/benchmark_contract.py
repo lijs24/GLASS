@@ -618,6 +618,7 @@ def _build_dq_provenance_contract_checks(
                     )
                 )
         if dq_contract.get("rejection_map_sum_matches_provenance"):
+            tolerance = int(dq_contract.get("rejection_map_sum_tolerance_samples") or 0)
             matches = []
             for record in records:
                 verification = record.get("output_count_map_verification") or {}
@@ -633,7 +634,7 @@ def _build_dq_provenance_contract_checks(
                         "actual": actual,
                         "provenance": None if expected is None else int(round(expected)),
                         "delta": delta,
-                        "passed": delta == 0,
+                        "passed": delta is not None and abs(delta) <= tolerance,
                     }
                 )
             if matches or not allow_skipped_rejection:
@@ -641,7 +642,7 @@ def _build_dq_provenance_contract_checks(
                     _check(
                         "contract_rejection_map_sum_matches_provenance",
                         bool(matches) and all(bool(match.get("passed")) for match in matches),
-                        {"matches": matches},
+                        {"matches": matches, "tolerance_samples": tolerance},
                     )
                 )
 

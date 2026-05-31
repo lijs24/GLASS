@@ -524,13 +524,28 @@ integration where applicable.
   contract opts into that exact resident invariant.
 - When low/high rejection maps are written, verify positive-pixel counts against
   DQ `LOW_REJECTED`/`HIGH_REJECTED` flags and verify total rejection-map sample
-  sums against `rejected_sample_count`.
+  sums against `rejected_sample_count` with an explicit sample-count tolerance
+  for integer count-map write rounding.
 - When a resident output-map policy intentionally skips low/high rejection map
   FITS files, acceptance audit must report that as an explicit skipped-policy
   PASS rather than silently ignoring the maps.
 - Validate with direct count-map tests, acceptance-audit tests, ruff, full
   pytest, and a contract audit against the latest preserved 200-light resident
   artifacts.
+
+### S2-Gate 31: Real-Data Audit-Map Rejection Verification
+
+- Run the 200-light resident CUDA benchmark with `--resident-output-maps audit`
+  so low/high rejection FITS maps are actually written.
+- Add a strict audit-map benchmark contract that requires
+  `--resident-output-maps audit`, forbids policy-skipped rejection maps, and
+  verifies low/high rejection map positive pixels and total rejected samples on
+  real data.
+- Keep the original science-mode benchmark contract unchanged for the release
+  speed baseline.
+- Compare the audit-map master against the same external reference output and
+  record runtime and numerical agreement.
+- Validate with acceptance-audit, ruff, full pytest, checkpoint, and commit.
 
 ## Gate Rules
 

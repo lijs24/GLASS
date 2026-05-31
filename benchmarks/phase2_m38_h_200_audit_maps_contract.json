@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "name": "phase2_m38_h_200_resident_cuda_audit_maps",
+  "description": "Strict rejection-map audit contract for the Phase 2 M38 H-alpha 200-light resident CUDA benchmark with --resident-output-maps audit.",
+  "dataset_requirements": {
+    "light": 200,
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "active_light_frames": 190
+  },
+  "runtime": {
+    "release_baseline_elapsed_s": 30.361440100008622,
+    "max_runtime_regression_factor": 1.3,
+    "external_reference_elapsed_s": 1092.541,
+    "min_speedup_vs_reference": 20.0
+  },
+  "comparison": {
+    "required_scale": 8.764434957115609e-06,
+    "required_offset": 0.0006274500691899127,
+    "required_min_coverage": 190,
+    "min_coverage_fraction": 0.95,
+    "max_rms_diff": 0.01,
+    "max_abs_diff_p99": 0.01,
+    "numeric_abs_tolerance": 1.0e-12,
+    "numeric_rel_tolerance": 1.0e-9
+  },
+  "dq_provenance": {
+    "required": true,
+    "min_records": 1,
+    "required_source_schemas": [
+      "resident_dq_coverage_provenance"
+    ],
+    "required_engines": [
+      "cuda_resident_stack"
+    ],
+    "min_active_frame_count": 190,
+    "require_dq_map_path": true,
+    "require_existing_dq_map": true,
+    "require_coverage_map_path": true,
+    "required_summary_fields": [
+      "zero_coverage_pixels",
+      "partial_coverage_pixels"
+    ],
+    "required_output_dq_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
+    "verify_dq_map_pixels": true,
+    "dq_map_verify_tile_size": 2048,
+    "dq_map_summary_tolerance_pixels": 0,
+    "dq_map_summary_match_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
+    "verify_output_count_maps": true,
+    "count_map_verify_tile_size": 2048,
+    "count_map_positive_threshold": 0.0,
+    "coverage_map_finite_pixels_match_provenance": true,
+    "coverage_zero_pixels_match_no_data": true,
+    "allow_missing_rejection_maps_if_skipped": false,
+    "rejection_map_sum_matches_provenance": true,
+    "rejection_map_sum_tolerance_samples": 4,
+    "positive_output_dq_flags": [
+      "valid",
+      "warp_edge"
+    ],
+    "required_source_terms": [
+      "geometric_warp_coverage",
+      "low_rejection",
+      "high_rejection"
+    ]
+  },
+  "required_command_tokens": [
+    "--backend cuda",
+    "--until-stage integration",
+    "--memory-mode resident",
+    "--resident-h2d-mode pinned_ring",
+    "--resident-registration similarity_cuda_triangle",
+    "--resident-warp-interpolation lanczos3",
+    "--resident-warp-clamping-threshold 0.3",
+    "--resident-star-threshold 350",
+    "--resident-star-max-candidates 48",
+    "--resident-star-grid-cols 24",
+    "--resident-star-grid-rows 16",
+    "--resident-triangle-pixel-refine-coarse-stride 4",
+    "--resident-triangle-pixel-refine-final-stride 8",
+    "--reference-frame-id F000196",
+    "--local-normalization off",
+    "--integration-weighting none",
+    "--integration-rejection winsorized_sigma",
+    "--resident-output-maps audit",
+    "--flat-floor 0.05",
+    "--exclude-frame-id LIGHT_H_0100",
+    "--exclude-frame-id LIGHT_H_0153",
+    "--exclude-frame-id LIGHT_H_0154",
+    "--exclude-frame-id LIGHT_H_0155",
+    "--exclude-frame-id LIGHT_H_0156",
+    "--exclude-frame-id LIGHT_H_0157",
+    "--exclude-frame-id LIGHT_H_0158"
+  ]
+}

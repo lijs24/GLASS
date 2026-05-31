@@ -403,6 +403,56 @@ def test_acceptance_audit_applies_dq_provenance_contract(tmp_path: Path):
     assert count_maps["high_rejection"]["result"]["rounded_sum"] == 3
 
 
+def test_acceptance_audit_rejection_sum_uses_explicit_tolerance(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        active=193,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_dq=True,
+    )
+    for artifact_name, list_key in [
+        ("integration_results.json", "outputs"),
+        ("resident_artifacts.json", "artifacts"),
+    ]:
+        payload = read_json(gp_run / artifact_name)
+        payload[list_key][0]["dq_coverage_provenance"]["rejected_sample_count"] = 3
+        write_json(gp_run / artifact_name, payload)
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_dq_contract(contract)
+    contract_payload = read_json(contract)
+    contract_payload["dq_provenance"]["rejection_map_sum_tolerance_samples"] = 1
+    write_json(contract, contract_payload)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    rejection_sum = checks["contract_rejection_map_sum_matches_provenance"]
+    assert audit["passed"] is True
+    assert rejection_sum["passed"] is True
+    assert rejection_sum["evidence"]["tolerance_samples"] == 1
+    assert rejection_sum["evidence"]["matches"][0]["delta"] == 1
+
+
 def test_acceptance_audit_dq_contract_fails_when_artifact_missing(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     gp_run = tmp_path / "gp"
