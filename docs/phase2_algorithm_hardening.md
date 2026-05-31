@@ -22,9 +22,8 @@ duplicating every gate, benchmark, and algorithm rule.
 Recommended goal text:
 
 ```text
-GLASS Phase 2：按照 docs/phase2_algorithm_hardening.md 持续推进 Algorithm Hardening 与 Unified Stack Engine。每个 S2-Gate 必须满足文档门禁：代码或文档、测试、checkpoint、Git commit；失败 Gate 先修复再继续。保持 Phase 1 的 200-light 真实数据 benchmark 作为性能和数值基线，避免无解释的速度、形状、帧数、mask/rejection 或结果一致性回退。新增算法必须有 CPU baseline、synthetic 测试、必要 CUDA 对照、可审计 artifact，并更新 docs/algorithm_sources.md。原始图像目录只读，CUDA 保持 optional，CPU-only 安装和测试不得破坏。
+GLASS Phase 2: follow docs/phase2_algorithm_hardening.md as the controlling plan. Advance S2-Gates in order; every gate needs code or docs, focused tests, full pytest, a checkpoint, and a Git commit. Failed gates must be fixed before later work. Preserve the Phase 1 200-light benchmark as the speed and numerical baseline; do not accept unexplained runtime, shape, frame-count, mask/rejection, or result-agreement regressions. New algorithms need CPU baselines, synthetic tests, CUDA comparisons where relevant, auditable artifacts, and updates to docs/algorithm_sources.md. Input image directories stay read-only. CUDA remains optional and CPU-only install/tests must keep working.
 ```
-
 ## Hard Constraints
 
 - Keep the existing 200-light real dataset benchmark as a performance and
@@ -272,6 +271,15 @@ integration where applicable.
   parameters drift silently.
 - Run the contract against the current 200-light real-data artifacts and record
   whether runtime and numerical results remain within the allowed envelope.
+
+### S2-Gate 12: Performance Regression Diagnostics
+
+- Add per-stage resident CUDA timing baselines to the benchmark contract.
+- Make acceptance audit report non-blocking timing diagnostics for stages that
+  regress beyond the documented warning factor.
+- Use the diagnostics to name the next optimization target without weakening
+  the existing hard pass/fail checks for runtime, frame counts, and image
+  agreement.
 
 ## Gate Rules
 

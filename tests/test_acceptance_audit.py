@@ -22,6 +22,7 @@ def _write_glass_run(
     active: int = 193,
     zero: int = 7,
     command: str | None = None,
+    resident_timing: dict[str, float] | None = None,
 ) -> None:
     path.mkdir()
     write_json(path / "run_timing.json", {"total_elapsed_s": elapsed_s, "memory_mode": "resident"})
@@ -45,6 +46,8 @@ def _write_glass_run(
             ],
         },
     )
+    if resident_timing is not None:
+        write_json(path / "resident_artifacts.json", {"artifacts": [{"timing_s": resident_timing}]})
 
 
 def _write_wbpp_result(path: Path, *, elapsed_s: float = 1000.0) -> None:
@@ -118,6 +121,15 @@ def _write_contract(path: Path, *, max_runtime_factor: float = 1.3) -> None:
                 "--resident-registration similarity_cuda_triangle",
                 "--flat-floor 0.05",
             ],
+            "timing_baseline": {
+                "warning_regression_factor": 1.15,
+                "stages_s": {
+                    "master_build_or_load": 10.0,
+                    "light_read_upload_calibrate": 15.0,
+                    "resident_registration_warp": 11.0,
+                    "output_write": 1.0,
+                },
+            },
         },
     )
 
@@ -160,6 +172,12 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
             "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
             "--flat-floor 0.05"
         ),
+        resident_timing={
+            "master_build_or_load": 11.0,
+            "light_read_upload_calibrate": 16.0,
+            "resident_registration_warp": 12.0,
+            "output_write": 3.5,
+        },
     )
     _write_wbpp_result(wbpp, elapsed_s=1092.541)
     _write_compare(compare)
@@ -182,6 +200,10 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert checks["contract_required_command_token:--flat-floor 0.05"] is True
     assert checks["contract_compare_scale"] is True
     assert checks["contract_compare_min_coverage"] is True
+    regression = audit["performance_regression"]
+    assert regression["status"] == "regressed"
+    assert regression["worst_regression"]["stage"] == "output_write"
+    assert regression["regressed_count"] == 1
 
 
 def test_acceptance_audit_contract_catches_missing_parameters(tmp_path: Path):

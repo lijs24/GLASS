@@ -49,6 +49,82 @@ def _read_run_command(glass_run: str | Path) -> str | None:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def _load_resident_timing(glass_run: str | Path) -> dict[str, Any]:
+    path = Path(glass_run) / "resident_artifacts.json"
+    if not path.exists():
+        return {}
+    payload = _read_json_lenient(path)
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        return {}
+    first = artifacts[0]
+    if not isinstance(first, dict):
+        return {}
+    timing = first.get("timing_s")
+    return timing if isinstance(timing, dict) else {}
+
+
+def build_benchmark_performance_diagnostics(
+    contract: dict[str, Any],
+    *,
+    glass_run: str | Path,
+) -> dict[str, Any] | None:
+    baseline = contract.get("timing_baseline") or {}
+    stage_baselines = baseline.get("stages_s") or {}
+    if not isinstance(stage_baselines, dict) or not stage_baselines:
+        return None
+
+    warning_factor = _numeric(baseline.get("warning_regression_factor")) or 1.15
+    current_timing = _load_resident_timing(glass_run)
+    items: list[dict[str, Any]] = []
+    for stage, baseline_value in stage_baselines.items():
+        baseline_s = _numeric(baseline_value)
+        actual_s = _numeric(current_timing.get(stage))
+        if baseline_s is None:
+            continue
+        factor = actual_s / baseline_s if actual_s is not None and baseline_s > 0.0 else None
+        delta_s = actual_s - baseline_s if actual_s is not None else None
+        status = "missing_current"
+        if factor is not None:
+            status = "regressed" if factor > warning_factor else "ok"
+        items.append(
+            {
+                "stage": str(stage),
+                "baseline_s": baseline_s,
+                "actual_s": actual_s,
+                "delta_s": delta_s,
+                "factor": factor,
+                "status": status,
+            }
+        )
+
+    items.sort(
+        key=lambda item: (
+            item["factor"] is not None,
+            float(item["factor"] or 0.0),
+            float(item["delta_s"] or 0.0),
+        ),
+        reverse=True,
+    )
+    regressed = [item for item in items if item["status"] == "regressed"]
+    missing = [item for item in items if item["status"] == "missing_current"]
+    if regressed:
+        status = "regressed"
+    elif missing:
+        status = "incomplete"
+    else:
+        status = "ok"
+    return {
+        "schema_version": 1,
+        "status": status,
+        "warning_regression_factor": warning_factor,
+        "items": items,
+        "regressed_count": len(regressed),
+        "missing_count": len(missing),
+        "worst_regression": regressed[0] if regressed else (items[0] if items else None),
+    }
+
+
 def build_benchmark_contract_checks(
     contract: dict[str, Any],
     *,

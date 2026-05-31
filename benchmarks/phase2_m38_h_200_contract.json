@@ -15,6 +15,22 @@
     "external_reference_elapsed_s": 1092.541,
     "min_speedup_vs_reference": 20.0
   },
+  "timing_baseline": {
+    "source": "C:\\glass_runs\\cuda_version_matrix_200\\v8_cuda11_m38_h_200\\resident_artifacts.json",
+    "warning_regression_factor": 1.15,
+    "stages_s": {
+      "master_build_or_load": 9.85976749996189,
+      "light_read_upload_calibrate": 15.546634200029075,
+      "light_fits_materialize_decode": 40.36132279911544,
+      "light_read_decode_worker": 45.18920989986509,
+      "light_h2d_calibrate_store": 2.7688988983863965,
+      "resident_registration_warp": 10.903585300431587,
+      "resident_registration_component_accounted": 15.875620800070465,
+      "resident_integration": 0.2955454000039026,
+      "output_write": 0.9690760000376031,
+      "gc": 0.2969544001389295
+    }
+  },
   "comparison": {
     "required_scale": 8.764434957115609e-06,
     "required_offset": 0.0006274500691899127,

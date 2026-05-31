@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from glass.io.json_io import write_json
-from glass.report.benchmark_contract import build_benchmark_contract_checks, load_benchmark_contract
+from glass.report.benchmark_contract import (
+    build_benchmark_contract_checks,
+    build_benchmark_performance_diagnostics,
+    load_benchmark_contract,
+)
 from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
 
 
@@ -124,6 +128,7 @@ def build_acceptance_audit(
         )
 
     contract_payload: dict[str, Any] | None = None
+    performance_regression: dict[str, Any] | None = None
     if benchmark_contract is not None:
         contract_payload = load_benchmark_contract(benchmark_contract)
         checks.extend(
@@ -134,6 +139,10 @@ def build_acceptance_audit(
                 compare_payload=compare_payload,
                 frame_type_counts=counts,
             )
+        )
+        performance_regression = build_benchmark_performance_diagnostics(
+            contract_payload,
+            glass_run=glass_run,
         )
 
     passed = all(item["passed"] for item in checks)
@@ -154,6 +163,7 @@ def build_acceptance_audit(
         },
         "frame_type_counts": counts,
         "checks": checks,
+        "performance_regression": performance_regression,
         "speedup_summary": speedup,
         "clean_room": {
             "status": "compliant",
@@ -186,6 +196,24 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
     for item in audit["checks"]:
         marker = "PASS" if item["passed"] else "FAIL"
         lines.append(f"- {marker}: {item['name']} - {item['evidence']}")
+    regression = audit.get("performance_regression")
+    if regression:
+        lines.extend(["", "## Performance Regression Diagnostics", ""])
+        lines.append(f"- Status: {regression.get('status')}")
+        worst = regression.get("worst_regression") or {}
+        if worst:
+            lines.append(
+                "- Worst stage: "
+                f"{worst.get('stage')} actual={worst.get('actual_s')}s "
+                f"baseline={worst.get('baseline_s')}s factor={worst.get('factor')}"
+            )
+        for item in (regression.get("items") or [])[:8]:
+            lines.append(
+                "- "
+                f"{item.get('status')}: {item.get('stage')} "
+                f"actual={item.get('actual_s')}s baseline={item.get('baseline_s')}s "
+                f"delta={item.get('delta_s')}s factor={item.get('factor')}"
+            )
     lines.extend(["", "## Clean-room", "", f"- {audit['clean_room']['note']}", ""])
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
