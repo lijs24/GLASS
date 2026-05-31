@@ -1303,6 +1303,50 @@ def test_gpu_star_top_nms_candidates_suppresses_close_peaks():
     assert (7, 40) in points
 
 
+def _cpu_grid_top_nms_reference(
+    image: np.ndarray,
+    *,
+    threshold: float,
+    grid_cols: int,
+    grid_rows: int,
+    candidates_per_cell: int,
+    max_output_candidates: int,
+    min_separation_px: float,
+) -> list[tuple[float, float, float]]:
+    candidates: list[tuple[float, float, float]] = []
+    height, width = image.shape
+    for y in range(1, height - 1):
+        for x in range(1, width - 1):
+            center = float(image[y, x])
+            if not np.isfinite(center) or center <= threshold:
+                continue
+            patch = image[y - 1 : y + 2, x - 1 : x + 2]
+            if np.any(center < patch):
+                continue
+            candidates.append((float(x), float(y), center))
+
+    per_cell: list[list[tuple[float, float, float]]] = [[] for _ in range(grid_cols * grid_rows)]
+    for x, y, flux in candidates:
+        cell_x = min((int(x) * grid_cols) // width, grid_cols - 1)
+        cell_y = min((int(y) * grid_rows) // height, grid_rows - 1)
+        per_cell[cell_y * grid_cols + cell_x].append((x, y, flux))
+
+    compact: list[tuple[float, float, float]] = []
+    for cell in per_cell:
+        cell.sort(key=lambda item: (-item[2], item[1], item[0]))
+        compact.extend(cell[:candidates_per_cell])
+    compact.sort(key=lambda item: (-item[2], item[1], item[0]))
+
+    selected: list[tuple[float, float, float]] = []
+    min_separation2 = min_separation_px * min_separation_px
+    for x, y, flux in compact:
+        if len(selected) >= max_output_candidates:
+            break
+        if all((x - kept_x) ** 2 + (y - kept_y) ** 2 >= min_separation2 for kept_x, kept_y, _ in selected):
+            selected.append((x, y, flux))
+    return selected
+
+
 def test_gpu_star_grid_top_nms_candidates_keeps_spatial_candidates():
     module = cuda_module_or_skip()
     if not hasattr(module, "star_grid_top_nms_candidates_f32"):
@@ -1329,11 +1373,60 @@ def test_gpu_star_grid_top_nms_candidates_keeps_spatial_candidates():
     assert result["count"] == 5
     assert result["stored_count"] == 4
     assert result["grid_capacity"] == 8
+    assert result["catalog_sort_mode"] == "shared_bitonic_power2"
     assert (8, 8) in points
     assert (10, 10) not in points
     assert (40, 8) in points
     assert (8, 40) in points
     assert (40, 40) in points
+
+
+def test_gpu_star_grid_top_nms_candidates_matches_cpu_reference_for_non_power2_capacity():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_grid_top_nms_candidates_f32"):
+        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from glass_cuda")
+
+    image = np.zeros((31, 37), dtype=np.float32)
+    for x, y, flux in [
+        (4, 4, 100.0),
+        (6, 4, 99.0),
+        (12, 8, 180.0),
+        (25, 7, 150.0),
+        (30, 14, 170.0),
+        (7, 20, 160.0),
+        (18, 21, 130.0),
+        (31, 25, 140.0),
+        (34, 27, 135.0),
+    ]:
+        image[y, x] = flux
+
+    result = module.star_grid_top_nms_candidates_f32(
+        image,
+        threshold=10.0,
+        grid_cols=5,
+        grid_rows=3,
+        candidates_per_cell=3,
+        max_output_candidates=8,
+        min_separation_px=3.0,
+    )
+    expected = _cpu_grid_top_nms_reference(
+        image,
+        threshold=10.0,
+        grid_cols=5,
+        grid_rows=3,
+        candidates_per_cell=3,
+        max_output_candidates=8,
+        min_separation_px=3.0,
+    )
+    points = [
+        (float(x), float(y), float(flux))
+        for x, y, flux in zip(result["x"], result["y"], result["flux"], strict=True)
+    ]
+
+    assert result["grid_capacity"] == 45
+    assert result["catalog_sort_mode"] == "shared_bitonic_power2"
+    assert result["stored_count"] == len(expected)
+    assert points == expected
 
 
 def test_gpu_star_top_candidates_tie_breaks_saturated_plateau_deterministically():

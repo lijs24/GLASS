@@ -875,6 +875,23 @@ integration where applicable.
   resident triangle-registration smoke tests, ruff, full pytest, and the
   200-light benchmark because this gate changes registration diagnostics.
 
+### S2-Gate 52: Resident Grid Catalog Bitonic Shared Sort
+
+- Replace the resident grid/NMS catalog path's shared-memory odd-even sort with
+  a shared bitonic sort for grid capacities up to 4096 candidates, preserving
+  the GLASS candidate ordering rule of flux descending, then y ascending, then
+  x ascending.
+- Keep local-maximum detection, per-grid-cell candidate budgets, NMS radius,
+  compact catalog output, frame accounting, and downstream triangle
+  registration behavior within the existing benchmark tolerance family.
+- Record the catalog sort mode in CUDA wrapper results, resident per-frame
+  warnings, `resident_artifacts.json`, and the HTML resident summary so
+  performance changes remain auditable.
+- Validate with a CPU-reference non-power-of-two catalog test, resident
+  batch/single equivalence tests, resident triangle-registration smoke tests,
+  ruff, full pytest, and the 200-light benchmark because this gate changes the
+  resident catalog GPU kernel.
+
 ## Gate Rules
 
 Each gate requires:

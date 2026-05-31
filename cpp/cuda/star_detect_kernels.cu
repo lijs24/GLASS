@@ -321,49 +321,83 @@ __global__ void star_catalog_sort_desc_kernel(float* xs, float* ys, float* fluxe
   }
 }
 
-__global__ void star_catalog_sort_desc_shared_kernel(float* xs, float* ys, float* fluxes, int max_candidates) {
+__global__ void star_catalog_sort_desc_shared_kernel(
+    float* xs,
+    float* ys,
+    float* fluxes,
+    int candidate_count,
+    int sort_count) {
   extern __shared__ float shared_catalog[];
   float* shared_xs = shared_catalog;
-  float* shared_ys = shared_xs + max_candidates;
-  float* shared_fluxes = shared_ys + max_candidates;
+  float* shared_ys = shared_xs + sort_count;
+  float* shared_fluxes = shared_ys + sort_count;
 
-  for (int i = threadIdx.x; i < max_candidates; i += blockDim.x) {
-    shared_xs[i] = xs[i];
-    shared_ys[i] = ys[i];
-    shared_fluxes[i] = fluxes[i];
+  for (int i = threadIdx.x; i < sort_count; i += blockDim.x) {
+    if (i < candidate_count) {
+      shared_xs[i] = xs[i];
+      shared_ys[i] = ys[i];
+      shared_fluxes[i] = fluxes[i];
+    } else {
+      shared_xs[i] = 0.0f;
+      shared_ys[i] = 0.0f;
+      shared_fluxes[i] = -3.402823466e+38F;
+    }
   }
   __syncthreads();
 
-  for (int phase = 0; phase < max_candidates; ++phase) {
-    const int first = phase & 1;
-    for (int i = first + threadIdx.x * 2; i + 1 < max_candidates; i += blockDim.x * 2) {
-      const int j = i + 1;
-      if (star_candidate_weaker(
-              shared_fluxes[i],
-              shared_xs[i],
-              shared_ys[i],
-              shared_fluxes[j],
-              shared_xs[j],
-              shared_ys[j])) {
-        const float tmp_x = shared_xs[i];
-        const float tmp_y = shared_ys[i];
-        const float tmp_flux = shared_fluxes[i];
-        shared_xs[i] = shared_xs[j];
-        shared_ys[i] = shared_ys[j];
-        shared_fluxes[i] = shared_fluxes[j];
-        shared_xs[j] = tmp_x;
-        shared_ys[j] = tmp_y;
-        shared_fluxes[j] = tmp_flux;
+  for (int k = 2; k <= sort_count; k <<= 1) {
+    for (int j = k >> 1; j > 0; j >>= 1) {
+      for (int i = threadIdx.x; i < sort_count; i += blockDim.x) {
+        const int peer = i ^ j;
+        if (peer <= i || peer >= sort_count) {
+          continue;
+        }
+        const bool ascending = (i & k) != 0;
+        const bool should_swap =
+            ascending
+                ? star_candidate_better(
+                      shared_fluxes[i],
+                      shared_xs[i],
+                      shared_ys[i],
+                      shared_fluxes[peer],
+                      shared_xs[peer],
+                      shared_ys[peer])
+                : star_candidate_better(
+                      shared_fluxes[peer],
+                      shared_xs[peer],
+                      shared_ys[peer],
+                      shared_fluxes[i],
+                      shared_xs[i],
+                      shared_ys[i]);
+        if (should_swap) {
+          const float tmp_x = shared_xs[i];
+          const float tmp_y = shared_ys[i];
+          const float tmp_flux = shared_fluxes[i];
+          shared_xs[i] = shared_xs[peer];
+          shared_ys[i] = shared_ys[peer];
+          shared_fluxes[i] = shared_fluxes[peer];
+          shared_xs[peer] = tmp_x;
+          shared_ys[peer] = tmp_y;
+          shared_fluxes[peer] = tmp_flux;
+        }
       }
+      __syncthreads();
     }
-    __syncthreads();
   }
 
-  for (int i = threadIdx.x; i < max_candidates; i += blockDim.x) {
+  for (int i = threadIdx.x; i < candidate_count; i += blockDim.x) {
     xs[i] = shared_xs[i];
     ys[i] = shared_ys[i];
     fluxes[i] = shared_fluxes[i];
   }
+}
+
+int next_power_of_two_int(int value) {
+  int result = 1;
+  while (result < value) {
+    result <<= 1;
+  }
+  return result;
 }
 
 __global__ void star_catalog_nms_kernel(
@@ -547,11 +581,12 @@ void glass_star_grid_top_nms_candidates_f32_launch(
       grid_cols,
       grid_rows,
       candidates_per_cell);
-  if (grid_capacity <= 4096) {
+  const int sort_count = next_power_of_two_int(grid_capacity);
+  if (sort_count <= 4096) {
     constexpr int sort_threads = 256;
-    const std::size_t shared_bytes = static_cast<std::size_t>(grid_capacity) * 3 * sizeof(float);
+    const std::size_t shared_bytes = static_cast<std::size_t>(sort_count) * 3 * sizeof(float);
     star_catalog_sort_desc_shared_kernel<<<1, sort_threads, shared_bytes>>>(
-        grid_xs, grid_ys, grid_fluxes, grid_capacity);
+        grid_xs, grid_ys, grid_fluxes, grid_capacity, sort_count);
   } else {
     star_catalog_sort_desc_kernel<<<1, 1>>>(grid_xs, grid_ys, grid_fluxes, grid_capacity);
   }

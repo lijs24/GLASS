@@ -2758,6 +2758,7 @@ def run_resident_calibration_integration(
                 triangle_catalog_native_count_download_s = 0.0
                 triangle_catalog_native_output_download_s = 0.0
                 triangle_catalog_native_total_s = 0.0
+                triangle_catalog_sort_mode = "off"
                 triangle_pixel_refine_batch_enabled = bool(
                     pixel_refine_enabled
                     and hasattr(native_stack, "refine_matrix_translation_candidates_batch_to_reference")
@@ -2848,6 +2849,7 @@ def run_resident_calibration_integration(
                     nonlocal triangle_catalog_native_output_download_s
                     nonlocal triangle_catalog_native_sync_s
                     nonlocal triangle_catalog_native_total_s
+                    nonlocal triangle_catalog_sort_mode
                     nonlocal triangle_catalog_timing_model
                     threshold_key = round(float(threshold), 6)
                     if triangle_catalog_batch_enabled:
@@ -2871,6 +2873,9 @@ def run_resident_calibration_integration(
                             if batch_results:
                                 triangle_catalog_timing_model = str(
                                     batch_results[0].get("catalog_timing_model", "unavailable")
+                                )
+                                triangle_catalog_sort_mode = str(
+                                    batch_results[0].get("catalog_sort_mode", "unavailable")
                                 )
                                 triangle_catalog_native_enqueue_s = sum(
                                     float(item.get("catalog_enqueue_s", 0.0) or 0.0)
@@ -3320,6 +3325,7 @@ def run_resident_calibration_integration(
                                         f"triangle_catalog_selector={catalog_selector}",
                                         f"triangle_catalog_batch={triangle_catalog_batch_mode}",
                                         f"triangle_catalog_timing_model={triangle_catalog_timing_model}",
+                                        f"triangle_catalog_sort_mode={triangle_catalog_sort_mode}",
                                         f"triangle_nms_min_separation_px={nms_min_separation_px:.6g}",
                                         "resident CUDA triangle descriptor similarity",
                                     ]
@@ -4160,6 +4166,9 @@ def run_resident_calibration_integration(
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_catalog_timing_model": triangle_catalog_timing_model
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_catalog_sort_mode": triangle_catalog_sort_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_catalog_native_enqueue_s": float(triangle_catalog_native_enqueue_s)
