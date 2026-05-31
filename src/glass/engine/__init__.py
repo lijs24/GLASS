@@ -13,9 +13,11 @@ from glass.engine.contracts import (
     TileWindow,
     TransformResult,
 )
+from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 
 __all__ = [
     "CombinePolicy",
+    "CPUStackEngine",
     "DQFlag",
     "DQMask",
     "FrameTransform",
@@ -23,6 +25,7 @@ __all__ = [
     "ImageSource",
     "OutputMapPolicy",
     "RejectionPolicy",
+    "StackEngineResult",
     "StackRequest",
     "TileWindow",
     "TransformResult",
