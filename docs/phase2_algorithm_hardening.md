@@ -1313,6 +1313,21 @@ integration where applicable.
 - Validate with benchmark dry-run tests, ruff, full pytest, and a focused
   200-light sweep around the current Gate70B/Gate73/Gate77 parameter family.
 
+### S2-Gate 79: Queued Resident Prefetch Refill
+
+- Add an explicit resident pinned-ring prefetch refill mode so callback-time
+  H2D slot release can be decoupled from immediate `_fill()` submission.
+- Keep the default `immediate` refill behavior unchanged; add `queued` for a
+  lightweight single-thread refill queue and `deferred` as a diagnostic mode.
+- Preserve host-buffer lifetime safety: a slot can still be recycled only after
+  the matching H2D completion release path says it is safe.
+- Record requested refill mode, refill request count, queued submit/execute
+  counts, coalesced refill requests, wait time, and release/fill model in
+  `resident_io_pipeline`.
+- Validate with resident CLI coverage, benchmark dry-run coverage, ruff, full
+  pytest, and a 200-light comparison against the Gate70B/Gate78 resident
+  baseline.
+
 ## Gate Rules
 
 Each gate requires:

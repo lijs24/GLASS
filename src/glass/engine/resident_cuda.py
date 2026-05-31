@@ -6,6 +6,7 @@ import json
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
+from threading import RLock
 from time import perf_counter
 from typing import Any
 
@@ -125,14 +126,21 @@ class _LightPrefetcher:
         pinned_ring: bool = False,
         height: int | None = None,
         width: int | None = None,
+        release_refill_mode: str = "immediate",
     ):
         self.light_frames = light_frames
         self.depth = max(0, int(depth))
         self.workers = max(1, int(workers))
         self.pinned_ring = bool(pinned_ring and self.depth > 0)
+        if release_refill_mode not in {"immediate", "queued", "deferred"}:
+            raise ValueError("release_refill_mode must be immediate, queued, or deferred")
+        self.release_refill_mode = release_refill_mode
         self.height = height
         self.width = width
         self.executor: ThreadPoolExecutor | None = None
+        self.refill_executor: ThreadPoolExecutor | None = None
+        self.refill_future: Future[None] | None = None
+        self.lock = RLock()
         self.pending: dict[int, Future[tuple[np.ndarray, dict[str, float]]]] = {}
         self.pinned_slots: list[np.ndarray] = []
         self.free_slots: list[int] = []
@@ -143,6 +151,12 @@ class _LightPrefetcher:
         self.fill_submit_count = 0
         self.release_count = 0
         self.release_batch_count = 0
+        self.release_refill_request_count = 0
+        self.release_refill_queued_submit_count = 0
+        self.release_refill_queued_execute_count = 0
+        self.release_refill_queued_coalesced_count = 0
+        self.release_refill_deferred_count = 0
+        self.release_refill_wait_s = 0.0
         self.max_inflight_slots = 0
 
     def __enter__(self) -> "_LightPrefetcher":
@@ -160,41 +174,89 @@ class _LightPrefetcher:
                 max_workers=self.workers,
                 thread_name_prefix="glass-light-prefetch",
             )
+            if self.pinned_ring and self.release_refill_mode == "queued":
+                self.refill_executor = ThreadPoolExecutor(
+                    max_workers=1,
+                    thread_name_prefix="glass-light-refill",
+                )
             self._fill()
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self.flush_refill()
+        if self.refill_executor is not None:
+            self.refill_executor.shutdown(wait=True, cancel_futures=True)
+            self.refill_executor = None
         if self.executor is not None:
             self.executor.shutdown(wait=True, cancel_futures=True)
             self.executor = None
 
     def _fill(self) -> None:
-        self.fill_call_count += 1
-        if self.executor is None:
+        with self.lock:
+            self.fill_call_count += 1
+            if self.executor is None:
+                return
+            while self.next_submit < len(self.light_frames) and len(self.pending) < self.depth:
+                slot: np.ndarray | None = None
+                slot_id: int | None = None
+                if self.pinned_ring:
+                    if not self.free_slots:
+                        if self.next_submit < len(self.light_frames):
+                            self.fill_blocked_no_slot_count += 1
+                        return
+                    slot_id = self.free_slots.pop()
+                    slot = self.pinned_slots[slot_id]
+                frame = self.light_frames[self.next_submit]
+                self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"], slot)
+                if slot_id is not None:
+                    self.inflight_slots[self.next_submit] = slot_id
+                    self.max_inflight_slots = max(self.max_inflight_slots, len(self.inflight_slots))
+                self.fill_submit_count += 1
+                self.next_submit += 1
+
+    def _queued_fill(self) -> None:
+        self.release_refill_queued_execute_count += 1
+        self._fill()
+
+    def _request_fill_after_release(self) -> None:
+        self.release_refill_request_count += 1
+        if self.release_refill_mode == "deferred":
+            self.release_refill_deferred_count += 1
             return
-        while self.next_submit < len(self.light_frames) and len(self.pending) < self.depth:
-            slot: np.ndarray | None = None
-            slot_id: int | None = None
-            if self.pinned_ring:
-                if not self.free_slots:
-                    if self.next_submit < len(self.light_frames):
-                        self.fill_blocked_no_slot_count += 1
-                    return
-                slot_id = self.free_slots.pop()
-                slot = self.pinned_slots[slot_id]
-            frame = self.light_frames[self.next_submit]
-            self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"], slot)
-            if slot_id is not None:
-                self.inflight_slots[self.next_submit] = slot_id
-                self.max_inflight_slots = max(self.max_inflight_slots, len(self.inflight_slots))
-            self.fill_submit_count += 1
-            self.next_submit += 1
+        if self.release_refill_mode != "queued" or self.refill_executor is None:
+            self._fill()
+            return
+        with self.lock:
+            if self.refill_future is not None and not self.refill_future.done():
+                self.release_refill_queued_coalesced_count += 1
+                return
+            self.release_refill_queued_submit_count += 1
+            self.refill_future = self.refill_executor.submit(self._queued_fill)
+
+    def flush_refill(self) -> None:
+        refill_future = self.refill_future
+        if refill_future is not None:
+            wait_start = perf_counter()
+            refill_future.result()
+            self.release_refill_wait_s += perf_counter() - wait_start
+        if self.release_refill_mode == "deferred" and self.release_refill_deferred_count > 0:
+            self._fill()
+            self.release_refill_deferred_count = 0
 
     def result(self, index: int) -> tuple[np.ndarray, dict[str, float], float]:
         if self.executor is None:
             data, read_profile = _read_light_timed(self.light_frames[index]["path"])
             return data, read_profile, read_profile["total"]
-        future = self.pending.pop(index)
+        with self.lock:
+            future = self.pending.pop(index, None)
+        if future is None:
+            self.flush_refill()
+            with self.lock:
+                future = self.pending.pop(index, None)
+        if future is None:
+            self._fill()
+            with self.lock:
+                future = self.pending.pop(index)
         wait_start = perf_counter()
         data, read_profile = future.result()
         wait_elapsed = perf_counter() - wait_start
@@ -209,17 +271,18 @@ class _LightPrefetcher:
         if not self.pinned_ring:
             return
         released = 0
-        for index in indices:
-            slot_id = self.inflight_slots.pop(index, None)
-            if slot_id is None:
-                continue
-            self.free_slots.append(slot_id)
-            released += 1
+        with self.lock:
+            for index in indices:
+                slot_id = self.inflight_slots.pop(index, None)
+                if slot_id is None:
+                    continue
+                self.free_slots.append(slot_id)
+                released += 1
         if released == 0:
             return
         self.release_count += released
         self.release_batch_count += 1
-        self._fill()
+        self._request_fill_after_release()
 
     @property
     def host_pinned_bytes(self) -> int:
@@ -1663,6 +1726,7 @@ def run_resident_calibration_integration(
     resident_local_normalization_tile_size: int = 512,
     resident_prefetch_frames: int = 0,
     resident_prefetch_workers: int = 1,
+    resident_prefetch_refill_mode: str = "immediate",
     resident_h2d_mode: str = "pageable",
     resident_calibration_batch_frames: int = 1,
     resident_calibration_streams: int = 1,
@@ -1726,6 +1790,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
         raise ValueError("resident_prefetch_workers must be positive")
+    if resident_prefetch_refill_mode not in {"immediate", "queued", "deferred"}:
+        raise ValueError("resident_prefetch_refill_mode must be immediate, queued, or deferred")
     if resident_h2d_mode not in {"pageable", "pinned_async", "pinned_ring"}:
         raise ValueError("resident_h2d_mode must be one of: pageable, pinned_async, pinned_ring")
     if resident_h2d_mode == "pinned_ring" and resident_prefetch_frames <= 0:
@@ -1982,6 +2048,7 @@ def run_resident_calibration_integration(
                 pinned_ring=resident_h2d_mode == "pinned_ring",
                 height=height,
                 width=width,
+                release_refill_mode=resident_prefetch_refill_mode,
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
                 if calibration_batch_enabled:
@@ -5049,6 +5116,7 @@ def run_resident_calibration_integration(
                     "resident_io_pipeline": {
                         "prefetch_frames": int(resident_prefetch_frames),
                         "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
+                        "prefetch_refill_mode": resident_prefetch_refill_mode,
                         "h2d_mode": resident_h2d_mode,
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
@@ -5135,7 +5203,26 @@ def run_resident_calibration_integration(
                         "prefetch_fill_submit_count": int(light_prefetch.fill_submit_count),
                         "prefetch_release_count": int(prefetch_release_count),
                         "prefetch_release_batch_count": int(light_prefetch.release_batch_count),
-                        "prefetch_release_fill_model": "batched_release_single_fill",
+                        "prefetch_release_fill_model": (
+                            "queued_release_refill"
+                            if resident_prefetch_refill_mode == "queued"
+                            else "deferred_release_refill"
+                            if resident_prefetch_refill_mode == "deferred"
+                            else "batched_release_single_fill"
+                        ),
+                        "prefetch_release_refill_request_count": int(
+                            light_prefetch.release_refill_request_count
+                        ),
+                        "prefetch_release_refill_queued_submit_count": int(
+                            light_prefetch.release_refill_queued_submit_count
+                        ),
+                        "prefetch_release_refill_queued_execute_count": int(
+                            light_prefetch.release_refill_queued_execute_count
+                        ),
+                        "prefetch_release_refill_queued_coalesced_count": int(
+                            light_prefetch.release_refill_queued_coalesced_count
+                        ),
+                        "prefetch_release_refill_wait_s": float(light_prefetch.release_refill_wait_s),
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
                         "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",

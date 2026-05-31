@@ -119,6 +119,7 @@ def main() -> int:
     parser.add_argument("--streams", default="4")
     parser.add_argument("--wave-frames", default="2,4")
     parser.add_argument("--release-modes", default="callback_queue")
+    parser.add_argument("--refill-modes", default="immediate")
     parser.add_argument("--baseline-total-seconds", type=float)
     parser.add_argument("--reference-master", help="optional master FITS used for post-run compare reports")
     parser.add_argument("--reference-time-seconds", type=float)
@@ -144,6 +145,7 @@ def main() -> int:
         streams=parse_int_grid(args.streams, default=[4]),
         wave_frames=parse_int_grid(args.wave_frames, default=[2, 4]),
         release_modes=parse_mode_grid(args.release_modes, default=["callback_queue"]),
+        refill_modes=parse_mode_grid(args.refill_modes, default=["immediate"]),
     )
 
     summaries: list[dict[str, Any]] = []

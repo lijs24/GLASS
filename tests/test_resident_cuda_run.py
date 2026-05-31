@@ -861,6 +861,78 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(tmp_path:
     assert io_pipeline["prefetch_release_fill_model"] == "batched_release_single_fill"
 
 
+def test_cli_resident_cuda_callback_queue_queued_prefetch_refill(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_callback_queue_queued_refill"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-prefetch-refill-mode",
+            "queued",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-calibration-wave-frames",
+            "1",
+            "--resident-calibration-release-mode",
+            "callback_queue",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
+    assert io_pipeline["calibration_release_mode_effective"] == "callback_queue"
+    assert io_pipeline["prefetch_refill_mode"] == "queued"
+    assert io_pipeline["prefetch_release_fill_model"] == "queued_release_refill"
+    assert io_pipeline["prefetch_release_count"] == 2
+    assert io_pipeline["prefetch_release_batch_count"] == 2
+    assert io_pipeline["prefetch_release_refill_request_count"] == 2
+    assert io_pipeline["prefetch_release_refill_queued_submit_count"] >= 1
+    assert io_pipeline["prefetch_release_refill_queued_execute_count"] == (
+        io_pipeline["prefetch_release_refill_queued_submit_count"]
+    )
+    assert (
+        io_pipeline["prefetch_release_refill_queued_submit_count"]
+        + io_pipeline["prefetch_release_refill_queued_coalesced_count"]
+        == io_pipeline["prefetch_release_refill_request_count"]
+    )
+    assert io_pipeline["prefetch_fill_call_count"] == (
+        1 + io_pipeline["prefetch_release_refill_queued_execute_count"]
+    )
+    assert io_pipeline["prefetch_fill_submit_count"] == 2
+
+
 def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_weight_dataset(tmp_path)

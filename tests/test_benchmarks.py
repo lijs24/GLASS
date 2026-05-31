@@ -337,4 +337,5 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
     assert all(run["status"] == "dry_run" for run in payload["runs"])
     assert len([command for command in payload["commands"] if command["kind"] == "run"]) == 4
     assert "--resident-output-maps" in payload["commands"][0]["command"]
+    assert "--resident-prefetch-refill-mode" in payload["commands"][0]["command"]
     assert "Resident Prefetch Sweep" in markdown

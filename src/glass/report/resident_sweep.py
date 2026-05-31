@@ -38,6 +38,7 @@ def build_resident_sweep_variants(
     streams: Iterable[int],
     wave_frames: Iterable[int],
     release_modes: Iterable[str],
+    refill_modes: Iterable[str] = ("immediate",),
 ) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     for prefetch_frame_count in prefetch_frames:
@@ -46,23 +47,27 @@ def build_resident_sweep_variants(
                 for stream_count in streams:
                     for wave_frame_count in wave_frames:
                         for release_mode in release_modes:
-                            if wave_frame_count > batch_frame_count:
-                                continue
-                            variant_id = (
-                                f"pf{prefetch_frame_count}_pw{prefetch_worker_count}_"
-                                f"b{batch_frame_count}_s{stream_count}_w{wave_frame_count}_{release_mode}"
-                            )
-                            variants.append(
-                                {
-                                    "variant_id": variant_id,
-                                    "prefetch_frames": int(prefetch_frame_count),
-                                    "prefetch_workers": int(prefetch_worker_count),
-                                    "batch_frames": int(batch_frame_count),
-                                    "streams": int(stream_count),
-                                    "wave_frames": int(wave_frame_count),
-                                    "release_mode": str(release_mode),
-                                }
-                            )
+                            for refill_mode in refill_modes:
+                                if wave_frame_count > batch_frame_count:
+                                    continue
+                                refill_suffix = "" if str(refill_mode) == "immediate" else f"_rf{refill_mode}"
+                                variant_id = (
+                                    f"pf{prefetch_frame_count}_pw{prefetch_worker_count}_"
+                                    f"b{batch_frame_count}_s{stream_count}_w{wave_frame_count}_{release_mode}"
+                                    f"{refill_suffix}"
+                                )
+                                variants.append(
+                                    {
+                                        "variant_id": variant_id,
+                                        "prefetch_frames": int(prefetch_frame_count),
+                                        "prefetch_workers": int(prefetch_worker_count),
+                                        "batch_frames": int(batch_frame_count),
+                                        "streams": int(stream_count),
+                                        "wave_frames": int(wave_frame_count),
+                                        "release_mode": str(release_mode),
+                                        "refill_mode": str(refill_mode),
+                                    }
+                                )
     return variants
 
 
@@ -72,6 +77,8 @@ def variant_run_args(variant: dict[str, Any]) -> list[str]:
         str(int(variant["prefetch_frames"])),
         "--resident-prefetch-workers",
         str(int(variant["prefetch_workers"])),
+        "--resident-prefetch-refill-mode",
+        str(variant.get("refill_mode", "immediate")),
         "--resident-h2d-mode",
         "pinned_ring",
         "--resident-calibration-batch-frames",
@@ -118,6 +125,17 @@ def load_resident_run_summary(run_dir: str | Path, *, variant: dict[str, Any] | 
         "resident_registration_warp_s": _optional_float(artifact_timing.get("resident_registration_warp")),
         "prefetch_blocked_no_slot_count": int(io_pipeline.get("prefetch_fill_blocked_no_slot_count", 0) or 0),
         "prefetch_release_batch_count": int(io_pipeline.get("prefetch_release_batch_count", 0) or 0),
+        "prefetch_refill_mode": io_pipeline.get("prefetch_refill_mode"),
+        "prefetch_release_refill_queued_submit_count": int(
+            io_pipeline.get("prefetch_release_refill_queued_submit_count", 0) or 0
+        ),
+        "prefetch_release_refill_queued_execute_count": int(
+            io_pipeline.get("prefetch_release_refill_queued_execute_count", 0) or 0
+        ),
+        "prefetch_release_refill_queued_coalesced_count": int(
+            io_pipeline.get("prefetch_release_refill_queued_coalesced_count", 0) or 0
+        ),
+        "prefetch_release_refill_wait_s": float(io_pipeline.get("prefetch_release_refill_wait_s", 0.0) or 0.0),
         "prefetch_fill_call_count": int(io_pipeline.get("prefetch_fill_call_count", 0) or 0),
         "prefetch_fill_submit_count": int(io_pipeline.get("prefetch_fill_submit_count", 0) or 0),
         "callback_wave_count": int(io_pipeline.get("calibration_callback_wave_count", 0) or 0),

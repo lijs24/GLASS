@@ -420,6 +420,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
+                resident_prefetch_refill_mode=args.resident_prefetch_refill_mode,
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_calibration_streams=args.resident_calibration_streams,
@@ -514,6 +515,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_local_normalization_tile_size=args.resident_local_normalization_tile_size,
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
+                resident_prefetch_refill_mode=args.resident_prefetch_refill_mode,
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_calibration_streams=args.resident_calibration_streams,
@@ -954,6 +956,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="worker threads used for resident light-frame CPU RAM prefetch",
     )
     run.add_argument(
+        "--resident-prefetch-refill-mode",
+        choices=["immediate", "queued", "deferred"],
+        default="immediate",
+        help=(
+            "resident pinned-ring slot refill policy after host-buffer release; queued moves refill "
+            "submission out of native callback timing for tuning runs"
+        ),
+    )
+    run.add_argument(
         "--resident-h2d-mode",
         choices=["pageable", "pinned_async", "pinned_ring"],
         default="pageable",
@@ -1190,6 +1201,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="worker threads used for resident light-frame CPU RAM prefetch",
+    )
+    audit.add_argument(
+        "--resident-prefetch-refill-mode",
+        choices=["immediate", "queued", "deferred"],
+        default="immediate",
+        help="resident pinned-ring slot refill policy for resident audit",
     )
     audit.add_argument(
         "--resident-h2d-mode",
