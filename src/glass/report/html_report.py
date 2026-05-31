@@ -53,6 +53,49 @@ def _table(rows: list[dict[str, Any]]) -> str:
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
 
 
+def _benchmark_comparison_rows(
+    compare: dict[str, Any] | None,
+    acceptance_audit: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not compare and not acceptance_audit:
+        return []
+    speedup = (acceptance_audit or {}).get("speedup_summary") or {}
+    speedup_comparison = speedup.get("comparison") or {}
+    glass = speedup.get("glass") or {}
+    reference = speedup.get("wbpp_blackbox") or {}
+    timing = (compare or {}).get("timing") or {}
+    region = (compare or {}).get("comparison_region") or {}
+    checks = (acceptance_audit or {}).get("checks") or []
+    failed_checks = [str(item.get("name")) for item in checks if not item.get("passed")]
+    counts = (acceptance_audit or {}).get("frame_type_counts") or {}
+    contract = (acceptance_audit or {}).get("benchmark_contract") or {}
+    return [
+        {
+            "acceptance_status": (acceptance_audit or {}).get("status"),
+            "benchmark_contract": contract.get("name"),
+            "compare_json": (compare or {}).get("_report_source_path") or speedup_comparison.get("path"),
+            "acceptance_json": (acceptance_audit or {}).get("_report_source_path"),
+            "glass_time_s": timing.get("glass_time_seconds", glass.get("elapsed_s")),
+            "reference_time_s": timing.get("reference_time_seconds", reference.get("elapsed_s")),
+            "speedup": timing.get("speedup_vs_reference", speedup.get("speedup_vs_wbpp")),
+            "shape_match": (compare or {}).get("shape_match", speedup_comparison.get("shape_match")),
+            "rms_diff": (compare or {}).get("rms_diff", speedup_comparison.get("rms_diff")),
+            "abs_diff_p99": (compare or {}).get("abs_diff_p99", speedup_comparison.get("abs_diff_p99")),
+            "coverage_fraction": region.get("coverage_fraction", speedup_comparison.get("coverage_fraction")),
+            "compared_pixels": region.get("compared_pixels", speedup_comparison.get("compared_pixels")),
+            "active_frames": glass.get("weighted_frame_count"),
+            "zero_weight_frames": glass.get("zero_weight_frame_count"),
+            "light_frames": counts.get("light"),
+            "bias_frames": counts.get("bias"),
+            "dark_frames": counts.get("dark"),
+            "flat_frames": counts.get("flat"),
+            "checks_passed": sum(1 for item in checks if item.get("passed")),
+            "checks_failed": len(failed_checks),
+            "failed_check_names": ", ".join(failed_checks[:8]),
+        }
+    ]
+
+
 def _warning_rows(
     manifest: dict[str, Any] | None,
     plan: dict[str, Any] | None,
@@ -528,11 +571,14 @@ def write_html_report(
     integration: dict[str, Any] | None = None,
     timing: dict[str, Any] | None = None,
     resident: dict[str, Any] | None = None,
+    compare: dict[str, Any] | None = None,
+    acceptance_audit: dict[str, Any] | None = None,
     title: str = "GLASS Report",
     run_root: str | Path | None = None,
 ) -> None:
     frames = (manifest or {}).get("frames", [])
     light_plans = (plan or {}).get("light_plans", [])
+    benchmark_comparison_rows = _benchmark_comparison_rows(compare, acceptance_audit)
     master_rows = []
     for group_id, master in (calibration or {}).get("masters", {}).items():
         stats = master.get("stats", {})
@@ -633,6 +679,11 @@ def write_html_report(
   <h1>{escape(title)}</h1>
   <h2>Project summary</h2>
   <p>Clean-room GLASS report. Input directories are not modified.</p>
+  <h2>Benchmark comparison</h2>
+  <p>When compare and acceptance-audit JSON artifacts are present, this table
+  brings speed, image-difference, frame-count, and pass/fail evidence into the
+  main report.</p>
+  {_table(benchmark_comparison_rows)}
   <h2>Stage coverage summary</h2>
   {_table(stage_coverage_rows)}
   <h2>Input frame table</h2>

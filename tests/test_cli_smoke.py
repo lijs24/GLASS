@@ -307,9 +307,55 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
             ],
         },
     )
+    write_json(
+        run / "fixture_compare.json",
+        {
+            "shape_match": True,
+            "rms_diff": 0.001,
+            "abs_diff_p99": 0.004,
+            "timing": {
+                "glass_time_seconds": 10.0,
+                "reference_time_seconds": 250.0,
+                "speedup_vs_reference": 25.0,
+            },
+            "comparison_region": {"coverage_fraction": 0.97, "compared_pixels": 12345},
+        },
+    )
+    write_json(
+        run / "fixture_acceptance_audit.json",
+        {
+            "status": "passed",
+            "passed": True,
+            "benchmark_contract": {"name": "fixture_contract", "schema_version": 1},
+            "frame_type_counts": {"light": 200, "bias": 20, "dark": 20, "flat": 20},
+            "checks": [
+                {"name": "minimum_speedup", "passed": True},
+                {"name": "maximum_rms_diff", "passed": True},
+            ],
+            "speedup_summary": {
+                "speedup_vs_wbpp": 25.0,
+                "glass": {"elapsed_s": 10.0, "weighted_frame_count": 2, "zero_weight_frame_count": 0},
+                "wbpp_blackbox": {"elapsed_s": 250.0},
+                "comparison": {
+                    "shape_match": True,
+                    "rms_diff": 0.001,
+                    "abs_diff_p99": 0.004,
+                    "coverage_fraction": 0.97,
+                    "compared_pixels": 12345,
+                },
+            },
+        },
+    )
     report = tmp_path / "resident_report.html"
     assert main(["report", "--run", str(run), "--out", str(report)]) == 0
     html = report.read_text(encoding="utf-8")
+    assert "Benchmark comparison" in html
+    assert "fixture_contract" in html
+    assert "fixture_compare.json" in html
+    assert "fixture_acceptance_audit.json" in html
+    assert "25.0" in html
+    assert "0.97" in html
+    assert "12345" in html
     assert "Resident CUDA summary" in html
     assert "cuda_resident_stack" in html
     assert "Test GPU" in html

@@ -589,6 +589,20 @@ integration where applicable.
 - Validate with CLI report tests, ruff, full pytest, and a report regeneration
   on the latest 200-light resident audit-map run.
 
+### S2-Gate 35: Benchmark Comparison In Main Report
+
+- Let `glass report` summarize compare JSON and acceptance-audit JSON artifacts
+  in the main HTML report.
+- Auto-discover the newest `*compare*.json` and `*acceptance_audit*.json` files
+  in the run directory, with explicit CLI overrides for both.
+- Surface speedup, GLASS/reference elapsed time, RMS, P99 absolute difference,
+  coverage fraction, compared pixels, active/zero-weight frames, calibration
+  frame counts, acceptance status, contract name, and check counts.
+- Keep compare/audit JSON files as the authoritative artifacts; the report
+  should only present their high-signal fields.
+- Validate with CLI report tests, ruff, full pytest, and a report regeneration
+  on the latest 200-light resident audit-map run.
+
 ## Gate Rules
 
 Each gate requires:

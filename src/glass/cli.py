@@ -41,6 +41,36 @@ def _read_json_if_exists(path: Path):
     return read_json(path) if path.exists() else None
 
 
+def _read_report_json_if_exists(path: Path | None):
+    if path is None or not path.exists():
+        return None
+    payload = read_json(path)
+    if isinstance(payload, dict):
+        payload["_report_source_path"] = str(path)
+    return payload
+
+
+def _newest_matching_json(run: Path, patterns: list[str]) -> Path | None:
+    candidates: list[Path] = []
+    for pattern in patterns:
+        candidates.extend(path for path in run.glob(pattern) if path.is_file())
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.stat().st_mtime_ns, path.name))
+
+
+def _report_compare_path(run: Path, explicit: str | Path | None = None) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    return _newest_matching_json(run, ["*compare*.json"])
+
+
+def _report_acceptance_audit_path(run: Path, explicit: str | Path | None = None) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    return _newest_matching_json(run, ["*acceptance_audit*.json"])
+
+
 def _local_norm_override_from_arg(value: str) -> bool | None:
     if value == "on":
         return True
@@ -91,7 +121,15 @@ def _timed_stage(run: Path, timing: dict, stage: str, fn):
     return result
 
 
-def _write_run_report(run: Path, report_path: Path, manifest_path: Path, plan_path: Path) -> None:
+def _write_run_report(
+    run: Path,
+    report_path: Path,
+    manifest_path: Path,
+    plan_path: Path,
+    *,
+    compare_json: str | Path | None = None,
+    acceptance_audit: str | Path | None = None,
+) -> None:
     write_html_report(
         report_path,
         manifest=_read_json_if_exists(manifest_path),
@@ -103,6 +141,8 @@ def _write_run_report(run: Path, report_path: Path, manifest_path: Path, plan_pa
         integration=_read_json_if_exists(run / "integration_results.json"),
         timing=_read_json_if_exists(run / "run_timing.json"),
         resident=_read_json_if_exists(run / "resident_artifacts.json"),
+        compare=_read_report_json_if_exists(_report_compare_path(run, compare_json)),
+        acceptance_audit=_read_report_json_if_exists(_report_acceptance_audit_path(run, acceptance_audit)),
         run_root=run,
     )
 
@@ -295,6 +335,8 @@ def cmd_report(args: argparse.Namespace) -> int:
     integration = _read_json_if_exists(integration_path)
     timing = _read_json_if_exists(timing_path)
     resident = _read_json_if_exists(resident_path)
+    compare_payload = _read_report_json_if_exists(_report_compare_path(run, args.compare_json))
+    acceptance_payload = _read_report_json_if_exists(_report_acceptance_audit_path(run, args.acceptance_audit))
     write_html_report(
         args.out,
         manifest=manifest,
@@ -306,6 +348,8 @@ def cmd_report(args: argparse.Namespace) -> int:
         integration=integration,
         timing=timing,
         resident=resident,
+        compare=compare_payload,
+        acceptance_audit=acceptance_payload,
         run_root=run,
     )
     console.print(f"Wrote report: {args.out}")
@@ -1033,6 +1077,8 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--out", required=True)
     report.add_argument("--manifest")
     report.add_argument("--plan")
+    report.add_argument("--compare-json", help="optional compare JSON to summarize in the report")
+    report.add_argument("--acceptance-audit", help="optional acceptance-audit JSON to summarize in the report")
     report.set_defaults(func=cmd_report)
 
     audit = sub.add_parser("audit", help="scan, plan, and report in one command")
