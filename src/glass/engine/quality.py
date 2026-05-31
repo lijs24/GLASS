@@ -26,6 +26,65 @@ class _QualityScan:
     median_method: str
 
 
+def _quality_gate_policy(run: Path) -> dict[str, Any]:
+    plan_path = run / "processing_plan.json"
+    plan = read_json(plan_path) if plan_path.exists() else {}
+    registration_policy = plan.get("registration_policy", {}) if isinstance(plan, dict) else {}
+    return {
+        "min_stars": int(registration_policy.get("min_stars") or 8),
+        "max_saturation_fraction": float(
+            registration_policy.get(
+                "quality_max_saturation_fraction",
+                registration_policy.get("max_saturation_fraction", 0.02),
+            )
+        ),
+        "min_quality_score": float(registration_policy.get("quality_min_score") or 0.0),
+        "require_fwhm": bool(registration_policy.get("quality_require_fwhm", True)),
+    }
+
+
+def _apply_quality_gate(quality: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+    warnings: list[str] = []
+    star_count = int(quality.get("star_count") or 0)
+    min_stars = int(policy["min_stars"])
+    if star_count < min_stars:
+        warnings.append(f"star_count {star_count} below min_stars={min_stars}")
+    if bool(policy["require_fwhm"]) and quality.get("fwhm_px") is None:
+        warnings.append("fwhm_px is unavailable")
+    saturation_fraction = float(quality.get("saturation_fraction") or 0.0)
+    max_saturation_fraction = float(policy["max_saturation_fraction"])
+    if saturation_fraction > max_saturation_fraction:
+        warnings.append(
+            f"saturation_fraction {saturation_fraction:.6g} exceeds max_saturation_fraction={max_saturation_fraction}"
+        )
+    quality_score = float(quality.get("quality_score") or quality.get("weight") or 0.0)
+    min_quality_score = float(policy["min_quality_score"])
+    if quality_score < min_quality_score:
+        warnings.append(f"quality_score {quality_score:.6g} below min_quality_score={min_quality_score}")
+    quality["quality_gate_status"] = "accepted" if not warnings else "rejected"
+    quality["quality_gate_warnings"] = warnings
+    quality["reference_candidate"] = not warnings
+    return quality
+
+
+def _quality_gate_summary(qualities: list[dict[str, Any]], policy: dict[str, Any], fallback_used: bool) -> dict[str, Any]:
+    accepted = [item for item in qualities if item.get("quality_gate_status") == "accepted"]
+    rejected = [item for item in qualities if item.get("quality_gate_status") == "rejected"]
+    reason_counts: dict[str, int] = {}
+    for item in rejected:
+        for warning in item.get("quality_gate_warnings", []):
+            reason = str(warning).split(" ", 1)[0]
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+    return {
+        "policy": policy,
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected),
+        "reference_candidate_count": len(accepted),
+        "fallback_used": fallback_used,
+        "rejection_reason_counts": reason_counts,
+    }
+
+
 def _scan_quality_stats(path: str | Path, tile_size: int, scratch_path: Path) -> _QualityScan:
     import gc
 
@@ -220,25 +279,34 @@ def measure_calibrated_quality(
 ) -> dict[str, Any]:
     run = Path(run_dir)
     artifacts = read_json(run / "calibration_artifacts.json")
+    gate_policy = _quality_gate_policy(run)
     scratch_dir = run / "quality_scratch"
     qualities = []
     for item in artifacts.get("calibrated_lights", []):
         dq_summary = item.get("dq_summary", {}) if isinstance(item, dict) else {}
-        quality = measure_quality_streaming(
-            item["frame_id"],
-            None,
-            item["path"],
-            tile_size=tile_size,
-            scratch_dir=scratch_dir,
-            saturated_pixels=int(dq_summary.get("saturated") or 0),
+        quality = _apply_quality_gate(
+            measure_quality_streaming(
+                item["frame_id"],
+                None,
+                item["path"],
+                tile_size=tile_size,
+                scratch_dir=scratch_dir,
+                saturated_pixels=int(dq_summary.get("saturated") or 0),
+            ),
+            gate_policy,
         )
         qualities.append(quality)
     if scratch_dir.exists() and not any(scratch_dir.iterdir()):
         scratch_dir.rmdir()
     reference = None
+    fallback_used = False
     if qualities:
+        reference_candidates = [item for item in qualities if item.get("reference_candidate")]
+        if not reference_candidates:
+            reference_candidates = qualities
+            fallback_used = True
         reference = max(
-            qualities,
+            reference_candidates,
             key=lambda q: (
                 int(q.get("star_count") or 0),
                 float(q.get("quality_score") or q.get("weight") or 0.0),
@@ -251,7 +319,13 @@ def measure_calibrated_quality(
         "schema_version": 1,
         "frame_quality": qualities,
         "reference_frame_id": reference,
-        "reference_selection": "max star_count, then max combined quality, min FWHM/eccentricity/background_rms",
+        "reference_selection": (
+            "quality_gate accepted frames, then max star_count, max combined quality, "
+            "min FWHM/eccentricity/background_rms"
+        ),
+        "reference_selection_fallback": fallback_used,
+        "quality_gate_policy": gate_policy,
+        "quality_gate_summary": _quality_gate_summary(qualities, gate_policy, fallback_used),
         "metric_source": "streaming_tile_reader",
         "tile_size": tile_size,
         "star_detector": "robust_local_maximum_moments_v1",

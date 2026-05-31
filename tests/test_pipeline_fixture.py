@@ -439,10 +439,15 @@ def test_pipeline_fixture_run_quality_and_report(tmp_path: Path):
     assert all(item["fwhm_px"] is not None for item in quality["frame_quality"])
     assert all(item["star_metrics"]["star_snr_median"] is not None for item in quality["frame_quality"])
     assert all(item["weight_source"] == "combined_psf_snr_v1" for item in quality["frame_quality"])
+    assert "quality_gate_policy" in quality
+    assert "quality_gate_summary" in quality
+    assert all(item["quality_gate_status"] in {"accepted", "rejected"} for item in quality["frame_quality"])
+    assert all("reference_candidate" in item for item in quality["frame_quality"])
     assert not (run / "quality_scratch").exists()
     assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
     assert "Frame quality table" in text
+    assert "reference_candidates" in text
     assert "Reference frame" in text
     assert "Runtime summary" in text
 

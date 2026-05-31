@@ -162,6 +162,25 @@ def _benchmark_comparison_rows(
     ]
 
 
+def _quality_gate_rows(quality: dict[str, Any] | None) -> list[dict[str, Any]]:
+    summary = (quality or {}).get("quality_gate_summary") or {}
+    if not summary:
+        return []
+    policy = summary.get("policy") or {}
+    return [
+        {
+            "accepted": summary.get("accepted_count"),
+            "rejected": summary.get("rejected_count"),
+            "reference_candidates": summary.get("reference_candidate_count"),
+            "fallback_used": summary.get("fallback_used"),
+            "min_stars": policy.get("min_stars"),
+            "max_saturation_fraction": policy.get("max_saturation_fraction"),
+            "min_quality_score": policy.get("min_quality_score"),
+            "rejection_reasons": summary.get("rejection_reason_counts"),
+        }
+    ]
+
+
 def _acceptance_failure_rows(acceptance_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in (acceptance_audit or {}).get("checks") or []:
@@ -686,6 +705,7 @@ def write_html_report(
     calibration_policy = (calibration or {}).get("policy", {})
     input_cache_rows = (calibration or {}).get("input_cache", [])
     frame_quality = (quality or {}).get("frame_quality", [])
+    quality_gate_rows = _quality_gate_rows(quality)
     registration_results = (registration or {}).get("registration_results", [])
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
     integration_outputs = (integration or {}).get("outputs", [])
@@ -800,6 +820,7 @@ def write_html_report(
   {_h2("frame-quality-table", "Frame quality table")}
   <p>Detector: <code>{escape(str((quality or {}).get("star_detector", "pending")))}</code>.
   Weight source: <code>{escape(str((quality or {}).get("weight_source", "pending")))}</code>.</p>
+  {_table(quality_gate_rows)}
   {_limited_table(frame_quality, label="frame quality rows", artifact="frame_quality.json")}
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
   {_h2("registration-table", "Registration table")}

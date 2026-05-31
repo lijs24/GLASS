@@ -6,8 +6,9 @@ import numpy as np
 
 from glass.cpu.star_detect import detect_stars
 from glass.cpu.metrics import measure_quality
-from glass.engine.quality import measure_quality_streaming
+from glass.engine.quality import measure_calibrated_quality, measure_quality_streaming
 from glass.io.fits_io import write_fits_data
+from glass.io.json_io import write_json
 from glass.synthetic.generator import render_star_field
 
 
@@ -85,3 +86,43 @@ def test_streaming_quality_uses_saturation_fraction(tmp_path: Path):
 
     assert streaming["saturation_fraction"] == 4 / 256
     assert streaming["weight_components"]["saturation_penalty"] < 1.0
+
+
+def test_calibrated_quality_gate_excludes_saturated_reference(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    bad_stars = np.array(
+        [[18.0, 18.0, 1200.0], [34.0, 28.0, 1000.0], [44.0, 42.0, 900.0]],
+        dtype=np.float32,
+    )
+    good_stars = np.array([[18.0, 18.0, 1000.0], [42.0, 38.0, 900.0]], dtype=np.float32)
+    bad_path = run / "bad.fits"
+    good_path = run / "good.fits"
+    write_fits_data(bad_path, render_star_field(64, 64, bad_stars))
+    write_fits_data(good_path, render_star_field(64, 64, good_stars))
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "calibrated_lights": [
+                {"frame_id": "bad", "path": str(bad_path), "dq_summary": {"saturated": 200}},
+                {"frame_id": "good", "path": str(good_path), "dq_summary": {"saturated": 0}},
+            ]
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {"registration_policy": {"min_stars": 2, "quality_max_saturation_fraction": 0.01}},
+    )
+
+    result = measure_calibrated_quality(run, tile_size=16)
+    by_id = {item["frame_id"]: item for item in result["frame_quality"]}
+
+    assert result["reference_frame_id"] == "good"
+    assert result["reference_selection_fallback"] is False
+    assert result["quality_gate_summary"]["accepted_count"] == 1
+    assert result["quality_gate_summary"]["rejected_count"] == 1
+    assert by_id["good"]["quality_gate_status"] == "accepted"
+    assert by_id["good"]["reference_candidate"] is True
+    assert by_id["bad"]["quality_gate_status"] == "rejected"
+    assert by_id["bad"]["reference_candidate"] is False
+    assert any("saturation_fraction" in warning for warning in by_id["bad"]["quality_gate_warnings"])

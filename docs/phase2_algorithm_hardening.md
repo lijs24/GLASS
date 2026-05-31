@@ -641,6 +641,19 @@ integration where applicable.
 - Validate with CLI report tests, ruff, full pytest, and a report regeneration
   on the latest 200-light resident audit-map run.
 
+### S2-Gate 39: Quality Gate Reference Candidates
+
+- Add an explicit quality-gate artifact contract to `frame_quality.json`.
+- Mark each calibrated light as accepted or rejected for automatic reference
+  selection using star count, saturation fraction, optional quality score, and
+  FWHM availability.
+- Select the automatic reference frame from accepted quality-gate candidates
+  first, with an explicit fallback flag when every frame fails the gate.
+- Surface quality-gate counts and policy in the HTML report.
+- Validate with synthetic quality tests, pipeline/report tests, ruff, full
+  pytest, and a report regeneration on the latest 200-light resident audit-map
+  run.
+
 ## Gate Rules
 
 Each gate requires:
