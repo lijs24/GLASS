@@ -514,6 +514,24 @@ integration where applicable.
   and a contract audit against the latest preserved 200-light resident
   artifacts.
 
+### S2-Gate 30: Coverage And Rejection Map Consistency Verification
+
+- Extend the tiled map verifier to summarize scalar count maps such as
+  coverage and rejection maps without loading full images into memory.
+- Let benchmark contracts verify coverage-map finite pixels against
+  `dq_coverage_provenance.post_rejection_coverage.finite_pixels`.
+- Verify that coverage zero-or-less pixels match DQ `NO_DATA` counts when the
+  contract opts into that exact resident invariant.
+- When low/high rejection maps are written, verify positive-pixel counts against
+  DQ `LOW_REJECTED`/`HIGH_REJECTED` flags and verify total rejection-map sample
+  sums against `rejected_sample_count`.
+- When a resident output-map policy intentionally skips low/high rejection map
+  FITS files, acceptance audit must report that as an explicit skipped-policy
+  PASS rather than silently ignoring the maps.
+- Validate with direct count-map tests, acceptance-audit tests, ruff, full
+  pytest, and a contract audit against the latest preserved 200-light resident
+  artifacts.
+
 ## Gate Rules
 
 Each gate requires:

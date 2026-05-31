@@ -89,6 +89,13 @@
       "low_rejected",
       "high_rejected"
     ],
+    "verify_output_count_maps": true,
+    "count_map_verify_tile_size": 2048,
+    "count_map_positive_threshold": 0.0,
+    "coverage_map_finite_pixels_match_provenance": true,
+    "coverage_zero_pixels_match_no_data": true,
+    "allow_missing_rejection_maps_if_skipped": true,
+    "rejection_map_sum_matches_provenance": true,
     "positive_output_dq_flags": [
       "valid",
       "warp_edge"

@@ -216,6 +216,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         for record in dq.get("records") or []:
             summary = record.get("summary") or {}
             verification = record.get("dq_map_pixel_verification") or {}
+            output_maps = record.get("output_count_map_verification") or {}
             lines.append(
                 "- "
                 f"{record.get('source_file')}[{record.get('index')}] "
@@ -223,7 +224,8 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                 f"stage={summary.get('stage')} item={summary.get('item')} "
                 f"dq_map_exists={record.get('dq_map_exists')} "
                 f"legacy_normalized={record.get('normalized_from_legacy')} "
-                f"pixel_verification={verification.get('status')}"
+                f"pixel_verification={verification.get('status')} "
+                f"coverage_verification={(output_maps.get('coverage') or {}).get('status')}"
             )
     regression = audit.get("performance_regression")
     if regression:

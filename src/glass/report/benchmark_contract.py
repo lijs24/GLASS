@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from glass.engine.dq import dq_provenance_summary_from_resident
-from glass.report.dq_map_verify import summarize_dq_map_pixels
+from glass.report.dq_map_verify import summarize_count_map_pixels, summarize_dq_map_pixels
 from glass.report.speedup_report import _read_json_lenient
 
 
@@ -113,6 +113,8 @@ def _dq_record_from_payload(
         return None
     dq_map_path = payload.get("dq_map_path")
     coverage_map_path = payload.get("coverage_map_path")
+    low_rejection_map_path = payload.get("low_rejection_map_path")
+    high_rejection_map_path = payload.get("high_rejection_map_path")
     return {
         "source_file": source_file,
         "source_kind": source_kind,
@@ -122,7 +124,13 @@ def _dq_record_from_payload(
         "dq_map_exists": _path_exists_maybe_relative(dq_map_path, run_root),
         "coverage_map_path": coverage_map_path,
         "coverage_map_exists": _path_exists_maybe_relative(coverage_map_path, run_root),
+        "low_rejection_map_path": low_rejection_map_path,
+        "low_rejection_map_exists": _path_exists_maybe_relative(low_rejection_map_path, run_root),
+        "high_rejection_map_path": high_rejection_map_path,
+        "high_rejection_map_exists": _path_exists_maybe_relative(high_rejection_map_path, run_root),
+        "output_map_policy": dict(payload.get("output_map_policy") or {}),
         "dq_flag_bits": dict(payload.get("dq_flag_bits") or {}),
+        "source_provenance": dict(payload.get("dq_coverage_provenance") or {}),
         "summary": summary,
     }
 
@@ -197,6 +205,65 @@ def _attach_dq_map_pixel_verification(
             }
 
 
+def _map_skipped_by_policy(record: dict[str, Any], map_name: str) -> bool:
+    policy = record.get("output_map_policy") or {}
+    skipped = policy.get("skipped") or []
+    return str(map_name) in {str(item) for item in skipped}
+
+
+def _attach_output_count_map_verification(
+    records: list[dict[str, Any]],
+    *,
+    run_root: Path,
+    dq_contract: dict[str, Any],
+) -> None:
+    if not dq_contract.get("verify_output_count_maps"):
+        return
+    tile_size = int(dq_contract.get("count_map_verify_tile_size") or 2048)
+    threshold = float(dq_contract.get("count_map_positive_threshold") or 0.0)
+    cache: dict[str, dict[str, Any]] = {}
+    map_fields = {
+        "coverage": "coverage_map_path",
+        "low_rejection": "low_rejection_map_path",
+        "high_rejection": "high_rejection_map_path",
+    }
+    for record in records:
+        output_verification: dict[str, Any] = {}
+        for map_name, path_key in map_fields.items():
+            path_value = record.get(path_key)
+            map_path = _resolve_path_maybe_relative(path_value, run_root)
+            if map_path is None:
+                output_verification[map_name] = {
+                    "status": "skipped" if _map_skipped_by_policy(record, map_name) else "missing_path",
+                    "verified": False,
+                    "path": path_value,
+                }
+                continue
+            cache_key = str(map_path)
+            try:
+                summary = cache.get(cache_key)
+                if summary is None:
+                    summary = summarize_count_map_pixels(
+                        map_path,
+                        tile_size=tile_size,
+                        positive_threshold=threshold,
+                    )
+                    cache[cache_key] = summary
+                output_verification[map_name] = {
+                    "status": "verified",
+                    "verified": True,
+                    "result": summary,
+                }
+            except Exception as exc:  # pragma: no cover - exercised through audit failure path
+                output_verification[map_name] = {
+                    "status": "error",
+                    "verified": False,
+                    "path": path_value,
+                    "error": str(exc),
+                }
+        record["output_count_map_verification"] = output_verification
+
+
 def collect_dq_provenance_records(
     glass_run: str | Path,
     *,
@@ -239,6 +306,7 @@ def collect_dq_provenance_records(
 
     if dq_contract:
         _attach_dq_map_pixel_verification(records, run_root=run_root, dq_contract=dq_contract)
+        _attach_output_count_map_verification(records, run_root=run_root, dq_contract=dq_contract)
     return records
 
 
@@ -256,6 +324,18 @@ def _summary_output_count(summary: dict[str, Any], key: str) -> float | None:
     if not isinstance(output, dict):
         return None
     return _numeric(output.get(key))
+
+
+def _summary_output_count_default_zero(summary: dict[str, Any], key: str) -> int:
+    value = _summary_output_count(summary, key)
+    return 0 if value is None else int(value)
+
+
+def _provenance_nested_number(provenance: dict[str, Any], section: str, key: str) -> float | None:
+    nested = provenance.get(section)
+    if not isinstance(nested, dict):
+        return None
+    return _numeric(nested.get(key))
 
 
 def _build_dq_provenance_contract_checks(
@@ -406,6 +486,164 @@ def _build_dq_provenance_contract_checks(
                     {"matches": matches},
                 )
             )
+
+    if dq_contract.get("verify_output_count_maps"):
+        count_map_verifications = [record.get("output_count_map_verification") or {} for record in records]
+        coverage_items = [
+            item.get("coverage") or {}
+            for item in count_map_verifications
+            if item.get("coverage")
+        ]
+        coverage_verified = [item for item in coverage_items if item.get("verified")]
+        coverage_errors = [item for item in coverage_items if item.get("status") == "error"]
+        checks.append(
+            _check(
+                "contract_coverage_map_pixel_verification",
+                bool(coverage_verified) and not coverage_errors,
+                {
+                    "verified_records": len(coverage_verified),
+                    "error_records": len(coverage_errors),
+                    "errors": [item.get("error") for item in coverage_errors],
+                },
+            )
+        )
+        if dq_contract.get("coverage_map_finite_pixels_match_provenance"):
+            matches = []
+            for record in records:
+                coverage = (record.get("output_count_map_verification") or {}).get("coverage") or {}
+                result = coverage.get("result") or {}
+                if not result:
+                    continue
+                expected = _provenance_nested_number(
+                    record.get("source_provenance") or {},
+                    "post_rejection_coverage",
+                    "finite_pixels",
+                )
+                actual = result.get("finite_pixels")
+                delta = None if actual is None or expected is None else int(actual) - int(expected)
+                if actual is not None or expected is not None:
+                    matches.append(
+                        {
+                            "actual": None if actual is None else int(actual),
+                            "provenance": None if expected is None else int(expected),
+                            "delta": delta,
+                            "passed": delta == 0,
+                        }
+                    )
+            checks.append(
+                _check(
+                    "contract_coverage_map_finite_pixels_match",
+                    bool(matches) and all(bool(match.get("passed")) for match in matches),
+                    {"matches": matches},
+                )
+            )
+        if dq_contract.get("coverage_zero_pixels_match_no_data"):
+            matches = []
+            for record in records:
+                coverage = (record.get("output_count_map_verification") or {}).get("coverage") or {}
+                result = coverage.get("result") or {}
+                if not result:
+                    continue
+                actual = result.get("zero_or_less_pixels")
+                expected = _summary_output_count_default_zero(record.get("summary") or {}, "no_data")
+                delta = None if actual is None else int(actual) - int(expected)
+                if actual is not None:
+                    matches.append(
+                        {
+                            "actual": int(actual),
+                            "summary": expected,
+                            "delta": delta,
+                            "passed": delta == 0,
+                        }
+                    )
+            checks.append(
+                _check(
+                    "contract_coverage_zero_pixels_match_no_data",
+                    bool(matches) and all(bool(match.get("passed")) for match in matches),
+                    {"matches": matches},
+                )
+            )
+
+        allow_skipped_rejection = bool(dq_contract.get("allow_missing_rejection_maps_if_skipped"))
+        for map_name, flag in [
+            ("low_rejection", "low_rejected"),
+            ("high_rejection", "high_rejected"),
+        ]:
+            map_items = [
+                (record, (record.get("output_count_map_verification") or {}).get(map_name) or {})
+                for record in records
+            ]
+            verified_items = [(record, item) for record, item in map_items if item.get("verified")]
+            missing_items = [
+                (record, item)
+                for record, item in map_items
+                if not item.get("verified") and item.get("status") in {"missing_path", "skipped"}
+            ]
+            skipped_ok = (
+                allow_skipped_rejection
+                and missing_items
+                and all(_map_skipped_by_policy(record, map_name) for record, _item in missing_items)
+            )
+            checks.append(
+                _check(
+                    f"contract_{map_name}_map_available_or_skipped",
+                    bool(verified_items) or bool(skipped_ok),
+                    {
+                        "verified_records": len(verified_items),
+                        "missing_or_skipped_records": len(missing_items),
+                        "allow_skipped_by_policy": allow_skipped_rejection,
+                    },
+                )
+            )
+            if verified_items:
+                matches = []
+                for record, item in verified_items:
+                    result = item.get("result") or {}
+                    actual = result.get("positive_pixels")
+                    expected = _summary_output_count_default_zero(record.get("summary") or {}, flag)
+                    delta = None if actual is None else int(actual) - int(expected)
+                    matches.append(
+                        {
+                            "actual": None if actual is None else int(actual),
+                            "summary": expected,
+                            "delta": delta,
+                            "passed": delta == 0,
+                        }
+                    )
+                checks.append(
+                    _check(
+                        f"contract_{map_name}_map_positive_pixels_match:{flag}",
+                        bool(matches) and all(bool(match.get("passed")) for match in matches),
+                        {"matches": matches},
+                    )
+                )
+        if dq_contract.get("rejection_map_sum_matches_provenance"):
+            matches = []
+            for record in records:
+                verification = record.get("output_count_map_verification") or {}
+                low = (verification.get("low_rejection") or {}).get("result") or {}
+                high = (verification.get("high_rejection") or {}).get("result") or {}
+                if not low or not high:
+                    continue
+                actual = int(low.get("rounded_sum") or 0) + int(high.get("rounded_sum") or 0)
+                expected = _numeric((record.get("source_provenance") or {}).get("rejected_sample_count"))
+                delta = None if expected is None else actual - int(round(expected))
+                matches.append(
+                    {
+                        "actual": actual,
+                        "provenance": None if expected is None else int(round(expected)),
+                        "delta": delta,
+                        "passed": delta == 0,
+                    }
+                )
+            if matches or not allow_skipped_rejection:
+                checks.append(
+                    _check(
+                        "contract_rejection_map_sum_matches_provenance",
+                        bool(matches) and all(bool(match.get("passed")) for match in matches),
+                        {"matches": matches},
+                    )
+                )
 
     for term in dq_contract.get("required_source_terms") or []:
         term_text = str(term)

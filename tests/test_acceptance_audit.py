@@ -47,6 +47,8 @@ def _write_glass_run(
     if resident_dq:
         dq_map = path / "dq_map.fits"
         coverage_map = path / "coverage_map.fits"
+        low_rejection_map = path / "low_rejection_map.fits"
+        high_rejection_map = path / "high_rejection_map.fits"
         dq_values = np.array(
             [
                 [0, int(DQFlag.WARP_EDGE), int(DQFlag.LOW_REJECTED)],
@@ -55,7 +57,17 @@ def _write_glass_run(
             dtype=np.uint32,
         )
         write_fits_data(dq_map, dq_values, dtype=np.float32)
-        coverage_map.write_bytes(b"coverage")
+        write_fits_data(coverage_map, np.ones((2, 3), dtype=np.float32), dtype=np.float32)
+        write_fits_data(
+            low_rejection_map,
+            np.array([[0, 0, 1], [0, 0, 0]], dtype=np.float32),
+            dtype=np.float32,
+        )
+        write_fits_data(
+            high_rejection_map,
+            np.array([[0, 0, 0], [1, 2, 0]], dtype=np.float32),
+            dtype=np.float32,
+        )
         dq_summary = {
             "valid": 2,
             "no_data": 0,
@@ -72,8 +84,8 @@ def _write_glass_run(
                 "geometric_warp_coverage",
             ],
             "finite_pre_rejection_coverage": {"finite_pixels": 1000},
-            "post_rejection_coverage": {"finite_pixels": 990},
-            "rejected_sample_count": 9,
+            "post_rejection_coverage": {"finite_pixels": 6},
+            "rejected_sample_count": 4,
             "geometric_zero_pixels": 0,
             "geometric_partial_pixels": 12,
             "partial_pre_rejection_pixels": 12,
@@ -82,6 +94,14 @@ def _write_glass_run(
             {
                 "dq_map_path": str(dq_map),
                 "coverage_map_path": str(coverage_map),
+                "low_rejection_map_path": str(low_rejection_map),
+                "high_rejection_map_path": str(high_rejection_map),
+                "output_map_policy": {
+                    "available": ["master", "weight", "dq", "coverage", "low_rejection", "high_rejection"],
+                    "mode": "audit",
+                    "skipped": [],
+                    "written": ["master", "weight", "dq", "coverage", "low_rejection", "high_rejection"],
+                },
                 "dq_summary": dq_summary,
                 "dq_coverage_provenance": dq_coverage_provenance,
             }
@@ -90,6 +110,14 @@ def _write_glass_run(
             {
                 "dq_map_path": str(dq_map),
                 "coverage_map_path": str(coverage_map),
+                "low_rejection_map_path": str(low_rejection_map),
+                "high_rejection_map_path": str(high_rejection_map),
+                "output_map_policy": {
+                    "available": ["master", "weight", "dq", "coverage", "low_rejection", "high_rejection"],
+                    "mode": "audit",
+                    "skipped": [],
+                    "written": ["master", "weight", "dq", "coverage", "low_rejection", "high_rejection"],
+                },
                 "dq_summary": dq_summary,
                 "dq_coverage_provenance": dq_coverage_provenance,
             }
@@ -208,6 +236,12 @@ def _add_dq_contract(path: Path) -> None:
         "dq_map_verify_tile_size": 2,
         "dq_map_summary_tolerance_pixels": 0,
         "dq_map_summary_match_flags": ["valid", "warp_edge", "low_rejected", "high_rejected"],
+        "verify_output_count_maps": True,
+        "count_map_verify_tile_size": 2,
+        "coverage_map_finite_pixels_match_provenance": True,
+        "coverage_zero_pixels_match_no_data": True,
+        "allow_missing_rejection_maps_if_skipped": True,
+        "rejection_map_sum_matches_provenance": True,
         "positive_output_dq_flags": ["valid", "warp_edge"],
         "required_source_terms": ["geometric_warp_coverage"],
     }
@@ -352,10 +386,21 @@ def test_acceptance_audit_applies_dq_provenance_contract(tmp_path: Path):
     assert checks["contract_dq_map_pixel_verification"] is True
     assert checks["contract_dq_map_summary_match:valid"] is True
     assert checks["contract_dq_map_summary_match:warp_edge"] is True
+    assert checks["contract_coverage_map_pixel_verification"] is True
+    assert checks["contract_coverage_map_finite_pixels_match"] is True
+    assert checks["contract_coverage_zero_pixels_match_no_data"] is True
+    assert checks["contract_low_rejection_map_available_or_skipped"] is True
+    assert checks["contract_low_rejection_map_positive_pixels_match:low_rejected"] is True
+    assert checks["contract_high_rejection_map_positive_pixels_match:high_rejected"] is True
+    assert checks["contract_rejection_map_sum_matches_provenance"] is True
     assert checks["contract_dq_source_term:geometric_warp_coverage"] is True
     verification = audit["dq_provenance"]["records"][0]["dq_map_pixel_verification"]
     assert verification["status"] == "verified"
     assert verification["result"]["counts"]["high_rejected"] == 2
+    count_maps = audit["dq_provenance"]["records"][0]["output_count_map_verification"]
+    assert count_maps["coverage"]["result"]["finite_pixels"] == 6
+    assert count_maps["low_rejection"]["result"]["positive_pixels"] == 1
+    assert count_maps["high_rejection"]["result"]["rounded_sum"] == 3
 
 
 def test_acceptance_audit_dq_contract_fails_when_artifact_missing(tmp_path: Path):
@@ -395,6 +440,8 @@ def test_acceptance_audit_dq_contract_fails_when_artifact_missing(tmp_path: Path
     assert checks["contract_dq_source_schema:resident_dq_coverage_provenance"] is False
     assert checks["contract_dq_map_path_present"] is False
     assert checks["contract_dq_map_pixel_verification"] is False
+    assert checks["contract_coverage_map_pixel_verification"] is False
+    assert checks["contract_low_rejection_map_available_or_skipped"] is False
 
 
 def test_acceptance_audit_contract_catches_missing_parameters(tmp_path: Path):
