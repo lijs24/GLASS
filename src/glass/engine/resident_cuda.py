@@ -707,6 +707,7 @@ def _apply_resident_registration_matrix_batch(
     items: list[tuple[int, list[list[float]]]],
     interpolation: str = "bilinear",
     clamping_threshold: float = -1.0,
+    batch_dispatch: str = "loop",
 ) -> tuple[list[str], dict[str, Any]]:
     if not items:
         return [], {"batched": False, "frame_count": 0}
@@ -740,6 +741,7 @@ def _apply_resident_registration_matrix_batch(
                     np.asarray(matrix_values, dtype=np.float32),
                     np.nan,
                     float(clamping_threshold),
+                    dispatch=batch_dispatch,
                 )
             )
             for position in matrix_positions:
@@ -750,6 +752,7 @@ def _apply_resident_registration_matrix_batch(
                     matrix_indices,
                     np.asarray(matrix_values, dtype=np.float32),
                     np.nan,
+                    dispatch=batch_dispatch,
                 )
             )
             for position in matrix_positions:
@@ -1719,6 +1722,7 @@ def run_resident_calibration_integration(
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
+    resident_warp_batch_dispatch: str = "loop",
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
@@ -1764,6 +1768,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_registration_max_shift must be non-negative")
     if resident_warp_interpolation not in {"bilinear", "lanczos3"}:
         raise ValueError("resident_warp_interpolation must be bilinear or lanczos3")
+    if resident_warp_batch_dispatch not in {"loop", "chunked"}:
+        raise ValueError("resident_warp_batch_dispatch must be loop or chunked")
     if resident_ncc_sample_stride <= 0:
         raise ValueError("resident_ncc_sample_stride must be positive")
     if resident_ncc_fallback_score_threshold < 0.0 or resident_ncc_fallback_score_threshold > 1.0:
@@ -3500,11 +3506,22 @@ def run_resident_calibration_integration(
                 triangle_warp_batch_native_inverse_prepare_s = 0.0
                 triangle_warp_batch_native_inverse_batch_alloc_s = 0.0
                 triangle_warp_batch_native_inverse_batch_bytes = 0
+                triangle_warp_batch_native_index_upload_s = 0.0
                 triangle_warp_batch_native_inverse_upload_s = 0.0
                 triangle_warp_batch_native_kernel_enqueue_s = 0.0
+                triangle_warp_batch_native_coverage_reduce_enqueue_s = 0.0
+                triangle_warp_batch_native_scatter_enqueue_s = 0.0
                 triangle_warp_batch_native_device_copy_enqueue_s = 0.0
                 triangle_warp_batch_native_sync_s = 0.0
                 triangle_warp_batch_native_total_s = 0.0
+                triangle_warp_batch_native_chunk_frames = 0
+                triangle_warp_batch_native_chunk_count = 0
+                triangle_warp_batch_native_workspace_bytes = 0
+                triangle_warp_batch_native_output_bytes = 0
+                triangle_warp_batch_native_coverage_bytes = 0
+                triangle_warp_batch_native_warp_kernel_launches = 0
+                triangle_warp_batch_native_coverage_reduce_kernel_launches = 0
+                triangle_warp_batch_native_scatter_kernel_launches = 0
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -4422,6 +4439,7 @@ def run_resident_calibration_integration(
                             ],
                             resident_warp_interpolation,
                             resident_warp_clamping_threshold,
+                            resident_warp_batch_dispatch,
                         )
                         warp_elapsed = perf_counter() - warp_start
                         _add_elapsed(registration_component_s, "triangle_warp", warp_elapsed)
@@ -4445,17 +4463,54 @@ def run_resident_calibration_integration(
                             triangle_warp_batch_native_inverse_batch_bytes += int(
                                 warp_timing.get("inverse_batch_bytes", 0) or 0
                             )
+                            triangle_warp_batch_native_index_upload_s += float(
+                                warp_timing.get("index_upload_s", 0.0) or 0.0
+                            )
                             triangle_warp_batch_native_inverse_upload_s += float(
                                 warp_timing.get("inverse_upload_s", 0.0) or 0.0
                             )
                             triangle_warp_batch_native_kernel_enqueue_s += float(
                                 warp_timing.get("kernel_enqueue_s", 0.0) or 0.0
                             )
+                            triangle_warp_batch_native_coverage_reduce_enqueue_s += float(
+                                warp_timing.get("coverage_reduce_enqueue_s", 0.0) or 0.0
+                            )
+                            triangle_warp_batch_native_scatter_enqueue_s += float(
+                                warp_timing.get("scatter_enqueue_s", 0.0) or 0.0
+                            )
                             triangle_warp_batch_native_device_copy_enqueue_s += float(
                                 warp_timing.get("device_copy_enqueue_s", 0.0) or 0.0
                             )
                             triangle_warp_batch_native_sync_s += float(warp_timing.get("sync_s", 0.0) or 0.0)
                             triangle_warp_batch_native_total_s += float(warp_timing.get("total_s", 0.0) or 0.0)
+                            triangle_warp_batch_native_chunk_frames = max(
+                                triangle_warp_batch_native_chunk_frames,
+                                int(warp_timing.get("batch_chunk_frames", 0) or 0),
+                            )
+                            triangle_warp_batch_native_chunk_count += int(
+                                warp_timing.get("batch_chunk_count", 0) or 0
+                            )
+                            triangle_warp_batch_native_workspace_bytes = max(
+                                triangle_warp_batch_native_workspace_bytes,
+                                int(warp_timing.get("batch_workspace_bytes", 0) or 0),
+                            )
+                            triangle_warp_batch_native_output_bytes = max(
+                                triangle_warp_batch_native_output_bytes,
+                                int(warp_timing.get("batch_output_bytes", 0) or 0),
+                            )
+                            triangle_warp_batch_native_coverage_bytes = max(
+                                triangle_warp_batch_native_coverage_bytes,
+                                int(warp_timing.get("batch_coverage_bytes", 0) or 0),
+                            )
+                            triangle_warp_batch_native_warp_kernel_launches += int(
+                                warp_timing.get("warp_kernel_launches", 0) or 0
+                            )
+                            triangle_warp_batch_native_coverage_reduce_kernel_launches += int(
+                                warp_timing.get("coverage_reduce_kernel_launches", 0) or 0
+                            )
+                            triangle_warp_batch_native_scatter_kernel_launches += int(
+                                warp_timing.get("scatter_kernel_launches", 0) or 0
+                            )
                             _add_elapsed(
                                 registration_component_s,
                                 "triangle_warp_native_batch",
@@ -4481,10 +4536,13 @@ def run_resident_calibration_integration(
                                     f"resident_registration_application={warp_model}",
                                     "triangle_warp_batch=" + str(bool(warp_timing.get("batched", False))).lower(),
                                     f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
+                                    f"triangle_warp_batch_dispatch={resident_warp_batch_dispatch}",
                                     "triangle_warp_batch_timing_model="
                                     + str(warp_timing.get("timing_model", "per_frame")),
                                     "triangle_warp_batch_inverse_upload_mode="
                                     + str(warp_timing.get("inverse_upload_mode", "per_frame")),
+                                    "triangle_warp_batch_chunk_frames="
+                                    + str(int(warp_timing.get("batch_chunk_frames", 0) or 0)),
                                 ]
                             )
                     batch_post_elapsed = perf_counter() - batch_post_start
@@ -5260,6 +5318,7 @@ def run_resident_calibration_integration(
                         "preview_scale": preview_scale,
                         "warp_interpolation": resident_warp_interpolation,
                         "warp_clamping_threshold": resident_warp_clamping_threshold,
+                        "warp_batch_dispatch": resident_warp_batch_dispatch,
                         "max_shift": resident_registration_max_shift,
                         "ncc_sample_stride": resident_ncc_sample_stride,
                         "ncc_fallback_score_threshold": resident_ncc_fallback_score_threshold,
@@ -5502,6 +5561,11 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
+                        "triangle_warp_batch_native_index_upload_s": float(
+                            triangle_warp_batch_native_index_upload_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
                         "triangle_warp_batch_native_inverse_upload_s": float(
                             triangle_warp_batch_native_inverse_upload_s
                         )
@@ -5509,6 +5573,16 @@ def run_resident_calibration_integration(
                         else 0.0,
                         "triangle_warp_batch_native_kernel_enqueue_s": float(
                             triangle_warp_batch_native_kernel_enqueue_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_coverage_reduce_enqueue_s": float(
+                            triangle_warp_batch_native_coverage_reduce_enqueue_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_scatter_enqueue_s": float(
+                            triangle_warp_batch_native_scatter_enqueue_s
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
@@ -5523,6 +5597,46 @@ def run_resident_calibration_integration(
                         "triangle_warp_batch_native_total_s": float(triangle_warp_batch_native_total_s)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
+                        "triangle_warp_batch_native_chunk_frames": int(
+                            triangle_warp_batch_native_chunk_frames
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_chunk_count": int(
+                            triangle_warp_batch_native_chunk_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_workspace_bytes": int(
+                            triangle_warp_batch_native_workspace_bytes
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_output_bytes": int(
+                            triangle_warp_batch_native_output_bytes
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_coverage_bytes": int(
+                            triangle_warp_batch_native_coverage_bytes
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_warp_kernel_launches": int(
+                            triangle_warp_batch_native_warp_kernel_launches
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_coverage_reduce_kernel_launches": int(
+                            triangle_warp_batch_native_coverage_reduce_kernel_launches
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_scatter_kernel_launches": int(
+                            triangle_warp_batch_native_scatter_kernel_launches
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])
                         if resident_registration == "similarity_cuda_triangle"
                         else None,

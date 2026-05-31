@@ -2662,10 +2662,16 @@ class ResidentCalibratedStack:
         indices: Any,
         matrices: Any,
         fill: float = np.nan,
+        dispatch: str = "loop",
     ) -> dict[str, Any]:
-        if not hasattr(self._impl, "apply_matrix_bilinear_frames"):
-            raise RuntimeError("native ResidentCalibratedStack.apply_matrix_bilinear_frames is not available")
-        result = self._impl.apply_matrix_bilinear_frames(
+        method_name = "apply_matrix_bilinear_frames"
+        if dispatch == "loop" and hasattr(self._impl, "apply_matrix_bilinear_frames_loop"):
+            method_name = "apply_matrix_bilinear_frames_loop"
+        if dispatch not in {"loop", "chunked"}:
+            raise ValueError("matrix bilinear batch dispatch must be loop or chunked")
+        if not hasattr(self._impl, method_name):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
+        result = getattr(self._impl, method_name)(
             np.asarray(indices, dtype=np.int64),
             np.asarray(matrices, dtype=np.float32),
             float(fill),
@@ -2694,10 +2700,16 @@ class ResidentCalibratedStack:
         matrices: Any,
         fill: float = np.nan,
         clamping_threshold: float = -1.0,
+        dispatch: str = "loop",
     ) -> dict[str, Any]:
-        if not hasattr(self._impl, "apply_matrix_lanczos3_frames"):
-            raise RuntimeError("native ResidentCalibratedStack.apply_matrix_lanczos3_frames is not available")
-        result = self._impl.apply_matrix_lanczos3_frames(
+        method_name = "apply_matrix_lanczos3_frames"
+        if dispatch == "loop" and hasattr(self._impl, "apply_matrix_lanczos3_frames_loop"):
+            method_name = "apply_matrix_lanczos3_frames_loop"
+        if dispatch not in {"loop", "chunked"}:
+            raise ValueError("matrix Lanczos3 batch dispatch must be loop or chunked")
+        if not hasattr(self._impl, method_name):
+            raise RuntimeError(f"native ResidentCalibratedStack.{method_name} is not available")
+        result = getattr(self._impl, method_name)(
             np.asarray(indices, dtype=np.int64),
             np.asarray(matrices, dtype=np.float32),
             float(fill),

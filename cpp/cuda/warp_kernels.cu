@@ -217,6 +217,81 @@ void glass_warp_matrix_bilinear_f32_launch(
       input, output, coverage, inverse, width, height, fill, coverage_accumulator);
 }
 
+__global__ void glass_warp_matrix_bilinear_batch_f32_kernel(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill) {
+  const std::size_t pixels_per_frame = static_cast<std::size_t>(width) * height;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * pixels_per_frame;
+  const std::size_t linear = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (linear >= total) {
+    return;
+  }
+  const int frame = static_cast<int>(linear / pixels_per_frame);
+  const std::size_t pixel = linear - static_cast<std::size_t>(frame) * pixels_per_frame;
+  const int x = static_cast<int>(pixel % static_cast<std::size_t>(width));
+  const int y = static_cast<int>(pixel / static_cast<std::size_t>(width));
+  const float* input = stack + static_cast<std::size_t>(frame_indices[frame]) * pixels_per_frame;
+  const float* inverse = inverses + static_cast<std::size_t>(frame) * 9;
+  float* output = batch_output + static_cast<std::size_t>(frame) * pixels_per_frame;
+  unsigned char* coverage = batch_coverage + static_cast<std::size_t>(frame) * pixels_per_frame;
+  const float fx = static_cast<float>(x);
+  const float fy = static_cast<float>(y);
+  const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
+  if (fabsf(denom) < 1.0e-12f) {
+    output[pixel] = fill;
+    coverage[pixel] = 0;
+    return;
+  }
+  const float sx = (inverse[0] * fx + inverse[1] * fy + inverse[2]) / denom;
+  const float sy = (inverse[3] * fx + inverse[4] * fy + inverse[5]) / denom;
+  if (sx < 0.0f || sx > static_cast<float>(width - 1) ||
+      sy < 0.0f || sy > static_cast<float>(height - 1)) {
+    output[pixel] = fill;
+    coverage[pixel] = 0;
+    return;
+  }
+
+  const int x0 = static_cast<int>(floorf(sx));
+  const int y0 = static_cast<int>(floorf(sy));
+  const int x1 = x0 + 1 < width ? x0 + 1 : x0;
+  const int y1 = y0 + 1 < height ? y0 + 1 : y0;
+  const float tx = sx - static_cast<float>(x0);
+  const float ty = sy - static_cast<float>(y0);
+
+  const float v00 = input[y0 * width + x0];
+  const float v10 = input[y0 * width + x1];
+  const float v01 = input[y1 * width + x0];
+  const float v11 = input[y1 * width + x1];
+  const float top = v00 * (1.0f - tx) + v10 * tx;
+  const float bottom = v01 * (1.0f - tx) + v11 * tx;
+  output[pixel] = top * (1.0f - ty) + bottom * ty;
+  coverage[pixel] = 1;
+}
+
+void glass_warp_matrix_bilinear_batch_f32_launch(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill) {
+  constexpr int threads = 256;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * width * height;
+  const int blocks = static_cast<int>((total + threads - 1) / threads);
+  glass_warp_matrix_bilinear_batch_f32_kernel<<<blocks, threads>>>(
+      stack, batch_output, batch_coverage, frame_indices, inverses, frame_count, width, height, fill);
+}
+
 __device__ float glass_sinc_f32(float x) {
   const float ax = fabsf(x);
   if (ax < 1.0e-6f) {
@@ -329,6 +404,175 @@ void glass_warp_matrix_lanczos3_f32_launch(
   const int blocks = (width * height + threads - 1) / threads;
   glass_warp_matrix_lanczos3_f32_kernel<<<blocks, threads>>>(
       input, output, coverage, inverse, width, height, fill, clamping_threshold, coverage_accumulator);
+}
+
+__global__ void glass_warp_matrix_lanczos3_batch_f32_kernel(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold) {
+  const std::size_t pixels_per_frame = static_cast<std::size_t>(width) * height;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * pixels_per_frame;
+  const std::size_t linear = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (linear >= total) {
+    return;
+  }
+  const int frame = static_cast<int>(linear / pixels_per_frame);
+  const std::size_t pixel = linear - static_cast<std::size_t>(frame) * pixels_per_frame;
+  const int x = static_cast<int>(pixel % static_cast<std::size_t>(width));
+  const int y = static_cast<int>(pixel / static_cast<std::size_t>(width));
+  const float* input = stack + static_cast<std::size_t>(frame_indices[frame]) * pixels_per_frame;
+  const float* inverse = inverses + static_cast<std::size_t>(frame) * 9;
+  float* output = batch_output + static_cast<std::size_t>(frame) * pixels_per_frame;
+  unsigned char* coverage = batch_coverage + static_cast<std::size_t>(frame) * pixels_per_frame;
+  const float fx = static_cast<float>(x);
+  const float fy = static_cast<float>(y);
+  const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
+  if (fabsf(denom) < 1.0e-12f) {
+    output[pixel] = fill;
+    coverage[pixel] = 0;
+    return;
+  }
+
+  const float sx = (inverse[0] * fx + inverse[1] * fy + inverse[2]) / denom;
+  const float sy = (inverse[3] * fx + inverse[4] * fy + inverse[5]) / denom;
+  if (sx < 2.0f || sx >= static_cast<float>(width - 3) ||
+      sy < 2.0f || sy >= static_cast<float>(height - 3)) {
+    output[pixel] = fill;
+    coverage[pixel] = 0;
+    return;
+  }
+
+  const int x0 = static_cast<int>(floorf(sx));
+  const int y0 = static_cast<int>(floorf(sy));
+  float wx[6];
+  float wy[6];
+  for (int k = 0; k < 6; ++k) {
+    wx[k] = glass_lanczos3_weight_f32(sx - static_cast<float>(x0 - 2 + k));
+    wy[k] = glass_lanczos3_weight_f32(sy - static_cast<float>(y0 - 2 + k));
+  }
+
+  float weighted_sum = 0.0f;
+  float weight_sum = 0.0f;
+  float local_min = 3.402823466e+38f;
+  float local_max = -3.402823466e+38f;
+  for (int ky = 0; ky < 6; ++ky) {
+    const int yy = y0 - 2 + ky;
+    for (int kx = 0; kx < 6; ++kx) {
+      const int xx = x0 - 2 + kx;
+      const float weight = wx[kx] * wy[ky];
+      const float value = input[yy * width + xx];
+      weighted_sum += value * weight;
+      weight_sum += weight;
+      local_min = fminf(local_min, value);
+      local_max = fmaxf(local_max, value);
+    }
+  }
+
+  if (fabsf(weight_sum) < 1.0e-12f) {
+    output[pixel] = fill;
+    coverage[pixel] = 0;
+    return;
+  }
+  float value = weighted_sum / weight_sum;
+  if (clamping_threshold >= 0.0f && local_max >= local_min) {
+    const float range = local_max - local_min;
+    const float lo = local_min - clamping_threshold * range;
+    const float hi = local_max + clamping_threshold * range;
+    value = fminf(hi, fmaxf(lo, value));
+  }
+  output[pixel] = value;
+  coverage[pixel] = 1;
+}
+
+void glass_warp_matrix_lanczos3_batch_f32_launch(
+    const float* stack,
+    float* batch_output,
+    unsigned char* batch_coverage,
+    const unsigned long long* frame_indices,
+    const float* inverses,
+    int frame_count,
+    int width,
+    int height,
+    float fill,
+    float clamping_threshold) {
+  constexpr int threads = 256;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * width * height;
+  const int blocks = static_cast<int>((total + threads - 1) / threads);
+  glass_warp_matrix_lanczos3_batch_f32_kernel<<<blocks, threads>>>(
+      stack,
+      batch_output,
+      batch_coverage,
+      frame_indices,
+      inverses,
+      frame_count,
+      width,
+      height,
+      fill,
+      clamping_threshold);
+}
+
+__global__ void glass_warp_batch_coverage_reduce_f32_kernel(
+    const unsigned char* batch_coverage,
+    float* coverage_accumulator,
+    int frame_count,
+    std::size_t pixels_per_frame) {
+  const std::size_t pixel = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (pixel >= pixels_per_frame) {
+    return;
+  }
+  unsigned int count = 0;
+  for (int frame = 0; frame < frame_count; ++frame) {
+    count += batch_coverage[static_cast<std::size_t>(frame) * pixels_per_frame + pixel] != 0 ? 1U : 0U;
+  }
+  coverage_accumulator[pixel] += static_cast<float>(count);
+}
+
+void glass_warp_batch_coverage_reduce_f32_launch(
+    const unsigned char* batch_coverage,
+    float* coverage_accumulator,
+    int frame_count,
+    std::size_t pixels_per_frame) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_warp_batch_coverage_reduce_f32_kernel<<<blocks, threads>>>(
+      batch_coverage, coverage_accumulator, frame_count, pixels_per_frame);
+}
+
+__global__ void glass_warp_batch_scatter_f32_kernel(
+    const float* batch_output,
+    float* stack,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame) {
+  const std::size_t total = static_cast<std::size_t>(frame_count) * pixels_per_frame;
+  const std::size_t linear = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (linear >= total) {
+    return;
+  }
+  const int frame = static_cast<int>(linear / pixels_per_frame);
+  const std::size_t pixel = linear - static_cast<std::size_t>(frame) * pixels_per_frame;
+  const std::size_t stack_index = static_cast<std::size_t>(frame_indices[frame]) * pixels_per_frame + pixel;
+  stack[stack_index] = batch_output[linear];
+}
+
+void glass_warp_batch_scatter_f32_launch(
+    const float* batch_output,
+    float* stack,
+    const unsigned long long* frame_indices,
+    int frame_count,
+    std::size_t pixels_per_frame) {
+  constexpr int threads = 256;
+  const std::size_t total = static_cast<std::size_t>(frame_count) * pixels_per_frame;
+  const int blocks = static_cast<int>((total + threads - 1) / threads);
+  glass_warp_batch_scatter_f32_kernel<<<blocks, threads>>>(
+      batch_output, stack, frame_indices, frame_count, pixels_per_frame);
 }
 
 __global__ void glass_matrix_alignment_metrics_f32_kernel(

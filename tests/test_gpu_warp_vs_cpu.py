@@ -264,7 +264,7 @@ def test_resident_stack_matrix_bilinear_batch_warp_matches_cpu_reference():
     stack.upload_calibrated_frame(0, data0)
     stack.upload_calibrated_frame(1, data1)
 
-    timing = stack.apply_matrix_bilinear_frames([0, 1], matrices, np.nan)
+    timing = stack.apply_matrix_bilinear_frames([0, 1], matrices, np.nan, dispatch="chunked")
     warped, weight_map = stack.integrate_mean()
     expected0, coverage0 = _warp_matrix_bilinear_cpu(data0, matrices[0], np.nan)
     expected1, coverage1 = _warp_matrix_bilinear_cpu(data1, matrices[1], np.nan)
@@ -281,20 +281,52 @@ def test_resident_stack_matrix_bilinear_batch_warp_matches_cpu_reference():
         where=expected_weight > 0,
     )
 
-    assert timing["timing_model"] == "native_loop_batched_inverse_one_sync"
+    assert timing["timing_model"] == "native_chunked_batch_warp_scatter_one_sync"
     assert timing["frame_count"] == 2
     assert timing["interpolation"] == "bilinear"
-    assert timing["inverse_upload_mode"] == "single_device_batch"
+    assert timing["inverse_upload_mode"] == "chunked_device_batch"
+    assert timing["batch_chunk_frames"] >= 1
+    assert timing["batch_chunk_count"] == 1
+    assert timing["batch_workspace_bytes"] >= timing["batch_output_bytes"]
+    assert timing["batch_output_bytes"] >= 2 * data0.size * 4
+    assert timing["batch_coverage_bytes"] >= 2 * data0.size
+    assert timing["index_upload_s"] >= 0.0
     assert timing["inverse_prepare_s"] >= 0.0
     assert timing["inverse_batch_alloc_s"] >= 0.0
     assert timing["inverse_batch_bytes"] == 2 * 9 * 4
     assert timing["inverse_upload_s"] >= 0.0
     assert timing["kernel_enqueue_s"] >= 0.0
+    assert timing["coverage_reduce_enqueue_s"] >= 0.0
+    assert timing["scatter_enqueue_s"] >= 0.0
+    assert timing["warp_kernel_launches"] == 1
+    assert timing["coverage_reduce_kernel_launches"] == 1
+    assert timing["scatter_kernel_launches"] == 1
     assert timing["device_copy_enqueue_s"] >= 0.0
     assert timing["sync_s"] >= 0.0
     assert timing["total_s"] >= timing["kernel_enqueue_s"]
     assert np.allclose(warped, expected, atol=1.0e-5)
     assert np.array_equal(weight_map, expected_weight)
+
+
+def test_resident_stack_matrix_bilinear_batch_default_dispatch_is_loop():
+    module = cuda_module_or_skip()
+    data = np.arange(36, dtype=np.float32).reshape(6, 6)
+    matrix = np.array(
+        [
+            [1.0, 0.0, 0.35],
+            [0.0, 1.0, -0.25],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    stack = module.ResidentCalibratedStack(1, *data.shape)
+    stack.upload_calibrated_frame(0, data)
+
+    timing = stack.apply_matrix_bilinear_frames([0], matrix[None, :, :], np.nan)
+
+    assert timing["timing_model"] == "native_loop_batched_inverse_one_sync"
+    assert timing["inverse_upload_mode"] == "single_device_batch"
+    assert timing["frame_count"] == 1
 
 
 def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
@@ -326,7 +358,7 @@ def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
     stack.upload_calibrated_frame(0, data0)
     stack.upload_calibrated_frame(1, data1)
 
-    timing = stack.apply_matrix_lanczos3_frames([0, 1], matrices, np.nan, 0.30)
+    timing = stack.apply_matrix_lanczos3_frames([0, 1], matrices, np.nan, 0.30, dispatch="chunked")
     warped, weight_map = stack.integrate_mean()
     expected0, coverage0 = _warp_matrix_lanczos3_cpu(data0, matrices[0], np.nan, 0.30)
     expected1, coverage1 = _warp_matrix_lanczos3_cpu(data1, matrices[1], np.nan, 0.30)
@@ -343,15 +375,26 @@ def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
         where=expected_weight > 0,
     )
 
-    assert timing["timing_model"] == "native_loop_batched_inverse_one_sync"
+    assert timing["timing_model"] == "native_chunked_batch_warp_scatter_one_sync"
     assert timing["frame_count"] == 2
     assert timing["interpolation"] == "lanczos3"
-    assert timing["inverse_upload_mode"] == "single_device_batch"
+    assert timing["inverse_upload_mode"] == "chunked_device_batch"
+    assert timing["batch_chunk_frames"] >= 1
+    assert timing["batch_chunk_count"] == 1
+    assert timing["batch_workspace_bytes"] >= timing["batch_output_bytes"]
+    assert timing["batch_output_bytes"] >= 2 * data0.size * 4
+    assert timing["batch_coverage_bytes"] >= 2 * data0.size
+    assert timing["index_upload_s"] >= 0.0
     assert timing["inverse_prepare_s"] >= 0.0
     assert timing["inverse_batch_alloc_s"] >= 0.0
     assert timing["inverse_batch_bytes"] == 2 * 9 * 4
     assert timing["inverse_upload_s"] >= 0.0
     assert timing["kernel_enqueue_s"] >= 0.0
+    assert timing["coverage_reduce_enqueue_s"] >= 0.0
+    assert timing["scatter_enqueue_s"] >= 0.0
+    assert timing["warp_kernel_launches"] == 1
+    assert timing["coverage_reduce_kernel_launches"] == 1
+    assert timing["scatter_kernel_launches"] == 1
     assert timing["device_copy_enqueue_s"] >= 0.0
     assert timing["sync_s"] >= 0.0
     assert timing["total_s"] >= timing["kernel_enqueue_s"]

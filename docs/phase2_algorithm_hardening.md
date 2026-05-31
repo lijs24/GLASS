@@ -1343,6 +1343,23 @@ integration where applicable.
   coverage, ruff, full pytest, and a 200-light benchmark comparison against
   the Gate70B/Gate78 resident baseline.
 
+### S2-Gate 81: Chunked Multi-Frame Resident Matrix Warp
+
+- Replace native resident matrix bilinear and Lanczos3 batch warp's per-frame
+  warp-kernel plus device-copy loop with chunked multi-frame warp kernels,
+  chunked coverage reduction, and chunked scatter back into the resident stack.
+- Keep in-place safety by writing warped pixels into a temporary chunk
+  workspace before scattering them back to their source frame slots.
+- Keep interpolation formulas, matrix inversion semantics, coverage/DQ
+  accounting, accepted-frame contract, and output pixels unchanged.
+- Record chunk size, chunk count, workspace bytes, output/coverage bytes,
+  index upload, inverse upload, warp-kernel launches, coverage-reduce launches,
+  scatter launches, sync time, and native total timing in native results and
+  resident artifacts.
+- Validate with direct resident CUDA warp-vs-CPU tests, resident CUDA artifact
+  coverage, ruff, full pytest, and a 200-light benchmark comparison against
+  Gate70B/Gate78/Gate80.
+
 ## Gate Rules
 
 Each gate requires:
