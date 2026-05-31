@@ -3370,3 +3370,69 @@ class ResidentCalibratedStack:
                 "modifies_resident_stack": bool(timing_dict.get("modifies_resident_stack", False)),
             },
         )
+
+    def integrate_matrix_warped_sigma_clip(
+        self,
+        matrices: Any,
+        weights: Any | None = None,
+        interpolation: str = "bilinear",
+        clamping_threshold: float = -1.0,
+        low_sigma: float = 3.0,
+        high_sigma: float = 3.0,
+        winsorize: bool = True,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+        if not hasattr(self._impl, "integrate_matrix_warped_sigma_clip"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.integrate_matrix_warped_sigma_clip is not available"
+            )
+        if interpolation not in {"bilinear", "lanczos3"}:
+            raise ValueError("fused matrix-warped sigma interpolation must be bilinear or lanczos3")
+        if low_sigma <= 0.0 or high_sigma <= 0.0:
+            raise ValueError("sigma thresholds must be positive")
+        matrix_array = np.asarray(matrices, dtype=np.float32)
+        if matrix_array.ndim != 3 or matrix_array.shape != (self.frame_count, 3, 3):
+            raise ValueError("matrices must have shape (frame_count, 3, 3)")
+        result = self._impl.integrate_matrix_warped_sigma_clip(
+            np.ascontiguousarray(matrix_array),
+            None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
+            interpolation,
+            float(clamping_threshold),
+            float(low_sigma),
+            float(high_sigma),
+            bool(winsorize),
+        )
+        master, weight_map, coverage, low_reject, high_reject, geometric_coverage, timing = result
+        timing_dict = dict(timing)
+        return (
+            np.asarray(master, dtype=np.float32),
+            np.asarray(weight_map, dtype=np.float32),
+            np.asarray(coverage, dtype=np.float32),
+            np.asarray(low_reject, dtype=np.float32),
+            np.asarray(high_reject, dtype=np.float32),
+            np.asarray(geometric_coverage, dtype=np.float32),
+            {
+                "schema_version": int(timing_dict.get("schema_version", 1)),
+                "timing_model": str(
+                    timing_dict.get("timing_model", "native_fused_matrix_warp_sigma_clip_one_sync")
+                ),
+                "interpolation": str(timing_dict.get("interpolation", interpolation)),
+                "rejection": str(timing_dict.get("rejection", "winsorized_sigma" if winsorize else "sigma_clip")),
+                "winsorize": bool(timing_dict.get("winsorize", winsorize)),
+                "low_sigma": float(timing_dict.get("low_sigma", low_sigma)),
+                "high_sigma": float(timing_dict.get("high_sigma", high_sigma)),
+                "frame_count": int(timing_dict.get("frame_count", self.frame_count)),
+                "inverse_prepare_s": float(timing_dict.get("inverse_prepare_s", 0.0)),
+                "device_alloc_s": float(timing_dict.get("device_alloc_s", 0.0)),
+                "weights_upload_s": float(timing_dict.get("weights_upload_s", 0.0)),
+                "inverse_upload_s": float(timing_dict.get("inverse_upload_s", 0.0)),
+                "kernel_enqueue_s": float(timing_dict.get("kernel_enqueue_s", 0.0)),
+                "sync_s": float(timing_dict.get("sync_s", 0.0)),
+                "download_s": float(timing_dict.get("download_s", 0.0)),
+                "total_s": float(timing_dict.get("total_s", 0.0)),
+                "inverse_batch_bytes": int(timing_dict.get("inverse_batch_bytes", 0)),
+                "weights_bytes": int(timing_dict.get("weights_bytes", 0)),
+                "output_bytes": int(timing_dict.get("output_bytes", 0)),
+                "avoids_stack_scatter": bool(timing_dict.get("avoids_stack_scatter", True)),
+                "modifies_resident_stack": bool(timing_dict.get("modifies_resident_stack", False)),
+            },
+        )

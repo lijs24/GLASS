@@ -1168,3 +1168,186 @@ def test_resident_stack_winsorized_sigma_matches_cpu_reference():
     assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
     assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
     assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
+
+
+def _expected_matrix_warped_sigma(
+    module: object,
+    frames: list[np.ndarray],
+    matrices: np.ndarray,
+    low_sigma: float,
+    high_sigma: float,
+    winsorize: bool,
+    interpolation: str,
+    weights: np.ndarray | None = None,
+    clamping_threshold: float = -1.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    warped_frames: list[np.ndarray] = []
+    geometric: np.ndarray | None = None
+    frame_weights = (
+        np.ones((len(frames),), dtype=np.float32)
+        if weights is None
+        else np.asarray(weights, dtype=np.float32)
+    )
+    for frame, matrix, weight in zip(frames, matrices, frame_weights, strict=True):
+        if interpolation == "lanczos3":
+            warped, footprint = module.warp_matrix_lanczos3_f32(
+                frame,
+                matrix,
+                np.nan,
+                clamping_threshold,
+            )
+        else:
+            warped, footprint = module.warp_matrix_bilinear_f32(frame, matrix, np.nan)
+        warped_frames.append(warped)
+        footprint_count = ((footprint > 0.5) & (weight > 0.0) & np.isfinite(weight)).astype(np.float32)
+        geometric = footprint_count if geometric is None else geometric + footprint_count
+    warped_stack = module.ResidentCalibratedStack(len(warped_frames), *warped_frames[0].shape)
+    for index, warped in enumerate(warped_frames):
+        warped_stack.upload_calibrated_frame(index, warped)
+    master, weight_map, coverage, low_reject, high_reject = warped_stack.integrate_sigma_clip(
+        frame_weights,
+        low_sigma,
+        high_sigma,
+        winsorize,
+    )
+    return (
+        master,
+        weight_map,
+        coverage,
+        low_reject,
+        high_reject,
+        np.zeros_like(master) if geometric is None else geometric,
+    )
+
+
+def test_resident_stack_fused_matrix_warped_sigma_bilinear_matches_warp_then_integrate():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+
+    yy, xx = np.indices((16, 18), dtype=np.float32)
+    base = (10.0 + xx * 0.7 + yy * 0.2).astype(np.float32)
+    frames = [
+        base,
+        base + 1.0,
+        base + 2.0,
+        base + 80.0,
+    ]
+    matrices = np.stack(
+        [
+            _matrix_translation(0.0, 0.0),
+            _matrix_translation(0.5, -0.25),
+            _matrix_translation(-1.0, 0.75),
+            _matrix_translation(0.25, 0.5),
+        ],
+        axis=0,
+    )
+    weights = np.ones((len(frames),), dtype=np.float32)
+    stack = module.ResidentCalibratedStack(len(frames), 16, 18)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, geometric, timing = (
+        stack.integrate_matrix_warped_sigma_clip(
+            matrices,
+            weights,
+            interpolation="bilinear",
+            low_sigma=1.0,
+            high_sigma=1.0,
+            winsorize=False,
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high, expected_geometric = (
+        _expected_matrix_warped_sigma(
+            module,
+            frames,
+            matrices,
+            1.0,
+            1.0,
+            False,
+            "bilinear",
+            weights,
+        )
+    )
+    unwarped_master, _ = stack.integrate_mean(weights)
+
+    assert timing["timing_model"] == "native_fused_matrix_warp_sigma_clip_one_sync"
+    assert timing["interpolation"] == "bilinear"
+    assert timing["rejection"] == "sigma_clip"
+    assert timing["winsorize"] is False
+    assert timing["avoids_stack_scatter"] is True
+    assert timing["modifies_resident_stack"] is False
+    assert timing["output_bytes"] == 16 * 18 * 4 * 6
+    assert np.max(high_reject) > 0.0
+    assert np.allclose(master, expected_master, rtol=3e-5, atol=3e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-6, atol=1e-6)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-6, atol=1e-6)
+    assert np.allclose(low_reject, expected_low, rtol=1e-6, atol=1e-6)
+    assert np.allclose(high_reject, expected_high, rtol=1e-6, atol=1e-6)
+    assert np.allclose(geometric, expected_geometric, rtol=1e-6, atol=1e-6)
+    assert not np.allclose(master, unwarped_master)
+
+
+def test_resident_stack_fused_matrix_warped_winsorized_lanczos3_matches_warp_then_integrate():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+
+    yy, xx = np.indices((22, 24), dtype=np.float32)
+    base = (25.0 + np.sin(xx * 0.15) * 2.0 + yy * 0.3).astype(np.float32)
+    frames = [
+        base,
+        base + 0.5,
+        base - 0.75,
+        base + 60.0,
+    ]
+    matrices = np.stack(
+        [
+            _matrix_translation(0.0, 0.0),
+            _matrix_translation(0.3, -0.2),
+            _matrix_translation(-0.4, 0.35),
+            _matrix_translation(0.2, 0.25),
+        ],
+        axis=0,
+    )
+    weights = np.ones((len(frames),), dtype=np.float32)
+    stack = module.ResidentCalibratedStack(len(frames), 22, 24)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject, geometric, timing = (
+        stack.integrate_matrix_warped_sigma_clip(
+            matrices,
+            weights,
+            interpolation="lanczos3",
+            clamping_threshold=0.3,
+            low_sigma=1.0,
+            high_sigma=1.0,
+            winsorize=True,
+        )
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high, expected_geometric = (
+        _expected_matrix_warped_sigma(
+            module,
+            frames,
+            matrices,
+            1.0,
+            1.0,
+            True,
+            "lanczos3",
+            weights,
+            clamping_threshold=0.3,
+        )
+    )
+
+    assert timing["interpolation"] == "lanczos3"
+    assert timing["rejection"] == "winsorized_sigma"
+    assert timing["winsorize"] is True
+    assert timing["inverse_batch_bytes"] == len(frames) * 9 * 4
+    assert np.max(high_reject) > 0.0
+    assert np.allclose(master, expected_master, rtol=3e-5, atol=3e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-6, atol=1e-6)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-6, atol=1e-6)
+    assert np.allclose(low_reject, expected_low, rtol=1e-6, atol=1e-6)
+    assert np.allclose(high_reject, expected_high, rtol=1e-6, atol=1e-6)
+    assert np.allclose(geometric, expected_geometric, rtol=1e-6, atol=1e-6)

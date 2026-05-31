@@ -451,3 +451,226 @@ void glass_integrate_matrix_warped_mean_f32_launch(
       interpolation,
       clamping_threshold);
 }
+
+__global__ void glass_integrate_matrix_warped_sigma_clip_f32_kernel(
+    const float* stack,
+    const float* weights,
+    const float* inverses,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    float* geometric_coverage_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int interpolation,
+    float clamping_threshold,
+    float low_sigma,
+    float high_sigma,
+    bool winsorize) {
+  const std::size_t pixels_per_frame = static_cast<std::size_t>(width) * height;
+  const std::size_t pixel = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (pixel >= pixels_per_frame) {
+    return;
+  }
+
+  float mean = 0.0f;
+  float count = 0.0f;
+  float geometric_coverage = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    float value = 0.0f;
+    const float* input = stack + frame * pixels_per_frame;
+    const float* inverse = inverses + frame * 9;
+    const bool footprint_valid = interpolation == 1
+        ? glass_fused_sample_matrix_lanczos3_f32(
+              input, inverse, width, height, pixel, clamping_threshold, &value)
+        : glass_fused_sample_matrix_bilinear_f32(input, inverse, width, height, pixel, &value);
+    if (!footprint_valid) {
+      continue;
+    }
+    geometric_coverage += 1.0f;
+    if (isfinite(value)) {
+      mean += value;
+      count += 1.0f;
+    }
+  }
+  if (count <= 0.0f) {
+    master[pixel] = 0.0f;
+    weight_map[pixel] = 0.0f;
+    coverage_map[pixel] = 0.0f;
+    low_rejection_map[pixel] = 0.0f;
+    high_rejection_map[pixel] = 0.0f;
+    geometric_coverage_map[pixel] = geometric_coverage;
+    return;
+  }
+  mean /= count;
+
+  float variance = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    float value = 0.0f;
+    const float* input = stack + frame * pixels_per_frame;
+    const float* inverse = inverses + frame * 9;
+    const bool footprint_valid = interpolation == 1
+        ? glass_fused_sample_matrix_lanczos3_f32(
+              input, inverse, width, height, pixel, clamping_threshold, &value)
+        : glass_fused_sample_matrix_bilinear_f32(input, inverse, width, height, pixel, &value);
+    if (footprint_valid && isfinite(value)) {
+      const float delta = value - mean;
+      variance += delta * delta;
+    }
+  }
+  const float stddev = sqrtf(variance / count);
+  float center = mean;
+  float scale = stddev;
+  float low_threshold = center - low_sigma * scale;
+  float high_threshold = center + high_sigma * scale;
+  if (winsorize) {
+    float winsor_mean = 0.0f;
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = 0.0f;
+      const float* input = stack + frame * pixels_per_frame;
+      const float* inverse = inverses + frame * 9;
+      const bool footprint_valid = interpolation == 1
+          ? glass_fused_sample_matrix_lanczos3_f32(
+                input, inverse, width, height, pixel, clamping_threshold, &value)
+          : glass_fused_sample_matrix_bilinear_f32(input, inverse, width, height, pixel, &value);
+      if (!footprint_valid || !isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        value = low_threshold;
+      } else if (value > high_threshold) {
+        value = high_threshold;
+      }
+      winsor_mean += value;
+    }
+    winsor_mean /= count;
+
+    float winsor_variance = 0.0f;
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      const float weight = weights[frame];
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = 0.0f;
+      const float* input = stack + frame * pixels_per_frame;
+      const float* inverse = inverses + frame * 9;
+      const bool footprint_valid = interpolation == 1
+          ? glass_fused_sample_matrix_lanczos3_f32(
+                input, inverse, width, height, pixel, clamping_threshold, &value)
+          : glass_fused_sample_matrix_bilinear_f32(input, inverse, width, height, pixel, &value);
+      if (!footprint_valid || !isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        value = low_threshold;
+      } else if (value > high_threshold) {
+        value = high_threshold;
+      }
+      const float delta = value - winsor_mean;
+      winsor_variance += delta * delta;
+    }
+    center = winsor_mean;
+    scale = sqrtf(winsor_variance / count);
+    low_threshold = center - low_sigma * scale;
+    high_threshold = center + high_sigma * scale;
+  }
+
+  float sum = 0.0f;
+  float weight_sum = 0.0f;
+  float coverage = 0.0f;
+  float low_reject = 0.0f;
+  float high_reject = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    float value = 0.0f;
+    const float* input = stack + frame * pixels_per_frame;
+    const float* inverse = inverses + frame * 9;
+    const bool footprint_valid = interpolation == 1
+        ? glass_fused_sample_matrix_lanczos3_f32(
+              input, inverse, width, height, pixel, clamping_threshold, &value)
+        : glass_fused_sample_matrix_bilinear_f32(input, inverse, width, height, pixel, &value);
+    if (!footprint_valid || !isfinite(value)) {
+      continue;
+    }
+    bool rejected = false;
+    if (value < low_threshold) {
+      low_reject += 1.0f;
+      rejected = true;
+    } else if (value > high_threshold) {
+      high_reject += 1.0f;
+      rejected = true;
+    }
+    if (rejected) {
+      continue;
+    }
+    sum += value * weight;
+    weight_sum += weight;
+    coverage += 1.0f;
+  }
+
+  master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
+  weight_map[pixel] = weight_sum;
+  coverage_map[pixel] = coverage;
+  low_rejection_map[pixel] = low_reject;
+  high_rejection_map[pixel] = high_reject;
+  geometric_coverage_map[pixel] = geometric_coverage;
+}
+
+void glass_integrate_matrix_warped_sigma_clip_f32_launch(
+    const float* stack,
+    const float* weights,
+    const float* inverses,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    float* geometric_coverage_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int interpolation,
+    float clamping_threshold,
+    float low_sigma,
+    float high_sigma,
+    bool winsorize) {
+  constexpr int threads = 256;
+  const std::size_t pixels_per_frame = static_cast<std::size_t>(width) * height;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_integrate_matrix_warped_sigma_clip_f32_kernel<<<blocks, threads>>>(
+      stack,
+      weights,
+      inverses,
+      master,
+      weight_map,
+      coverage_map,
+      low_rejection_map,
+      high_rejection_map,
+      geometric_coverage_map,
+      frame_count,
+      width,
+      height,
+      interpolation,
+      clamping_threshold,
+      low_sigma,
+      high_sigma,
+      winsorize);
+}

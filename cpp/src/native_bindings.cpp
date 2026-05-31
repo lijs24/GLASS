@@ -406,6 +406,24 @@ void glass_integrate_matrix_warped_mean_f32_launch(
     int height,
     int interpolation,
     float clamping_threshold);
+void glass_integrate_matrix_warped_sigma_clip_f32_launch(
+    const float* stack,
+    const float* weights,
+    const float* inverses,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    float* geometric_coverage_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int interpolation,
+    float clamping_threshold,
+    float low_sigma,
+    float high_sigma,
+    bool winsorize);
 void glass_star_local_max_mask_f32_launch(
     const float* input,
     unsigned char* mask,
@@ -5245,6 +5263,237 @@ class ResidentCalibratedStack {
     return py::make_tuple(master, weight_map, coverage_map, geometric_coverage_map, timing);
   }
 
+  py::tuple integrate_matrix_warped_sigma_clip(
+      py::object matrices_obj,
+      py::object weights_obj,
+      const std::string& interpolation,
+      float clamping_threshold,
+      float low_sigma,
+      float high_sigma,
+      bool winsorize) const {
+    if (loaded_count_ != frame_count_) {
+      throw std::runtime_error("all resident frames must be loaded before fused matrix-warped sigma integration");
+    }
+    if (interpolation != "bilinear" && interpolation != "lanczos3") {
+      throw std::invalid_argument("interpolation must be bilinear or lanczos3");
+    }
+    if (low_sigma <= 0.0f || high_sigma <= 0.0f) {
+      throw std::invalid_argument("sigma thresholds must be positive");
+    }
+    const auto matrices = parse_matrix_stack(matrices_obj);
+    if (matrices.size() != frame_count_) {
+      throw std::invalid_argument("matrices must have shape (frame_count, 3, 3)");
+    }
+
+    std::vector<float> weights(frame_count_, 1.0f);
+    py::array_t<float, py::array::c_style | py::array::forcecast> weights_array;
+    if (!weights_obj.is_none()) {
+      weights_array = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(weights_obj);
+      const py::buffer_info weights_info = weights_array.request();
+      if (weights_info.ndim != 1 || static_cast<std::size_t>(weights_info.shape[0]) != frame_count_) {
+        throw std::invalid_argument("weights must have shape (frame_count,)");
+      }
+      const auto* ptr = static_cast<const float*>(weights_info.ptr);
+      weights.assign(ptr, ptr + frame_count_);
+    }
+
+    py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> low_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> high_rejection_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> geometric_coverage_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    const py::buffer_info master_info = master.request();
+    const py::buffer_info weight_map_info = weight_map.request();
+    const py::buffer_info coverage_info = coverage_map.request();
+    const py::buffer_info low_info = low_rejection_map.request();
+    const py::buffer_info high_info = high_rejection_map.request();
+    const py::buffer_info geometric_info = geometric_coverage_map.request();
+
+    const auto total_start = Clock::now();
+    const auto inverse_prepare_start = Clock::now();
+    std::vector<float> inverse_host(frame_count_ * 9, 0.0f);
+    for (std::size_t frame = 0; frame < frame_count_; ++frame) {
+      const auto inverse = invert_matrix3x3(matrices[frame]);
+      std::copy(inverse.begin(), inverse.end(), inverse_host.begin() + static_cast<std::ptrdiff_t>(frame * 9));
+    }
+    const double inverse_prepare_s = seconds_since(inverse_prepare_start);
+
+    float* d_weights = nullptr;
+    float* d_inverses = nullptr;
+    float* d_master = nullptr;
+    float* d_weight_map = nullptr;
+    float* d_coverage_map = nullptr;
+    float* d_low_rejection_map = nullptr;
+    float* d_high_rejection_map = nullptr;
+    float* d_geometric_coverage_map = nullptr;
+    double device_alloc_s = 0.0;
+    double weights_upload_s = 0.0;
+    double inverse_upload_s = 0.0;
+    double kernel_enqueue_s = 0.0;
+    double sync_s = 0.0;
+    double download_s = 0.0;
+    try {
+      const auto alloc_start = Clock::now();
+      check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(fused matrix sigma weights)");
+      check_cuda(
+          cudaMalloc(&d_inverses, inverse_host.size() * sizeof(float)),
+          "cudaMalloc(fused matrix sigma inverses)");
+      check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(fused matrix sigma master)");
+      check_cuda(
+          cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(fused matrix sigma weight map)");
+      check_cuda(
+          cudaMalloc(&d_coverage_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(fused matrix sigma coverage)");
+      check_cuda(
+          cudaMalloc(&d_low_rejection_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(fused matrix sigma low rejection)");
+      check_cuda(
+          cudaMalloc(&d_high_rejection_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(fused matrix sigma high rejection)");
+      check_cuda(
+          cudaMalloc(&d_geometric_coverage_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(fused matrix sigma geometric coverage)");
+      device_alloc_s = seconds_since(alloc_start);
+
+      const auto weights_upload_start = Clock::now();
+      check_cuda(
+          cudaMemcpyAsync(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice, 0),
+          "cudaMemcpyAsync(fused matrix sigma weights)");
+      weights_upload_s = seconds_since(weights_upload_start);
+
+      const auto inverse_upload_start = Clock::now();
+      check_cuda(
+          cudaMemcpyAsync(
+              d_inverses,
+              inverse_host.data(),
+              inverse_host.size() * sizeof(float),
+              cudaMemcpyHostToDevice,
+              0),
+          "cudaMemcpyAsync(fused matrix sigma inverses)");
+      inverse_upload_s = seconds_since(inverse_upload_start);
+
+      const auto kernel_start = Clock::now();
+      glass_integrate_matrix_warped_sigma_clip_f32_launch(
+          d_stack_,
+          d_weights,
+          d_inverses,
+          d_master,
+          d_weight_map,
+          d_coverage_map,
+          d_low_rejection_map,
+          d_high_rejection_map,
+          d_geometric_coverage_map,
+          frame_count_,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          interpolation == "lanczos3" ? 1 : 0,
+          clamping_threshold,
+          low_sigma,
+          high_sigma,
+          winsorize);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.integrate_matrix_warped_sigma_clip kernel launch");
+      kernel_enqueue_s = seconds_since(kernel_start);
+
+      const auto sync_start = Clock::now();
+      check_cuda(
+          cudaDeviceSynchronize(),
+          "ResidentCalibratedStack.integrate_matrix_warped_sigma_clip synchronize");
+      sync_s = seconds_since(sync_start);
+
+      const auto download_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(fused matrix sigma master)");
+      check_cuda(
+          cudaMemcpy(
+              weight_map_info.ptr,
+              d_weight_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(fused matrix sigma weight map)");
+      check_cuda(
+          cudaMemcpy(
+              coverage_info.ptr,
+              d_coverage_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(fused matrix sigma coverage map)");
+      check_cuda(
+          cudaMemcpy(
+              low_info.ptr,
+              d_low_rejection_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(fused matrix sigma low rejection map)");
+      check_cuda(
+          cudaMemcpy(
+              high_info.ptr,
+              d_high_rejection_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(fused matrix sigma high rejection map)");
+      check_cuda(
+          cudaMemcpy(
+              geometric_info.ptr,
+              d_geometric_coverage_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(fused matrix sigma geometric coverage map)");
+      download_s = seconds_since(download_start);
+    } catch (...) {
+      cudaFree(d_weights);
+      cudaFree(d_inverses);
+      cudaFree(d_master);
+      cudaFree(d_weight_map);
+      cudaFree(d_coverage_map);
+      cudaFree(d_low_rejection_map);
+      cudaFree(d_high_rejection_map);
+      cudaFree(d_geometric_coverage_map);
+      throw;
+    }
+    cudaFree(d_weights);
+    cudaFree(d_inverses);
+    cudaFree(d_master);
+    cudaFree(d_weight_map);
+    cudaFree(d_coverage_map);
+    cudaFree(d_low_rejection_map);
+    cudaFree(d_high_rejection_map);
+    cudaFree(d_geometric_coverage_map);
+
+    py::dict timing;
+    timing["schema_version"] = 1;
+    timing["timing_model"] = "native_fused_matrix_warp_sigma_clip_one_sync";
+    timing["interpolation"] = interpolation;
+    timing["rejection"] = winsorize ? "winsorized_sigma" : "sigma_clip";
+    timing["winsorize"] = winsorize;
+    timing["low_sigma"] = low_sigma;
+    timing["high_sigma"] = high_sigma;
+    timing["frame_count"] = static_cast<unsigned long long>(frame_count_);
+    timing["inverse_prepare_s"] = inverse_prepare_s;
+    timing["device_alloc_s"] = device_alloc_s;
+    timing["weights_upload_s"] = weights_upload_s;
+    timing["inverse_upload_s"] = inverse_upload_s;
+    timing["kernel_enqueue_s"] = kernel_enqueue_s;
+    timing["sync_s"] = sync_s;
+    timing["download_s"] = download_s;
+    timing["total_s"] = seconds_since(total_start);
+    timing["inverse_batch_bytes"] = static_cast<unsigned long long>(inverse_host.size() * sizeof(float));
+    timing["weights_bytes"] = static_cast<unsigned long long>(frame_count_ * sizeof(float));
+    timing["output_bytes"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float) * 6);
+    timing["avoids_stack_scatter"] = true;
+    timing["modifies_resident_stack"] = false;
+    return py::make_tuple(
+        master,
+        weight_map,
+        coverage_map,
+        low_rejection_map,
+        high_rejection_map,
+        geometric_coverage_map,
+        timing);
+  }
+
  private:
   void require_index(std::size_t index) const {
     if (index >= frame_count_) {
@@ -9844,5 +10093,15 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("matrices"),
           py::arg("weights") = py::none(),
           py::arg("interpolation") = "bilinear",
-          py::arg("clamping_threshold") = -1.0f);
+          py::arg("clamping_threshold") = -1.0f)
+      .def(
+          "integrate_matrix_warped_sigma_clip",
+          &ResidentCalibratedStack::integrate_matrix_warped_sigma_clip,
+          py::arg("matrices"),
+          py::arg("weights") = py::none(),
+          py::arg("interpolation") = "bilinear",
+          py::arg("clamping_threshold") = -1.0f,
+          py::arg("low_sigma") = 3.0f,
+          py::arg("high_sigma") = 3.0f,
+          py::arg("winsorize") = true);
 }

@@ -1378,6 +1378,22 @@ integration where applicable.
   against existing warp-then-integrate behavior, plus native build, ruff, and
   full pytest.
 
+### S2-Gate 83: Fused Resident Matrix-Warp Rejection Primitive
+
+- Extend the Gate82 fused resident matrix-warp primitive to support sigma and
+  winsorized-sigma rejection without scattering warped full-frame images back
+  into the resident stack.
+- Support bilinear and Lanczos3 sampling with the same matrix inversion,
+  footprint rules, and Lanczos clamping semantics used by GLASS warp kernels.
+- Emit master, weight map, finite-sample coverage, low/high rejection maps,
+  geometric footprint coverage, and timing diagnostics that state the path
+  avoids stack scatter and does not modify the resident stack.
+- Keep the primitive opt-in and non-default until LN, DQ map construction,
+  report artifacts, and pipeline routing are explicitly bridged.
+- Validate with direct resident CUDA tests comparing fused sigma and fused
+  winsorized-sigma output against existing warp-then-integrate behavior, plus
+  native build, ruff, and full pytest.
+
 ## Gate Rules
 
 Each gate requires:
