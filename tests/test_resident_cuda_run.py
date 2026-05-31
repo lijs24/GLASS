@@ -13,7 +13,11 @@ from glass.engine.resident_cuda import (
     _matches_any_token,
     _resident_dq_coverage_provenance,
     _resident_dq_map,
+    _resident_catalog_signature,
+    _resident_descriptor_signature,
+    _resident_fit_signature,
     _resident_output_map_selection,
+    _resident_triangle_determinism_summary,
     _resident_similarity_frame_dispatch,
     _select_star_core_preselected_seed_indices,
     _select_star_guarded_seed,
@@ -197,6 +201,84 @@ def test_resident_output_map_selection_modes():
         "high_rejection": False,
         "dq": False,
     }
+
+
+def test_resident_triangle_determinism_signatures_are_stable_and_sensitive():
+    catalog = {
+        "count": 3,
+        "stored_count": 3,
+        "grid_cols": 1,
+        "grid_rows": 1,
+        "candidates_per_cell": 3,
+        "max_output_candidates": 3,
+        "min_separation_px": 0.0,
+        "catalog_sort_mode": "test_sort",
+        "catalog_topk_mode": "test_topk",
+        "x": np.array([1.0, 2.0, 3.0], dtype=np.float32),
+        "y": np.array([4.0, 5.0, 6.0], dtype=np.float32),
+        "flux": np.array([30.0, 20.0, 10.0], dtype=np.float32),
+    }
+    descriptor = {
+        "count": 1,
+        "raw_count": 1,
+        "max_stars": 3,
+        "neighbors": 3,
+        "model": "test_descriptor",
+        "descriptors": np.array([[0.1, 0.2]], dtype=np.float32),
+        "indices": np.array([[0, 1, 2]], dtype=np.int32),
+        "areas": np.array([4.0], dtype=np.float32),
+    }
+    fit = {
+        "status": "ok",
+        "model": "test_fit",
+        "matrix": np.eye(3, dtype=np.float32),
+        "inliers": 3,
+        "rms_px": 0.25,
+        "scale": 1.0,
+        "rotation_rad": 0.0,
+        "best_candidate_index": 7,
+        "candidate_count": 11,
+        "reference_descriptor_count": 1,
+        "moving_descriptor_count": 1,
+    }
+
+    catalog_sig = _resident_catalog_signature(catalog)
+    descriptor_sig = _resident_descriptor_signature(descriptor)
+    fit_sig = _resident_fit_signature(fit)
+
+    assert catalog_sig == _resident_catalog_signature(catalog)
+    assert descriptor_sig == _resident_descriptor_signature(descriptor)
+    assert fit_sig == _resident_fit_signature(fit)
+
+    changed_catalog = dict(catalog)
+    changed_catalog["flux"] = np.array([30.0, 19.0, 10.0], dtype=np.float32)
+    assert catalog_sig["sha256"] != _resident_catalog_signature(changed_catalog)["sha256"]
+
+    summary = _resident_triangle_determinism_summary(
+        {
+            "schema_version": 1,
+            "signature_mode": "catalog_descriptor_fit_exact_float32_sha256",
+            "thresholds": {
+                "30.000000": {
+                    "reference_catalog": catalog_sig,
+                    "reference_descriptor": descriptor_sig,
+                }
+            },
+            "moving": {
+                "light_002": {
+                    "moving_catalog": catalog_sig,
+                    "selected_fit": fit_sig,
+                    "trial_signature": {"sha256": "trial-a"},
+                }
+            },
+        }
+    )
+
+    assert summary["signature_mode"] == "catalog_descriptor_fit_exact_float32_sha256"
+    assert summary["moving_frame_count"] == 1
+    assert summary["threshold_count"] == 1
+    assert len(summary["moving_catalog_combined_sha256"]) == 64
+    assert len(summary["selected_fit_combined_sha256"]) == 64
 
 
 def test_resident_star_core_preselection_keeps_refit_seed_and_rejects_low_inlier_trap():
@@ -1023,6 +1105,21 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_pixel_refine_workspace_mode"] == "shared_flattened_candidate_metric_buffers"
     assert resident_registration["triangle_pixel_refine_workspace_bytes"] > 0
     assert resident_registration["triangle_pixel_refine_workspace_candidate_capacity"] > 0
+    assert resident_registration["triangle_determinism_signature_mode"] == (
+        "catalog_descriptor_fit_exact_float32_sha256"
+    )
+    assert resident_registration["triangle_determinism_moving_frame_count"] == 1
+    assert resident_registration["triangle_determinism_threshold_count"] == 1
+    assert len(resident_registration["triangle_determinism_reference_combined_sha256"]) == 64
+    assert len(resident_registration["triangle_determinism_moving_catalog_combined_sha256"]) == 64
+    assert len(resident_registration["triangle_determinism_selected_fit_combined_sha256"]) == 64
+    determinism = resident_registration["triangle_determinism"]
+    assert determinism["signature_mode"] == "catalog_descriptor_fit_exact_float32_sha256"
+    assert set(determinism["moving"]) == {moving["frame_id"]}
+    moving_signature = determinism["moving"][moving["frame_id"]]
+    assert moving_signature["moving_catalog"]["stored_count"] >= 3
+    assert moving_signature["moving_descriptor"]["count"] > 0
+    assert moving_signature["selected_fit"]["status"] == "ok"
     timing = resident["artifacts"][0]["timing_s"]
     registration_components = resident["artifacts"][0]["fine_timing"]["registration_component_seconds"]
     assert timing["resident_registration_component_accounted"] >= 0.0
@@ -1056,6 +1153,8 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
         "triangle_descriptor_fit_reference_device_reuse=true" in warning
         for warning in moving["warnings"]
     )
+    assert any("triangle_determinism_moving_catalog_signature=" in warning for warning in moving["warnings"])
+    assert any("triangle_determinism_selected_fit_signature=" in warning for warning in moving["warnings"])
     assert any("triangle_pixel_refine_mode=native_batch" in warning for warning in moving["warnings"])
     assert any(
         "triangle_pixel_refine_batch_metric_mode=flattened_frame_candidate_grid" in warning

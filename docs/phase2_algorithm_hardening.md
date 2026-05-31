@@ -951,6 +951,25 @@ integration where applicable.
   200-light benchmark because this gate changes native registration scheduling
   and synchronization behavior.
 
+### S2-Gate 56: Resident Registration Determinism Signatures
+
+- Add exact SHA-256 signatures for resident triangle-registration reference
+  catalogs, moving catalogs, triangle descriptors, selected descriptor fits,
+  and threshold trial lists.
+- Record the per-frame signatures in `resident_artifacts.json` and per-frame
+  registration warnings so repeated real-data runs can identify whether a
+  coverage or accepted-frame swing came from catalog extraction, descriptor
+  generation, descriptor fit selection, or later pixel refinement.
+- Surface compact combined determinism hashes in the HTML resident CUDA
+  summary while keeping detailed per-frame hashes in JSON artifacts.
+- Keep this gate diagnostic-only: it must not alter catalog selection,
+  descriptor formulas, fit scoring, pixel refinement, warp behavior, accepted
+  frame counts, or output pixels.
+- Validate with direct signature-helper tests, repeated resident catalog batch
+  determinism checks, resident triangle-registration smoke tests, ruff, and
+  full pytest. A fresh 200-light benchmark is optional unless the diagnostic
+  change alters image artifacts or registration decisions.
+
 ## Gate Rules
 
 Each gate requires:

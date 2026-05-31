@@ -366,19 +366,25 @@ def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
         stack.upload_calibrated_frame(index, frame)
 
     batch = stack.star_grid_top_nms_candidates_batch([0, 1, 2], 30.0, 4, 4, 2, 8, 4.0)
+    repeat_batch = stack.star_grid_top_nms_candidates_batch([0, 1, 2], 30.0, 4, 4, 2, 8, 4.0)
     singles = [
         stack.star_grid_top_nms_candidates(index, 30.0, 4, 4, 2, 8, 4.0)
         for index in [0, 1, 2]
     ]
 
     assert [item["frame_index"] for item in batch] == [0, 1, 2]
-    for batch_item, single_item in zip(batch, singles, strict=True):
+    for batch_item, repeat_item, single_item in zip(batch, repeat_batch, singles, strict=True):
         assert batch_item["catalog_timing_model"] == "per_frame_launch_sync_download"
         assert batch_item["catalog_sort_mode"] == "shared_bitonic_power2"
         assert batch_item["catalog_topk_mode"] == "strict_flux_precheck_per_cell_lock"
         assert batch_item["catalog_native_s"] >= 0.0
         assert batch_item["catalog_sync_s"] >= 0.0
         assert batch_item["catalog_output_download_s"] >= 0.0
+        assert batch_item["count"] == repeat_item["count"]
+        assert batch_item["stored_count"] == repeat_item["stored_count"]
+        assert np.array_equal(batch_item["x"], repeat_item["x"])
+        assert np.array_equal(batch_item["y"], repeat_item["y"])
+        assert np.array_equal(batch_item["flux"], repeat_item["flux"])
         assert batch_item["count"] == single_item["count"]
         assert batch_item["stored_count"] == single_item["stored_count"]
         assert batch_item["catalog_sort_mode"] == single_item["catalog_sort_mode"]

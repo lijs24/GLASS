@@ -422,6 +422,141 @@ def _finite_float_or_none(value: Any) -> float | None:
     return result
 
 
+def _json_sha256(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _array_sha256(value: Any, dtype: Any) -> str:
+    array = np.ascontiguousarray(np.asarray(value, dtype=dtype))
+    digest = hashlib.sha256()
+    digest.update(str(array.dtype).encode("ascii"))
+    digest.update(np.asarray(array.shape, dtype=np.int64).tobytes())
+    digest.update(array.tobytes())
+    return digest.hexdigest()
+
+
+def _resident_catalog_signature(catalog: dict[str, Any] | None) -> dict[str, Any]:
+    if not catalog:
+        return {"available": False, "sha256": None}
+    stored_count = int(catalog.get("stored_count", len(catalog.get("x", []))) or 0)
+    payload = {
+        "available": True,
+        "schema_version": 1,
+        "count": int(catalog.get("count", stored_count) or 0),
+        "stored_count": stored_count,
+        "grid_cols": int(catalog.get("grid_cols", 0) or 0),
+        "grid_rows": int(catalog.get("grid_rows", 0) or 0),
+        "candidates_per_cell": int(catalog.get("candidates_per_cell", 0) or 0),
+        "max_output_candidates": int(catalog.get("max_output_candidates", 0) or 0),
+        "min_separation_px": _float_or_nan(catalog.get("min_separation_px")),
+        "catalog_sort_mode": str(catalog.get("catalog_sort_mode", "unavailable")),
+        "catalog_topk_mode": str(catalog.get("catalog_topk_mode", "unavailable")),
+        "x_sha256": _array_sha256(np.asarray(catalog.get("x", []), dtype=np.float32)[:stored_count], np.float32),
+        "y_sha256": _array_sha256(np.asarray(catalog.get("y", []), dtype=np.float32)[:stored_count], np.float32),
+        "flux_sha256": _array_sha256(
+            np.asarray(catalog.get("flux", []), dtype=np.float32)[:stored_count],
+            np.float32,
+        ),
+    }
+    return {**payload, "sha256": _json_sha256(payload)}
+
+
+def _resident_descriptor_signature(descriptor: dict[str, Any] | None) -> dict[str, Any]:
+    if not descriptor:
+        return {"available": False, "sha256": None}
+    count = int(descriptor.get("count", 0) or 0)
+    payload = {
+        "available": True,
+        "schema_version": 1,
+        "count": count,
+        "raw_count": int(descriptor.get("raw_count", 0) or 0),
+        "max_stars": int(descriptor.get("max_stars", 0) or 0),
+        "neighbors": int(descriptor.get("neighbors", 0) or 0),
+        "model": str(descriptor.get("model", "unavailable")),
+        "descriptors_sha256": _array_sha256(
+            np.asarray(descriptor.get("descriptors", []), dtype=np.float32).reshape(-1, 2)[:count],
+            np.float32,
+        ),
+        "indices_sha256": _array_sha256(
+            np.asarray(descriptor.get("indices", []), dtype=np.int32).reshape(-1, 3)[:count],
+            np.int32,
+        ),
+        "areas_sha256": _array_sha256(
+            np.asarray(descriptor.get("areas", []), dtype=np.float32).reshape(-1)[:count],
+            np.float32,
+        ),
+    }
+    return {**payload, "sha256": _json_sha256(payload)}
+
+
+def _resident_fit_signature(fit: dict[str, Any] | None) -> dict[str, Any]:
+    if not fit:
+        return {"available": False, "sha256": None}
+    matrix = np.asarray(fit.get("matrix", np.eye(3, dtype=np.float32)), dtype=np.float32).reshape(3, 3)
+    payload = {
+        "available": True,
+        "schema_version": 1,
+        "status": str(fit.get("status", "unknown")),
+        "model": str(fit.get("model", "unavailable")),
+        "batch_model": str(fit.get("batch_model", "")),
+        "inliers": int(fit.get("inliers", 0) or 0),
+        "rms_px": _float_or_nan(fit.get("rms_px")),
+        "scale": _float_or_nan(fit.get("scale")),
+        "rotation_rad": _float_or_nan(fit.get("rotation_rad")),
+        "best_candidate_index": int(fit.get("best_candidate_index", -1) or -1),
+        "candidate_count": int(fit.get("candidate_count", 0) or 0),
+        "reference_descriptor_count": int(fit.get("reference_descriptor_count", 0) or 0),
+        "moving_descriptor_count": int(fit.get("moving_descriptor_count", 0) or 0),
+        "matrix_sha256": _array_sha256(matrix, np.float32),
+    }
+    return {**payload, "sha256": _json_sha256(payload)}
+
+
+def _resident_trial_signature(trials: list[dict[str, Any]]) -> dict[str, Any]:
+    payload = {"schema_version": 1, "trials": trials}
+    return {
+        "schema_version": 1,
+        "trial_count": len(trials),
+        "sha256": _json_sha256(payload),
+    }
+
+
+def _resident_triangle_determinism_summary(signatures: dict[str, Any]) -> dict[str, Any]:
+    moving = signatures.get("moving") or {}
+    threshold_entries = signatures.get("thresholds") or {}
+    moving_catalog_hashes = {
+        frame_id: (item.get("moving_catalog") or {}).get("sha256")
+        for frame_id, item in moving.items()
+    }
+    selected_fit_hashes = {
+        frame_id: (item.get("selected_fit") or {}).get("sha256")
+        for frame_id, item in moving.items()
+    }
+    trial_hashes = {
+        frame_id: (item.get("trial_signature") or {}).get("sha256")
+        for frame_id, item in moving.items()
+    }
+    reference_hashes = {
+        threshold: {
+            "catalog": (item.get("reference_catalog") or {}).get("sha256"),
+            "descriptor": (item.get("reference_descriptor") or {}).get("sha256"),
+        }
+        for threshold, item in threshold_entries.items()
+    }
+    return {
+        "schema_version": 1,
+        "signature_mode": signatures.get("signature_mode"),
+        "hash_algorithm": "sha256",
+        "moving_frame_count": len(moving),
+        "threshold_count": len(threshold_entries),
+        "moving_catalog_combined_sha256": _json_sha256(moving_catalog_hashes),
+        "selected_fit_combined_sha256": _json_sha256(selected_fit_hashes),
+        "trial_combined_sha256": _json_sha256(trial_hashes),
+        "reference_combined_sha256": _json_sha256(reference_hashes),
+    }
+
+
 def _policy_int(raw: dict[str, Any], key: str, default: int) -> int:
     value = raw.get(key)
     if value is None:
@@ -2843,6 +2978,13 @@ def run_resident_calibration_integration(
                 moving_descriptor_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
                 descriptor_fit_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
                 pending_triangle_pixel_refines: list[dict[str, Any]] = []
+                triangle_determinism_signatures: dict[str, Any] = {
+                    "schema_version": 1,
+                    "signature_mode": "catalog_descriptor_fit_exact_float32_sha256",
+                    "hash_algorithm": "sha256",
+                    "thresholds": {},
+                    "moving": {},
+                }
                 moving_catalog_batch_indices = [
                     frame_index
                     for frame_index, frame in enumerate(light_frames)
@@ -3163,6 +3305,18 @@ def run_resident_calibration_integration(
                                         perf_counter() - reference_descriptor_start,
                                     )
                                     reference_descriptors[threshold_key] = reference_descriptor
+                                threshold_signature = triangle_determinism_signatures["thresholds"].setdefault(
+                                    f"{threshold_key:.6f}",
+                                    {},
+                                )
+                                threshold_signature.setdefault(
+                                    "reference_catalog",
+                                    _resident_catalog_signature(reference_catalog),
+                                )
+                                threshold_signature.setdefault(
+                                    "reference_descriptor",
+                                    _resident_descriptor_signature(reference_descriptor),
+                                )
                                 moving_descriptor = moving_triangle_descriptor(
                                     index,
                                     threshold_key,
@@ -3216,11 +3370,45 @@ def run_resident_calibration_integration(
                                     selected_reference_descriptors = reference_descriptor
                                     selected_moving_descriptors = moving_descriptor
 
+                            frame_determinism = {
+                                "schema_version": 1,
+                                "frame_index": int(index),
+                                "frame_id": str(frame["id"]),
+                                "threshold_mode": threshold_mode,
+                                "threshold_candidates": [float(item) for item in threshold_candidates],
+                                "selected_threshold": None
+                                if selected_threshold is None
+                                else float(selected_threshold),
+                                "trial_signature": _resident_trial_signature(trial_results),
+                                "status": "failed" if selected_fit is None else "ok",
+                            }
+                            if selected_fit is not None:
+                                frame_determinism.update(
+                                    {
+                                        "reference_catalog": _resident_catalog_signature(
+                                            selected_reference_catalog
+                                        ),
+                                        "moving_catalog": _resident_catalog_signature(selected_moving_catalog),
+                                        "reference_descriptor": _resident_descriptor_signature(
+                                            selected_reference_descriptors
+                                        ),
+                                        "moving_descriptor": _resident_descriptor_signature(
+                                            selected_moving_descriptors
+                                        ),
+                                        "selected_fit": _resident_fit_signature(selected_fit),
+                                    }
+                                )
+                            triangle_determinism_signatures["moving"][str(frame["id"])] = frame_determinism
+
                             if selected_fit is None:
                                 status = "failed"
                                 frame_weight_values[index] = 0.0
                                 frame_weights[frame["id"]] = 0.0
                                 warnings.append("resident triangle descriptor registration found no accepted fit")
+                                warnings.append(
+                                    "triangle_determinism_trial_signature="
+                                    + str(frame_determinism["trial_signature"]["sha256"])
+                                )
                             else:
                                 matrix_array = np.asarray(selected_fit["matrix"], dtype=np.float32).reshape(3, 3)
                                 pixel_metrics: dict[str, Any] | None = None
@@ -3327,6 +3515,18 @@ def run_resident_calibration_integration(
                                         + str(bool(selected_fit.get("output_device_reuse", False))).lower(),
                                         "triangle_descriptor_fit_output_device_bytes="
                                         + str(int(selected_fit.get("output_device_bytes", 0) or 0)),
+                                        "triangle_determinism_reference_catalog_signature="
+                                        + str(frame_determinism["reference_catalog"]["sha256"]),
+                                        "triangle_determinism_moving_catalog_signature="
+                                        + str(frame_determinism["moving_catalog"]["sha256"]),
+                                        "triangle_determinism_reference_descriptor_signature="
+                                        + str(frame_determinism["reference_descriptor"]["sha256"]),
+                                        "triangle_determinism_moving_descriptor_signature="
+                                        + str(frame_determinism["moving_descriptor"]["sha256"]),
+                                        "triangle_determinism_selected_fit_signature="
+                                        + str(frame_determinism["selected_fit"]["sha256"]),
+                                        "triangle_determinism_trial_signature="
+                                        + str(frame_determinism["trial_signature"]["sha256"]),
                                         f"triangle_scale={float(selected_fit.get('scale', float('nan'))):.9g}",
                                         f"triangle_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
                                         f"triangle_fit_rms_px={rms_px:.6g}",
@@ -4041,6 +4241,16 @@ def run_resident_calibration_integration(
                     "python_orchestration_or_uninstrumented": registration_orchestration_elapsed,
                 },
             }
+            triangle_determinism = (
+                triangle_determinism_signatures
+                if resident_registration == "similarity_cuda_triangle"
+                else {}
+            )
+            triangle_determinism_summary = (
+                _resident_triangle_determinism_summary(triangle_determinism)
+                if resident_registration == "similarity_cuda_triangle"
+                else {}
+            )
             resident_artifacts.append(
                 {
                     "filter": filter_name,
@@ -4354,6 +4564,47 @@ def run_resident_calibration_integration(
                         "triangle_pixel_refine_native_fine_s": float(triangle_pixel_refine_native_fine_s)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
+                        "triangle_determinism_signature_mode": triangle_determinism_summary.get(
+                            "signature_mode",
+                            "off",
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_determinism_moving_frame_count": triangle_determinism_summary.get(
+                            "moving_frame_count",
+                            0,
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_determinism_threshold_count": triangle_determinism_summary.get(
+                            "threshold_count",
+                            0,
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_determinism_reference_combined_sha256": triangle_determinism_summary.get(
+                            "reference_combined_sha256"
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_determinism_moving_catalog_combined_sha256": triangle_determinism_summary.get(
+                            "moving_catalog_combined_sha256"
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_determinism_selected_fit_combined_sha256": triangle_determinism_summary.get(
+                            "selected_fit_combined_sha256"
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_determinism_trial_combined_sha256": triangle_determinism_summary.get(
+                            "trial_combined_sha256"
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_determinism": triangle_determinism
+                        if resident_registration == "similarity_cuda_triangle"
+                        else {},
                         "triangle_min_pixel_ncc": _policy_optional_float(
                             registration_policy,
                             "cuda_triangle_min_pixel_ncc",
