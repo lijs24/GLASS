@@ -692,6 +692,7 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
     report_text = report.read_text(encoding="utf-8")
     assert "Integration summary" in report_text
     assert "Frame accounting" in report_text
+    assert "Rejected/zero-weight frames" in report_text
     assert "StackEngine DQ provenance" in report_text
     assert "DQ provenance contract" in report_text
 

@@ -171,8 +171,27 @@ def _write_glass_run(
                     "registration_accepted_frames": active,
                     "integrated_frames": active,
                     "zero_weight_frames": zero,
+                    "exception_frames": zero,
                     "final_status_counts": {"integrated": active, "zero_weight": zero},
                 },
+                "exception_summary": {
+                    "count": zero,
+                    "final_status_counts": {"zero_weight": zero},
+                    "primary_stage_counts": {"integration": zero},
+                },
+                "exception_frames": [
+                    {
+                        "frame_id": f"Z{idx:04d}",
+                        "filter": "H",
+                        "final_status": "zero_weight",
+                        "primary_stage": "integration",
+                        "primary_reason": "integration weight is zero",
+                        "registration_status": "excluded",
+                        "integration_status": "zero_weight",
+                        "integration_weight": 0.0,
+                    }
+                    for idx in range(zero)
+                ],
                 "frames": [
                     *[
                         {
@@ -539,6 +558,8 @@ def test_acceptance_audit_applies_frame_accounting_contract(tmp_path: Path):
     assert audit["passed"] is True
     assert audit["frame_accounting"]["exists"] is True
     assert audit["frame_accounting"]["summary"]["integrated_frames"] == 193
+    assert audit["frame_accounting"]["exception_summary"]["count"] == 7
+    assert audit["frame_accounting"]["exception_frames"][0]["primary_reason"] == "integration weight is zero"
     assert checks["contract_frame_accounting_present"] is True
     assert checks["contract_frame_accounting_input_light_frames"] is True
     assert checks["contract_frame_accounting_integrated_frames"] is True

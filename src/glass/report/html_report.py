@@ -31,6 +31,7 @@ _REPORT_SECTIONS = [
     ("local-normalization-summary", "Local normalization summary"),
     ("integration-summary", "Integration summary"),
     ("frame-accounting", "Frame accounting"),
+    ("rejected-zero-weight-frames", "Rejected/zero-weight frames"),
     ("output-diagnostics", "Output diagnostics"),
     ("integration-output-maps", "Integration output maps"),
     ("output-map-policy", "Output map policy"),
@@ -223,6 +224,40 @@ def _frame_accounting_rows(frame_accounting: dict[str, Any] | None) -> list[dict
             }
         )
     return rows
+
+
+def _frame_accounting_exception_rows(frame_accounting: dict[str, Any] | None) -> list[dict[str, Any]]:
+    explicit = (frame_accounting or {}).get("exception_frames")
+    if isinstance(explicit, list):
+        return [item for item in explicit if isinstance(item, dict)]
+    return [row for row in _frame_accounting_rows(frame_accounting) if row.get("final_status") != "integrated"]
+
+
+def _frame_accounting_exception_summary_rows(frame_accounting: dict[str, Any] | None) -> list[dict[str, Any]]:
+    summary = (frame_accounting or {}).get("exception_summary") or {}
+    if not summary:
+        exceptions = _frame_accounting_exception_rows(frame_accounting)
+        if not exceptions:
+            return []
+        final_counts: dict[str, int] = {}
+        stage_counts: dict[str, int] = {}
+        for item in exceptions:
+            final = str(item.get("final_status") or "unknown")
+            stage = str(item.get("primary_stage") or "unknown")
+            final_counts[final] = final_counts.get(final, 0) + 1
+            stage_counts[stage] = stage_counts.get(stage, 0) + 1
+        summary = {
+            "count": len(exceptions),
+            "final_status_counts": final_counts,
+            "primary_stage_counts": stage_counts,
+        }
+    return [
+        {
+            "exception_frames": summary.get("count"),
+            "final_status_counts": summary.get("final_status_counts"),
+            "primary_stage_counts": summary.get("primary_stage_counts"),
+        }
+    ]
 
 
 def _acceptance_failure_rows(acceptance_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -757,6 +792,8 @@ def write_html_report(
     integration_summary_rows = _integration_output_rows(integration)
     frame_accounting_summary_rows = _frame_accounting_summary_rows(frame_accounting)
     frame_accounting_rows = _frame_accounting_rows(frame_accounting)
+    frame_accounting_exception_summary_rows = _frame_accounting_exception_summary_rows(frame_accounting)
+    frame_accounting_exception_rows = _frame_accounting_exception_rows(frame_accounting)
     output_diagnostic_rows = _output_diagnostic_rows(integration, resident)
     integration_map_rows = [
         {
@@ -813,6 +850,11 @@ def write_html_report(
         {
             "stage": "frame_accounting",
             "rows": len(frame_accounting_rows),
+            "artifact": "frame_accounting.json" if frame_accounting else "missing",
+        },
+        {
+            "stage": "frame_accounting_exceptions",
+            "rows": len(frame_accounting_exception_rows),
             "artifact": "frame_accounting.json" if frame_accounting else "missing",
         },
     ]
@@ -892,6 +934,11 @@ def write_html_report(
   authoritative in <code>frame_accounting.json</code>.</p>
   {_table(frame_accounting_summary_rows)}
   {_limited_table(frame_accounting_rows, label="frame accounting rows", artifact="frame_accounting.json")}
+  {_h2("rejected-zero-weight-frames", "Rejected/zero-weight frames")}
+  <p>This compact table focuses on frames that did not enter the final integrated
+  stack. The complete per-frame ledger remains in <code>frame_accounting.json</code>.</p>
+  {_table(frame_accounting_exception_summary_rows)}
+  {_limited_table(frame_accounting_exception_rows, label="frame accounting exception rows", artifact="frame_accounting.json")}
   {_h2("output-diagnostics", "Output diagnostics")}
   <p>Output diagnostics are flattened from integration and resident artifacts to
   avoid dumping nested JSON into the report.</p>

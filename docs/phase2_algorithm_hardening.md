@@ -712,6 +712,23 @@ integration where applicable.
   pytest, and a strict acceptance audit against the latest preserved 200-light
   resident artifacts.
 
+### S2-Gate 43: Rejected-Frame Focused Accounting
+
+- Extend `frame_accounting.json` with `exception_frames` and
+  `exception_summary` so non-integrated frames are easy to inspect without
+  scanning the full light table.
+- For each exception frame, record the final status, primary pipeline stage,
+  primary reason, weight, stage statuses, warning/reason counts, and input path.
+- Surface a dedicated HTML report section for rejected/zero-weight frames,
+  keeping the complete per-frame ledger in `frame_accounting.json`.
+- Include exception-frame summary and the first rejected frames in
+  acceptance-audit Markdown output.
+- Keep this diagnostic-only: it must not alter accepted frames, rejection math,
+  registration behavior, GPU kernels, or output pixels.
+- Validate with direct frame-accounting tests, report tests, acceptance-audit
+  tests, ruff, full pytest, and a report/audit regeneration on the latest
+  preserved 200-light resident artifacts.
+
 ## Gate Rules
 
 Each gate requires:

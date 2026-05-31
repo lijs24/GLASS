@@ -124,6 +124,18 @@ def test_frame_accounting_builds_per_light_ledger(tmp_path: Path):
     assert accounting["summary"]["zero_weight_frames"] == 1
     assert accounting["summary"]["quality_rejected_frames"] == 1
     assert accounting["summary"]["warp_skipped_frames"] == 2
+    assert accounting["summary"]["exception_frames"] == 3
+    exceptions = {item["frame_id"]: item for item in accounting["exception_frames"]}
+    assert exceptions["zero"]["primary_stage"] == "integration"
+    assert exceptions["zero"]["primary_reason"] == "integration weight is zero"
+    assert exceptions["quality_bad"]["primary_stage"] == "quality"
+    assert exceptions["quality_bad"]["primary_reason"] == "star_count 1 below min_stars=8"
+    assert exceptions["registration_bad"]["primary_stage"] == "registration"
+    assert accounting["exception_summary"]["final_status_counts"] == {
+        "quality_rejected": 1,
+        "registration_rejected": 1,
+        "zero_weight": 1,
+    }
 
 
 def test_report_renders_frame_accounting(tmp_path: Path):
@@ -138,6 +150,15 @@ def test_report_renders_frame_accounting(tmp_path: Path):
                 "final_status_counts": {"integrated": 1},
             },
             "frames": [{"frame_id": "light_001", "final_status": "integrated"}],
+            "exception_summary": {"count": 1, "final_status_counts": {"zero_weight": 1}},
+            "exception_frames": [
+                {
+                    "frame_id": "light_002",
+                    "final_status": "zero_weight",
+                    "primary_stage": "integration",
+                    "primary_reason": "integration weight is zero",
+                }
+            ],
         },
     )
     report = tmp_path / "report.html"
@@ -145,8 +166,11 @@ def test_report_renders_frame_accounting(tmp_path: Path):
 
     html = report.read_text(encoding="utf-8")
     assert "Frame accounting" in html
+    assert "Rejected/zero-weight frames" in html
     assert "frame_accounting.json" in html
     assert "light_001" in html
+    assert "light_002" in html
+    assert "integration weight is zero" in html
 
 
 def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
@@ -183,4 +207,6 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     assert rows["ref"]["warp_status"] == "resident_in_vram"
     assert rows["ref"]["local_norm_status"] == "resident_applied"
     assert rows["excluded"]["final_status"] == "zero_weight"
-    assert read_json(run / "frame_accounting.json")["sources"]["integration"] is True
+    written = read_json(run / "frame_accounting.json")
+    assert written["sources"]["integration"] is True
+    assert written["exception_summary"]["primary_stage_counts"] == {"integration": 1}

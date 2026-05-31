@@ -235,6 +235,8 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
     accounting = audit.get("frame_accounting") or {}
     if accounting:
         summary = accounting.get("summary") or {}
+        exception_summary = accounting.get("exception_summary") or {}
+        exceptions = accounting.get("exception_frames") if isinstance(accounting.get("exception_frames"), list) else []
         weights = accounting.get("integration_weight_counts") or {}
         registration = accounting.get("registration_counts") or {}
         lines.extend(["", "## Frame Accounting", ""])
@@ -243,8 +245,15 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         lines.append(f"- Integrated frames: {summary.get('integrated_frames')}")
         lines.append(f"- Zero-weight frames: {summary.get('zero_weight_frames')}")
         lines.append(f"- Final status counts: {summary.get('final_status_counts')}")
+        lines.append(f"- Exception summary: {exception_summary}")
         lines.append(f"- Integration weight counts: {weights}")
         lines.append(f"- Registration counts: {registration}")
+        for item in exceptions[:12]:
+            lines.append(
+                "- Exception frame: "
+                f"{item.get('frame_id')} status={item.get('final_status')} "
+                f"stage={item.get('primary_stage')} reason={item.get('primary_reason')}"
+            )
     regression = audit.get("performance_regression")
     if regression:
         lines.extend(["", "## Performance Regression Diagnostics", ""])

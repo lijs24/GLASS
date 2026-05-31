@@ -138,6 +138,12 @@ def collect_frame_accounting_record(glass_run: str | Path) -> dict[str, Any]:
         "path": str(accounting_path),
         "exists": accounting_path.exists(),
         "summary": accounting.get("summary") if isinstance(accounting.get("summary"), dict) else {},
+        "exception_summary": accounting.get("exception_summary")
+        if isinstance(accounting.get("exception_summary"), dict)
+        else {},
+        "exception_frames": accounting.get("exception_frames")
+        if isinstance(accounting.get("exception_frames"), list)
+        else [],
         "frame_count": len(frames),
         "calculated_final_status_counts": calculated_final_counts,
         "integration_source_stage": accounting.get("integration_source_stage"),

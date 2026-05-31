@@ -125,6 +125,62 @@ def _status_counts(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
     return dict(Counter(str(row.get(key) or "unknown") for row in rows))
 
 
+def _primary_exception(row: dict[str, Any]) -> tuple[str, str]:
+    final_status = str(row.get("final_status") or "unknown")
+    reasons = row.get("reasons") if isinstance(row.get("reasons"), list) else []
+    warnings = row.get("warnings") if isinstance(row.get("warnings"), list) else []
+    if final_status == "zero_weight":
+        return "integration", reasons[0] if reasons else "integration weight is zero"
+    if final_status == "quality_rejected":
+        return "quality", reasons[0] if reasons else "quality gate rejected frame"
+    if final_status == "registration_rejected":
+        return "registration", warnings[0] if warnings else "registration did not accept frame"
+    if final_status == "warp_skipped":
+        return "warp", str(row.get("warp_reason") or "warp skipped frame")
+    if final_status == "local_norm_rejected":
+        return "local_normalization", warnings[0] if warnings else "local normalization rejected frame"
+    if final_status == "not_integrated":
+        return "integration", reasons[0] if reasons else "frame was not present in integration weights"
+    return final_status, reasons[0] if reasons else (warnings[0] if warnings else final_status)
+
+
+def _exception_frames(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    exceptions: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("final_status") == "integrated":
+            continue
+        reasons = row.get("reasons") if isinstance(row.get("reasons"), list) else []
+        warnings = row.get("warnings") if isinstance(row.get("warnings"), list) else []
+        primary_stage, primary_reason = _primary_exception(row)
+        exceptions.append(
+            {
+                "frame_id": row.get("frame_id"),
+                "filter": row.get("filter"),
+                "final_status": row.get("final_status"),
+                "primary_stage": primary_stage,
+                "primary_reason": primary_reason,
+                "quality_gate_status": row.get("quality_gate_status"),
+                "registration_status": row.get("registration_status"),
+                "warp_status": row.get("warp_status"),
+                "local_norm_status": row.get("local_norm_status"),
+                "integration_status": row.get("integration_status"),
+                "integration_weight": row.get("integration_weight"),
+                "reason_count": len(reasons),
+                "warning_count": len(warnings),
+                "input_path": row.get("input_path"),
+            }
+        )
+    return exceptions
+
+
+def _exception_summary(exceptions: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "count": len(exceptions),
+        "final_status_counts": _status_counts(exceptions, "final_status"),
+        "primary_stage_counts": _status_counts(exceptions, "primary_stage"),
+    }
+
+
 def build_frame_accounting(
     run_dir: str | Path,
     out_path: str | Path | None = None,
@@ -273,6 +329,7 @@ def build_frame_accounting(
         )
 
     final_counts = _status_counts(rows, "final_status")
+    exceptions = _exception_frames(rows)
     summary = {
         "input_light_frames": len(rows),
         "calibrated_frames": sum(1 for row in rows if row["calibration_status"] == "calibrated"),
@@ -294,6 +351,7 @@ def build_frame_accounting(
         "zero_weight_frames": final_counts.get("zero_weight", 0),
         "not_integrated_frames": final_counts.get("not_integrated", 0),
         "final_status_counts": final_counts,
+        "exception_frames": len(exceptions),
     }
     payload = {
         "schema_version": 1,
@@ -310,6 +368,8 @@ def build_frame_accounting(
         },
         "integration_source_stage": (integration or {}).get("source_stage"),
         "summary": summary,
+        "exception_summary": _exception_summary(exceptions),
+        "exception_frames": exceptions,
         "frames": rows,
     }
     write_json(out_path or (run / "frame_accounting.json"), payload)
