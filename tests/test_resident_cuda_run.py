@@ -945,6 +945,60 @@ def test_cli_resident_cuda_uses_planner_matching_master_sets(tmp_path: Path):
     assert len({item["dark_group"] for item in master_stats["sets"].values()}) == 2
 
 
+def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_dark_group_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    cache = tmp_path / "shared_resident_master_cache"
+    run_a = tmp_path / "resident_cache_first"
+    run_b = tmp_path / "resident_cache_second"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    base_args = [
+        "run",
+        "--plan",
+        str(plan),
+        "--backend",
+        "cuda",
+        "--memory-mode",
+        "resident",
+        "--until-stage",
+        "integration",
+        "--local-normalization",
+        "off",
+        "--integration-rejection",
+        "none",
+        "--integration-weighting",
+        "none",
+        "--resident-registration",
+        "off",
+        "--flat-floor",
+        "0.05",
+        "--resident-master-cache-dir",
+        str(cache),
+    ]
+
+    assert main([*base_args, "--out", str(run_a)]) == 0
+    assert main([*base_args, "--out", str(run_b)]) == 0
+
+    first_sets = read_json(run_a / "resident_artifacts.json")["artifacts"][0]["master_stats"]["sets"]
+    second_artifact = read_json(run_b / "resident_artifacts.json")["artifacts"][0]
+    second_sets = second_artifact["master_stats"]["sets"]
+
+    assert cache.exists()
+    assert list(cache.glob("*_master_stats.json"))
+    assert {item["cache_scope"] for item in first_sets.values()} == {"shared"}
+    assert {item["cache_scope"] for item in second_sets.values()} == {"shared"}
+    assert {item["cache_hit"] for item in first_sets.values()} == {False}
+    assert {item["cache_hit"] for item in second_sets.values()} == {True}
+    assert second_artifact["resident_io_pipeline"]["master_cache_scope"] == "shared"
+    assert second_artifact["resident_io_pipeline"]["master_cache_dir"] == str(cache)
+    assert "--resident-master-cache-dir" in (run_b / "run_command.txt").read_text(encoding="utf-8")
+
+
 def test_resident_frame_exclusion_matches_id_name_or_stem():
     frame = {
         "id": "F000196",

@@ -303,6 +303,20 @@ integration where applicable.
 - Run a cold-output 200-light benchmark and acceptance audit to separate
   output-write recovery from hot-cache master reuse.
 
+### S2-Gate 15: Shared Resident Master Cache
+
+- Add an explicit `--resident-master-cache-dir` option for `glass run` and
+  `glass audit`.
+- Keep the default cache run-local, but allow an opt-in shared resident
+  master-frame cache across output directories.
+- Fingerprint cache entries from frame metadata, file size/mtime, calibration
+  groups, shape, filter, and calibration policy so stale or mismatched cache
+  entries are not silently reused.
+- Record cache scope, key, fingerprint, hit/miss, and cache directory in
+  `resident_artifacts.json`.
+- Validate the cache-hit 200-light benchmark against the release reference
+  output and benchmark contract.
+
 ## Gate Rules
 
 Each gate requires:

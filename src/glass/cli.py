@@ -365,6 +365,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
+                resident_master_cache_dir=args.resident_master_cache_dir,
             ),
         )
     elif plan.executable:
@@ -451,6 +452,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
+                resident_master_cache_dir=args.resident_master_cache_dir,
             ),
         )
         write_run_state(args.out, state)
@@ -874,6 +876,10 @@ def build_parser() -> argparse.ArgumentParser:
             "or prefetch-ring pinned slots plus async H2D"
         ),
     )
+    run.add_argument(
+        "--resident-master-cache-dir",
+        help="optional shared resident master-frame cache directory reused across output directories",
+    )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument(
         "--integration-weighting",
@@ -1044,6 +1050,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["pageable", "pinned_async", "pinned_ring"],
         default="pageable",
         help="resident light upload mode for resident audit",
+    )
+    audit.add_argument(
+        "--resident-master-cache-dir",
+        help="optional shared resident master-frame cache directory reused across audit output directories",
     )
     audit.add_argument(
         "--registration-method",

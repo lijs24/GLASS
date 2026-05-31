@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import gc
+import hashlib
+import json
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
@@ -946,6 +948,87 @@ def _master_set_cache_key(
     )
 
 
+def _record_cache_token(record: dict[str, Any]) -> dict[str, Any]:
+    path = Path(str(record.get("path") or ""))
+    stat: dict[str, Any]
+    try:
+        info = path.stat()
+        stat = {"size": int(info.st_size), "mtime_ns": int(info.st_mtime_ns)}
+    except OSError:
+        stat = {"missing": True}
+    return {
+        "id": record.get("id"),
+        "path": str(path),
+        "exposure_s": record.get("exposure_s"),
+        "gain": record.get("gain"),
+        "offset": record.get("offset"),
+        "temperature_c": record.get("temperature_c"),
+        "width": record.get("width"),
+        "height": record.get("height"),
+        **stat,
+    }
+
+
+def _master_cache_fingerprint(
+    *,
+    filter_name: str | None,
+    height: int,
+    width: int,
+    bias_group: str | None,
+    dark_group: str | None,
+    flat_group: str | None,
+    flat_bias_group: str | None,
+    bias_records: list[dict[str, Any]],
+    dark_records: list[dict[str, Any]],
+    flat_records: list[dict[str, Any]],
+    flat_bias_records: list[dict[str, Any]],
+    policy: CalibrationPolicy,
+) -> str:
+    payload = {
+        "schema_version": 1,
+        "filter": filter_name,
+        "shape": {"height": int(height), "width": int(width)},
+        "groups": {
+            "bias": bias_group,
+            "dark": dark_group,
+            "flat": flat_group,
+            "flat_bias": flat_bias_group,
+        },
+        "policy": asdict(policy),
+        "records": {
+            "bias": [_record_cache_token(record) for record in bias_records],
+            "dark": [_record_cache_token(record) for record in dark_records],
+            "flat": [_record_cache_token(record) for record in flat_records],
+            "flat_bias": [_record_cache_token(record) for record in flat_bias_records],
+        },
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _resident_master_cache_root(run: Path, master_cache_dir: str | Path | None) -> tuple[Path, str]:
+    if master_cache_dir is None:
+        return run / "calib_cache" / "resident_masters", "run"
+    return Path(master_cache_dir), "shared"
+
+
+def _master_cache_paths(cache: Path, key: str) -> dict[str, Path]:
+    return {
+        "bias": cache / f"{key}_master_bias.npy",
+        "dark": cache / f"{key}_master_dark.npy",
+        "flat": cache / f"{key}_master_flat.npy",
+        "stats": cache / f"{key}_master_stats.json",
+    }
+
+
+def _cached_master_files_complete(paths: dict[str, Path], stats: dict[str, Any]) -> bool:
+    return (
+        (int(stats.get("bias_count") or 0) <= 0 or paths["bias"].exists())
+        and (int(stats.get("dark_count") or 0) <= 0 or paths["dark"].exists())
+        and (int(stats.get("flat_count") or 0) <= 0 or paths["flat"].exists())
+    )
+
+
 def _load_or_build_matching_masters(
     run: Path,
     filter_name: str | None,
@@ -957,24 +1040,42 @@ def _load_or_build_matching_masters(
     dark_group: str | None,
     flat_group: str | None,
     policy: CalibrationPolicy,
+    master_cache_dir: str | Path | None = None,
 ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None, dict[str, Any], float | None]:
-    cache = run / "calib_cache" / "resident_masters"
+    cache, cache_scope = _resident_master_cache_root(run, master_cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
-    key = _master_set_cache_key(filter_name, height, width, bias_group, dark_group, flat_group)
-    bias_path = cache / f"{key}_master_bias.npy"
-    dark_path = cache / f"{key}_master_dark.npy"
-    flat_path = cache / f"{key}_master_flat.npy"
-    stats_path = cache / f"{key}_master_stats.json"
-    if stats_path.exists():
-        stats = read_json(stats_path)
-        master_bias = np.load(bias_path) if bias_path.exists() else None
-        master_dark = np.load(dark_path) if dark_path.exists() else None
-        master_flat = np.load(flat_path) if flat_path.exists() else None
-        return master_bias, master_dark, master_flat, stats, stats.get("dark_exposure_s")
-
+    base_key = _master_set_cache_key(filter_name, height, width, bias_group, dark_group, flat_group)
     bias_records = _records_for_group(bias_group, frames, groups)
     dark_records = _records_for_group(dark_group, frames, groups)
     flat_records = _records_for_group(flat_group, frames, groups)
+    flat_group_record = groups.get(flat_group or "")
+    flat_bias_group = _find_matching_bias_for_group(flat_group_record, groups)
+    flat_bias_records = [] if flat_bias_group == bias_group else _records_for_group(flat_bias_group, frames, groups)
+    fingerprint = _master_cache_fingerprint(
+        filter_name=filter_name,
+        height=height,
+        width=width,
+        bias_group=bias_group,
+        dark_group=dark_group,
+        flat_group=flat_group,
+        flat_bias_group=flat_bias_group,
+        bias_records=bias_records,
+        dark_records=dark_records,
+        flat_records=flat_records,
+        flat_bias_records=flat_bias_records,
+        policy=policy,
+    )
+    key = f"{base_key}_{fingerprint[:16]}"
+    paths = _master_cache_paths(cache, key)
+    stats_path = paths["stats"]
+    if stats_path.exists():
+        stats = read_json(stats_path)
+        if stats.get("cache_fingerprint") == fingerprint and _cached_master_files_complete(paths, stats):
+            stats = {**stats, "cache_hit": True, "cache_scope": cache_scope, "cache_dir": str(cache)}
+            master_bias = np.load(paths["bias"]) if paths["bias"].exists() else None
+            master_dark = np.load(paths["dark"]) if paths["dark"].exists() else None
+            master_flat = np.load(paths["flat"]) if paths["flat"].exists() else None
+            return master_bias, master_dark, master_flat, stats, stats.get("dark_exposure_s")
 
     master_bias = None
     bias_paths = _paths_for_records(bias_records)
@@ -990,11 +1091,8 @@ def _load_or_build_matching_masters(
     master_flat = None
     flat_paths = _paths_for_records(flat_records)
     if flat_paths:
-        flat_group_record = groups.get(flat_group or "")
-        flat_bias_group = _find_matching_bias_for_group(flat_group_record, groups)
         flat_bias = master_bias
         if flat_bias_group != bias_group:
-            flat_bias_records = _records_for_group(flat_bias_group, frames, groups)
             flat_bias_paths = _paths_for_records(flat_bias_records)
             flat_bias = make_master_bias(flat_bias_paths).data if flat_bias_paths else None
         master_flat = make_master_flat(
@@ -1015,6 +1113,7 @@ def _load_or_build_matching_masters(
         "bias_group": bias_group,
         "dark_group": dark_group,
         "flat_group": flat_group,
+        "flat_bias_group": flat_bias_group,
         "bias_count": len(bias_paths),
         "dark_count": len(dark_paths),
         "flat_count": len(flat_paths),
@@ -1023,13 +1122,19 @@ def _load_or_build_matching_masters(
         "dark": None if master_dark is None else image_stats(master_dark),
         "flat": None if master_flat is None else image_stats(master_flat),
         "master_dark_includes_bias": policy.master_dark_includes_bias,
+        "cache_hit": False,
+        "cache_scope": cache_scope,
+        "cache_dir": str(cache),
+        "cache_key": key,
+        "cache_base_key": base_key,
+        "cache_fingerprint": fingerprint,
     }
     if master_bias is not None:
-        np.save(bias_path, master_bias)
+        np.save(paths["bias"], master_bias)
     if master_dark is not None:
-        np.save(dark_path, master_dark)
+        np.save(paths["dark"], master_dark)
     if master_flat is not None:
-        np.save(flat_path, master_flat)
+        np.save(paths["flat"], master_flat)
     write_json(stats_path, stats)
     return master_bias, master_dark, master_flat, stats, dark_exposure
 
@@ -1129,6 +1234,7 @@ def run_resident_calibration_integration(
     resident_prefetch_frames: int = 0,
     resident_prefetch_workers: int = 1,
     resident_h2d_mode: str = "pageable",
+    resident_master_cache_dir: str | Path | None = None,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -1201,6 +1307,9 @@ def run_resident_calibration_integration(
     plan = read_json(plan_path)
     run = Path(run_dir)
     run.mkdir(parents=True, exist_ok=True)
+    shared_master_cache_dir = None if resident_master_cache_dir is None else Path(resident_master_cache_dir)
+    if shared_master_cache_dir is not None:
+        shared_master_cache_dir.mkdir(parents=True, exist_ok=True)
     state = RunState(run_id=run.name or "glass-run", created_at=now_iso(), current_stage="resident_calibration")
 
     frames = _frame_map(plan)
@@ -1340,6 +1449,7 @@ def run_resident_calibration_integration(
                             dark_group,
                             flat_group,
                             policy,
+                            master_cache_dir=shared_master_cache_dir,
                         )
                         stack.set_calibration_masters(master_bias, master_dark, master_flat)
                         master_elapsed += perf_counter() - master_set_start
@@ -3246,6 +3356,8 @@ def run_resident_calibration_integration(
                         "prefetch_frames": int(resident_prefetch_frames),
                         "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                         "h2d_mode": resident_h2d_mode,
+                        "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
+                        "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",
                         "host_pinned_bytes": int(
                             max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
                         ),
