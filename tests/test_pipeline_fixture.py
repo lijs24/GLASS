@@ -34,7 +34,10 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert integration["rejection"] == "none"
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
     assert all(output["stack_engine_enabled"] for output in integration["outputs"])
+    assert all(Path(output["dq_map_path"]).exists() for output in integration["outputs"])
+    assert all("valid" in output["dq_summary"] for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
+    assert "DQ/mask summary" in (run / "report.html").read_text(encoding="utf-8")
     assert main(["resume", "--run", str(run)]) == 0
 
 
@@ -67,6 +70,7 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert (run / "calibration_artifacts.json").exists()
     assert len(list((run / "calib_cache" / "masters").glob("*.fits"))) >= 3
     assert len(list((run / "calib_cache" / "calibrated").glob("*.fits"))) == 3
+    assert len(list((run / "calib_cache" / "dq").glob("dq_calibrated_*.fits"))) == 3
     import json
 
     artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
@@ -75,6 +79,8 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert all(master["stack_engine_enabled"] for master in artifacts["masters"].values())
     assert all(master["tile_stack_mode"] == "stack_engine_cpu" for master in artifacts["masters"].values())
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
+    assert all(Path(item["dq_mask_path"]).exists() for item in artifacts["calibrated_lights"])
+    assert all("valid" in item["dq_summary"] for item in artifacts["calibrated_lights"])
 
 
 def test_streaming_exact_median_scratch_matches_numpy(tmp_path: Path):
@@ -329,6 +335,11 @@ def test_pipeline_fixture_run_warp(tmp_path: Path):
     assert (run / "warp_results.json").exists()
     assert list((run / "registered_cache").glob("registered_*.fits"))
     assert list((run / "coverage_cache").glob("coverage_*.fits"))
+    import json
+
+    warp = json.loads((run / "warp_results.json").read_text(encoding="utf-8"))
+    assert all(Path(item["dq_mask_path"]).exists() for item in warp["warp_results"])
+    assert all("valid" in item["dq_summary"] for item in warp["warp_results"])
 
 
 def test_pipeline_fixture_run_local_normalization(tmp_path: Path):
@@ -360,6 +371,7 @@ def test_pipeline_fixture_run_local_normalization(tmp_path: Path):
     )
     assert (run / "local_norm_results.json").exists()
     assert list((run / "local_norm_cache").glob("local_norm_*.fits"))
+    assert list((run / "dq_cache").glob("dq_local_norm_*.fits"))
     assert (
         main(
             [
@@ -381,6 +393,8 @@ def test_pipeline_fixture_run_local_normalization(tmp_path: Path):
 
     local_norm = json.loads((run / "local_norm_results.json").read_text(encoding="utf-8"))
     result = local_norm["local_norm_results"][0]
+    assert Path(result["dq_mask_path"]).exists()
+    assert "valid" in result["dq_summary"]
     assert result["grid_rows"] == 4
     assert result["grid_cols"] == 4
     assert result["tile_count"] == 16
@@ -430,6 +444,8 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
     assert all(output["stack_engine_enabled"] for output in integration["outputs"])
     assert all(output["stack_engine_rejection_method"] == "winsorized_sigma" for output in integration["outputs"])
+    assert all(Path(output["dq_map_path"]).exists() for output in integration["outputs"])
+    assert all("high_rejected" in output["dq_summary"] or "valid" in output["dq_summary"] for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     assert list((run / "integration").glob("weight_map_*.fits"))
     assert list((run / "integration").glob("coverage_map_*.fits"))

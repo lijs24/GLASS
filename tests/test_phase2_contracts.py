@@ -14,6 +14,7 @@ from glass.engine.contracts import (
     StackRequest,
     TileWindow,
 )
+from glass.engine.dq import dq_mask_from_coverage, dq_summary
 from glass.io.image_source import FitsImageSource
 from glass.models import to_jsonable
 
@@ -115,3 +116,11 @@ def test_fits_image_source_reads_tile_and_mask(small_fits_dataset):
     assert tile.shape == window.shape
     assert np.allclose(tile, 1200.0)
     assert mask.summary() == {"valid": 20}
+
+
+def test_dq_helper_builds_summary_from_coverage():
+    coverage = np.array([[1.0, 0.0], [np.nan, 1.0]], dtype=np.float32)
+
+    mask = dq_mask_from_coverage(coverage, DQFlag.WARP_EDGE)
+
+    assert dq_summary(mask) == {"valid": 2, "warp_edge": 2}

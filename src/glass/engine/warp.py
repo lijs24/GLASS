@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 
+from glass.engine.contracts import DQFlag
+from glass.engine.dq import add_summary_counts, dq_header, dq_mask_from_coverage, write_dq_tile
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.fits_io import FitsImageReader, FitsTileWriter
 from glass.io.json_io import read_json, write_json
@@ -126,8 +128,10 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
     calibrated = {item["frame_id"]: item for item in calibration.get("calibrated_lights", [])}
     registered_dir = run / "registered_cache"
     coverage_dir = run / "coverage_cache"
+    dq_dir = run / "dq_cache"
     registered_dir.mkdir(parents=True, exist_ok=True)
     coverage_dir.mkdir(parents=True, exist_ok=True)
+    dq_dir.mkdir(parents=True, exist_ok=True)
     outputs = []
     skipped = []
     for result in registration.get("registration_results", []):
@@ -151,6 +155,7 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
             height, width = reader.shape
             registered_path = registered_dir / f"registered_{frame_id}.fits"
             coverage_path = coverage_dir / f"coverage_{frame_id}.fits"
+            dq_path = dq_dir / f"dq_warp_{frame_id}.fits"
             with FitsTileWriter(
                 registered_path,
                 width,
@@ -161,9 +166,15 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                 width,
                 height,
                 {"IMAGETYP": "coverage", "FRAMEID": frame_id},
-            ) as coverage_writer:
+            ) as coverage_writer, FitsTileWriter(
+                dq_path,
+                width,
+                height,
+                dq_header("warp", frame_id),
+            ) as dq_writer:
                 tile_count = 0
                 valid_pixels = 0
+                dq_summary: dict[str, int] = {}
                 for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
                     if integer_translation:
                         warped, coverage = _warp_tile_nearest(reader, tile, int(round(dx)), int(round(dy)))
@@ -173,6 +184,9 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                         warp_model = "matrix_bilinear"
                     registered_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, warped)
                     coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage)
+                    tile_dq = dq_mask_from_coverage(coverage, DQFlag.WARP_EDGE)
+                    write_dq_tile(dq_writer, tile, tile_dq)
+                    add_summary_counts(dq_summary, tile_dq.summary())
                     tile_count += 1
                     valid_pixels += int(np.sum(coverage))
         outputs.append(
@@ -180,6 +194,8 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                 "frame_id": frame_id,
                 "registered_path": str(registered_path),
                 "coverage_path": str(coverage_path),
+                "dq_mask_path": str(dq_path),
+                "dq_summary": dq_summary,
                 "registration_status": status,
                 "dx": dx,
                 "dy": dy,

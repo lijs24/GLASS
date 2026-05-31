@@ -81,6 +81,22 @@ def write_html_report(
     registration_results = (registration or {}).get("registration_results", [])
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
     integration_outputs = (integration or {}).get("outputs", [])
+    dq_rows = []
+    for source_name, rows in [
+        ("registration/warp", registration_results),
+        ("local_normalization", local_norm_results),
+        ("integration", integration_outputs),
+    ]:
+        for row in rows:
+            if row.get("dq_summary") or row.get("dq_mask_path") or row.get("dq_map_path"):
+                dq_rows.append(
+                    {
+                        "stage": source_name,
+                        "frame_or_filter": row.get("frame_id") or row.get("filter"),
+                        "summary": row.get("dq_summary", {}),
+                        "path": row.get("dq_mask_path") or row.get("dq_map_path"),
+                    }
+                )
     timing_rows = (timing or {}).get("stages", [])
     resident_summary = _resident_rows(resident)
     warnings = []
@@ -125,6 +141,8 @@ def write_html_report(
   Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
   Rejection: <code>{escape(str((integration or {}).get("rejection", "pending")))}</code>.</p>
   {_table(integration_outputs)}
+  <h2>DQ/mask summary</h2>
+  {_table(dq_rows)}
   <h2>Resident CUDA summary</h2>
   <p>Backend: <code>{escape(str((resident or {}).get("backend", "not used")))}</code>.
   Device: <code>{escape(str(((resident or {}).get("device") or {}).get("name", "pending")))}</code>.</p>

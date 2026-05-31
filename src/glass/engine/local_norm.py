@@ -6,6 +6,8 @@ from typing import Any
 import numpy as np
 
 from glass.cpu.local_norm import apply_tile_normalization, estimate_tile_normalization
+from glass.engine.contracts import DQFlag
+from glass.engine.dq import add_summary_counts, dq_header, dq_mask_from_invalid, write_dq_tile
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.fits_io import FitsImageReader, FitsTileWriter
 from glass.io.json_io import read_json, write_json
@@ -50,6 +52,8 @@ def _disabled_payload(run: Path, policy: dict[str, Any], warp: dict[str, Any], r
                 "input_path": item["registered_path"],
                 "normalized_path": item["registered_path"],
                 "coverage_path": item["coverage_path"],
+                "dq_mask_path": item.get("dq_mask_path"),
+                "dq_summary": item.get("dq_summary", {}),
                 "backend": "passthrough",
                 "tile_count": 0,
                 "status": "disabled_passthrough",
@@ -91,7 +95,9 @@ def local_normalize_registered_frames(
         raise ValueError("local normalization reference frame is missing from warp results")
     reference = by_frame[reference_id]
     output_dir = run / "local_norm_cache"
+    dq_dir = run / "dq_cache"
     output_dir.mkdir(parents=True, exist_ok=True)
+    dq_dir.mkdir(parents=True, exist_ok=True)
     cuda_module = _cuda_module_if_requested(backend)
     outputs: list[dict[str, Any]] = []
 
@@ -104,6 +110,7 @@ def local_normalize_registered_frames(
         for item in warp.get("warp_results", []):
             frame_id = item["frame_id"]
             out_path = output_dir / f"local_norm_{frame_id}.fits"
+            dq_path = dq_dir / f"dq_local_norm_{frame_id}.fits"
             coefficient_path = output_dir / f"local_norm_{frame_id}_coefficients.json"
             warnings: list[str] = []
             scales: list[float] = []
@@ -120,9 +127,15 @@ def local_normalize_registered_frames(
                 width=width,
                 height=height,
                 header={"IMAGETYP": "local_norm", "FRAMEID": frame_id},
-            ) as writer:
+            ) as writer, FitsTileWriter(
+                dq_path,
+                width=width,
+                height=height,
+                header=dq_header("local_norm", frame_id),
+            ) as dq_writer:
                 tile_count = 0
                 actual_backend = "cuda" if cuda_module is not None else "cpu"
+                dq_summary: dict[str, int] = {}
                 for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
                     src_tile = source_data.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
                     ref_tile = reference_data.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
@@ -160,6 +173,13 @@ def local_normalize_registered_frames(
                     valid_grid[grid_y, grid_x] = int(stats["valid_pixels"])
                     status_grid[grid_y][grid_x] = str(stats["status"])
                     writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, normalized)
+                    tile_dq = dq_mask_from_invalid(
+                        valid_mask.shape,
+                        ~valid_mask,
+                        DQFlag.LOCAL_NORMALIZATION_EXCLUDED,
+                    )
+                    write_dq_tile(dq_writer, tile, tile_dq)
+                    add_summary_counts(dq_summary, tile_dq.summary())
                     tile_count += 1
                     scales.append(scale)
                     offsets.append(offset)
@@ -186,6 +206,8 @@ def local_normalize_registered_frames(
                     "input_path": item["registered_path"],
                     "normalized_path": str(out_path),
                     "coverage_path": item["coverage_path"],
+                    "dq_mask_path": str(dq_path),
+                    "dq_summary": dq_summary,
                     "coefficient_grid_path": str(coefficient_path),
                     "backend": actual_backend,
                     "model": "tile_mean_std_cuda" if actual_backend == "cuda_mean_std" else "tile_median_std_cpu",

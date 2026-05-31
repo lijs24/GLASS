@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from glass.cpu.calibration import calibrate_light
-from glass.engine.contracts import CombinePolicy, OutputMapPolicy, StackRequest
+from glass.engine.contracts import CombinePolicy, DQFlag, OutputMapPolicy, StackRequest
+from glass.engine.dq import add_summary_counts, dq_header, dq_mask_from_invalid, write_dq_tile
 from glass.engine.stack_engine import CPUStackEngine
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.image_source import FitsImageSource
@@ -314,7 +315,13 @@ def _calibrate_light_to_cache_streaming(
     backend: str,
     tile_size: int,
 ) -> dict[str, Any]:
+    import numpy as np
+
     cuda_module = _cuda_module_if_requested(backend)
+    dq_dir = path.parent.parent / "dq"
+    dq_dir.mkdir(parents=True, exist_ok=True)
+    dq_path = dq_dir / f"dq_calibrated_{frame['id']}.fits"
+    dq_summary: dict[str, int] = {}
     with ExitStack() as stack:
         light_reader = stack.enter_context(FitsImageReader(frame["path"]))
         bias_reader = stack.enter_context(FitsImageReader(bias_path)) if bias_path else None
@@ -330,7 +337,12 @@ def _calibrate_light_to_cache_streaming(
                 "FILTER": frame.get("filter"),
                 "EXPTIME": frame.get("exposure_s"),
             },
-        ) as writer:
+        ) as writer, FitsTileWriter(
+            dq_path,
+            width=width,
+            height=height,
+            header=dq_header("calibration", frame["id"]),
+        ) as dq_writer:
             tile_count = 0
             for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
                 light_tile = light_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
@@ -371,10 +383,19 @@ def _calibrate_light_to_cache_streaming(
                     )
                     actual_backend = "cpu"
                 writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, calibrated_tile)
+                tile_dq = dq_mask_from_invalid(
+                    calibrated_tile.shape,
+                    ~np.isfinite(calibrated_tile),
+                    DQFlag.NO_DATA,
+                )
+                write_dq_tile(dq_writer, tile, tile_dq)
+                add_summary_counts(dq_summary, tile_dq.summary())
                 tile_count += 1
     return {
         "frame_id": frame["id"],
         "path": str(path),
+        "dq_mask_path": str(dq_path),
+        "dq_summary": dq_summary,
         "backend": actual_backend,
         "tile_size": tile_size,
         "tile_count": tile_count,

@@ -15,6 +15,7 @@ from glass.engine.contracts import (
     StackRequest,
     TileWindow,
 )
+from glass.engine.dq import add_summary_counts, dq_header, dq_mask_from_coverage, write_dq_tile
 from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.fits_io import FitsImageReader, FitsTileWriter
@@ -153,16 +154,19 @@ def _write_stack_engine_result(
     coverage_path: Path,
     low_path: Path,
     high_path: Path,
+    dq_path: Path,
     tile_size: int,
-) -> int:
+) -> tuple[int, dict[str, int]]:
     height, width = result.master.shape
     tile_count = 0
+    dq_summary: dict[str, int] = {}
     with ExitStack() as stack:
         master_writer = stack.enter_context(FitsTileWriter(master_path, width, height, {"IMAGETYP": "master"}))
         weight_writer = stack.enter_context(FitsTileWriter(weight_path, width, height, {"IMAGETYP": "weight"}))
         coverage_writer = stack.enter_context(FitsTileWriter(coverage_path, width, height, {"IMAGETYP": "coverage"}))
         low_writer = stack.enter_context(FitsTileWriter(low_path, width, height, {"IMAGETYP": "lowrej"}))
         high_writer = stack.enter_context(FitsTileWriter(high_path, width, height, {"IMAGETYP": "highrej"}))
+        dq_writer = stack.enter_context(FitsTileWriter(dq_path, width, height, dq_header("integration")))
         weight_map = (
             result.weight_map if result.weight_map is not None else np.zeros_like(result.master, dtype=np.float32)
         )
@@ -189,8 +193,14 @@ def _write_stack_engine_result(
             coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage_map[y_slice, x_slice])
             low_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, low_map[y_slice, x_slice])
             high_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, high_map[y_slice, x_slice])
+            if result.dq_mask is not None:
+                dq_tile = DQMask(result.dq_mask.data[y_slice, x_slice].copy())
+            else:
+                dq_tile = dq_mask_from_coverage(coverage_map[y_slice, x_slice], DQFlag.NO_DATA)
+            write_dq_tile(dq_writer, tile, dq_tile)
+            add_summary_counts(dq_summary, dq_tile.summary())
             tile_count += 1
-    return tile_count
+    return tile_count, dq_summary
 
 
 def _integrate_with_stack_engine(
@@ -205,8 +215,9 @@ def _integrate_with_stack_engine(
     coverage_path: Path,
     low_path: Path,
     high_path: Path,
+    dq_path: Path,
     weighting: str,
-) -> tuple[int, dict[str, float | int | str], str]:
+) -> tuple[int, dict[str, float | int | str], str, dict[str, int]]:
     method = _stack_engine_rejection_method(rejection)
     with ExitStack() as stack:
         sources = {
@@ -231,16 +242,16 @@ def _integrate_with_stack_engine(
                 variance=False,
                 low_rejection=True,
                 high_rejection=True,
-                dq=False,
+                dq=True,
             ),
             weights={item["frame_id"]: frame_weights[item["frame_id"]] for item in items},
             metadata={"stage": "integration", "coverage_source": "coverage_fits"},
         )
         result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
-    tile_count = _write_stack_engine_result(
-        result, master_path, weight_path, coverage_path, low_path, high_path, tile_size
+    tile_count, dq_summary = _write_stack_engine_result(
+        result, master_path, weight_path, coverage_path, low_path, high_path, dq_path, tile_size
     )
-    return tile_count, result.metrics, method
+    return tile_count, result.metrics, method, dq_summary
 
 
 def integrate_registered_frames(
@@ -286,6 +297,7 @@ def integrate_registered_frames(
             coverage_path = out_dir / f"coverage_map_{filt}.fits"
             low_path = out_dir / f"low_rejection_{filt}.fits"
             high_path = out_dir / f"high_rejection_{filt}.fits"
+            dq_path = out_dir / f"dq_map_{filt}.fits"
             tile_count = 0
             actual_backend = "cuda" if cuda_module is not None and rejection == "none" else "cpu"
             use_stack_engine = actual_backend == "cpu"
@@ -296,9 +308,10 @@ def integrate_registered_frames(
             )
             stack_engine_metrics: dict[str, float | int | str] | None = None
             stack_engine_rejection_method: str | None = None
+            dq_summary: dict[str, int] = {}
 
             if use_stack_engine:
-                tile_count, stack_engine_metrics, stack_engine_rejection_method = _integrate_with_stack_engine(
+                tile_count, stack_engine_metrics, stack_engine_rejection_method, dq_summary = _integrate_with_stack_engine(
                     items,
                     frame_weights,
                     rejection,
@@ -310,6 +323,7 @@ def integrate_registered_frames(
                     coverage_path,
                     low_path,
                     high_path,
+                    dq_path,
                     weighting,
                 )
             else:
@@ -324,6 +338,7 @@ def integrate_registered_frames(
                 )
                 low_writer = stack.enter_context(FitsTileWriter(low_path, width, height, {"IMAGETYP": "lowrej"}))
                 high_writer = stack.enter_context(FitsTileWriter(high_path, width, height, {"IMAGETYP": "highrej"}))
+                dq_writer = stack.enter_context(FitsTileWriter(dq_path, width, height, dq_header("integration")))
                 for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
                     weights = np.asarray([frame_weights[item["frame_id"]] for item in items], dtype=np.float32)
                     sum_tile = None
@@ -361,6 +376,9 @@ def integrate_registered_frames(
                     coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage_map)
                     low_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, low_map)
                     high_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, high_map)
+                    tile_dq = dq_mask_from_coverage(coverage_map, DQFlag.NO_DATA)
+                    write_dq_tile(dq_writer, tile, tile_dq)
+                    add_summary_counts(dq_summary, tile_dq.summary())
                     tile_count += 1
         outputs.append(
             {
@@ -371,6 +389,8 @@ def integrate_registered_frames(
                 "coverage_map_path": str(coverage_path),
                 "low_rejection_map_path": str(low_path),
                 "high_rejection_map_path": str(high_path),
+                "dq_map_path": str(dq_path),
+                "dq_summary": dq_summary,
                 "tile_size": tile_size,
                 "tile_count": tile_count,
                 "backend": actual_backend,
