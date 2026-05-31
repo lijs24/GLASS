@@ -161,6 +161,13 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "resident_local_normalization": {"mode": "resident_grid_mean_std"},
                     "resident_integration_weighting": {"mode": "simple_snr"},
                     "integration_rejection": {"mode": "winsorized_sigma"},
+                    "output_map_policy": {
+                        "mode": "science",
+                        "available": ["master", "weight", "dq", "coverage", "low_rejection", "high_rejection"],
+                        "written": ["master", "weight", "dq", "coverage"],
+                        "skipped": ["low_rejection", "high_rejection"],
+                        "description": "science keeps comparison maps and skips rejection count FITS files",
+                    },
                     "timing_s": {
                         "light_read_upload_calibrate": 2.0,
                         "light_read_decode": 1.0,
@@ -198,3 +205,7 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "resident_grid_mean_std" in html
     assert "simple_snr" in html
     assert "winsorized_sigma" in html
+    assert "Output map policy" in html
+    assert "science" in html
+    assert "master, weight, dq, coverage" in html
+    assert "low_rejection, high_rejection" in html

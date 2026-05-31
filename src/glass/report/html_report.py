@@ -98,6 +98,44 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
     return rows
 
 
+def _output_policy_rows(
+    integration: dict[str, Any] | None,
+    resident: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    for item in (integration or {}).get("outputs", []):
+        policy = item.get("output_map_policy") or {}
+        if policy:
+            rows.append(
+                {
+                    "source": "integration",
+                    "filter": item.get("filter"),
+                    "mode": policy.get("mode"),
+                    "available": ", ".join(str(name) for name in policy.get("available", [])),
+                    "written": ", ".join(str(name) for name in policy.get("written", [])),
+                    "skipped": ", ".join(str(name) for name in policy.get("skipped", [])),
+                }
+            )
+
+    for item in (resident or {}).get("artifacts", []):
+        policy = item.get("output_map_policy") or {}
+        if policy:
+            rows.append(
+                {
+                    "source": "resident",
+                    "filter": item.get("filter"),
+                    "mode": policy.get("mode"),
+                    "available": ", ".join(str(name) for name in policy.get("available", [])),
+                    "written": ", ".join(str(name) for name in policy.get("written", [])),
+                    "skipped": ", ".join(str(name) for name in policy.get("skipped", [])),
+                    "description": policy.get("description", ""),
+                }
+            )
+
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -203,6 +241,7 @@ def write_html_report(
         },
     ]
     resident_summary = _resident_rows(resident)
+    output_policy_rows = _output_policy_rows(integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
 <html lang="en">
@@ -253,6 +292,8 @@ def write_html_report(
   {_table(integration_outputs)}
   <h2>Integration output maps</h2>
   {_table(integration_map_rows)}
+  <h2>Output map policy</h2>
+  {_table(output_policy_rows)}
   <h2>DQ/mask summary</h2>
   {_table(dq_rows)}
   <h2>Resident CUDA summary</h2>

@@ -360,6 +360,16 @@ integration where applicable.
 - Validate the policy on small CUDA fixtures and rerun a 200-light science-mode
   benchmark because the output set now affects wall-clock performance.
 
+### S2-Gate 19: Resident Output Policy Reporting
+
+- Surface resident output-map policy decisions in the HTML report, not only in
+  JSON artifacts.
+- Report the policy mode, available maps, written maps, and skipped maps from
+  `integration_results.json` and `resident_artifacts.json`.
+- Keep the report readable when a run has no resident output policy.
+- Validate with CLI report smoke tests; this is a reporting-only gate and does
+  not require rerunning the 200-light benchmark unless compute artifacts change.
+
 ## Gate Rules
 
 Each gate requires:
