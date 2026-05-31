@@ -347,6 +347,31 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "compared_pixels": 12345,
                 },
             },
+            "summary": {
+                "output_numerical_drift_count": 1,
+                "output_numerical_drift_max_relative_rms": 0.011916,
+            },
+            "output_numerical_drifts": [
+                {
+                    "key": "H:200:F000061:F000260",
+                    "field": "master_path",
+                    "drift": {
+                        "available": True,
+                        "joint_finite_pixels": 61651200,
+                        "nonfinite_mismatch_pixels": 0,
+                        "mean_signed": 0.000111721,
+                        "mean_abs": 0.642260,
+                        "median_abs": 0.417107,
+                        "rms": 3.751400,
+                        "p95_abs": 1.489120,
+                        "p99_abs": 3.408920,
+                        "max_abs": 1836.101562,
+                        "baseline_std": 314.820862,
+                        "candidate_std": 314.730194,
+                        "relative_rms_to_baseline_std": 0.011916,
+                    },
+                }
+            ],
         },
     )
     report = tmp_path / "resident_report.html"
@@ -363,11 +388,18 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert 'id="resident-output-maps"' in html
     assert 'href="#acceptance-check-failures"' in html
     assert 'id="acceptance-check-failures"' in html
+    assert 'href="#output-numerical-drift"' in html
+    assert 'id="output-numerical-drift"' in html
     assert "Benchmark comparison" in html
     assert "Optimization guidance" in html
     assert "I/O + upload + calibration overlap" in html
     assert "Resident registration/warp batching" in html
     assert "Acceptance check failures" in html
+    assert "Output numerical drift" in html
+    assert "H:200:F000061:F000260" in html
+    assert "relative_rms_to_baseline_std" in html
+    assert "0.011916" in html
+    assert "3.7514" in html
     assert "Only failed acceptance-audit checks" in html
     assert "fixture_contract" in html
     assert "fixture_compare.json" in html

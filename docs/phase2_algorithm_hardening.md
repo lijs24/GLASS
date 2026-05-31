@@ -1118,6 +1118,20 @@ integration where applicable.
 - Validate with synthetic FITS audit fixtures, CLI Markdown output, ruff, full
   pytest, and the Gate63-conservative vs Gate64-fast 200-light comparison.
 
+### S2-Gate 66: HTML Numerical Drift Reporting
+
+- Surface resident output numerical drift evidence in the main HTML report when
+  the report is given an acceptance/resident-determinism audit JSON containing
+  `output_numerical_drifts`.
+- Add a dedicated report section with artifact key, output field, finite-pixel
+  accounting, mean/median/RMS/percentile/max absolute differences, and RMS
+  relative to baseline standard deviation.
+- Keep the report read-only and do not alter strict audit pass/fail semantics;
+  this gate only makes the S2-Gate 65 evidence visible to users reviewing fast
+  presets or regressions.
+- Validate with CLI report smoke tests, ruff, full pytest, and a real
+  Gate63-vs-Gate64 audit JSON rendered through `glass report`.
+
 ## Gate Rules
 
 Each gate requires:

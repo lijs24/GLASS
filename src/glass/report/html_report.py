@@ -23,6 +23,7 @@ _REPORT_SECTIONS = [
     ("benchmark-comparison", "Benchmark comparison"),
     ("optimization-guidance", "Optimization guidance"),
     ("acceptance-check-failures", "Acceptance check failures"),
+    ("output-numerical-drift", "Output numerical drift"),
     ("stage-coverage-summary", "Stage coverage summary"),
     ("input-frame-table", "Input frame table"),
     ("frame-type-distribution", "Frame type distribution"),
@@ -280,6 +281,34 @@ def _acceptance_failure_rows(acceptance_audit: dict[str, Any] | None) -> list[di
                     for key, value in evidence.items()
                     if key not in {"actual", "required", "required_min", "required_max"}
                 ),
+            }
+        )
+    return rows
+
+
+def _output_numerical_drift_rows(audit: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (audit or {}).get("output_numerical_drifts") or []:
+        if not isinstance(item, dict):
+            continue
+        drift = item.get("drift") if isinstance(item.get("drift"), dict) else {}
+        rows.append(
+            {
+                "artifact": item.get("key"),
+                "field": item.get("field"),
+                "available": drift.get("available"),
+                "joint_finite_pixels": drift.get("joint_finite_pixels"),
+                "nonfinite_mismatch_pixels": drift.get("nonfinite_mismatch_pixels"),
+                "mean_signed": drift.get("mean_signed"),
+                "mean_abs": drift.get("mean_abs"),
+                "median_abs": drift.get("median_abs"),
+                "rms": drift.get("rms"),
+                "p95_abs": drift.get("p95_abs"),
+                "p99_abs": drift.get("p99_abs"),
+                "max_abs": drift.get("max_abs"),
+                "baseline_std": drift.get("baseline_std"),
+                "candidate_std": drift.get("candidate_std"),
+                "relative_rms_to_baseline_std": drift.get("relative_rms_to_baseline_std"),
             }
         )
     return rows
@@ -902,6 +931,7 @@ def write_html_report(
     optimization_stage_rows = _optimization_stage_rows(optimization_guidance)
     optimization_exception_rows = _optimization_exception_rows(optimization_guidance)
     acceptance_failure_rows = _acceptance_failure_rows(acceptance_audit)
+    output_numerical_drift_rows = _output_numerical_drift_rows(acceptance_audit)
     master_rows = []
     for group_id, master in (calibration or {}).get("masters", {}).items():
         stats = master.get("stats", {})
@@ -1039,6 +1069,11 @@ def write_html_report(
   <p>Only failed acceptance-audit checks are listed here. A green run reports no
   rows while retaining the authoritative check list in the audit JSON.</p>
   {_table(acceptance_failure_rows)}
+  {_h2("output-numerical-drift", "Output numerical drift")}
+  <p>When a resident determinism or acceptance audit contains output FITS
+  numerical drift evidence, this table reports the magnitude of strict output
+  mismatches instead of leaving only hashes to interpret.</p>
+  {_table(output_numerical_drift_rows)}
   {_h2("stage-coverage-summary", "Stage coverage summary")}
   {_table(stage_coverage_rows)}
   {_h2("input-frame-table", "Input frame table")}
