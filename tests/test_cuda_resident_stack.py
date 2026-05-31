@@ -196,6 +196,51 @@ def test_resident_stack_host_async_batch_calibration_matches_cpu():
     assert np.allclose(weight, np.full((4, 5), 2.0, dtype=np.float32))
 
 
+def test_resident_stack_host_async_multistream_batch_calibration_matches_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "calibrate_frames_host_async_multistream_timed"):
+        raise AssertionError("ResidentCalibratedStack.calibrate_frames_host_async_multistream_timed is missing")
+
+    lights = []
+    for offset in (1000.0, 1010.0, 1020.0):
+        light = module.host_pinned_empty_f32(4, 5)
+        light[...] = np.arange(20, dtype=np.float32).reshape(4, 5) + offset
+        lights.append(light)
+    bias = np.full((4, 5), 100, dtype=np.float32)
+    dark = np.full((4, 5), 120, dtype=np.float32)
+    flat = np.full((4, 5), 2, dtype=np.float32)
+    policy = CalibrationPolicy(master_dark_includes_bias=True, dark_scaling_enabled=False)
+
+    stack = module.ResidentCalibratedStack(3, 4, 5)
+    stack.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    timing = stack.calibrate_frames_host_async_multistream_timed(
+        [0, 1, 2],
+        lights,
+        [60.0, 60.0, 60.0],
+        [60.0, 60.0, 60.0],
+        2,
+        asdict(policy),
+    )
+    master, weight = stack.integrate_mean()
+
+    expected_frames = [calibrate_light(light, bias, dark, flat, 60.0, 60.0, policy) for light in lights]
+    expected = np.mean(np.stack(expected_frames, axis=0), axis=0)
+    assert timing["h2d_mode"] == "host_async_multistream_batch"
+    assert timing["event_mode"] == "reused_stack_lane_events"
+    assert timing["timing_model"] == "multi_stream_lanes_one_sync"
+    assert timing["requested_stream_count"] == 2
+    assert timing["stream_count"] == 2
+    assert timing["frame_count"] == 3
+    assert timing["calibration_lane_buffer_bytes"] >= 2 * 4 * 5 * 4
+    assert len(timing["lane_stream_elapsed_s"]) == 2
+    assert timing["stream_h2d_calibrate_store_s"] >= 0.0
+    assert timing["sync_s"] >= 0.0
+    assert stack.calibration_lane_count >= 2
+    assert stack.calibration_lane_buffer_bytes >= 2 * 4 * 5 * 4
+    assert np.allclose(master, expected, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight, np.full((4, 5), 3.0, dtype=np.float32))
+
+
 def test_resident_stack_weighted_mean_matches_cpu():
     module = cuda_module_or_skip()
     frames = [

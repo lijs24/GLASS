@@ -2394,6 +2394,18 @@ class ResidentCalibratedStack:
         return int(self._impl.host_pinned_bytes)
 
     @property
+    def calibration_lane_count(self) -> int:
+        if not hasattr(self._impl, "calibration_lane_count"):
+            return 0
+        return int(self._impl.calibration_lane_count)
+
+    @property
+    def calibration_lane_buffer_bytes(self) -> int:
+        if not hasattr(self._impl, "calibration_lane_buffer_bytes"):
+            return 0
+        return int(self._impl.calibration_lane_buffer_bytes)
+
+    @property
     def warp_coverage_frame_count(self) -> int:
         if not hasattr(self._impl, "warp_coverage_frame_count"):
             return 0
@@ -2546,6 +2558,29 @@ class ResidentCalibratedStack:
             list(lights),
             np.asarray(light_exposures_s, dtype=np.float32),
             np.asarray(dark_exposures_s, dtype=np.float32),
+            _policy_payload(policy),
+        )
+        return dict(result)
+
+    def calibrate_frames_host_async_multistream_timed(
+        self,
+        indices: Any,
+        lights: Any,
+        light_exposures_s: Any,
+        dark_exposures_s: Any,
+        stream_count: int,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "calibrate_frames_host_async_multistream_timed"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.calibrate_frames_host_async_multistream_timed is not available"
+            )
+        result = self._impl.calibrate_frames_host_async_multistream_timed(
+            np.asarray(indices, dtype=np.int64),
+            list(lights),
+            np.asarray(light_exposures_s, dtype=np.float32),
+            np.asarray(dark_exposures_s, dtype=np.float32),
+            int(stream_count),
             _policy_payload(policy),
         )
         return dict(result)

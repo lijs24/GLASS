@@ -1644,6 +1644,7 @@ def run_resident_calibration_integration(
     resident_prefetch_workers: int = 1,
     resident_h2d_mode: str = "pageable",
     resident_calibration_batch_frames: int = 1,
+    resident_calibration_streams: int = 1,
     resident_master_cache_dir: str | Path | None = None,
     resident_output_maps: str = "audit",
 ) -> RunState:
@@ -1708,6 +1709,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_h2d_mode=pinned_ring requires resident_prefetch_frames > 0")
     if resident_calibration_batch_frames <= 0:
         raise ValueError("resident_calibration_batch_frames must be positive")
+    if resident_calibration_streams <= 0:
+        raise ValueError("resident_calibration_streams must be positive")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1842,17 +1845,27 @@ def run_resident_calibration_integration(
             current_dark_exposure: float | None = None
             prefetch_host_pinned_bytes = 0
             calibration_batch_supported = hasattr(stack, "calibrate_frames_host_async_timed")
+            calibration_batch_multistream_supported = hasattr(
+                stack, "calibrate_frames_host_async_multistream_timed"
+            )
             calibration_batch_enabled = bool(
                 resident_h2d_mode == "pinned_ring"
                 and resident_registration != "translation_preview"
                 and resident_calibration_batch_frames > 1
                 and calibration_batch_supported
             )
+            calibration_batch_multistream_enabled = bool(
+                calibration_batch_enabled
+                and resident_calibration_streams > 1
+                and calibration_batch_multistream_supported
+            )
             calibration_batch_count = 0
             calibration_batch_frame_count = 0
             calibration_batch_native_total_s = 0.0
             calibration_batch_stream_s = 0.0
             calibration_batch_sync_s = 0.0
+            calibration_batch_lane_buffer_bytes = 0
+            calibration_batch_actual_stream_count = 0
             with _LightPrefetcher(
                 light_frames,
                 resident_prefetch_frames,
@@ -1925,17 +1938,30 @@ def run_resident_calibration_integration(
 
                         batch_calibrate_start = perf_counter()
                         batch_indices = [item[0] for item in batch_items]
+                        batch_lights = [item[2] for item in batch_items]
+                        batch_light_exposures = [item[3] for item in batch_items]
+                        batch_dark_exposures = [
+                            np.nan if current_dark_exposure is None else float(current_dark_exposure)
+                            for _item in batch_items
+                        ]
                         try:
-                            calibration_timing = stack.calibrate_frames_host_async_timed(
-                                batch_indices,
-                                [item[2] for item in batch_items],
-                                [item[3] for item in batch_items],
-                                [
-                                    np.nan if current_dark_exposure is None else float(current_dark_exposure)
-                                    for _item in batch_items
-                                ],
-                                asdict(policy),
-                            )
+                            if calibration_batch_multistream_enabled:
+                                calibration_timing = stack.calibrate_frames_host_async_multistream_timed(
+                                    batch_indices,
+                                    batch_lights,
+                                    batch_light_exposures,
+                                    batch_dark_exposures,
+                                    resident_calibration_streams,
+                                    asdict(policy),
+                                )
+                            else:
+                                calibration_timing = stack.calibrate_frames_host_async_timed(
+                                    batch_indices,
+                                    batch_lights,
+                                    batch_light_exposures,
+                                    batch_dark_exposures,
+                                    asdict(policy),
+                                )
                         finally:
                             for item_index in batch_indices:
                                 light_prefetch.release(item_index)
@@ -1947,6 +1973,14 @@ def run_resident_calibration_integration(
                             calibration_timing.get("stream_h2d_calibrate_store_s", 0.0) or 0.0
                         )
                         calibration_batch_sync_s += float(calibration_timing.get("sync_s", 0.0) or 0.0)
+                        calibration_batch_lane_buffer_bytes = max(
+                            calibration_batch_lane_buffer_bytes,
+                            int(calibration_timing.get("calibration_lane_buffer_bytes", 0) or 0),
+                        )
+                        calibration_batch_actual_stream_count = max(
+                            calibration_batch_actual_stream_count,
+                            int(calibration_timing.get("stream_count", 0) or 0),
+                        )
                         frame_share = 1.0 / float(len(batch_items))
                         for position, (item_index, frame, _light, _exposure) in enumerate(batch_items):
                             frame_weight = 0.0 if _matches_any_token(frame, excluded_tokens) else 1.0
@@ -4819,15 +4853,30 @@ def run_resident_calibration_integration(
                         "h2d_mode": resident_h2d_mode,
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
-                        "calibration_event_reuse": "reused_stack_events" in unique_calibration_event_modes,
+                        "calibration_event_reuse": bool(
+                            {"reused_stack_events", "reused_stack_lane_events"} & set(unique_calibration_event_modes)
+                        ),
                         "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
+                        "calibration_batch_requested_streams": int(resident_calibration_streams),
                         "calibration_batch_enabled": bool(calibration_batch_enabled),
                         "calibration_batch_supported": bool(calibration_batch_supported),
+                        "calibration_batch_multistream_enabled": bool(calibration_batch_multistream_enabled),
+                        "calibration_batch_multistream_supported": bool(calibration_batch_multistream_supported),
                         "calibration_batch_count": int(calibration_batch_count),
                         "calibration_batch_frame_count": int(calibration_batch_frame_count),
-                        "calibration_batch_mode": "host_async_batch" if calibration_batch_enabled else "per_frame",
+                        "calibration_batch_actual_stream_count": int(calibration_batch_actual_stream_count),
+                        "calibration_batch_lane_buffer_bytes": int(calibration_batch_lane_buffer_bytes),
+                        "calibration_batch_mode": (
+                            "host_async_multistream_batch"
+                            if calibration_batch_multistream_enabled
+                            else "host_async_batch"
+                            if calibration_batch_enabled
+                            else "per_frame"
+                        ),
                         "calibration_batch_timing_model": (
-                            "single_stream_sequential_h2d_kernel_one_sync"
+                            "multi_stream_lanes_one_sync"
+                            if calibration_batch_multistream_enabled
+                            else "single_stream_sequential_h2d_kernel_one_sync"
                             if calibration_batch_enabled
                             else "per_frame_sync"
                         ),

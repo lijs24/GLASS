@@ -557,6 +557,8 @@ def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
             "pinned_ring",
             "--resident-calibration-batch-frames",
             "2",
+            "--resident-calibration-streams",
+            "2",
         ]
     ) == 0
 
@@ -569,16 +571,18 @@ def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
     weighting = resident["artifacts"][0]["resident_integration_weighting"]
     io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
     assert io_pipeline["calibration_batch_enabled"] is True
-    assert io_pipeline["calibration_batch_mode"] == "host_async_batch"
+    assert io_pipeline["calibration_batch_multistream_enabled"] is True
+    assert io_pipeline["calibration_batch_mode"] == "host_async_multistream_batch"
     assert io_pipeline["calibration_batch_requested_frames"] == 2
+    assert io_pipeline["calibration_batch_requested_streams"] == 2
+    assert io_pipeline["calibration_batch_actual_stream_count"] == 2
+    assert io_pipeline["calibration_batch_lane_buffer_bytes"] > 0
     assert io_pipeline["calibration_batch_frame_count"] == 2
     assert io_pipeline["calibration_batch_count"] == 1
-    assert io_pipeline["calibration_batch_timing_model"] == (
-        "single_stream_sequential_h2d_kernel_one_sync"
-    )
+    assert io_pipeline["calibration_batch_timing_model"] == "multi_stream_lanes_one_sync"
     assert io_pipeline["calibration_batch_native_total_s"] >= 0.0
     assert io_pipeline["calibration_batch_sync_s"] >= 0.0
-    assert io_pipeline["calibration_event_mode"] == "reused_stack_events"
+    assert io_pipeline["calibration_event_mode"] == "reused_stack_lane_events"
     assert weighting["mode"] == "simple_snr"
     assert len(weighting["frame_results"]) == 2
     assert all(item["source_std"] is not None for item in weighting["frame_results"])

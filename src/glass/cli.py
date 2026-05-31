@@ -422,6 +422,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
+                resident_calibration_streams=args.resident_calibration_streams,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -513,6 +514,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
                 resident_calibration_batch_frames=args.resident_calibration_batch_frames,
+                resident_calibration_streams=args.resident_calibration_streams,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -966,6 +968,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-calibration-streams",
+        type=int,
+        default=1,
+        help=(
+            "opt-in resident calibration stream count used inside native batch calibration; "
+            "values above 1 allocate multiple raw device buffers and CUDA streams"
+        ),
+    )
+    run.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across output directories",
     )
@@ -1169,6 +1180,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="opt-in resident pinned-ring calibration batch size for resident audit",
+    )
+    audit.add_argument(
+        "--resident-calibration-streams",
+        type=int,
+        default=1,
+        help="opt-in resident calibration stream count for resident audit batch calibration",
     )
     audit.add_argument(
         "--resident-master-cache-dir",

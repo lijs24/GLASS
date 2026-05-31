@@ -1218,11 +1218,29 @@ class ResidentCalibratedStack {
     if (calibrate_stream_ != nullptr) {
       cudaStreamDestroy(calibrate_stream_);
     }
+    for (cudaEvent_t event : calibration_lane_start_events_) {
+      if (event != nullptr) {
+        cudaEventDestroy(event);
+      }
+    }
+    for (cudaEvent_t event : calibration_lane_stop_events_) {
+      if (event != nullptr) {
+        cudaEventDestroy(event);
+      }
+    }
+    for (cudaStream_t stream : calibration_lane_streams_) {
+      if (stream != nullptr) {
+        cudaStreamDestroy(stream);
+      }
+    }
     if (h_pinned_light_ != nullptr) {
       cudaFreeHost(h_pinned_light_);
     }
     cudaFree(d_stack_);
     cudaFree(d_light_);
+    for (float* buffer : d_calibration_lane_lights_) {
+      cudaFree(buffer);
+    }
     cudaFree(d_bias_);
     cudaFree(d_dark_);
     cudaFree(d_flat_);
@@ -1239,6 +1257,10 @@ class ResidentCalibratedStack {
   std::size_t loaded_count() const { return loaded_count_; }
   std::size_t host_pinned_bytes() const {
     return h_pinned_light_ == nullptr ? 0 : pixels_per_frame_ * sizeof(float);
+  }
+  std::size_t calibration_lane_count() const { return d_calibration_lane_lights_.size(); }
+  std::size_t calibration_lane_buffer_bytes() const {
+    return d_calibration_lane_lights_.size() * pixels_per_frame_ * sizeof(float);
   }
 
   std::size_t warp_scratch_bytes() const {
@@ -1262,7 +1284,7 @@ class ResidentCalibratedStack {
 
   std::size_t bytes_allocated() const {
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
-    std::size_t total = frame_count_ * frame_bytes + frame_bytes;
+    std::size_t total = frame_count_ * frame_bytes + frame_bytes + calibration_lane_buffer_bytes();
     if (has_bias_) {
       total += frame_bytes;
     }
@@ -1531,6 +1553,159 @@ class ResidentCalibratedStack {
     out["frame_count"] = static_cast<unsigned long long>(frame_count);
     out["stream_h2d_calibrate_store_s"] = stream_s;
     out["sync_s"] = sync_s;
+    return out;
+  }
+
+  py::dict calibrate_frames_host_async_multistream_timed(
+      py::object indices_obj,
+      py::object lights_obj,
+      py::object light_exposures_obj,
+      py::object dark_exposures_obj,
+      int stream_count,
+      py::object policy_obj) {
+    if (stream_count <= 0) {
+      throw std::invalid_argument("stream_count must be positive");
+    }
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    const auto light_exposures = parse_float_sequence(light_exposures_obj, "light_exposures");
+    const auto dark_exposures = parse_float_sequence(dark_exposures_obj, "dark_exposures");
+    py::sequence lights = py::cast<py::sequence>(lights_obj);
+    const std::size_t frame_count = indices.size();
+    if (frame_count == 0) {
+      py::dict out;
+      out["schema_version"] = 1;
+      out["h2d_mode"] = "host_async_multistream_batch";
+      out["event_mode"] = "reused_stack_lane_events";
+      out["timing_model"] = "multi_stream_lanes_one_sync";
+      out["requested_stream_count"] = stream_count;
+      out["stream_count"] = 0;
+      out["frame_count"] = 0;
+      out["host_copy_s"] = 0.0;
+      out["h2d_s"] = 0.0;
+      out["calibrate_store_s"] = 0.0;
+      out["stream_h2d_calibrate_store_s"] = 0.0;
+      out["sync_s"] = 0.0;
+      out["total_s"] = 0.0;
+      out["host_pinned_bytes"] = host_pinned_bytes();
+      out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+      out["lane_stream_elapsed_s"] = py::list();
+      return out;
+    }
+    if (static_cast<std::size_t>(py::len(lights)) != frame_count ||
+        light_exposures.size() != frame_count ||
+        dark_exposures.size() != frame_count) {
+      throw std::invalid_argument("indices, lights, light_exposures, and dark_exposures must have the same length");
+    }
+    const std::size_t lane_count =
+        std::min<std::size_t>(static_cast<std::size_t>(stream_count), frame_count);
+    ensure_calibration_lanes(lane_count);
+
+    std::vector<py::array_t<float, py::array::c_style | py::array::forcecast>> light_arrays;
+    std::vector<void*> light_ptrs;
+    std::vector<CalibrationParameters> params;
+    light_arrays.reserve(frame_count);
+    light_ptrs.reserve(frame_count);
+    params.reserve(frame_count);
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      require_index(indices[i]);
+      auto light = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(lights[i]);
+      const py::buffer_info info = light.request();
+      require_frame_shape(info, height_, width_);
+      light_ptrs.push_back(info.ptr);
+      light_arrays.push_back(std::move(light));
+      py::object dark_exposure_obj = py::none();
+      if (std::isfinite(dark_exposures[i]) && dark_exposures[i] > 0.0f) {
+        dark_exposure_obj = py::float_(dark_exposures[i]);
+      }
+      params.push_back(calibration_parameters(light_exposures[i], dark_exposure_obj, policy_obj));
+    }
+
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    const auto total_start = Clock::now();
+    std::vector<unsigned char> lane_used(lane_count, 0);
+    std::vector<double> lane_elapsed(lane_count, 0.0);
+    double sync_s = 0.0;
+    double stream_s = 0.0;
+    {
+      py::gil_scoped_release release;
+      for (std::size_t i = 0; i < frame_count; ++i) {
+        const std::size_t lane = i % lane_count;
+        if (!lane_used[lane]) {
+          check_cuda(
+              cudaEventRecord(calibration_lane_start_events_[lane], calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident multistream batch lane start)");
+          lane_used[lane] = 1;
+        }
+        check_cuda(
+            cudaMemcpyAsync(
+                d_calibration_lane_lights_[lane],
+                light_ptrs[i],
+                frame_bytes,
+                cudaMemcpyHostToDevice,
+                calibration_lane_streams_[lane]),
+            "cudaMemcpyAsync(resident multistream batch host raw light)");
+        glass_calibrate_tile_f32_launch_stream(
+            d_calibration_lane_lights_[lane],
+            d_bias_,
+            d_dark_,
+            d_flat_,
+            d_stack_ + indices[i] * pixels_per_frame_,
+            pixels_per_frame_,
+            has_bias_,
+            has_dark_,
+            has_flat_,
+            params[i].master_dark_includes_bias,
+            params[i].dark_scale,
+            params[i].flat_floor,
+            params[i].pedestal,
+            calibration_lane_streams_[lane]);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frames_host_async_multistream kernel launch");
+      }
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_used[lane]) {
+          check_cuda(
+              cudaEventRecord(calibration_lane_stop_events_[lane], calibration_lane_streams_[lane]),
+              "cudaEventRecord(resident multistream batch lane stop)");
+        }
+      }
+      const auto sync_start = Clock::now();
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_used[lane]) {
+          check_cuda(
+              cudaStreamSynchronize(calibration_lane_streams_[lane]),
+              "ResidentCalibratedStack.calibrate_frames_host_async_multistream synchronize");
+        }
+      }
+      sync_s = seconds_since(sync_start);
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_used[lane]) {
+          lane_elapsed[lane] = cuda_event_elapsed_s(
+              calibration_lane_start_events_[lane],
+              calibration_lane_stop_events_[lane],
+              "cudaEventElapsedTime(resident multistream batch lane)");
+          stream_s = std::max(stream_s, lane_elapsed[lane]);
+        }
+      }
+    }
+    for (std::size_t index : indices) {
+      mark_loaded(index);
+    }
+    py::dict out = calibration_timing_dict(
+        ResidentCalibrationTiming{0.0, 0.0, stream_s, seconds_since(total_start)},
+        "host_async_multistream_batch");
+    py::list lane_stream_elapsed_s;
+    for (const double value : lane_elapsed) {
+      lane_stream_elapsed_s.append(value);
+    }
+    out["event_mode"] = "reused_stack_lane_events";
+    out["timing_model"] = "multi_stream_lanes_one_sync";
+    out["requested_stream_count"] = stream_count;
+    out["stream_count"] = static_cast<unsigned long long>(lane_count);
+    out["frame_count"] = static_cast<unsigned long long>(frame_count);
+    out["stream_h2d_calibrate_store_s"] = stream_s;
+    out["sync_s"] = sync_s;
+    out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+    out["lane_stream_elapsed_s"] = lane_stream_elapsed_s;
     return out;
   }
 
@@ -4026,6 +4201,41 @@ class ResidentCalibratedStack {
         "cudaHostAlloc(resident pinned raw light buffer)");
   }
 
+  void ensure_calibration_lanes(std::size_t lane_count) {
+    if (lane_count == 0) {
+      return;
+    }
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    while (d_calibration_lane_lights_.size() < lane_count) {
+      float* buffer = nullptr;
+      cudaStream_t stream = nullptr;
+      cudaEvent_t start_event = nullptr;
+      cudaEvent_t stop_event = nullptr;
+      try {
+        check_cuda(cudaMalloc(&buffer, frame_bytes), "cudaMalloc(resident multistream raw light lane)");
+        check_cuda(cudaStreamCreate(&stream), "cudaStreamCreate(resident multistream calibration lane)");
+        check_cuda(cudaEventCreate(&start_event), "cudaEventCreate(resident multistream calibration lane start)");
+        check_cuda(cudaEventCreate(&stop_event), "cudaEventCreate(resident multistream calibration lane stop)");
+      } catch (...) {
+        if (stop_event != nullptr) {
+          cudaEventDestroy(stop_event);
+        }
+        if (start_event != nullptr) {
+          cudaEventDestroy(start_event);
+        }
+        if (stream != nullptr) {
+          cudaStreamDestroy(stream);
+        }
+        cudaFree(buffer);
+        throw;
+      }
+      d_calibration_lane_lights_.push_back(buffer);
+      calibration_lane_streams_.push_back(stream);
+      calibration_lane_start_events_.push_back(start_event);
+      calibration_lane_stop_events_.push_back(stop_event);
+    }
+  }
+
   ResidentCalibrationTiming calibrate_frame_pageable_impl(
       std::size_t index,
       void* light_ptr,
@@ -4248,6 +4458,10 @@ class ResidentCalibratedStack {
   float* d_bias_ = nullptr;
   float* d_dark_ = nullptr;
   float* d_flat_ = nullptr;
+  std::vector<float*> d_calibration_lane_lights_;
+  std::vector<cudaStream_t> calibration_lane_streams_;
+  std::vector<cudaEvent_t> calibration_lane_start_events_;
+  std::vector<cudaEvent_t> calibration_lane_stop_events_;
   float* d_warp_coverage_ = nullptr;
   float* d_warp_output_ = nullptr;
   float* d_warp_frame_coverage_ = nullptr;
@@ -8148,6 +8362,10 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       .def_property_readonly("pixels_per_frame", &ResidentCalibratedStack::pixels_per_frame)
       .def_property_readonly("loaded_count", &ResidentCalibratedStack::loaded_count)
       .def_property_readonly("host_pinned_bytes", &ResidentCalibratedStack::host_pinned_bytes)
+      .def_property_readonly("calibration_lane_count", &ResidentCalibratedStack::calibration_lane_count)
+      .def_property_readonly(
+          "calibration_lane_buffer_bytes",
+          &ResidentCalibratedStack::calibration_lane_buffer_bytes)
       .def_property_readonly("warp_scratch_bytes", &ResidentCalibratedStack::warp_scratch_bytes)
       .def_property_readonly("warp_copy_mode", &ResidentCalibratedStack::warp_copy_mode)
       .def_property_readonly("bytes_allocated", &ResidentCalibratedStack::bytes_allocated)
@@ -8209,6 +8427,15 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("lights"),
           py::arg("light_exposures"),
           py::arg("dark_exposures"),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frames_host_async_multistream_timed",
+          &ResidentCalibratedStack::calibrate_frames_host_async_multistream_timed,
+          py::arg("indices"),
+          py::arg("lights"),
+          py::arg("light_exposures"),
+          py::arg("dark_exposures"),
+          py::arg("stream_count"),
           py::arg("policy") = py::none())
       .def(
           "apply_translation_frame",

@@ -1204,6 +1204,22 @@ integration where applicable.
 - Validate with resident stack CUDA tests, resident CLI smoke coverage, ruff,
   full pytest, and 200-light pinned-ring benchmark comparison.
 
+### S2-Gate 72: Multi-Stream Resident Calibration Batch
+
+- Add an explicit resident calibration stream count for native batch
+  calibration.
+- Allocate reusable raw-light device buffers, CUDA streams, and timing events
+  per calibration lane.
+- Preserve default single-stream behavior unless the user opts into multiple
+  streams.
+- Keep output identity checks strict against the prior resident calibration
+  path.
+- Record requested stream count, actual stream count, lane buffer bytes,
+  multistream support, multistream enablement, and timing model in
+  `resident_io_pipeline`.
+- Validate with resident stack CUDA tests, resident CLI smoke coverage, ruff,
+  full pytest, and 200-light benchmark comparison.
+
 ## Gate Rules
 
 Each gate requires:
