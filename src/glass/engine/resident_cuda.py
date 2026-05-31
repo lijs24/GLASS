@@ -2950,6 +2950,16 @@ def run_resident_calibration_integration(
                 triangle_descriptor_fit_moving_device_bytes = 0
                 triangle_descriptor_fit_output_device_reuse = False
                 triangle_descriptor_fit_output_device_bytes = 0
+                triangle_descriptor_fit_batch_timing_model = "off"
+                triangle_descriptor_fit_native_host_prepare_s = 0.0
+                triangle_descriptor_fit_native_reference_alloc_s = 0.0
+                triangle_descriptor_fit_native_reference_upload_s = 0.0
+                triangle_descriptor_fit_native_workspace_alloc_s = 0.0
+                triangle_descriptor_fit_native_moving_upload_s = 0.0
+                triangle_descriptor_fit_native_kernel_sync_s = 0.0
+                triangle_descriptor_fit_native_output_download_s = 0.0
+                triangle_descriptor_fit_native_frame_total_s = 0.0
+                triangle_descriptor_fit_native_total_s = 0.0
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -3140,6 +3150,16 @@ def run_resident_calibration_integration(
                     nonlocal triangle_descriptor_fit_moving_device_reuse
                     nonlocal triangle_descriptor_fit_output_device_bytes
                     nonlocal triangle_descriptor_fit_output_device_reuse
+                    nonlocal triangle_descriptor_fit_batch_timing_model
+                    nonlocal triangle_descriptor_fit_native_frame_total_s
+                    nonlocal triangle_descriptor_fit_native_host_prepare_s
+                    nonlocal triangle_descriptor_fit_native_kernel_sync_s
+                    nonlocal triangle_descriptor_fit_native_moving_upload_s
+                    nonlocal triangle_descriptor_fit_native_output_download_s
+                    nonlocal triangle_descriptor_fit_native_reference_alloc_s
+                    nonlocal triangle_descriptor_fit_native_reference_upload_s
+                    nonlocal triangle_descriptor_fit_native_total_s
+                    nonlocal triangle_descriptor_fit_native_workspace_alloc_s
                     threshold_key = round(float(threshold), 6)
                     if triangle_descriptor_fit_batch_enabled:
                         cached_fits = descriptor_fit_batch_cache.get(threshold_key)
@@ -3214,12 +3234,65 @@ def run_resident_calibration_integration(
                                 triangle_descriptor_fit_output_device_bytes = int(
                                     batch_fits[0].get("output_device_bytes", 0) or 0
                                 )
+                                triangle_descriptor_fit_batch_timing_model = str(
+                                    batch_fits[0].get("batch_timing_model", "unavailable")
+                                )
+                                triangle_descriptor_fit_native_host_prepare_s = float(
+                                    batch_fits[0].get("batch_host_prepare_s", 0.0) or 0.0
+                                )
+                                triangle_descriptor_fit_native_reference_alloc_s = float(
+                                    batch_fits[0].get("batch_reference_alloc_s", 0.0) or 0.0
+                                )
+                                triangle_descriptor_fit_native_reference_upload_s = float(
+                                    batch_fits[0].get("batch_reference_upload_s", 0.0) or 0.0
+                                )
+                                triangle_descriptor_fit_native_workspace_alloc_s = float(
+                                    batch_fits[0].get("batch_workspace_alloc_s", 0.0) or 0.0
+                                )
+                                triangle_descriptor_fit_native_moving_upload_s = sum(
+                                    float(fit.get("batch_frame_moving_upload_s", 0.0) or 0.0)
+                                    for fit in batch_fits
+                                )
+                                triangle_descriptor_fit_native_kernel_sync_s = sum(
+                                    float(fit.get("batch_frame_kernel_sync_s", 0.0) or 0.0)
+                                    for fit in batch_fits
+                                )
+                                triangle_descriptor_fit_native_output_download_s = sum(
+                                    float(fit.get("batch_frame_output_download_s", 0.0) or 0.0)
+                                    for fit in batch_fits
+                                )
+                                triangle_descriptor_fit_native_frame_total_s = sum(
+                                    float(fit.get("batch_frame_total_s", 0.0) or 0.0)
+                                    for fit in batch_fits
+                                )
+                                triangle_descriptor_fit_native_total_s = (
+                                    triangle_descriptor_fit_native_host_prepare_s
+                                    + triangle_descriptor_fit_native_reference_alloc_s
+                                    + triangle_descriptor_fit_native_reference_upload_s
+                                    + triangle_descriptor_fit_native_workspace_alloc_s
+                                    + triangle_descriptor_fit_native_frame_total_s
+                                )
                             fit_batch_elapsed = perf_counter() - fit_batch_start
                             _add_elapsed(registration_component_s, "triangle_descriptor_fit", fit_batch_elapsed)
                             _add_elapsed(
                                 registration_component_s,
                                 "triangle_descriptor_fit_batch",
                                 fit_batch_elapsed,
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_descriptor_fit_native_moving_upload",
+                                triangle_descriptor_fit_native_moving_upload_s,
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_descriptor_fit_native_kernel_sync",
+                                triangle_descriptor_fit_native_kernel_sync_s,
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_descriptor_fit_native_output_download",
+                                triangle_descriptor_fit_native_output_download_s,
                             )
                             cached_fits = {
                                 int(index): dict(fit)
@@ -3525,6 +3598,8 @@ def run_resident_calibration_integration(
                                         + str(bool("batch_model" in selected_fit)).lower(),
                                         "triangle_descriptor_fit_batch_mode="
                                         + str(selected_fit.get("batch_model", triangle_descriptor_fit_batch_mode)),
+                                        "triangle_descriptor_fit_batch_timing_model="
+                                        + str(selected_fit.get("batch_timing_model", "unavailable")),
                                         "triangle_descriptor_fit_reference_device_reuse="
                                         + str(bool(selected_fit.get("reference_device_reuse", False))).lower(),
                                         "triangle_descriptor_fit_reference_device_bytes="
@@ -3537,6 +3612,12 @@ def run_resident_calibration_integration(
                                         + str(bool(selected_fit.get("output_device_reuse", False))).lower(),
                                         "triangle_descriptor_fit_output_device_bytes="
                                         + str(int(selected_fit.get("output_device_bytes", 0) or 0)),
+                                        "triangle_descriptor_fit_frame_kernel_sync_s="
+                                        + f"{float(selected_fit.get('batch_frame_kernel_sync_s', 0.0) or 0.0):.6g}",
+                                        "triangle_descriptor_fit_frame_moving_upload_s="
+                                        + f"{float(selected_fit.get('batch_frame_moving_upload_s', 0.0) or 0.0):.6g}",
+                                        "triangle_descriptor_fit_frame_output_download_s="
+                                        + f"{float(selected_fit.get('batch_frame_output_download_s', 0.0) or 0.0):.6g}",
                                         "triangle_determinism_reference_catalog_signature="
                                         + str(frame_determinism["reference_catalog"]["sha256"]),
                                         "triangle_determinism_moving_catalog_signature="
@@ -4512,6 +4593,9 @@ def run_resident_calibration_integration(
                         "triangle_descriptor_fit_batch_mode": triangle_descriptor_fit_batch_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_descriptor_fit_batch_timing_model": triangle_descriptor_fit_batch_timing_model
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
                         "triangle_descriptor_fit_reference_device_reuse": bool(
                             resident_registration == "similarity_cuda_triangle"
                             and triangle_descriptor_fit_reference_device_reuse
@@ -4539,6 +4623,49 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
+                        "triangle_descriptor_fit_native_host_prepare_s": float(
+                            triangle_descriptor_fit_native_host_prepare_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_reference_alloc_s": float(
+                            triangle_descriptor_fit_native_reference_alloc_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_reference_upload_s": float(
+                            triangle_descriptor_fit_native_reference_upload_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_workspace_alloc_s": float(
+                            triangle_descriptor_fit_native_workspace_alloc_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_moving_upload_s": float(
+                            triangle_descriptor_fit_native_moving_upload_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_kernel_sync_s": float(
+                            triangle_descriptor_fit_native_kernel_sync_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_output_download_s": float(
+                            triangle_descriptor_fit_native_output_download_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_frame_total_s": float(
+                            triangle_descriptor_fit_native_frame_total_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_descriptor_fit_native_total_s": float(triangle_descriptor_fit_native_total_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
                         "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])
                         if resident_registration == "similarity_cuda_triangle"
                         else None,

@@ -5849,6 +5849,7 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     py::sequence moving_indices_list,
     float tolerance_px,
     float descriptor_radius) {
+  const auto batch_total_start = Clock::now();
   const py::ssize_t batch_count = py::len(moving_x_list);
   if (static_cast<py::ssize_t>(py::len(moving_y_list)) != batch_count ||
       static_cast<py::ssize_t>(py::len(moving_descriptors_list)) != batch_count ||
@@ -5894,6 +5895,7 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
 
   using FloatArray = py::array_t<float, py::array::c_style | py::array::forcecast>;
   using IntArray = py::array_t<int, py::array::c_style | py::array::forcecast>;
+  const auto host_prepare_start = Clock::now();
   std::vector<FloatArray> moving_x_arrays;
   std::vector<FloatArray> moving_y_arrays;
   std::vector<FloatArray> moving_descriptor_arrays;
@@ -5947,6 +5949,7 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     moving_descriptor_arrays.push_back(std::move(moving_descriptors));
     moving_index_arrays.push_back(std::move(moving_indices));
   }
+  const double host_prepare_s = seconds_since(host_prepare_start);
   const std::size_t moving_device_bytes =
       max_moving_count * 2 * sizeof(float) +
       max_moving_descriptor_count * 2 * sizeof(float) +
@@ -5976,7 +5979,11 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
   float* d_rms_px = nullptr;
   int* d_best_inliers = nullptr;
   int* d_best_index = nullptr;
+  double reference_alloc_s = 0.0;
+  double reference_upload_s = 0.0;
+  double workspace_alloc_s = 0.0;
   try {
+    const auto reference_alloc_start = Clock::now();
     check_cuda(
         cudaMalloc(&d_reference_x, static_cast<std::size_t>(reference_count) * sizeof(float)),
         "cudaMalloc(batch triangle similarity reference x)");
@@ -5993,6 +6000,8 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
             &d_reference_indices,
             static_cast<std::size_t>(reference_descriptor_count) * 3 * sizeof(int)),
         "cudaMalloc(batch triangle similarity reference indices)");
+    reference_alloc_s = seconds_since(reference_alloc_start);
+    const auto reference_upload_start = Clock::now();
     check_cuda(
         cudaMemcpy(
             d_reference_x,
@@ -6021,6 +6030,8 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
             static_cast<std::size_t>(reference_descriptor_count) * 3 * sizeof(int),
             cudaMemcpyHostToDevice),
         "cudaMemcpy(batch triangle similarity reference indices)");
+    reference_upload_s = seconds_since(reference_upload_start);
+    const auto workspace_alloc_start = Clock::now();
     check_cuda(
         cudaMalloc(&d_moving_x, max_moving_count * sizeof(float)),
         "cudaMalloc(batch triangle similarity reusable moving x)");
@@ -6048,8 +6059,10 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(batch triangle similarity reusable rms)");
     check_cuda(cudaMalloc(&d_best_inliers, sizeof(int)), "cudaMalloc(batch triangle similarity reusable best inliers)");
     check_cuda(cudaMalloc(&d_best_index, sizeof(int)), "cudaMalloc(batch triangle similarity reusable best index)");
+    workspace_alloc_s = seconds_since(workspace_alloc_start);
 
   for (py::ssize_t batch_index = 0; batch_index < batch_count; ++batch_index) {
+    const auto frame_total_start = Clock::now();
     const auto& moving_x = moving_x_arrays[static_cast<std::size_t>(batch_index)];
     const auto& moving_y = moving_y_arrays[static_cast<std::size_t>(batch_index)];
     const auto& moving_descriptors = moving_descriptor_arrays[static_cast<std::size_t>(batch_index)];
@@ -6068,6 +6081,7 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     float rms_px = std::numeric_limits<float>::quiet_NaN();
     int best_inliers = 0;
     int best_index = -1;
+      const auto moving_upload_start = Clock::now();
       check_cuda(
           cudaMemcpy(
               d_moving_x,
@@ -6096,6 +6110,8 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
               static_cast<std::size_t>(moving_descriptor_count) * 3 * sizeof(int),
               cudaMemcpyHostToDevice),
           "cudaMemcpy(batch triangle similarity moving indices)");
+      const double moving_upload_s = seconds_since(moving_upload_start);
+      const auto kernel_sync_start = Clock::now();
       glass_estimate_similarity_from_triangle_descriptors_f32_launch(
           d_reference_x,
           d_reference_y,
@@ -6123,6 +6139,8 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
           descriptor_radius);
       check_cuda(cudaGetLastError(), "estimate_similarity_from_triangle_descriptors_batch_f32 kernel launch");
       check_cuda(cudaDeviceSynchronize(), "estimate_similarity_from_triangle_descriptors_batch_f32 synchronize");
+      const double kernel_sync_s = seconds_since(kernel_sync_start);
+      const auto output_download_start = Clock::now();
       check_cuda(
           cudaMemcpy(host_matrix.data(), d_matrix, host_matrix.size() * sizeof(float), cudaMemcpyDeviceToHost),
           "cudaMemcpy(batch triangle similarity matrix)");
@@ -6135,6 +6153,8 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
           cudaMemcpy(&best_inliers, d_best_inliers, sizeof(int), cudaMemcpyDeviceToHost),
           "cudaMemcpy(batch triangle similarity best inliers)");
       check_cuda(cudaMemcpy(&best_index, d_best_index, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(batch triangle similarity best index)");
+      const double output_download_s = seconds_since(output_download_start);
+      const double frame_total_s = seconds_since(frame_total_start);
 
     py::list matrix_rows;
     for (int row = 0; row < 3; ++row) {
@@ -6169,6 +6189,16 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     result["moving_device_bytes"] = static_cast<unsigned long long>(moving_device_bytes);
     result["output_device_reuse"] = true;
     result["output_device_bytes"] = static_cast<unsigned long long>(output_device_bytes);
+    result["batch_timing_model"] = "per_frame_reused_buffers_sync_timed";
+    result["batch_host_prepare_s"] = host_prepare_s;
+    result["batch_reference_alloc_s"] = reference_alloc_s;
+    result["batch_reference_upload_s"] = reference_upload_s;
+    result["batch_workspace_alloc_s"] = workspace_alloc_s;
+    result["batch_frame_moving_upload_s"] = moving_upload_s;
+    result["batch_frame_kernel_sync_s"] = kernel_sync_s;
+    result["batch_frame_output_download_s"] = output_download_s;
+    result["batch_frame_total_s"] = frame_total_s;
+    result["batch_total_elapsed_s_at_result"] = seconds_since(batch_total_start);
     results.append(result);
   }
   } catch (...) {

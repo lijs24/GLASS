@@ -1706,6 +1706,21 @@ def _normalize_triangle_similarity_result(result: dict[str, Any]) -> dict[str, A
         normalized["output_device_reuse"] = bool(result["output_device_reuse"])
     if "output_device_bytes" in result:
         normalized["output_device_bytes"] = int(result["output_device_bytes"])
+    if "batch_timing_model" in result:
+        normalized["batch_timing_model"] = str(result["batch_timing_model"])
+    for key in (
+        "batch_host_prepare_s",
+        "batch_reference_alloc_s",
+        "batch_reference_upload_s",
+        "batch_workspace_alloc_s",
+        "batch_frame_moving_upload_s",
+        "batch_frame_kernel_sync_s",
+        "batch_frame_output_download_s",
+        "batch_frame_total_s",
+        "batch_total_elapsed_s_at_result",
+    ):
+        if key in result:
+            normalized[key] = float(result[key])
     return normalized
 
 

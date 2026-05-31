@@ -1042,6 +1042,23 @@ integration where applicable.
   triangle-registration smoke tests, ruff, full pytest, and repeated 200-light
   resident determinism plus output-pixel audits.
 
+### S2-Gate 61: Resident Descriptor Fit Timing Ledger
+
+- Add native timing fields to the resident triangle descriptor batch-fit path so
+  the current descriptor-fit cost is split into host preparation, reference
+  allocation/upload, reusable workspace allocation, moving-frame uploads, kernel
+  synchronization, output downloads, and total per-frame native fit time.
+- Surface the timing ledger in `resident_artifacts.json`, fine timing component
+  totals, and per-frame registration warnings without changing catalog
+  contents, fit decisions, matrices, pixel refinement, warp behavior, or output
+  pixels.
+- Use the ledger to choose whether the next optimization gate should attack
+  candidate scoring kernels, host/device transfers, descriptor generation, or
+  batch orchestration.
+- Validate with native descriptor batch tests, resident CUDA smoke tests, ruff,
+  full pytest, and a repeated 200-light resident determinism plus output-pixel
+  audit.
+
 ## Gate Rules
 
 Each gate requires:

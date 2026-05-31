@@ -240,6 +240,19 @@ def test_gpu_triangle_descriptor_similarity_batch_matches_single_fits():
         assert batch_result["moving_device_bytes"] > 0
         assert batch_result["output_device_reuse"] is True
         assert batch_result["output_device_bytes"] > 0
+        assert batch_result["batch_timing_model"] == "per_frame_reused_buffers_sync_timed"
+        assert batch_result["batch_host_prepare_s"] >= 0.0
+        assert batch_result["batch_reference_alloc_s"] >= 0.0
+        assert batch_result["batch_reference_upload_s"] >= 0.0
+        assert batch_result["batch_workspace_alloc_s"] >= 0.0
+        assert batch_result["batch_frame_moving_upload_s"] >= 0.0
+        assert batch_result["batch_frame_kernel_sync_s"] >= 0.0
+        assert batch_result["batch_frame_output_download_s"] >= 0.0
+        assert batch_result["batch_frame_total_s"] + 1.0e-6 >= (
+            batch_result["batch_frame_moving_upload_s"]
+            + batch_result["batch_frame_kernel_sync_s"]
+            + batch_result["batch_frame_output_download_s"]
+        )
         assert batch_result["status"] == "ok"
         assert batch_result["inliers"] == single_result["inliers"]
         assert batch_result["best_candidate_index"] == single_result["best_candidate_index"]

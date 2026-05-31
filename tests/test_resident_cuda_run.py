@@ -1097,6 +1097,23 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_descriptor_fit_moving_device_bytes"] > 0
     assert resident_registration["triangle_descriptor_fit_output_device_reuse"] is True
     assert resident_registration["triangle_descriptor_fit_output_device_bytes"] > 0
+    assert resident_registration["triangle_descriptor_fit_batch_timing_model"] == (
+        "per_frame_reused_buffers_sync_timed"
+    )
+    assert resident_registration["triangle_descriptor_fit_native_host_prepare_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_reference_alloc_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_reference_upload_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_workspace_alloc_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_moving_upload_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_kernel_sync_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_output_download_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_frame_total_s"] >= 0.0
+    assert resident_registration["triangle_descriptor_fit_native_total_s"] >= (
+        resident_registration["triangle_descriptor_fit_native_host_prepare_s"]
+        + resident_registration["triangle_descriptor_fit_native_reference_alloc_s"]
+        + resident_registration["triangle_descriptor_fit_native_reference_upload_s"]
+        + resident_registration["triangle_descriptor_fit_native_workspace_alloc_s"]
+    )
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_batch"] is True
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "native_batch_one_seed_per_frame"
@@ -1131,6 +1148,9 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert registration_components["triangle_moving_descriptors"] >= 0.0
     assert registration_components["triangle_descriptor_fit"] >= 0.0
     assert registration_components["triangle_descriptor_fit_batch"] >= 0.0
+    assert registration_components["triangle_descriptor_fit_native_moving_upload"] >= 0.0
+    assert registration_components["triangle_descriptor_fit_native_kernel_sync"] >= 0.0
+    assert registration_components["triangle_descriptor_fit_native_output_download"] >= 0.0
     assert registration_components["triangle_warp"] >= 0.0
     assert registration_components["triangle_pixel_refine_batch"] >= 0.0
     assert registration_components["triangle_pixel_refine_native_coarse"] >= 0.0
@@ -1152,9 +1172,14 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
     assert any("triangle_descriptor_fit_batch=true" in warning for warning in moving["warnings"])
     assert any(
+        "triangle_descriptor_fit_batch_timing_model=per_frame_reused_buffers_sync_timed" in warning
+        for warning in moving["warnings"]
+    )
+    assert any(
         "triangle_descriptor_fit_reference_device_reuse=true" in warning
         for warning in moving["warnings"]
     )
+    assert any("triangle_descriptor_fit_frame_kernel_sync_s=" in warning for warning in moving["warnings"])
     assert any("triangle_determinism_moving_catalog_signature=" in warning for warning in moving["warnings"])
     assert any("triangle_determinism_selected_fit_signature=" in warning for warning in moving["warnings"])
     assert any("triangle_pixel_refine_mode=native_batch" in warning for warning in moving["warnings"])
