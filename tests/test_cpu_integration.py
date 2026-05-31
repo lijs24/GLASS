@@ -59,15 +59,22 @@ def test_quality_weight_modes_are_normalized(tmp_path):
             "frame_quality": [
                 {"frame_id": "A", "snr": 20.0, "quality_score": 10.0, "weight": 10.0},
                 {"frame_id": "B", "snr": 10.0, "quality_score": 5.0, "weight": 5.0},
+                {"frame_id": "C", "snr": 5.0, "quality_score": 1.0, "noise_sigma": 4.0, "background_rms": 4.0},
+                {"frame_id": "D", "snr": 5.0, "quality_score": 1.0, "noise_sigma": 2.0, "background_rms": 2.0},
             ]
         },
     )
     records = [{"frame_id": "A"}, {"frame_id": "B"}]
+    variance_records = [{"frame_id": "C"}, {"frame_id": "D"}]
 
     simple = _quality_weights(tmp_path, records, "simple_snr")
     combined = _quality_weights(tmp_path, records, "combined")
+    variance_aware = _quality_weights(tmp_path, variance_records, "variance_aware")
 
     assert simple["A"] > simple["B"]
     assert combined["A"] > combined["B"]
+    assert variance_aware["D"] > variance_aware["C"]
+    assert np.isclose(variance_aware["D"] / variance_aware["C"], 4.0)
     assert np.isclose(np.median(list(simple.values())), 1.0)
     assert np.isclose(np.median(list(combined.values())), 1.0)
+    assert np.isclose(np.median(list(variance_aware.values())), 1.0)

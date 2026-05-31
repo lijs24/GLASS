@@ -92,6 +92,21 @@ class CPUStackEngine:
             rejected_high_total += int(np.sum(high))
             valid_total += int(np.sum(tile_coverage))
 
+        metrics: dict[str, float | int | str] = {
+            "frame_count": len(request.frame_ids),
+            "width": width,
+            "height": height,
+            "combine": request.combine.method,
+            "rejection": request.rejection.method,
+            "valid_samples": valid_total,
+            "low_rejected": rejected_low_total,
+            "high_rejected": rejected_high_total,
+        }
+        if variance_map is not None:
+            finite_variance = variance_map[np.isfinite(variance_map)]
+            metrics["variance_mean"] = float(np.mean(finite_variance)) if finite_variance.size else 0.0
+            metrics["variance_max"] = float(np.max(finite_variance)) if finite_variance.size else 0.0
+
         return StackEngineResult(
             master=master,
             weight_map=weight_map,
@@ -100,16 +115,7 @@ class CPUStackEngine:
             high_rejection_map=high_rejection_map,
             variance_map=variance_map,
             dq_mask=dq_mask,
-            metrics={
-                "frame_count": len(request.frame_ids),
-                "width": width,
-                "height": height,
-                "combine": request.combine.method,
-                "rejection": request.rejection.method,
-                "valid_samples": valid_total,
-                "low_rejected": rejected_low_total,
-                "high_rejected": rejected_high_total,
-            },
+            metrics=metrics,
         )
 
     def _validate_sources(self, request: StackRequest, sources: list[ImageSource]) -> tuple[int, int]:
@@ -253,13 +259,17 @@ def _combine_tile(
     accumulator_dtype: type[np.floating],
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     coverage = np.sum(valid, axis=0).astype(np.float32)
+    variance = np.zeros(stack.shape[1:], dtype=accumulator_dtype)
     if method == "median":
         masked = np.where(valid, stack, np.nan)
         master = np.nanmedian(masked, axis=0)
         weight = coverage
+        variance = np.nanvar(masked, axis=0)
     elif method == "sum":
         master = np.sum(np.where(valid, stack, 0.0).astype(accumulator_dtype), axis=0)
         weight = coverage
+        masked = np.where(valid, stack, np.nan)
+        variance = np.nanvar(masked, axis=0)
     elif method in {"mean", "weighted_mean"}:
         weights = np.ones_like(frame_weights) if method == "mean" else frame_weights
         effective_weights = np.where(valid, weights[:, None, None], 0.0).astype(accumulator_dtype)
@@ -271,11 +281,16 @@ def _combine_tile(
             out=np.zeros_like(weight, dtype=accumulator_dtype),
             where=weight > 0,
         )
+        delta = np.where(valid, stack.astype(accumulator_dtype) - master[None, :, :], 0.0)
+        variance = np.divide(
+            np.sum(effective_weights * delta * delta, axis=0),
+            weight,
+            out=np.zeros_like(weight, dtype=accumulator_dtype),
+            where=weight > 0,
+        )
     else:
         raise ValueError(f"unsupported combine method: {method}")
 
-    masked = np.where(valid, stack, np.nan)
-    variance = np.nanvar(masked, axis=0)
     master = np.where(np.isfinite(master), master, 0.0)
     variance = np.where(np.isfinite(variance), variance, 0.0)
     return (

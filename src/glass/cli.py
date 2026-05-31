@@ -865,10 +865,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
-    run.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr", "combined"], default="auto")
+    run.add_argument(
+        "--integration-weighting",
+        choices=["auto", "none", "simple_snr", "combined", "variance_aware"],
+        default="auto",
+    )
     run.add_argument(
         "--integration-rejection",
-        choices=["auto", "none", "sigma_clip", "winsorized_sigma"],
+        choices=["auto", "none", "sigma_clip", "winsorized_sigma", "minmax", "percentile", "mad", "median_sigma"],
         default="auto",
     )
     run.add_argument("--allow-partial", action="store_true")
@@ -1044,10 +1048,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="tile-mode warp interpolator registry entry",
     )
     audit.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
-    audit.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr", "combined"], default="auto")
+    audit.add_argument(
+        "--integration-weighting",
+        choices=["auto", "none", "simple_snr", "combined", "variance_aware"],
+        default="auto",
+    )
     audit.add_argument(
         "--integration-rejection",
-        choices=["auto", "none", "sigma_clip", "winsorized_sigma"],
+        choices=["auto", "none", "sigma_clip", "winsorized_sigma", "minmax", "percentile", "mad", "median_sigma"],
         default="auto",
     )
     audit.add_argument("--flat-floor", type=float, help="override calibration flat floor for resident audit")

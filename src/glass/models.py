@@ -126,6 +126,7 @@ class IntegrationPolicy:
     output_weight_map: bool = True
     output_rejection_maps: bool = True
     output_coverage_map: bool = True
+    output_variance_map: bool = True
 
 
 @dataclass(slots=True)

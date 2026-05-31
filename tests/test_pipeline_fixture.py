@@ -37,6 +37,8 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
     assert all(output["stack_engine_enabled"] for output in integration["outputs"])
     assert all(Path(output["dq_map_path"]).exists() for output in integration["outputs"])
+    assert all(Path(output["variance_map_path"]).exists() for output in integration["outputs"])
+    assert all(output["output_variance_map"] for output in integration["outputs"])
     assert all("valid" in output["dq_summary"] for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     report_text = (run / "report.html").read_text(encoding="utf-8")
@@ -569,6 +571,7 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
     assert list((run / "integration").glob("master_*.fits"))
     assert list((run / "integration").glob("weight_map_*.fits"))
     assert list((run / "integration").glob("coverage_map_*.fits"))
+    assert list((run / "integration").glob("variance_map_*.fits"))
     assert list((run / "integration").glob("low_rejection_*.fits"))
     assert list((run / "integration").glob("high_rejection_*.fits"))
     assert (

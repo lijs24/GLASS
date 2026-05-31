@@ -16,6 +16,7 @@ Outputs per filter:
 - master light
 - weight map
 - coverage map
+- variance map
 - low rejection map
 - high rejection map
 
@@ -31,6 +32,10 @@ Supported modes:
   saturation penalty. Tile-mode weights are normalized by their median positive
   value so the integrated master is invariant to global score scale and the
   weight map stays readable.
+- `variance_aware`: uses a first-pass inverse-variance proxy from
+  `noise_sigma` or `background_rms` in `frame_quality.json`, falling back to the
+  frame quality weight when no noise estimate is available. Positive weights
+  are median-normalized like the other non-unit modes.
 
 In resident CUDA mode, `simple_snr` is derived from per-frame device-side
 mean/std after calibration/registration and before integration. Frames excluded
@@ -46,6 +51,12 @@ Supported modes:
 
 - `none`: weighted mean over valid coverage pixels.
 - `sigma_clip`: excludes pixels outside median +/- sigma thresholds.
+- `minmax`: rejects the lowest and highest valid sample per pixel when enough
+  samples remain.
+- `percentile`: rejects samples outside percentile bounds encoded by
+  `low_sigma` and `high_sigma`.
+- `mad`: uses median absolute deviation as a robust scale estimate.
+- `median_sigma`: alias-style median/MAD robust sigma path.
 - `winsorized_sigma`: estimates a more stable mean/std by clamping extreme
   samples for the statistics pass, then rejects original samples outside the
   derived sigma thresholds before weighted averaging.
@@ -76,7 +87,23 @@ winsorized clipping. The tile-streaming CPU path remains the scientific baseline
 for correctness, while the resident path is the high-VRAM performance path for
 the M38 comparison dataset.
 
+## Variance Map
+
+S2-Gate 9 makes the tile-mode variance map a formal integration artifact. The
+StackEngine computes a weighted population variance for `mean` and
+`weighted_mean` combines:
+
+```text
+variance = sum(w_i * (x_i - master)^2) / sum(w_i)
+```
+
+Invalid, rejected, or zero-weight samples do not contribute. Median and sum
+combines continue to report an unweighted finite-sample variance diagnostic.
+The CUDA streaming fast path for rejection-free tile integration writes the
+same population-variance map by accumulating `sum(w*x^2)` alongside `sum(w*x)`.
+
 ## Artifact
 
 `integration_results.json` records source stage, combine mode, weighting,
-rejection mode, sigma thresholds, per-frame weights, and all output map paths.
+rejection mode, sigma thresholds, per-frame weights, variance-map enablement,
+and all output map paths.

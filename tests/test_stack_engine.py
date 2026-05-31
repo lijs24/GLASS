@@ -106,6 +106,24 @@ def test_cpu_stack_engine_weighted_mean_consumes_dq_masks():
     assert result.dq_mask.count(DQFlag.NO_DATA) == 0
 
 
+def test_cpu_stack_engine_weighted_variance_map():
+    frames = [
+        np.ones((2, 2), dtype=np.float32),
+        np.ones((2, 2), dtype=np.float32) * 3.0,
+    ]
+    request = _request(
+        len(frames),
+        combine=CombinePolicy(method="weighted_mean", accumulator_dtype="float64"),
+        weights={"f0": 1.0, "f1": 3.0},
+    )
+
+    result = CPUStackEngine(tile_size=2).stack(request, _sources(frames))
+
+    assert np.allclose(result.master, 2.5)
+    assert np.allclose(result.variance_map, 0.75)
+    assert result.metrics["variance_mean"] == pytest.approx(0.75)
+
+
 def test_cpu_stack_engine_median_combine():
     frames = [
         np.ones((4, 4), dtype=np.float32),
