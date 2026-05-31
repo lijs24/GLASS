@@ -1394,6 +1394,25 @@ integration where applicable.
   winsorized-sigma output against existing warp-then-integrate behavior, plus
   native build, ruff, and full pytest.
 
+### S2-Gate 84: Opt-In Fused Resident Matrix Integration Route
+
+- Add a CLI/engine dispatch switch that can route resident integration through
+  the Gate82/Gate83 fused matrix-warp primitives without first writing warped
+  full-frame intermediates back into the resident stack.
+- Keep the first route deliberately narrow: `registration=off` uses identity
+  matrices, and `registration=external_matrix` consumes an existing
+  `registration_results.json` artifact while deferring matrix application to
+  the integration kernel.
+- Require local normalization to be off for the first fused route, because
+  resident LN currently mutates already-registered stack frames.
+- Emit resident artifacts that state whether fused dispatch was used, how many
+  frames were deferred, native fused timing, interpolation/clamping policy, and
+  geometric coverage provenance.
+- Validate with a CLI-level CUDA test comparing external-matrix stack dispatch
+  against fused-matrix dispatch, plus native build, ruff, full pytest, and a
+  200-light external-registration A/B run when local benchmark artifacts are
+  available.
+
 ## Gate Rules
 
 Each gate requires:

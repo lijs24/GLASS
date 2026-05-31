@@ -414,6 +414,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
                 resident_warp_batch_dispatch=args.resident_warp_batch_dispatch,
+                resident_integration_dispatch=args.resident_integration_dispatch,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
@@ -510,6 +511,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
                 resident_warp_batch_dispatch=args.resident_warp_batch_dispatch,
+                resident_integration_dispatch=args.resident_integration_dispatch,
                 reference_frame_id=args.reference_frame_id,
                 exclude_frame_ids=args.exclude_frame_id,
                 local_normalization=args.local_normalization,
@@ -1080,6 +1082,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="loop",
         help="resident matrix batch warp dispatch mode; chunked is experimental",
     )
+    run.add_argument(
+        "--resident-integration-dispatch",
+        choices=["stack", "fused_matrix"],
+        default="stack",
+        help="resident integration dispatch mode; fused_matrix is experimental and consumes matrix registration at integration time",
+    )
     run.add_argument("--resident-registration-max-shift", type=int, default=128)
     run.add_argument(
         "--resident-ncc-sample-stride",
@@ -1313,6 +1321,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["loop", "chunked"],
         default="loop",
         help="resident matrix batch warp dispatch mode; chunked is experimental",
+    )
+    audit.add_argument(
+        "--resident-integration-dispatch",
+        choices=["stack", "fused_matrix"],
+        default="stack",
+        help="resident integration dispatch mode; fused_matrix is experimental and consumes matrix registration at integration time",
     )
     audit.add_argument("--resident-registration-max-shift", type=int, default=128)
     audit.add_argument("--resident-ncc-sample-stride", type=int, default=1)

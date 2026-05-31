@@ -1723,6 +1723,7 @@ def run_resident_calibration_integration(
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
     resident_warp_batch_dispatch: str = "loop",
+    resident_integration_dispatch: str = "stack",
     reference_frame_id: str | None = None,
     exclude_frame_ids: list[str] | None = None,
     local_normalization: str = "off",
@@ -1770,6 +1771,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_warp_interpolation must be bilinear or lanczos3")
     if resident_warp_batch_dispatch not in {"loop", "chunked"}:
         raise ValueError("resident_warp_batch_dispatch must be loop or chunked")
+    if resident_integration_dispatch not in {"stack", "fused_matrix"}:
+        raise ValueError("resident_integration_dispatch must be stack or fused_matrix")
+    if resident_integration_dispatch == "fused_matrix" and resident_registration not in {"off", "external_matrix"}:
+        raise ValueError("resident fused_matrix integration currently supports registration=off or external_matrix")
     if resident_ncc_sample_stride <= 0:
         raise ValueError("resident_ncc_sample_stride must be positive")
     if resident_ncc_fallback_score_threshold < 0.0 or resident_ncc_fallback_score_threshold > 1.0:
@@ -1905,6 +1910,8 @@ def run_resident_calibration_integration(
                 )
             )
             warped_frame_indices: set[int] = set()
+            fused_matrix_deferred_frame_indices: set[int] = set()
+            integration_matrices = [translation_matrix(0.0, 0.0) for _ in light_frames]
             if resident_warp_coverage_supported:
                 stack.reset_warp_coverage()
 
@@ -4572,6 +4579,7 @@ def run_resident_calibration_integration(
                             warnings.append("missing external registration row")
                         else:
                             matrix = _registration_matrix(row)
+                            integration_matrices[index] = matrix
                             transform_model = str(row.get("transform_model") or "external_matrix")
                             matched = int(row.get("matched_stars") or 0)
                             inliers = int(row.get("inliers") or 0)
@@ -4586,6 +4594,11 @@ def run_resident_calibration_integration(
                                 frame_weight_values[index] = 0.0
                                 frame_weights[frame["id"]] = 0.0
                                 warnings.append(f"external registration status was {source_status}")
+                            elif resident_integration_dispatch == "fused_matrix":
+                                fused_matrix_deferred_frame_indices.add(index)
+                                warnings.append(
+                                    "external_registration_application=fused_matrix_deferred"
+                                )
                             else:
                                 warp_model = _apply_resident_registration_matrix(
                                     stack,
@@ -4669,6 +4682,8 @@ def run_resident_calibration_integration(
             local_norm_enabled = local_normalization == "on" or (
                 local_normalization == "auto" and bool(local_norm_policy.get("enabled", False))
             )
+            if resident_integration_dispatch == "fused_matrix" and local_norm_enabled:
+                raise RuntimeError("resident fused_matrix integration currently requires local_normalization=off")
             local_norm_mode = (
                 f"resident_{resident_local_normalization_mode}" if local_norm_enabled else "off"
             )
@@ -4814,9 +4829,17 @@ def run_resident_calibration_integration(
                 }
             )
 
+            coverage_map = None
+            low_rejection_map = None
+            high_rejection_map = None
+            weights_array = np.asarray(frame_weight_values, dtype=np.float32)
+            weights_arg = None if np.all(weights_array == 1.0) else weights_array
+            active_frame_count = int(np.count_nonzero(np.isfinite(weights_array) & (weights_array > 0.0)))
             geometric_warp_coverage_map = None
             geometric_warp_coverage_frame_count = 0
-            if resident_warp_coverage_supported:
+            fused_matrix_integration_used = resident_integration_dispatch == "fused_matrix"
+            fused_matrix_integration_timing: dict[str, Any] = {}
+            if resident_warp_coverage_supported and not fused_matrix_integration_used:
                 for index, weight in enumerate(frame_weight_values):
                     if weight > 0.0 and index not in warped_frame_indices:
                         stack.accumulate_full_warp_coverage_frame()
@@ -4824,13 +4847,49 @@ def run_resident_calibration_integration(
                 geometric_warp_coverage_map = stack.warp_coverage_map()
 
             integrate_start = perf_counter()
-            coverage_map = None
-            low_rejection_map = None
-            high_rejection_map = None
-            weights_array = np.asarray(frame_weight_values, dtype=np.float32)
-            weights_arg = None if np.all(weights_array == 1.0) else weights_array
-            active_frame_count = int(np.count_nonzero(np.isfinite(weights_array) & (weights_array > 0.0)))
-            if rejection_mode == "none":
+            if fused_matrix_integration_used:
+                integration_matrix_array = np.asarray(integration_matrices, dtype=np.float32)
+                fused_weights_arg = weights_array
+                if rejection_mode == "none":
+                    if not hasattr(stack, "integrate_matrix_warped_mean"):
+                        raise RuntimeError("resident CUDA backend does not expose integrate_matrix_warped_mean")
+                    (
+                        master,
+                        weight_map,
+                        coverage_map,
+                        geometric_warp_coverage_map,
+                        fused_matrix_integration_timing,
+                    ) = stack.integrate_matrix_warped_mean(
+                        integration_matrix_array,
+                        fused_weights_arg,
+                        interpolation=resident_warp_interpolation,
+                        clamping_threshold=resident_warp_clamping_threshold,
+                    )
+                else:
+                    if not hasattr(stack, "integrate_matrix_warped_sigma_clip"):
+                        raise RuntimeError(
+                            "resident CUDA backend does not expose integrate_matrix_warped_sigma_clip"
+                        )
+                    winsorize = rejection_mode == "winsorized_sigma"
+                    (
+                        master,
+                        weight_map,
+                        coverage_map,
+                        low_rejection_map,
+                        high_rejection_map,
+                        geometric_warp_coverage_map,
+                        fused_matrix_integration_timing,
+                    ) = stack.integrate_matrix_warped_sigma_clip(
+                        integration_matrix_array,
+                        fused_weights_arg,
+                        interpolation=resident_warp_interpolation,
+                        clamping_threshold=resident_warp_clamping_threshold,
+                        low_sigma=low_sigma,
+                        high_sigma=high_sigma,
+                        winsorize=winsorize,
+                    )
+                geometric_warp_coverage_frame_count = active_frame_count
+            elif rejection_mode == "none":
                 master, weight_map = stack.integrate_mean(weights_arg)
             else:
                 if not hasattr(stack, "integrate_sigma_clip"):
@@ -5166,6 +5225,9 @@ def run_resident_calibration_integration(
                         "resident_weighting": weighting_elapsed,
                         "resident_local_normalization": local_norm_elapsed,
                         "resident_integration": integrate_elapsed,
+                        "resident_fused_matrix_integration_native": float(
+                            fused_matrix_integration_timing.get("total_s", 0.0)
+                        ),
                         "output_write": write_elapsed,
                         "per_frame_mean": fine_timing["per_frame_seconds"]["total"]["mean"],
                         "per_frame_min": fine_timing["per_frame_seconds"]["total"]["min"],
@@ -5793,12 +5855,19 @@ def run_resident_calibration_integration(
                         "warp_coverage": {
                             "available": bool(geometric_warp_coverage_map is not None),
                             "supported": bool(resident_warp_coverage_supported),
-                            "native_source": "ResidentCalibratedStack warp coverage accumulator",
+                            "native_source": (
+                                "ResidentCalibratedStack fused matrix integration geometric coverage"
+                                if fused_matrix_integration_used
+                                else "ResidentCalibratedStack warp coverage accumulator"
+                            ),
                             "frame_count": geometric_warp_coverage_frame_count,
                             "warped_frame_count": len(warped_frame_indices),
+                            "fused_deferred_frame_count": len(fused_matrix_deferred_frame_indices),
                             "full_frame_count": max(
                                 0,
-                                geometric_warp_coverage_frame_count - len(warped_frame_indices),
+                                geometric_warp_coverage_frame_count
+                                - len(warped_frame_indices)
+                                - len(fused_matrix_deferred_frame_indices),
                             ),
                             "active_frame_count": active_frame_count,
                             "frame_count_matches_active": geometric_warp_coverage_frame_count == active_frame_count,
@@ -5823,6 +5892,22 @@ def run_resident_calibration_integration(
                         "frame_results": weighting_frame_results,
                         "timing_s": weighting_elapsed,
                         "warnings": weighting_warnings,
+                    },
+                    "resident_integration_dispatch": {
+                        "mode": resident_integration_dispatch,
+                        "used": bool(fused_matrix_integration_used),
+                        "eligible_registration_modes": ["off", "external_matrix"],
+                        "matrix_count": len(integration_matrices),
+                        "deferred_matrix_frame_count": len(fused_matrix_deferred_frame_indices),
+                        "interpolation": resident_warp_interpolation,
+                        "clamping_threshold": resident_warp_clamping_threshold,
+                        "native_timing_s": fused_matrix_integration_timing,
+                        "notes": (
+                            "fused_matrix samples unwarped resident frames through the registration matrix during "
+                            "integration and avoids writing registered full-frame intermediates"
+                            if fused_matrix_integration_used
+                            else "stack dispatch integrates frames already present in the resident stack"
+                        ),
                     },
                     "integration_rejection": {
                         "mode": rejection_mode,
@@ -5887,6 +5972,7 @@ def run_resident_calibration_integration(
                     "rejection": rejection_mode,
                     "weighting": weighting_mode,
                     "resident_registration": resident_registration,
+                    "resident_integration_dispatch": resident_integration_dispatch,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,

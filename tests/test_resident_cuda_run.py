@@ -1824,6 +1824,118 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert any("external_registration_application=matrix_lanczos3" == item for item in moving["warnings"])
 
 
+def test_cli_resident_cuda_run_fused_matrix_dispatch_matches_external_stack(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    external_registration = tmp_path / "external_registration_results.json"
+    stack_run = tmp_path / "resident_run_external_matrix_stack"
+    fused_run = tmp_path / "resident_run_external_matrix_fused"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    plan_payload = read_json(plan)
+    light_by_stem = {
+        Path(frame["path"]).stem: frame for frame in plan_payload["frames"] if frame["frame_type"] == "light"
+    }
+    reference_id = str(light_by_stem["light_001"]["id"])
+    moving_id = str(light_by_stem["light_002"]["id"])
+    similarity_matrix = [
+        [1.0, 0.001, -3.0],
+        [-0.001, 1.0, 2.0],
+        [0.0, 0.0, 1.0],
+    ]
+    write_json(
+        external_registration,
+        {
+            "schema_version": 1,
+            "reference_frame_id": reference_id,
+            "registration_results": [
+                {
+                    "frame_id": reference_id,
+                    "reference_frame_id": reference_id,
+                    "transform_model": "similarity",
+                    "matrix": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                    "matched_stars": 8,
+                    "inliers": 8,
+                    "rms_px": 0.0,
+                    "status": "reference",
+                    "warnings": [],
+                },
+                {
+                    "frame_id": moving_id,
+                    "reference_frame_id": reference_id,
+                    "transform_model": "similarity",
+                    "matrix": similarity_matrix,
+                    "matched_stars": 12,
+                    "inliers": 10,
+                    "rms_px": 0.4,
+                    "status": "ok",
+                    "warnings": ["synthetic external similarity matrix"],
+                },
+            ],
+        },
+    )
+
+    common_args = [
+        "--plan",
+        str(plan),
+        "--backend",
+        "cuda",
+        "--memory-mode",
+        "resident",
+        "--until-stage",
+        "integration",
+        "--local-normalization",
+        "off",
+        "--integration-rejection",
+        "winsorized_sigma",
+        "--integration-weighting",
+        "none",
+        "--resident-registration",
+        "external_matrix",
+        "--resident-registration-results",
+        str(external_registration),
+        "--resident-warp-interpolation",
+        "bilinear",
+    ]
+
+    assert main(["run", "--out", str(stack_run), *common_args]) == 0
+    assert main(
+        [
+            "run",
+            "--out",
+            str(fused_run),
+            *common_args,
+            "--resident-integration-dispatch",
+            "fused_matrix",
+        ]
+    ) == 0
+
+    stack_master = read_fits_data(stack_run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    fused_master = read_fits_data(fused_run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    fused_registration = read_json(fused_run / "registration_results.json")
+    fused_resident = read_json(fused_run / "resident_artifacts.json")
+    fused_integration = read_json(fused_run / "integration_results.json")
+    moving = [item for item in fused_registration["results"] if item["frame_id"] == moving_id][0]
+    dispatch = fused_resident["artifacts"][0]["resident_integration_dispatch"]
+    warp_coverage = fused_resident["artifacts"][0]["resident_registration"]["warp_coverage"]
+
+    assert np.allclose(stack_master, fused_master, rtol=2e-5, atol=2e-4, equal_nan=True)
+    assert fused_integration["outputs"][0]["resident_integration_dispatch"] == "fused_matrix"
+    assert dispatch["mode"] == "fused_matrix"
+    assert dispatch["used"] is True
+    assert dispatch["deferred_matrix_frame_count"] == 1
+    assert dispatch["native_timing_s"]["rejection"] == "winsorized_sigma"
+    assert dispatch["native_timing_s"]["avoids_stack_scatter"] is True
+    assert warp_coverage["native_source"] == "ResidentCalibratedStack fused matrix integration geometric coverage"
+    assert warp_coverage["fused_deferred_frame_count"] == 1
+    assert moving["status"] == "ok"
+    assert any("external_registration_application=fused_matrix_deferred" == item for item in moving["warnings"])
+
+
 def test_cli_resident_cuda_uses_planner_matching_master_sets(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_dark_group_dataset(tmp_path)
