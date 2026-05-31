@@ -3496,6 +3496,10 @@ def run_resident_calibration_integration(
                 triangle_warp_batch_timing_model = "off"
                 triangle_warp_batch_frame_count = 0
                 triangle_warp_batch_fallback_frame_count = 0
+                triangle_warp_batch_native_inverse_upload_mode = "off"
+                triangle_warp_batch_native_inverse_prepare_s = 0.0
+                triangle_warp_batch_native_inverse_batch_alloc_s = 0.0
+                triangle_warp_batch_native_inverse_batch_bytes = 0
                 triangle_warp_batch_native_inverse_upload_s = 0.0
                 triangle_warp_batch_native_kernel_enqueue_s = 0.0
                 triangle_warp_batch_native_device_copy_enqueue_s = 0.0
@@ -4429,6 +4433,18 @@ def run_resident_calibration_integration(
                             triangle_warp_batch_fallback_frame_count += int(
                                 warp_timing.get("fallback_frame_count", 0) or 0
                             )
+                            triangle_warp_batch_native_inverse_upload_mode = str(
+                                warp_timing.get("inverse_upload_mode", "unavailable")
+                            )
+                            triangle_warp_batch_native_inverse_prepare_s += float(
+                                warp_timing.get("inverse_prepare_s", 0.0) or 0.0
+                            )
+                            triangle_warp_batch_native_inverse_batch_alloc_s += float(
+                                warp_timing.get("inverse_batch_alloc_s", 0.0) or 0.0
+                            )
+                            triangle_warp_batch_native_inverse_batch_bytes += int(
+                                warp_timing.get("inverse_batch_bytes", 0) or 0
+                            )
                             triangle_warp_batch_native_inverse_upload_s += float(
                                 warp_timing.get("inverse_upload_s", 0.0) or 0.0
                             )
@@ -4467,6 +4483,8 @@ def run_resident_calibration_integration(
                                     f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
                                     "triangle_warp_batch_timing_model="
                                     + str(warp_timing.get("timing_model", "per_frame")),
+                                    "triangle_warp_batch_inverse_upload_mode="
+                                    + str(warp_timing.get("inverse_upload_mode", "per_frame")),
                                 ]
                             )
                     batch_post_elapsed = perf_counter() - batch_post_start
@@ -5456,11 +5474,31 @@ def run_resident_calibration_integration(
                         "triangle_warp_batch_timing_model": triangle_warp_batch_timing_model
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_warp_batch_native_inverse_upload_mode": (
+                            triangle_warp_batch_native_inverse_upload_mode
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
                         "triangle_warp_batch_frame_count": int(triangle_warp_batch_frame_count)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
                         "triangle_warp_batch_fallback_frame_count": int(
                             triangle_warp_batch_fallback_frame_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_warp_batch_native_inverse_prepare_s": float(
+                            triangle_warp_batch_native_inverse_prepare_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_inverse_batch_alloc_s": float(
+                            triangle_warp_batch_native_inverse_batch_alloc_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_warp_batch_native_inverse_batch_bytes": int(
+                            triangle_warp_batch_native_inverse_batch_bytes
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,

@@ -1490,8 +1490,12 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_warp_batch"] is True
     assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_bilinear_frames"
     assert resident_registration["triangle_warp_batch_timing_model"] == "off"
+    assert resident_registration["triangle_warp_batch_native_inverse_upload_mode"] == "off"
     assert resident_registration["triangle_warp_batch_frame_count"] == 0
     assert resident_registration["triangle_warp_batch_fallback_frame_count"] == 1
+    assert resident_registration["triangle_warp_batch_native_inverse_prepare_s"] == 0.0
+    assert resident_registration["triangle_warp_batch_native_inverse_batch_alloc_s"] == 0.0
+    assert resident_registration["triangle_warp_batch_native_inverse_batch_bytes"] == 0
     assert resident_registration["triangle_warp_batch_native_inverse_upload_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_kernel_enqueue_s"] >= 0.0
     assert resident_registration["triangle_warp_batch_native_device_copy_enqueue_s"] >= 0.0

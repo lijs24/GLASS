@@ -281,9 +281,13 @@ def test_resident_stack_matrix_bilinear_batch_warp_matches_cpu_reference():
         where=expected_weight > 0,
     )
 
-    assert timing["timing_model"] == "native_loop_single_scratch_one_sync"
+    assert timing["timing_model"] == "native_loop_batched_inverse_one_sync"
     assert timing["frame_count"] == 2
     assert timing["interpolation"] == "bilinear"
+    assert timing["inverse_upload_mode"] == "single_device_batch"
+    assert timing["inverse_prepare_s"] >= 0.0
+    assert timing["inverse_batch_alloc_s"] >= 0.0
+    assert timing["inverse_batch_bytes"] == 2 * 9 * 4
     assert timing["inverse_upload_s"] >= 0.0
     assert timing["kernel_enqueue_s"] >= 0.0
     assert timing["device_copy_enqueue_s"] >= 0.0
@@ -339,9 +343,13 @@ def test_resident_stack_matrix_lanczos3_batch_warp_matches_cpu_reference():
         where=expected_weight > 0,
     )
 
-    assert timing["timing_model"] == "native_loop_single_scratch_one_sync"
+    assert timing["timing_model"] == "native_loop_batched_inverse_one_sync"
     assert timing["frame_count"] == 2
     assert timing["interpolation"] == "lanczos3"
+    assert timing["inverse_upload_mode"] == "single_device_batch"
+    assert timing["inverse_prepare_s"] >= 0.0
+    assert timing["inverse_batch_alloc_s"] >= 0.0
+    assert timing["inverse_batch_bytes"] == 2 * 9 * 4
     assert timing["inverse_upload_s"] >= 0.0
     assert timing["kernel_enqueue_s"] >= 0.0
     assert timing["device_copy_enqueue_s"] >= 0.0

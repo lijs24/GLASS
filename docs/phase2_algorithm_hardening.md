@@ -1328,6 +1328,21 @@ integration where applicable.
   pytest, and a 200-light comparison against the Gate70B/Gate78 resident
   baseline.
 
+### S2-Gate 80: Batched Resident Warp Matrix Upload
+
+- Replace per-frame host-to-device inverse-matrix uploads in native resident
+  matrix bilinear and Lanczos3 batch warp with one batch inverse preparation
+  and one device upload per batch.
+- Keep the same warp kernels, interpolation formulas, coverage accounting, DQ
+  semantics, accepted-frame contract, and output pixels.
+- Record inverse upload mode, inverse preparation time, inverse-batch
+  allocation time, inverse-batch bytes, upload time, kernel enqueue time, copy
+  enqueue time, sync time, and native total time in native timing results and
+  resident artifacts.
+- Validate with direct resident CUDA warp-vs-CPU tests, resident CUDA artifact
+  coverage, ruff, full pytest, and a 200-light benchmark comparison against
+  the Gate70B/Gate78 resident baseline.
+
 ## Gate Rules
 
 Each gate requires:

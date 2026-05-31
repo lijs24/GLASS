@@ -14,8 +14,17 @@
 #include <utility>
 #include <chrono>
 #include <cstring>
+#include <memory>
 
 namespace py = pybind11;
+
+struct CudaFloatFree {
+  void operator()(float* ptr) const noexcept {
+    if (ptr != nullptr) {
+      (void)cudaFree(ptr);
+    }
+  }
+};
 
 void glass_smoke_add_f32_launch(const float* a, const float* b, float* out, std::size_t n);
 void glass_calibrate_tile_f32_launch(
@@ -2355,7 +2364,11 @@ class ResidentCalibratedStack {
       result["schema_version"] = 1;
       result["frame_count"] = 0;
       result["interpolation"] = "bilinear";
-      result["timing_model"] = "native_loop_single_scratch_one_sync";
+      result["timing_model"] = "native_loop_batched_inverse_one_sync";
+      result["inverse_upload_mode"] = "single_device_batch";
+      result["inverse_prepare_s"] = 0.0;
+      result["inverse_batch_alloc_s"] = 0.0;
+      result["inverse_batch_bytes"] = 0;
       result["inverse_upload_s"] = 0.0;
       result["kernel_enqueue_s"] = 0.0;
       result["device_copy_enqueue_s"] = 0.0;
@@ -2367,24 +2380,41 @@ class ResidentCalibratedStack {
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     allocate_warp_scratch_if_needed(true);
     allocate_warp_coverage_if_needed();
-    double inverse_upload_s = 0.0;
+    const auto inverse_prepare_start = Clock::now();
+    std::vector<float> inverse_host(indices.size() * 9, 0.0f);
+    for (std::size_t i = 0; i < matrices.size(); ++i) {
+      const auto inverse = invert_matrix3x3(matrices[i]);
+      std::copy(inverse.begin(), inverse.end(), inverse_host.begin() + static_cast<std::ptrdiff_t>(i * 9));
+    }
+    const double inverse_prepare_s = seconds_since(inverse_prepare_start);
+    float* raw_inverse_batch = nullptr;
+    const auto inverse_alloc_start = Clock::now();
+    check_cuda(
+        cudaMalloc(&raw_inverse_batch, inverse_host.size() * sizeof(float)),
+        "cudaMalloc(resident batched matrix warp inverses)");
+    std::unique_ptr<float, CudaFloatFree> inverse_batch(raw_inverse_batch);
+    const double inverse_alloc_s = seconds_since(inverse_alloc_start);
+    const auto inverse_upload_start = Clock::now();
+    check_cuda(
+        cudaMemcpyAsync(
+            inverse_batch.get(),
+            inverse_host.data(),
+            inverse_host.size() * sizeof(float),
+            cudaMemcpyHostToDevice,
+            0),
+        "cudaMemcpyAsync(resident batched matrix warp inverses)");
+    double inverse_upload_s = seconds_since(inverse_upload_start);
     double kernel_enqueue_s = 0.0;
     double copy_enqueue_s = 0.0;
     for (std::size_t i = 0; i < indices.size(); ++i) {
       const std::size_t index = indices[i];
       require_loaded(index, "batched matrix bilinear warp");
-      const auto inverse = invert_matrix3x3(matrices[i]);
-      const auto inverse_start = Clock::now();
-      check_cuda(
-          cudaMemcpy(d_warp_inverse_, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
-          "cudaMemcpy(resident batched matrix warp inverse)");
-      inverse_upload_s += seconds_since(inverse_start);
       const auto kernel_start = Clock::now();
       glass_warp_matrix_bilinear_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_warp_output_,
           d_warp_frame_coverage_,
-          d_warp_inverse_,
+          inverse_batch.get() + i * 9,
           static_cast<int>(width_),
           static_cast<int>(height_),
           fill,
@@ -2410,7 +2440,11 @@ class ResidentCalibratedStack {
     result["schema_version"] = 1;
     result["frame_count"] = static_cast<unsigned long long>(indices.size());
     result["interpolation"] = "bilinear";
-    result["timing_model"] = "native_loop_single_scratch_one_sync";
+    result["timing_model"] = "native_loop_batched_inverse_one_sync";
+    result["inverse_upload_mode"] = "single_device_batch";
+    result["inverse_prepare_s"] = inverse_prepare_s;
+    result["inverse_batch_alloc_s"] = inverse_alloc_s;
+    result["inverse_batch_bytes"] = static_cast<unsigned long long>(inverse_host.size() * sizeof(float));
     result["inverse_upload_s"] = inverse_upload_s;
     result["kernel_enqueue_s"] = kernel_enqueue_s;
     result["device_copy_enqueue_s"] = copy_enqueue_s;
@@ -2434,7 +2468,11 @@ class ResidentCalibratedStack {
       result["schema_version"] = 1;
       result["frame_count"] = 0;
       result["interpolation"] = "lanczos3";
-      result["timing_model"] = "native_loop_single_scratch_one_sync";
+      result["timing_model"] = "native_loop_batched_inverse_one_sync";
+      result["inverse_upload_mode"] = "single_device_batch";
+      result["inverse_prepare_s"] = 0.0;
+      result["inverse_batch_alloc_s"] = 0.0;
+      result["inverse_batch_bytes"] = 0;
       result["inverse_upload_s"] = 0.0;
       result["kernel_enqueue_s"] = 0.0;
       result["device_copy_enqueue_s"] = 0.0;
@@ -2446,24 +2484,41 @@ class ResidentCalibratedStack {
     const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
     allocate_warp_scratch_if_needed(true);
     allocate_warp_coverage_if_needed();
-    double inverse_upload_s = 0.0;
+    const auto inverse_prepare_start = Clock::now();
+    std::vector<float> inverse_host(indices.size() * 9, 0.0f);
+    for (std::size_t i = 0; i < matrices.size(); ++i) {
+      const auto inverse = invert_matrix3x3(matrices[i]);
+      std::copy(inverse.begin(), inverse.end(), inverse_host.begin() + static_cast<std::ptrdiff_t>(i * 9));
+    }
+    const double inverse_prepare_s = seconds_since(inverse_prepare_start);
+    float* raw_inverse_batch = nullptr;
+    const auto inverse_alloc_start = Clock::now();
+    check_cuda(
+        cudaMalloc(&raw_inverse_batch, inverse_host.size() * sizeof(float)),
+        "cudaMalloc(resident batched matrix Lanczos3 inverses)");
+    std::unique_ptr<float, CudaFloatFree> inverse_batch(raw_inverse_batch);
+    const double inverse_alloc_s = seconds_since(inverse_alloc_start);
+    const auto inverse_upload_start = Clock::now();
+    check_cuda(
+        cudaMemcpyAsync(
+            inverse_batch.get(),
+            inverse_host.data(),
+            inverse_host.size() * sizeof(float),
+            cudaMemcpyHostToDevice,
+            0),
+        "cudaMemcpyAsync(resident batched matrix Lanczos3 inverses)");
+    double inverse_upload_s = seconds_since(inverse_upload_start);
     double kernel_enqueue_s = 0.0;
     double copy_enqueue_s = 0.0;
     for (std::size_t i = 0; i < indices.size(); ++i) {
       const std::size_t index = indices[i];
       require_loaded(index, "batched matrix Lanczos3 warp");
-      const auto inverse = invert_matrix3x3(matrices[i]);
-      const auto inverse_start = Clock::now();
-      check_cuda(
-          cudaMemcpy(d_warp_inverse_, inverse.data(), inverse.size() * sizeof(float), cudaMemcpyHostToDevice),
-          "cudaMemcpy(resident batched matrix Lanczos3 inverse)");
-      inverse_upload_s += seconds_since(inverse_start);
       const auto kernel_start = Clock::now();
       glass_warp_matrix_lanczos3_f32_launch(
           d_stack_ + index * pixels_per_frame_,
           d_warp_output_,
           d_warp_frame_coverage_,
-          d_warp_inverse_,
+          inverse_batch.get() + i * 9,
           static_cast<int>(width_),
           static_cast<int>(height_),
           fill,
@@ -2490,7 +2545,11 @@ class ResidentCalibratedStack {
     result["schema_version"] = 1;
     result["frame_count"] = static_cast<unsigned long long>(indices.size());
     result["interpolation"] = "lanczos3";
-    result["timing_model"] = "native_loop_single_scratch_one_sync";
+    result["timing_model"] = "native_loop_batched_inverse_one_sync";
+    result["inverse_upload_mode"] = "single_device_batch";
+    result["inverse_prepare_s"] = inverse_prepare_s;
+    result["inverse_batch_alloc_s"] = inverse_alloc_s;
+    result["inverse_batch_bytes"] = static_cast<unsigned long long>(inverse_host.size() * sizeof(float));
     result["inverse_upload_s"] = inverse_upload_s;
     result["kernel_enqueue_s"] = kernel_enqueue_s;
     result["device_copy_enqueue_s"] = copy_enqueue_s;
