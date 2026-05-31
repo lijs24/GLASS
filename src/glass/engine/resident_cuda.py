@@ -1722,8 +1722,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_calibration_streams must be positive")
     if resident_calibration_wave_frames < 0:
         raise ValueError("resident_calibration_wave_frames must be non-negative")
-    if resident_calibration_release_mode not in {"sync", "h2d_event", "auto"}:
-        raise ValueError("resident_calibration_release_mode must be one of: sync, h2d_event, auto")
+    if resident_calibration_release_mode not in {"sync", "h2d_event", "auto", "callback_queue"}:
+        raise ValueError("resident_calibration_release_mode must be one of: sync, h2d_event, auto, callback_queue")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1865,6 +1865,9 @@ def run_resident_calibration_integration(
                 hasattr(stack, "calibrate_frames_host_async_multistream_h2d_release_timed")
                 and hasattr(stack, "finish_pending_calibration_timed")
             )
+            calibration_callback_release_supported = bool(
+                hasattr(stack, "calibrate_frames_host_async_multistream_callback_release_timed")
+            )
             calibration_batch_enabled = bool(
                 resident_h2d_mode == "pinned_ring"
                 and resident_registration != "translation_preview"
@@ -1892,6 +1895,11 @@ def run_resident_calibration_integration(
                 and calibration_h2d_release_supported
                 and calibration_wave_effective_frames <= resident_calibration_streams
             )
+            calibration_callback_release_capable = bool(
+                calibration_batch_multistream_enabled
+                and calibration_callback_release_supported
+                and calibration_wave_effective_frames <= resident_calibration_streams
+            )
             if not calibration_batch_multistream_enabled:
                 calibration_h2d_release_reason = "multistream_batch_disabled"
             elif not calibration_h2d_release_supported:
@@ -1906,8 +1914,17 @@ def run_resident_calibration_integration(
                 calibration_h2d_release_capable
                 and calibration_wave_effective_frames == resident_calibration_streams
             )
+            calibration_callback_release_recommended = bool(
+                calibration_callback_release_capable
+                and calibration_wave_effective_frames == resident_calibration_streams
+            )
             calibration_release_mode_effective = "sync"
-            if resident_calibration_release_mode == "h2d_event" and calibration_h2d_release_capable:
+            if resident_calibration_release_mode == "callback_queue" and calibration_callback_release_capable:
+                calibration_release_mode_effective = "callback_queue"
+                calibration_h2d_release_reason = "explicit_callback_queue_requested"
+            elif resident_calibration_release_mode == "callback_queue":
+                calibration_h2d_release_reason = f"explicit_callback_queue_not_capable:{calibration_h2d_release_reason}"
+            elif resident_calibration_release_mode == "h2d_event" and calibration_h2d_release_capable:
                 calibration_release_mode_effective = "h2d_event"
                 calibration_h2d_release_reason = "explicit_h2d_event_requested"
             elif resident_calibration_release_mode == "h2d_event":
@@ -1920,6 +1937,12 @@ def run_resident_calibration_integration(
             elif resident_calibration_release_mode == "sync":
                 calibration_h2d_release_reason = "explicit_sync_requested"
             calibration_h2d_release_enabled = calibration_release_mode_effective == "h2d_event"
+            calibration_callback_release_enabled = calibration_release_mode_effective == "callback_queue"
+            calibration_fetch_batch_frames = (
+                int(resident_calibration_batch_frames)
+                if calibration_callback_release_enabled
+                else int(calibration_wave_effective_frames)
+            )
             calibration_batch_count = 0
             calibration_batch_frame_count = 0
             calibration_batch_native_total_s = 0.0
@@ -1932,6 +1955,9 @@ def run_resident_calibration_integration(
             calibration_h2d_event_sync_s = 0.0
             calibration_h2d_event_elapsed_s = 0.0
             calibration_pending_wait_sync_s = 0.0
+            calibration_callback_release_count = 0
+            calibration_callback_release_s = 0.0
+            calibration_callback_wave_count = 0
             prefetch_fill_blocked_no_slot_count = 0
             prefetch_release_count = 0
             prefetch_max_inflight_slots = 0
@@ -1949,7 +1975,7 @@ def run_resident_calibration_integration(
                     while index < len(light_frames):
                         batch_items: list[tuple[int, dict[str, Any], np.ndarray, float]] = []
                         batch_frame_starts: list[float] = []
-                        while index < len(light_frames) and len(batch_items) < calibration_wave_effective_frames:
+                        while index < len(light_frames) and len(batch_items) < calibration_fetch_batch_frames:
                             frame = light_frames[index]
                             frame_start = perf_counter()
                             calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
@@ -2013,7 +2039,52 @@ def run_resident_calibration_integration(
                             np.nan if current_dark_exposure is None else float(current_dark_exposure)
                             for _item in batch_items
                         ]
-                        if calibration_h2d_release_enabled:
+                        if calibration_callback_release_enabled:
+                            released_batch_indices: set[int] = set()
+
+                            def _release_h2d_completed_indices(released_indices: list[int]) -> None:
+                                for released_index in released_indices:
+                                    item_index = int(released_index)
+                                    light_prefetch.release(item_index)
+                                    released_batch_indices.add(item_index)
+
+                            try:
+                                calibration_timing = (
+                                    stack.calibrate_frames_host_async_multistream_callback_release_timed(
+                                        batch_indices,
+                                        batch_lights,
+                                        batch_light_exposures,
+                                        batch_dark_exposures,
+                                        resident_calibration_streams,
+                                        calibration_wave_effective_frames,
+                                        _release_h2d_completed_indices,
+                                        asdict(policy),
+                                    )
+                                )
+                            finally:
+                                for item_index in batch_indices:
+                                    if item_index not in released_batch_indices:
+                                        light_prefetch.release(item_index)
+                            calibration_h2d_release_count += int(
+                                calibration_timing.get("callback_release_count", 0) or 0
+                            )
+                            calibration_h2d_release_s += float(
+                                calibration_timing.get("h2d_release_s", 0.0) or 0.0
+                            )
+                            calibration_h2d_event_sync_s += float(
+                                calibration_timing.get("h2d_event_sync_s", 0.0) or 0.0
+                            )
+                            calibration_h2d_event_elapsed_s += float(
+                                calibration_timing.get("h2d_event_elapsed_s", 0.0) or 0.0
+                            )
+                            calibration_callback_release_count += int(
+                                calibration_timing.get("callback_release_count", 0) or 0
+                            )
+                            calibration_callback_release_s += float(
+                                calibration_timing.get("callback_s", 0.0) or 0.0
+                            )
+                            calibration_callback_wave_count += int(calibration_timing.get("wave_count", 0) or 0)
+                        elif calibration_h2d_release_enabled:
                             h2d_release_timing = stack.calibrate_frames_host_async_multistream_h2d_release_timed(
                                 batch_indices,
                                 batch_lights,
@@ -4970,7 +5041,12 @@ def run_resident_calibration_integration(
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
                         "calibration_event_reuse": bool(
-                            {"reused_stack_events", "reused_stack_lane_events", "reused_stack_lane_h2d_events"}
+                            {
+                                "reused_stack_events",
+                                "reused_stack_lane_events",
+                                "reused_stack_lane_h2d_events",
+                                "reused_stack_lane_h2d_callback_events",
+                            }
                             & set(unique_calibration_event_modes)
                         ),
                         "calibration_release_mode_requested": resident_calibration_release_mode,
@@ -4978,8 +5054,16 @@ def run_resident_calibration_integration(
                         "calibration_h2d_release_supported": bool(calibration_h2d_release_supported),
                         "calibration_h2d_release_capable": bool(calibration_h2d_release_capable),
                         "calibration_h2d_release_recommended": bool(calibration_h2d_release_recommended),
+                        "calibration_callback_release_supported": bool(calibration_callback_release_supported),
+                        "calibration_callback_release_capable": bool(calibration_callback_release_capable),
+                        "calibration_callback_release_enabled": bool(calibration_callback_release_enabled),
+                        "calibration_callback_release_recommended": bool(calibration_callback_release_recommended),
+                        "calibration_callback_release_count": int(calibration_callback_release_count),
+                        "calibration_callback_release_s": float(calibration_callback_release_s),
+                        "calibration_callback_wave_count": int(calibration_callback_wave_count),
                         "calibration_h2d_release_policy": (
-                            "auto enables h2d_event only when wave_effective_frames equals stream_count"
+                            "auto enables h2d_event only when wave_effective_frames equals stream_count; "
+                            "callback_queue is an explicit native multi-wave experiment"
                         ),
                         "calibration_h2d_release_reason": calibration_h2d_release_reason,
                         "calibration_h2d_release_enabled": bool(calibration_h2d_release_enabled),
@@ -4992,9 +5076,12 @@ def run_resident_calibration_integration(
                         "calibration_batch_requested_streams": int(resident_calibration_streams),
                         "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
                         "calibration_wave_effective_frames": int(calibration_wave_effective_frames),
+                        "calibration_fetch_batch_frames": int(calibration_fetch_batch_frames),
                         "calibration_wave_enabled": bool(calibration_wave_enabled),
                         "calibration_wave_release_mode": (
-                            "after_wave_sync" if calibration_wave_enabled else "after_native_batch_sync"
+                            "callback_after_h2d_event"
+                            if calibration_callback_release_enabled
+                            else ("after_wave_sync" if calibration_wave_enabled else "after_native_batch_sync")
                         ),
                         "calibration_batch_enabled": bool(calibration_batch_enabled),
                         "calibration_batch_supported": bool(calibration_batch_supported),
@@ -5005,6 +5092,9 @@ def run_resident_calibration_integration(
                         "calibration_batch_actual_stream_count": int(calibration_batch_actual_stream_count),
                         "calibration_batch_lane_buffer_bytes": int(calibration_batch_lane_buffer_bytes),
                         "calibration_batch_mode": (
+                            "host_async_multistream_callback_release_batch"
+                            if calibration_callback_release_enabled
+                            else
                             "host_async_multistream_h2d_release_batch"
                             if calibration_h2d_release_enabled
                             else "host_async_multistream_batch"
@@ -5014,6 +5104,9 @@ def run_resident_calibration_integration(
                             else "per_frame"
                         ),
                         "calibration_batch_timing_model": (
+                            "multi_stream_callback_release_waves_one_final_sync"
+                            if calibration_callback_release_enabled
+                            else
                             "multi_stream_one_frame_per_lane_h2d_release_then_wait"
                             if calibration_h2d_release_enabled
                             else "multi_stream_lanes_one_sync"

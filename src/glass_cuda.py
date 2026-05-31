@@ -2614,6 +2614,34 @@ class ResidentCalibratedStack:
             raise RuntimeError("native ResidentCalibratedStack.finish_pending_calibration_timed is not available")
         return dict(self._impl.finish_pending_calibration_timed())
 
+    def calibrate_frames_host_async_multistream_callback_release_timed(
+        self,
+        indices: Any,
+        lights: Any,
+        light_exposures_s: Any,
+        dark_exposures_s: Any,
+        stream_count: int,
+        wave_frames: int,
+        release_callback: Any,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "calibrate_frames_host_async_multistream_callback_release_timed"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.calibrate_frames_host_async_multistream_callback_release_timed "
+                "is not available"
+            )
+        result = self._impl.calibrate_frames_host_async_multistream_callback_release_timed(
+            np.asarray(indices, dtype=np.int64),
+            list(lights),
+            np.asarray(light_exposures_s, dtype=np.float32),
+            np.asarray(dark_exposures_s, dtype=np.float32),
+            int(stream_count),
+            int(wave_frames),
+            release_callback,
+            _policy_payload(policy),
+        )
+        return dict(result)
+
     def apply_translation_frame(self, index: int, dx: int, dy: int, fill: float = np.nan) -> None:
         if not hasattr(self._impl, "apply_translation_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_translation_frame is not available")

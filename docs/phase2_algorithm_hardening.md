@@ -1265,6 +1265,23 @@ integration where applicable.
   200-light benchmark comparison that checks output identity against the prior
   GLASS resident baseline.
 
+### S2-Gate 76: Native Callback Release Calibration Queue
+
+- Add an explicit `callback_queue` resident calibration release mode that
+  sends a larger Python batch to native code while native code internally
+  schedules smaller H2D waves.
+- After each native wave's H2D completion events synchronize, call back into
+  Python to release only the host prefetch slots whose copies are complete,
+  then continue enqueueing later waves before one final calibration sync.
+- Keep host buffer lifetime safe: a slot is released only after the matching
+  native H2D event has completed.
+- Record callback queue support, capability, enablement, callback release
+  count, callback release time, internal wave count, fetch batch size, and
+  timing model in `resident_io_pipeline`.
+- Validate with native resident-stack callback tests, resident CLI coverage,
+  ruff, full pytest, and a 200-light benchmark comparison against the prior
+  resident baseline.
+
 ## Gate Rules
 
 Each gate requires:

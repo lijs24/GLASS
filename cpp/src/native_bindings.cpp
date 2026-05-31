@@ -1233,6 +1233,11 @@ class ResidentCalibratedStack {
         cudaEventDestroy(event);
       }
     }
+    for (cudaEvent_t event : calibration_lane_h2d_start_events_) {
+      if (event != nullptr) {
+        cudaEventDestroy(event);
+      }
+    }
     for (cudaStream_t stream : calibration_lane_streams_) {
       if (stream != nullptr) {
         cudaStreamDestroy(stream);
@@ -1961,6 +1966,259 @@ class ResidentCalibratedStack {
     out["total_s"] = total_s;
     out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
     out["lane_stream_elapsed_s"] = lane_stream_elapsed_s;
+    return out;
+  }
+
+  py::dict calibrate_frames_host_async_multistream_callback_release_timed(
+      py::object indices_obj,
+      py::object lights_obj,
+      py::object light_exposures_obj,
+      py::object dark_exposures_obj,
+      int stream_count,
+      int wave_frames,
+      py::object release_callback,
+      py::object policy_obj) {
+    if (pending_calibration_) {
+      throw std::runtime_error("a resident calibration batch is already pending");
+    }
+    if (stream_count <= 0) {
+      throw std::invalid_argument("stream_count must be positive");
+    }
+    if (wave_frames <= 0) {
+      throw std::invalid_argument("wave_frames must be positive");
+    }
+    if (wave_frames > stream_count) {
+      throw std::invalid_argument("callback-release calibration requires wave_frames <= stream_count");
+    }
+    if (!PyCallable_Check(release_callback.ptr())) {
+      throw std::invalid_argument("release_callback must be callable");
+    }
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    const auto light_exposures = parse_float_sequence(light_exposures_obj, "light_exposures");
+    const auto dark_exposures = parse_float_sequence(dark_exposures_obj, "dark_exposures");
+    py::sequence lights = py::cast<py::sequence>(lights_obj);
+    const std::size_t frame_count = indices.size();
+    if (frame_count == 0) {
+      py::dict out;
+      out["schema_version"] = 1;
+      out["h2d_mode"] = "host_async_multistream_callback_release_batch";
+      out["event_mode"] = "reused_stack_lane_h2d_callback_events";
+      out["timing_model"] = "multi_stream_callback_release_waves_one_final_sync";
+      out["requested_stream_count"] = stream_count;
+      out["stream_count"] = 0;
+      out["requested_wave_frames"] = wave_frames;
+      out["wave_frames"] = 0;
+      out["wave_count"] = 0;
+      out["frame_count"] = 0;
+      out["callback_release_count"] = 0;
+      out["h2d_release_s"] = 0.0;
+      out["h2d_event_sync_s"] = 0.0;
+      out["h2d_event_elapsed_s"] = 0.0;
+      out["callback_s"] = 0.0;
+      out["stream_h2d_calibrate_store_s"] = 0.0;
+      out["sync_s"] = 0.0;
+      out["total_s"] = 0.0;
+      out["host_release_safe"] = true;
+      out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+      out["lane_stream_elapsed_s"] = py::list();
+      out["wave_h2d_elapsed_s"] = py::list();
+      return out;
+    }
+    if (static_cast<std::size_t>(py::len(lights)) != frame_count ||
+        light_exposures.size() != frame_count ||
+        dark_exposures.size() != frame_count) {
+      throw std::invalid_argument("indices, lights, light_exposures, and dark_exposures must have the same length");
+    }
+    const std::size_t requested_wave_frames = static_cast<std::size_t>(wave_frames);
+    const std::size_t lane_count = std::min<std::size_t>(
+        static_cast<std::size_t>(stream_count),
+        std::min<std::size_t>(requested_wave_frames, frame_count));
+    ensure_calibration_lanes(lane_count);
+
+    std::vector<py::array_t<float, py::array::c_style | py::array::forcecast>> light_arrays;
+    std::vector<void*> light_ptrs;
+    std::vector<CalibrationParameters> params;
+    light_arrays.reserve(frame_count);
+    light_ptrs.reserve(frame_count);
+    params.reserve(frame_count);
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      require_index(indices[i]);
+      auto light = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(lights[i]);
+      const py::buffer_info info = light.request();
+      require_frame_shape(info, height_, width_);
+      light_ptrs.push_back(info.ptr);
+      light_arrays.push_back(std::move(light));
+      py::object dark_exposure_obj = py::none();
+      if (std::isfinite(dark_exposures[i]) && dark_exposures[i] > 0.0f) {
+        dark_exposure_obj = py::float_(dark_exposures[i]);
+      }
+      params.push_back(calibration_parameters(light_exposures[i], dark_exposure_obj, policy_obj));
+    }
+
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    const auto total_start = Clock::now();
+    std::vector<unsigned char> lane_started(lane_count, 0);
+    std::vector<unsigned char> lane_used_in_wave(lane_count, 0);
+    std::vector<double> lane_elapsed(lane_count, 0.0);
+    std::vector<double> wave_h2d_elapsed;
+    wave_h2d_elapsed.reserve((frame_count + requested_wave_frames - 1) / requested_wave_frames);
+    double h2d_event_sync_s = 0.0;
+    double h2d_event_elapsed_s = 0.0;
+    double callback_s = 0.0;
+    std::size_t callback_release_count = 0;
+    std::size_t wave_count = 0;
+    double h2d_release_s = 0.0;
+    try {
+      for (std::size_t wave_start = 0; wave_start < frame_count; wave_start += requested_wave_frames) {
+        const std::size_t frames_in_wave = std::min<std::size_t>(requested_wave_frames, frame_count - wave_start);
+        std::fill(lane_used_in_wave.begin(), lane_used_in_wave.end(), 0);
+        double wave_elapsed_s = 0.0;
+        {
+          py::gil_scoped_release release;
+          for (std::size_t j = 0; j < frames_in_wave; ++j) {
+            const std::size_t lane = j;
+            const std::size_t frame_offset = wave_start + j;
+            if (!lane_started[lane]) {
+              check_cuda(
+                  cudaEventRecord(calibration_lane_start_events_[lane], calibration_lane_streams_[lane]),
+                  "cudaEventRecord(resident callback-release lane start)");
+              lane_started[lane] = 1;
+            }
+            lane_used_in_wave[lane] = 1;
+            check_cuda(
+                cudaEventRecord(calibration_lane_h2d_start_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident callback-release lane h2d start)");
+            check_cuda(
+                cudaMemcpyAsync(
+                    d_calibration_lane_lights_[lane],
+                    light_ptrs[frame_offset],
+                    frame_bytes,
+                    cudaMemcpyHostToDevice,
+                    calibration_lane_streams_[lane]),
+                "cudaMemcpyAsync(resident callback-release host raw light)");
+            check_cuda(
+                cudaEventRecord(calibration_lane_h2d_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident callback-release lane h2d done)");
+            glass_calibrate_tile_f32_launch_stream(
+                d_calibration_lane_lights_[lane],
+                d_bias_,
+                d_dark_,
+                d_flat_,
+                d_stack_ + indices[frame_offset] * pixels_per_frame_,
+                pixels_per_frame_,
+                has_bias_,
+                has_dark_,
+                has_flat_,
+                params[frame_offset].master_dark_includes_bias,
+                params[frame_offset].dark_scale,
+                params[frame_offset].flat_floor,
+                params[frame_offset].pedestal,
+                calibration_lane_streams_[lane]);
+            check_cuda(
+                cudaGetLastError(),
+                "ResidentCalibratedStack.calibrate_frames_host_async_multistream_callback_release kernel launch");
+            check_cuda(
+                cudaEventRecord(calibration_lane_stop_events_[lane], calibration_lane_streams_[lane]),
+                "cudaEventRecord(resident callback-release lane calibration stop)");
+          }
+          const auto h2d_sync_start = Clock::now();
+          for (std::size_t lane = 0; lane < frames_in_wave; ++lane) {
+            if (lane_used_in_wave[lane]) {
+              check_cuda(
+                  cudaEventSynchronize(calibration_lane_h2d_events_[lane]),
+                  "cudaEventSynchronize(resident callback-release lane h2d)");
+            }
+          }
+          h2d_event_sync_s += seconds_since(h2d_sync_start);
+          for (std::size_t lane = 0; lane < frames_in_wave; ++lane) {
+            if (lane_used_in_wave[lane]) {
+              const double lane_h2d_s = cuda_event_elapsed_s(
+                  calibration_lane_h2d_start_events_[lane],
+                  calibration_lane_h2d_events_[lane],
+                  "cudaEventElapsedTime(resident callback-release lane h2d)");
+              wave_elapsed_s = std::max(wave_elapsed_s, lane_h2d_s);
+              h2d_event_elapsed_s = std::max(h2d_event_elapsed_s, lane_h2d_s);
+            }
+          }
+        }
+        py::list released_indices;
+        for (std::size_t j = 0; j < frames_in_wave; ++j) {
+          released_indices.append(static_cast<unsigned long long>(indices[wave_start + j]));
+        }
+        const auto callback_start = Clock::now();
+        release_callback(released_indices);
+        callback_s += seconds_since(callback_start);
+        callback_release_count += frames_in_wave;
+        wave_h2d_elapsed.push_back(wave_elapsed_s);
+        ++wave_count;
+      }
+      h2d_release_s = seconds_since(total_start);
+    } catch (...) {
+      py::gil_scoped_release release;
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          cudaStreamSynchronize(calibration_lane_streams_[lane]);
+        }
+      }
+      throw;
+    }
+
+    double sync_s = 0.0;
+    double stream_s = 0.0;
+    {
+      py::gil_scoped_release release;
+      const auto sync_start = Clock::now();
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          check_cuda(
+              cudaStreamSynchronize(calibration_lane_streams_[lane]),
+              "ResidentCalibratedStack.calibrate_frames_host_async_multistream_callback_release synchronize");
+        }
+      }
+      sync_s = seconds_since(sync_start);
+      for (std::size_t lane = 0; lane < lane_count; ++lane) {
+        if (lane_started[lane]) {
+          lane_elapsed[lane] = cuda_event_elapsed_s(
+              calibration_lane_start_events_[lane],
+              calibration_lane_stop_events_[lane],
+              "cudaEventElapsedTime(resident callback-release lane calibration)");
+          stream_s = std::max(stream_s, lane_elapsed[lane]);
+        }
+      }
+    }
+    for (std::size_t index : indices) {
+      mark_loaded(index);
+    }
+    py::list lane_stream_elapsed_s;
+    for (const double value : lane_elapsed) {
+      lane_stream_elapsed_s.append(value);
+    }
+    py::list wave_h2d_elapsed_s;
+    for (const double value : wave_h2d_elapsed) {
+      wave_h2d_elapsed_s.append(value);
+    }
+    py::dict out = calibration_timing_dict(
+        ResidentCalibrationTiming{0.0, 0.0, stream_s, seconds_since(total_start)},
+        "host_async_multistream_callback_release_batch");
+    out["event_mode"] = "reused_stack_lane_h2d_callback_events";
+    out["timing_model"] = "multi_stream_callback_release_waves_one_final_sync";
+    out["requested_stream_count"] = stream_count;
+    out["stream_count"] = static_cast<unsigned long long>(lane_count);
+    out["requested_wave_frames"] = wave_frames;
+    out["wave_frames"] = static_cast<unsigned long long>(requested_wave_frames);
+    out["wave_count"] = static_cast<unsigned long long>(wave_count);
+    out["frame_count"] = static_cast<unsigned long long>(frame_count);
+    out["callback_release_count"] = static_cast<unsigned long long>(callback_release_count);
+    out["h2d_release_s"] = h2d_release_s;
+    out["h2d_event_sync_s"] = h2d_event_sync_s;
+    out["h2d_event_elapsed_s"] = h2d_event_elapsed_s;
+    out["callback_s"] = callback_s;
+    out["stream_h2d_calibrate_store_s"] = stream_s;
+    out["sync_s"] = sync_s;
+    out["host_release_safe"] = true;
+    out["calibration_lane_buffer_bytes"] = calibration_lane_buffer_bytes();
+    out["lane_stream_elapsed_s"] = lane_stream_elapsed_s;
+    out["wave_h2d_elapsed_s"] = wave_h2d_elapsed_s;
     return out;
   }
 
@@ -4471,6 +4729,9 @@ class ResidentCalibratedStack {
         check_cuda(cudaStreamCreate(&stream), "cudaStreamCreate(resident multistream calibration lane)");
         check_cuda(cudaEventCreate(&start_event), "cudaEventCreate(resident multistream calibration lane start)");
         check_cuda(cudaEventCreate(&stop_event), "cudaEventCreate(resident multistream calibration lane stop)");
+        cudaEvent_t h2d_start_event = nullptr;
+        check_cuda(cudaEventCreate(&h2d_start_event), "cudaEventCreate(resident multistream calibration lane h2d start)");
+        calibration_lane_h2d_start_events_.push_back(h2d_start_event);
         cudaEvent_t h2d_event = nullptr;
         check_cuda(cudaEventCreate(&h2d_event), "cudaEventCreate(resident multistream calibration lane h2d done)");
         calibration_lane_h2d_events_.push_back(h2d_event);
@@ -4480,6 +4741,10 @@ class ResidentCalibratedStack {
         }
         if (start_event != nullptr) {
           cudaEventDestroy(start_event);
+        }
+        if (calibration_lane_h2d_start_events_.size() > d_calibration_lane_lights_.size()) {
+          cudaEventDestroy(calibration_lane_h2d_start_events_.back());
+          calibration_lane_h2d_start_events_.pop_back();
         }
         if (calibration_lane_h2d_events_.size() > d_calibration_lane_lights_.size()) {
           cudaEventDestroy(calibration_lane_h2d_events_.back());
@@ -4724,6 +4989,7 @@ class ResidentCalibratedStack {
   std::vector<cudaStream_t> calibration_lane_streams_;
   std::vector<cudaEvent_t> calibration_lane_start_events_;
   std::vector<cudaEvent_t> calibration_lane_stop_events_;
+  std::vector<cudaEvent_t> calibration_lane_h2d_start_events_;
   std::vector<cudaEvent_t> calibration_lane_h2d_events_;
   bool pending_calibration_ = false;
   std::vector<std::size_t> pending_calibration_indices_;
@@ -8720,6 +8986,17 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       .def(
           "finish_pending_calibration_timed",
           &ResidentCalibratedStack::finish_pending_calibration_timed)
+      .def(
+          "calibrate_frames_host_async_multistream_callback_release_timed",
+          &ResidentCalibratedStack::calibrate_frames_host_async_multistream_callback_release_timed,
+          py::arg("indices"),
+          py::arg("lights"),
+          py::arg("light_exposures"),
+          py::arg("dark_exposures"),
+          py::arg("stream_count"),
+          py::arg("wave_frames"),
+          py::arg("release_callback"),
+          py::arg("policy") = py::none())
       .def(
           "apply_translation_frame",
           &ResidentCalibratedStack::apply_translation_frame,
