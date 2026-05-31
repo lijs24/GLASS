@@ -30,10 +30,15 @@ def read_fits_header(path: str | Path) -> dict[str, Any]:
     return {str(k): header[k] for k in header.keys()}
 
 
-def write_fits_data(path: str | Path, data: np.ndarray, header: dict[str, Any] | None = None) -> None:
+def write_fits_data(
+    path: str | Path,
+    data: np.ndarray,
+    header: dict[str, Any] | None = None,
+    dtype: Any = np.float32,
+) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    hdu = fits.PrimaryHDU(np.asarray(data, dtype=np.float32))
+    hdu = fits.PrimaryHDU(np.asarray(data, dtype=dtype))
     if header:
         for key, value in header.items():
             if value is not None and len(str(key)) <= 8:

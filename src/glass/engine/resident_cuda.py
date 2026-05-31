@@ -556,6 +556,18 @@ def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) 
     }
 
 
+def _count_map_dtype(frame_count: int) -> Any:
+    return np.int16 if int(frame_count) <= np.iinfo(np.int16).max else np.int32
+
+
+def _count_map_for_write(data: np.ndarray, dtype: Any) -> np.ndarray:
+    return np.rint(np.asarray(data)).astype(dtype, copy=False)
+
+
+def _array_storage_bytes(data: np.ndarray, dtype: Any) -> int:
+    return int(np.asarray(data).size * np.dtype(dtype).itemsize)
+
+
 def _resident_star_threshold_candidates(
     stack: Any,
     reference_index: int,
@@ -3010,15 +3022,52 @@ def run_resident_calibration_integration(
             high_rejection_path = (
                 output_dir / f"resident_high_rejection_map_{filt}.fits" if high_rejection_map is not None else None
             )
+            write_breakdown: dict[str, float] = {}
+            write_storage: dict[str, dict[str, Any]] = {}
+            count_dtype = _count_map_dtype(len(light_frames))
+
+            def _write_output_map(
+                name: str,
+                path: Path,
+                data: np.ndarray,
+                header: dict[str, Any],
+                dtype: Any = np.float32,
+            ) -> None:
+                map_start = perf_counter()
+                write_fits_data(path, data, header, dtype=dtype)
+                write_breakdown[name] = perf_counter() - map_start
+                write_storage[name] = {
+                    "dtype": np.dtype(dtype).name,
+                    "estimated_data_bytes": _array_storage_bytes(data, dtype),
+                }
+
             write_start = perf_counter()
-            write_fits_data(master_path, master, {"IMAGETYP": "master", "FILTER": filter_name})
-            write_fits_data(weight_path, weight_map, {"IMAGETYP": "weight", "FILTER": filter_name})
+            _write_output_map("master", master_path, master, {"IMAGETYP": "master", "FILTER": filter_name})
+            _write_output_map("weight", weight_path, weight_map, {"IMAGETYP": "weight", "FILTER": filter_name})
             if coverage_map is not None and coverage_path is not None:
-                write_fits_data(coverage_path, coverage_map, {"IMAGETYP": "coverage", "FILTER": filter_name})
+                _write_output_map(
+                    "coverage",
+                    coverage_path,
+                    _count_map_for_write(coverage_map, count_dtype),
+                    {"IMAGETYP": "coverage", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
+                    dtype=count_dtype,
+                )
             if low_rejection_map is not None and low_rejection_path is not None:
-                write_fits_data(low_rejection_path, low_rejection_map, {"IMAGETYP": "rej_low", "FILTER": filter_name})
+                _write_output_map(
+                    "low_rejection",
+                    low_rejection_path,
+                    _count_map_for_write(low_rejection_map, count_dtype),
+                    {"IMAGETYP": "rej_low", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
+                    dtype=count_dtype,
+                )
             if high_rejection_map is not None and high_rejection_path is not None:
-                write_fits_data(high_rejection_path, high_rejection_map, {"IMAGETYP": "rej_high", "FILTER": filter_name})
+                _write_output_map(
+                    "high_rejection",
+                    high_rejection_path,
+                    _count_map_for_write(high_rejection_map, count_dtype),
+                    {"IMAGETYP": "rej_high", "FILTER": filter_name, "DTYPE": np.dtype(count_dtype).name},
+                    dtype=count_dtype,
+                )
             write_elapsed = perf_counter() - write_start
 
             first_master_stats = next(iter(master_stats_sets.values()), {})
@@ -3139,6 +3188,10 @@ def run_resident_calibration_integration(
                         "per_frame_calibrate_store_mean": calibrate_store_timing["mean"],
                         "per_frame_h2d_calibrate_store_mean": calibrate_timing["mean"],
                         "per_frame_registration_mean": registration_timing["mean"],
+                    },
+                    "output_write": {
+                        "breakdown_s": write_breakdown,
+                        "storage": write_storage,
                     },
                     "fine_timing": fine_timing,
                     "resident_io_pipeline": {
@@ -3334,10 +3387,11 @@ def run_resident_calibration_integration(
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,
+                    "output_write_storage": write_storage,
                     "output_diagnostics": output_diagnostics,
                 }
             )
-            del stack, master, weight_map
+            del stack, master, weight_map, coverage_map, low_rejection_map, high_rejection_map
             gc.collect()
 
         if not outputs:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from astropy.io import fits
 
-from glass.io.fits_io import FitsImageReader, read_fits_data
+from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 
 
 def test_fits_image_reader_applies_bscale_bzero_per_tile(tmp_path):
@@ -32,3 +32,15 @@ def test_fits_image_reader_maps_blank_to_nan(tmp_path):
         tile = reader.read_tile(0, 3, 0, 3)
     assert np.isnan(tile[1, 1])
     assert tile[0, 0] == 0
+
+
+def test_write_fits_data_can_preserve_integer_count_maps(tmp_path):
+    path = tmp_path / "coverage.fits"
+    counts = np.array([[0, 1, 2], [30, 200, 32767]], dtype=np.int16)
+
+    write_fits_data(path, counts, {"IMAGETYP": "coverage"}, dtype=np.int16)
+
+    with fits.open(path, do_not_scale_image_data=True) as hdul:
+        assert hdul[0].header["BITPIX"] == 16
+        assert hdul[0].data.dtype == np.dtype(">i2")
+        assert np.array_equal(hdul[0].data, counts)

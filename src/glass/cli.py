@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import platform
+import subprocess
 import sys
 from time import perf_counter
 from pathlib import Path
@@ -63,6 +64,12 @@ def _new_timing(command: str, backend: str | None = None, tile_size: int | None 
 def _write_timing(run: Path, timing: dict) -> None:
     timing["total_elapsed_s"] = float(sum(float(item.get("elapsed_s") or 0.0) for item in timing["stages"]))
     write_json(run / "run_timing.json", timing)
+
+
+def _write_run_command(run: Path, args: argparse.Namespace) -> None:
+    argv = list(getattr(args, "_glass_argv", []) or sys.argv[1:])
+    command = subprocess.list2cmdline(["glass", *argv])
+    (run / "run_command.txt").write_text(command, encoding="utf-8")
 
 
 def _timed_stage(run: Path, timing: dict, stage: str, fn):
@@ -306,6 +313,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_audit(args: argparse.Namespace) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    _write_run_command(out, args)
     if args.backend == "cuda" and not capability_report()["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
     if args.memory_mode == "resident" and args.backend != "cuda":
@@ -390,6 +398,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
     _seed_run_inputs(Path(args.out), args.plan)
+    _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
         if args.backend != "cuda":
             raise SystemExit("Resident memory mode currently requires --backend cuda.")
@@ -1226,6 +1235,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    args._glass_argv = list(sys.argv[1:] if argv is None else argv)
     return int(args.func(args))
 
 

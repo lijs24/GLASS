@@ -281,6 +281,18 @@ integration where applicable.
   the existing hard pass/fail checks for runtime, frame counts, and image
   agreement.
 
+### S2-Gate 13: Resident Output Map Storage Recovery
+
+- Preserve resident master and weight outputs as `float32`.
+- Store integer count maps such as coverage and rejection maps using integer
+  FITS image types when the frame count fits the selected dtype.
+- Record per-map output write timing and estimated data bytes in
+  `resident_artifacts.json`.
+- Make `glass run` and `glass audit` write `run_command.txt` so benchmark
+  contract audits can prove that required command tokens were used.
+- Validate the 200-light benchmark again and compare image agreement against
+  the release reference output.
+
 ## Gate Rules
 
 Each gate requires:

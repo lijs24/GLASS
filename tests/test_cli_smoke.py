@@ -22,6 +22,9 @@ def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
     assert (audit / "manifest.json").exists()
     assert (audit / "processing_plan.json").exists()
     assert (audit / "report.html").exists()
+    run_command = (audit / "run_command.txt").read_text(encoding="utf-8")
+    assert "glass audit" in run_command
+    assert "--backend cpu" in run_command
 
 
 def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
