@@ -2588,6 +2588,7 @@ class ResidentCalibratedStack {
         int total_count = 0;
         int stored_count = 0;
 
+        const auto enqueue_start = std::chrono::steady_clock::now();
         glass_star_grid_top_nms_candidates_f32_launch(
             d_stack_ + index * pixels_per_frame_,
             d_grid_xs,
@@ -2608,13 +2609,16 @@ class ResidentCalibratedStack {
             max_output_candidates,
             min_separation_px);
         check_cuda(cudaGetLastError(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch kernel launch");
+        const auto enqueue_end = std::chrono::steady_clock::now();
         check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.star_grid_top_nms_candidates_batch synchronize");
+        const auto sync_end = std::chrono::steady_clock::now();
         check_cuda(
             cudaMemcpy(&total_count, d_count, sizeof(int), cudaMemcpyDeviceToHost),
             "cudaMemcpy(resident batch grid top nms count)");
         check_cuda(
             cudaMemcpy(&stored_count, d_stored_count, sizeof(int), cudaMemcpyDeviceToHost),
             "cudaMemcpy(resident batch grid top nms stored count)");
+        const auto count_download_end = std::chrono::steady_clock::now();
         check_cuda(
             cudaMemcpy(
                 xs_info.ptr,
@@ -2636,6 +2640,16 @@ class ResidentCalibratedStack {
                 static_cast<std::size_t>(stored_count) * sizeof(float),
                 cudaMemcpyDeviceToHost),
             "cudaMemcpy(resident batch grid top nms star fluxes)");
+        const auto catalog_download_end = std::chrono::steady_clock::now();
+
+        const double enqueue_s = std::chrono::duration<double>(enqueue_end - enqueue_start).count();
+        const double sync_s = std::chrono::duration<double>(sync_end - enqueue_end).count();
+        const double count_download_s =
+            std::chrono::duration<double>(count_download_end - sync_end).count();
+        const double catalog_download_s =
+            std::chrono::duration<double>(catalog_download_end - count_download_end).count();
+        const double native_s =
+            std::chrono::duration<double>(catalog_download_end - enqueue_start).count();
 
         py::dict result;
         result["frame_index"] = index;
@@ -2646,6 +2660,12 @@ class ResidentCalibratedStack {
         result["candidates_per_cell"] = candidates_per_cell;
         result["max_output_candidates"] = max_output_candidates;
         result["min_separation_px"] = min_separation_px;
+        result["catalog_timing_model"] = "per_frame_launch_sync_download";
+        result["catalog_enqueue_s"] = enqueue_s;
+        result["catalog_sync_s"] = sync_s;
+        result["catalog_count_download_s"] = count_download_s;
+        result["catalog_output_download_s"] = catalog_download_s;
+        result["catalog_native_s"] = native_s;
         result["x"] = xs[py::slice(0, stored_count, 1)];
         result["y"] = ys[py::slice(0, stored_count, 1)];
         result["flux"] = fluxes[py::slice(0, stored_count, 1)];

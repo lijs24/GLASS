@@ -2982,6 +2982,18 @@ class ResidentCalibratedStack:
                     "candidates_per_cell": int(result["candidates_per_cell"]),
                     "max_output_candidates": int(result["max_output_candidates"]),
                     "min_separation_px": float(result["min_separation_px"]),
+                    "catalog_timing_model": str(
+                        result.get("catalog_timing_model", "unavailable")
+                    ),
+                    "catalog_enqueue_s": float(result.get("catalog_enqueue_s", 0.0) or 0.0),
+                    "catalog_sync_s": float(result.get("catalog_sync_s", 0.0) or 0.0),
+                    "catalog_count_download_s": float(
+                        result.get("catalog_count_download_s", 0.0) or 0.0
+                    ),
+                    "catalog_output_download_s": float(
+                        result.get("catalog_output_download_s", 0.0) or 0.0
+                    ),
+                    "catalog_native_s": float(result.get("catalog_native_s", 0.0) or 0.0),
                     "x": np.asarray(result["x"], dtype=np.float32),
                     "y": np.asarray(result["y"], dtype=np.float32),
                     "flux": np.asarray(result["flux"], dtype=np.float32),

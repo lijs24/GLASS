@@ -2752,6 +2752,12 @@ def run_resident_calibration_integration(
                 triangle_catalog_batch_mode = (
                     "grid_top_nms_fixed_threshold" if triangle_catalog_batch_enabled else "off"
                 )
+                triangle_catalog_timing_model = "off"
+                triangle_catalog_native_enqueue_s = 0.0
+                triangle_catalog_native_sync_s = 0.0
+                triangle_catalog_native_count_download_s = 0.0
+                triangle_catalog_native_output_download_s = 0.0
+                triangle_catalog_native_total_s = 0.0
                 triangle_pixel_refine_batch_enabled = bool(
                     pixel_refine_enabled
                     and hasattr(native_stack, "refine_matrix_translation_candidates_batch_to_reference")
@@ -2837,6 +2843,12 @@ def run_resident_calibration_integration(
                     threshold: float,
                     _stack=stack,
                 ) -> dict[str, Any]:
+                    nonlocal triangle_catalog_native_count_download_s
+                    nonlocal triangle_catalog_native_enqueue_s
+                    nonlocal triangle_catalog_native_output_download_s
+                    nonlocal triangle_catalog_native_sync_s
+                    nonlocal triangle_catalog_native_total_s
+                    nonlocal triangle_catalog_timing_model
                     threshold_key = round(float(threshold), 6)
                     if triangle_catalog_batch_enabled:
                         cached_by_index = moving_catalog_batch_cache.get(threshold_key)
@@ -2856,6 +2868,55 @@ def run_resident_calibration_integration(
                                 "triangle_moving_catalog_batch",
                                 perf_counter() - batch_start,
                             )
+                            if batch_results:
+                                triangle_catalog_timing_model = str(
+                                    batch_results[0].get("catalog_timing_model", "unavailable")
+                                )
+                                triangle_catalog_native_enqueue_s = sum(
+                                    float(item.get("catalog_enqueue_s", 0.0) or 0.0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_native_sync_s = sum(
+                                    float(item.get("catalog_sync_s", 0.0) or 0.0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_native_count_download_s = sum(
+                                    float(item.get("catalog_count_download_s", 0.0) or 0.0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_native_output_download_s = sum(
+                                    float(item.get("catalog_output_download_s", 0.0) or 0.0)
+                                    for item in batch_results
+                                )
+                                triangle_catalog_native_total_s = sum(
+                                    float(item.get("catalog_native_s", 0.0) or 0.0)
+                                    for item in batch_results
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_catalog_native_enqueue",
+                                    triangle_catalog_native_enqueue_s,
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_catalog_native_sync",
+                                    triangle_catalog_native_sync_s,
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_catalog_native_count_download",
+                                    triangle_catalog_native_count_download_s,
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_catalog_native_output_download",
+                                    triangle_catalog_native_output_download_s,
+                                )
+                                _add_elapsed(
+                                    registration_component_s,
+                                    "triangle_moving_catalog_native_total",
+                                    triangle_catalog_native_total_s,
+                                )
                             cached_by_index = {int(item["frame_index"]): item for item in batch_results}
                             moving_catalog_batch_cache[threshold_key] = cached_by_index
                         cached_catalog = cached_by_index.get(frame_index)
@@ -3258,6 +3319,7 @@ def run_resident_calibration_integration(
                                         f"triangle_min_pixel_ncc={min_pixel_ncc}",
                                         f"triangle_catalog_selector={catalog_selector}",
                                         f"triangle_catalog_batch={triangle_catalog_batch_mode}",
+                                        f"triangle_catalog_timing_model={triangle_catalog_timing_model}",
                                         f"triangle_nms_min_separation_px={nms_min_separation_px:.6g}",
                                         "resident CUDA triangle descriptor similarity",
                                     ]
@@ -4097,6 +4159,28 @@ def run_resident_calibration_integration(
                         "triangle_catalog_batch_mode": triangle_catalog_batch_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_catalog_timing_model": triangle_catalog_timing_model
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_catalog_native_enqueue_s": float(triangle_catalog_native_enqueue_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_catalog_native_sync_s": float(triangle_catalog_native_sync_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_catalog_native_count_download_s": float(
+                            triangle_catalog_native_count_download_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_catalog_native_output_download_s": float(
+                            triangle_catalog_native_output_download_s
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_catalog_native_total_s": float(triangle_catalog_native_total_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
                         "triangle_descriptor_fit_batch": bool(
                             resident_registration == "similarity_cuda_triangle"
                             and triangle_descriptor_fit_batch_enabled

@@ -857,6 +857,24 @@ integration where applicable.
   triangle-registration smoke tests, ruff, full pytest, and the 200-light
   benchmark because this changes native registration memory scheduling.
 
+### S2-Gate 51: Resident Grid Catalog Timing Decomposition
+
+- Instrument native `ResidentCalibratedStack.star_grid_top_nms_candidates_batch`
+  with per-frame timing for catalog kernel enqueue, GPU synchronization, count
+  downloads, compact catalog downloads, and total native catalog time.
+- Preserve the existing grid/NMS star catalog algorithm, output ordering,
+  candidate coordinates, fluxes, counts, and resident triangle-registration
+  behavior.
+- Aggregate the native catalog timings into resident registration component
+  timings and record the timing model in per-frame warnings,
+  `resident_artifacts.json`, and the HTML resident summary.
+- Use the 200-light benchmark to decide whether the remaining
+  `triangle_moving_catalog_batch` cost is dominated by device scan/sort/NMS
+  work or by host/device transfer and synchronization overhead.
+- Validate with direct resident CUDA catalog batch/single equivalence tests,
+  resident triangle-registration smoke tests, ruff, full pytest, and the
+  200-light benchmark because this gate changes registration diagnostics.
+
 ## Gate Rules
 
 Each gate requires:

@@ -393,6 +393,17 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "flat": master_stats.get("flat_count"),
                 "registration": registration.get("mode"),
                 "warp": registration.get("warp_interpolation"),
+                "catalog_timing_model": registration.get("triangle_catalog_timing_model"),
+                "catalog_native_sync_s": round(
+                    float(registration.get("triangle_catalog_native_sync_s") or 0.0), 3
+                ),
+                "catalog_native_output_download_s": round(
+                    float(registration.get("triangle_catalog_native_output_download_s") or 0.0),
+                    3,
+                ),
+                "catalog_native_total_s": round(
+                    float(registration.get("triangle_catalog_native_total_s") or 0.0), 3
+                ),
                 "descriptor_fit_batch": registration.get("triangle_descriptor_fit_batch"),
                 "descriptor_fit_batch_mode": registration.get("triangle_descriptor_fit_batch_mode"),
                 "descriptor_reference_reuse": registration.get(

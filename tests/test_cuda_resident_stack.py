@@ -350,6 +350,40 @@ def test_resident_stack_reuses_warp_scratch_buffers():
     assert stack.bytes_allocated == after_translation + 9 * np.dtype(np.float32).itemsize
 
 
+def test_resident_stack_grid_star_catalog_batch_reports_native_timing():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "star_grid_top_nms_candidates_batch"):
+        raise AssertionError("ResidentCalibratedStack.star_grid_top_nms_candidates_batch is missing")
+
+    reference = _resident_star_field()
+    frames = [
+        reference,
+        _shift_image(reference, 4, -3),
+        _shift_image(reference, -2, 5),
+    ]
+    stack = module.ResidentCalibratedStack(len(frames), reference.shape[0], reference.shape[1])
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    batch = stack.star_grid_top_nms_candidates_batch([0, 1, 2], 30.0, 4, 4, 2, 8, 4.0)
+    singles = [
+        stack.star_grid_top_nms_candidates(index, 30.0, 4, 4, 2, 8, 4.0)
+        for index in [0, 1, 2]
+    ]
+
+    assert [item["frame_index"] for item in batch] == [0, 1, 2]
+    for batch_item, single_item in zip(batch, singles, strict=True):
+        assert batch_item["catalog_timing_model"] == "per_frame_launch_sync_download"
+        assert batch_item["catalog_native_s"] >= 0.0
+        assert batch_item["catalog_sync_s"] >= 0.0
+        assert batch_item["catalog_output_download_s"] >= 0.0
+        assert batch_item["count"] == single_item["count"]
+        assert batch_item["stored_count"] == single_item["stored_count"]
+        assert np.allclose(batch_item["x"], single_item["x"])
+        assert np.allclose(batch_item["y"], single_item["y"])
+        assert np.allclose(batch_item["flux"], single_item["flux"])
+
+
 def test_resident_stack_estimates_and_warps_subpixel_translation_on_device():
     module = cuda_module_or_skip()
     required = [
