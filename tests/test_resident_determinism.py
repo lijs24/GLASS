@@ -161,9 +161,21 @@ def test_resident_determinism_audit_reports_output_pixel_drift(tmp_path: Path):
 
     assert audit["summary"]["passed"] is False
     assert audit["summary"]["output_difference_count"] == 1
+    assert audit["summary"]["output_numerical_drift_count"] == 1
     diff = audit["output_differences"][0]
     assert diff["key"] == "H:2:F001:F002"
     assert "master_path" in diff["fields"]
+    drift = audit["output_numerical_drifts"][0]
+    assert drift["key"] == "H:2:F001:F002"
+    assert drift["field"] == "master_path"
+    assert drift["drift"]["available"] is True
+    assert drift["drift"]["joint_finite_pixels"] == 4
+    assert drift["drift"]["mean_abs"] == 1.0
+    assert drift["drift"]["median_abs"] == 1.0
+    assert drift["drift"]["rms"] == 1.0
+    assert drift["drift"]["p95_abs"] == 1.0
+    assert drift["drift"]["p99_abs"] == 1.0
+    assert drift["drift"]["max_abs"] == 1.0
 
 
 def test_resident_determinism_audit_treats_matching_nan_registration_values_as_equal(

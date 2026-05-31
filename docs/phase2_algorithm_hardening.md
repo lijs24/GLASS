@@ -1104,6 +1104,20 @@ integration where applicable.
   repeated 200-light runs in fast-coarse mode, strict A/B determinism for those
   runs, and a numerical drift note against the conservative Gate63 baseline.
 
+### S2-Gate 65: Resident Output Numerical Drift Audit
+
+- Extend `glass resident-determinism` so output FITS hash mismatches include
+  numerical drift metrics, not only exact-match failure.
+- For each mismatched output/map with compatible shapes, report joint finite
+  pixel count, non-finite mismatch count, signed mean, mean/median absolute
+  difference, RMS, p95/p99/max absolute difference, baseline/candidate
+  mean/std, and RMS relative to baseline standard deviation.
+- Keep the strict audit semantics unchanged: hash or registration mismatches
+  still fail `--fail-on-mismatch`; the drift metrics explain magnitude and
+  support fast-mode quality review.
+- Validate with synthetic FITS audit fixtures, CLI Markdown output, ruff, full
+  pytest, and the Gate63-conservative vs Gate64-fast 200-light comparison.
+
 ## Gate Rules
 
 Each gate requires:

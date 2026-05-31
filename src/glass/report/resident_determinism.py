@@ -83,7 +83,7 @@ def _resolve_artifact_path(run: Path, value: Any) -> Path | None:
 
 def _fits_data_signature(path: Path) -> dict[str, Any]:
     if not path.exists():
-        return {"available": False, "exists": False}
+        return {"available": False, "exists": False, "path": str(path)}
     data = np.ascontiguousarray(read_fits_data(path, dtype=np.float32))
     finite = np.isfinite(data)
     finite_count = int(np.count_nonzero(finite))
@@ -108,10 +108,74 @@ def _fits_data_signature(path: Path) -> dict[str, Any]:
     return {
         "available": True,
         "exists": True,
+        "path": str(path),
         "sha256": digest.hexdigest(),
         "shape": [int(item) for item in data.shape],
         "dtype": str(data.dtype),
         **stats,
+    }
+
+
+def _fits_numerical_drift(baseline_signature: dict[str, Any], candidate_signature: dict[str, Any]) -> dict[str, Any]:
+    baseline_path = Path(str(baseline_signature.get("path") or ""))
+    candidate_path = Path(str(candidate_signature.get("path") or ""))
+    if not baseline_path.exists() or not candidate_path.exists():
+        return {
+            "available": False,
+            "reason": "missing_file",
+            "baseline_path": str(baseline_path),
+            "candidate_path": str(candidate_path),
+        }
+    baseline = np.ascontiguousarray(read_fits_data(baseline_path, dtype=np.float32))
+    candidate = np.ascontiguousarray(read_fits_data(candidate_path, dtype=np.float32))
+    if baseline.shape != candidate.shape:
+        return {
+            "available": False,
+            "reason": "shape_mismatch",
+            "baseline_path": str(baseline_path),
+            "candidate_path": str(candidate_path),
+            "baseline_shape": [int(item) for item in baseline.shape],
+            "candidate_shape": [int(item) for item in candidate.shape],
+        }
+    finite = np.isfinite(baseline) & np.isfinite(candidate)
+    finite_count = int(np.count_nonzero(finite))
+    nonfinite_mismatch_count = int(np.count_nonzero(np.isfinite(baseline) != np.isfinite(candidate)))
+    if finite_count == 0:
+        return {
+            "available": False,
+            "reason": "no_joint_finite_pixels",
+            "baseline_path": str(baseline_path),
+            "candidate_path": str(candidate_path),
+            "shape": [int(item) for item in baseline.shape],
+            "joint_finite_pixels": 0,
+            "nonfinite_mismatch_pixels": nonfinite_mismatch_count,
+        }
+    delta = candidate[finite] - baseline[finite]
+    abs_delta = np.abs(delta)
+    baseline_values = baseline[finite]
+    candidate_values = candidate[finite]
+    rms = float(np.sqrt(np.mean(delta * delta)))
+    baseline_std = float(np.std(baseline_values))
+    return {
+        "available": True,
+        "baseline_path": str(baseline_path),
+        "candidate_path": str(candidate_path),
+        "shape": [int(item) for item in baseline.shape],
+        "dtype": str(baseline.dtype),
+        "joint_finite_pixels": finite_count,
+        "nonfinite_mismatch_pixels": nonfinite_mismatch_count,
+        "mean_signed": float(np.mean(delta)),
+        "mean_abs": float(np.mean(abs_delta)),
+        "median_abs": float(np.median(abs_delta)),
+        "rms": rms,
+        "p95_abs": float(np.percentile(abs_delta, 95)),
+        "p99_abs": float(np.percentile(abs_delta, 99)),
+        "max_abs": float(np.max(abs_delta)),
+        "baseline_mean": float(np.mean(baseline_values)),
+        "candidate_mean": float(np.mean(candidate_values)),
+        "baseline_std": baseline_std,
+        "candidate_std": float(np.std(candidate_values)),
+        "relative_rms_to_baseline_std": None if baseline_std == 0.0 else rms / baseline_std,
     }
 
 
@@ -129,6 +193,28 @@ def _index_output_signatures(run: Path, payload: dict[str, Any]) -> dict[str, di
                 signatures[field] = _fits_data_signature(path)
         output_signatures[key] = signatures
     return output_signatures
+
+
+def _output_numerical_drifts(
+    baseline_outputs: dict[str, dict[str, Any]],
+    candidate_outputs: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    drifts: list[dict[str, Any]] = []
+    for key in sorted(set(baseline_outputs) | set(candidate_outputs)):
+        baseline_fields = baseline_outputs.get(key) or {}
+        candidate_fields = candidate_outputs.get(key) or {}
+        for field in _OUTPUT_PATH_FIELDS:
+            baseline_signature = baseline_fields.get(field)
+            candidate_signature = candidate_fields.get(field)
+            if not isinstance(baseline_signature, dict) or not isinstance(candidate_signature, dict):
+                continue
+            if not baseline_signature.get("available") or not candidate_signature.get("available"):
+                continue
+            if baseline_signature.get("sha256") == candidate_signature.get("sha256"):
+                continue
+            drift = _fits_numerical_drift(baseline_signature, candidate_signature)
+            drifts.append({"key": key, "field": field, "drift": drift})
+    return drifts
 
 
 def _registration_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -156,6 +242,8 @@ def _values_equal(left: Any, right: Any) -> bool:
         )
     if isinstance(left, dict) and isinstance(right, dict):
         keys = set(left) | set(right)
+        if "path" in keys and ("sha256" in keys or "available" in keys):
+            keys.discard("path")
         return all(_values_equal(left.get(key), right.get(key)) for key in keys)
     return left == right
 
@@ -375,6 +463,7 @@ def build_resident_determinism_audit(
         candidate_outputs,
         fields=_OUTPUT_PATH_FIELDS,
     )
+    output_numerical_drifts = _output_numerical_drifts(baseline_outputs, candidate_outputs)
 
     baseline_registration = _registration_index(baseline_dir)
     candidate_registration = _registration_index(candidate_dir)
@@ -470,6 +559,16 @@ def build_resident_determinism_audit(
             "registration_difference_count": len(registration_differences),
             "frame_accounting_difference_count": len(accounting_differences),
             "output_difference_count": len(output_differences),
+            "output_numerical_drift_count": len(output_numerical_drifts),
+            "output_numerical_drift_max_relative_rms": max(
+                (
+                    float(item["drift"].get("relative_rms_to_baseline_std"))
+                    for item in output_numerical_drifts
+                    if isinstance(item.get("drift"), dict)
+                    and item["drift"].get("relative_rms_to_baseline_std") is not None
+                ),
+                default=None,
+            ),
         },
         "checks": checks,
         "artifact_differences": artifact_differences,
@@ -477,6 +576,7 @@ def build_resident_determinism_audit(
         "registration_differences": registration_differences,
         "frame_accounting_differences": accounting_differences,
         "output_differences": output_differences,
+        "output_numerical_drifts": output_numerical_drifts,
     }
 
 
@@ -502,6 +602,8 @@ def write_resident_determinism_markdown(path: str | Path, audit: dict[str, Any])
         f"- Registration results: `{summary['registration_difference_count']}`",
         f"- Frame accounting: `{summary['frame_accounting_difference_count']}`",
         f"- Output pixels/maps: `{summary['output_difference_count']}`",
+        f"- Output numerical drifts: `{summary.get('output_numerical_drift_count', 0)}`",
+        f"- Max relative output RMS drift: `{summary.get('output_numerical_drift_max_relative_rms')}`",
         "",
     ]
     if summary.get("frame_signature_difference_type_counts"):
@@ -528,6 +630,18 @@ def write_resident_determinism_markdown(path: str | Path, audit: dict[str, Any])
         lines.extend(["", "## First Output Differences", ""])
         for item in audit["output_differences"][:20]:
             lines.append(f"- `{item['key']}`: `{item['difference']}`")
+    if audit.get("output_numerical_drifts"):
+        lines.extend(["", "## First Output Numerical Drifts", ""])
+        for item in audit["output_numerical_drifts"][:20]:
+            drift = item.get("drift", {})
+            lines.append(
+                "- "
+                f"`{item['key']}` `{item['field']}`: "
+                f"rms=`{drift.get('rms')}`, "
+                f"mean_abs=`{drift.get('mean_abs')}`, "
+                f"p99_abs=`{drift.get('p99_abs')}`, "
+                f"relative_rms=`{drift.get('relative_rms_to_baseline_std')}`"
+            )
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
