@@ -1132,6 +1132,21 @@ integration where applicable.
 - Validate with CLI report smoke tests, ruff, full pytest, and a real
   Gate63-vs-Gate64 audit JSON rendered through `glass report`.
 
+### S2-Gate 67: Acceptance Audit Resident Drift Attachment
+
+- Add an optional `glass acceptance-audit --resident-determinism-json` input so
+  benchmark acceptance artifacts can carry S2-Gate 65 strict resident
+  determinism status and output numerical drift rows.
+- Preserve acceptance pass/fail semantics: resident drift evidence is attached
+  for review/reporting and does not by itself change benchmark acceptance
+  checks unless a later contract explicitly requires thresholds.
+- Copy the resident determinism source path, strict status, summary, timing,
+  output drift count, max relative RMS drift, and drift rows into the
+  acceptance JSON/Markdown artifact.
+- Validate with acceptance-audit CLI tests, HTML report smoke coverage, ruff,
+  full pytest, and a real Gate63-vs-Gate64 drift audit attached to an
+  acceptance-style report.
+
 ## Gate Rules
 
 Each gate requires:

@@ -52,6 +52,7 @@ def build_acceptance_audit(
     max_rms_diff: float | None = 0.01,
     max_abs_diff_p99: float | None = 0.01,
     benchmark_contract: str | Path | None = None,
+    resident_determinism_json: str | Path | None = None,
 ) -> dict[str, Any]:
     manifest = _read_json_lenient(manifest_path)
     speedup = summarize_wbpp_speedup(
@@ -160,6 +161,32 @@ def build_acceptance_audit(
         frame_accounting=frame_accounting_record,
         glass_run=glass_run,
     )
+    resident_determinism_payload = (
+        _read_json_lenient(resident_determinism_json) if resident_determinism_json is not None else {}
+    )
+    resident_determinism_summary = (
+        resident_determinism_payload.get("summary")
+        if isinstance(resident_determinism_payload.get("summary"), dict)
+        else {}
+    )
+    output_numerical_drifts = (
+        resident_determinism_payload.get("output_numerical_drifts")
+        if isinstance(resident_determinism_payload.get("output_numerical_drifts"), list)
+        else []
+    )
+    resident_determinism = None
+    if resident_determinism_payload:
+        resident_determinism = {
+            "path": str(resident_determinism_json),
+            "audit_type": resident_determinism_payload.get("audit_type"),
+            "strict_passed": resident_determinism_summary.get("passed"),
+            "summary": resident_determinism_summary,
+            "timing": resident_determinism_payload.get("timing") or {},
+            "output_numerical_drift_count": len(output_numerical_drifts),
+            "output_numerical_drift_max_relative_rms": resident_determinism_summary.get(
+                "output_numerical_drift_max_relative_rms"
+            ),
+        }
 
     passed = all(item["passed"] for item in checks)
     return {
@@ -188,6 +215,8 @@ def build_acceptance_audit(
             "contract": (contract_payload or {}).get("dq_provenance") if contract_payload else None,
         },
         "frame_accounting": frame_accounting_record,
+        "resident_determinism": resident_determinism,
+        "output_numerical_drifts": output_numerical_drifts,
         "speedup_summary": speedup,
         "clean_room": {
             "status": "compliant",
@@ -278,6 +307,26 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                 f"{item.get('status')}: {item.get('stage')} "
                 f"actual={item.get('actual_s')}s baseline={item.get('baseline_s')}s "
                 f"delta={item.get('delta_s')}s factor={item.get('factor')}"
+            )
+    resident_determinism = audit.get("resident_determinism") or {}
+    if resident_determinism:
+        summary = resident_determinism.get("summary") or {}
+        lines.extend(["", "## Resident Determinism", ""])
+        lines.append(f"- Source: {resident_determinism.get('path')}")
+        lines.append(f"- Strict passed: {resident_determinism.get('strict_passed')}")
+        lines.append(f"- Output differences: {summary.get('output_difference_count')}")
+        lines.append(f"- Output numerical drifts: {resident_determinism.get('output_numerical_drift_count')}")
+        lines.append(
+            "- Max relative output RMS drift: "
+            f"{resident_determinism.get('output_numerical_drift_max_relative_rms')}"
+        )
+        for item in (audit.get("output_numerical_drifts") or [])[:8]:
+            drift = item.get("drift") if isinstance(item.get("drift"), dict) else {}
+            lines.append(
+                "- Output drift: "
+                f"{item.get('key')} {item.get('field')} "
+                f"rms={drift.get('rms')} mean_abs={drift.get('mean_abs')} "
+                f"relative_rms={drift.get('relative_rms_to_baseline_std')}"
             )
     guidance = audit.get("optimization_guidance") or {}
     targets = guidance.get("targets") if isinstance(guidance.get("targets"), list) else []

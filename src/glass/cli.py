@@ -716,6 +716,7 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         max_rms_diff=args.max_rms_diff,
         max_abs_diff_p99=args.max_abs_diff_p99,
         benchmark_contract=args.benchmark_contract,
+        resident_determinism_json=args.resident_determinism_json,
     )
     write_acceptance_audit(args.out, audit, markdown=args.markdown)
     console.print(
@@ -1327,6 +1328,13 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance.add_argument(
         "--benchmark-contract",
         help="optional JSON contract that pins real-data benchmark parameters and regression limits",
+    )
+    acceptance.add_argument(
+        "--resident-determinism-json",
+        help=(
+            "optional resident-determinism JSON; copied into the acceptance audit so reports can "
+            "show strict drift status and numerical output-drift magnitude"
+        ),
     )
     acceptance.set_defaults(func=cmd_acceptance_audit)
 

@@ -759,12 +759,40 @@ def test_acceptance_audit_cli_writes_outputs_and_returns_failure(tmp_path: Path)
     gp_run = tmp_path / "gp"
     wbpp = tmp_path / "wbpp.json"
     compare = tmp_path / "compare.json"
+    resident_det = tmp_path / "resident_determinism.json"
     out_json = tmp_path / "audit.json"
     out_md = tmp_path / "audit.md"
     _write_manifest(manifest, light=199)
     _write_glass_run(gp_run, elapsed_s=100.0)
     _write_wbpp_result(wbpp, elapsed_s=150.0)
     _write_compare(compare, rms=0.02)
+    write_json(
+        resident_det,
+        {
+            "audit_type": "resident_triangle_determinism",
+            "summary": {
+                "passed": False,
+                "output_difference_count": 1,
+                "output_numerical_drift_count": 1,
+                "output_numerical_drift_max_relative_rms": 0.011916,
+            },
+            "timing": {"candidate_over_baseline_ratio": 0.95},
+            "output_numerical_drifts": [
+                {
+                    "key": "H:200:F000061:F000260",
+                    "field": "master_path",
+                    "drift": {
+                        "available": True,
+                        "joint_finite_pixels": 61651200,
+                        "mean_abs": 0.642260,
+                        "rms": 3.751400,
+                        "p99_abs": 3.408920,
+                        "relative_rms_to_baseline_std": 0.011916,
+                    },
+                }
+            ],
+        },
+    )
 
     result = main(
         [
@@ -777,6 +805,8 @@ def test_acceptance_audit_cli_writes_outputs_and_returns_failure(tmp_path: Path)
             str(wbpp),
             "--compare-json",
             str(compare),
+            "--resident-determinism-json",
+            str(resident_det),
             "--out",
             str(out_json),
             "--markdown",
@@ -792,4 +822,10 @@ def test_acceptance_audit_cli_writes_outputs_and_returns_failure(tmp_path: Path)
     assert {item["name"]: item["passed"] for item in payload["checks"]}["minimum_light_frames"] is False
     assert {item["name"]: item["passed"] for item in payload["checks"]}["minimum_speedup"] is False
     assert {item["name"]: item["passed"] for item in payload["checks"]}["maximum_rms_diff"] is False
+    assert payload["resident_determinism"]["path"] == str(resident_det)
+    assert payload["resident_determinism"]["strict_passed"] is False
+    assert payload["resident_determinism"]["output_numerical_drift_count"] == 1
+    assert payload["output_numerical_drifts"][0]["drift"]["rms"] == 3.751400
     assert "FAIL: minimum_light_frames" in out_md.read_text(encoding="utf-8")
+    assert "Resident Determinism" in out_md.read_text(encoding="utf-8")
+    assert "relative_rms=0.011916" in out_md.read_text(encoding="utf-8")
