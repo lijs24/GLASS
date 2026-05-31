@@ -1677,6 +1677,14 @@ def _normalize_triangle_similarity_result(result: dict[str, Any]) -> dict[str, A
         normalized["reference_device_reuse"] = bool(result["reference_device_reuse"])
     if "reference_device_bytes" in result:
         normalized["reference_device_bytes"] = int(result["reference_device_bytes"])
+    if "moving_device_reuse" in result:
+        normalized["moving_device_reuse"] = bool(result["moving_device_reuse"])
+    if "moving_device_bytes" in result:
+        normalized["moving_device_bytes"] = int(result["moving_device_bytes"])
+    if "output_device_reuse" in result:
+        normalized["output_device_reuse"] = bool(result["output_device_reuse"])
+    if "output_device_bytes" in result:
+        normalized["output_device_bytes"] = int(result["output_device_bytes"])
     return normalized
 
 

@@ -1003,6 +1003,10 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     )
     assert resident_registration["triangle_descriptor_fit_reference_device_reuse"] is True
     assert resident_registration["triangle_descriptor_fit_reference_device_bytes"] > 0
+    assert resident_registration["triangle_descriptor_fit_moving_device_reuse"] is True
+    assert resident_registration["triangle_descriptor_fit_moving_device_bytes"] > 0
+    assert resident_registration["triangle_descriptor_fit_output_device_reuse"] is True
+    assert resident_registration["triangle_descriptor_fit_output_device_bytes"] > 0
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_batch"] is True
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "native_batch_one_seed_per_frame"

@@ -5437,10 +5437,90 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
       static_cast<std::size_t>(reference_descriptor_count) * 2 * sizeof(float) +
       static_cast<std::size_t>(reference_descriptor_count) * 3 * sizeof(int);
 
+  using FloatArray = py::array_t<float, py::array::c_style | py::array::forcecast>;
+  using IntArray = py::array_t<int, py::array::c_style | py::array::forcecast>;
+  std::vector<FloatArray> moving_x_arrays;
+  std::vector<FloatArray> moving_y_arrays;
+  std::vector<FloatArray> moving_descriptor_arrays;
+  std::vector<IntArray> moving_index_arrays;
+  moving_x_arrays.reserve(static_cast<std::size_t>(batch_count));
+  moving_y_arrays.reserve(static_cast<std::size_t>(batch_count));
+  moving_descriptor_arrays.reserve(static_cast<std::size_t>(batch_count));
+  moving_index_arrays.reserve(static_cast<std::size_t>(batch_count));
+  std::size_t max_moving_count = 0;
+  std::size_t max_moving_descriptor_count = 0;
+  std::size_t max_candidate_count = 0;
+  for (py::ssize_t batch_index = 0; batch_index < batch_count; ++batch_index) {
+    auto moving_x = FloatArray::ensure(moving_x_list[batch_index]);
+    auto moving_y = FloatArray::ensure(moving_y_list[batch_index]);
+    auto moving_descriptors = FloatArray::ensure(moving_descriptors_list[batch_index]);
+    auto moving_indices = IntArray::ensure(moving_indices_list[batch_index]);
+    if (!moving_x || !moving_y || !moving_descriptors || !moving_indices) {
+      throw std::invalid_argument("moving batch items must be convertible to arrays");
+    }
+    const py::buffer_info moving_x_info = moving_x.request();
+    const py::buffer_info moving_y_info = moving_y.request();
+    const py::buffer_info moving_descriptor_info = moving_descriptors.request();
+    const py::buffer_info moving_index_info = moving_indices.request();
+    if (moving_x_info.ndim != 1 || moving_y_info.ndim != 1) {
+      throw std::invalid_argument("moving catalog coordinate arrays must be one-dimensional");
+    }
+    require_same_shape(moving_x_info, moving_y_info);
+    if (moving_descriptor_info.ndim != 2 || moving_descriptor_info.shape[1] != 2) {
+      throw std::invalid_argument("moving triangle descriptors must have shape (N, 2)");
+    }
+    if (moving_index_info.ndim != 2 || moving_index_info.shape[1] != 3) {
+      throw std::invalid_argument("moving triangle indices must have shape (N, 3)");
+    }
+    if (moving_descriptor_info.shape[0] != moving_index_info.shape[0]) {
+      throw std::invalid_argument("moving descriptor and index row counts must match");
+    }
+    const int moving_count = static_cast<int>(moving_x_info.shape[0]);
+    const int moving_descriptor_count = static_cast<int>(moving_descriptor_info.shape[0]);
+    if (moving_count < 3 || moving_descriptor_count == 0) {
+      throw std::invalid_argument("triangle descriptor batch similarity requires moving descriptors and three stars");
+    }
+    max_moving_count = std::max(max_moving_count, static_cast<std::size_t>(moving_count));
+    max_moving_descriptor_count =
+        std::max(max_moving_descriptor_count, static_cast<std::size_t>(moving_descriptor_count));
+    max_candidate_count = std::max(
+        max_candidate_count,
+        static_cast<std::size_t>(reference_descriptor_count) *
+            static_cast<std::size_t>(moving_descriptor_count) * 2);
+    moving_x_arrays.push_back(std::move(moving_x));
+    moving_y_arrays.push_back(std::move(moving_y));
+    moving_descriptor_arrays.push_back(std::move(moving_descriptors));
+    moving_index_arrays.push_back(std::move(moving_indices));
+  }
+  const std::size_t moving_device_bytes =
+      max_moving_count * 2 * sizeof(float) +
+      max_moving_descriptor_count * 2 * sizeof(float) +
+      max_moving_descriptor_count * 3 * sizeof(int);
+  const std::size_t output_device_bytes =
+      max_candidate_count * 4 * sizeof(float) +
+      max_candidate_count * sizeof(int) +
+      max_candidate_count * sizeof(float) +
+      9 * sizeof(float) +
+      sizeof(float) * 3 +
+      sizeof(int) * 2;
+
   float* d_reference_x = nullptr;
   float* d_reference_y = nullptr;
   float* d_reference_descriptors = nullptr;
   int* d_reference_indices = nullptr;
+  float* d_moving_x = nullptr;
+  float* d_moving_y = nullptr;
+  float* d_moving_descriptors = nullptr;
+  int* d_moving_indices = nullptr;
+  float* d_candidate_params = nullptr;
+  int* d_candidate_scores = nullptr;
+  float* d_candidate_rms = nullptr;
+  float* d_matrix = nullptr;
+  float* d_scale = nullptr;
+  float* d_rotation_rad = nullptr;
+  float* d_rms_px = nullptr;
+  int* d_best_inliers = nullptr;
+  int* d_best_index = nullptr;
   try {
     check_cuda(
         cudaMalloc(&d_reference_x, static_cast<std::size_t>(reference_count) * sizeof(float)),
@@ -5486,94 +5566,53 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
             static_cast<std::size_t>(reference_descriptor_count) * 3 * sizeof(int),
             cudaMemcpyHostToDevice),
         "cudaMemcpy(batch triangle similarity reference indices)");
+    check_cuda(
+        cudaMalloc(&d_moving_x, max_moving_count * sizeof(float)),
+        "cudaMalloc(batch triangle similarity reusable moving x)");
+    check_cuda(
+        cudaMalloc(&d_moving_y, max_moving_count * sizeof(float)),
+        "cudaMalloc(batch triangle similarity reusable moving y)");
+    check_cuda(
+        cudaMalloc(&d_moving_descriptors, max_moving_descriptor_count * 2 * sizeof(float)),
+        "cudaMalloc(batch triangle similarity reusable moving descriptors)");
+    check_cuda(
+        cudaMalloc(&d_moving_indices, max_moving_descriptor_count * 3 * sizeof(int)),
+        "cudaMalloc(batch triangle similarity reusable moving indices)");
+    check_cuda(
+        cudaMalloc(&d_candidate_params, max_candidate_count * 4 * sizeof(float)),
+        "cudaMalloc(batch triangle similarity reusable candidate params)");
+    check_cuda(
+        cudaMalloc(&d_candidate_scores, max_candidate_count * sizeof(int)),
+        "cudaMalloc(batch triangle similarity reusable candidate scores)");
+    check_cuda(
+        cudaMalloc(&d_candidate_rms, max_candidate_count * sizeof(float)),
+        "cudaMalloc(batch triangle similarity reusable candidate rms)");
+    check_cuda(cudaMalloc(&d_matrix, 9 * sizeof(float)), "cudaMalloc(batch triangle similarity reusable matrix)");
+    check_cuda(cudaMalloc(&d_scale, sizeof(float)), "cudaMalloc(batch triangle similarity reusable scale)");
+    check_cuda(cudaMalloc(&d_rotation_rad, sizeof(float)), "cudaMalloc(batch triangle similarity reusable rotation)");
+    check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(batch triangle similarity reusable rms)");
+    check_cuda(cudaMalloc(&d_best_inliers, sizeof(int)), "cudaMalloc(batch triangle similarity reusable best inliers)");
+    check_cuda(cudaMalloc(&d_best_index, sizeof(int)), "cudaMalloc(batch triangle similarity reusable best index)");
 
   for (py::ssize_t batch_index = 0; batch_index < batch_count; ++batch_index) {
-    auto moving_x = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(
-        moving_x_list[batch_index]);
-    auto moving_y = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(
-        moving_y_list[batch_index]);
-    auto moving_descriptors = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(
-        moving_descriptors_list[batch_index]);
-    auto moving_indices = py::array_t<int, py::array::c_style | py::array::forcecast>::ensure(
-        moving_indices_list[batch_index]);
-    if (!moving_x || !moving_y || !moving_descriptors || !moving_indices) {
-      throw std::invalid_argument("moving batch items must be convertible to arrays");
-    }
+    const auto& moving_x = moving_x_arrays[static_cast<std::size_t>(batch_index)];
+    const auto& moving_y = moving_y_arrays[static_cast<std::size_t>(batch_index)];
+    const auto& moving_descriptors = moving_descriptor_arrays[static_cast<std::size_t>(batch_index)];
+    const auto& moving_indices = moving_index_arrays[static_cast<std::size_t>(batch_index)];
     const py::buffer_info moving_x_info = moving_x.request();
     const py::buffer_info moving_y_info = moving_y.request();
     const py::buffer_info moving_descriptor_info = moving_descriptors.request();
     const py::buffer_info moving_index_info = moving_indices.request();
-    if (moving_x_info.ndim != 1 || moving_y_info.ndim != 1) {
-      throw std::invalid_argument("moving catalog coordinate arrays must be one-dimensional");
-    }
-    require_same_shape(moving_x_info, moving_y_info);
-    if (moving_descriptor_info.ndim != 2 || moving_descriptor_info.shape[1] != 2) {
-      throw std::invalid_argument("moving triangle descriptors must have shape (N, 2)");
-    }
-    if (moving_index_info.ndim != 2 || moving_index_info.shape[1] != 3) {
-      throw std::invalid_argument("moving triangle indices must have shape (N, 3)");
-    }
-    if (moving_descriptor_info.shape[0] != moving_index_info.shape[0]) {
-      throw std::invalid_argument("moving descriptor and index row counts must match");
-    }
     const int moving_count = static_cast<int>(moving_x_info.shape[0]);
     const int moving_descriptor_count = static_cast<int>(moving_descriptor_info.shape[0]);
-    if (moving_count < 3 || moving_descriptor_count == 0) {
-      throw std::invalid_argument("triangle descriptor batch similarity requires moving descriptors and three stars");
-    }
     const int candidate_count = reference_descriptor_count * moving_descriptor_count * 2;
 
-    float* d_moving_x = nullptr;
-    float* d_moving_y = nullptr;
-    float* d_moving_descriptors = nullptr;
-    int* d_moving_indices = nullptr;
-    float* d_candidate_params = nullptr;
-    int* d_candidate_scores = nullptr;
-    float* d_candidate_rms = nullptr;
-    float* d_matrix = nullptr;
-    float* d_scale = nullptr;
-    float* d_rotation_rad = nullptr;
-    float* d_rms_px = nullptr;
-    int* d_best_inliers = nullptr;
-    int* d_best_index = nullptr;
     std::array<float, 9> host_matrix{};
     float scale = 1.0f;
     float rotation_rad = 0.0f;
     float rms_px = std::numeric_limits<float>::quiet_NaN();
     int best_inliers = 0;
     int best_index = -1;
-    try {
-      check_cuda(
-          cudaMalloc(&d_moving_x, static_cast<std::size_t>(moving_count) * sizeof(float)),
-          "cudaMalloc(batch triangle similarity moving x)");
-      check_cuda(
-          cudaMalloc(&d_moving_y, static_cast<std::size_t>(moving_count) * sizeof(float)),
-          "cudaMalloc(batch triangle similarity moving y)");
-      check_cuda(
-          cudaMalloc(
-              &d_moving_descriptors,
-              static_cast<std::size_t>(moving_descriptor_count) * 2 * sizeof(float)),
-          "cudaMalloc(batch triangle similarity moving descriptors)");
-      check_cuda(
-          cudaMalloc(
-              &d_moving_indices,
-              static_cast<std::size_t>(moving_descriptor_count) * 3 * sizeof(int)),
-          "cudaMalloc(batch triangle similarity moving indices)");
-      check_cuda(
-          cudaMalloc(&d_candidate_params, static_cast<std::size_t>(candidate_count) * 4 * sizeof(float)),
-          "cudaMalloc(batch triangle similarity candidate params)");
-      check_cuda(
-          cudaMalloc(&d_candidate_scores, static_cast<std::size_t>(candidate_count) * sizeof(int)),
-          "cudaMalloc(batch triangle similarity candidate scores)");
-      check_cuda(
-          cudaMalloc(&d_candidate_rms, static_cast<std::size_t>(candidate_count) * sizeof(float)),
-          "cudaMalloc(batch triangle similarity candidate rms)");
-      check_cuda(cudaMalloc(&d_matrix, host_matrix.size() * sizeof(float)), "cudaMalloc(batch triangle similarity matrix)");
-      check_cuda(cudaMalloc(&d_scale, sizeof(float)), "cudaMalloc(batch triangle similarity scale)");
-      check_cuda(cudaMalloc(&d_rotation_rad, sizeof(float)), "cudaMalloc(batch triangle similarity rotation)");
-      check_cuda(cudaMalloc(&d_rms_px, sizeof(float)), "cudaMalloc(batch triangle similarity rms)");
-      check_cuda(cudaMalloc(&d_best_inliers, sizeof(int)), "cudaMalloc(batch triangle similarity best inliers)");
-      check_cuda(cudaMalloc(&d_best_index, sizeof(int)), "cudaMalloc(batch triangle similarity best index)");
       check_cuda(
           cudaMemcpy(
               d_moving_x,
@@ -5641,35 +5680,6 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
           cudaMemcpy(&best_inliers, d_best_inliers, sizeof(int), cudaMemcpyDeviceToHost),
           "cudaMemcpy(batch triangle similarity best inliers)");
       check_cuda(cudaMemcpy(&best_index, d_best_index, sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy(batch triangle similarity best index)");
-    } catch (...) {
-      cudaFree(d_moving_x);
-      cudaFree(d_moving_y);
-      cudaFree(d_moving_descriptors);
-      cudaFree(d_moving_indices);
-      cudaFree(d_candidate_params);
-      cudaFree(d_candidate_scores);
-      cudaFree(d_candidate_rms);
-      cudaFree(d_matrix);
-      cudaFree(d_scale);
-      cudaFree(d_rotation_rad);
-      cudaFree(d_rms_px);
-      cudaFree(d_best_inliers);
-      cudaFree(d_best_index);
-      throw;
-    }
-    cudaFree(d_moving_x);
-    cudaFree(d_moving_y);
-    cudaFree(d_moving_descriptors);
-    cudaFree(d_moving_indices);
-    cudaFree(d_candidate_params);
-    cudaFree(d_candidate_scores);
-    cudaFree(d_candidate_rms);
-    cudaFree(d_matrix);
-    cudaFree(d_scale);
-    cudaFree(d_rotation_rad);
-    cudaFree(d_rms_px);
-    cudaFree(d_best_inliers);
-    cudaFree(d_best_index);
 
     py::list matrix_rows;
     for (int row = 0; row < 3; ++row) {
@@ -5700,6 +5710,10 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     result["batch_model"] = "triangle_descriptor_similarity_cuda_batch_shared_reference_device";
     result["reference_device_reuse"] = true;
     result["reference_device_bytes"] = static_cast<unsigned long long>(reference_device_bytes);
+    result["moving_device_reuse"] = true;
+    result["moving_device_bytes"] = static_cast<unsigned long long>(moving_device_bytes);
+    result["output_device_reuse"] = true;
+    result["output_device_bytes"] = static_cast<unsigned long long>(output_device_bytes);
     results.append(result);
   }
   } catch (...) {
@@ -5707,12 +5721,38 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     cudaFree(d_reference_y);
     cudaFree(d_reference_descriptors);
     cudaFree(d_reference_indices);
+    cudaFree(d_moving_x);
+    cudaFree(d_moving_y);
+    cudaFree(d_moving_descriptors);
+    cudaFree(d_moving_indices);
+    cudaFree(d_candidate_params);
+    cudaFree(d_candidate_scores);
+    cudaFree(d_candidate_rms);
+    cudaFree(d_matrix);
+    cudaFree(d_scale);
+    cudaFree(d_rotation_rad);
+    cudaFree(d_rms_px);
+    cudaFree(d_best_inliers);
+    cudaFree(d_best_index);
     throw;
   }
   cudaFree(d_reference_x);
   cudaFree(d_reference_y);
   cudaFree(d_reference_descriptors);
   cudaFree(d_reference_indices);
+  cudaFree(d_moving_x);
+  cudaFree(d_moving_y);
+  cudaFree(d_moving_descriptors);
+  cudaFree(d_moving_indices);
+  cudaFree(d_candidate_params);
+  cudaFree(d_candidate_scores);
+  cudaFree(d_candidate_rms);
+  cudaFree(d_matrix);
+  cudaFree(d_scale);
+  cudaFree(d_rotation_rad);
+  cudaFree(d_rms_px);
+  cudaFree(d_best_inliers);
+  cudaFree(d_best_index);
   return results;
 }
 

@@ -838,6 +838,25 @@ integration where applicable.
   200-light benchmark because this changes native registration memory
   scheduling.
 
+### S2-Gate 50: Shared Moving And Output Device Buffers For Descriptor Fit
+
+- Extend the native triangle descriptor batch fit to pre-validate moving
+  catalogs/descriptors, allocate moving-catalog and output/candidate device
+  workspaces once per batch, then reuse those buffers for each moving-frame fit
+  alongside the S2-Gate 49 shared reference buffers.
+- Preserve descriptor generation, CUDA descriptor-similarity scoring, matrix
+  output, inlier counts, RMS, candidate-count semantics, and resident
+  registration frame accounting.
+- Record `moving_device_reuse`, `moving_device_bytes`,
+  `output_device_reuse`, and `output_device_bytes` through Python
+  normalization, resident per-frame warnings, resident artifacts, and the HTML
+  resident summary.
+- Keep older native builds and CPU-only installs compatible by preserving the
+  public Python wrapper shape and defaulting missing diagnostic fields.
+- Validate with direct descriptor batch/single fit equivalence tests, resident
+  triangle-registration smoke tests, ruff, full pytest, and the 200-light
+  benchmark because this changes native registration memory scheduling.
+
 ## Gate Rules
 
 Each gate requires:

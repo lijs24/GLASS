@@ -403,6 +403,22 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                     / (1024.0**2),
                     3,
                 ),
+                "descriptor_moving_reuse": registration.get(
+                    "triangle_descriptor_fit_moving_device_reuse"
+                ),
+                "descriptor_moving_mib": round(
+                    float(registration.get("triangle_descriptor_fit_moving_device_bytes") or 0.0)
+                    / (1024.0**2),
+                    3,
+                ),
+                "descriptor_output_reuse": registration.get(
+                    "triangle_descriptor_fit_output_device_reuse"
+                ),
+                "descriptor_output_mib": round(
+                    float(registration.get("triangle_descriptor_fit_output_device_bytes") or 0.0)
+                    / (1024.0**2),
+                    3,
+                ),
                 "local_norm": local_norm.get("mode"),
                 "weighting": weighting.get("mode"),
                 "rejection": rejection.get("mode"),
