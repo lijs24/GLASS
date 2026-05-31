@@ -7,7 +7,13 @@ from typing import Any
 from glass.cpu.calibration import calibrate_light
 from glass.cpu.cosmetic import correct_cosmetic_defects
 from glass.engine.contracts import CombinePolicy, DQFlag, DQMask, OutputMapPolicy, RejectionPolicy, StackRequest, TileWindow
-from glass.engine.dq import add_summary_counts, dq_header, dq_mask_from_invalid, write_dq_tile
+from glass.engine.dq import (
+    add_summary_counts,
+    dq_header,
+    dq_mask_from_invalid,
+    dq_provenance_summary_from_stack_engine,
+    write_dq_tile,
+)
 from glass.engine.stack_engine import CPUStackEngine
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.image_source import FitsImageSource
@@ -713,6 +719,13 @@ def run_calibration_stages(
                 "stack_engine_dq_provenance": stack_metrics.get("dq_provenance")
                 if isinstance(stack_metrics, dict)
                 else None,
+                "dq_provenance_summary": dq_provenance_summary_from_stack_engine(
+                    stack_metrics.get("dq_provenance") if isinstance(stack_metrics, dict) else None,
+                    stage="master_calibration",
+                    item=group_id,
+                )
+                if isinstance(stack_metrics, dict) and stack_metrics.get("dq_provenance")
+                else None,
                 "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
             }
@@ -751,6 +764,13 @@ def run_calibration_stages(
                 "stack_engine_metrics": stack_metrics,
                 "stack_engine_dq_provenance": stack_metrics.get("dq_provenance")
                 if isinstance(stack_metrics, dict)
+                else None,
+                "dq_provenance_summary": dq_provenance_summary_from_stack_engine(
+                    stack_metrics.get("dq_provenance") if isinstance(stack_metrics, dict) else None,
+                    stage="master_calibration",
+                    item=group_id,
+                )
+                if isinstance(stack_metrics, dict) and stack_metrics.get("dq_provenance")
                 else None,
                 "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
@@ -797,6 +817,13 @@ def run_calibration_stages(
                 "stack_engine_metrics": raw_stack_metrics,
                 "stack_engine_dq_provenance": raw_stack_metrics.get("dq_provenance")
                 if isinstance(raw_stack_metrics, dict)
+                else None,
+                "dq_provenance_summary": dq_provenance_summary_from_stack_engine(
+                    raw_stack_metrics.get("dq_provenance") if isinstance(raw_stack_metrics, dict) else None,
+                    stage="master_calibration",
+                    item=group_id,
+                )
+                if isinstance(raw_stack_metrics, dict) and raw_stack_metrics.get("dq_provenance")
                 else None,
                 "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,

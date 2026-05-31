@@ -181,6 +181,19 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                         "skipped": ["low_rejection", "high_rejection"],
                         "description": "science keeps comparison maps and skips rejection count FITS files",
                     },
+                    "dq_provenance_summary": {
+                        "schema_version": 1,
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "stage": "integration",
+                        "item": "H",
+                        "engine": "cuda_resident_stack",
+                        "active_frame_count": 2,
+                        "zero_coverage_pixels": 0,
+                        "partial_coverage_pixels": 1,
+                        "valid_pixels": 3,
+                        "no_data_pixels": 0,
+                        "warp_edge_pixels": 1,
+                    },
                     "timing_s": {
                         "light_read_upload_calibrate": 2.0,
                         "light_read_decode": 1.0,
@@ -225,6 +238,19 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                         "geometric_full_pixels": 3,
                         "partial_edge_inference": "available_from_geometric_warp_coverage",
                     },
+                    "dq_provenance_summary": {
+                        "schema_version": 1,
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "stage": "integration",
+                        "item": "H",
+                        "engine": "cuda_resident_stack",
+                        "active_frame_count": 2,
+                        "zero_coverage_pixels": 0,
+                        "partial_coverage_pixels": 1,
+                        "valid_pixels": 3,
+                        "no_data_pixels": 0,
+                        "warp_edge_pixels": 1,
+                    },
                     "output_map_policy": {
                         "mode": "science",
                         "available": ["master", "weight", "dq", "coverage"],
@@ -259,6 +285,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "master, weight, dq, coverage" in html
     assert "low_rejection, high_rejection" in html
     assert "Geometric warp coverage" in html
+    assert "DQ provenance contract" in html
+    assert "resident_dq_coverage_provenance" in html
     assert "available_from_geometric_warp_coverage" in html
     assert "geometric_partial_pixels" in html
     assert "partial_pixels" in html

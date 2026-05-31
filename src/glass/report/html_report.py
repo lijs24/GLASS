@@ -254,6 +254,86 @@ def _stack_engine_dq_rows(
     return rows
 
 
+def _dq_provenance_contract_rows(
+    calibration: dict[str, Any] | None,
+    integration: dict[str, Any] | None,
+    resident: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    for group_id, master in (calibration or {}).get("masters", {}).items():
+        summary = master.get("dq_provenance_summary") or {}
+        if not summary:
+            continue
+        rows.append(
+            {
+                "source": "calibration",
+                "stage": summary.get("stage"),
+                "item": summary.get("item", group_id),
+                "engine": summary.get("engine"),
+                "schema": summary.get("source_schema"),
+                "input_samples": summary.get("input_samples"),
+                "flagged_samples": summary.get("input_flagged_samples"),
+                "nonfinite_samples": summary.get("input_nonfinite_samples"),
+                "zero_coverage": summary.get("zero_coverage_pixels"),
+                "partial_coverage": summary.get("partial_coverage_pixels"),
+                "low_rejected": summary.get("low_rejected_pixels"),
+                "high_rejected": summary.get("high_rejected_pixels"),
+                "valid": summary.get("valid_pixels"),
+                "no_data": summary.get("no_data_pixels"),
+                "warp_edge": summary.get("warp_edge_pixels"),
+            }
+        )
+
+    for item in (integration or {}).get("outputs", []):
+        summary = item.get("dq_provenance_summary") or {}
+        if not summary:
+            continue
+        rows.append(
+            {
+                "source": "integration",
+                "stage": summary.get("stage"),
+                "item": summary.get("item", item.get("filter")),
+                "engine": summary.get("engine"),
+                "schema": summary.get("source_schema"),
+                "input_samples": summary.get("input_samples"),
+                "flagged_samples": summary.get("input_flagged_samples"),
+                "nonfinite_samples": summary.get("input_nonfinite_samples"),
+                "zero_coverage": summary.get("zero_coverage_pixels"),
+                "partial_coverage": summary.get("partial_coverage_pixels"),
+                "low_rejected": summary.get("low_rejected_pixels"),
+                "high_rejected": summary.get("high_rejected_pixels"),
+                "valid": summary.get("valid_pixels"),
+                "no_data": summary.get("no_data_pixels"),
+                "warp_edge": summary.get("warp_edge_pixels"),
+            }
+        )
+
+    for item in (resident or {}).get("artifacts", []):
+        summary = item.get("dq_provenance_summary") or {}
+        if not summary:
+            continue
+        rows.append(
+            {
+                "source": "resident",
+                "stage": summary.get("stage"),
+                "item": summary.get("item", item.get("filter")),
+                "engine": summary.get("engine"),
+                "schema": summary.get("source_schema"),
+                "active_frames": summary.get("active_frame_count"),
+                "zero_coverage": summary.get("zero_coverage_pixels"),
+                "partial_coverage": summary.get("partial_coverage_pixels"),
+                "low_rejected": summary.get("low_rejected_pixels"),
+                "high_rejected": summary.get("high_rejected_pixels"),
+                "valid": summary.get("valid_pixels"),
+                "no_data": summary.get("no_data_pixels"),
+                "warp_edge": summary.get("warp_edge_pixels"),
+            }
+        )
+
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -363,6 +443,7 @@ def write_html_report(
     geometric_warp_coverage_rows = _geometric_warp_coverage_rows(integration, resident)
     output_policy_rows = _output_policy_rows(integration, resident)
     stack_engine_dq_rows = _stack_engine_dq_rows(calibration, integration)
+    dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
 <html lang="en">
@@ -421,6 +502,10 @@ def write_html_report(
   <p>StackEngine paths record source DQ flag counts, non-finite samples,
   zero-coverage pixels, rejection-touched pixels, and output DQ summaries.</p>
   {_table(stack_engine_dq_rows)}
+  <h2>DQ provenance contract</h2>
+  <p>This normalized summary bridges StackEngine and resident CUDA provenance
+  schemas for report and audit consumers.</p>
+  {_table(dq_provenance_contract_rows)}
   <h2>Geometric warp coverage</h2>
   <p>Resident CUDA runs can accumulate a pre-rejection geometric footprint from
   warp kernels. Partial geometric coverage is reported separately from low/high

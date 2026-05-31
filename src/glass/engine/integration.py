@@ -15,7 +15,13 @@ from glass.engine.contracts import (
     StackRequest,
     TileWindow,
 )
-from glass.engine.dq import add_summary_counts, dq_header, dq_mask_from_coverage, write_dq_tile
+from glass.engine.dq import (
+    add_summary_counts,
+    dq_header,
+    dq_mask_from_coverage,
+    dq_provenance_summary_from_stack_engine,
+    write_dq_tile,
+)
 from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.fits_io import FitsImageReader, FitsTileWriter
@@ -469,6 +475,13 @@ def integrate_registered_frames(
                 "stack_engine_metrics": stack_engine_metrics,
                 "stack_engine_rejection_method": stack_engine_rejection_method,
                 "stack_engine_dq_provenance": stack_engine_dq_provenance,
+                "dq_provenance_summary": dq_provenance_summary_from_stack_engine(
+                    stack_engine_dq_provenance,
+                    stage="integration",
+                    item=filt,
+                )
+                if stack_engine_dq_provenance
+                else None,
                 "output_variance_map": output_variance_map,
             }
         )

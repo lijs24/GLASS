@@ -530,6 +530,10 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert "dq" in output["output_map_policy"]["written"]
     assert "valid" in output["dq_summary"]
     assert output["dq_coverage_provenance"] == artifact["dq_coverage_provenance"]
+    assert output["dq_provenance_summary"] == artifact["dq_provenance_summary"]
+    assert output["dq_provenance_summary"]["source_schema"] == "resident_dq_coverage_provenance"
+    assert output["dq_provenance_summary"]["engine"] == "cuda_resident_stack"
+    assert output["dq_provenance_summary"]["active_frame_count"] == 2
     provenance = output["dq_coverage_provenance"]
     assert provenance["available"] is True
     assert provenance["source_terms"][:3] == ["post_rejection_coverage", "low_rejection", "high_rejection"]

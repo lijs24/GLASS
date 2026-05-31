@@ -14,6 +14,7 @@ import numpy as np
 from glass.cpu.registration import estimate_translation_phase_correlation, translation_matrix
 from glass.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
 from glass.engine.contracts import DQFlag, DQMask
+from glass.engine.dq import dq_provenance_summary_from_resident
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
@@ -3440,6 +3441,11 @@ def run_resident_calibration_integration(
                 geometric_warp_coverage_map=geometric_warp_coverage_map,
                 geometric_warp_coverage_frame_count=geometric_warp_coverage_frame_count,
             )
+            dq_provenance_summary = dq_provenance_summary_from_resident(
+                dq_coverage_provenance,
+                dq_summary,
+                item=filt,
+            )
             count_dtype = _count_map_dtype(len(light_frames))
             available_output_maps = ["master", "weight", "dq"]
             if coverage_map is not None:
@@ -3647,6 +3653,7 @@ def run_resident_calibration_integration(
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
+                    "dq_provenance_summary": dq_provenance_summary,
                     "dq_flag_bits": {
                         "no_data": int(DQFlag.NO_DATA),
                         "warp_edge": int(DQFlag.WARP_EDGE),
@@ -3911,6 +3918,7 @@ def run_resident_calibration_integration(
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
+                    "dq_provenance_summary": dq_provenance_summary,
                     "geometric_warp_coverage": {
                         "available": bool(geometric_warp_coverage_map is not None),
                         "frame_count": geometric_warp_coverage_frame_count,

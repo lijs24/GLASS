@@ -466,6 +466,22 @@ integration where applicable.
 - A 200-light benchmark rerun is not required unless this gate changes resident
   CUDA routing or image math.
 
+### S2-Gate 27: Unified DQ Provenance Summary Contract
+
+- Add a compact `dq_provenance_summary` schema that can be emitted by both CPU
+  StackEngine artifacts and resident CUDA artifacts.
+- Preserve detailed source schemas such as `stack_engine_dq_provenance` and
+  `dq_coverage_provenance`; the summary is a bridge for report and audit
+  consumers, not a replacement.
+- Record common fields for engine, stage, item, source schema, sample counts,
+  zero/partial coverage, rejection pixels, and DQ summary counts when the source
+  can provide them.
+- Surface the normalized summary in the HTML report as `DQ provenance contract`.
+- Validate with direct DQ helper tests, pipeline/report tests, resident CUDA
+  smoke tests, ruff, and full pytest.
+- A 200-light benchmark rerun is not required unless this gate changes resident
+  CUDA image math or benchmark routing.
+
 ## Gate Rules
 
 Each gate requires:
