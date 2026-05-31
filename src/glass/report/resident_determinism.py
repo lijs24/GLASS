@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+import hashlib
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
+from glass.io.fits_io import read_fits_data
 from glass.io.json_io import read_json, write_json
 
 
@@ -22,6 +26,15 @@ _COMBINED_HASH_FIELDS = (
     "triangle_determinism_moving_catalog_combined_sha256",
     "triangle_determinism_selected_fit_combined_sha256",
     "triangle_determinism_trial_combined_sha256",
+)
+
+_OUTPUT_PATH_FIELDS = (
+    "master_path",
+    "weight_map_path",
+    "coverage_map_path",
+    "low_rejection_map_path",
+    "high_rejection_map_path",
+    "dq_map_path",
 )
 
 
@@ -59,6 +72,63 @@ def _artifact_key(index: int, artifact: dict[str, Any]) -> str:
     if frame_ids:
         return f"{filt}:{len(frame_ids)}:{frame_ids[0]}:{frame_ids[-1]}"
     return f"{filt}:{index}"
+
+
+def _resolve_artifact_path(run: Path, value: Any) -> Path | None:
+    if value in (None, ""):
+        return None
+    path = Path(str(value))
+    return path if path.is_absolute() else run / path
+
+
+def _fits_data_signature(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"available": False, "exists": False}
+    data = np.ascontiguousarray(read_fits_data(path, dtype=np.float32))
+    finite = np.isfinite(data)
+    finite_count = int(np.count_nonzero(finite))
+    digest = hashlib.sha256()
+    digest.update(str(data.shape).encode("utf-8"))
+    digest.update(str(data.dtype).encode("utf-8"))
+    digest.update(data.view(np.uint8))
+    stats: dict[str, Any] = {
+        "finite_pixels": finite_count,
+        "nonfinite_pixels": int(data.size - finite_count),
+    }
+    if finite_count:
+        finite_values = data[finite]
+        stats.update(
+            {
+                "min": float(np.min(finite_values)),
+                "max": float(np.max(finite_values)),
+                "mean": float(np.mean(finite_values)),
+                "std": float(np.std(finite_values)),
+            }
+        )
+    return {
+        "available": True,
+        "exists": True,
+        "sha256": digest.hexdigest(),
+        "shape": [int(item) for item in data.shape],
+        "dtype": str(data.dtype),
+        **stats,
+    }
+
+
+def _index_output_signatures(run: Path, payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    artifacts = payload.get("artifacts") if isinstance(payload.get("artifacts"), list) else []
+    output_signatures: dict[str, dict[str, Any]] = {}
+    for index, artifact in enumerate(artifacts):
+        if not isinstance(artifact, dict):
+            continue
+        key = _artifact_key(index, artifact)
+        signatures: dict[str, Any] = {}
+        for field in _OUTPUT_PATH_FIELDS:
+            path = _resolve_artifact_path(run, artifact.get(field))
+            if path is not None:
+                signatures[field] = _fits_data_signature(path)
+        output_signatures[key] = signatures
+    return output_signatures
 
 
 def _registration_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -298,6 +368,13 @@ def build_resident_determinism_audit(
         candidate_det["artifacts"],
         fields=("signature_mode", "moving_frame_count", "threshold_count", *_COMBINED_HASH_FIELDS),
     )
+    baseline_outputs = _index_output_signatures(baseline_dir, baseline_resident)
+    candidate_outputs = _index_output_signatures(candidate_dir, candidate_resident)
+    output_differences = _diff_mapping(
+        baseline_outputs,
+        candidate_outputs,
+        fields=_OUTPUT_PATH_FIELDS,
+    )
 
     baseline_registration = _registration_index(baseline_dir)
     candidate_registration = _registration_index(candidate_dir)
@@ -351,6 +428,11 @@ def build_resident_determinism_audit(
             len(accounting_differences) == 0,
             {"difference_count": len(accounting_differences)},
         ),
+        _check(
+            "output_pixels_match",
+            len(output_differences) == 0,
+            {"difference_count": len(output_differences)},
+        ),
     ]
     passed = all(item["passed"] for item in checks)
     return {
@@ -387,12 +469,14 @@ def build_resident_determinism_audit(
             "frame_signature_difference_type_counts": _difference_type_counts(frame_differences),
             "registration_difference_count": len(registration_differences),
             "frame_accounting_difference_count": len(accounting_differences),
+            "output_difference_count": len(output_differences),
         },
         "checks": checks,
         "artifact_differences": artifact_differences,
         "frame_signature_differences": frame_differences,
         "registration_differences": registration_differences,
         "frame_accounting_differences": accounting_differences,
+        "output_differences": output_differences,
     }
 
 
@@ -417,6 +501,7 @@ def write_resident_determinism_markdown(path: str | Path, audit: dict[str, Any])
         f"- Frame signatures: `{summary['frame_signature_difference_count']}`",
         f"- Registration results: `{summary['registration_difference_count']}`",
         f"- Frame accounting: `{summary['frame_accounting_difference_count']}`",
+        f"- Output pixels/maps: `{summary['output_difference_count']}`",
         "",
     ]
     if summary.get("frame_signature_difference_type_counts"):
@@ -438,6 +523,10 @@ def write_resident_determinism_markdown(path: str | Path, audit: dict[str, Any])
     if audit["frame_accounting_differences"]:
         lines.extend(["", "## First Frame Accounting Differences", ""])
         for item in audit["frame_accounting_differences"][:20]:
+            lines.append(f"- `{item['key']}`: `{item['difference']}`")
+    if audit["output_differences"]:
+        lines.extend(["", "## First Output Differences", ""])
+        for item in audit["output_differences"][:20]:
             lines.append(f"- `{item['key']}`: `{item['difference']}`")
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

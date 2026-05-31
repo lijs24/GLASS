@@ -736,6 +736,7 @@ def cmd_resident_determinism(args: argparse.Namespace) -> int:
             "frame_signature_differences": audit["summary"]["frame_signature_difference_count"],
             "registration_differences": audit["summary"]["registration_difference_count"],
             "frame_accounting_differences": audit["summary"]["frame_accounting_difference_count"],
+            "output_differences": audit["summary"]["output_difference_count"],
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -1322,7 +1323,7 @@ def build_parser() -> argparse.ArgumentParser:
     resident_det.add_argument(
         "--fail-on-mismatch",
         action="store_true",
-        help="return exit code 2 when signatures, registration, or frame accounting differ",
+        help="return exit code 2 when signatures, registration, frame accounting, or output pixels differ",
     )
     resident_det.set_defaults(func=cmd_resident_determinism)
 

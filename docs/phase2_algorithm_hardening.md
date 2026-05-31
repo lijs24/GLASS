@@ -1009,6 +1009,22 @@ integration where applicable.
   resident determinism unit tests, ruff, full pytest, and a repeated 200-light
   resident CUDA determinism audit.
 
+### S2-Gate 59: Resident Output Pixel Determinism Audit
+
+- Extend `glass resident-determinism` so repeated resident CUDA runs compare
+  final output FITS image data, not only catalog/registration/accounting
+  metadata.
+- Hash the data payload for resident master outputs and available maps
+  (`weight`, `coverage`, low/high rejection, and DQ) using a canonical
+  contiguous numeric representation with shape, dtype, finite-pixel count, and
+  compact summary statistics in the audit evidence.
+- Treat missing output artifacts as explicit audit differences unless both
+  runs omit the same optional map.
+- Keep the audit read-only: never rewrite output FITS files or input image
+  directories.
+- Validate with synthetic FITS audit fixtures, CLI smoke coverage, ruff, full
+  pytest, and the repeated 200-light resident CUDA runs produced by S2-Gate 58.
+
 ## Gate Rules
 
 Each gate requires:

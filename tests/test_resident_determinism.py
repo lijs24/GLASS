@@ -3,7 +3,10 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+import numpy as np
+
 from glass.cli import main
+from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.resident_determinism import build_resident_determinism_audit
 
@@ -17,8 +20,11 @@ def _write_run(
     final_status: str = "integrated",
     elapsed_s: float = 10.0,
     rms_px: float = 0.5,
+    output_value: float = 1.0,
 ) -> None:
     path.mkdir(parents=True, exist_ok=True)
+    master_path = path / "integration" / "resident_master_H.fits"
+    write_fits_data(master_path, np.full((2, 2), output_value, dtype=np.float32))
     write_json(
         path / "resident_artifacts.json",
         {
@@ -27,6 +33,7 @@ def _write_run(
                 {
                     "filter": "H",
                     "frame_ids": ["F001", "F002"],
+                    "master_path": str(master_path),
                     "resident_registration": {
                         "active_frame_count": 2,
                         "triangle_determinism_signature_mode": (
@@ -113,6 +120,7 @@ def test_resident_determinism_audit_passes_identical_runs(tmp_path: Path):
 
     assert audit["summary"]["passed"] is True
     assert audit["summary"]["frame_signature_difference_count"] == 0
+    assert audit["summary"]["output_difference_count"] == 0
     assert audit["timing"]["elapsed_delta_s"] == 1.0
     assert audit["baseline"]["registration_status_counts"] == {"ok": 1}
 
@@ -141,6 +149,21 @@ def test_resident_determinism_audit_reports_signature_and_status_drift(tmp_path:
     assert diff["frame_id"] == "F002"
     assert "moving_catalog_hash" in diff["difference_types"]
     assert "selected_fit_hash" in diff["difference_types"]
+
+
+def test_resident_determinism_audit_reports_output_pixel_drift(tmp_path: Path):
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    _write_run(baseline, output_value=1.0)
+    _write_run(candidate, output_value=2.0)
+
+    audit = build_resident_determinism_audit(baseline, candidate)
+
+    assert audit["summary"]["passed"] is False
+    assert audit["summary"]["output_difference_count"] == 1
+    diff = audit["output_differences"][0]
+    assert diff["key"] == "H:2:F001:F002"
+    assert "master_path" in diff["fields"]
 
 
 def test_resident_determinism_audit_treats_matching_nan_registration_values_as_equal(
