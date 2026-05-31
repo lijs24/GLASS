@@ -414,6 +414,18 @@ integration where applicable.
   CLI smoke tests, full pytest, and the 200-light benchmark because this changes
   the resident fast path artifacts.
 
+### S2-Gate 23: Geometric Warp Coverage Reporting
+
+- Surface resident geometric warp coverage as a first-class HTML report table
+  instead of requiring users to inspect nested JSON provenance.
+- Include active frame count, geometric coverage frame count, frame-count match
+  status, coverage min/max/mean, zero/partial/full pixel counts, and DQ
+  `WARP_EDGE`/`NO_DATA` counts when available.
+- Keep the table readable for resident and integration artifact sources, and
+  keep older runs without the new schema reportable.
+- Validate with CLI report tests, ruff, full pytest, and a report regeneration
+  on the most recent 200-light resident run.
+
 ## Gate Rules
 
 Each gate requires:

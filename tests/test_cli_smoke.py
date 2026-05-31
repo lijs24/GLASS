@@ -157,7 +157,20 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "master_stats": {"bias_count": 1, "dark_count": 1, "flat_count": 1},
                     "memory_estimate": {"resident_base_gib": 1.25, "estimated_peak_gib": 1.75},
                     "resident_io_pipeline": {"prefetch_frames": 2, "prefetch_workers": 1},
-                    "resident_registration": {"mode": "similarity_cuda_triangle", "warp_interpolation": "lanczos3"},
+                    "resident_registration": {
+                        "mode": "similarity_cuda_triangle",
+                        "warp_interpolation": "lanczos3",
+                        "warp_coverage": {
+                            "available": True,
+                            "active_frame_count": 2,
+                            "frame_count": 2,
+                            "frame_count_matches_active": True,
+                            "warped_frame_count": 1,
+                            "full_frame_count": 1,
+                            "native_source": "ResidentCalibratedStack warp coverage accumulator",
+                            "statistics": {"min": 1.0, "max": 2.0, "mean": 1.75},
+                        },
+                    },
                     "resident_local_normalization": {"mode": "resident_grid_mean_std"},
                     "resident_integration_weighting": {"mode": "simple_snr"},
                     "integration_rejection": {"mode": "winsorized_sigma"},
@@ -186,6 +199,42 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
             ],
         },
     )
+    write_json(
+        run / "integration_results.json",
+        {
+            "source_stage": "resident_calibrated_stack",
+            "outputs": [
+                {
+                    "filter": "H",
+                    "dq_map_path": "dq.fits",
+                    "dq_summary": {"valid": 3, "warp_edge": 1, "no_data": 0},
+                    "geometric_warp_coverage": {
+                        "available": True,
+                        "frame_count": 2,
+                        "frame_count_matches_active": True,
+                    },
+                    "dq_coverage_provenance": {
+                        "available": True,
+                        "active_frame_count": 2,
+                        "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
+                        "geometric_warp_coverage_frame_count": 2,
+                        "geometric_frame_count_matches_active": True,
+                        "geometric_warp_coverage": {"min": 1.0, "max": 2.0, "mean": 1.75},
+                        "geometric_zero_pixels": 0,
+                        "geometric_partial_pixels": 1,
+                        "geometric_full_pixels": 3,
+                        "partial_edge_inference": "available_from_geometric_warp_coverage",
+                    },
+                    "output_map_policy": {
+                        "mode": "science",
+                        "available": ["master", "weight", "dq", "coverage"],
+                        "written": ["master", "weight", "dq", "coverage"],
+                        "skipped": [],
+                    },
+                }
+            ],
+        },
+    )
     report = tmp_path / "resident_report.html"
     assert main(["report", "--run", str(run), "--out", str(report)]) == 0
     html = report.read_text(encoding="utf-8")
@@ -209,3 +258,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "science" in html
     assert "master, weight, dq, coverage" in html
     assert "low_rejection, high_rejection" in html
+    assert "Geometric warp coverage" in html
+    assert "available_from_geometric_warp_coverage" in html
+    assert "geometric_partial_pixels" in html
+    assert "partial_pixels" in html
+    assert "ResidentCalibratedStack warp coverage accumulator" in html

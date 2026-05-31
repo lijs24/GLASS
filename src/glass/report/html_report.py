@@ -98,6 +98,69 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
     return rows
 
 
+def _geometric_warp_coverage_rows(
+    integration: dict[str, Any] | None,
+    resident: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (integration or {}).get("outputs", []):
+        provenance = item.get("dq_coverage_provenance") or {}
+        geometric = item.get("geometric_warp_coverage") or {}
+        geometric_stats = provenance.get("geometric_warp_coverage") or {}
+        if not geometric and not geometric_stats:
+            continue
+        dq_summary = item.get("dq_summary") or {}
+        rows.append(
+            {
+                "source": "integration",
+                "filter": item.get("filter"),
+                "available": geometric.get("available", bool(geometric_stats)),
+                "active_frames": provenance.get("active_frame_count"),
+                "coverage_frames": provenance.get(
+                    "geometric_warp_coverage_frame_count",
+                    geometric.get("frame_count"),
+                ),
+                "matches_active": provenance.get(
+                    "geometric_frame_count_matches_active",
+                    geometric.get("frame_count_matches_active"),
+                ),
+                "min": geometric_stats.get("min"),
+                "max": geometric_stats.get("max"),
+                "mean": geometric_stats.get("mean"),
+                "zero_pixels": provenance.get("geometric_zero_pixels"),
+                "partial_pixels": provenance.get("geometric_partial_pixels"),
+                "full_pixels": provenance.get("geometric_full_pixels"),
+                "dq_warp_edge": dq_summary.get("warp_edge"),
+                "dq_no_data": dq_summary.get("no_data"),
+                "inference": provenance.get("partial_edge_inference"),
+            }
+        )
+
+    for item in (resident or {}).get("artifacts", []):
+        registration = item.get("resident_registration") or {}
+        coverage = registration.get("warp_coverage") or {}
+        if not coverage:
+            continue
+        stats = coverage.get("statistics") or {}
+        rows.append(
+            {
+                "source": "resident",
+                "filter": item.get("filter"),
+                "available": coverage.get("available"),
+                "active_frames": coverage.get("active_frame_count"),
+                "coverage_frames": coverage.get("frame_count"),
+                "matches_active": coverage.get("frame_count_matches_active"),
+                "warped_frames": coverage.get("warped_frame_count"),
+                "full_frames": coverage.get("full_frame_count"),
+                "min": stats.get("min"),
+                "max": stats.get("max"),
+                "mean": stats.get("mean"),
+                "native_source": coverage.get("native_source"),
+            }
+        )
+    return rows
+
+
 def _output_policy_rows(
     integration: dict[str, Any] | None,
     resident: dict[str, Any] | None,
@@ -242,6 +305,7 @@ def write_html_report(
         },
     ]
     resident_summary = _resident_rows(resident)
+    geometric_warp_coverage_rows = _geometric_warp_coverage_rows(integration, resident)
     output_policy_rows = _output_policy_rows(integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
@@ -297,6 +361,11 @@ def write_html_report(
   {_table(output_policy_rows)}
   <h2>DQ/mask summary</h2>
   {_table(dq_rows)}
+  <h2>Geometric warp coverage</h2>
+  <p>Resident CUDA runs can accumulate a pre-rejection geometric footprint from
+  warp kernels. Partial geometric coverage is reported separately from low/high
+  rejection counts.</p>
+  {_table(geometric_warp_coverage_rows)}
   <h2>Resident CUDA summary</h2>
   <p>Backend: <code>{escape(str((resident or {}).get("backend", "not used")))}</code>.
   Device: <code>{escape(str(((resident or {}).get("device") or {}).get("name", "pending")))}</code>.</p>
