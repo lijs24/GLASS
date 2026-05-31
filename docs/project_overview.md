@@ -18,6 +18,14 @@ as a staged GPU-oriented pipeline.
   and diagnostic artifacts.
 - Keep every optimization measurable through timing JSON and validation reports.
 
+## Phase 2 Execution Plan
+
+The active second-stage algorithm plan is tracked in
+[`phase2_algorithm_hardening.md`](phase2_algorithm_hardening.md). It defines the
+unified StackEngine, DQ/mask propagation contract, algorithm source log, gate
+sequence, benchmark baseline, and completion criteria for the next major round
+of work.
+
 ## Pipeline Shape
 
 1. Metadata scan
