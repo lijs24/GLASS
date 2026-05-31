@@ -3,10 +3,14 @@ from __future__ import annotations
 import numpy as np
 
 from glass.cpu.local_norm import (
+    apply_coefficient_fields,
     apply_grid_normalization,
     apply_tile_normalization,
     estimate_tile_normalization,
     estimate_tile_normalization_mean_std,
+    fill_invalid_coefficient_grid,
+    interpolate_coefficient_grid,
+    normalize_grid_continuous_mean_std,
     normalize_grid_mean_std,
 )
 
@@ -77,3 +81,58 @@ def test_apply_grid_normalization_uses_edge_tiles():
     assert np.allclose(out[:2, 3:], data[:2, 3:] * 2.0 + 10.0)
     assert np.allclose(out[2:, :3], data[2:, :3] * 3.0 + 20.0)
     assert np.allclose(out[2:, 3:], data[2:, 3:] * 4.0 + 30.0)
+
+
+def test_interpolate_coefficient_grid_uses_tile_center_bilinear_field():
+    values = np.array([[1.0, 3.0], [5.0, 7.0]], dtype=np.float32)
+    field = interpolate_coefficient_grid(values, height=4, width=4, tile_height=2, tile_width=2)
+
+    assert field.shape == (4, 4)
+    assert np.isclose(field[0, 0], 1.0)
+    assert np.isclose(field[0, -1], 3.0)
+    assert np.isclose(field[-1, 0], 5.0)
+    assert np.isclose(field[-1, -1], 7.0)
+    assert np.all(np.diff(field, axis=0) >= 0)
+    assert np.all(np.diff(field, axis=1) >= 0)
+
+
+def test_apply_coefficient_fields_honors_valid_mask():
+    data = np.arange(9, dtype=np.float32).reshape(3, 3)
+    scale = np.full((3, 3), 2.0, dtype=np.float32)
+    offset = np.full((3, 3), 10.0, dtype=np.float32)
+    mask = np.ones((3, 3), dtype=bool)
+    mask[1, 1] = False
+
+    out = apply_coefficient_fields(data, scale, offset, mask)
+
+    assert np.allclose(out[mask], data[mask] * 2.0 + 10.0)
+    assert out[1, 1] == data[1, 1]
+
+
+def test_fill_invalid_coefficient_grid_uses_nearest_valid_cell():
+    values = np.array([[1.0, 0.0], [0.0, 4.0]], dtype=np.float32)
+    valid = np.array([[True, False], [False, True]])
+
+    repaired = fill_invalid_coefficient_grid(values, valid, default=9.0)
+
+    assert repaired[0, 0] == 1.0
+    assert repaired[1, 1] == 4.0
+    assert repaired[0, 1] in {1.0, 4.0}
+    assert repaired[1, 0] in {1.0, 4.0}
+
+
+def test_continuous_grid_normalization_outputs_fields_and_residual_summary():
+    yy, xx = np.indices((8, 10), dtype=np.float32)
+    data = 5.0 + xx * 0.5 + yy * 1.25
+    reference = data * 1.2 + 7.0
+
+    out, model = normalize_grid_continuous_mean_std(data, reference, tile_height=4, tile_width=5)
+
+    assert model["model"] == "continuous_grid_mean_std_v1"
+    assert model["coefficient_field_model"] == "bilinear_tile_center_v1"
+    assert model["scale_field"].shape == data.shape
+    assert model["offset_field"].shape == data.shape
+    assert model["empty_tiles_filled"] == 0
+    assert model["residual_summary"]["valid_pixels"] == data.size
+    assert model["residual_summary"]["rms"] < 1.0e-5
+    assert np.allclose(out, reference, atol=1.0e-5)

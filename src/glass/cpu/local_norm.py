@@ -218,6 +218,193 @@ def apply_grid_normalization(
     return out
 
 
+def fill_invalid_coefficient_grid(
+    values: np.ndarray,
+    valid_mask: np.ndarray,
+    default: float,
+) -> np.ndarray:
+    grid = np.asarray(values, dtype=np.float32)
+    valid = np.asarray(valid_mask, dtype=bool)
+    if grid.shape != valid.shape:
+        raise ValueError("values and valid_mask must have the same shape")
+    out = grid.copy()
+    valid_positions = np.argwhere(valid)
+    if len(valid_positions) == 0:
+        out[...] = np.float32(default)
+        return out
+    invalid_positions = np.argwhere(~valid)
+    for y, x in invalid_positions:
+        distances = np.sum((valid_positions - np.array([y, x])) ** 2, axis=1)
+        nearest_y, nearest_x = valid_positions[int(np.argmin(distances))]
+        out[y, x] = grid[nearest_y, nearest_x]
+    return out
+
+
+def _grid_centers(length: int, tile_length: int, grid_count: int) -> np.ndarray:
+    if length <= 0:
+        raise ValueError("image dimensions must be positive")
+    if tile_length <= 0:
+        raise ValueError("tile dimensions must be positive")
+    centers = np.empty(grid_count, dtype=np.float32)
+    for index in range(grid_count):
+        start = index * tile_length
+        end = min(length, start + tile_length)
+        centers[index] = np.float32((start + end - 1) * 0.5)
+    return centers
+
+
+def interpolate_coefficient_grid_slice(
+    values: np.ndarray,
+    height: int,
+    width: int,
+    tile_height: int,
+    tile_width: int,
+    y0: int,
+    y1: int,
+    x0: int,
+    x1: int,
+) -> np.ndarray:
+    grid = np.asarray(values, dtype=np.float32)
+    if grid.ndim != 2:
+        raise ValueError("coefficient grid must be two-dimensional")
+    grid_rows, grid_cols = grid.shape
+    expected_shape = (int(np.ceil(height / tile_height)), int(np.ceil(width / tile_width)))
+    if grid.shape != expected_shape:
+        raise ValueError("coefficient grid shape does not match image shape and tile dimensions")
+    if not (0 <= y0 < y1 <= height and 0 <= x0 < x1 <= width):
+        raise ValueError("slice bounds must be inside the image")
+    if grid_rows == 1 and grid_cols == 1:
+        return np.full((y1 - y0, x1 - x0), grid[0, 0], dtype=np.float32)
+
+    x_centers = _grid_centers(width, tile_width, grid_cols)
+    y_centers = _grid_centers(height, tile_height, grid_rows)
+    x_coords = np.arange(x0, x1, dtype=np.float32)
+    y_coords = np.arange(y0, y1, dtype=np.float32)
+
+    if grid_cols == 1:
+        along_x = np.repeat(grid[:, :1], len(x_coords), axis=1)
+    else:
+        along_x = np.vstack([np.interp(x_coords, x_centers, row).astype(np.float32) for row in grid])
+    if grid_rows == 1:
+        return np.repeat(along_x, len(y_coords), axis=0).astype(np.float32)
+
+    out = np.empty((len(y_coords), len(x_coords)), dtype=np.float32)
+    for x_index in range(len(x_coords)):
+        out[:, x_index] = np.interp(y_coords, y_centers, along_x[:, x_index]).astype(np.float32)
+    return out
+
+
+def interpolate_coefficient_grid(
+    values: np.ndarray,
+    height: int,
+    width: int,
+    tile_height: int,
+    tile_width: int,
+) -> np.ndarray:
+    return interpolate_coefficient_grid_slice(
+        values,
+        height,
+        width,
+        tile_height,
+        tile_width,
+        0,
+        int(height),
+        0,
+        int(width),
+    )
+
+
+def apply_coefficient_fields(
+    data: np.ndarray,
+    scale_field: np.ndarray,
+    offset_field: np.ndarray,
+    valid_mask: np.ndarray | None = None,
+) -> np.ndarray:
+    src = np.asarray(data, dtype=np.float32)
+    scale = np.asarray(scale_field, dtype=np.float32)
+    offset = np.asarray(offset_field, dtype=np.float32)
+    if src.shape != scale.shape or src.shape != offset.shape:
+        raise ValueError("data, scale_field, and offset_field must have the same shape")
+    out = src.copy()
+    transformed = src * scale + offset
+    if valid_mask is None:
+        return transformed.astype(np.float32)
+    mask = np.asarray(valid_mask, dtype=bool)
+    if mask.shape != src.shape:
+        raise ValueError("valid_mask must match data shape")
+    out[mask] = transformed[mask]
+    return out.astype(np.float32)
+
+
+def summarize_residuals(residuals: np.ndarray, valid_mask: np.ndarray | None = None) -> dict[str, Any]:
+    values = np.asarray(residuals, dtype=np.float32)
+    mask = np.isfinite(values)
+    if valid_mask is not None:
+        mask &= np.asarray(valid_mask, dtype=bool)
+    count = int(np.count_nonzero(mask))
+    if count == 0:
+        return {
+            "valid_pixels": 0,
+            "mean": None,
+            "median": None,
+            "rms": None,
+            "mad": None,
+            "p95_abs": None,
+            "max_abs": None,
+        }
+    finite = values[mask].astype(np.float64)
+    median = float(np.median(finite))
+    abs_values = np.abs(finite)
+    return {
+        "valid_pixels": count,
+        "mean": float(np.mean(finite)),
+        "median": median,
+        "rms": float(np.sqrt(np.mean(finite * finite))),
+        "mad": float(np.median(np.abs(finite - median))),
+        "p95_abs": float(np.percentile(abs_values, 95)),
+        "max_abs": float(np.max(abs_values)),
+    }
+
+
+def normalize_grid_continuous_mean_std(
+    data: np.ndarray,
+    reference: np.ndarray,
+    tile_height: int,
+    tile_width: int,
+    valid_mask: np.ndarray | None = None,
+    eps: float = 1.0e-6,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    src = np.asarray(data, dtype=np.float32)
+    ref = np.asarray(reference, dtype=np.float32)
+    model = estimate_grid_normalization_mean_std(src, ref, tile_height, tile_width, valid_mask, eps)
+    valid_grid = np.asarray(model["valid_pixels"]) > 0
+    scale_grid = fill_invalid_coefficient_grid(model["scales"], valid_grid, default=1.0)
+    offset_grid = fill_invalid_coefficient_grid(model["offsets"], valid_grid, default=0.0)
+    scale_field = interpolate_coefficient_grid(scale_grid, src.shape[0], src.shape[1], tile_height, tile_width)
+    offset_field = interpolate_coefficient_grid(offset_grid, src.shape[0], src.shape[1], tile_height, tile_width)
+    out = apply_coefficient_fields(src, scale_field, offset_field, valid_mask)
+    residual_mask = np.isfinite(out) & np.isfinite(ref)
+    if valid_mask is not None:
+        residual_mask &= np.asarray(valid_mask, dtype=bool)
+    residual_summary = summarize_residuals(out - ref, residual_mask)
+    model.update(
+        {
+            "model": "continuous_grid_mean_std_v1",
+            "coefficient_field_model": "bilinear_tile_center_v1",
+            "interpolation": "bilinear_tile_center",
+            "raw_scales": np.asarray(model["scales"], dtype=np.float32),
+            "raw_offsets": np.asarray(model["offsets"], dtype=np.float32),
+            "scales": scale_grid,
+            "offsets": offset_grid,
+            "empty_tiles_filled": int(np.count_nonzero(~valid_grid)),
+            "scale_field": scale_field,
+            "offset_field": offset_field,
+            "residual_summary": residual_summary,
+        }
+    )
+    return out, model
+
+
 def normalize_grid_mean_std(
     data: np.ndarray,
     reference: np.ndarray,

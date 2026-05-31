@@ -13,6 +13,18 @@ outcome is a unified, testable, GPU-oriented processing core where master frame
 construction and final light integration share the same stacking engine and the
 same mask, rejection, weighting, and reporting contracts.
 
+## Codex Goal Anchor
+
+Use this document as the authoritative long-form execution contract for Phase
+2. The interactive `/goal` text should stay short and point here instead of
+duplicating every gate, benchmark, and algorithm rule.
+
+Recommended goal text:
+
+```text
+GLASS Phase 2: 按 docs/phase2_algorithm_hardening.md 持续推进 Algorithm Hardening and Unified Stack Engine。每个 S2-Gate 必须满足文档门禁：代码或文档、测试、checkpoint、Git commit；失败 Gate 先修复再继续。保持 Phase 1 的 200-light 真实数据 benchmark 作为性能和数值基线，避免无解释的速度、形状、帧数、mask/rejection 或结果一致性回退。新增算法必须有 CPU baseline、synthetic 测试、必要 CUDA 对照、可审计 artifact，并更新 docs/algorithm_sources.md。原始图像目录只读，CUDA 保持 optional，CPU-only 安装和测试不得破坏。
+```
+
 ## Hard Constraints
 
 - Keep the existing 200-light real dataset benchmark as a performance and

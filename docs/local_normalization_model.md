@@ -4,33 +4,52 @@ Local normalization runs after registration and warp. It never changes the image
 dimensions. If a future stage crops output, the crop box must be recorded in the
 local normalization artifact before integration can consume the result.
 
-## Gate 10 Baseline
+## S2-Gate 8 Continuous Baseline
 
-Gate 10 implements a conservative tile baseline:
+S2-Gate 8 replaces the original piecewise tile apply path with a continuous
+coefficient-field baseline:
 
 1. Select the registration reference frame as the local-normalization reference.
 2. Iterate over registered FITS files tile by tile.
 3. Build a valid-pixel mask from the source and reference coverage maps.
-4. Estimate per-tile source/reference median and standard deviation.
-5. Apply `normalized = source * scale + offset` for valid pixels only.
-6. Write `local_norm_results.json` and optional `local_norm_cache/*.fits`.
+4. Estimate per-tile source/reference mean and standard deviation.
+5. Repair empty coefficient tiles from the nearest valid tile.
+6. Interpolate the scale and offset grids with bilinear interpolation over tile
+   centers.
+7. Apply `O(x,y) = a(x,y)S(x,y) + b(x,y)` for valid pixels only.
+8. Write `local_norm_results.json`, normalized FITS, DQ FITS, coefficient JSON,
+   and diagnostic coefficient/residual maps when the image is within the
+   configured diagnostic size limit.
 
 The scale and offset are:
 
 ```text
 scale = reference_std / source_std
-offset = reference_median - source_median * scale
+offset = reference_mean - source_mean * scale
 ```
 
-If either standard deviation is too small, Gate 10 falls back to offset-only
+If either standard deviation is too small, the model falls back to offset-only
 matching:
 
 ```text
 scale = 1
-offset = reference_median - source_median
+offset = reference_mean - source_mean
 ```
 
 If a tile has no valid pixels, it is passed through and a warning is recorded.
+Its coefficient cell is filled from the nearest valid cell before interpolation.
+If no valid coefficient exists for a frame, the scale grid defaults to `1` and
+the offset grid defaults to `0`.
+
+The current interpolation model is recorded as:
+
+```text
+model = continuous_grid_mean_std_v1
+coefficient_field_model = bilinear_tile_center_v1
+```
+
+The model never crops. Artifacts record `crop_box = null`; if a future LN stage
+introduces cropping, that crop box becomes a required integration input.
 
 ## Policy
 
@@ -68,6 +87,13 @@ The grid model estimates a coefficient table on the CPU baseline with
 `local_norm_apply_grid_f32` on the CUDA backend. This first grid implementation is
 piecewise constant per tile. It validates the data model, edge tiles, and GPU
 coefficient application before adding smoother windowed/interpolated LN.
+
+The tile-mode S2-Gate 8 path now estimates the coefficient grid, repairs empty
+cells, and applies a bilinear continuous field on the CPU baseline. When CUDA is
+available, the pipeline can use CUDA pair-statistics primitives for coefficient
+estimation, then applies the continuous field through the audited CPU tile path.
+A fully resident CUDA continuous-field apply kernel remains a later optimization
+target.
 
 The resident CUDA stack exposes the same grid application primitive as
 `ResidentCalibratedStack.apply_grid_normalization_frame`, plus resident
@@ -107,3 +133,15 @@ capability, but it is not the full tile/window local normalization model.
 - mean scale, mean offset, valid-pixel count, status, and warnings
 - per-frame coefficient grid path, grid dimensions, per-tile scale/offset arrays,
   per-tile valid-pixel counts, and per-tile statuses
+- coefficient field model and interpolation name
+- raw and repaired coefficient grids
+- full-resolution scale/offset field paths when written
+- residual map path and residual summary when written
+- empty coefficient tile repair count
+- crop box, currently `null`
+
+Full-resolution diagnostic maps are intentionally bounded because one
+9600-by-6422 float32 map is about 235 MiB. The environment variable
+`GLASS_LN_FULL_FIELD_MAP_MAX_PIXELS` controls the threshold; the default writes
+full maps for small validation runs and records `omitted_due_to_size` for larger
+runs while retaining coefficient grids and summaries.

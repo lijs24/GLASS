@@ -501,9 +501,24 @@ def test_pipeline_fixture_run_local_normalization(tmp_path: Path):
     assert result["grid_rows"] == 4
     assert result["grid_cols"] == 4
     assert result["tile_count"] == 16
+    assert result["model"] == "continuous_grid_mean_std_v1"
+    assert result["coefficient_field_model"] == "bilinear_tile_center_v1"
+    assert result["full_field_map_status"] == "written"
+    assert Path(result["scale_field_path"]).exists()
+    assert Path(result["offset_field_path"]).exists()
+    assert Path(result["residual_map_path"]).exists()
+    assert result["crop_box"] is None
+    assert result["residual_summary"]["valid_pixels"] > 0
     coefficients = json.loads(Path(result["coefficient_grid_path"]).read_text(encoding="utf-8"))
     assert coefficients["grid_rows"] == 4
     assert coefficients["grid_cols"] == 4
+    assert coefficients["model"] == "continuous_grid_mean_std_v1"
+    assert coefficients["coefficient_field_model"] == "bilinear_tile_center_v1"
+    assert coefficients["full_field_map_status"] == "written"
+    assert Path(coefficients["scale_field_path"]).exists()
+    assert Path(coefficients["offset_field_path"]).exists()
+    assert Path(coefficients["residual_map_path"]).exists()
+    assert coefficients["crop_box"] is None
     assert len(coefficients["scales"]) == 4
     assert len(coefficients["scales"][0]) == 4
     assert len(coefficients["valid_pixels"][0]) == 4
