@@ -3,6 +3,129 @@
 #include <cstddef>
 #include <cmath>
 
+__device__ bool glass_fused_sample_matrix_bilinear_f32(
+    const float* input,
+    const float* inverse,
+    int width,
+    int height,
+    std::size_t pixel,
+    float* value_out) {
+  const int x = static_cast<int>(pixel % static_cast<std::size_t>(width));
+  const int y = static_cast<int>(pixel / static_cast<std::size_t>(width));
+  const float fx = static_cast<float>(x);
+  const float fy = static_cast<float>(y);
+  const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
+  if (fabsf(denom) <= 1.0e-12f) {
+    return false;
+  }
+  const float sx = (inverse[0] * fx + inverse[1] * fy + inverse[2]) / denom;
+  const float sy = (inverse[3] * fx + inverse[4] * fy + inverse[5]) / denom;
+  if (sx < 0.0f || sx > static_cast<float>(width - 1) ||
+      sy < 0.0f || sy > static_cast<float>(height - 1)) {
+    return false;
+  }
+
+  const int x0 = static_cast<int>(floorf(sx));
+  const int y0 = static_cast<int>(floorf(sy));
+  const int x1 = x0 + 1 < width ? x0 + 1 : x0;
+  const int y1 = y0 + 1 < height ? y0 + 1 : y0;
+  const float tx = sx - static_cast<float>(x0);
+  const float ty = sy - static_cast<float>(y0);
+
+  const float v00 = input[y0 * width + x0];
+  const float v10 = input[y0 * width + x1];
+  const float v01 = input[y1 * width + x0];
+  const float v11 = input[y1 * width + x1];
+  const float top = v00 * (1.0f - tx) + v10 * tx;
+  const float bottom = v01 * (1.0f - tx) + v11 * tx;
+  *value_out = top * (1.0f - ty) + bottom * ty;
+  return true;
+}
+
+__device__ float glass_fused_sinc_f32(float x) {
+  const float ax = fabsf(x);
+  if (ax < 1.0e-6f) {
+    return 1.0f;
+  }
+  const float pix = 3.14159265358979323846f * x;
+  return sinf(pix) / pix;
+}
+
+__device__ float glass_fused_lanczos3_weight_f32(float x) {
+  const float ax = fabsf(x);
+  if (ax >= 3.0f) {
+    return 0.0f;
+  }
+  return glass_fused_sinc_f32(x) * glass_fused_sinc_f32(x / 3.0f);
+}
+
+__device__ bool glass_fused_sample_matrix_lanczos3_f32(
+    const float* input,
+    const float* inverse,
+    int width,
+    int height,
+    std::size_t pixel,
+    float clamping_threshold,
+    float* value_out) {
+  const int x = static_cast<int>(pixel % static_cast<std::size_t>(width));
+  const int y = static_cast<int>(pixel / static_cast<std::size_t>(width));
+  const float fx = static_cast<float>(x);
+  const float fy = static_cast<float>(y);
+  const float denom = inverse[6] * fx + inverse[7] * fy + inverse[8];
+  if (fabsf(denom) <= 1.0e-12f) {
+    return false;
+  }
+
+  const float sx = (inverse[0] * fx + inverse[1] * fy + inverse[2]) / denom;
+  const float sy = (inverse[3] * fx + inverse[4] * fy + inverse[5]) / denom;
+  if (sx < 2.0f || sx >= static_cast<float>(width - 3) ||
+      sy < 2.0f || sy >= static_cast<float>(height - 3)) {
+    return false;
+  }
+
+  const int x0 = static_cast<int>(floorf(sx));
+  const int y0 = static_cast<int>(floorf(sy));
+  float wx[6];
+  float wy[6];
+  for (int k = 0; k < 6; ++k) {
+    wx[k] = glass_fused_lanczos3_weight_f32(sx - static_cast<float>(x0 - 2 + k));
+    wy[k] = glass_fused_lanczos3_weight_f32(sy - static_cast<float>(y0 - 2 + k));
+  }
+
+  float weighted_sum = 0.0f;
+  float weight_sum = 0.0f;
+  float local_min = 3.402823466e+38f;
+  float local_max = -3.402823466e+38f;
+  for (int ky = 0; ky < 6; ++ky) {
+    const int yy = y0 - 2 + ky;
+    for (int kx = 0; kx < 6; ++kx) {
+      const int xx = x0 - 2 + kx;
+      const float w = wx[kx] * wy[ky];
+      const float value = input[yy * width + xx];
+      if (!isfinite(value)) {
+        continue;
+      }
+      weighted_sum += value * w;
+      weight_sum += w;
+      local_min = fminf(local_min, value);
+      local_max = fmaxf(local_max, value);
+    }
+  }
+
+  if (fabsf(weight_sum) <= 1.0e-12f) {
+    return false;
+  }
+  float value = weighted_sum / weight_sum;
+  if (clamping_threshold >= 0.0f && local_max >= local_min) {
+    const float range = local_max - local_min;
+    const float lo = local_min - clamping_threshold * range;
+    const float hi = local_max + clamping_threshold * range;
+    value = fminf(hi, fmaxf(lo, value));
+  }
+  *value_out = value;
+  return true;
+}
+
 __global__ void glass_integrate_accumulate_mean_tile_f32_kernel(
     const float* frame,
     const float* weight,
@@ -244,4 +367,87 @@ void glass_integrate_resident_sigma_clip_f32_launch(
       low_sigma,
       high_sigma,
       winsorize);
+}
+
+__global__ void glass_integrate_matrix_warped_mean_f32_kernel(
+    const float* stack,
+    const float* weights,
+    const float* inverses,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* geometric_coverage_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int interpolation,
+    float clamping_threshold) {
+  const std::size_t pixels_per_frame = static_cast<std::size_t>(width) * height;
+  const std::size_t pixel = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (pixel >= pixels_per_frame) {
+    return;
+  }
+
+  float sum = 0.0f;
+  float weight_sum = 0.0f;
+  float finite_coverage = 0.0f;
+  float geometric_coverage = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    float value = 0.0f;
+    const float* input = stack + frame * pixels_per_frame;
+    const float* inverse = inverses + frame * 9;
+    const bool footprint_valid = interpolation == 1
+        ? glass_fused_sample_matrix_lanczos3_f32(
+              input, inverse, width, height, pixel, clamping_threshold, &value)
+        : glass_fused_sample_matrix_bilinear_f32(input, inverse, width, height, pixel, &value);
+    if (!footprint_valid) {
+      continue;
+    }
+    geometric_coverage += 1.0f;
+    if (!isfinite(value)) {
+      continue;
+    }
+    sum += value * weight;
+    weight_sum += weight;
+    finite_coverage += 1.0f;
+  }
+  master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
+  weight_map[pixel] = weight_sum;
+  coverage_map[pixel] = finite_coverage;
+  geometric_coverage_map[pixel] = geometric_coverage;
+}
+
+void glass_integrate_matrix_warped_mean_f32_launch(
+    const float* stack,
+    const float* weights,
+    const float* inverses,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* geometric_coverage_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int interpolation,
+    float clamping_threshold) {
+  constexpr int threads = 256;
+  const std::size_t pixels_per_frame = static_cast<std::size_t>(width) * height;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_integrate_matrix_warped_mean_f32_kernel<<<blocks, threads>>>(
+      stack,
+      weights,
+      inverses,
+      master,
+      weight_map,
+      coverage_map,
+      geometric_coverage_map,
+      frame_count,
+      width,
+      height,
+      interpolation,
+      clamping_threshold);
 }

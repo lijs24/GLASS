@@ -1360,6 +1360,24 @@ integration where applicable.
   coverage, ruff, full pytest, and a 200-light benchmark comparison against
   Gate70B/Gate78/Gate80.
 
+### S2-Gate 82: Fused Resident Matrix-Warp Mean Primitive
+
+- Add a native resident CUDA primitive that computes weighted mean integration
+  directly from unwarped resident frames plus one registration matrix per
+  frame, without scattering warped full-frame images back into the resident
+  stack.
+- Support bilinear and Lanczos3 sampling with the same matrix inversion,
+  footprint rules, and Lanczos clamping semantics used by the existing warp
+  kernels.
+- Emit master, weight, finite-sample coverage, geometric footprint coverage,
+  and timing diagnostics that state the path avoids stack scatter and does not
+  modify the resident stack.
+- Keep the primitive opt-in and non-default until rejection, LN, DQ, and
+  pipeline routing are fused or bridged explicitly.
+- Validate with direct resident CUDA tests comparing the fused primitive
+  against existing warp-then-integrate behavior, plus native build, ruff, and
+  full pytest.
+
 ## Gate Rules
 
 Each gate requires:

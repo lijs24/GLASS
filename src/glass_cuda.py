@@ -3317,3 +3317,56 @@ class ResidentCalibratedStack:
             np.asarray(low_reject, dtype=np.float32),
             np.asarray(high_reject, dtype=np.float32),
         )
+
+    def integrate_matrix_warped_mean(
+        self,
+        matrices: Any,
+        weights: Any | None = None,
+        interpolation: str = "bilinear",
+        clamping_threshold: float = -1.0,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+        if not hasattr(self._impl, "integrate_matrix_warped_mean"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.integrate_matrix_warped_mean is not available"
+            )
+        if interpolation not in {"bilinear", "lanczos3"}:
+            raise ValueError("fused matrix-warped mean interpolation must be bilinear or lanczos3")
+        matrix_array = np.asarray(matrices, dtype=np.float32)
+        if matrix_array.ndim != 3 or matrix_array.shape != (self.frame_count, 3, 3):
+            raise ValueError("matrices must have shape (frame_count, 3, 3)")
+        result = self._impl.integrate_matrix_warped_mean(
+            np.ascontiguousarray(matrix_array),
+            None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
+            interpolation,
+            float(clamping_threshold),
+        )
+        master, weight_map, coverage, geometric_coverage, timing = result
+        timing_dict = dict(timing)
+        return (
+            np.asarray(master, dtype=np.float32),
+            np.asarray(weight_map, dtype=np.float32),
+            np.asarray(coverage, dtype=np.float32),
+            np.asarray(geometric_coverage, dtype=np.float32),
+            {
+                "schema_version": int(timing_dict.get("schema_version", 1)),
+                "timing_model": str(
+                    timing_dict.get("timing_model", "native_fused_matrix_warp_weighted_mean_one_sync")
+                ),
+                "interpolation": str(timing_dict.get("interpolation", interpolation)),
+                "rejection": str(timing_dict.get("rejection", "none")),
+                "frame_count": int(timing_dict.get("frame_count", self.frame_count)),
+                "inverse_prepare_s": float(timing_dict.get("inverse_prepare_s", 0.0)),
+                "device_alloc_s": float(timing_dict.get("device_alloc_s", 0.0)),
+                "weights_upload_s": float(timing_dict.get("weights_upload_s", 0.0)),
+                "inverse_upload_s": float(timing_dict.get("inverse_upload_s", 0.0)),
+                "kernel_enqueue_s": float(timing_dict.get("kernel_enqueue_s", 0.0)),
+                "sync_s": float(timing_dict.get("sync_s", 0.0)),
+                "download_s": float(timing_dict.get("download_s", 0.0)),
+                "total_s": float(timing_dict.get("total_s", 0.0)),
+                "inverse_batch_bytes": int(timing_dict.get("inverse_batch_bytes", 0)),
+                "weights_bytes": int(timing_dict.get("weights_bytes", 0)),
+                "output_bytes": int(timing_dict.get("output_bytes", 0)),
+                "avoids_stack_scatter": bool(timing_dict.get("avoids_stack_scatter", True)),
+                "modifies_resident_stack": bool(timing_dict.get("modifies_resident_stack", False)),
+            },
+        )

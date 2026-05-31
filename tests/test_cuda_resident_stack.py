@@ -94,6 +94,152 @@ def test_resident_stack_calibrates_and_integrates_like_cpu():
     assert np.allclose(weight_map, np.full((4, 5), len(lights), dtype=np.float32))
 
 
+def _matrix_translation(dx: float, dy: float) -> np.ndarray:
+    return np.array(
+        [[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+
+
+def _expected_matrix_warped_mean(
+    module: object,
+    frames: list[np.ndarray],
+    matrices: np.ndarray,
+    weights: np.ndarray,
+    interpolation: str,
+    clamping_threshold: float = -1.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    height, width = frames[0].shape
+    sums = np.zeros((height, width), dtype=np.float32)
+    weight_map = np.zeros((height, width), dtype=np.float32)
+    coverage = np.zeros((height, width), dtype=np.float32)
+    geometric = np.zeros((height, width), dtype=np.float32)
+    for frame, matrix, weight in zip(frames, matrices, weights, strict=True):
+        if weight <= 0.0 or not np.isfinite(weight):
+            continue
+        if interpolation == "lanczos3":
+            warped, footprint = module.warp_matrix_lanczos3_f32(
+                frame,
+                matrix,
+                np.nan,
+                clamping_threshold,
+            )
+        else:
+            warped, footprint = module.warp_matrix_bilinear_f32(frame, matrix, np.nan)
+        finite = np.isfinite(warped)
+        geometric += (footprint > 0.5).astype(np.float32)
+        coverage += finite.astype(np.float32)
+        sums[finite] += warped[finite] * weight
+        weight_map[finite] += weight
+    master = np.zeros((height, width), dtype=np.float32)
+    valid = weight_map > 0.0
+    master[valid] = sums[valid] / weight_map[valid]
+    return master, weight_map, coverage, geometric
+
+
+def test_resident_stack_fused_matrix_warped_mean_bilinear_matches_warp_then_integrate():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+
+    yy, xx = np.indices((12, 14), dtype=np.float32)
+    frames = [
+        (10.0 + xx + yy * 0.25).astype(np.float32),
+        (20.0 + xx * 0.5 + yy).astype(np.float32),
+        (30.0 + xx * 0.1 - yy * 0.2).astype(np.float32),
+    ]
+    frames[1][3, 4] = np.nan
+    matrices = np.stack(
+        [
+            _matrix_translation(0.0, 0.0),
+            _matrix_translation(1.25, -0.5),
+            _matrix_translation(-2.0, 1.0),
+        ],
+        axis=0,
+    )
+    weights = np.array([1.0, 0.5, 0.0], dtype=np.float32)
+
+    stack = module.ResidentCalibratedStack(len(frames), 12, 14)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, geometric, timing = stack.integrate_matrix_warped_mean(
+        matrices,
+        weights,
+        interpolation="bilinear",
+    )
+    expected_master, expected_weight, expected_coverage, expected_geometric = _expected_matrix_warped_mean(
+        module,
+        frames,
+        matrices,
+        weights,
+        "bilinear",
+    )
+    unwarped_master, _ = stack.integrate_mean(weights)
+
+    assert timing["timing_model"] == "native_fused_matrix_warp_weighted_mean_one_sync"
+    assert timing["interpolation"] == "bilinear"
+    assert timing["rejection"] == "none"
+    assert timing["avoids_stack_scatter"] is True
+    assert timing["modifies_resident_stack"] is False
+    assert timing["frame_count"] == len(frames)
+    assert timing["output_bytes"] == 12 * 14 * 4 * 4
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-6, atol=1e-6)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-6, atol=1e-6)
+    assert np.allclose(geometric, expected_geometric, rtol=1e-6, atol=1e-6)
+    assert not np.allclose(master, unwarped_master)
+
+
+def test_resident_stack_fused_matrix_warped_mean_lanczos3_matches_warp_then_integrate():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+
+    yy, xx = np.indices((20, 22), dtype=np.float32)
+    frames = [
+        (100.0 + np.sin(xx * 0.2) * 5.0 + yy * 0.3).astype(np.float32),
+        (90.0 + np.cos(yy * 0.25) * 3.0 + xx * 0.2).astype(np.float32),
+        (80.0 + xx * 0.4 - yy * 0.1).astype(np.float32),
+    ]
+    matrices = np.stack(
+        [
+            _matrix_translation(0.0, 0.0),
+            _matrix_translation(0.4, -0.3),
+            _matrix_translation(-0.75, 0.6),
+        ],
+        axis=0,
+    )
+    weights = np.array([1.0, 0.75, 0.25], dtype=np.float32)
+
+    stack = module.ResidentCalibratedStack(len(frames), 20, 22)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, geometric, timing = stack.integrate_matrix_warped_mean(
+        matrices,
+        weights,
+        interpolation="lanczos3",
+        clamping_threshold=0.3,
+    )
+    expected_master, expected_weight, expected_coverage, expected_geometric = _expected_matrix_warped_mean(
+        module,
+        frames,
+        matrices,
+        weights,
+        "lanczos3",
+        clamping_threshold=0.3,
+    )
+
+    assert timing["interpolation"] == "lanczos3"
+    assert timing["inverse_batch_bytes"] == len(frames) * 9 * 4
+    assert timing["weights_bytes"] == len(frames) * 4
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-6, atol=1e-6)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-6, atol=1e-6)
+    assert np.allclose(geometric, expected_geometric, rtol=1e-6, atol=1e-6)
+
+
 def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack"):
