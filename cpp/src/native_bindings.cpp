@@ -378,6 +378,7 @@ void glass_star_grid_top_nms_candidates_f32_launch(
     float* out_fluxes,
     int* count,
     int* locks,
+    int* cell_counts,
     int* stored_count,
     int width,
     int height,
@@ -447,6 +448,10 @@ double seconds_since(const Clock::time_point& start) {
 
 const char* grid_catalog_sort_mode(int grid_capacity) {
   return grid_capacity <= 4096 ? "shared_bitonic_power2" : "single_thread_selection";
+}
+
+const char* grid_catalog_topk_mode() {
+  return "strict_flux_precheck_per_cell_lock";
 }
 
 struct CalibrationParameters {
@@ -2422,6 +2427,7 @@ class ResidentCalibratedStack {
     float* d_fluxes = nullptr;
     int* d_count = nullptr;
     int* d_locks = nullptr;
+    int* d_cell_counts = nullptr;
     int* d_stored_count = nullptr;
     int total_count = 0;
     int stored_count = 0;
@@ -2448,6 +2454,9 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)),
           "cudaMalloc(resident grid top nms locks)");
+      check_cuda(
+          cudaMalloc(&d_cell_counts, static_cast<std::size_t>(cell_count) * sizeof(int)),
+          "cudaMalloc(resident grid top nms cell counts)");
       check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident grid top nms stored count)");
       glass_star_grid_top_nms_candidates_f32_launch(
           d_stack_ + index * pixels_per_frame_,
@@ -2459,6 +2468,7 @@ class ResidentCalibratedStack {
           d_fluxes,
           d_count,
           d_locks,
+          d_cell_counts,
           d_stored_count,
           static_cast<int>(width_),
           static_cast<int>(height_),
@@ -2498,6 +2508,7 @@ class ResidentCalibratedStack {
       result["max_output_candidates"] = max_output_candidates;
       result["min_separation_px"] = min_separation_px;
       result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
+      result["catalog_topk_mode"] = grid_catalog_topk_mode();
       result["x"] = xs[py::slice(0, stored_count, 1)];
       result["y"] = ys[py::slice(0, stored_count, 1)];
       result["flux"] = fluxes[py::slice(0, stored_count, 1)];
@@ -2509,6 +2520,7 @@ class ResidentCalibratedStack {
       cudaFree(d_fluxes);
       cudaFree(d_count);
       cudaFree(d_locks);
+      cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
       return result;
     } catch (...) {
@@ -2520,6 +2532,7 @@ class ResidentCalibratedStack {
       cudaFree(d_fluxes);
       cudaFree(d_count);
       cudaFree(d_locks);
+      cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
       throw;
     }
@@ -2557,6 +2570,7 @@ class ResidentCalibratedStack {
     float* d_fluxes = nullptr;
     int* d_count = nullptr;
     int* d_locks = nullptr;
+    int* d_cell_counts = nullptr;
     int* d_stored_count = nullptr;
     try {
       check_cuda(
@@ -2581,6 +2595,9 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)),
           "cudaMalloc(resident batch grid top nms locks)");
+      check_cuda(
+          cudaMalloc(&d_cell_counts, static_cast<std::size_t>(cell_count) * sizeof(int)),
+          "cudaMalloc(resident batch grid top nms cell counts)");
       check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(resident batch grid top nms stored count)");
 
       for (const std::size_t index : indices) {
@@ -2604,6 +2621,7 @@ class ResidentCalibratedStack {
             d_fluxes,
             d_count,
             d_locks,
+            d_cell_counts,
             d_stored_count,
             static_cast<int>(width_),
             static_cast<int>(height_),
@@ -2666,6 +2684,7 @@ class ResidentCalibratedStack {
         result["max_output_candidates"] = max_output_candidates;
         result["min_separation_px"] = min_separation_px;
         result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
+        result["catalog_topk_mode"] = grid_catalog_topk_mode();
         result["catalog_timing_model"] = "per_frame_launch_sync_download";
         result["catalog_enqueue_s"] = enqueue_s;
         result["catalog_sync_s"] = sync_s;
@@ -2686,6 +2705,7 @@ class ResidentCalibratedStack {
       cudaFree(d_fluxes);
       cudaFree(d_count);
       cudaFree(d_locks);
+      cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
       return results;
     } catch (...) {
@@ -2697,6 +2717,7 @@ class ResidentCalibratedStack {
       cudaFree(d_fluxes);
       cudaFree(d_count);
       cudaFree(d_locks);
+      cudaFree(d_cell_counts);
       cudaFree(d_stored_count);
       throw;
     }
@@ -6929,6 +6950,7 @@ py::dict star_grid_top_nms_candidates_f32(
   float* d_fluxes = nullptr;
   int* d_count = nullptr;
   int* d_locks = nullptr;
+  int* d_cell_counts = nullptr;
   int* d_stored_count = nullptr;
   int total_count = 0;
   int stored_count = 0;
@@ -6954,6 +6976,9 @@ py::dict star_grid_top_nms_candidates_f32(
         "cudaMalloc(grid top nms star fluxes)");
     check_cuda(cudaMalloc(&d_count, sizeof(int)), "cudaMalloc(grid top nms star count)");
     check_cuda(cudaMalloc(&d_locks, static_cast<std::size_t>(cell_count) * sizeof(int)), "cudaMalloc(grid top nms locks)");
+    check_cuda(
+        cudaMalloc(&d_cell_counts, static_cast<std::size_t>(cell_count) * sizeof(int)),
+        "cudaMalloc(grid top nms cell counts)");
     check_cuda(cudaMalloc(&d_stored_count, sizeof(int)), "cudaMalloc(grid top nms stored count)");
     check_cuda(cudaMemcpy(d_input, info.ptr, n * sizeof(float), cudaMemcpyHostToDevice), "cudaMemcpy(grid top nms input)");
     glass_star_grid_top_nms_candidates_f32_launch(
@@ -6966,6 +6991,7 @@ py::dict star_grid_top_nms_candidates_f32(
         d_fluxes,
         d_count,
         d_locks,
+        d_cell_counts,
         d_stored_count,
         width,
         height,
@@ -7006,6 +7032,7 @@ py::dict star_grid_top_nms_candidates_f32(
     result["max_output_candidates"] = max_output_candidates;
     result["min_separation_px"] = min_separation_px;
     result["catalog_sort_mode"] = grid_catalog_sort_mode(grid_capacity);
+    result["catalog_topk_mode"] = grid_catalog_topk_mode();
     result["x"] = xs[py::slice(0, stored_count, 1)];
     result["y"] = ys[py::slice(0, stored_count, 1)];
     result["flux"] = fluxes[py::slice(0, stored_count, 1)];
@@ -7018,6 +7045,7 @@ py::dict star_grid_top_nms_candidates_f32(
     cudaFree(d_fluxes);
     cudaFree(d_count);
     cudaFree(d_locks);
+    cudaFree(d_cell_counts);
     cudaFree(d_stored_count);
     return result;
   } catch (...) {
@@ -7030,6 +7058,7 @@ py::dict star_grid_top_nms_candidates_f32(
     cudaFree(d_fluxes);
     cudaFree(d_count);
     cudaFree(d_locks);
+    cudaFree(d_cell_counts);
     cudaFree(d_stored_count);
     throw;
   }

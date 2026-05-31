@@ -2184,6 +2184,7 @@ def star_grid_top_nms_candidates_f32(
             "max_output_candidates": int(result["max_output_candidates"]),
             "min_separation_px": float(result["min_separation_px"]),
             "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
+            "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
             "x": np.asarray(result["x"], dtype=np.float32),
             "y": np.asarray(result["y"], dtype=np.float32),
             "flux": np.asarray(result["flux"], dtype=np.float32),
@@ -2237,6 +2238,7 @@ def star_grid_top_nms_candidates_f32(
         "max_output_candidates": int(max_output_candidates),
         "min_separation_px": float(min_separation_px),
         "catalog_sort_mode": "python_stable_sort",
+        "catalog_topk_mode": "python_per_cell_sort",
         "x": xs[selected_array].astype(np.float32),
         "y": ys[selected_array].astype(np.float32),
         "flux": flux[selected_array].astype(np.float32),
@@ -2944,6 +2946,7 @@ class ResidentCalibratedStack:
             "max_output_candidates": int(result["max_output_candidates"]),
             "min_separation_px": float(result["min_separation_px"]),
             "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
+            "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
             "x": np.asarray(result["x"], dtype=np.float32),
             "y": np.asarray(result["y"], dtype=np.float32),
             "flux": np.asarray(result["flux"], dtype=np.float32),
@@ -2986,6 +2989,7 @@ class ResidentCalibratedStack:
                     "max_output_candidates": int(result["max_output_candidates"]),
                     "min_separation_px": float(result["min_separation_px"]),
                     "catalog_sort_mode": str(result.get("catalog_sort_mode", "unavailable")),
+                    "catalog_topk_mode": str(result.get("catalog_topk_mode", "unavailable")),
                     "catalog_timing_model": str(
                         result.get("catalog_timing_model", "unavailable")
                     ),

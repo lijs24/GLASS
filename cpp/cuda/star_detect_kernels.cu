@@ -239,6 +239,7 @@ __global__ void star_candidate_grid_topk_kernel(
     float* ys,
     float* fluxes,
     int* locks,
+    int* cell_counts,
     int* count,
     int width,
     int height,
@@ -260,6 +261,22 @@ __global__ void star_candidate_grid_topk_kernel(
   const int cell_y = min((y * grid_rows) / height, grid_rows - 1);
   const int cell_index = cell_y * grid_cols + cell_x;
   const int base = cell_index * candidates_per_cell;
+
+  const int filled_slots = atomicAdd(cell_counts + cell_index, 0);
+  if (filled_slots >= candidates_per_cell) {
+    // Equal-flux candidates still take the lock so the existing y/x tie-breaker
+    // remains authoritative.
+    bool strictly_weaker_than_cell = true;
+    for (int i = 0; i < candidates_per_cell; ++i) {
+      if (center >= fluxes[base + i]) {
+        strictly_weaker_than_cell = false;
+        break;
+      }
+    }
+    if (strictly_weaker_than_cell) {
+      return;
+    }
+  }
 
   while (atomicCAS(locks + cell_index, 0, 1) != 0) {
   }
@@ -284,10 +301,14 @@ __global__ void star_candidate_grid_topk_kernel(
           static_cast<float>(y),
           weakest_flux,
           xs[weakest_index],
-          ys[weakest_index])) {
+            ys[weakest_index])) {
+    const bool replacing_empty = weakest_flux <= -1.0e30f;
     xs[weakest_index] = static_cast<float>(x);
     ys[weakest_index] = static_cast<float>(y);
     fluxes[weakest_index] = center;
+    if (replacing_empty) {
+      atomicAdd(cell_counts + cell_index, 1);
+    }
   }
   __threadfence();
   atomicExch(locks + cell_index, 0);
@@ -547,6 +568,7 @@ void glass_star_grid_top_nms_candidates_f32_launch(
     float* out_fluxes,
     int* count,
     int* locks,
+    int* cell_counts,
     int* stored_count,
     int width,
     int height,
@@ -566,6 +588,7 @@ void glass_star_grid_top_nms_candidates_f32_launch(
   const int out_init_blocks = (max_output_candidates + init_threads - 1) / init_threads;
   star_catalog_init_kernel<<<out_init_blocks, init_threads>>>(out_xs, out_ys, out_fluxes, max_output_candidates);
   cudaMemset(locks, 0, static_cast<std::size_t>(cell_count) * sizeof(int));
+  cudaMemset(cell_counts, 0, static_cast<std::size_t>(cell_count) * sizeof(int));
   const dim3 block(16, 16);
   const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
   star_candidate_grid_topk_kernel<<<grid, block>>>(
@@ -574,6 +597,7 @@ void glass_star_grid_top_nms_candidates_f32_launch(
       grid_ys,
       grid_fluxes,
       locks,
+      cell_counts,
       count,
       width,
       height,

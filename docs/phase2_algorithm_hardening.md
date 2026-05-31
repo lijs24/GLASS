@@ -892,6 +892,24 @@ integration where applicable.
   ruff, full pytest, and the 200-light benchmark because this gate changes the
   resident catalog GPU kernel.
 
+### S2-Gate 53: Resident Grid Top-K Strict Flux Precheck
+
+- Reduce per-cell lock contention in the resident grid top-k catalog kernel by
+  adding a lock-free strict-flux precheck before the existing locked top-k
+  replacement step.
+- Track a per-cell filled-slot counter and enable the precheck only after that
+  cell has reached `candidates_per_cell`; sparse cells still take the locked
+  path so every available slot can be filled.
+- Preserve tie handling by sending equal-flux candidates through the existing
+  locked comparator, keeping the established flux/y/x ordering semantics and
+  saturated-plateau behavior.
+- Record the catalog top-k mode in CUDA wrapper results, resident per-frame
+  warnings, `resident_artifacts.json`, and the HTML resident summary.
+- Validate with CPU-reference and tie-break catalog tests, resident
+  batch/single equivalence tests, resident triangle-registration smoke tests,
+  ruff, full pytest, and the 200-light benchmark because this gate changes the
+  full-frame grid top-k GPU kernel.
+
 ## Gate Rules
 
 Each gate requires:

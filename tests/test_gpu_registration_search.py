@@ -1374,6 +1374,7 @@ def test_gpu_star_grid_top_nms_candidates_keeps_spatial_candidates():
     assert result["stored_count"] == 4
     assert result["grid_capacity"] == 8
     assert result["catalog_sort_mode"] == "shared_bitonic_power2"
+    assert result["catalog_topk_mode"] == "strict_flux_precheck_per_cell_lock"
     assert (8, 8) in points
     assert (10, 10) not in points
     assert (40, 8) in points
@@ -1425,8 +1426,38 @@ def test_gpu_star_grid_top_nms_candidates_matches_cpu_reference_for_non_power2_c
 
     assert result["grid_capacity"] == 45
     assert result["catalog_sort_mode"] == "shared_bitonic_power2"
+    assert result["catalog_topk_mode"] == "strict_flux_precheck_per_cell_lock"
     assert result["stored_count"] == len(expected)
     assert points == expected
+
+
+def test_gpu_star_grid_top_nms_candidates_precheck_preserves_tie_breaks():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "star_grid_top_nms_candidates_f32"):
+        raise AssertionError("star_grid_top_nms_candidates_f32 is missing from glass_cuda")
+
+    image = np.zeros((18, 18), dtype=np.float32)
+    image[4, 4] = 100.0
+    image[4, 7] = 100.0
+    image[7, 4] = 100.0
+    image[7, 7] = 100.0
+    image[12, 12] = 10.0
+
+    result = module.star_grid_top_nms_candidates_f32(
+        image,
+        threshold=1.0,
+        grid_cols=1,
+        grid_rows=1,
+        candidates_per_cell=4,
+        max_output_candidates=4,
+        min_separation_px=0.0,
+    )
+    points = [(int(x), int(y)) for x, y in zip(result["x"], result["y"], strict=True)]
+
+    assert result["catalog_topk_mode"] == "strict_flux_precheck_per_cell_lock"
+    assert result["count"] == 5
+    assert result["stored_count"] == 4
+    assert points == [(4, 4), (7, 4), (4, 7), (7, 7)]
 
 
 def test_gpu_star_top_candidates_tie_breaks_saturated_plateau_deterministically():

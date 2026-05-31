@@ -395,6 +395,7 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "warp": registration.get("warp_interpolation"),
                 "catalog_timing_model": registration.get("triangle_catalog_timing_model"),
                 "catalog_sort_mode": registration.get("triangle_catalog_sort_mode"),
+                "catalog_topk_mode": registration.get("triangle_catalog_topk_mode"),
                 "catalog_native_sync_s": round(
                     float(registration.get("triangle_catalog_native_sync_s") or 0.0), 3
                 ),
