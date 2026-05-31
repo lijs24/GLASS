@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping
+from typing import Any, Mapping
 
 import numpy as np
 
@@ -18,6 +18,7 @@ class StackEngineResult:
     high_rejection_map: np.ndarray | None = None
     variance_map: np.ndarray | None = None
     dq_mask: DQMask | None = None
+    dq_provenance: dict[str, Any] = field(default_factory=dict)
     metrics: dict[str, float | int | str] = field(default_factory=dict)
 
 
@@ -57,10 +58,17 @@ class CPUStackEngine:
         rejected_low_total = 0
         rejected_high_total = 0
         valid_total = 0
+        input_sample_total = 0
+        input_flagged_sample_total = 0
+        input_nonfinite_sample_total = 0
+        coverage_zero_pixel_total = 0
+        low_rejected_pixel_total = 0
+        high_rejected_pixel_total = 0
+        input_dq_flag_counts = {flag.name.lower(): 0 for flag in DQFlag if flag != DQFlag.VALID}
 
         for tile in iter_tiles(width, height, self.tile_size):
             window = TileWindow(tile.y0, tile.y1, tile.x0, tile.x1)
-            stack, valid = self._read_stack_tile(ordered_sources, window)
+            stack, valid, dq_stack = self._read_stack_tile(ordered_sources, window)
             valid, low, high = _apply_rejection(stack, valid, request.rejection)
             tile_master, tile_weight, tile_coverage, tile_variance = _combine_tile(
                 stack,
@@ -88,6 +96,18 @@ class CPUStackEngine:
                 dq_tile.mark(DQFlag.HIGH_REJECTED, high > 0)
                 dq_mask.data[y_slice, x_slice] = dq_tile.data
 
+            input_sample_total += int(dq_stack.size)
+            input_flagged_sample_total += int(np.count_nonzero(dq_stack != 0))
+            input_nonfinite_sample_total += int(np.count_nonzero(~np.isfinite(stack)))
+            coverage_zero_pixel_total += int(np.count_nonzero(tile_coverage <= 0))
+            low_rejected_pixel_total += int(np.count_nonzero(low > 0))
+            high_rejected_pixel_total += int(np.count_nonzero(high > 0))
+            for flag in DQFlag:
+                if flag == DQFlag.VALID:
+                    continue
+                input_dq_flag_counts[flag.name.lower()] += int(
+                    np.count_nonzero((dq_stack & np.uint32(int(flag))) != 0)
+                )
             rejected_low_total += int(np.sum(low))
             rejected_high_total += int(np.sum(high))
             valid_total += int(np.sum(tile_coverage))
@@ -102,6 +122,23 @@ class CPUStackEngine:
             "low_rejected": rejected_low_total,
             "high_rejected": rejected_high_total,
         }
+        dq_provenance: dict[str, Any] = {
+            "schema_version": 1,
+            "input_samples": input_sample_total,
+            "input_flagged_samples": input_flagged_sample_total,
+            "input_nonfinite_samples": input_nonfinite_sample_total,
+            "input_dq_flag_counts": input_dq_flag_counts,
+            "output_coverage_zero_pixels": coverage_zero_pixel_total,
+            "output_low_rejected_pixels": low_rejected_pixel_total,
+            "output_high_rejected_pixels": high_rejected_pixel_total,
+            "output_dq_summary": dq_mask.summary() if dq_mask is not None else None,
+            "semantics": (
+                "Source DQ flags and non-finite samples are consumed as invalid stack "
+                "samples. The output DQ map marks pixels with no valid samples and "
+                "pixels touched by low/high rejection; source DQ flag counts are "
+                "preserved here for audit."
+            ),
+        }
         if variance_map is not None:
             finite_variance = variance_map[np.isfinite(variance_map)]
             metrics["variance_mean"] = float(np.mean(finite_variance)) if finite_variance.size else 0.0
@@ -115,6 +152,7 @@ class CPUStackEngine:
             high_rejection_map=high_rejection_map,
             variance_map=variance_map,
             dq_mask=dq_mask,
+            dq_provenance=dq_provenance,
             metrics=metrics,
         )
 
@@ -140,17 +178,19 @@ class CPUStackEngine:
 
     def _read_stack_tile(
         self, sources: list[ImageSource], window: TileWindow
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         tiles: list[np.ndarray] = []
         valid_masks: list[np.ndarray] = []
+        dq_masks: list[np.ndarray] = []
         for source in sources:
             tile = np.asarray(source.read_tile(window, dtype=np.float32), dtype=np.float32)
             if tile.shape != window.shape:
                 raise ValueError(f"source returned tile shape {tile.shape}, expected {window.shape}")
             dq = source.read_mask_tile(window)
             tiles.append(tile)
+            dq_masks.append(dq.data.astype(np.uint32, copy=False))
             valid_masks.append(np.isfinite(tile) & (dq.data == 0))
-        return np.stack(tiles, axis=0), np.stack(valid_masks, axis=0)
+        return np.stack(tiles, axis=0), np.stack(valid_masks, axis=0), np.stack(dq_masks, axis=0)
 
 
 def _apply_rejection(

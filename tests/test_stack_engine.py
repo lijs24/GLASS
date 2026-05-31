@@ -106,6 +106,36 @@ def test_cpu_stack_engine_weighted_mean_consumes_dq_masks():
     assert result.dq_mask.count(DQFlag.NO_DATA) == 0
 
 
+def test_cpu_stack_engine_records_dq_provenance():
+    frames = [
+        np.ones((2, 2), dtype=np.float32),
+        np.ones((2, 2), dtype=np.float32) * 3,
+    ]
+    dq0 = np.zeros((2, 2), dtype=np.uint32)
+    dq1 = np.zeros((2, 2), dtype=np.uint32)
+    dq0[0, 0] = int(DQFlag.HOT_PIXEL)
+    dq1[0, 0] = int(DQFlag.NO_DATA)
+    dq0[0, 1] = int(DQFlag.SATURATED)
+    frames[1][1, 0] = np.nan
+    request = _request(len(frames), maps=OutputMapPolicy(coverage=True, dq=True))
+
+    result = CPUStackEngine(tile_size=1).stack(request, _sources(frames, [dq0, dq1]))
+
+    provenance = result.dq_provenance
+    assert provenance["schema_version"] == 1
+    assert provenance["input_samples"] == 8
+    assert provenance["input_flagged_samples"] == 3
+    assert provenance["input_nonfinite_samples"] == 1
+    assert provenance["input_dq_flag_counts"]["hot_pixel"] == 1
+    assert provenance["input_dq_flag_counts"]["no_data"] == 1
+    assert provenance["input_dq_flag_counts"]["saturated"] == 1
+    assert provenance["output_coverage_zero_pixels"] == 1
+    assert provenance["output_dq_summary"]["no_data"] == 1
+    assert result.coverage_map[0, 0] == pytest.approx(0.0)
+    assert result.coverage_map[0, 1] == pytest.approx(1.0)
+    assert result.coverage_map[1, 0] == pytest.approx(1.0)
+
+
 def test_cpu_stack_engine_weighted_variance_map():
     frames = [
         np.ones((2, 2), dtype=np.float32),

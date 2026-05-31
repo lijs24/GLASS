@@ -440,6 +440,19 @@ integration where applicable.
 - Validate with resident CUDA stack tests, CUDA smoke tests, ruff, full pytest,
   and the 200-light benchmark because this changes the resident fast path.
 
+### S2-Gate 25: StackEngine DQ Provenance
+
+- Add a first-pass DQ provenance contract to the CPU StackEngine result.
+- Record source DQ flag counts, flagged sample counts, non-finite sample
+  counts, output zero-coverage pixels, rejected-pixel counts, and output DQ
+  summaries.
+- Keep current StackEngine combine/rejection numerical behavior unchanged:
+  source DQ and non-finite samples remain invalid stack samples, while output
+  DQ marks no-data and low/high rejection pixels.
+- Validate with direct StackEngine synthetic tests, ruff, and full pytest.
+- A 200-light benchmark rerun is not required unless this gate changes the
+  resident CUDA fast path or default pipeline routing.
+
 ## Gate Rules
 
 Each gate requires:
