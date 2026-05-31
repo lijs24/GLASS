@@ -357,6 +357,11 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert Path(integration["outputs"][0]["dq_map_path"]).exists()
     assert integration["outputs"][0]["dq_map_path"] == resident["artifacts"][0]["dq_map_path"]
     assert integration["outputs"][0]["dq_summary"] == resident["artifacts"][0]["dq_summary"]
+    assert integration["outputs"][0]["master_path"] == resident["artifacts"][0]["master_path"]
+    assert integration["outputs"][0]["weight_map_path"] == resident["artifacts"][0]["weight_map_path"]
+    assert integration["outputs"][0]["coverage_map_path"] == resident["artifacts"][0]["coverage_map_path"]
+    assert integration["outputs"][0]["low_rejection_map_path"] == resident["artifacts"][0]["low_rejection_map_path"]
+    assert integration["outputs"][0]["high_rejection_map_path"] == resident["artifacts"][0]["high_rejection_map_path"]
     dq_data = read_fits_data(integration["outputs"][0]["dq_map_path"])
     shape = resident["artifacts"][0]["shape"]
     assert dq_data.shape == (shape["height"], shape["width"])
@@ -521,8 +526,15 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert Path(output["weight_map_path"]).exists()
     assert Path(output["coverage_map_path"]).exists()
     assert Path(output["dq_map_path"]).exists()
+    assert output["master_path"] == artifact["master_path"]
+    assert output["weight_map_path"] == artifact["weight_map_path"]
+    assert output["coverage_map_path"] == artifact["coverage_map_path"]
+    assert output["dq_map_path"] == artifact["dq_map_path"]
+    assert output["output_write_storage"] == artifact["output_write_storage"]
     assert output["low_rejection_map_path"] is None
     assert output["high_rejection_map_path"] is None
+    assert artifact["low_rejection_map_path"] is None
+    assert artifact["high_rejection_map_path"] is None
     assert not list((run / "integration").glob("resident_low_rejection_map_*.fits"))
     assert not list((run / "integration").glob("resident_high_rejection_map_*.fits"))
     assert "low_rejection" in output["output_map_policy"]["skipped"]
@@ -544,6 +556,64 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert "finite_pre_rejection_coverage" in provenance
     assert output["geometric_warp_coverage"]["available"] is True
     assert artifact["resident_registration"]["warp_coverage"]["available"] is True
+
+
+def test_cli_resident_cuda_audit_output_maps_mirror_paths(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_audit_maps"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cuda",
+                "--memory-mode",
+                "resident",
+                "--until-stage",
+                "integration",
+                "--local-normalization",
+                "off",
+                "--integration-rejection",
+                "sigma_clip",
+                "--integration-weighting",
+                "none",
+                "--resident-registration",
+                "off",
+                "--resident-output-maps",
+                "audit",
+            ]
+        )
+        == 0
+    )
+
+    integration = read_json(run / "integration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    output = integration["outputs"][0]
+    artifact = resident["artifacts"][0]
+    for key in [
+        "master_path",
+        "weight_map_path",
+        "coverage_map_path",
+        "low_rejection_map_path",
+        "high_rejection_map_path",
+        "dq_map_path",
+    ]:
+        assert output[key] == artifact[key]
+        assert Path(artifact[key]).exists()
+    assert output["output_write_storage"] == artifact["output_write_storage"]
+    assert output["output_map_policy"]["written"] == artifact["output_map_policy"]["written"]
+    assert "low_rejection" in artifact["output_map_policy"]["written"]
+    assert "high_rejection" in artifact["output_map_policy"]["written"]
 
 
 def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):

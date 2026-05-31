@@ -3650,6 +3650,11 @@ def run_resident_calibration_integration(
                             "weight, coverage, and DQ maps; minimal writes only master."
                         ),
                     },
+                    "master_path": str(master_path),
+                    "weight_map_path": None if weight_path is None else str(weight_path),
+                    "coverage_map_path": None if coverage_path is None else str(coverage_path),
+                    "low_rejection_map_path": None if low_rejection_path is None else str(low_rejection_path),
+                    "high_rejection_map_path": None if high_rejection_path is None else str(high_rejection_path),
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
@@ -3710,6 +3715,7 @@ def run_resident_calibration_integration(
                         "breakdown_s": write_breakdown,
                         "storage": write_storage,
                     },
+                    "output_write_storage": write_storage,
                     "fine_timing": fine_timing,
                     "resident_io_overlap": resident_io_overlap,
                     "resident_io_pipeline": {

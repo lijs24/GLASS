@@ -65,6 +65,14 @@
     "allow_missing_rejection_maps_if_skipped": false,
     "rejection_map_sum_matches_provenance": true,
     "rejection_map_sum_tolerance_samples": 4,
+    "required_resident_artifact_map_paths": [
+      "master",
+      "weight",
+      "coverage",
+      "dq",
+      "low_rejection",
+      "high_rejection"
+    ],
     "positive_output_dq_flags": [
       "valid",
       "warp_edge"

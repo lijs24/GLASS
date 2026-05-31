@@ -45,10 +45,14 @@ def _write_glass_run(
     if resident_timing is not None:
         resident_artifact["timing_s"] = resident_timing
     if resident_dq:
+        master = path / "master.fits"
+        weight_map = path / "weight_map.fits"
         dq_map = path / "dq_map.fits"
         coverage_map = path / "coverage_map.fits"
         low_rejection_map = path / "low_rejection_map.fits"
         high_rejection_map = path / "high_rejection_map.fits"
+        write_fits_data(master, np.ones((2, 3), dtype=np.float32), dtype=np.float32)
+        write_fits_data(weight_map, np.ones((2, 3), dtype=np.float32), dtype=np.float32)
         dq_values = np.array(
             [
                 [0, int(DQFlag.WARP_EDGE), int(DQFlag.LOW_REJECTED)],
@@ -92,6 +96,8 @@ def _write_glass_run(
         }
         output.update(
             {
+                "master_path": str(master),
+                "weight_map_path": str(weight_map),
                 "dq_map_path": str(dq_map),
                 "coverage_map_path": str(coverage_map),
                 "low_rejection_map_path": str(low_rejection_map),
@@ -108,6 +114,8 @@ def _write_glass_run(
         )
         resident_artifact.update(
             {
+                "master_path": str(master),
+                "weight_map_path": str(weight_map),
                 "dq_map_path": str(dq_map),
                 "coverage_map_path": str(coverage_map),
                 "low_rejection_map_path": str(low_rejection_map),
@@ -242,6 +250,14 @@ def _add_dq_contract(path: Path) -> None:
         "coverage_zero_pixels_match_no_data": True,
         "allow_missing_rejection_maps_if_skipped": True,
         "rejection_map_sum_matches_provenance": True,
+        "required_resident_artifact_map_paths": [
+            "master",
+            "weight",
+            "coverage",
+            "dq",
+            "low_rejection",
+            "high_rejection",
+        ],
         "positive_output_dq_flags": ["valid", "warp_edge"],
         "required_source_terms": ["geometric_warp_coverage"],
     }
@@ -393,6 +409,9 @@ def test_acceptance_audit_applies_dq_provenance_contract(tmp_path: Path):
     assert checks["contract_low_rejection_map_positive_pixels_match:low_rejected"] is True
     assert checks["contract_high_rejection_map_positive_pixels_match:high_rejected"] is True
     assert checks["contract_rejection_map_sum_matches_provenance"] is True
+    assert checks["contract_resident_artifact_map_path:master"] is True
+    assert checks["contract_resident_artifact_map_path:low_rejection"] is True
+    assert checks["contract_resident_artifact_map_path:high_rejection"] is True
     assert checks["contract_dq_source_term:geometric_warp_coverage"] is True
     verification = audit["dq_provenance"]["records"][0]["dq_map_pixel_verification"]
     assert verification["status"] == "verified"

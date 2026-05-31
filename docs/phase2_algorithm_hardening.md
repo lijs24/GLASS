@@ -547,6 +547,22 @@ integration where applicable.
   record runtime and numerical agreement.
 - Validate with acceptance-audit, ruff, full pytest, checkpoint, and commit.
 
+### S2-Gate 32: Resident Artifact Output Path Completeness
+
+- Mirror all resident output map paths into `resident_artifacts.json`,
+  including master, weight, coverage, low rejection, high rejection, and DQ
+  maps.
+- Mirror resident output write storage metadata into the resident artifact so
+  audit consumers do not need to join against `integration_results.json` to
+  explain written artifacts.
+- Extend the benchmark DQ provenance contract so it can require resident
+  artifact map paths and verify that each path exists.
+- Validate the strict audit-map contract on the 200-light resident CUDA run, so
+  the real-data artifact record is self-contained for map provenance, pixel
+  verification, and output-storage review.
+- Validate with focused resident/audit tests, ruff, full pytest, real-data
+  compare, acceptance-audit, checkpoint, and commit.
+
 ## Gate Rules
 
 Each gate requires:

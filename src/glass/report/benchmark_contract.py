@@ -112,6 +112,8 @@ def _dq_record_from_payload(
     if not isinstance(summary, dict):
         return None
     dq_map_path = payload.get("dq_map_path")
+    master_path = payload.get("master_path")
+    weight_map_path = payload.get("weight_map_path")
     coverage_map_path = payload.get("coverage_map_path")
     low_rejection_map_path = payload.get("low_rejection_map_path")
     high_rejection_map_path = payload.get("high_rejection_map_path")
@@ -120,6 +122,10 @@ def _dq_record_from_payload(
         "source_kind": source_kind,
         "index": index,
         "normalized_from_legacy": normalized_from_legacy,
+        "master_path": master_path,
+        "master_exists": _path_exists_maybe_relative(master_path, run_root),
+        "weight_map_path": weight_map_path,
+        "weight_map_exists": _path_exists_maybe_relative(weight_map_path, run_root),
         "dq_map_path": dq_map_path,
         "dq_map_exists": _path_exists_maybe_relative(dq_map_path, run_root),
         "coverage_map_path": coverage_map_path,
@@ -645,6 +651,34 @@ def _build_dq_provenance_contract_checks(
                         {"matches": matches, "tolerance_samples": tolerance},
                     )
                 )
+
+    required_resident_paths = [str(item) for item in dq_contract.get("required_resident_artifact_map_paths") or []]
+    if required_resident_paths:
+        resident_records = [record for record in records if record.get("source_kind") == "resident_artifact"]
+        map_path_keys = {
+            "master": ("master_path", "master_exists"),
+            "weight": ("weight_map_path", "weight_map_exists"),
+            "coverage": ("coverage_map_path", "coverage_map_exists"),
+            "dq": ("dq_map_path", "dq_map_exists"),
+            "low_rejection": ("low_rejection_map_path", "low_rejection_map_exists"),
+            "high_rejection": ("high_rejection_map_path", "high_rejection_map_exists"),
+        }
+        for map_name in required_resident_paths:
+            path_key, exists_key = map_path_keys.get(map_name, (f"{map_name}_path", f"{map_name}_exists"))
+            matches = [
+                {
+                    "path": record.get(path_key),
+                    "exists": bool(record.get(exists_key)),
+                }
+                for record in resident_records
+            ]
+            checks.append(
+                _check(
+                    f"contract_resident_artifact_map_path:{map_name}",
+                    bool(matches) and all(bool(match.get("path")) and bool(match.get("exists")) for match in matches),
+                    {"resident_records": len(resident_records), "matches": matches},
+                )
+            )
 
     for term in dq_contract.get("required_source_terms") or []:
         term_text = str(term)
