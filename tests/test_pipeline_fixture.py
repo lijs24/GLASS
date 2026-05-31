@@ -3,8 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from glass.cli import main
-from glass.engine.pipeline import _exact_median_scratch, _mean_stack_tile, _normalization_scalar
-from glass.io.fits_io import write_fits_data
+from glass.engine.pipeline import (
+    _exact_median_scratch,
+    _mean_stack_tile,
+    _normalization_scalar,
+    _stack_mean_master,
+    _stream_mean_master,
+)
+from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.synthetic.generator import generate_synthetic_dataset
 
 
@@ -26,7 +32,8 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     )
     integration = json.loads((run / "integration_results.json").read_text(encoding="utf-8"))
     assert integration["rejection"] == "none"
-    assert all(output["tile_stack_mode"] == "streaming_accumulator" for output in integration["outputs"])
+    assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
+    assert all(output["stack_engine_enabled"] for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     assert main(["resume", "--run", str(run)]) == 0
 
@@ -65,6 +72,8 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     artifacts = json.loads((run / "calibration_artifacts.json").read_text(encoding="utf-8"))
     assert artifacts["policy"]["flat_floor"] == 0.05
     assert all(master["streaming"] for master in artifacts["masters"].values())
+    assert all(master["stack_engine_enabled"] for master in artifacts["masters"].values())
+    assert all(master["tile_stack_mode"] == "stack_engine_cpu" for master in artifacts["masters"].values())
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
 
 
@@ -128,6 +137,53 @@ def test_mean_stack_tile_uses_streaming_accumulator(monkeypatch):
 
     monkeypatch.setattr(np, "stack", fail_stack)
     assert np.allclose(_mean_stack_tile(readers, tile), expected)
+
+
+def test_stack_engine_master_matches_legacy_streaming(tmp_path: Path):
+    import numpy as np
+
+    paths = []
+    for index, value in enumerate([1.0, 3.0, 5.0]):
+        path = tmp_path / f"frame_{index}.fits"
+        write_fits_data(path, np.full((5, 7), value, dtype=np.float32))
+        paths.append(str(path))
+    subtract = tmp_path / "subtract.fits"
+    write_fits_data(subtract, np.ones((5, 7), dtype=np.float32))
+    legacy = tmp_path / "legacy.fits"
+    stack_engine = tmp_path / "stack_engine.fits"
+
+    legacy_stats = _stream_mean_master(paths, legacy, tile_size=3, header={}, subtract_path=str(subtract))
+    stack_stats, mode, fallback_reason = _stack_mean_master(
+        paths, stack_engine, tile_size=3, header={}, subtract_path=str(subtract)
+    )
+
+    assert mode == "stack_engine_cpu"
+    assert fallback_reason is None
+    assert np.allclose(read_fits_data(stack_engine), read_fits_data(legacy))
+    assert stack_stats["mean"] == legacy_stats["mean"]
+
+
+def test_stack_engine_master_fallback_preserves_legacy_streaming(tmp_path: Path, monkeypatch):
+    import numpy as np
+    import glass.engine.pipeline as pipeline_module
+
+    paths = []
+    for index, value in enumerate([2.0, 6.0]):
+        path = tmp_path / f"frame_{index}.fits"
+        write_fits_data(path, np.full((4, 4), value, dtype=np.float32))
+        paths.append(str(path))
+    out = tmp_path / "fallback.fits"
+
+    def fail_stack_engine(*args, **kwargs):
+        raise RuntimeError("forced stack engine failure")
+
+    monkeypatch.setattr(pipeline_module, "_stack_mean_master_with_engine", fail_stack_engine)
+    stats, mode, fallback_reason = _stack_mean_master(paths, out, tile_size=2, header={})
+
+    assert mode == "legacy_streaming_accumulator"
+    assert "forced stack engine failure" in str(fallback_reason)
+    assert np.allclose(read_fits_data(out), 4.0)
+    assert stats["mean"] == 4.0
 
 
 def test_pipeline_fixture_run_calibration_cuda_streaming(tmp_path: Path):
@@ -371,7 +427,9 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
     import json
 
     integration = json.loads((run / "integration_results.json").read_text(encoding="utf-8"))
-    assert all(output["tile_stack_mode"] == "stack_for_rejection" for output in integration["outputs"])
+    assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
+    assert all(output["stack_engine_enabled"] for output in integration["outputs"])
+    assert all(output["stack_engine_rejection_method"] == "winsorized_sigma" for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     assert list((run / "integration").glob("weight_map_*.fits"))
     assert list((run / "integration").glob("coverage_map_*.fits"))

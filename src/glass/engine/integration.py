@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from glass.cpu.integration import weighted_integrate_stack
+from glass.engine.contracts import (
+    CombinePolicy,
+    DQFlag,
+    DQMask,
+    OutputMapPolicy,
+    RejectionPolicy,
+    StackRequest,
+    TileWindow,
+)
+from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.fits_io import FitsImageReader, FitsTileWriter
 from glass.io.json_io import read_json, write_json
@@ -84,6 +93,156 @@ def _policy_value(policy: dict[str, Any], key: str, override: str | None, defaul
     return str(policy.get(key) or default)
 
 
+def _stack_engine_rejection_method(value: str) -> str:
+    if value == "sigma_clip":
+        return "sigma"
+    return value
+
+
+@dataclass(slots=True)
+class _CoverageImageSource:
+    path: str | Path
+    coverage_path: str | Path
+    metadata: dict[str, Any] = field(default_factory=dict)
+    width: int = 0
+    height: int = 0
+    channels: int = 1
+    dtype: str = "float32"
+    _reader: FitsImageReader | None = field(default=None, init=False, repr=False)
+    _coverage_reader: FitsImageReader | None = field(default=None, init=False, repr=False)
+
+    def __enter__(self) -> "_CoverageImageSource":
+        self._reader = FitsImageReader(self.path)
+        self._coverage_reader = FitsImageReader(self.coverage_path)
+        self._reader.__enter__()
+        self._coverage_reader.__enter__()
+        self.height, self.width = self._reader.shape
+        if self._coverage_reader.shape != (self.height, self.width):
+            raise ValueError("coverage shape does not match image shape")
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._coverage_reader is not None:
+            self._coverage_reader.__exit__(exc_type, exc, tb)
+        if self._reader is not None:
+            self._reader.__exit__(exc_type, exc, tb)
+        self._reader = None
+        self._coverage_reader = None
+
+    def read_tile(self, window: TileWindow, dtype: Any = np.float32) -> np.ndarray:
+        if self._reader is None:
+            raise RuntimeError("coverage image source is not open")
+        return self._reader.read_tile(window.y0, window.y1, window.x0, window.x1, dtype=dtype)
+
+    def read_mask_tile(self, window: TileWindow) -> DQMask:
+        if self._reader is None or self._coverage_reader is None:
+            raise RuntimeError("coverage image source is not open")
+        data = self._reader.read_tile(window.y0, window.y1, window.x0, window.x1)
+        coverage = self._coverage_reader.read_tile(window.y0, window.y1, window.x0, window.x1)
+        mask = DQMask.empty(window.shape)
+        invalid = (~np.isfinite(data)) | (~np.isfinite(coverage)) | (coverage <= 0.5)
+        if np.any(invalid):
+            mask.mark(DQFlag.NO_DATA, invalid)
+        return mask
+
+
+def _write_stack_engine_result(
+    result: StackEngineResult,
+    master_path: Path,
+    weight_path: Path,
+    coverage_path: Path,
+    low_path: Path,
+    high_path: Path,
+    tile_size: int,
+) -> int:
+    height, width = result.master.shape
+    tile_count = 0
+    with ExitStack() as stack:
+        master_writer = stack.enter_context(FitsTileWriter(master_path, width, height, {"IMAGETYP": "master"}))
+        weight_writer = stack.enter_context(FitsTileWriter(weight_path, width, height, {"IMAGETYP": "weight"}))
+        coverage_writer = stack.enter_context(FitsTileWriter(coverage_path, width, height, {"IMAGETYP": "coverage"}))
+        low_writer = stack.enter_context(FitsTileWriter(low_path, width, height, {"IMAGETYP": "lowrej"}))
+        high_writer = stack.enter_context(FitsTileWriter(high_path, width, height, {"IMAGETYP": "highrej"}))
+        weight_map = (
+            result.weight_map if result.weight_map is not None else np.zeros_like(result.master, dtype=np.float32)
+        )
+        coverage_map = (
+            result.coverage_map
+            if result.coverage_map is not None
+            else np.zeros_like(result.master, dtype=np.float32)
+        )
+        low_map = (
+            result.low_rejection_map
+            if result.low_rejection_map is not None
+            else np.zeros_like(result.master, dtype=np.float32)
+        )
+        high_map = (
+            result.high_rejection_map
+            if result.high_rejection_map is not None
+            else np.zeros_like(result.master, dtype=np.float32)
+        )
+        for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
+            y_slice = slice(tile.y0, tile.y1)
+            x_slice = slice(tile.x0, tile.x1)
+            master_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, result.master[y_slice, x_slice])
+            weight_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, weight_map[y_slice, x_slice])
+            coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage_map[y_slice, x_slice])
+            low_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, low_map[y_slice, x_slice])
+            high_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, high_map[y_slice, x_slice])
+            tile_count += 1
+    return tile_count
+
+
+def _integrate_with_stack_engine(
+    items: list[dict[str, Any]],
+    frame_weights: dict[str, float],
+    rejection: str,
+    low_sigma: float,
+    high_sigma: float,
+    tile_size: int,
+    master_path: Path,
+    weight_path: Path,
+    coverage_path: Path,
+    low_path: Path,
+    high_path: Path,
+    weighting: str,
+) -> tuple[int, dict[str, float | int | str], str]:
+    method = _stack_engine_rejection_method(rejection)
+    with ExitStack() as stack:
+        sources = {
+            item["frame_id"]: stack.enter_context(
+                _CoverageImageSource(item["path"], item["coverage_path"])
+            )
+            for item in items
+        }
+        request = StackRequest(
+            frame_ids=tuple(item["frame_id"] for item in items),
+            source_kind="light",
+            combine=CombinePolicy(
+                method="weighted_mean" if weighting != "none" else "mean",
+                accumulator_dtype="float32",
+            ),
+            rejection=RejectionPolicy(
+                method=method, low_sigma=low_sigma, high_sigma=high_sigma, max_reject_fraction=0.5
+            ),
+            output_maps=OutputMapPolicy(
+                coverage=True,
+                weight=True,
+                variance=False,
+                low_rejection=True,
+                high_rejection=True,
+                dq=False,
+            ),
+            weights={item["frame_id"]: frame_weights[item["frame_id"]] for item in items},
+            metadata={"stage": "integration", "coverage_source": "coverage_fits"},
+        )
+        result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+    tile_count = _write_stack_engine_result(
+        result, master_path, weight_path, coverage_path, low_path, high_path, tile_size
+    )
+    return tile_count, result.metrics, method
+
+
 def integrate_registered_frames(
     run_dir: str | Path,
     plan_path: str | Path | None = None,
@@ -127,20 +286,46 @@ def integrate_registered_frames(
             coverage_path = out_dir / f"coverage_map_{filt}.fits"
             low_path = out_dir / f"low_rejection_{filt}.fits"
             high_path = out_dir / f"high_rejection_{filt}.fits"
-            master_writer = stack.enter_context(FitsTileWriter(master_path, width, height, {"IMAGETYP": "master"}))
-            weight_writer = stack.enter_context(FitsTileWriter(weight_path, width, height, {"IMAGETYP": "weight"}))
-            coverage_writer = stack.enter_context(
-                FitsTileWriter(coverage_path, width, height, {"IMAGETYP": "coverage"})
-            )
-            low_writer = stack.enter_context(FitsTileWriter(low_path, width, height, {"IMAGETYP": "lowrej"}))
-            high_writer = stack.enter_context(FitsTileWriter(high_path, width, height, {"IMAGETYP": "highrej"}))
             tile_count = 0
             actual_backend = "cuda" if cuda_module is not None and rejection == "none" else "cpu"
-            tile_stack_mode = "streaming_accumulator" if rejection == "none" else "stack_for_rejection"
+            use_stack_engine = actual_backend == "cpu"
+            tile_stack_mode = (
+                "stack_engine_cpu"
+                if use_stack_engine
+                else "cuda_streaming_accumulator_fast_path"
+            )
+            stack_engine_metrics: dict[str, float | int | str] | None = None
+            stack_engine_rejection_method: str | None = None
 
-            for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
-                weights = np.asarray([frame_weights[item["frame_id"]] for item in items], dtype=np.float32)
-                if rejection == "none":
+            if use_stack_engine:
+                tile_count, stack_engine_metrics, stack_engine_rejection_method = _integrate_with_stack_engine(
+                    items,
+                    frame_weights,
+                    rejection,
+                    low_sigma,
+                    high_sigma,
+                    tile_size,
+                    master_path,
+                    weight_path,
+                    coverage_path,
+                    low_path,
+                    high_path,
+                    weighting,
+                )
+            else:
+                master_writer = stack.enter_context(
+                    FitsTileWriter(master_path, width, height, {"IMAGETYP": "master"})
+                )
+                weight_writer = stack.enter_context(
+                    FitsTileWriter(weight_path, width, height, {"IMAGETYP": "weight"})
+                )
+                coverage_writer = stack.enter_context(
+                    FitsTileWriter(coverage_path, width, height, {"IMAGETYP": "coverage"})
+                )
+                low_writer = stack.enter_context(FitsTileWriter(low_path, width, height, {"IMAGETYP": "lowrej"}))
+                high_writer = stack.enter_context(FitsTileWriter(high_path, width, height, {"IMAGETYP": "highrej"}))
+                for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
+                    weights = np.asarray([frame_weights[item["frame_id"]] for item in items], dtype=np.float32)
                     sum_tile = None
                     weight_sum_tile = None
                     coverage_map = None
@@ -171,28 +356,12 @@ def integrate_registered_frames(
                     weight_map = weight_sum_tile.astype(np.float32)
                     low_map = np.zeros_like(master, dtype=np.float32)
                     high_map = np.zeros_like(master, dtype=np.float32)
-                else:
-                    frame_tiles = []
-                    coverage_tiles = []
-                    for src_reader, cov_reader in zip(source_readers, coverage_readers, strict=True):
-                        frame_tiles.append(src_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
-                        coverage_tiles.append(cov_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1))
-                    stack_tile = np.stack(frame_tiles, axis=0)
-                    coverage_tile = np.stack(coverage_tiles, axis=0)
-                    master, weight_map, coverage_map, low_map, high_map = weighted_integrate_stack(
-                        stack_tile,
-                        coverage=coverage_tile,
-                        weights=weights,
-                        rejection=rejection,
-                        low_sigma=low_sigma,
-                        high_sigma=high_sigma,
-                    )
-                master_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, master)
-                weight_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, weight_map)
-                coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage_map)
-                low_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, low_map)
-                high_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, high_map)
-                tile_count += 1
+                    master_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, master)
+                    weight_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, weight_map)
+                    coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage_map)
+                    low_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, low_map)
+                    high_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, high_map)
+                    tile_count += 1
         outputs.append(
             {
                 "filter": filt,
@@ -206,6 +375,9 @@ def integrate_registered_frames(
                 "tile_count": tile_count,
                 "backend": actual_backend,
                 "tile_stack_mode": tile_stack_mode,
+                "stack_engine_enabled": use_stack_engine,
+                "stack_engine_metrics": stack_engine_metrics,
+                "stack_engine_rejection_method": stack_engine_rejection_method,
             }
         )
 

@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from glass.cpu.calibration import calibrate_light
+from glass.engine.contracts import CombinePolicy, OutputMapPolicy, StackRequest
+from glass.engine.stack_engine import CPUStackEngine
 from glass.gpu.tile_scheduler import iter_tiles
+from glass.io.image_source import FitsImageSource
 from glass.io.fits_io import FitsImageReader, FitsTileWriter
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RunState, now_iso
@@ -153,6 +156,77 @@ def _stream_mean_master(
                 writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, mean_tile)
                 stats.update(mean_tile)
     return stats.as_dict()
+
+
+def _stack_mean_master_with_engine(
+    paths: list[str],
+    out_path: Path,
+    tile_size: int,
+    header: dict[str, Any],
+    subtract_path: str | None = None,
+) -> dict[str, float]:
+    import numpy as np
+
+    if not paths:
+        raise ValueError("cannot stack an empty frame list")
+    with ExitStack() as stack:
+        sources = {
+            f"frame-{index}": stack.enter_context(FitsImageSource(path))
+            for index, path in enumerate(paths)
+        }
+        request = StackRequest(
+            frame_ids=tuple(sources.keys()),
+            source_kind="unknown",
+            combine=CombinePolicy(method="mean", accumulator_dtype="float64"),
+            output_maps=OutputMapPolicy(
+                coverage=False,
+                weight=False,
+                variance=False,
+                low_rejection=False,
+                high_rejection=False,
+                dq=False,
+            ),
+            metadata={"stage": "master_calibration"},
+        )
+        result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+        subtract_reader = stack.enter_context(FitsImageReader(subtract_path)) if subtract_path else None
+        height, width = result.master.shape
+        stats = _StreamingStats()
+        with FitsTileWriter(out_path, width=width, height=height, header=header) as writer:
+            for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
+                data = result.master[tile.y0 : tile.y1, tile.x0 : tile.x1]
+                if subtract_reader is not None:
+                    data = (
+                        data - subtract_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                    ).astype(np.float32)
+                writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, data)
+                stats.update(data)
+    return stats.as_dict()
+
+
+def _stack_mean_master(
+    paths: list[str],
+    out_path: Path,
+    tile_size: int,
+    header: dict[str, Any],
+    subtract_path: str | None = None,
+    use_stack_engine: bool = True,
+) -> tuple[dict[str, float], str, str | None]:
+    if use_stack_engine:
+        try:
+            return (
+                _stack_mean_master_with_engine(paths, out_path, tile_size, header, subtract_path),
+                "stack_engine_cpu",
+                None,
+            )
+        except Exception as exc:
+            fallback_stats = _stream_mean_master(paths, out_path, tile_size, header, subtract_path)
+            return fallback_stats, "legacy_streaming_accumulator", str(exc)
+    return (
+        _stream_mean_master(paths, out_path, tile_size, header, subtract_path),
+        "legacy_streaming_accumulator",
+        None,
+    )
 
 
 def _normalization_scalar(path: Path, normalization: str, tile_size: int) -> tuple[float, str]:
@@ -340,7 +414,7 @@ def run_calibration_stages(
             if group_type != "bias":
                 continue
             path = master_dir / f"master_bias_{group_id}.fits"
-            stats = _stream_mean_master(
+            stats, tile_stack_mode, fallback_reason = _stack_mean_master(
                 _paths_for_group(group, frames),
                 path,
                 tile_size,
@@ -351,7 +425,9 @@ def run_calibration_stages(
                 "stats": stats,
                 "type": "bias",
                 "streaming": True,
-                "tile_stack_mode": "streaming_accumulator",
+                "tile_stack_mode": tile_stack_mode,
+                "stack_engine_enabled": tile_stack_mode == "stack_engine_cpu",
+                "stack_engine_fallback_reason": fallback_reason,
                 "tile_size": tile_size,
             }
 
@@ -366,7 +442,7 @@ def run_calibration_stages(
                 else None
             )
             path = master_dir / f"master_dark_{group_id}.fits"
-            stats = _stream_mean_master(
+            stats, tile_stack_mode, fallback_reason = _stack_mean_master(
                 _paths_for_group(group, frames),
                 path,
                 tile_size,
@@ -382,7 +458,9 @@ def run_calibration_stages(
                 "bias_group": bias_group,
                 "bias_subtracted_from_source": bias_path is not None,
                 "streaming": True,
-                "tile_stack_mode": "streaming_accumulator",
+                "tile_stack_mode": tile_stack_mode,
+                "stack_engine_enabled": tile_stack_mode == "stack_engine_cpu",
+                "stack_engine_fallback_reason": fallback_reason,
                 "tile_size": tile_size,
             }
 
@@ -397,7 +475,7 @@ def run_calibration_stages(
                 else None
             )
             raw_path = master_dir / f"raw_master_flat_{group_id}.fits"
-            _stream_mean_master(
+            _raw_stats, raw_tile_stack_mode, raw_fallback_reason = _stack_mean_master(
                 _paths_for_group(group, frames),
                 raw_path,
                 tile_size,
@@ -426,7 +504,9 @@ def run_calibration_stages(
                 "normalization_method": norm_method,
                 "flat_floor": policy.flat_floor,
                 "streaming": True,
-                "tile_stack_mode": "streaming_accumulator",
+                "tile_stack_mode": raw_tile_stack_mode,
+                "stack_engine_enabled": raw_tile_stack_mode == "stack_engine_cpu",
+                "stack_engine_fallback_reason": raw_fallback_reason,
                 "tile_size": tile_size,
             }
 
