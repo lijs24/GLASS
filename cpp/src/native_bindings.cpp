@@ -110,6 +110,18 @@ void glass_matrix_alignment_metrics_candidates_f32_launch(
     int height,
     int sample_stride,
     int candidate_count);
+void glass_matrix_alignment_metrics_batch_candidates_f32_launch(
+    const float* reference,
+    const float* stack,
+    const int* moving_frame_indices,
+    unsigned long long pixels_per_frame,
+    const float* inverses,
+    double* partial_stats,
+    unsigned long long* partial_count,
+    int width,
+    int height,
+    int sample_stride,
+    int candidate_count);
 void glass_star_core_metrics_candidates_f32_launch(
     const float* reference,
     const float* moving,
@@ -612,6 +624,7 @@ struct MatrixRefineWorkspace {
   float* d_inverses = nullptr;
   double* d_partial_stats = nullptr;
   unsigned long long* d_partial_count = nullptr;
+  int* d_moving_frame_indices = nullptr;
   int candidate_capacity = 0;
 };
 
@@ -621,7 +634,8 @@ std::size_t matrix_refine_workspace_bytes(int candidate_capacity) {
   }
   return static_cast<std::size_t>(candidate_capacity) * 9 * sizeof(float) +
          static_cast<std::size_t>(candidate_capacity) * 7 * sizeof(double) +
-         static_cast<std::size_t>(candidate_capacity) * sizeof(unsigned long long);
+         static_cast<std::size_t>(candidate_capacity) * sizeof(unsigned long long) +
+         static_cast<std::size_t>(candidate_capacity) * sizeof(int);
 }
 
 std::vector<std::pair<float, float>> translation_offsets(
@@ -837,6 +851,146 @@ MatrixCandidateMetrics score_matrix_translation_candidates_f32(
     cudaFree(workspace.d_partial_count);
     throw;
   }
+}
+
+std::vector<MatrixCandidateMetrics> score_matrix_translation_candidates_batch_f32_workspace(
+    const float* d_reference,
+    const float* d_stack,
+    std::size_t pixels_per_frame,
+    const std::vector<std::size_t>& moving_indices,
+    const std::vector<std::array<float, 9>>& base_matrices,
+    const std::vector<std::vector<std::pair<float, float>>>& offsets_by_frame,
+    int width,
+    int height,
+    int sample_stride,
+    MatrixRefineWorkspace workspace) {
+  if (moving_indices.empty()) {
+    return {};
+  }
+  if (base_matrices.size() != moving_indices.size() || offsets_by_frame.size() != moving_indices.size()) {
+    throw std::invalid_argument("batch matrix scoring requires one matrix and offset list per moving frame");
+  }
+  const int stride = sample_stride > 1 ? sample_stride : 1;
+  const int sample_width = (width + stride - 1) / stride;
+  const int sample_height = (height + stride - 1) / stride;
+  const int sampled_pixels = sample_width * sample_height;
+
+  std::vector<int> frame_starts(moving_indices.size(), 0);
+  std::vector<int> frame_counts(moving_indices.size(), 0);
+  std::size_t total_candidates_size = 0;
+  for (std::size_t frame = 0; frame < moving_indices.size(); ++frame) {
+    if (offsets_by_frame[frame].empty()) {
+      throw std::invalid_argument("candidate offsets must be non-empty");
+    }
+    if (moving_indices[frame] > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+      throw std::invalid_argument("moving frame index exceeds native batch metric index range");
+    }
+    total_candidates_size += offsets_by_frame[frame].size();
+  }
+  if (total_candidates_size > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    throw std::invalid_argument("too many matrix metric candidates for one native batch");
+  }
+  const int total_candidates = static_cast<int>(total_candidates_size);
+  if (total_candidates > workspace.candidate_capacity ||
+      workspace.d_inverses == nullptr ||
+      workspace.d_partial_stats == nullptr ||
+      workspace.d_partial_count == nullptr ||
+      workspace.d_moving_frame_indices == nullptr) {
+    throw std::invalid_argument("matrix batch refine workspace is smaller than candidate count");
+  }
+
+  std::vector<std::array<float, 9>> matrices(total_candidates_size);
+  std::vector<std::pair<float, float>> candidate_offsets(total_candidates_size);
+  std::vector<float> inverses(total_candidates_size * 9, 0.0f);
+  std::vector<int> moving_frame_indices(total_candidates_size, 0);
+  std::size_t cursor = 0;
+  for (std::size_t frame = 0; frame < moving_indices.size(); ++frame) {
+    frame_starts[frame] = static_cast<int>(cursor);
+    frame_counts[frame] = static_cast<int>(offsets_by_frame[frame].size());
+    const int moving_index = static_cast<int>(moving_indices[frame]);
+    for (const auto& offset : offsets_by_frame[frame]) {
+      auto matrix = base_matrices[frame];
+      matrix[2] += offset.first;
+      matrix[5] += offset.second;
+      matrices[cursor] = matrix;
+      candidate_offsets[cursor] = offset;
+      moving_frame_indices[cursor] = moving_index;
+      const auto inverse = invert_matrix3x3(matrix);
+      std::copy(inverse.begin(), inverse.end(), inverses.begin() + cursor * 9);
+      ++cursor;
+    }
+  }
+
+  std::vector<double> partial_stats(total_candidates_size * 7, 0.0);
+  std::vector<unsigned long long> partial_count(total_candidates_size, 0ULL);
+  check_cuda(
+      cudaMemcpy(workspace.d_inverses, inverses.data(), inverses.size() * sizeof(float), cudaMemcpyHostToDevice),
+      "cudaMemcpy(matrix batch refine candidate inverses)");
+  check_cuda(
+      cudaMemcpy(
+          workspace.d_moving_frame_indices,
+          moving_frame_indices.data(),
+          moving_frame_indices.size() * sizeof(int),
+          cudaMemcpyHostToDevice),
+      "cudaMemcpy(matrix batch refine moving frame indices)");
+  glass_matrix_alignment_metrics_batch_candidates_f32_launch(
+      d_reference,
+      d_stack,
+      workspace.d_moving_frame_indices,
+      static_cast<unsigned long long>(pixels_per_frame),
+      workspace.d_inverses,
+      workspace.d_partial_stats,
+      workspace.d_partial_count,
+      width,
+      height,
+      stride,
+      total_candidates);
+  check_cuda(cudaGetLastError(), "matrix batch translation refine candidate kernel launch");
+  check_cuda(cudaDeviceSynchronize(), "matrix batch translation refine candidate synchronize");
+  check_cuda(
+      cudaMemcpy(
+          partial_stats.data(),
+          workspace.d_partial_stats,
+          partial_stats.size() * sizeof(double),
+          cudaMemcpyDeviceToHost),
+      "cudaMemcpy(matrix batch refine partial stats)");
+  check_cuda(
+      cudaMemcpy(
+          partial_count.data(),
+          workspace.d_partial_count,
+          partial_count.size() * sizeof(unsigned long long),
+          cudaMemcpyDeviceToHost),
+      "cudaMemcpy(matrix batch refine partial count)");
+
+  std::vector<MatrixCandidateMetrics> results;
+  results.reserve(moving_indices.size());
+  for (std::size_t frame = 0; frame < moving_indices.size(); ++frame) {
+    MatrixCandidateMetrics best;
+    bool have_best = false;
+    const int start = frame_starts[frame];
+    const int count = frame_counts[frame];
+    for (int local = 0; local < count; ++local) {
+      const int candidate = start + local;
+      const std::size_t candidate_offset = static_cast<std::size_t>(candidate) * 7;
+      const auto metrics = metrics_from_sums(
+          matrices[static_cast<std::size_t>(candidate)],
+          candidate_offsets[static_cast<std::size_t>(candidate)].first,
+          candidate_offsets[static_cast<std::size_t>(candidate)].second,
+          partial_stats.data() + candidate_offset,
+          partial_count[static_cast<std::size_t>(candidate)],
+          sampled_pixels,
+          stride);
+      if (!have_best || better_matrix_metric(metrics, best)) {
+        best = metrics;
+        have_best = true;
+      }
+    }
+    if (!have_best) {
+      throw std::runtime_error("matrix batch refine produced no candidates");
+    }
+    results.push_back(best);
+  }
+  return results;
 }
 
 std::vector<MatrixCandidateMetrics> score_star_core_matrix_candidates_f32(
@@ -1601,13 +1755,26 @@ class ResidentCalibratedStack {
     if (matrices.size() != moving_indices.size()) {
       throw std::invalid_argument("batch refine requires one seed matrix per moving frame");
     }
+    for (const auto moving_index : moving_indices) {
+      require_loaded(moving_index, "resident matrix batch refine");
+    }
     const auto coarse_offsets = translation_offsets(0.0f, 0.0f, search_radius_px, coarse_step_px);
     const int coarse_candidates = static_cast<int>(coarse_offsets.size());
     const int fine_candidate_capacity =
         fine_radius_px > 0.0f ? static_cast<int>(translation_offsets(0.0f, 0.0f, fine_radius_px, fine_step_px).size())
                               : final_sample_stride != coarse_sample_stride ? 1
                                                                             : 0;
-    const int workspace_candidate_capacity = std::max(coarse_candidates, fine_candidate_capacity);
+    const std::size_t moving_count = moving_indices.size();
+    const std::size_t coarse_total_candidate_capacity =
+        moving_count * static_cast<std::size_t>(coarse_candidates);
+    const std::size_t fine_total_candidate_capacity =
+        moving_count * static_cast<std::size_t>(fine_candidate_capacity);
+    const std::size_t workspace_candidate_capacity_size =
+        std::max(coarse_total_candidate_capacity, fine_total_candidate_capacity);
+    if (workspace_candidate_capacity_size > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+      throw std::invalid_argument("too many resident matrix refine candidates for one native batch");
+    }
+    const int workspace_candidate_capacity = static_cast<int>(workspace_candidate_capacity_size);
     const std::size_t workspace_bytes = matrix_refine_workspace_bytes(workspace_candidate_capacity);
     const auto* d_reference = d_stack_ + reference_index * pixels_per_frame_;
     py::list results;
@@ -1632,65 +1799,80 @@ class ResidentCalibratedStack {
               &workspace.d_partial_count,
               static_cast<std::size_t>(workspace_candidate_capacity) * sizeof(unsigned long long)),
           "cudaMalloc(resident batch matrix refine partial count)");
+      check_cuda(
+          cudaMalloc(
+              &workspace.d_moving_frame_indices,
+              static_cast<std::size_t>(workspace_candidate_capacity) * sizeof(int)),
+          "cudaMalloc(resident batch matrix refine moving frame indices)");
     } catch (...) {
       cudaFree(workspace.d_inverses);
       cudaFree(workspace.d_partial_stats);
       cudaFree(workspace.d_partial_count);
+      cudaFree(workspace.d_moving_frame_indices);
       throw;
     }
     try {
-      for (std::size_t batch_index = 0; batch_index < moving_indices.size(); ++batch_index) {
-        const std::size_t moving_index = moving_indices[batch_index];
-        require_loaded(moving_index, "resident matrix batch refine");
-        const auto* d_moving = d_stack_ + moving_index * pixels_per_frame_;
-        const auto& base_matrix = matrices[batch_index];
-        const auto coarse_start = Clock::now();
-        const MatrixCandidateMetrics coarse_best = score_matrix_translation_candidates_f32_workspace(
+      const std::vector<std::vector<std::pair<float, float>>> coarse_offsets_by_frame(moving_count, coarse_offsets);
+      const auto coarse_start = Clock::now();
+      const auto coarse_bests = score_matrix_translation_candidates_batch_f32_workspace(
           d_reference,
-          d_moving,
-          base_matrix,
-          coarse_offsets,
+          d_stack_,
+          pixels_per_frame_,
+          moving_indices,
+          matrices,
+          coarse_offsets_by_frame,
           static_cast<int>(width_),
           static_cast<int>(height_),
           coarse_sample_stride,
           workspace);
-        const double coarse_s = seconds_since(coarse_start);
-        native_coarse_total_s += coarse_s;
-        MatrixCandidateMetrics best = coarse_best;
-        int fine_candidates = 0;
-        double fine_s = 0.0;
-        if (fine_radius_px > 0.0f) {
-          const auto fine_offsets = translation_offsets(coarse_best.dx, coarse_best.dy, fine_radius_px, fine_step_px);
-          fine_candidates = static_cast<int>(fine_offsets.size());
-          const auto fine_start = Clock::now();
-          best = score_matrix_translation_candidates_f32_workspace(
-            d_reference,
-            d_moving,
-            base_matrix,
-            fine_offsets,
-            static_cast<int>(width_),
-            static_cast<int>(height_),
-            final_sample_stride,
-            workspace);
-          fine_s = seconds_since(fine_start);
-          native_fine_total_s += fine_s;
-        } else if (final_sample_stride != coarse_sample_stride) {
-          const std::vector<std::pair<float, float>> final_offsets{{coarse_best.dx, coarse_best.dy}};
-          fine_candidates = static_cast<int>(final_offsets.size());
-          const auto fine_start = Clock::now();
-          best = score_matrix_translation_candidates_f32_workspace(
-            d_reference,
-            d_moving,
-            base_matrix,
-            final_offsets,
-            static_cast<int>(width_),
-            static_cast<int>(height_),
-            final_sample_stride,
-            workspace);
-          fine_s = seconds_since(fine_start);
-          native_fine_total_s += fine_s;
-        }
+      native_coarse_total_s = seconds_since(coarse_start);
 
+      std::vector<std::vector<std::pair<float, float>>> fine_offsets_by_frame(moving_count);
+      std::vector<int> fine_candidate_counts(moving_count, 0);
+      bool run_fine_metric = false;
+      for (std::size_t batch_index = 0; batch_index < moving_indices.size(); ++batch_index) {
+        if (fine_radius_px > 0.0f) {
+          fine_offsets_by_frame[batch_index] =
+              translation_offsets(coarse_bests[batch_index].dx, coarse_bests[batch_index].dy, fine_radius_px, fine_step_px);
+          run_fine_metric = true;
+        } else if (final_sample_stride != coarse_sample_stride) {
+          fine_offsets_by_frame[batch_index] = {{coarse_bests[batch_index].dx, coarse_bests[batch_index].dy}};
+          run_fine_metric = true;
+        }
+        fine_candidate_counts[batch_index] = static_cast<int>(fine_offsets_by_frame[batch_index].size());
+      }
+
+      std::vector<MatrixCandidateMetrics> bests = coarse_bests;
+      int fine_total_candidates = 0;
+      for (const int count : fine_candidate_counts) {
+        fine_total_candidates += count;
+      }
+      if (run_fine_metric) {
+        const auto fine_start = Clock::now();
+        bests = score_matrix_translation_candidates_batch_f32_workspace(
+            d_reference,
+            d_stack_,
+            pixels_per_frame_,
+            moving_indices,
+            matrices,
+            fine_offsets_by_frame,
+            static_cast<int>(width_),
+            static_cast<int>(height_),
+            final_sample_stride,
+            workspace);
+        native_fine_total_s = seconds_since(fine_start);
+      }
+
+      const double per_frame_coarse_s = native_coarse_total_s / static_cast<double>(moving_count);
+      const double per_frame_fine_s =
+          run_fine_metric ? native_fine_total_s / static_cast<double>(moving_count) : 0.0;
+      const int batch_metric_kernel_launches = run_fine_metric ? 2 : 1;
+      const int coarse_total_candidates = static_cast<int>(coarse_total_candidate_capacity);
+
+      for (std::size_t batch_index = 0; batch_index < moving_indices.size(); ++batch_index) {
+        const std::size_t moving_index = moving_indices[batch_index];
+        const MatrixCandidateMetrics& best = bests[batch_index];
+        const int fine_candidates = fine_candidate_counts[batch_index];
         py::dict seed_result;
         seed_result["seed_index"] = 0;
         seed_result["matrix"] = matrix3x3_to_pylist(best.matrix);
@@ -1723,11 +1905,15 @@ class ResidentCalibratedStack {
         result["batch_index"] = static_cast<int>(batch_index);
         result["batch_count"] = static_cast<int>(moving_indices.size());
         result["batch_model"] = "resident_cuda_matrix_metric_translation_batch_refine_grid";
-        result["workspace_mode"] = "shared_candidate_metric_buffers";
+        result["batch_metric_mode"] = "flattened_frame_candidate_grid";
+        result["batch_metric_kernel_launches"] = batch_metric_kernel_launches;
+        result["coarse_total_candidates"] = coarse_total_candidates;
+        result["fine_total_candidates"] = fine_total_candidates;
+        result["workspace_mode"] = "shared_flattened_candidate_metric_buffers";
         result["workspace_candidate_capacity"] = workspace_candidate_capacity;
         result["workspace_bytes"] = static_cast<unsigned long long>(workspace_bytes);
-        result["coarse_metric_s"] = coarse_s;
-        result["fine_metric_s"] = fine_s;
+        result["coarse_metric_s"] = per_frame_coarse_s;
+        result["fine_metric_s"] = per_frame_fine_s;
         result["native_coarse_total_s"] = native_coarse_total_s;
         result["native_fine_total_s"] = native_fine_total_s;
         result["model"] = "resident_cuda_matrix_metric_translation_multi_seed_refine_grid";
@@ -1737,11 +1923,13 @@ class ResidentCalibratedStack {
       cudaFree(workspace.d_inverses);
       cudaFree(workspace.d_partial_stats);
       cudaFree(workspace.d_partial_count);
+      cudaFree(workspace.d_moving_frame_indices);
       throw;
     }
     cudaFree(workspace.d_inverses);
     cudaFree(workspace.d_partial_stats);
     cudaFree(workspace.d_partial_count);
+    cudaFree(workspace.d_moving_frame_indices);
     return results;
   }
 

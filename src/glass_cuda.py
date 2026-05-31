@@ -140,9 +140,14 @@ def _normalize_matrix_refinement_result(result: dict[str, Any]) -> dict[str, Any
         normalized["batch_count"] = int(result["batch_count"])
     if "batch_model" in result:
         normalized["batch_model"] = str(result["batch_model"])
+    if "batch_metric_mode" in result:
+        normalized["batch_metric_mode"] = str(result["batch_metric_mode"])
     if "workspace_mode" in result:
         normalized["workspace_mode"] = str(result["workspace_mode"])
     for key in (
+        "batch_metric_kernel_launches",
+        "coarse_total_candidates",
+        "fine_total_candidates",
         "workspace_candidate_capacity",
         "workspace_bytes",
     ):

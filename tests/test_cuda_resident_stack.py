@@ -535,12 +535,18 @@ def test_resident_stack_batches_matrix_translation_refine():
     assert [item["moving_index"] for item in batch] == [1, 2]
     assert batch[0]["batch_model"] == "resident_cuda_matrix_metric_translation_batch_refine_grid"
     assert batch[0]["batch_count"] == 2
-    assert batch[0]["workspace_mode"] == "shared_candidate_metric_buffers"
+    assert batch[0]["batch_metric_mode"] == "flattened_frame_candidate_grid"
+    assert batch[0]["batch_metric_kernel_launches"] == 2
+    assert batch[0]["coarse_total_candidates"] == batch[0]["batch_count"] * batch[0]["coarse_candidates_per_seed"]
+    assert batch[0]["fine_total_candidates"] > 0
+    assert batch[0]["workspace_mode"] == "shared_flattened_candidate_metric_buffers"
     assert batch[0]["workspace_candidate_capacity"] >= batch[0]["coarse_candidates_per_seed"]
     assert batch[0]["workspace_bytes"] > 0
     for batch_result, single_result in zip(batch, singles, strict=True):
         assert batch_result["model"] == single_result["model"]
-        assert batch_result["workspace_mode"] == "shared_candidate_metric_buffers"
+        assert batch_result["batch_metric_mode"] == "flattened_frame_candidate_grid"
+        assert batch_result["batch_metric_kernel_launches"] == 2
+        assert batch_result["workspace_mode"] == "shared_flattened_candidate_metric_buffers"
         assert batch_result["workspace_candidate_capacity"] >= batch_result["coarse_candidates_per_seed"]
         assert batch_result["workspace_bytes"] == batch[0]["workspace_bytes"]
         assert batch_result["coarse_metric_s"] >= 0.0

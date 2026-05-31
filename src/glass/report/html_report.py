@@ -433,6 +433,10 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                     3,
                 ),
                 "pixel_refine_workspace_mode": registration.get("triangle_pixel_refine_workspace_mode"),
+                "pixel_refine_metric_mode": registration.get("triangle_pixel_refine_batch_metric_mode"),
+                "pixel_refine_metric_launches": registration.get("triangle_pixel_refine_batch_metric_kernel_launches"),
+                "pixel_refine_coarse_candidates": registration.get("triangle_pixel_refine_coarse_total_candidates"),
+                "pixel_refine_fine_candidates": registration.get("triangle_pixel_refine_fine_total_candidates"),
                 "pixel_refine_workspace_mib": round(
                     float(registration.get("triangle_pixel_refine_workspace_bytes") or 0.0)
                     / (1024.0**2),

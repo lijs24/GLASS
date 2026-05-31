@@ -929,6 +929,28 @@ integration where applicable.
   200-light benchmark because this gate changes native registration memory
   scheduling.
 
+### S2-Gate 55: Resident Pixel-Refine Flattened Batch Metric Launch
+
+- Replace the resident triangle-registration batch pixel-refine loop's
+  per-frame coarse/fine metric launches with a flattened frame/candidate metric
+  launch for the whole moving-frame batch.
+- Run the coarse candidate grid for all moving frames in one native CUDA kernel
+  synchronization, then build per-frame fine candidate grids from the coarse
+  winners and run the fine metric pass in one additional native CUDA kernel
+  synchronization.
+- Preserve candidate generation, matrix inversion, NCC/RMS formulas,
+  fine-search semantics, quality gates, warp behavior, frame accounting, and
+  output pixels within the existing benchmark tolerance family.
+- Record flattened metric mode, native metric launch count, coarse/fine total
+  candidate counts, workspace capacity, workspace bytes, and coarse/fine metric
+  timings through Python normalization, per-frame warnings,
+  `resident_artifacts.json`, resident timing components, and the HTML resident
+  summary.
+- Validate with resident CUDA batch/single pixel-refine equivalence tests,
+  resident triangle-registration smoke tests, ruff, full pytest, and the
+  200-light benchmark because this gate changes native registration scheduling
+  and synchronization behavior.
+
 ## Gate Rules
 
 Each gate requires:

@@ -2774,6 +2774,10 @@ def run_resident_calibration_integration(
                 triangle_pixel_refine_workspace_mode = "off"
                 triangle_pixel_refine_workspace_bytes = 0
                 triangle_pixel_refine_workspace_candidate_capacity = 0
+                triangle_pixel_refine_batch_metric_mode = "off"
+                triangle_pixel_refine_batch_metric_kernel_launches = 0
+                triangle_pixel_refine_coarse_total_candidates = 0
+                triangle_pixel_refine_fine_total_candidates = 0
                 triangle_pixel_refine_native_coarse_s = 0.0
                 triangle_pixel_refine_native_fine_s = 0.0
                 triangle_descriptor_fit_batch_enabled = bool(
@@ -3399,13 +3403,37 @@ def run_resident_calibration_integration(
                             triangle_pixel_refine_workspace_candidate_capacity = int(
                                 first_refinement.get("workspace_candidate_capacity", 0) or 0
                             )
-                            triangle_pixel_refine_native_coarse_s = sum(
-                                float(item.get("coarse_metric_s", 0.0) or 0.0)
-                                for item in batch_refinements
+                            triangle_pixel_refine_batch_metric_mode = str(
+                                first_refinement.get("batch_metric_mode", "unavailable")
                             )
-                            triangle_pixel_refine_native_fine_s = sum(
-                                float(item.get("fine_metric_s", 0.0) or 0.0)
-                                for item in batch_refinements
+                            triangle_pixel_refine_batch_metric_kernel_launches = int(
+                                first_refinement.get("batch_metric_kernel_launches", 0) or 0
+                            )
+                            triangle_pixel_refine_coarse_total_candidates = int(
+                                first_refinement.get("coarse_total_candidates", 0) or 0
+                            )
+                            triangle_pixel_refine_fine_total_candidates = int(
+                                first_refinement.get("fine_total_candidates", 0) or 0
+                            )
+                            triangle_pixel_refine_native_coarse_s = float(
+                                first_refinement.get(
+                                    "native_coarse_total_s",
+                                    sum(
+                                        float(item.get("coarse_metric_s", 0.0) or 0.0)
+                                        for item in batch_refinements
+                                    ),
+                                )
+                                or 0.0
+                            )
+                            triangle_pixel_refine_native_fine_s = float(
+                                first_refinement.get(
+                                    "native_fine_total_s",
+                                    sum(
+                                        float(item.get("fine_metric_s", 0.0) or 0.0)
+                                        for item in batch_refinements
+                                    ),
+                                )
+                                or 0.0
                             )
                             _add_elapsed(
                                 registration_component_s,
@@ -3438,6 +3466,11 @@ def run_resident_calibration_integration(
                                 f"triangle_pixel_refine_batch_index={int(refinement.get('batch_index', -1))}",
                                 f"triangle_pixel_refine_batch_count={int(refinement.get('batch_count', 0))}",
                                 f"triangle_pixel_refine_batch_model={refinement.get('batch_model')}",
+                                f"triangle_pixel_refine_batch_metric_mode={refinement.get('batch_metric_mode', 'unavailable')}",
+                                "triangle_pixel_refine_batch_metric_kernel_launches="
+                                + str(int(refinement.get("batch_metric_kernel_launches", 0) or 0)),
+                                f"triangle_pixel_refine_coarse_total_candidates={int(refinement.get('coarse_total_candidates', 0) or 0)}",
+                                f"triangle_pixel_refine_fine_total_candidates={int(refinement.get('fine_total_candidates', 0) or 0)}",
                                 f"triangle_pixel_refine_workspace_mode={refinement.get('workspace_mode', 'unavailable')}",
                                 f"triangle_pixel_refine_workspace_bytes={int(refinement.get('workspace_bytes', 0) or 0)}",
                                 "triangle_pixel_refine_workspace_candidate_capacity="
@@ -4289,6 +4322,24 @@ def run_resident_calibration_integration(
                         "triangle_pixel_refine_workspace_mode": triangle_pixel_refine_workspace_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_pixel_refine_batch_metric_mode": triangle_pixel_refine_batch_metric_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_pixel_refine_batch_metric_kernel_launches": int(
+                            triangle_pixel_refine_batch_metric_kernel_launches
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_coarse_total_candidates": int(
+                            triangle_pixel_refine_coarse_total_candidates
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_fine_total_candidates": int(
+                            triangle_pixel_refine_fine_total_candidates
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_pixel_refine_workspace_bytes": int(triangle_pixel_refine_workspace_bytes)
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
