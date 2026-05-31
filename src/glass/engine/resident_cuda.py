@@ -3255,8 +3255,39 @@ def run_resident_calibration_integration(
             )
             registration_orchestration_elapsed = max(0.0, registration_total - registration_component_total)
             registration_deferred_elapsed = max(0.0, registration_total - registration_during_load_elapsed)
+            read_wait_total = read_timing["total"]
+            read_worker_total = read_worker_timing["total"]
+            read_overlap_saved = max(0.0, read_worker_total - read_wait_total)
+            read_overlap_efficiency = (
+                read_overlap_saved / read_worker_total if read_worker_total > 0.0 else None
+            )
+            read_wait_fraction_of_wall = (
+                read_wait_total / load_calibrate_elapsed if load_calibrate_elapsed > 0.0 else None
+            )
+            read_worker_to_wall_ratio = (
+                read_worker_total / load_calibrate_elapsed if load_calibrate_elapsed > 0.0 else None
+            )
+            resident_io_overlap = {
+                "schema_version": 1,
+                "wall_clock_stage_s": load_calibrate_elapsed,
+                "consumer_read_wait_wall_s": read_wait_total,
+                "worker_read_cumulative_s": read_worker_total,
+                "worker_fits_open_cumulative_s": fits_open_timing["total"],
+                "worker_fits_materialize_decode_cumulative_s": fits_materialize_decode_timing["total"],
+                "overlap_saved_s": read_overlap_saved,
+                "overlap_efficiency": read_overlap_efficiency,
+                "consumer_wait_fraction_of_wall": read_wait_fraction_of_wall,
+                "worker_cumulative_to_wall_ratio": read_worker_to_wall_ratio,
+                "prefetch_enabled": bool(resident_prefetch_frames > 0),
+                "prefetch_frames": int(resident_prefetch_frames),
+                "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
+                "note": (
+                    "worker_* values are cumulative read-thread time and can exceed wall-clock time "
+                    "when prefetch overlaps FITS decode with GPU upload/calibration."
+                ),
+            }
             light_loop_accounted = (
-                read_timing["total"]
+                read_wait_total
                 + calibrate_timing["total"]
                 + registration_during_load_elapsed
                 + gc_elapsed
@@ -3266,10 +3297,11 @@ def run_resident_calibration_integration(
                 "schema_version": 1,
                 "seconds": {
                     "light_loop_total": load_calibrate_elapsed,
-                    "light_read_decode_total": read_timing["total"],
-                    "light_read_decode_worker_total": read_worker_timing["total"],
+                    "light_read_decode_total": read_wait_total,
+                    "light_read_decode_worker_total": read_worker_total,
                     "light_fits_open_total": fits_open_timing["total"],
                     "light_fits_materialize_decode_total": fits_materialize_decode_timing["total"],
+                    "light_read_overlap_saved": read_overlap_saved,
                     "light_host_copy_to_pinned_total": host_copy_timing["total"],
                     "light_h2d_total": h2d_timing["total"],
                     "light_calibrate_store_total": calibrate_store_timing["total"],
@@ -3313,10 +3345,15 @@ def run_resident_calibration_integration(
                         "resident_allocate_and_master_upload": allocate_elapsed,
                         "registration_preview_setup": registration_setup_elapsed,
                         "light_read_upload_calibrate": load_calibrate_elapsed,
-                        "light_read_decode": read_timing["total"],
-                        "light_read_decode_worker": read_worker_timing["total"],
+                        "light_read_decode": read_wait_total,
+                        "light_read_wait_wall": read_wait_total,
+                        "light_read_decode_worker": read_worker_total,
+                        "light_read_worker_cumulative": read_worker_total,
                         "light_fits_open": fits_open_timing["total"],
+                        "light_fits_open_worker_cumulative": fits_open_timing["total"],
                         "light_fits_materialize_decode": fits_materialize_decode_timing["total"],
+                        "light_fits_materialize_decode_worker_cumulative": fits_materialize_decode_timing["total"],
+                        "light_read_overlap_saved": read_overlap_saved,
                         "light_host_copy_to_pinned": host_copy_timing["total"],
                         "light_h2d": h2d_timing["total"],
                         "light_calibrate_store": calibrate_store_timing["total"],
@@ -3352,6 +3389,7 @@ def run_resident_calibration_integration(
                         "storage": write_storage,
                     },
                     "fine_timing": fine_timing,
+                    "resident_io_overlap": resident_io_overlap,
                     "resident_io_pipeline": {
                         "prefetch_frames": int(resident_prefetch_frames),
                         "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,

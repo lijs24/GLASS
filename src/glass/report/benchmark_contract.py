@@ -76,25 +76,40 @@ def build_benchmark_performance_diagnostics(
 
     warning_factor = _numeric(baseline.get("warning_regression_factor")) or 1.15
     current_timing = _load_resident_timing(glass_run)
+    raw_cumulative_stages = baseline.get("cumulative_stages") or []
+    cumulative_stages = {str(item) for item in raw_cumulative_stages}
+    raw_stage_aliases = baseline.get("stage_aliases") or {}
+    stage_aliases = raw_stage_aliases if isinstance(raw_stage_aliases, dict) else {}
+    raw_stage_notes = baseline.get("stage_notes") or {}
+    stage_notes = raw_stage_notes if isinstance(raw_stage_notes, dict) else {}
     items: list[dict[str, Any]] = []
     for stage, baseline_value in stage_baselines.items():
+        stage_name = str(stage)
+        actual_key = str(stage_aliases.get(stage_name, stage_name))
         baseline_s = _numeric(baseline_value)
-        actual_s = _numeric(current_timing.get(stage))
+        actual_s = _numeric(current_timing.get(actual_key))
         if baseline_s is None:
             continue
         factor = actual_s / baseline_s if actual_s is not None and baseline_s > 0.0 else None
         delta_s = actual_s - baseline_s if actual_s is not None else None
+        is_cumulative = stage_name in cumulative_stages or actual_key in cumulative_stages
         status = "missing_current"
         if factor is not None:
-            status = "regressed" if factor > warning_factor else "ok"
+            if is_cumulative:
+                status = "informational_cumulative"
+            else:
+                status = "regressed" if factor > warning_factor else "ok"
         items.append(
             {
-                "stage": str(stage),
+                "stage": stage_name,
+                "actual_key": actual_key,
                 "baseline_s": baseline_s,
                 "actual_s": actual_s,
                 "delta_s": delta_s,
                 "factor": factor,
                 "status": status,
+                "timing_kind": "worker_cumulative" if is_cumulative else "wall_or_stage",
+                "note": str(stage_notes.get(stage_name, "")),
             }
         )
 

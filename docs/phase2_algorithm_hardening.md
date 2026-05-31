@@ -317,6 +317,20 @@ integration where applicable.
 - Validate the cache-hit 200-light benchmark against the release reference
   output and benchmark contract.
 
+### S2-Gate 16: Resident I/O Overlap Timing Semantics
+
+- Separate resident light-read consumer wait wall time from cumulative
+  read-worker FITS open/decode time in `resident_artifacts.json`.
+- Record overlap diagnostics for the I/O + upload + calibration pipeline:
+  wall-clock stage time, consumer wait time, worker cumulative time, estimated
+  overlap saved, wait fraction, and worker-to-wall ratio.
+- Keep legacy timing keys for compatibility, but add explicit
+  `*_worker_cumulative` and `light_read_wait_wall` aliases.
+- Update the 200-light benchmark contract so cumulative worker timings are
+  informational diagnostics rather than wall-clock regression failures.
+- Validate that acceptance audit still flags real wall-clock regressions while
+  excluding cumulative prefetch-worker totals from `regressed_count`.
+
 ## Gate Rules
 
 Each gate requires:

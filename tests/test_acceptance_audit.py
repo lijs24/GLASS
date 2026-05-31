@@ -175,6 +175,7 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
         resident_timing={
             "master_build_or_load": 11.0,
             "light_read_upload_calibrate": 16.0,
+            "light_read_worker_cumulative": 92.0,
             "resident_registration_warp": 12.0,
             "output_write": 3.5,
         },
@@ -182,6 +183,17 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     _write_wbpp_result(wbpp, elapsed_s=1092.541)
     _write_compare(compare)
     _write_contract(contract)
+    contract_payload = read_json(contract)
+    timing_baseline = contract_payload["timing_baseline"]
+    timing_baseline["stages_s"]["light_read_decode_worker"] = 45.0
+    timing_baseline["cumulative_stages"] = ["light_read_decode_worker"]
+    timing_baseline["stage_aliases"] = {
+        "light_read_decode_worker": "light_read_worker_cumulative",
+    }
+    timing_baseline["stage_notes"] = {
+        "light_read_decode_worker": "Cumulative worker time is informational.",
+    }
+    write_json(contract, contract_payload)
 
     audit = build_acceptance_audit(
         manifest_path=manifest,
@@ -204,6 +216,14 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert regression["status"] == "regressed"
     assert regression["worst_regression"]["stage"] == "output_write"
     assert regression["regressed_count"] == 1
+    cumulative = {
+        item["stage"]: item
+        for item in regression["items"]
+        if item["stage"] == "light_read_decode_worker"
+    }["light_read_decode_worker"]
+    assert cumulative["actual_key"] == "light_read_worker_cumulative"
+    assert cumulative["status"] == "informational_cumulative"
+    assert cumulative["timing_kind"] == "worker_cumulative"
 
 
 def test_acceptance_audit_contract_catches_missing_parameters(tmp_path: Path):

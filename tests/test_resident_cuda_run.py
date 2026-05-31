@@ -239,6 +239,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     timing = resident["artifacts"][0]["timing_s"]
     fine_timing = resident["artifacts"][0]["fine_timing"]
     io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
+    io_overlap = resident["artifacts"][0]["resident_io_overlap"]
     assert fine_timing["schema_version"] == 1
     assert io_pipeline["prefetch_frames"] == 2
     assert io_pipeline["prefetch_workers"] == 2
@@ -247,9 +248,17 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert io_pipeline["prefetch_host_pinned_bytes"] > 0
     assert io_pipeline["stack_host_pinned_bytes"] == 0
     assert timing["light_read_decode"] >= 0.0
+    assert timing["light_read_wait_wall"] == timing["light_read_decode"]
     assert timing["light_read_decode_worker"] >= 0.0
+    assert timing["light_read_worker_cumulative"] == timing["light_read_decode_worker"]
     assert timing["light_fits_open"] >= 0.0
+    assert timing["light_fits_open_worker_cumulative"] == timing["light_fits_open"]
     assert timing["light_fits_materialize_decode"] >= 0.0
+    assert (
+        timing["light_fits_materialize_decode_worker_cumulative"]
+        == timing["light_fits_materialize_decode"]
+    )
+    assert timing["light_read_overlap_saved"] >= 0.0
     assert timing["light_host_copy_to_pinned"] >= 0.0
     assert timing["light_host_copy_to_pinned"] == 0.0
     assert timing["light_h2d"] >= 0.0
@@ -259,6 +268,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert timing["light_loop_unaccounted"] >= 0.0
     assert fine_timing["seconds"]["light_read_decode_total"] == timing["light_read_decode"]
     assert fine_timing["seconds"]["light_read_decode_worker_total"] == timing["light_read_decode_worker"]
+    assert fine_timing["seconds"]["light_read_overlap_saved"] == timing["light_read_overlap_saved"]
     assert fine_timing["seconds"]["light_fits_open_total"] == timing["light_fits_open"]
     assert fine_timing["seconds"]["light_fits_materialize_decode_total"] == timing["light_fits_materialize_decode"]
     assert fine_timing["seconds"]["light_host_copy_to_pinned_total"] == timing["light_host_copy_to_pinned"]
@@ -266,6 +276,12 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert fine_timing["seconds"]["light_calibrate_store_total"] == timing["light_calibrate_store"]
     assert fine_timing["seconds"]["light_h2d_calibrate_store_total"] == timing["light_h2d_calibrate_store"]
     assert fine_timing["seconds"]["resident_registration_warp_total"] == timing["resident_registration_warp"]
+    assert io_overlap["schema_version"] == 1
+    assert io_overlap["prefetch_enabled"] is True
+    assert io_overlap["wall_clock_stage_s"] == timing["light_read_upload_calibrate"]
+    assert io_overlap["consumer_read_wait_wall_s"] == timing["light_read_wait_wall"]
+    assert io_overlap["worker_read_cumulative_s"] == timing["light_read_worker_cumulative"]
+    assert io_overlap["overlap_saved_s"] == timing["light_read_overlap_saved"]
 
 
 def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
