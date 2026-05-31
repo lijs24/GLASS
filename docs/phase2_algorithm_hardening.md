@@ -819,6 +819,25 @@ integration where applicable.
   resident triangle-registration smoke tests, full pytest, and the 200-light
   benchmark because this changes resident registration scheduling.
 
+### S2-Gate 49: Shared Reference Device Buffers For Triangle Descriptor Fit
+
+- Replace the first batch descriptor-fit implementation's internal per-frame
+  single-fit loop with a native batch implementation that uploads the shared
+  reference catalog, reference descriptors, and reference indices to device
+  memory once per batch.
+- Reuse those reference device buffers for every moving catalog in the batch
+  while preserving the existing CUDA descriptor-similarity kernel, matrix
+  output, inlier counts, RMS, and candidate-count semantics.
+- Record `reference_device_reuse` and `reference_device_bytes` in batch-fit
+  results, resident per-frame warnings, resident artifacts, and the HTML
+  resident summary.
+- Keep the public batch API and resident fallback behavior stable for CPU-only
+  installs and older native builds.
+- Validate with direct CUDA batch/single descriptor-fit equivalence tests,
+  resident triangle-registration smoke tests, ruff, full pytest, and the
+  200-light benchmark because this changes native registration memory
+  scheduling.
+
 ## Gate Rules
 
 Each gate requires:

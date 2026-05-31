@@ -1673,6 +1673,10 @@ def _normalize_triangle_similarity_result(result: dict[str, Any]) -> dict[str, A
         normalized["batch_count"] = int(result["batch_count"])
     if "batch_model" in result:
         normalized["batch_model"] = str(result["batch_model"])
+    if "reference_device_reuse" in result:
+        normalized["reference_device_reuse"] = bool(result["reference_device_reuse"])
+    if "reference_device_bytes" in result:
+        normalized["reference_device_bytes"] = int(result["reference_device_bytes"])
     return normalized
 
 

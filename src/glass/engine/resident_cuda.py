@@ -2768,10 +2768,12 @@ def run_resident_calibration_integration(
                     and hasattr(cuda_module, "estimate_similarity_from_triangle_descriptors_batch_f32")
                 )
                 triangle_descriptor_fit_batch_mode = (
-                    "native_batch_shared_reference_descriptor"
+                    "native_batch_shared_reference_device"
                     if triangle_descriptor_fit_batch_enabled
                     else "per_frame"
                 )
+                triangle_descriptor_fit_reference_device_reuse = False
+                triangle_descriptor_fit_reference_device_bytes = 0
                 catalog_selector = (
                     "resident_grid_top_nms"
                     if use_grid_catalog
@@ -2884,6 +2886,8 @@ def run_resident_calibration_integration(
                     moving_catalog: dict[str, Any],
                     moving_descriptor: dict[str, Any],
                 ) -> dict[str, Any]:
+                    nonlocal triangle_descriptor_fit_reference_device_bytes
+                    nonlocal triangle_descriptor_fit_reference_device_reuse
                     threshold_key = round(float(threshold), 6)
                     if triangle_descriptor_fit_batch_enabled:
                         cached_fits = descriptor_fit_batch_cache.get(threshold_key)
@@ -2939,6 +2943,13 @@ def run_resident_calibration_integration(
                                 )
                             else:
                                 batch_fits = []
+                            if batch_fits:
+                                triangle_descriptor_fit_reference_device_reuse = bool(
+                                    batch_fits[0].get("reference_device_reuse", False)
+                                )
+                                triangle_descriptor_fit_reference_device_bytes = int(
+                                    batch_fits[0].get("reference_device_bytes", 0) or 0
+                                )
                             fit_batch_elapsed = perf_counter() - fit_batch_start
                             _add_elapsed(registration_component_s, "triangle_descriptor_fit", fit_batch_elapsed)
                             _add_elapsed(
@@ -3204,6 +3215,10 @@ def run_resident_calibration_integration(
                                         + str(bool("batch_model" in selected_fit)).lower(),
                                         "triangle_descriptor_fit_batch_mode="
                                         + str(selected_fit.get("batch_model", triangle_descriptor_fit_batch_mode)),
+                                        "triangle_descriptor_fit_reference_device_reuse="
+                                        + str(bool(selected_fit.get("reference_device_reuse", False))).lower(),
+                                        "triangle_descriptor_fit_reference_device_bytes="
+                                        + str(int(selected_fit.get("reference_device_bytes", 0) or 0)),
                                         f"triangle_scale={float(selected_fit.get('scale', float('nan'))):.9g}",
                                         f"triangle_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
                                         f"triangle_fit_rms_px={rms_px:.6g}",
@@ -4061,6 +4076,15 @@ def run_resident_calibration_integration(
                         "triangle_descriptor_fit_batch_mode": triangle_descriptor_fit_batch_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_descriptor_fit_reference_device_reuse": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_descriptor_fit_reference_device_reuse
+                        ),
+                        "triangle_descriptor_fit_reference_device_bytes": int(
+                            triangle_descriptor_fit_reference_device_bytes
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])
                         if resident_registration == "similarity_cuda_triangle"
                         else None,

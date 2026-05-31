@@ -999,8 +999,10 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_catalog_batch_mode"] == "grid_top_nms_fixed_threshold"
     assert resident_registration["triangle_descriptor_fit_batch"] is True
     assert resident_registration["triangle_descriptor_fit_batch_mode"] == (
-        "native_batch_shared_reference_descriptor"
+        "native_batch_shared_reference_device"
     )
+    assert resident_registration["triangle_descriptor_fit_reference_device_reuse"] is True
+    assert resident_registration["triangle_descriptor_fit_reference_device_bytes"] > 0
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_batch"] is True
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "native_batch_one_seed_per_frame"
@@ -1028,6 +1030,10 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_catalog_selector=resident_grid_top_nms" in warning for warning in moving["warnings"])
     assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
     assert any("triangle_descriptor_fit_batch=true" in warning for warning in moving["warnings"])
+    assert any(
+        "triangle_descriptor_fit_reference_device_reuse=true" in warning
+        for warning in moving["warnings"]
+    )
     assert any("triangle_pixel_refine_mode=native_batch" in warning for warning in moving["warnings"])
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
 

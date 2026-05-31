@@ -229,11 +229,13 @@ def test_gpu_triangle_descriptor_similarity_batch_matches_single_fits():
     ]
 
     assert len(batch) == len(singles) == 2
-    assert batch[0]["batch_model"] == "triangle_descriptor_similarity_cuda_batch_shared_reference"
+    assert batch[0]["batch_model"] == "triangle_descriptor_similarity_cuda_batch_shared_reference_device"
     assert [item["batch_index"] for item in batch] == [0, 1]
     assert [item["batch_count"] for item in batch] == [2, 2]
     for batch_result, single_result in zip(batch, singles, strict=True):
         assert batch_result["model"] == single_result["model"]
+        assert batch_result["reference_device_reuse"] is True
+        assert batch_result["reference_device_bytes"] > 0
         assert batch_result["status"] == "ok"
         assert batch_result["inliers"] == single_result["inliers"]
         assert batch_result["best_candidate_index"] == single_result["best_candidate_index"]
