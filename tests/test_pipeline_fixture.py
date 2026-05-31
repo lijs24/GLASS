@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import struct
 
 from glass.cli import main
 from glass.engine.pipeline import (
@@ -10,10 +11,32 @@ from glass.engine.pipeline import (
     _stack_mean_master,
     _stream_mean_master,
 )
-from glass.io.fits_io import read_fits_data, write_fits_data
+from glass.io.fits_io import read_fits_data, read_fits_header, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy
 from glass.synthetic.generator import generate_synthetic_dataset
+
+
+def _write_test_xisf_from_fits(path: Path, data, header: dict[str, object]) -> None:
+    image = data.astype("<f4")
+    height, width = image.shape
+    payload = image.tobytes(order="C")
+    offset = 4096
+    keyword_names = ["IMAGETYP", "FILTER", "EXPTIME", "GAIN", "OFFSET", "CCD-TEMP", "XBINNING", "YBINNING"]
+    keywords = "".join(
+        f'<FITSKeyword name="{name}" value="{header[name]}"/>'
+        for name in keyword_names
+        if name in header and header[name] is not None
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<xisf version="1.0">'
+        f'<Image geometry="{width}:{height}:1" sampleFormat="Float32" location="attachment:{offset}:{len(payload)}">'
+        f"{keywords}</Image></xisf>"
+    ).encode("utf-8")
+    if 16 + len(xml) > offset:
+        raise AssertionError("test XISF header exceeded fixed offset")
+    path.write_bytes(b"XISF0100" + struct.pack("<Q", len(xml)) + xml + b"\0" * (offset - 16 - len(xml)) + payload)
 
 
 def test_pipeline_fixture_audit(tmp_path: Path):
@@ -42,8 +65,12 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert all("valid" in output["dq_summary"] for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     report_text = (run / "report.html").read_text(encoding="utf-8")
+    assert "Stage coverage summary" in report_text
     assert "DQ/mask summary" in report_text
     assert "Master frame statistics" in report_text
+    assert "XISF input cache" in report_text
+    assert "Integration output maps" in report_text
+    assert "variance_map_" in report_text
     assert "winsorized_sigma" in report_text
     assert main(["resume", "--run", str(run)]) == 0
 
@@ -53,7 +80,9 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     audit = tmp_path / "audit"
     run = tmp_path / "run"
     generate_synthetic_dataset(data, frames=3, width=24, height=24)
-    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    audit.mkdir()
+    assert main(["scan", "--root", str(data), "--out", str(audit / "manifest.json")]) == 0
+    assert main(["plan", "--manifest", str(audit / "manifest.json"), "--out", str(audit / "processing_plan.json")]) == 0
     assert (
         main(
             [
@@ -84,7 +113,7 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert artifacts["policy"]["flat_floor"] == 0.05
     assert all(master["streaming"] for master in artifacts["masters"].values())
     assert all(master["stack_engine_enabled"] for master in artifacts["masters"].values())
-    assert all(master["tile_stack_mode"] == "stack_engine_cpu" for master in artifacts["masters"].values())
+    assert all(master["tile_stack_mode"].startswith("stack_engine_cpu") for master in artifacts["masters"].values())
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
     assert all(Path(item["dq_mask_path"]).exists() for item in artifacts["calibrated_lights"])
     assert all("valid" in item["dq_summary"] for item in artifacts["calibrated_lights"])
@@ -93,6 +122,44 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert all(master["normalization_stage"] == "per_flat" for master in flat_masters)
     assert all(len(master["per_flat_normalization"]) >= 1 for master in flat_masters)
     assert all(master["master_rejection"] == "winsorized_sigma" for master in artifacts["masters"].values())
+
+
+def test_pipeline_calibration_caches_xisf_light_input(tmp_path: Path):
+    data = tmp_path / "data"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    generate_synthetic_dataset(data, frames=1, width=24, height=24)
+    light_fits = next((data / "light").glob("*.fits"))
+    light_xisf = light_fits.with_suffix(".xisf")
+    _write_test_xisf_from_fits(light_xisf, read_fits_data(light_fits), read_fits_header(light_fits))
+    light_fits.unlink()
+
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu"]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(audit / "processing_plan.json"),
+                "--out",
+                str(run),
+                "--backend",
+                "cpu",
+                "--until-stage",
+                "calibration",
+                "--tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+
+    artifacts = read_json(run / "calibration_artifacts.json")
+    assert len(artifacts["input_cache"]) == 1
+    cache_record = artifacts["input_cache"][0]
+    assert cache_record["source_path"].endswith(".xisf")
+    assert Path(cache_record["cache_path"]).exists()
+    assert len(artifacts["calibrated_lights"]) == 1
 
 
 def test_streaming_exact_median_scratch_matches_numpy(tmp_path: Path):

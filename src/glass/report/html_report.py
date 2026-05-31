@@ -8,12 +8,47 @@ from typing import Any
 def _table(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "<p>No rows.</p>"
-    keys = list(rows[0].keys())
+    keys: list[str] = []
+    for row in rows:
+        for key in row.keys():
+            if key not in keys:
+                keys.append(key)
     head = "".join(f"<th>{escape(str(k))}</th>" for k in keys)
     body = []
     for row in rows:
         body.append("<tr>" + "".join(f"<td>{escape(str(row.get(k, '')))}</td>" for k in keys) + "</tr>")
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
+
+
+def _warning_rows(
+    manifest: dict[str, Any] | None,
+    plan: dict[str, Any] | None,
+    calibration: dict[str, Any] | None,
+    registration: dict[str, Any] | None,
+    local_norm: dict[str, Any] | None,
+    integration: dict[str, Any] | None,
+    timing: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (manifest or {}).get("warnings", []):
+        rows.append({"stage": "scan", "item": item.get("path") if isinstance(item, dict) else "", "warning": item})
+    for item in (plan or {}).get("global_warnings", []):
+        rows.append({"stage": "plan", "item": "", "warning": item})
+    for item in (calibration or {}).get("calibrated_lights", []):
+        for warning in item.get("warnings", []):
+            rows.append({"stage": "calibration", "item": item.get("frame_id"), "warning": warning})
+    for item in (registration or {}).get("registration_results", []):
+        for warning in item.get("warnings", []):
+            rows.append({"stage": "registration", "item": item.get("frame_id"), "warning": warning})
+    for item in (local_norm or {}).get("local_norm_results", []):
+        for warning in item.get("warnings", []):
+            rows.append({"stage": "local_normalization", "item": item.get("frame_id"), "warning": warning})
+    for warning in (integration or {}).get("warnings", []):
+        rows.append({"stage": "integration", "item": "", "warning": warning})
+    for item in (timing or {}).get("stages", []):
+        if item.get("status") == "failed":
+            rows.append({"stage": item.get("stage"), "item": "timing", "warning": item.get("error")})
+    return rows
 
 
 def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -94,10 +129,24 @@ def write_html_report(
             }
         )
     calibration_policy = (calibration or {}).get("policy", {})
+    input_cache_rows = (calibration or {}).get("input_cache", [])
     frame_quality = (quality or {}).get("frame_quality", [])
     registration_results = (registration or {}).get("registration_results", [])
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
     integration_outputs = (integration or {}).get("outputs", [])
+    integration_map_rows = [
+        {
+            "filter": item.get("filter"),
+            "master": item.get("master_path"),
+            "weight": item.get("weight_map_path"),
+            "coverage": item.get("coverage_map_path"),
+            "variance": item.get("variance_map_path"),
+            "low_rejection": item.get("low_rejection_map_path"),
+            "high_rejection": item.get("high_rejection_map_path"),
+            "dq": item.get("dq_map_path"),
+        }
+        for item in integration_outputs
+    ]
     dq_rows = []
     for source_name, rows in [
         ("registration/warp", registration_results),
@@ -115,10 +164,46 @@ def write_html_report(
                     }
                 )
     timing_rows = (timing or {}).get("stages", [])
+    timing_overview = [
+        {
+            "command": (timing or {}).get("command"),
+            "backend": (timing or {}).get("backend"),
+            "memory_mode": (timing or {}).get("memory_mode", "tile"),
+            "total_elapsed_s": (timing or {}).get("total_elapsed_s"),
+            "stage_count": len(timing_rows),
+        }
+    ]
+    stage_coverage_rows = [
+        {"stage": "scan", "rows": len(frames), "artifact": "manifest.json" if manifest else "missing"},
+        {"stage": "plan", "rows": len(light_plans), "artifact": "processing_plan.json" if plan else "missing"},
+        {
+            "stage": "calibration",
+            "rows": len((calibration or {}).get("calibrated_lights", [])),
+            "artifact": "calibration_artifacts.json" if calibration else "missing",
+        },
+        {
+            "stage": "quality",
+            "rows": len(frame_quality),
+            "artifact": "frame_quality.json" if quality else "missing",
+        },
+        {
+            "stage": "registration",
+            "rows": len(registration_results),
+            "artifact": "registration_results.json" if registration else "missing",
+        },
+        {
+            "stage": "local_normalization",
+            "rows": len(local_norm_results),
+            "artifact": "local_norm_results.json" if local_norm else "missing",
+        },
+        {
+            "stage": "integration",
+            "rows": len(integration_outputs),
+            "artifact": "integration_results.json" if integration else "missing",
+        },
+    ]
     resident_summary = _resident_rows(resident)
-    warnings = []
-    warnings.extend((manifest or {}).get("warnings", []))
-    warnings.extend((plan or {}).get("global_warnings", []))
+    warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -136,6 +221,8 @@ def write_html_report(
   <h1>{escape(title)}</h1>
   <h2>Project summary</h2>
   <p>Clean-room GLASS report. Input directories are not modified.</p>
+  <h2>Stage coverage summary</h2>
+  {_table(stage_coverage_rows)}
   <h2>Input frame table</h2>
   {_table(frames)}
   <h2>Frame type distribution</h2>
@@ -145,6 +232,9 @@ def write_html_report(
   <h2>Master frame statistics</h2>
   <pre>{escape(str(calibration_policy))}</pre>
   {_table(master_rows)}
+  <h2>XISF input cache</h2>
+  <p>XISF sources are streamed into run-local FITS cache files before calibration.</p>
+  {_table(input_cache_rows)}
   <h2>Frame quality table</h2>
   <p>Detector: <code>{escape(str((quality or {}).get("star_detector", "pending")))}</code>.
   Weight source: <code>{escape(str((quality or {}).get("weight_source", "pending")))}</code>.</p>
@@ -161,6 +251,8 @@ def write_html_report(
   Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
   Rejection: <code>{escape(str((integration or {}).get("rejection", "pending")))}</code>.</p>
   {_table(integration_outputs)}
+  <h2>Integration output maps</h2>
+  {_table(integration_map_rows)}
   <h2>DQ/mask summary</h2>
   {_table(dq_rows)}
   <h2>Resident CUDA summary</h2>
@@ -175,9 +267,10 @@ def write_html_report(
   the configured device memory budget.</p>
   <h2>Runtime summary</h2>
   <p>Total elapsed seconds: <code>{escape(str((timing or {}).get("total_elapsed_s", "pending")))}</code>.</p>
+  {_table(timing_overview)}
   {_table(timing_rows)}
   <h2>Warnings/errors</h2>
-  <pre>{escape(str(warnings))}</pre>
+  {_table(warning_rows)}
   <h2>PixInsight comparison if available</h2>
   <p>No comparison artifact attached.</p>
   <h2>Known differences from WBPP</h2>

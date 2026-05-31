@@ -12,6 +12,7 @@ from glass.engine.stack_engine import CPUStackEngine
 from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.image_source import FitsImageSource
 from glass.io.fits_io import FitsImageReader, FitsTileWriter
+from glass.io.xisf_io import cache_xisf_to_fits
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RunState, now_iso
 
@@ -31,6 +32,32 @@ def _policy_from_plan(plan: dict[str, Any]) -> CalibrationPolicy:
 
 def _frame_map(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {frame["id"]: frame for frame in plan.get("frames", [])}
+
+
+def _prepare_cache_safe_inputs(
+    frames: dict[str, dict[str, Any]],
+    run_dir: Path,
+    tile_size: int,
+) -> list[dict[str, Any]]:
+    input_cache_dir = run_dir / "input_cache" / "xisf_as_fits"
+    cached: list[dict[str, Any]] = []
+    for frame_id, frame in frames.items():
+        source_path = Path(str(frame.get("path")))
+        if source_path.suffix.lower() != ".xisf":
+            continue
+        input_cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path = input_cache_dir / f"{frame_id}.fits"
+        cache_record = cache_xisf_to_fits(
+            source_path,
+            cache_path,
+            tile_size=tile_size,
+            header={"FRAMEID": frame_id, "ORIGFMT": "XISF"},
+        )
+        frame["original_path"] = str(source_path)
+        frame["path"] = str(cache_path)
+        frame["input_cache_path"] = str(cache_path)
+        cached.append({"frame_id": frame_id, **cache_record})
+    return cached
 
 
 def _group_map(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -370,6 +397,8 @@ class _NormalizedFlatSource:
         return np.asarray(data, dtype=dtype or np.float32)
 
     def read_mask_tile(self, window: TileWindow) -> DQMask:
+        import numpy as np
+
         tile = self.read_tile(window, dtype=None)
         return dq_mask_from_invalid(tile.shape, ~np.isfinite(tile), DQFlag.NO_DATA)
 
@@ -641,6 +670,7 @@ def run_calibration_stages(
     state.current_stage = "master_calibration"
 
     frames = _frame_map(plan)
+    input_cache = _prepare_cache_safe_inputs(frames, out, tile_size)
     groups = _group_map(plan)
     policy = _policy_from_plan(plan)
     if flat_floor is not None:
@@ -752,7 +782,7 @@ def run_calibration_stages(
                 "flat_floor": policy.flat_floor,
                 "streaming": True,
                 "tile_stack_mode": raw_tile_stack_mode,
-                "stack_engine_enabled": raw_tile_stack_mode == "stack_engine_cpu",
+                "stack_engine_enabled": raw_tile_stack_mode.startswith("stack_engine_cpu"),
                 "stack_engine_fallback_reason": raw_fallback_reason,
                 "stack_engine_metrics": raw_stack_metrics,
                 "master_rejection": policy.master_rejection,
@@ -798,6 +828,7 @@ def run_calibration_stages(
             {
                 "masters": master_metadata,
                 "calibrated_lights": calibrated,
+                "input_cache": input_cache,
                 "policy": policy,
                 "tile_size": tile_size,
                 "requested_backend": backend,
