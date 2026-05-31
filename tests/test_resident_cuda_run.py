@@ -11,6 +11,7 @@ from glass.io.fits_io import read_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
     _matches_any_token,
+    _resident_dq_coverage_provenance,
     _resident_dq_map,
     _resident_output_map_selection,
     _resident_similarity_frame_dispatch,
@@ -97,6 +98,29 @@ def test_resident_dq_map_marks_no_data_and_rejections():
     assert summary["warp_edge"] == 1
     assert summary["low_rejected"] == 1
     assert summary["high_rejected"] == 1
+
+
+def test_resident_dq_coverage_provenance_separates_rejection_from_pre_rejection():
+    coverage = np.array([[3.0, 0.0], [2.0, 1.0]], dtype=np.float32)
+    low = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float32)
+    high = np.array([[0.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+
+    provenance = _resident_dq_coverage_provenance(coverage, low, high, active_frame_count=3)
+
+    assert provenance["available"] is True
+    assert provenance["active_frame_count"] == 3
+    assert provenance["source_terms"] == [
+        "post_rejection_coverage",
+        "low_rejection",
+        "high_rejection",
+    ]
+    assert provenance["post_rejection_zero_pixels"] == 1
+    assert provenance["zero_pre_rejection_pixels"] == 1
+    assert provenance["partial_pre_rejection_pixels"] == 1
+    assert provenance["rejection_reduced_pixels"] == 2
+    assert provenance["rejected_sample_count"] == 2.0
+    assert provenance["finite_pre_rejection_coverage"]["max"] == 3.0
+    assert provenance["partial_edge_inference"] == "deferred"
 
 
 def test_resident_output_map_selection_modes():
@@ -456,6 +480,16 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert "high_rejection" in output["output_map_policy"]["skipped"]
     assert "dq" in output["output_map_policy"]["written"]
     assert "valid" in output["dq_summary"]
+    assert output["dq_coverage_provenance"] == artifact["dq_coverage_provenance"]
+    provenance = output["dq_coverage_provenance"]
+    assert provenance["available"] is True
+    assert provenance["source_terms"] == [
+        "post_rejection_coverage",
+        "low_rejection",
+        "high_rejection",
+    ]
+    assert provenance["active_frame_count"] == 2
+    assert "finite_pre_rejection_coverage" in provenance
 
 
 def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):

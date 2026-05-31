@@ -383,6 +383,21 @@ integration where applicable.
   coverage.
 - Validate with direct DQ helper tests and resident CUDA smoke tests.
 
+### S2-Gate 21: Resident DQ Coverage Provenance
+
+- Record resident coverage provenance alongside the DQ map.
+- Separate post-rejection integration coverage from finite pre-rejection sample
+  coverage by using `coverage + low_rejection + high_rejection` when rejection
+  maps are available.
+- Report zero pre-rejection pixels, partial pre-rejection pixels, rejection
+  reduced pixels, and rejected sample counts in `resident_artifacts.json` and
+  `integration_results.json`.
+- Keep partial warp-edge inference deferred until a pure geometric
+  pre-rejection warp coverage map exists.
+- Validate with direct helper tests, resident CUDA smoke tests, and the
+  200-light benchmark because the artifact is produced on the resident fast
+  path.
+
 ## Gate Rules
 
 Each gate requires:

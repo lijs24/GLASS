@@ -198,6 +198,7 @@ def write_html_report(
                         "stage": source_name,
                         "frame_or_filter": row.get("frame_id") or row.get("filter"),
                         "summary": row.get("dq_summary", {}),
+                        "coverage_provenance": row.get("dq_coverage_provenance", {}),
                         "path": row.get("dq_mask_path") or row.get("dq_map_path"),
                     }
                 )

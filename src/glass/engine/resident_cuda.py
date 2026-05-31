@@ -590,6 +590,83 @@ def _resident_dq_map(
     return dq, DQMask(dq).summary()
 
 
+def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
+    values = np.asarray(data, dtype=np.float32)
+    finite_mask = np.isfinite(values)
+    finite_count = int(np.count_nonzero(finite_mask))
+    if finite_count == 0:
+        return {
+            "finite_pixels": 0,
+            "min": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+        }
+    return {
+        "finite_pixels": finite_count,
+        "min": float(np.nanmin(values)),
+        "max": float(np.nanmax(values)),
+        "mean": float(np.nanmean(values)),
+    }
+
+
+def _resident_dq_coverage_provenance(
+    coverage_map: np.ndarray | None,
+    low_rejection_map: np.ndarray | None,
+    high_rejection_map: np.ndarray | None,
+    active_frame_count: int,
+) -> dict[str, Any]:
+    active_count = max(0, int(active_frame_count))
+    if coverage_map is None:
+        return {
+            "available": False,
+            "active_frame_count": active_count,
+            "reason": "resident integration did not emit a coverage map",
+        }
+
+    post_rejection = np.asarray(coverage_map, dtype=np.float32)
+    finite_pre_rejection = post_rejection.copy()
+    source_terms = ["post_rejection_coverage"]
+    if low_rejection_map is not None:
+        finite_pre_rejection += np.nan_to_num(np.asarray(low_rejection_map, dtype=np.float32), nan=0.0)
+        source_terms.append("low_rejection")
+    if high_rejection_map is not None:
+        finite_pre_rejection += np.nan_to_num(np.asarray(high_rejection_map, dtype=np.float32), nan=0.0)
+        source_terms.append("high_rejection")
+
+    finite_pre = np.isfinite(finite_pre_rejection)
+    finite_post = np.isfinite(post_rejection)
+    zero_pre = finite_pre & (finite_pre_rejection <= 0.5)
+    partial_pre = (
+        finite_pre
+        & (finite_pre_rejection > 0.5)
+        & (finite_pre_rejection < float(active_count) - 0.5)
+        if active_count > 0
+        else np.zeros_like(finite_pre, dtype=bool)
+    )
+    rejection_reduced = finite_pre & finite_post & (post_rejection < finite_pre_rejection - 0.5)
+    rejected_samples = finite_pre_rejection - post_rejection
+    np.maximum(rejected_samples, 0.0, out=rejected_samples)
+
+    return {
+        "available": True,
+        "active_frame_count": active_count,
+        "source_terms": source_terms,
+        "post_rejection_coverage": _resident_coverage_array_stats(post_rejection),
+        "finite_pre_rejection_coverage": _resident_coverage_array_stats(finite_pre_rejection),
+        "zero_pre_rejection_pixels": int(np.count_nonzero(zero_pre)),
+        "partial_pre_rejection_pixels": int(np.count_nonzero(partial_pre)),
+        "post_rejection_zero_pixels": int(np.count_nonzero(finite_post & (post_rejection <= 0.5))),
+        "rejection_reduced_pixels": int(np.count_nonzero(rejection_reduced)),
+        "rejected_sample_count": float(np.nansum(rejected_samples)),
+        "partial_edge_inference": "deferred",
+        "note": (
+            "finite_pre_rejection_coverage is coverage + low/high rejection counts. "
+            "It separates rejection loss from finite contributing samples but is not yet "
+            "a pure geometric warp-footprint map."
+        ),
+    }
+
+
 def _resident_output_map_selection(policy: str) -> dict[str, bool]:
     if policy not in _RESIDENT_OUTPUT_MAP_POLICIES:
         raise ValueError("resident_output_maps must be audit, science, or minimal")
@@ -3194,6 +3271,7 @@ def run_resident_calibration_integration(
             high_rejection_map = None
             weights_array = np.asarray(frame_weight_values, dtype=np.float32)
             weights_arg = None if np.all(weights_array == 1.0) else weights_array
+            active_frame_count = int(np.count_nonzero(np.isfinite(weights_array) & (weights_array > 0.0)))
             if rejection_mode == "none":
                 master, weight_map = stack.integrate_mean(weights_arg)
             else:
@@ -3240,6 +3318,12 @@ def run_resident_calibration_integration(
                     low_rejection_map,
                     high_rejection_map,
                 )
+            dq_coverage_provenance = _resident_dq_coverage_provenance(
+                coverage_map,
+                low_rejection_map,
+                high_rejection_map,
+                active_frame_count,
+            )
             count_dtype = _count_map_dtype(len(light_frames))
             available_output_maps = ["master", "weight", "dq"]
             if coverage_map is not None:
@@ -3276,8 +3360,8 @@ def run_resident_calibration_integration(
                         "header": {
                             "IMAGETYP": "dq_mask",
                             "FILTER": filter_name,
-                        "DQSTAGE": "integration",
-                        "DQFLAGS": "NO_DATA,WARP_EDGE,LOW_REJECTED,HIGH_REJECTED",
+                            "DQSTAGE": "integration",
+                            "DQFLAGS": "NO_DATA,WARP_EDGE,LOW_REJECTED,HIGH_REJECTED",
                         },
                         "dtype": np.int16,
                         "round_counts": True,
@@ -3446,6 +3530,7 @@ def run_resident_calibration_integration(
                     },
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
+                    "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_flag_bits": {
                         "no_data": int(DQFlag.NO_DATA),
                         "warp_edge": int(DQFlag.WARP_EDGE),
@@ -3693,6 +3778,7 @@ def run_resident_calibration_integration(
                     "high_rejection_map_path": None if high_rejection_path is None else str(high_rejection_path),
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
+                    "dq_coverage_provenance": dq_coverage_provenance,
                     "output_map_policy": {
                         "mode": resident_output_maps,
                         "available": available_output_maps,
