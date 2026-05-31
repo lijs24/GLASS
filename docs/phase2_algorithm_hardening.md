@@ -1282,6 +1282,20 @@ integration where applicable.
   ruff, full pytest, and a 200-light benchmark comparison against the prior
   resident baseline.
 
+### S2-Gate 77: Batched Prefetch Slot Release
+
+- Replace repeated per-index pinned prefetch slot release calls with a batched
+  release path that returns all completed slots first and triggers at most one
+  `_fill()` call per release batch.
+- Preserve the existing `release(index)` API by routing it through
+  `release_many([index])`.
+- Record prefetch fill call count, submitted frame count, release batch count,
+  and release/fill model in `resident_io_pipeline`.
+- Use the batched release path for synchronized batch calibration, H2D-event
+  release, and callback-queue release.
+- Validate with resident CLI coverage, ruff, full pytest, and 200-light
+  benchmark comparison against the previous callback-queue run.
+
 ## Gate Rules
 
 Each gate requires:

@@ -672,6 +672,10 @@ def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):
     )
     assert io_pipeline["calibration_event_mode"] == "reused_stack_lane_h2d_events"
     assert io_pipeline["prefetch_release_count"] == 2
+    assert io_pipeline["prefetch_release_batch_count"] == 2
+    assert io_pipeline["prefetch_fill_call_count"] == 3
+    assert io_pipeline["prefetch_fill_submit_count"] == 2
+    assert io_pipeline["prefetch_release_fill_model"] == "batched_release_single_fill"
     assert io_pipeline["prefetch_max_inflight_slots"] == 2
 
 
@@ -851,6 +855,10 @@ def test_cli_resident_cuda_callback_queue_releases_inside_native_batch(tmp_path:
     assert io_pipeline["calibration_batch_timing_model"] == "multi_stream_callback_release_waves_one_final_sync"
     assert io_pipeline["calibration_event_mode"] == "reused_stack_lane_h2d_callback_events"
     assert io_pipeline["prefetch_release_count"] == 2
+    assert io_pipeline["prefetch_release_batch_count"] == 2
+    assert io_pipeline["prefetch_fill_call_count"] == 3
+    assert io_pipeline["prefetch_fill_submit_count"] == 2
+    assert io_pipeline["prefetch_release_fill_model"] == "batched_release_single_fill"
 
 
 def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_path: Path):

@@ -139,7 +139,10 @@ class _LightPrefetcher:
         self.inflight_slots: dict[int, int] = {}
         self.next_submit = 0
         self.fill_blocked_no_slot_count = 0
+        self.fill_call_count = 0
+        self.fill_submit_count = 0
         self.release_count = 0
+        self.release_batch_count = 0
         self.max_inflight_slots = 0
 
     def __enter__(self) -> "_LightPrefetcher":
@@ -166,6 +169,7 @@ class _LightPrefetcher:
             self.executor = None
 
     def _fill(self) -> None:
+        self.fill_call_count += 1
         if self.executor is None:
             return
         while self.next_submit < len(self.light_frames) and len(self.pending) < self.depth:
@@ -183,6 +187,7 @@ class _LightPrefetcher:
             if slot_id is not None:
                 self.inflight_slots[self.next_submit] = slot_id
                 self.max_inflight_slots = max(self.max_inflight_slots, len(self.inflight_slots))
+            self.fill_submit_count += 1
             self.next_submit += 1
 
     def result(self, index: int) -> tuple[np.ndarray, dict[str, float], float]:
@@ -198,13 +203,22 @@ class _LightPrefetcher:
         return data, read_profile, wait_elapsed
 
     def release(self, index: int) -> None:
+        self.release_many([index])
+
+    def release_many(self, indices: list[int]) -> None:
         if not self.pinned_ring:
             return
-        slot_id = self.inflight_slots.pop(index, None)
-        if slot_id is None:
+        released = 0
+        for index in indices:
+            slot_id = self.inflight_slots.pop(index, None)
+            if slot_id is None:
+                continue
+            self.free_slots.append(slot_id)
+            released += 1
+        if released == 0:
             return
-        self.free_slots.append(slot_id)
-        self.release_count += 1
+        self.release_count += released
+        self.release_batch_count += 1
         self._fill()
 
     @property
@@ -2043,10 +2057,9 @@ def run_resident_calibration_integration(
                             released_batch_indices: set[int] = set()
 
                             def _release_h2d_completed_indices(released_indices: list[int]) -> None:
-                                for released_index in released_indices:
-                                    item_index = int(released_index)
-                                    light_prefetch.release(item_index)
-                                    released_batch_indices.add(item_index)
+                                completed = [int(released_index) for released_index in released_indices]
+                                light_prefetch.release_many(completed)
+                                released_batch_indices.update(completed)
 
                             try:
                                 calibration_timing = (
@@ -2062,9 +2075,10 @@ def run_resident_calibration_integration(
                                     )
                                 )
                             finally:
-                                for item_index in batch_indices:
-                                    if item_index not in released_batch_indices:
-                                        light_prefetch.release(item_index)
+                                unreleased_indices = [
+                                    item_index for item_index in batch_indices if item_index not in released_batch_indices
+                                ]
+                                light_prefetch.release_many(unreleased_indices)
                             calibration_h2d_release_count += int(
                                 calibration_timing.get("callback_release_count", 0) or 0
                             )
@@ -2093,8 +2107,7 @@ def run_resident_calibration_integration(
                                 resident_calibration_streams,
                                 asdict(policy),
                             )
-                            for item_index in batch_indices:
-                                light_prefetch.release(item_index)
+                            light_prefetch.release_many(batch_indices)
                             finish_timing = stack.finish_pending_calibration_timed()
                             calibration_timing = dict(finish_timing)
                             calibration_timing["h2d_mode"] = str(h2d_release_timing.get("h2d_mode", "unknown"))
@@ -2147,8 +2160,7 @@ def run_resident_calibration_integration(
                                         asdict(policy),
                                     )
                             finally:
-                                for item_index in batch_indices:
-                                    light_prefetch.release(item_index)
+                                light_prefetch.release_many(batch_indices)
                         batch_calibrate_elapsed = perf_counter() - batch_calibrate_start
                         calibration_batch_count += 1
                         calibration_batch_frame_count += len(batch_items)
@@ -5119,7 +5131,11 @@ def run_resident_calibration_integration(
                         "calibration_batch_stream_h2d_calibrate_store_s": float(calibration_batch_stream_s),
                         "calibration_batch_sync_s": float(calibration_batch_sync_s),
                         "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
+                        "prefetch_fill_call_count": int(light_prefetch.fill_call_count),
+                        "prefetch_fill_submit_count": int(light_prefetch.fill_submit_count),
                         "prefetch_release_count": int(prefetch_release_count),
+                        "prefetch_release_batch_count": int(light_prefetch.release_batch_count),
+                        "prefetch_release_fill_model": "batched_release_single_fill",
                         "prefetch_max_inflight_slots": int(prefetch_max_inflight_slots),
                         "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
                         "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",
