@@ -49,12 +49,118 @@ def _warp_tile_nearest(reader: FitsImageReader, tile, dx: int, dy: int) -> tuple
     return out, coverage
 
 
-def _warp_tile_matrix_bilinear(
+INTERPOLATOR_KERNEL_RADIUS = {
+    "nearest": 0,
+    "bilinear": 1,
+    "bicubic": 2,
+    "lanczos3": 3,
+}
+
+
+def available_warp_interpolators() -> tuple[str, ...]:
+    return tuple(INTERPOLATOR_KERNEL_RADIUS)
+
+
+def _cubic_weight(value: float, a: float = -0.5) -> float:
+    x = abs(float(value))
+    if x <= 1.0:
+        return (a + 2.0) * x**3 - (a + 3.0) * x**2 + 1.0
+    if x < 2.0:
+        return a * x**3 - 5.0 * a * x**2 + 8.0 * a * x - 4.0 * a
+    return 0.0
+
+
+def _sinc(value: float) -> float:
+    if abs(value) < 1.0e-8:
+        return 1.0
+    pix = np.pi * float(value)
+    return float(np.sin(pix) / pix)
+
+
+def _lanczos3_weight(value: float) -> float:
+    x = abs(float(value))
+    if x >= 3.0:
+        return 0.0
+    return _sinc(x) * _sinc(x / 3.0)
+
+
+def _sample_nearest(
+    source: np.ndarray,
+    src_x: np.ndarray,
+    src_y: np.ndarray,
+    read_x0: int,
+    read_y0: int,
+) -> np.ndarray:
+    x = np.rint(src_x).astype(np.int64) - int(read_x0)
+    y = np.rint(src_y).astype(np.int64) - int(read_y0)
+    return source[y, x].astype(np.float32)
+
+
+def _sample_bilinear(
+    source: np.ndarray,
+    src_x: np.ndarray,
+    src_y: np.ndarray,
+    read_x0: int,
+    read_y0: int,
+) -> np.ndarray:
+    x0 = np.floor(src_x).astype(np.int64)
+    y0 = np.floor(src_y).astype(np.int64)
+    x1 = np.minimum(x0 + 1, read_x0 + source.shape[1] - 1)
+    y1 = np.minimum(y0 + 1, read_y0 + source.shape[0] - 1)
+    tx = (src_x - x0).astype(np.float32)
+    ty = (src_y - y0).astype(np.float32)
+    lx0 = x0 - read_x0
+    lx1 = x1 - read_x0
+    ly0 = y0 - read_y0
+    ly1 = y1 - read_y0
+    top = source[ly0, lx0] * (1.0 - tx) + source[ly0, lx1] * tx
+    bottom = source[ly1, lx0] * (1.0 - tx) + source[ly1, lx1] * tx
+    return (top * (1.0 - ty) + bottom * ty).astype(np.float32)
+
+
+def _sample_windowed(
+    source: np.ndarray,
+    src_x: np.ndarray,
+    src_y: np.ndarray,
+    read_x0: int,
+    read_y0: int,
+    interpolation: str,
+) -> np.ndarray:
+    output = np.zeros(src_x.shape, dtype=np.float32)
+    weight_func = _cubic_weight if interpolation == "bicubic" else _lanczos3_weight
+    radius = 2 if interpolation == "bicubic" else 3
+    for index, (sx, sy) in enumerate(zip(src_x, src_y, strict=True)):
+        base_x = int(np.floor(float(sx)))
+        base_y = int(np.floor(float(sy)))
+        weighted_sum = 0.0
+        weight_sum = 0.0
+        for yy in range(base_y - radius + 1, base_y + radius + 1):
+            wy = weight_func(float(sy) - float(yy))
+            if wy == 0.0:
+                continue
+            ly = yy - read_y0
+            for xx in range(base_x - radius + 1, base_x + radius + 1):
+                wx = weight_func(float(sx) - float(xx))
+                if wx == 0.0:
+                    continue
+                lx = xx - read_x0
+                weight = wx * wy
+                weighted_sum += float(source[ly, lx]) * weight
+                weight_sum += weight
+        if abs(weight_sum) > 1.0e-12:
+            output[index] = np.float32(weighted_sum / weight_sum)
+    return output
+
+
+def _warp_tile_matrix(
     reader: FitsImageReader,
     tile,
     matrix: list[list[float]],
     fill: float = 0.0,
+    interpolation: str = "bilinear",
 ) -> tuple[np.ndarray, np.ndarray]:
+    if interpolation not in INTERPOLATOR_KERNEL_RADIUS:
+        raise ValueError(f"unsupported warp interpolation: {interpolation}")
     out_h = tile.y1 - tile.y0
     out_w = tile.x1 - tile.x0
     out = np.full((out_h, out_w), fill, dtype=np.float32)
@@ -86,42 +192,57 @@ def _warp_tile_matrix_bilinear(
     valid = (
         np.isfinite(src_x)
         & np.isfinite(src_y)
-        & (src_x >= 0.0)
-        & (src_x <= float(width - 1))
-        & (src_y >= 0.0)
-        & (src_y <= float(height - 1))
     )
+    radius = INTERPOLATOR_KERNEL_RADIUS[interpolation]
+    if interpolation in {"nearest", "bilinear"}:
+        valid &= (src_x >= 0.0) & (src_x <= float(width - 1)) & (src_y >= 0.0) & (src_y <= float(height - 1))
+    else:
+        valid &= (
+            (src_x >= float(radius - 1))
+            & (src_x < float(width - radius))
+            & (src_y >= float(radius - 1))
+            & (src_y < float(height - radius))
+        )
     if not np.any(valid):
         return out, coverage
 
     valid_src_x = src_x[valid]
     valid_src_y = src_y[valid]
-    read_x0 = max(0, int(np.floor(float(np.min(valid_src_x)))))
-    read_x1 = min(width, int(np.ceil(float(np.max(valid_src_x)))) + 1)
-    read_y0 = max(0, int(np.floor(float(np.min(valid_src_y)))))
-    read_y1 = min(height, int(np.ceil(float(np.max(valid_src_y)))) + 1)
+    read_x0 = max(0, int(np.floor(float(np.min(valid_src_x)))) - radius)
+    read_x1 = min(width, int(np.ceil(float(np.max(valid_src_x)))) + radius + 1)
+    read_y0 = max(0, int(np.floor(float(np.min(valid_src_y)))) - radius)
+    read_y1 = min(height, int(np.ceil(float(np.max(valid_src_y)))) + radius + 1)
     if read_x0 >= read_x1 or read_y0 >= read_y1:
         return out, coverage
 
     source = reader.read_tile(read_y0, read_y1, read_x0, read_x1)
-    x0 = np.floor(valid_src_x).astype(np.int64)
-    y0 = np.floor(valid_src_y).astype(np.int64)
-    x1 = np.minimum(x0 + 1, width - 1)
-    y1 = np.minimum(y0 + 1, height - 1)
-    tx = (valid_src_x - x0).astype(np.float32)
-    ty = (valid_src_y - y0).astype(np.float32)
-    lx0 = x0 - read_x0
-    lx1 = x1 - read_x0
-    ly0 = y0 - read_y0
-    ly1 = y1 - read_y0
-    top = source[ly0, lx0] * (1.0 - tx) + source[ly0, lx1] * tx
-    bottom = source[ly1, lx0] * (1.0 - tx) + source[ly1, lx1] * tx
-    out[valid] = top * (1.0 - ty) + bottom * ty
+    if interpolation == "nearest":
+        sampled = _sample_nearest(source, valid_src_x, valid_src_y, read_x0, read_y0)
+    elif interpolation == "bilinear":
+        sampled = _sample_bilinear(source, valid_src_x, valid_src_y, read_x0, read_y0)
+    else:
+        sampled = _sample_windowed(source, valid_src_x, valid_src_y, read_x0, read_y0, interpolation)
+    out[valid] = sampled
     coverage[valid] = 1.0
     return out, coverage
 
 
-def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[str, Any]:
+def _warp_tile_matrix_bilinear(
+    reader: FitsImageReader,
+    tile,
+    matrix: list[list[float]],
+    fill: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    return _warp_tile_matrix(reader, tile, matrix, fill=fill, interpolation="bilinear")
+
+
+def warp_registered_frames(
+    run_dir: str | Path,
+    tile_size: int = 512,
+    interpolation: str = "bilinear",
+) -> dict[str, Any]:
+    if interpolation not in INTERPOLATOR_KERNEL_RADIUS:
+        raise ValueError(f"unsupported warp interpolation: {interpolation}")
     run = Path(run_dir)
     calibration = read_json(run / "calibration_artifacts.json")
     registration = read_json(run / "registration_results.json")
@@ -176,12 +297,12 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                 valid_pixels = 0
                 dq_summary: dict[str, int] = {}
                 for tile in iter_tiles(width=width, height=height, tile_size=tile_size):
-                    if integer_translation:
+                    if integer_translation and interpolation in {"nearest", "bilinear"}:
                         warped, coverage = _warp_tile_nearest(reader, tile, int(round(dx)), int(round(dy)))
                         warp_model = "integer_translation_nearest"
                     else:
-                        warped, coverage = _warp_tile_matrix_bilinear(reader, tile, matrix)
-                        warp_model = "matrix_bilinear"
+                        warped, coverage = _warp_tile_matrix(reader, tile, matrix, interpolation=interpolation)
+                        warp_model = f"matrix_{interpolation}"
                     registered_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, warped)
                     coverage_writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, coverage)
                     tile_dq = dq_mask_from_coverage(coverage, DQFlag.WARP_EDGE)
@@ -201,6 +322,8 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
                 "dy": dy,
                 "matrix": matrix,
                 "warp_model": warp_model,
+                "interpolation": interpolation,
+                "interpolator_registry": list(available_warp_interpolators()),
                 "tile_size": tile_size,
                 "tile_count": tile_count,
                 "valid_pixels": valid_pixels,
@@ -208,6 +331,12 @@ def warp_registered_frames(run_dir: str | Path, tile_size: int = 512) -> dict[st
         )
     if not outputs:
         raise ValueError("registration produced no accepted frames for warp")
-    payload = {"schema_version": 1, "warp_results": outputs, "skipped_frames": skipped}
+    payload = {
+        "schema_version": 1,
+        "warp_results": outputs,
+        "skipped_frames": skipped,
+        "interpolation": interpolation,
+        "interpolator_registry": list(available_warp_interpolators()),
+    }
     write_json(run / "warp_results.json", payload)
     return payload

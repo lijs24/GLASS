@@ -7,6 +7,37 @@ record the accepted model.
 Each frame produces a registration result with matched star count, inliers,
 RMS, status, and warnings. Failed frames are never silently integrated.
 
+S2-Gate 7 adds an explicit validation gate after each candidate registration
+solution. A row is accepted only when the matrix is finite and 3x3, affine
+models keep an affine projective row, the linear part is nonsingular where
+applicable, the star-based inlier count reaches policy, and RMS is below
+policy. Phase-correlation fallback is marked separately as a preview solution
+because it does not produce star inliers. The validation payload is written per
+frame as `registration_validation`.
+
+The clean-room model ladder is now:
+
+- translation
+- similarity
+- affine
+- homography
+
+Homography uses a direct linear transform fit after affine/translation
+hypotheses provide candidate inlier sets. It is a global first-pass model, not
+a local-distortion surface.
+
+Tile-mode warp uses an interpolator registry exposed by
+`glass.engine.warp.available_warp_interpolators()` and the CLI
+`--warp-interpolation` option:
+
+- nearest
+- bilinear
+- bicubic
+- Lanczos 3
+
+The default remains bilinear, with the existing integer-translation fast path
+preserved for nearest-equivalent integer shifts.
+
 ## Clean-room StarAlignment reference
 
 The PixInsight StarAlignment reference for GLASS is limited to public

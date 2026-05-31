@@ -119,6 +119,24 @@ def _fit_affine_matrix(moving: np.ndarray, reference: np.ndarray) -> np.ndarray:
     )
 
 
+def _fit_homography_matrix(moving: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    if len(moving) < 4:
+        raise ValueError("homography registration requires at least four matched stars")
+    rows = []
+    for (x, y), (rx, ry) in zip(moving, reference, strict=True):
+        rows.append([-x, -y, -1.0, 0.0, 0.0, 0.0, rx * x, rx * y, rx])
+        rows.append([0.0, 0.0, 0.0, -x, -y, -1.0, ry * x, ry * y, ry])
+    _u, _s, vt = np.linalg.svd(np.asarray(rows, dtype=np.float64))
+    matrix = vt[-1, :].reshape(3, 3)
+    scale = matrix[2, 2]
+    if abs(float(scale)) <= 1.0e-12:
+        norm = float(np.linalg.norm(matrix))
+        if norm <= 1.0e-12:
+            raise ValueError("degenerate homography fit")
+        return matrix / norm
+    return matrix / scale
+
+
 def _fit_similarity_matrix(moving: np.ndarray, reference: np.ndarray) -> np.ndarray:
     if len(moving) < 2:
         raise ValueError("similarity registration requires at least two matched stars")
@@ -151,6 +169,8 @@ def _fit_model_matrix(transform_model: str, moving: np.ndarray, reference: np.nd
         return _fit_similarity_matrix(moving, reference)
     if transform_model == "affine":
         return _fit_affine_matrix(moving, reference)
+    if transform_model == "homography":
+        return _fit_homography_matrix(moving, reference)
     raise ValueError(f"unsupported star registration model: {transform_model}")
 
 
@@ -464,7 +484,15 @@ def estimate_star_transform(
     reference_points = _points(reference, max_stars)
     moving_points = _points(moving, max_stars)
     warnings: list[str] = []
-    minimum_points = 3 if transform_model == "affine" else 2 if transform_model == "similarity" else 1
+    minimum_points = (
+        4
+        if transform_model == "homography"
+        else 3
+        if transform_model == "affine"
+        else 2
+        if transform_model == "similarity"
+        else 1
+    )
     if len(reference_points) < minimum_points or len(moving_points) < minimum_points:
         return StarRegistration(
             transform_model=transform_model,
@@ -483,6 +511,15 @@ def estimate_star_transform(
             reference_points,
             moving_points,
             transform_model,
+            descriptor_tolerance=0.025,
+            max_triangles=600,
+        ) + candidates
+    elif transform_model == "homography":
+        warnings.append("homography model uses affine/translation hypotheses before homography refit")
+        candidates = _asterism_candidates(
+            reference_points,
+            moving_points,
+            "affine",
             descriptor_tolerance=0.025,
             max_triangles=600,
         ) + candidates

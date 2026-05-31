@@ -117,6 +117,7 @@ def _run_full_pipeline(
     integration_weighting: str,
     integration_rejection: str,
     registration_method: str = "auto",
+    warp_interpolation: str = "bilinear",
     timing: dict | None = None,
 ):
     timing = timing or _new_timing("run", backend, tile_size)
@@ -137,7 +138,12 @@ def _run_full_pipeline(
     )
     state.completed_stages.append("registration")
     state.current_stage = "registration"
-    _timed_stage(out, timing, "warp", lambda: warp_registered_frames(out, tile_size=tile_size))
+    _timed_stage(
+        out,
+        timing,
+        "warp",
+        lambda: warp_registered_frames(out, tile_size=tile_size, interpolation=warp_interpolation),
+    )
     state.completed_stages.append("warp")
     state.current_stage = "warp"
     _timed_stage(
@@ -179,7 +185,7 @@ def _resume_pipeline(plan_path: Path, out: Path, backend: str = "auto", tile_siz
         state.completed_stages.extend(["master_calibration", "light_calibration"])
         state.current_stage = "calibration"
     else:
-        return _run_full_pipeline(plan_path, out, backend, tile_size, "auto", "auto", "auto", "auto", timing)
+        return _run_full_pipeline(plan_path, out, backend, tile_size, "auto", "auto", "auto", "auto", "bilinear", timing)
 
     if not (out / "frame_quality.json").exists():
         _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(out, tile_size=tile_size))
@@ -363,6 +369,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
             args.integration_weighting,
             args.integration_rejection,
             registration_method=args.registration_method,
+            warp_interpolation=args.warp_interpolation,
             timing=timing,
         )
     else:
@@ -494,7 +501,16 @@ def cmd_run(args: argparse.Namespace) -> int:
             state.completed_stages.append("registration")
             state.current_stage = "registration"
         if args.until_stage in {"warp", "local_normalization", "integration"}:
-            _timed_stage(out, timing, "warp", lambda: warp_registered_frames(args.out, tile_size=args.tile_size))
+            _timed_stage(
+                out,
+                timing,
+                "warp",
+                lambda: warp_registered_frames(
+                    args.out,
+                    tile_size=args.tile_size,
+                    interpolation=args.warp_interpolation,
+                ),
+            )
             state.completed_stages.append("warp")
             state.current_stage = "warp"
         if args.until_stage in {"local_normalization", "integration"}:
@@ -816,6 +832,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="maximum preview width/height used by tile-mode streaming registration",
     )
     run.add_argument(
+        "--warp-interpolation",
+        choices=["nearest", "bilinear", "bicubic", "lanczos3"],
+        default="bilinear",
+        help="tile-mode warp interpolator registry entry",
+    )
+    run.add_argument(
         "--memory-mode",
         choices=["tile", "resident"],
         default="tile",
@@ -1014,6 +1036,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "star", "astroalign", "cuda_catalog", "cuda_triangle"],
         default="auto",
         help="registration method passed to the gated run portion of audit",
+    )
+    audit.add_argument(
+        "--warp-interpolation",
+        choices=["nearest", "bilinear", "bicubic", "lanczos3"],
+        default="bilinear",
+        help="tile-mode warp interpolator registry entry",
     )
     audit.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     audit.add_argument("--integration-weighting", choices=["auto", "none", "simple_snr", "combined"], default="auto")

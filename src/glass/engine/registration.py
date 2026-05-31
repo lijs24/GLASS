@@ -122,6 +122,61 @@ def _policy_optional_float(policy: dict[str, Any], key: str, default: float | No
     return float(value)
 
 
+def _validate_registration_solution(
+    *,
+    status: str,
+    matrix: list[list[float]],
+    transform_model: str,
+    inliers: int,
+    rms_px: float,
+    min_inliers: int,
+    max_rms_px: float,
+    solution_source: str,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    accepted = status in {"ok", "reference"}
+    matrix_array = np.asarray(matrix, dtype=np.float64)
+    determinant: float | None = None
+    if matrix_array.shape != (3, 3):
+        accepted = False
+        warnings.append(f"registration matrix shape is {matrix_array.shape}, expected 3x3")
+    elif not np.all(np.isfinite(matrix_array)):
+        accepted = False
+        warnings.append("registration matrix contains non-finite values")
+    else:
+        if abs(float(matrix_array[2, 2])) <= 1.0e-12:
+            accepted = False
+            warnings.append("registration matrix has invalid homogeneous scale")
+        if transform_model in {"translation", "similarity", "affine"} and not np.allclose(
+            matrix_array[2], np.asarray([0.0, 0.0, 1.0]), atol=1.0e-6
+        ):
+            accepted = False
+            warnings.append(f"{transform_model} registration matrix has non-affine projective row")
+        determinant = float(np.linalg.det(matrix_array[:2, :2]))
+        if transform_model in {"translation", "similarity", "affine"} and abs(determinant) <= 1.0e-10:
+            accepted = False
+            warnings.append("registration matrix linear part is singular")
+    requires_star_inliers = solution_source != "streaming_preview_fallback"
+    if status == "ok" and requires_star_inliers and inliers < min_inliers:
+        accepted = False
+        warnings.append(f"registration inliers {inliers} below min_inliers={min_inliers}")
+    if status == "ok" and (not np.isfinite(rms_px) or rms_px > max_rms_px):
+        accepted = False
+        warnings.append(f"registration rms_px {rms_px} exceeds max_rms_px={max_rms_px}")
+    return {
+        "accepted": bool(accepted),
+        "model": transform_model,
+        "solution_source": solution_source,
+        "requires_star_inliers": requires_star_inliers,
+        "min_inliers": int(min_inliers),
+        "max_rms_px": float(max_rms_px),
+        "inliers": int(inliers),
+        "rms_px": float(rms_px) if np.isfinite(rms_px) else None,
+        "determinant": determinant,
+        "warnings": warnings,
+    }
+
+
 def _cuda_catalog_backend() -> Any:
     import glass_cuda
 
@@ -578,7 +633,7 @@ def register_calibrated_frames(
     astroalign_max_control_points = int(registration_policy.get("astroalign_max_control_points") or 50)
     astroalign_detection_sigma = float(registration_policy.get("astroalign_detection_sigma") or 5.0)
     astroalign_min_area = int(registration_policy.get("astroalign_min_area") or 5)
-    if transform_model not in {"translation", "similarity", "affine"}:
+    if transform_model not in {"translation", "similarity", "affine", "homography"}:
         transform_model = "translation"
     if method in {"astroalign", "cuda_catalog", "cuda_triangle"}:
         transform_model = "similarity"
@@ -769,6 +824,21 @@ def register_calibrated_frames(
             preview_shape = list(moving_preview.shape)
         if status == "ok" and matched == 0:
             warnings.append("registration estimated by phase correlation without detected star matches")
+        validation = _validate_registration_solution(
+            status=status,
+            matrix=matrix,
+            transform_model=transform_model,
+            inliers=inliers,
+            rms_px=rms,
+            min_inliers=min_inliers,
+            max_rms_px=max_rms_px,
+            solution_source=row_source,
+        )
+        if status == "ok" and not validation["accepted"]:
+            status = "failed"
+            warnings.append("registration failed validation gate")
+        warnings.extend(str(item) for item in validation["warnings"])
+        extra_fields["registration_validation"] = validation
         row = to_jsonable(
             RegistrationResult(
                 frame_id=frame_id,

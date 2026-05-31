@@ -400,6 +400,7 @@ def test_pipeline_fixture_run_registration(tmp_path: Path):
     assert all(item["registration_image_source"] == "streaming_preview" for item in registration["registration_results"])
     assert all(item["matched_stars"] >= 1 for item in registration["registration_results"])
     assert all(item["status"] in {"reference", "ok"} for item in registration["registration_results"])
+    assert all(item["registration_validation"]["accepted"] for item in registration["registration_results"])
     assert main(["report", "--run", str(run), "--manifest", str(audit / "manifest.json"), "--plan", str(audit / "processing_plan.json"), "--out", str(report)]) == 0
     text = report.read_text(encoding="utf-8")
     assert "Registration table" in text
@@ -426,6 +427,8 @@ def test_pipeline_fixture_run_warp(tmp_path: Path):
                 "warp",
                 "--tile-size",
                 "8",
+                "--warp-interpolation",
+                "lanczos3",
             ]
         )
         == 0
@@ -438,6 +441,8 @@ def test_pipeline_fixture_run_warp(tmp_path: Path):
     warp = json.loads((run / "warp_results.json").read_text(encoding="utf-8"))
     assert all(Path(item["dq_mask_path"]).exists() for item in warp["warp_results"])
     assert all("valid" in item["dq_summary"] for item in warp["warp_results"])
+    assert warp["interpolation"] == "lanczos3"
+    assert all(item["interpolation"] == "lanczos3" for item in warp["warp_results"])
 
 
 def test_pipeline_fixture_run_local_normalization(tmp_path: Path):

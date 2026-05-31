@@ -146,6 +146,45 @@ def test_estimate_triangle_asterism_transform_similarity_with_outlier():
     assert any("triangle_asterism_descriptor_matches" in warning for warning in result.warnings)
 
 
+def test_estimate_star_transform_homography_model():
+    points = np.array(
+        [
+            (10, 10),
+            (20, 10),
+            (10, 25),
+            (30, 30),
+            (5, 35),
+            (35, 5),
+            (25, 18),
+            (14, 32),
+            (45, 20),
+            (40, 40),
+        ],
+        dtype=np.float64,
+    )
+    matrix = np.array(
+        [[1.01, 0.02, 2.0], [-0.01, 0.99, -3.0], [0.0001, -0.00008, 1.0]],
+        dtype=np.float64,
+    )
+    inverse = np.linalg.inv(matrix)
+    homogeneous = np.hstack([points, np.ones((points.shape[0], 1), dtype=np.float64)])
+    moving_h = homogeneous @ inverse.T
+    moving_points = moving_h[:, :2] / moving_h[:, 2:3]
+    reference = [Star(float(x), float(y), 1000.0 - i) for i, (x, y) in enumerate(points)]
+    moving = [Star(float(x), float(y), 1000.0 - i) for i, (x, y) in enumerate(moving_points)]
+
+    result = estimate_star_transform(reference, moving, "homography", min_inliers=8, tolerance_px=0.75)
+
+    assert result.status == "ok"
+    assert result.inliers >= 8
+    assert result.rms_px < 1.0e-4
+    estimated = np.asarray(result.matrix, dtype=np.float64)
+    estimated = estimated / estimated[2, 2]
+    expected = matrix / matrix[2, 2]
+    assert np.allclose(estimated, expected, atol=1.0e-5)
+    assert any("homography model" in warning for warning in result.warnings)
+
+
 def test_estimate_astroalign_transform_translation_like_similarity():
     pytest.importorskip("astroalign")
     reference = _star_field()

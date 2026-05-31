@@ -2,9 +2,36 @@ from __future__ import annotations
 
 import numpy as np
 
-from glass.engine.warp import warp_registered_frames
+from glass.engine.warp import available_warp_interpolators, warp_registered_frames
 from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import write_json
+
+
+def _warp_matrix_nearest_reference(
+    data: np.ndarray,
+    matrix: list[list[float]],
+    fill: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    image = np.asarray(data, dtype=np.float32)
+    h, w = image.shape
+    output = np.full_like(image, fill, dtype=np.float32)
+    coverage = np.zeros_like(image, dtype=np.float32)
+    inverse = np.linalg.inv(np.asarray(matrix, dtype=np.float64))
+    for y in range(h):
+        for x in range(w):
+            source = inverse @ np.asarray([x, y, 1.0], dtype=np.float64)
+            if abs(source[2]) <= 1.0e-12:
+                continue
+            sx = float(source[0] / source[2])
+            sy = float(source[1] / source[2])
+            if sx < 0.0 or sx > float(w - 1) or sy < 0.0 or sy > float(h - 1):
+                continue
+            rx = int(round(sx))
+            ry = int(round(sy))
+            if 0 <= rx < w and 0 <= ry < h:
+                output[y, x] = image[ry, rx]
+                coverage[y, x] = 1.0
+    return output, coverage
 
 
 def _warp_matrix_bilinear_reference(
@@ -39,11 +66,9 @@ def _warp_matrix_bilinear_reference(
     return output, coverage
 
 
-def test_warp_registered_frames_uses_matrix_bilinear_for_fractional_translation(tmp_path):
+def _write_single_warp_run(tmp_path, matrix: list[list[float]], data: np.ndarray):
     run = tmp_path / "run"
     source_path = run / "calibrated" / "light.fits"
-    data = np.arange(36, dtype=np.float32).reshape(6, 6)
-    matrix = [[1.0, 0.0, 1.25], [0.0, 1.0, -0.5], [0.0, 0.0, 1.0]]
     write_fits_data(source_path, data)
     write_json(
         run / "calibration_artifacts.json",
@@ -63,6 +88,17 @@ def test_warp_registered_frames_uses_matrix_bilinear_for_fractional_translation(
             ],
         },
     )
+    return run
+
+
+def test_warp_interpolator_registry_lists_required_modes():
+    assert available_warp_interpolators() == ("nearest", "bilinear", "bicubic", "lanczos3")
+
+
+def test_warp_registered_frames_uses_matrix_bilinear_for_fractional_translation(tmp_path):
+    data = np.arange(36, dtype=np.float32).reshape(6, 6)
+    matrix = [[1.0, 0.0, 1.25], [0.0, 1.0, -0.5], [0.0, 0.0, 1.0]]
+    run = _write_single_warp_run(tmp_path, matrix, data)
 
     result = warp_registered_frames(run, tile_size=3)
     row = result["warp_results"][0]
@@ -76,30 +112,45 @@ def test_warp_registered_frames_uses_matrix_bilinear_for_fractional_translation(
     assert np.array_equal(coverage, expected_coverage)
 
 
+def test_warp_registered_frames_can_use_nearest_registry_entry(tmp_path):
+    data = np.arange(36, dtype=np.float32).reshape(6, 6)
+    matrix = [[1.0, 0.0, 1.25], [0.0, 1.0, -0.5], [0.0, 0.0, 1.0]]
+    run = _write_single_warp_run(tmp_path, matrix, data)
+
+    result = warp_registered_frames(run, tile_size=3, interpolation="nearest")
+    row = result["warp_results"][0]
+    registered = read_fits_data(row["registered_path"])
+    coverage = read_fits_data(row["coverage_path"])
+    expected, expected_coverage = _warp_matrix_nearest_reference(data, matrix)
+
+    assert result["interpolator_registry"] == ["nearest", "bilinear", "bicubic", "lanczos3"]
+    assert row["warp_model"] == "matrix_nearest"
+    assert row["interpolation"] == "nearest"
+    assert np.array_equal(registered, expected)
+    assert np.array_equal(coverage, expected_coverage)
+
+
+def test_warp_registered_frames_can_use_lanczos3_registry_entry(tmp_path):
+    yy, xx = np.indices((12, 12), dtype=np.float32)
+    data = np.sin(xx * 0.2) + np.cos(yy * 0.3)
+    matrix = [[1.0, 0.0, 0.3], [0.0, 1.0, -0.25], [0.0, 0.0, 1.0]]
+    run = _write_single_warp_run(tmp_path, matrix, data)
+
+    result = warp_registered_frames(run, tile_size=6, interpolation="lanczos3")
+    row = result["warp_results"][0]
+    registered = read_fits_data(row["registered_path"])
+    coverage = read_fits_data(row["coverage_path"])
+
+    assert row["warp_model"] == "matrix_lanczos3"
+    assert row["interpolation"] == "lanczos3"
+    assert np.count_nonzero(coverage) > 0
+    assert np.all(np.isfinite(registered[coverage > 0]))
+
+
 def test_warp_registered_frames_preserves_integer_translation_fast_path(tmp_path):
-    run = tmp_path / "run"
-    source_path = run / "calibrated" / "light.fits"
     data = np.arange(25, dtype=np.float32).reshape(5, 5)
     matrix = [[1.0, 0.0, 1.0], [0.0, 1.0, -2.0], [0.0, 0.0, 1.0]]
-    write_fits_data(source_path, data)
-    write_json(
-        run / "calibration_artifacts.json",
-        {"schema_version": 1, "calibrated_lights": [{"frame_id": "L001", "path": str(source_path)}]},
-    )
-    write_json(
-        run / "registration_results.json",
-        {
-            "schema_version": 1,
-            "registration_results": [
-                {
-                    "frame_id": "L001",
-                    "status": "ok",
-                    "matrix": matrix,
-                    "warnings": [],
-                }
-            ],
-        },
-    )
+    run = _write_single_warp_run(tmp_path, matrix, data)
 
     result = warp_registered_frames(run, tile_size=3)
 
