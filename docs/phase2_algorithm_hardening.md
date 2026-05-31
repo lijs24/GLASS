@@ -331,6 +331,20 @@ integration where applicable.
 - Validate that acceptance audit still flags real wall-clock regressions while
   excluding cumulative prefetch-worker totals from `regressed_count`.
 
+### S2-Gate 17: Resident CUDA DQ Map Parity
+
+- Make the resident CUDA integration path emit a formal integration DQ map, not
+  only coverage and rejection count maps.
+- Encode at least `NO_DATA`, `LOW_REJECTED`, and `HIGH_REJECTED` flags from
+  resident master, weight, coverage, and rejection outputs.
+- Record `dq_map_path`, `dq_summary`, and flag bit meanings in
+  `resident_artifacts.json`, and mirror `dq_map_path`/`dq_summary` into
+  `integration_results.json`.
+- Keep the CPU StackEngine/DQ path unchanged while closing the production
+  resident CUDA artifact gap.
+- Validate small CUDA tests and the 200-light benchmark contract again because
+  the resident output set now includes one more diagnostic map.
+
 ## Gate Rules
 
 Each gate requires:

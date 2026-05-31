@@ -6,9 +6,12 @@ import numpy as np
 from astropy.io import fits
 
 from glass.cli import main
+from glass.engine.contracts import DQFlag
+from glass.io.fits_io import read_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
     _matches_any_token,
+    _resident_dq_map,
     _resident_similarity_frame_dispatch,
     _select_star_core_preselected_seed_indices,
     _select_star_guarded_seed,
@@ -70,6 +73,27 @@ def _two_light_star_dataset(tmp_path: Path) -> Path:
     _write_test_frame(root / "light" / "light_001.fits", "light", reference, 60.0)
     _write_test_frame(root / "light" / "light_002.fits", "light", moving, 60.0)
     return root
+
+
+def test_resident_dq_map_marks_no_data_and_rejections():
+    master = np.array([[1.0, np.nan], [3.0, 4.0]], dtype=np.float32)
+    weight = np.array([[2.0, 2.0], [0.0, 2.0]], dtype=np.float32)
+    coverage = np.array([[2.0, 2.0], [2.0, 0.0]], dtype=np.float32)
+    low = np.array([[0.0, 1.0], [0.0, 0.0]], dtype=np.float32)
+    high = np.array([[0.0, 0.0], [2.0, 0.0]], dtype=np.float32)
+
+    dq, summary = _resident_dq_map(master, weight, coverage, low, high)
+
+    assert dq[0, 0] == 0
+    assert dq[0, 1] & int(DQFlag.NO_DATA)
+    assert dq[0, 1] & int(DQFlag.LOW_REJECTED)
+    assert dq[1, 0] & int(DQFlag.NO_DATA)
+    assert dq[1, 0] & int(DQFlag.HIGH_REJECTED)
+    assert dq[1, 1] & int(DQFlag.NO_DATA)
+    assert summary["valid"] == 1
+    assert summary["no_data"] == 3
+    assert summary["low_rejected"] == 1
+    assert summary["high_rejected"] == 1
 
 
 def test_resident_star_core_preselection_keeps_refit_seed_and_rejects_low_inlier_trap():
@@ -227,6 +251,15 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert integration["outputs"][0]["resident_registration"] == "translation_preview"
     assert integration["excluded_frame_tokens"] == ["does_not_exist"]
     assert integration["outputs"][0]["output_diagnostics"]["normalization_probe"]["method"]
+    assert Path(integration["outputs"][0]["dq_map_path"]).exists()
+    assert integration["outputs"][0]["dq_map_path"] == resident["artifacts"][0]["dq_map_path"]
+    assert integration["outputs"][0]["dq_summary"] == resident["artifacts"][0]["dq_summary"]
+    dq_data = read_fits_data(integration["outputs"][0]["dq_map_path"])
+    shape = resident["artifacts"][0]["shape"]
+    assert dq_data.shape == (shape["height"], shape["width"])
+    assert np.all(np.isfinite(dq_data))
+    assert np.nanmax(dq_data) <= int(DQFlag.NO_DATA | DQFlag.LOW_REJECTED | DQFlag.HIGH_REJECTED)
+    assert "valid" in integration["outputs"][0]["dq_summary"]
     assert registration["source_stage"] == "resident_calibrated_stack"
     assert registration["results"][0]["status"] == "reference"
     assert state["current_stage"] == "integration"

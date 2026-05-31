@@ -13,6 +13,7 @@ import numpy as np
 
 from glass.cpu.registration import estimate_translation_phase_correlation, translation_matrix
 from glass.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
+from glass.engine.contracts import DQFlag, DQMask
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
@@ -560,6 +561,30 @@ def _output_diagnostics(data: np.ndarray, weight_map: np.ndarray | None = None) 
 
 def _count_map_dtype(frame_count: int) -> Any:
     return np.int16 if int(frame_count) <= np.iinfo(np.int16).max else np.int32
+
+
+def _resident_dq_map(
+    master: np.ndarray,
+    weight_map: np.ndarray,
+    coverage_map: np.ndarray | None,
+    low_rejection_map: np.ndarray | None,
+    high_rejection_map: np.ndarray | None,
+) -> tuple[np.ndarray, dict[str, int]]:
+    dq = np.zeros(np.asarray(master).shape, dtype=np.uint32)
+    master_values = np.asarray(master, dtype=np.float32)
+    weights = np.asarray(weight_map, dtype=np.float32)
+    invalid = (~np.isfinite(master_values)) | (~np.isfinite(weights)) | (weights <= 0.0)
+    if coverage_map is not None:
+        coverage = np.asarray(coverage_map, dtype=np.float32)
+        invalid |= (~np.isfinite(coverage)) | (coverage <= 0.5)
+    dq[invalid] |= np.uint32(int(DQFlag.NO_DATA))
+    if low_rejection_map is not None:
+        low = np.asarray(low_rejection_map, dtype=np.float32)
+        dq[np.isfinite(low) & (low > 0.0)] |= np.uint32(int(DQFlag.LOW_REJECTED))
+    if high_rejection_map is not None:
+        high = np.asarray(high_rejection_map, dtype=np.float32)
+        dq[np.isfinite(high) & (high > 0.0)] |= np.uint32(int(DQFlag.HIGH_REJECTED))
+    return dq, DQMask(dq).summary()
 
 
 def _count_map_for_write(data: np.ndarray, dtype: Any) -> np.ndarray:
@@ -3174,6 +3199,14 @@ def run_resident_calibration_integration(
             high_rejection_path = (
                 output_dir / f"resident_high_rejection_map_{filt}.fits" if high_rejection_map is not None else None
             )
+            dq_map, dq_summary = _resident_dq_map(
+                master,
+                weight_map,
+                coverage_map,
+                low_rejection_map,
+                high_rejection_map,
+            )
+            dq_path = output_dir / f"resident_dq_map_{filt}.fits"
             count_dtype = _count_map_dtype(len(light_frames))
             output_specs: list[dict[str, Any]] = [
                 {
@@ -3189,6 +3222,19 @@ def run_resident_calibration_integration(
                     "data": weight_map,
                     "header": {"IMAGETYP": "weight", "FILTER": filter_name},
                     "dtype": np.float32,
+                },
+                {
+                    "name": "dq",
+                    "path": dq_path,
+                    "data": dq_map,
+                    "header": {
+                        "IMAGETYP": "dq_mask",
+                        "FILTER": filter_name,
+                        "DQSTAGE": "integration",
+                        "DQFLAGS": "NO_DATA,LOW_REJECTED,HIGH_REJECTED",
+                    },
+                    "dtype": np.int16,
+                    "round_counts": True,
                 },
             ]
             if coverage_map is not None and coverage_path is not None:
@@ -3338,6 +3384,13 @@ def run_resident_calibration_integration(
                     "shape": {"height": height, "width": width},
                     "master_stats": master_stats,
                     "output_diagnostics": output_diagnostics,
+                    "dq_map_path": str(dq_path),
+                    "dq_summary": dq_summary,
+                    "dq_flag_bits": {
+                        "no_data": int(DQFlag.NO_DATA),
+                        "low_rejected": int(DQFlag.LOW_REJECTED),
+                        "high_rejected": int(DQFlag.HIGH_REJECTED),
+                    },
                     "memory_estimate": memory_estimate,
                     "resident_bytes_allocated_after_master_upload": stack.bytes_allocated,
                     "timing_s": {
@@ -3577,6 +3630,8 @@ def run_resident_calibration_integration(
                     "coverage_map_path": None if coverage_path is None else str(coverage_path),
                     "low_rejection_map_path": None if low_rejection_path is None else str(low_rejection_path),
                     "high_rejection_map_path": None if high_rejection_path is None else str(high_rejection_path),
+                    "dq_map_path": str(dq_path),
+                    "dq_summary": dq_summary,
                     "backend": "cuda_resident_stack",
                     "memory_mode": "resident",
                     "rejection": rejection_mode,
@@ -3589,7 +3644,7 @@ def run_resident_calibration_integration(
                     "output_diagnostics": output_diagnostics,
                 }
             )
-            del stack, master, weight_map, coverage_map, low_rejection_map, high_rejection_map
+            del stack, master, weight_map, coverage_map, low_rejection_map, high_rejection_map, dq_map
             gc.collect()
 
         if not outputs:
