@@ -499,4 +499,7 @@ def integrate_registered_frames(
         "outputs": outputs,
     }
     write_json(run / "integration_results.json", payload)
+    from glass.engine.frame_accounting import build_frame_accounting
+
+    build_frame_accounting(run)
     return payload

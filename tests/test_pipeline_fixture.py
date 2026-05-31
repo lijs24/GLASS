@@ -49,6 +49,7 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert (run / "run_state.json").exists()
     assert (run / "run_timing.json").exists()
     assert (run / "integration_results.json").exists()
+    assert (run / "frame_accounting.json").exists()
     timing = json.loads((run / "run_timing.json").read_text(encoding="utf-8"))
     assert timing["command"] == "audit"
     assert timing["total_elapsed_s"] > 0
@@ -77,6 +78,7 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert "Master frame statistics" in report_text
     assert "XISF input cache" in report_text
     assert "Integration output maps" in report_text
+    assert "Frame accounting" in report_text
     assert "variance_map_" in report_text
     assert "winsorized_sigma" in report_text
     assert main(["resume", "--run", str(run)]) == 0
@@ -645,10 +647,14 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
         == 0
     )
     assert (run / "integration_results.json").exists()
+    assert (run / "frame_accounting.json").exists()
     import json
 
     integration = json.loads((run / "integration_results.json").read_text(encoding="utf-8"))
+    accounting = json.loads((run / "frame_accounting.json").read_text(encoding="utf-8"))
     assert integration["weighting"] == "combined"
+    assert accounting["summary"]["integrated_frames"] >= 1
+    assert accounting["summary"]["input_light_frames"] == 4
     assert len(set(round(float(weight), 6) for weight in integration["frame_weights"].values())) > 1
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
     assert all(output["stack_engine_enabled"] for output in integration["outputs"])
@@ -685,6 +691,7 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
     )
     report_text = report.read_text(encoding="utf-8")
     assert "Integration summary" in report_text
+    assert "Frame accounting" in report_text
     assert "StackEngine DQ provenance" in report_text
     assert "DQ provenance contract" in report_text
 

@@ -30,6 +30,7 @@ _REPORT_SECTIONS = [
     ("registration-table", "Registration table"),
     ("local-normalization-summary", "Local normalization summary"),
     ("integration-summary", "Integration summary"),
+    ("frame-accounting", "Frame accounting"),
     ("output-diagnostics", "Output diagnostics"),
     ("integration-output-maps", "Integration output maps"),
     ("output-map-policy", "Output map policy"),
@@ -179,6 +180,49 @@ def _quality_gate_rows(quality: dict[str, Any] | None) -> list[dict[str, Any]]:
             "rejection_reasons": summary.get("rejection_reason_counts"),
         }
     ]
+
+
+def _frame_accounting_summary_rows(frame_accounting: dict[str, Any] | None) -> list[dict[str, Any]]:
+    summary = (frame_accounting or {}).get("summary") or {}
+    if not summary:
+        return []
+    return [
+        {
+            "input_light_frames": summary.get("input_light_frames"),
+            "integrated_frames": summary.get("integrated_frames"),
+            "zero_weight_frames": summary.get("zero_weight_frames"),
+            "quality_rejected_frames": summary.get("quality_rejected_frames"),
+            "registration_accepted_frames": summary.get("registration_accepted_frames"),
+            "warp_accepted_frames": summary.get("warp_accepted_frames"),
+            "warp_skipped_frames": summary.get("warp_skipped_frames"),
+            "not_integrated_frames": summary.get("not_integrated_frames"),
+            "final_status_counts": summary.get("final_status_counts"),
+        }
+    ]
+
+
+def _frame_accounting_rows(frame_accounting: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (frame_accounting or {}).get("frames", []):
+        reasons = item.get("reasons") if isinstance(item.get("reasons"), list) else []
+        warnings = item.get("warnings") if isinstance(item.get("warnings"), list) else []
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "filter": item.get("filter"),
+                "final_status": item.get("final_status"),
+                "quality_gate": item.get("quality_gate_status"),
+                "registration": item.get("registration_status"),
+                "warp": item.get("warp_status"),
+                "local_norm": item.get("local_norm_status"),
+                "integration": item.get("integration_status"),
+                "weight": item.get("integration_weight"),
+                "reason_count": len(reasons),
+                "first_reason": reasons[0] if reasons else "",
+                "warning_count": len(warnings),
+            }
+        )
+    return rows
 
 
 def _acceptance_failure_rows(acceptance_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -678,6 +722,7 @@ def write_html_report(
     integration: dict[str, Any] | None = None,
     timing: dict[str, Any] | None = None,
     resident: dict[str, Any] | None = None,
+    frame_accounting: dict[str, Any] | None = None,
     compare: dict[str, Any] | None = None,
     acceptance_audit: dict[str, Any] | None = None,
     title: str = "GLASS Report",
@@ -710,6 +755,8 @@ def write_html_report(
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
     integration_outputs = (integration or {}).get("outputs", [])
     integration_summary_rows = _integration_output_rows(integration)
+    frame_accounting_summary_rows = _frame_accounting_summary_rows(frame_accounting)
+    frame_accounting_rows = _frame_accounting_rows(frame_accounting)
     output_diagnostic_rows = _output_diagnostic_rows(integration, resident)
     integration_map_rows = [
         {
@@ -762,6 +809,11 @@ def write_html_report(
             "stage": "integration",
             "rows": len(integration_outputs),
             "artifact": "integration_results.json" if integration else "missing",
+        },
+        {
+            "stage": "frame_accounting",
+            "rows": len(frame_accounting_rows),
+            "artifact": "frame_accounting.json" if frame_accounting else "missing",
         },
     ]
     resident_summary = _resident_rows(resident)
@@ -834,6 +886,12 @@ def write_html_report(
   Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
   Rejection: <code>{escape(str((integration or {}).get("rejection", "pending")))}</code>.</p>
   {_table(integration_summary_rows)}
+  {_h2("frame-accounting", "Frame accounting")}
+  <p>Per-light acceptance accounting joins quality, registration, warp, local
+  normalization, integration weight, and final use/skip status. Full details are
+  authoritative in <code>frame_accounting.json</code>.</p>
+  {_table(frame_accounting_summary_rows)}
+  {_limited_table(frame_accounting_rows, label="frame accounting rows", artifact="frame_accounting.json")}
   {_h2("output-diagnostics", "Output diagnostics")}
   <p>Output diagnostics are flattened from integration and resident artifacts to
   avoid dumping nested JSON into the report.</p>

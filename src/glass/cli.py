@@ -141,6 +141,7 @@ def _write_run_report(
         integration=_read_json_if_exists(run / "integration_results.json"),
         timing=_read_json_if_exists(run / "run_timing.json"),
         resident=_read_json_if_exists(run / "resident_artifacts.json"),
+        frame_accounting=_read_json_if_exists(run / "frame_accounting.json"),
         compare=_read_report_json_if_exists(_report_compare_path(run, compare_json)),
         acceptance_audit=_read_report_json_if_exists(_report_acceptance_audit_path(run, acceptance_audit)),
         run_root=run,
@@ -328,6 +329,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     integration_path = run / "integration_results.json"
     timing_path = run / "run_timing.json"
     resident_path = run / "resident_artifacts.json"
+    frame_accounting_path = run / "frame_accounting.json"
     calibration = _read_json_if_exists(calibration_path)
     quality = _read_json_if_exists(quality_path)
     registration = _read_json_if_exists(registration_path)
@@ -335,6 +337,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     integration = _read_json_if_exists(integration_path)
     timing = _read_json_if_exists(timing_path)
     resident = _read_json_if_exists(resident_path)
+    frame_accounting = _read_json_if_exists(frame_accounting_path)
     compare_payload = _read_report_json_if_exists(_report_compare_path(run, args.compare_json))
     acceptance_payload = _read_report_json_if_exists(_report_acceptance_audit_path(run, args.acceptance_audit))
     write_html_report(
@@ -348,6 +351,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         integration=integration,
         timing=timing,
         resident=resident,
+        frame_accounting=frame_accounting,
         compare=compare_payload,
         acceptance_audit=acceptance_payload,
         run_root=run,

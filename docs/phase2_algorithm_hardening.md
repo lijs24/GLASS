@@ -669,6 +669,29 @@ integration where applicable.
 - Validate with registration and pipeline tests, ruff, full pytest, and a
   report regeneration on the latest 200-light resident audit-map run.
 
+### S2-Gate 41: Shared Accepted-Frame Accounting Summary
+
+- Add `frame_accounting.json` as the shared per-light ledger for quality,
+  registration, warp, local normalization, integration weight, and final
+  use/skip status.
+- Generate the accounting artifact automatically after both tiled integration
+  and resident CUDA integration so downstream report/audit tooling does not need
+  to re-derive accepted frame counts from scattered JSON files.
+- Preserve every input light from `processing_plan.json`, then merge stage
+  records from calibration artifacts, `frame_quality.json`,
+  `registration_results.json`, `warp_results.json`, `local_norm_results.json`,
+  and `integration_results.json`.
+- Record explicit final states such as `integrated`, `zero_weight`,
+  `quality_rejected`, `registration_rejected`, `warp_skipped`, and
+  `not_integrated`, with reasons/warnings carried from upstream artifacts.
+- Surface a compact accounting summary and limited per-frame table in the HTML
+  report while keeping the JSON artifact authoritative for large runs.
+- Keep this diagnostic-only: it must not change calibration, registration,
+  local-normalization, rejection, or master-light pixel math.
+- Validate with direct accounting tests, pipeline/report tests, ruff, full
+  pytest, and a report regeneration on the latest preserved 200-light resident
+  artifacts.
+
 ## Gate Rules
 
 Each gate requires:

@@ -4060,6 +4060,9 @@ def run_resident_calibration_integration(
                 "warnings": integration_warnings,
             },
         )
+        from glass.engine.frame_accounting import build_frame_accounting
+
+        build_frame_accounting(run)
         state.artifacts.append(
             PipelineArtifact(
                 stage="resident_calibration_integration",
