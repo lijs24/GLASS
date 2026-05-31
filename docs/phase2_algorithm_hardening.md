@@ -1296,6 +1296,23 @@ integration where applicable.
 - Validate with resident CLI coverage, ruff, full pytest, and 200-light
   benchmark comparison against the previous callback-queue run.
 
+### S2-Gate 78: Resident Prefetch Parameter Sweep
+
+- Add a reusable benchmark harness for resident CUDA prefetch tuning so
+  prefetch depth, prefetch workers, native batch size, stream count, wave size,
+  and release mode can be swept from a single auditable command.
+- The harness must support `--dry-run`, reuse of existing variant directories,
+  JSON and Markdown summaries, and optional per-variant compare reports against
+  a reference master.
+- Parse `run_timing.json`, `resident_artifacts.json`, and
+  `frame_accounting.json` into a compact ranking table with total runtime,
+  read-wait time, native calibration time, callback waves, blocked prefetch
+  slots, release batches, active frames, and zero-weight frames.
+- Do not change resident image math or defaults in this gate; the output is
+  benchmark evidence for later policy/default decisions.
+- Validate with benchmark dry-run tests, ruff, full pytest, and a focused
+  200-light sweep around the current Gate70B/Gate73/Gate77 parameter family.
+
 ## Gate Rules
 
 Each gate requires:

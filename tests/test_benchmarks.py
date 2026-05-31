@@ -290,3 +290,51 @@ def test_star_core_preselection_keeps_refit_and_rejects_low_inlier_trap():
     assert summary["star_max_inliers"] == 12
     assert summary["star_min_inliers_for_core_metric"] == 10
     assert summary["selected_seed_count"] == 3
+
+
+def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
+    plan = tmp_path / "processing_plan.json"
+    plan.write_text('{"frames": []}\n', encoding="utf-8")
+    out = tmp_path / "resident_sweep"
+
+    _run(
+        "benchmarks/bench_resident_prefetch_sweep.py",
+        "--plan",
+        str(plan),
+        "--out",
+        str(out),
+        "--prefetch-frames",
+        "16,32",
+        "--prefetch-workers",
+        "8",
+        "--batch-frames",
+        "8",
+        "--streams",
+        "4",
+        "--wave-frames",
+        "2,4",
+        "--release-modes",
+        "callback_queue",
+        "--baseline-total-seconds",
+        "12.2",
+        "--common-run-args",
+        "--resident-output-maps minimal",
+        "--dry-run",
+    )
+
+    payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    markdown = (out / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
+    assert payload["benchmark"] == "resident_prefetch_sweep"
+    assert payload["dry_run"] is True
+    assert payload["variant_count"] == 4
+    assert payload["best_variant"] is None
+    assert {variant["variant_id"] for variant in payload["variants"]} == {
+        "pf16_pw8_b8_s4_w2_callback_queue",
+        "pf16_pw8_b8_s4_w4_callback_queue",
+        "pf32_pw8_b8_s4_w2_callback_queue",
+        "pf32_pw8_b8_s4_w4_callback_queue",
+    }
+    assert all(run["status"] == "dry_run" for run in payload["runs"])
+    assert len([command for command in payload["commands"] if command["kind"] == "run"]) == 4
+    assert "--resident-output-maps" in payload["commands"][0]["command"]
+    assert "Resident Prefetch Sweep" in markdown
