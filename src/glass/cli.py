@@ -421,6 +421,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
+                resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -511,6 +512,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_prefetch_frames=args.resident_prefetch_frames,
                 resident_prefetch_workers=args.resident_prefetch_workers,
                 resident_h2d_mode=args.resident_h2d_mode,
+                resident_calibration_batch_frames=args.resident_calibration_batch_frames,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
             ),
@@ -955,6 +957,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-calibration-batch-frames",
+        type=int,
+        default=1,
+        help=(
+            "opt-in resident pinned-ring calibration batch size; values above 1 enqueue a "
+            "small native batch before synchronizing"
+        ),
+    )
+    run.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across output directories",
     )
@@ -1152,6 +1163,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["pageable", "pinned_async", "pinned_ring"],
         default="pageable",
         help="resident light upload mode for resident audit",
+    )
+    audit.add_argument(
+        "--resident-calibration-batch-frames",
+        type=int,
+        default=1,
+        help="opt-in resident pinned-ring calibration batch size for resident audit",
     )
     audit.add_argument(
         "--resident-master-cache-dir",

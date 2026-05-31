@@ -157,6 +157,45 @@ def test_resident_stack_host_async_calibration_accepts_pinned_host_array():
     assert np.allclose(weight, np.ones((4, 5), dtype=np.float32))
 
 
+def test_resident_stack_host_async_batch_calibration_matches_cpu():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "calibrate_frames_host_async_timed"):
+        raise AssertionError("ResidentCalibratedStack.calibrate_frames_host_async_timed is missing")
+
+    light0 = module.host_pinned_empty_f32(4, 5)
+    light1 = module.host_pinned_empty_f32(4, 5)
+    light0[...] = np.arange(20, dtype=np.float32).reshape(4, 5) + 1000.0
+    light1[...] = np.flipud(np.asarray(light0)) + 12.0
+    bias = np.full((4, 5), 100, dtype=np.float32)
+    dark = np.full((4, 5), 120, dtype=np.float32)
+    flat = np.full((4, 5), 2, dtype=np.float32)
+    policy = CalibrationPolicy(master_dark_includes_bias=True, dark_scaling_enabled=False)
+
+    stack = module.ResidentCalibratedStack(2, 4, 5)
+    stack.set_calibration_masters(bias=bias, dark=dark, flat=flat)
+    timing = stack.calibrate_frames_host_async_timed(
+        [0, 1],
+        [light0, light1],
+        [60.0, 60.0],
+        [60.0, 60.0],
+        asdict(policy),
+    )
+    master, weight = stack.integrate_mean()
+
+    expected0 = calibrate_light(light0, bias, dark, flat, 60.0, 60.0, policy)
+    expected1 = calibrate_light(light1, bias, dark, flat, 60.0, 60.0, policy)
+    expected = np.mean(np.stack([expected0, expected1], axis=0), axis=0)
+    assert timing["h2d_mode"] == "host_async_batch"
+    assert timing["event_mode"] == "reused_stack_events"
+    assert timing["timing_model"] == "single_stream_sequential_h2d_kernel_one_sync"
+    assert timing["frame_count"] == 2
+    assert timing["stream_h2d_calibrate_store_s"] >= 0.0
+    assert timing["sync_s"] >= 0.0
+    assert timing["total_s"] >= timing["sync_s"]
+    assert np.allclose(master, expected, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight, np.full((4, 5), 2.0, dtype=np.float32))
+
+
 def test_resident_stack_weighted_mean_matches_cpu():
     module = cuda_module_or_skip()
     frames = [

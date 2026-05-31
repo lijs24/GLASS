@@ -1643,6 +1643,7 @@ def run_resident_calibration_integration(
     resident_prefetch_frames: int = 0,
     resident_prefetch_workers: int = 1,
     resident_h2d_mode: str = "pageable",
+    resident_calibration_batch_frames: int = 1,
     resident_master_cache_dir: str | Path | None = None,
     resident_output_maps: str = "audit",
 ) -> RunState:
@@ -1705,6 +1706,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_h2d_mode must be one of: pageable, pinned_async, pinned_ring")
     if resident_h2d_mode == "pinned_ring" and resident_prefetch_frames <= 0:
         raise ValueError("resident_h2d_mode=pinned_ring requires resident_prefetch_frames > 0")
+    if resident_calibration_batch_frames <= 0:
+        raise ValueError("resident_calibration_batch_frames must be positive")
     if (resident_star_grid_cols > 0 or resident_star_grid_rows > 0) and (
         resident_star_grid_cols <= 0 or resident_star_grid_rows <= 0
     ):
@@ -1838,6 +1841,18 @@ def run_resident_calibration_integration(
             current_master_key: str | None = None
             current_dark_exposure: float | None = None
             prefetch_host_pinned_bytes = 0
+            calibration_batch_supported = hasattr(stack, "calibrate_frames_host_async_timed")
+            calibration_batch_enabled = bool(
+                resident_h2d_mode == "pinned_ring"
+                and resident_registration != "translation_preview"
+                and resident_calibration_batch_frames > 1
+                and calibration_batch_supported
+            )
+            calibration_batch_count = 0
+            calibration_batch_frame_count = 0
+            calibration_batch_native_total_s = 0.0
+            calibration_batch_stream_s = 0.0
+            calibration_batch_sync_s = 0.0
             with _LightPrefetcher(
                 light_frames,
                 resident_prefetch_frames,
@@ -1847,142 +1862,248 @@ def run_resident_calibration_integration(
                 width=width,
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
-                for index, frame in enumerate(light_frames):
-                    frame_start = perf_counter()
-                    calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
-                    bias_group = calibration_groups.get("bias_group")
-                    dark_group = calibration_groups.get("dark_group")
-                    flat_group = calibration_groups.get("flat_group")
-                    master_key = _master_set_cache_key(
-                        filter_name,
-                        height,
-                        width,
-                        bias_group,
-                        dark_group,
-                        flat_group,
-                    )
-                    if master_key != current_master_key:
-                        master_set_start = perf_counter()
-                        master_bias, master_dark, master_flat, stats, dark_exposure = _load_or_build_matching_masters(
-                            run,
+                if calibration_batch_enabled:
+                    index = 0
+                    while index < len(light_frames):
+                        batch_items: list[tuple[int, dict[str, Any], np.ndarray, float]] = []
+                        batch_frame_starts: list[float] = []
+                        while index < len(light_frames) and len(batch_items) < resident_calibration_batch_frames:
+                            frame = light_frames[index]
+                            frame_start = perf_counter()
+                            calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
+                            bias_group = calibration_groups.get("bias_group")
+                            dark_group = calibration_groups.get("dark_group")
+                            flat_group = calibration_groups.get("flat_group")
+                            master_key = _master_set_cache_key(
+                                filter_name,
+                                height,
+                                width,
+                                bias_group,
+                                dark_group,
+                                flat_group,
+                            )
+                            if batch_items and master_key != current_master_key:
+                                break
+                            if master_key != current_master_key:
+                                master_set_start = perf_counter()
+                                master_bias, master_dark, master_flat, stats, dark_exposure = (
+                                    _load_or_build_matching_masters(
+                                        run,
+                                        filter_name,
+                                        height,
+                                        width,
+                                        frames,
+                                        groups,
+                                        bias_group,
+                                        dark_group,
+                                        flat_group,
+                                        policy,
+                                        master_cache_dir=shared_master_cache_dir,
+                                    )
+                                )
+                                stack.set_calibration_masters(master_bias, master_dark, master_flat)
+                                master_elapsed += perf_counter() - master_set_start
+                                master_stats_sets[master_key] = stats
+                                current_master_key = master_key
+                                current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
+                                del master_bias, master_dark, master_flat
+                                gc_start = perf_counter()
+                                gc.collect()
+                                gc_elapsed += perf_counter() - gc_start
+                            light, read_profile, read_wait_elapsed = light_prefetch.result(index)
+                            per_frame_read_worker_s.append(float(read_profile.get("total", 0.0)))
+                            per_frame_fits_open_s.append(float(read_profile.get("fits_open", 0.0)))
+                            per_frame_fits_materialize_decode_s.append(
+                                float(read_profile.get("fits_materialize_decode", 0.0))
+                            )
+                            per_frame_read_s.append(read_wait_elapsed)
+                            batch_items.append((index, frame, light, float(frame.get("exposure_s") or 0.0)))
+                            batch_frame_starts.append(frame_start)
+                            index += 1
+                        if not batch_items:
+                            continue
+
+                        batch_calibrate_start = perf_counter()
+                        batch_indices = [item[0] for item in batch_items]
+                        try:
+                            calibration_timing = stack.calibrate_frames_host_async_timed(
+                                batch_indices,
+                                [item[2] for item in batch_items],
+                                [item[3] for item in batch_items],
+                                [
+                                    np.nan if current_dark_exposure is None else float(current_dark_exposure)
+                                    for _item in batch_items
+                                ],
+                                asdict(policy),
+                            )
+                        finally:
+                            for item_index in batch_indices:
+                                light_prefetch.release(item_index)
+                        batch_calibrate_elapsed = perf_counter() - batch_calibrate_start
+                        calibration_batch_count += 1
+                        calibration_batch_frame_count += len(batch_items)
+                        calibration_batch_native_total_s += float(calibration_timing.get("total_s", 0.0) or 0.0)
+                        calibration_batch_stream_s += float(
+                            calibration_timing.get("stream_h2d_calibrate_store_s", 0.0) or 0.0
+                        )
+                        calibration_batch_sync_s += float(calibration_timing.get("sync_s", 0.0) or 0.0)
+                        frame_share = 1.0 / float(len(batch_items))
+                        for position, (item_index, frame, _light, _exposure) in enumerate(batch_items):
+                            frame_weight = 0.0 if _matches_any_token(frame, excluded_tokens) else 1.0
+                            frame_weights[frame["id"]] = frame_weight
+                            frame_weight_values.append(frame_weight)
+                            per_frame_calibrate_s.append(batch_calibrate_elapsed * frame_share)
+                            per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)) * frame_share)
+                            per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)) * frame_share)
+                            per_frame_calibrate_store_s.append(
+                                float(calibration_timing.get("calibrate_store_s", 0.0)) * frame_share
+                            )
+                            calibration_event_modes.append(str(calibration_timing.get("event_mode", "unknown")))
+                            per_frame_s.append(perf_counter() - batch_frame_starts[position])
+                        del batch_items
+                        if index % 10 == 9:
+                            gc_start = perf_counter()
+                            gc.collect()
+                            gc_elapsed += perf_counter() - gc_start
+                else:
+                    for index, frame in enumerate(light_frames):
+                        frame_start = perf_counter()
+                        calibration_groups = light_calibration_groups.get(str(frame["id"]), {})
+                        bias_group = calibration_groups.get("bias_group")
+                        dark_group = calibration_groups.get("dark_group")
+                        flat_group = calibration_groups.get("flat_group")
+                        master_key = _master_set_cache_key(
                             filter_name,
                             height,
                             width,
-                            frames,
-                            groups,
                             bias_group,
                             dark_group,
                             flat_group,
-                            policy,
-                            master_cache_dir=shared_master_cache_dir,
                         )
-                        stack.set_calibration_masters(master_bias, master_dark, master_flat)
-                        master_elapsed += perf_counter() - master_set_start
-                        master_stats_sets[master_key] = stats
-                        current_master_key = master_key
-                        current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
-                        del master_bias, master_dark, master_flat
-                        gc_start = perf_counter()
-                        gc.collect()
-                        gc_elapsed += perf_counter() - gc_start
-                    light, read_profile, read_wait_elapsed = light_prefetch.result(index)
-                    per_frame_read_worker_s.append(float(read_profile.get("total", 0.0)))
-                    per_frame_fits_open_s.append(float(read_profile.get("fits_open", 0.0)))
-                    per_frame_fits_materialize_decode_s.append(
-                        float(read_profile.get("fits_materialize_decode", 0.0))
-                    )
-                    per_frame_read_s.append(read_wait_elapsed)
-                    calibrate_start = perf_counter()
-                    try:
-                        if resident_h2d_mode == "pinned_async":
-                            calibration_timing = stack.calibrate_frame_pinned_async_timed(
-                                index,
-                                light,
-                                float(frame.get("exposure_s") or 0.0),
-                                current_dark_exposure,
-                                asdict(policy),
-                            )
-                        elif resident_h2d_mode == "pinned_ring":
-                            calibration_timing = stack.calibrate_frame_host_async_timed(
-                                index,
-                                light,
-                                float(frame.get("exposure_s") or 0.0),
-                                current_dark_exposure,
-                                asdict(policy),
-                            )
-                        else:
-                            calibration_timing = stack.calibrate_frame_timed(
-                                index,
-                                light,
-                                float(frame.get("exposure_s") or 0.0),
-                                current_dark_exposure,
-                                asdict(policy),
-                            )
-                    finally:
-                        light_prefetch.release(index)
-                    per_frame_calibrate_s.append(perf_counter() - calibrate_start)
-                    per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
-                    per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
-                    per_frame_calibrate_store_s.append(float(calibration_timing.get("calibrate_store_s", 0.0)))
-                    calibration_event_modes.append(str(calibration_timing.get("event_mode", "unknown")))
-                    frame_weight = 1.0
-                    if resident_registration == "translation_preview":
-                        registration_frame_start = perf_counter()
-                        warnings = []
-                        status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
-                        dx = 0.0
-                        dy = 0.0
-                        try:
-                            if status == "excluded":
-                                frame_weight = 0.0
-                                warnings.append("excluded by resident frame mask")
-                            elif frame["id"] != reference_frame["id"]:
-                                preview = _registration_preview(light, preview_scale)
-                                if reference_preview is None:
-                                    raise RuntimeError("reference preview is not available")
-                                preview_dx, preview_dy = estimate_translation_phase_correlation(
-                                    reference_preview, preview
+                        if master_key != current_master_key:
+                            master_set_start = perf_counter()
+                            master_bias, master_dark, master_flat, stats, dark_exposure = (
+                                _load_or_build_matching_masters(
+                                    run,
+                                    filter_name,
+                                    height,
+                                    width,
+                                    frames,
+                                    groups,
+                                    bias_group,
+                                    dark_group,
+                                    flat_group,
+                                    policy,
+                                    master_cache_dir=shared_master_cache_dir,
                                 )
-                                dx = float(preview_dx * preview_scale)
-                                dy = float(preview_dy * preview_scale)
-                                stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
-                                warped_frame_indices.add(index)
-                            else:
-                                status = "reference"
-                        except Exception as exc:
-                            status = "failed"
-                            frame_weight = 0.0
-                            warnings.append(str(exc))
-                        registration_elapsed = perf_counter() - registration_frame_start
-                        registration_during_load_elapsed += registration_elapsed
-                        per_frame_registration_s.append(registration_elapsed)
-                        registration_results.append(
-                            RegistrationResult(
-                                frame_id=str(frame["id"]),
-                                reference_frame_id=str(reference_frame["id"]),
-                                transform_model="translation_preview",
-                                matrix=translation_matrix(dx, dy),
-                                matched_stars=0,
-                                inliers=0 if status in {"failed", "excluded"} else 1,
-                                rms_px=0.0 if status not in {"failed", "excluded"} else float("nan"),
-                                status=status,
-                                warnings=warnings
-                                + [
-                                    f"preview_scale={preview_scale}",
-                                    "phase-correlation preview registration; no star-model RMS yet",
-                                ],
                             )
+                            stack.set_calibration_masters(master_bias, master_dark, master_flat)
+                            master_elapsed += perf_counter() - master_set_start
+                            master_stats_sets[master_key] = stats
+                            current_master_key = master_key
+                            current_dark_exposure = None if dark_exposure is None else float(dark_exposure)
+                            del master_bias, master_dark, master_flat
+                            gc_start = perf_counter()
+                            gc.collect()
+                            gc_elapsed += perf_counter() - gc_start
+                        light, read_profile, read_wait_elapsed = light_prefetch.result(index)
+                        per_frame_read_worker_s.append(float(read_profile.get("total", 0.0)))
+                        per_frame_fits_open_s.append(float(read_profile.get("fits_open", 0.0)))
+                        per_frame_fits_materialize_decode_s.append(
+                            float(read_profile.get("fits_materialize_decode", 0.0))
                         )
-                    per_frame_s.append(perf_counter() - frame_start)
-                    if resident_registration == "off" and _matches_any_token(frame, excluded_tokens):
-                        frame_weight = 0.0
-                    frame_weights[frame["id"]] = frame_weight
-                    frame_weight_values.append(frame_weight)
-                    del light
-                    if index % 10 == 9:
-                        gc_start = perf_counter()
-                        gc.collect()
-                        gc_elapsed += perf_counter() - gc_start
+                        per_frame_read_s.append(read_wait_elapsed)
+                        calibrate_start = perf_counter()
+                        try:
+                            if resident_h2d_mode == "pinned_async":
+                                calibration_timing = stack.calibrate_frame_pinned_async_timed(
+                                    index,
+                                    light,
+                                    float(frame.get("exposure_s") or 0.0),
+                                    current_dark_exposure,
+                                    asdict(policy),
+                                )
+                            elif resident_h2d_mode == "pinned_ring":
+                                calibration_timing = stack.calibrate_frame_host_async_timed(
+                                    index,
+                                    light,
+                                    float(frame.get("exposure_s") or 0.0),
+                                    current_dark_exposure,
+                                    asdict(policy),
+                                )
+                            else:
+                                calibration_timing = stack.calibrate_frame_timed(
+                                    index,
+                                    light,
+                                    float(frame.get("exposure_s") or 0.0),
+                                    current_dark_exposure,
+                                    asdict(policy),
+                                )
+                        finally:
+                            light_prefetch.release(index)
+                        per_frame_calibrate_s.append(perf_counter() - calibrate_start)
+                        per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
+                        per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
+                        per_frame_calibrate_store_s.append(float(calibration_timing.get("calibrate_store_s", 0.0)))
+                        calibration_event_modes.append(str(calibration_timing.get("event_mode", "unknown")))
+                        frame_weight = 1.0
+                        if resident_registration == "translation_preview":
+                            registration_frame_start = perf_counter()
+                            warnings = []
+                            status = "excluded" if _matches_any_token(frame, excluded_tokens) else "ok"
+                            dx = 0.0
+                            dy = 0.0
+                            try:
+                                if status == "excluded":
+                                    frame_weight = 0.0
+                                    warnings.append("excluded by resident frame mask")
+                                elif frame["id"] != reference_frame["id"]:
+                                    preview = _registration_preview(light, preview_scale)
+                                    if reference_preview is None:
+                                        raise RuntimeError("reference preview is not available")
+                                    preview_dx, preview_dy = estimate_translation_phase_correlation(
+                                        reference_preview, preview
+                                    )
+                                    dx = float(preview_dx * preview_scale)
+                                    dy = float(preview_dy * preview_scale)
+                                    stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
+                                    warped_frame_indices.add(index)
+                                else:
+                                    status = "reference"
+                            except Exception as exc:
+                                status = "failed"
+                                frame_weight = 0.0
+                                warnings.append(str(exc))
+                            registration_elapsed = perf_counter() - registration_frame_start
+                            registration_during_load_elapsed += registration_elapsed
+                            per_frame_registration_s.append(registration_elapsed)
+                            registration_results.append(
+                                RegistrationResult(
+                                    frame_id=str(frame["id"]),
+                                    reference_frame_id=str(reference_frame["id"]),
+                                    transform_model="translation_preview",
+                                    matrix=translation_matrix(dx, dy),
+                                    matched_stars=0,
+                                    inliers=0 if status in {"failed", "excluded"} else 1,
+                                    rms_px=0.0 if status not in {"failed", "excluded"} else float("nan"),
+                                    status=status,
+                                    warnings=warnings
+                                    + [
+                                        f"preview_scale={preview_scale}",
+                                        "phase-correlation preview registration; no star-model RMS yet",
+                                    ],
+                                )
+                            )
+                        per_frame_s.append(perf_counter() - frame_start)
+                        if resident_registration == "off" and _matches_any_token(frame, excluded_tokens):
+                            frame_weight = 0.0
+                        frame_weights[frame["id"]] = frame_weight
+                        frame_weight_values.append(frame_weight)
+                        del light
+                        if index % 10 == 9:
+                            gc_start = perf_counter()
+                            gc.collect()
+                            gc_elapsed += perf_counter() - gc_start
             load_calibrate_elapsed = perf_counter() - load_calibrate_start
 
             if resident_registration == "translation_ncc_subpixel":
@@ -4562,6 +4683,9 @@ def run_resident_calibration_integration(
                     "light_h2d_total": h2d_timing["total"],
                     "light_calibrate_store_total": calibrate_store_timing["total"],
                     "light_h2d_calibrate_store_total": calibrate_timing["total"],
+                    "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
+                    "light_calibration_batch_stream_h2d_calibrate_store": float(calibration_batch_stream_s),
+                    "light_calibration_batch_sync": float(calibration_batch_sync_s),
                     "resident_registration_warp_total": registration_total,
                     "resident_registration_warp_during_load_total": registration_during_load_elapsed,
                     "resident_registration_warp_deferred_total": registration_deferred_elapsed,
@@ -4653,6 +4777,9 @@ def run_resident_calibration_integration(
                         "light_h2d": h2d_timing["total"],
                         "light_calibrate_store": calibrate_store_timing["total"],
                         "light_h2d_calibrate_store": calibrate_timing["total"],
+                        "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
+                        "light_calibration_batch_stream_h2d_calibrate_store": float(calibration_batch_stream_s),
+                        "light_calibration_batch_sync": float(calibration_batch_sync_s),
                         "resident_registration_warp": registration_total,
                         "resident_registration_warp_during_load": registration_during_load_elapsed,
                         "resident_registration_warp_deferred": registration_deferred_elapsed,
@@ -4693,6 +4820,20 @@ def run_resident_calibration_integration(
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
                         "calibration_event_reuse": "reused_stack_events" in unique_calibration_event_modes,
+                        "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
+                        "calibration_batch_enabled": bool(calibration_batch_enabled),
+                        "calibration_batch_supported": bool(calibration_batch_supported),
+                        "calibration_batch_count": int(calibration_batch_count),
+                        "calibration_batch_frame_count": int(calibration_batch_frame_count),
+                        "calibration_batch_mode": "host_async_batch" if calibration_batch_enabled else "per_frame",
+                        "calibration_batch_timing_model": (
+                            "single_stream_sequential_h2d_kernel_one_sync"
+                            if calibration_batch_enabled
+                            else "per_frame_sync"
+                        ),
+                        "calibration_batch_native_total_s": float(calibration_batch_native_total_s),
+                        "calibration_batch_stream_h2d_calibrate_store_s": float(calibration_batch_stream_s),
+                        "calibration_batch_sync_s": float(calibration_batch_sync_s),
                         "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
                         "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",
                         "host_pinned_bytes": int(

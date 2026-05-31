@@ -2531,6 +2531,25 @@ class ResidentCalibratedStack:
         )
         return dict(result)
 
+    def calibrate_frames_host_async_timed(
+        self,
+        indices: Any,
+        lights: Any,
+        light_exposures_s: Any,
+        dark_exposures_s: Any,
+        policy: Any | None = None,
+    ) -> dict[str, Any]:
+        if not hasattr(self._impl, "calibrate_frames_host_async_timed"):
+            raise RuntimeError("native ResidentCalibratedStack.calibrate_frames_host_async_timed is not available")
+        result = self._impl.calibrate_frames_host_async_timed(
+            np.asarray(indices, dtype=np.int64),
+            list(lights),
+            np.asarray(light_exposures_s, dtype=np.float32),
+            np.asarray(dark_exposures_s, dtype=np.float32),
+            _policy_payload(policy),
+        )
+        return dict(result)
+
     def apply_translation_frame(self, index: int, dx: int, dy: int, fill: float = np.nan) -> None:
         if not hasattr(self._impl, "apply_translation_frame"):
             raise RuntimeError("native ResidentCalibratedStack.apply_translation_frame is not available")

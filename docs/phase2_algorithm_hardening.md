@@ -1189,6 +1189,21 @@ integration where applicable.
 - Validate with native CUDA resident-stack tests, resident CLI smoke coverage,
   ruff, full pytest, and a 200-light pinned-ring benchmark comparison.
 
+### S2-Gate 71: Opt-In Resident Calibration Batch Enqueue
+
+- Add an explicit resident calibration batch size that can enqueue multiple
+  pinned-ring raw-light H2D copies and calibration kernels from native code
+  before synchronizing.
+- Keep default behavior at one frame per sync until the batch path has enough
+  200-light evidence for default routing.
+- Enable the batch path only for resident modes that do not need the CPU light
+  array for online registration during load; keep translation-preview on the
+  legacy per-frame path.
+- Record batch enablement, batch count, frame count, timing model, stream
+  elapsed time, sync time, and native wall time in `resident_io_pipeline`.
+- Validate with resident stack CUDA tests, resident CLI smoke coverage, ruff,
+  full pytest, and 200-light pinned-ring benchmark comparison.
+
 ## Gate Rules
 
 Each gate requires:

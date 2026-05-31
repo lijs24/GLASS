@@ -619,6 +619,19 @@ std::vector<std::size_t> parse_index_sequence(py::object indices_obj, const char
   return out;
 }
 
+std::vector<float> parse_float_sequence(py::object values_obj, const char* name) {
+  auto values = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(values_obj);
+  if (!values) {
+    throw std::invalid_argument(std::string(name) + " must be convertible to a float32 array");
+  }
+  const py::buffer_info info = values.request();
+  if (info.ndim != 1) {
+    throw std::invalid_argument(std::string(name) + " must be one-dimensional");
+  }
+  const auto* ptr = static_cast<const float*>(info.ptr);
+  return std::vector<float>(ptr, ptr + static_cast<std::size_t>(info.shape[0]));
+}
+
 std::array<float, 9> invert_matrix3x3(const std::array<float, 9>& m) {
   const double a = m[0];
   const double b = m[1];
@@ -1405,6 +1418,120 @@ class ResidentCalibratedStack {
         calibrate_frame_host_async_impl(index, light_info.ptr, params);
     mark_loaded(index);
     return calibration_timing_dict(timing, "host_async");
+  }
+
+  py::dict calibrate_frames_host_async_timed(
+      py::object indices_obj,
+      py::object lights_obj,
+      py::object light_exposures_obj,
+      py::object dark_exposures_obj,
+      py::object policy_obj) {
+    const auto indices = parse_index_sequence(indices_obj, "indices");
+    const auto light_exposures = parse_float_sequence(light_exposures_obj, "light_exposures");
+    const auto dark_exposures = parse_float_sequence(dark_exposures_obj, "dark_exposures");
+    py::sequence lights = py::cast<py::sequence>(lights_obj);
+    const std::size_t frame_count = indices.size();
+    if (frame_count == 0) {
+      py::dict out;
+      out["schema_version"] = 1;
+      out["h2d_mode"] = "host_async_batch";
+      out["event_mode"] = "reused_stack_events";
+      out["timing_model"] = "single_stream_sequential_h2d_kernel_one_sync";
+      out["frame_count"] = 0;
+      out["host_copy_s"] = 0.0;
+      out["h2d_s"] = 0.0;
+      out["calibrate_store_s"] = 0.0;
+      out["stream_h2d_calibrate_store_s"] = 0.0;
+      out["sync_s"] = 0.0;
+      out["total_s"] = 0.0;
+      out["host_pinned_bytes"] = host_pinned_bytes();
+      return out;
+    }
+    if (static_cast<std::size_t>(py::len(lights)) != frame_count ||
+        light_exposures.size() != frame_count ||
+        dark_exposures.size() != frame_count) {
+      throw std::invalid_argument("indices, lights, light_exposures, and dark_exposures must have the same length");
+    }
+
+    std::vector<py::array_t<float, py::array::c_style | py::array::forcecast>> light_arrays;
+    std::vector<void*> light_ptrs;
+    std::vector<CalibrationParameters> params;
+    light_arrays.reserve(frame_count);
+    light_ptrs.reserve(frame_count);
+    params.reserve(frame_count);
+    for (std::size_t i = 0; i < frame_count; ++i) {
+      require_index(indices[i]);
+      auto light = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(lights[i]);
+      const py::buffer_info info = light.request();
+      require_frame_shape(info, height_, width_);
+      light_ptrs.push_back(info.ptr);
+      light_arrays.push_back(std::move(light));
+      py::object dark_exposure_obj = py::none();
+      if (std::isfinite(dark_exposures[i]) && dark_exposures[i] > 0.0f) {
+        dark_exposure_obj = py::float_(dark_exposures[i]);
+      }
+      params.push_back(calibration_parameters(light_exposures[i], dark_exposure_obj, policy_obj));
+    }
+
+    const std::size_t frame_bytes = pixels_per_frame_ * sizeof(float);
+    const auto total_start = Clock::now();
+    double sync_s = 0.0;
+    double stream_s = 0.0;
+    {
+      py::gil_scoped_release release;
+      check_cuda(
+          cudaEventRecord(calibrate_h2d_start_, calibrate_stream_),
+          "cudaEventRecord(resident batch calibration start)");
+      for (std::size_t i = 0; i < frame_count; ++i) {
+        check_cuda(
+            cudaMemcpyAsync(
+                d_light_,
+                light_ptrs[i],
+                frame_bytes,
+                cudaMemcpyHostToDevice,
+                calibrate_stream_),
+            "cudaMemcpyAsync(resident batch host raw light)");
+        glass_calibrate_tile_f32_launch_stream(
+            d_light_,
+            d_bias_,
+            d_dark_,
+            d_flat_,
+            d_stack_ + indices[i] * pixels_per_frame_,
+            pixels_per_frame_,
+            has_bias_,
+            has_dark_,
+            has_flat_,
+            params[i].master_dark_includes_bias,
+            params[i].dark_scale,
+            params[i].flat_floor,
+            params[i].pedestal,
+            calibrate_stream_);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frames_host_async kernel launch");
+      }
+      check_cuda(
+          cudaEventRecord(calibrate_kernel_stop_, calibrate_stream_),
+          "cudaEventRecord(resident batch calibration stop)");
+      const auto sync_start = Clock::now();
+      check_cuda(
+          cudaStreamSynchronize(calibrate_stream_),
+          "ResidentCalibratedStack.calibrate_frames_host_async synchronize");
+      sync_s = seconds_since(sync_start);
+      stream_s = cuda_event_elapsed_s(
+          calibrate_h2d_start_,
+          calibrate_kernel_stop_,
+          "cudaEventElapsedTime(resident batch h2d calibration)");
+    }
+    for (std::size_t index : indices) {
+      mark_loaded(index);
+    }
+    py::dict out = calibration_timing_dict(
+        ResidentCalibrationTiming{0.0, 0.0, stream_s, seconds_since(total_start)},
+        "host_async_batch");
+    out["timing_model"] = "single_stream_sequential_h2d_kernel_one_sync";
+    out["frame_count"] = static_cast<unsigned long long>(frame_count);
+    out["stream_h2d_calibrate_store_s"] = stream_s;
+    out["sync_s"] = sync_s;
+    return out;
   }
 
   void apply_translation_frame(std::size_t index, int dx, int dy, float fill) {
@@ -8074,6 +8201,14 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("light"),
           py::arg("light_exposure_s"),
           py::arg("dark_exposure_s") = py::none(),
+          py::arg("policy") = py::none())
+      .def(
+          "calibrate_frames_host_async_timed",
+          &ResidentCalibratedStack::calibrate_frames_host_async_timed,
+          py::arg("indices"),
+          py::arg("lights"),
+          py::arg("light_exposures"),
+          py::arg("dark_exposures"),
           py::arg("policy") = py::none())
       .def(
           "apply_translation_frame",
