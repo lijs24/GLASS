@@ -1177,6 +1177,18 @@ integration where applicable.
   pytest, and the 200-light benchmark contract because this gate changes native
   registration scheduling and synchronization behavior.
 
+### S2-Gate 70: Reused Resident Calibration Events
+
+- Remove per-frame CUDA event create/destroy overhead from resident H2D +
+  calibration timing by allocating reusable stack-lifetime calibration events.
+- Preserve the existing pageable, pinned async, and pinned-ring behavior and
+  event-based H2D/kernel timing semantics.
+- Record the calibration event mode in `resident_io_pipeline` so 200-light
+  profiles can distinguish reused stack events from legacy per-frame event
+  allocation.
+- Validate with native CUDA resident-stack tests, resident CLI smoke coverage,
+  ruff, full pytest, and a 200-light pinned-ring benchmark comparison.
+
 ## Gate Rules
 
 Each gate requires:

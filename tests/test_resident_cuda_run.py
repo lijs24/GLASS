@@ -472,6 +472,9 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert io_pipeline["prefetch_frames"] == 2
     assert io_pipeline["prefetch_workers"] == 2
     assert io_pipeline["h2d_mode"] == "pinned_ring"
+    assert io_pipeline["calibration_event_mode"] == "reused_stack_events"
+    assert io_pipeline["calibration_event_modes"] == ["reused_stack_events"]
+    assert io_pipeline["calibration_event_reuse"] is True
     assert io_pipeline["host_pinned_bytes"] > 0
     assert io_pipeline["prefetch_host_pinned_bytes"] > 0
     assert io_pipeline["stack_host_pinned_bytes"] == 0

@@ -1829,6 +1829,7 @@ def run_resident_calibration_integration(
             per_frame_host_copy_s: list[float] = []
             per_frame_h2d_s: list[float] = []
             per_frame_calibrate_store_s: list[float] = []
+            calibration_event_modes: list[str] = []
             per_frame_registration_s = []
             registration_component_s: dict[str, float] = {}
             registration_during_load_elapsed = 0.0
@@ -1923,6 +1924,7 @@ def run_resident_calibration_integration(
                     per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
                     per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
                     per_frame_calibrate_store_s.append(float(calibration_timing.get("calibrate_store_s", 0.0)))
+                    calibration_event_modes.append(str(calibration_timing.get("event_mode", "unknown")))
                     frame_weight = 1.0
                     if resident_registration == "translation_preview":
                         registration_frame_start = perf_counter()
@@ -4493,6 +4495,12 @@ def run_resident_calibration_integration(
             h2d_timing = _timing_summary(per_frame_h2d_s)
             calibrate_store_timing = _timing_summary(per_frame_calibrate_store_s)
             registration_timing = _timing_summary(per_frame_registration_s)
+            unique_calibration_event_modes = sorted(set(calibration_event_modes))
+            calibration_event_mode = (
+                unique_calibration_event_modes[0]
+                if len(unique_calibration_event_modes) == 1
+                else "mixed"
+            )
             registration_total = registration_timing["total"]
             registration_component_total = float(
                 sum(
@@ -4682,6 +4690,9 @@ def run_resident_calibration_integration(
                         "prefetch_frames": int(resident_prefetch_frames),
                         "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                         "h2d_mode": resident_h2d_mode,
+                        "calibration_event_mode": calibration_event_mode,
+                        "calibration_event_modes": unique_calibration_event_modes,
+                        "calibration_event_reuse": "reused_stack_events" in unique_calibration_event_modes,
                         "master_cache_dir": str(shared_master_cache_dir) if shared_master_cache_dir is not None else None,
                         "master_cache_scope": "shared" if shared_master_cache_dir is not None else "run",
                         "host_pinned_bytes": int(

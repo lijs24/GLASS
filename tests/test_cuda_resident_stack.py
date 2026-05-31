@@ -117,7 +117,9 @@ def test_resident_stack_pinned_async_calibration_matches_pageable_and_cpu():
 
     expected = calibrate_light(light, bias, dark, flat, 60.0, 60.0, policy)
     assert pageable_timing["h2d_mode"] == "pageable"
+    assert pageable_timing["event_mode"] == "none"
     assert pinned_timing["h2d_mode"] == "pinned_async"
+    assert pinned_timing["event_mode"] == "reused_stack_events"
     assert pinned_timing["host_pinned_bytes"] >= light.nbytes
     assert pinned_timing["h2d_s"] >= 0.0
     assert pinned_timing["calibrate_store_s"] >= 0.0
@@ -147,6 +149,7 @@ def test_resident_stack_host_async_calibration_accepts_pinned_host_array():
     expected = calibrate_light(pinned_light, bias, dark, flat, 60.0, 60.0, policy)
     assert pinned_light.flags.c_contiguous
     assert timing["h2d_mode"] == "host_async"
+    assert timing["event_mode"] == "reused_stack_events"
     assert timing["host_copy_s"] == 0.0
     assert timing["h2d_s"] >= 0.0
     assert timing["calibrate_store_s"] >= 0.0

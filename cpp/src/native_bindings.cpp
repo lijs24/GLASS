@@ -529,6 +529,12 @@ double cuda_event_elapsed_s(const CudaEvent& start, const CudaEvent& stop, const
   return static_cast<double>(elapsed_ms) / 1000.0;
 }
 
+double cuda_event_elapsed_s(cudaEvent_t start, cudaEvent_t stop, const char* operation) {
+  float elapsed_ms = 0.0f;
+  check_cuda(cudaEventElapsedTime(&elapsed_ms, start, stop), operation);
+  return static_cast<double>(elapsed_ms) / 1000.0;
+}
+
 void require_frame_shape(const py::buffer_info& info, std::size_t height, std::size_t width) {
   if (info.ndim != 2) {
     throw std::invalid_argument("frame must have shape (height, width)");
@@ -1174,12 +1180,28 @@ class ResidentCalibratedStack {
     check_cuda(cudaMalloc(&d_stack_, frame_count_ * frame_bytes), "cudaMalloc(resident calibrated stack)");
     check_cuda(cudaMalloc(&d_light_, frame_bytes), "cudaMalloc(resident raw light buffer)");
     check_cuda(cudaStreamCreate(&calibrate_stream_), "cudaStreamCreate(resident calibration stream)");
+    check_cuda(cudaEventCreate(&calibrate_h2d_start_), "cudaEventCreate(resident reusable h2d start)");
+    check_cuda(cudaEventCreate(&calibrate_h2d_stop_), "cudaEventCreate(resident reusable h2d stop)");
+    check_cuda(cudaEventCreate(&calibrate_kernel_start_), "cudaEventCreate(resident reusable calibration start)");
+    check_cuda(cudaEventCreate(&calibrate_kernel_stop_), "cudaEventCreate(resident reusable calibration stop)");
   }
 
   ResidentCalibratedStack(const ResidentCalibratedStack&) = delete;
   ResidentCalibratedStack& operator=(const ResidentCalibratedStack&) = delete;
 
   ~ResidentCalibratedStack() {
+    if (calibrate_h2d_start_ != nullptr) {
+      cudaEventDestroy(calibrate_h2d_start_);
+    }
+    if (calibrate_h2d_stop_ != nullptr) {
+      cudaEventDestroy(calibrate_h2d_stop_);
+    }
+    if (calibrate_kernel_start_ != nullptr) {
+      cudaEventDestroy(calibrate_kernel_start_);
+    }
+    if (calibrate_kernel_stop_ != nullptr) {
+      cudaEventDestroy(calibrate_kernel_stop_);
+    }
     if (calibrate_stream_ != nullptr) {
       cudaStreamDestroy(calibrate_stream_);
     }
@@ -3856,6 +3878,7 @@ class ResidentCalibratedStack {
     py::dict out;
     out["schema_version"] = 1;
     out["h2d_mode"] = mode;
+    out["event_mode"] = std::string(mode) == "pageable" ? "none" : "reused_stack_events";
     out["host_copy_s"] = timing.host_copy_s;
     out["h2d_s"] = timing.h2d_s;
     out["calibrate_store_s"] = timing.calibrate_store_s;
@@ -3929,11 +3952,7 @@ class ResidentCalibratedStack {
       std::memcpy(h_pinned_light_, light_ptr, frame_bytes);
       timing.host_copy_s = seconds_since(host_copy_start);
 
-      CudaEvent h2d_start("cudaEventCreate(resident pinned h2d start)");
-      CudaEvent h2d_stop("cudaEventCreate(resident pinned h2d stop)");
-      CudaEvent kernel_start("cudaEventCreate(resident calibration start)");
-      CudaEvent kernel_stop("cudaEventCreate(resident calibration stop)");
-      check_cuda(cudaEventRecord(h2d_start.get(), calibrate_stream_), "cudaEventRecord(resident pinned h2d start)");
+      check_cuda(cudaEventRecord(calibrate_h2d_start_, calibrate_stream_), "cudaEventRecord(resident pinned h2d start)");
       check_cuda(
           cudaMemcpyAsync(
               d_light_,
@@ -3942,9 +3961,9 @@ class ResidentCalibratedStack {
               cudaMemcpyHostToDevice,
               calibrate_stream_),
           "cudaMemcpyAsync(resident pinned raw light)");
-      check_cuda(cudaEventRecord(h2d_stop.get(), calibrate_stream_), "cudaEventRecord(resident pinned h2d stop)");
+      check_cuda(cudaEventRecord(calibrate_h2d_stop_, calibrate_stream_), "cudaEventRecord(resident pinned h2d stop)");
       check_cuda(
-          cudaEventRecord(kernel_start.get(), calibrate_stream_),
+          cudaEventRecord(calibrate_kernel_start_, calibrate_stream_),
           "cudaEventRecord(resident calibration start)");
       glass_calibrate_tile_f32_launch_stream(
           d_light_,
@@ -3963,14 +3982,20 @@ class ResidentCalibratedStack {
           calibrate_stream_);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame_pinned_async kernel launch");
       check_cuda(
-          cudaEventRecord(kernel_stop.get(), calibrate_stream_),
+          cudaEventRecord(calibrate_kernel_stop_, calibrate_stream_),
           "cudaEventRecord(resident calibration stop)");
       check_cuda(
           cudaStreamSynchronize(calibrate_stream_),
           "ResidentCalibratedStack.calibrate_frame_pinned_async synchronize");
-      timing.h2d_s = cuda_event_elapsed_s(h2d_start, h2d_stop, "cudaEventElapsedTime(resident pinned h2d)");
+      timing.h2d_s = cuda_event_elapsed_s(
+          calibrate_h2d_start_,
+          calibrate_h2d_stop_,
+          "cudaEventElapsedTime(resident pinned h2d)");
       timing.calibrate_store_s =
-          cuda_event_elapsed_s(kernel_start, kernel_stop, "cudaEventElapsedTime(resident calibration)");
+          cuda_event_elapsed_s(
+              calibrate_kernel_start_,
+              calibrate_kernel_stop_,
+              "cudaEventElapsedTime(resident calibration)");
     }
     timing.total_s = seconds_since(total_start);
     return timing;
@@ -3985,11 +4010,9 @@ class ResidentCalibratedStack {
     const auto total_start = Clock::now();
     {
       py::gil_scoped_release release;
-      CudaEvent h2d_start("cudaEventCreate(resident host async h2d start)");
-      CudaEvent h2d_stop("cudaEventCreate(resident host async h2d stop)");
-      CudaEvent kernel_start("cudaEventCreate(resident host async calibration start)");
-      CudaEvent kernel_stop("cudaEventCreate(resident host async calibration stop)");
-      check_cuda(cudaEventRecord(h2d_start.get(), calibrate_stream_), "cudaEventRecord(resident host async h2d start)");
+      check_cuda(
+          cudaEventRecord(calibrate_h2d_start_, calibrate_stream_),
+          "cudaEventRecord(resident host async h2d start)");
       check_cuda(
           cudaMemcpyAsync(
               d_light_,
@@ -3998,9 +4021,11 @@ class ResidentCalibratedStack {
               cudaMemcpyHostToDevice,
               calibrate_stream_),
           "cudaMemcpyAsync(resident host raw light)");
-      check_cuda(cudaEventRecord(h2d_stop.get(), calibrate_stream_), "cudaEventRecord(resident host async h2d stop)");
       check_cuda(
-          cudaEventRecord(kernel_start.get(), calibrate_stream_),
+          cudaEventRecord(calibrate_h2d_stop_, calibrate_stream_),
+          "cudaEventRecord(resident host async h2d stop)");
+      check_cuda(
+          cudaEventRecord(calibrate_kernel_start_, calibrate_stream_),
           "cudaEventRecord(resident host async calibration start)");
       glass_calibrate_tile_f32_launch_stream(
           d_light_,
@@ -4019,14 +4044,20 @@ class ResidentCalibratedStack {
           calibrate_stream_);
       check_cuda(cudaGetLastError(), "ResidentCalibratedStack.calibrate_frame_host_async kernel launch");
       check_cuda(
-          cudaEventRecord(kernel_stop.get(), calibrate_stream_),
+          cudaEventRecord(calibrate_kernel_stop_, calibrate_stream_),
           "cudaEventRecord(resident host async calibration stop)");
       check_cuda(
           cudaStreamSynchronize(calibrate_stream_),
           "ResidentCalibratedStack.calibrate_frame_host_async synchronize");
-      timing.h2d_s = cuda_event_elapsed_s(h2d_start, h2d_stop, "cudaEventElapsedTime(resident host async h2d)");
+      timing.h2d_s = cuda_event_elapsed_s(
+          calibrate_h2d_start_,
+          calibrate_h2d_stop_,
+          "cudaEventElapsedTime(resident host async h2d)");
       timing.calibrate_store_s =
-          cuda_event_elapsed_s(kernel_start, kernel_stop, "cudaEventElapsedTime(resident host async calibration)");
+          cuda_event_elapsed_s(
+              calibrate_kernel_start_,
+              calibrate_kernel_stop_,
+              "cudaEventElapsedTime(resident host async calibration)");
     }
     timing.total_s = seconds_since(total_start);
     return timing;
@@ -4096,6 +4127,10 @@ class ResidentCalibratedStack {
   float* d_warp_inverse_ = nullptr;
   float* h_pinned_light_ = nullptr;
   cudaStream_t calibrate_stream_ = nullptr;
+  cudaEvent_t calibrate_h2d_start_ = nullptr;
+  cudaEvent_t calibrate_h2d_stop_ = nullptr;
+  cudaEvent_t calibrate_kernel_start_ = nullptr;
+  cudaEvent_t calibrate_kernel_stop_ = nullptr;
   bool has_bias_ = false;
   bool has_dark_ = false;
   bool has_flat_ = false;
