@@ -23,6 +23,7 @@ def _write_glass_run(
     zero: int = 7,
     command: str | None = None,
     resident_timing: dict[str, float] | None = None,
+    resident_dq: bool = False,
 ) -> None:
     path.mkdir()
     write_json(path / "run_timing.json", {"total_elapsed_s": elapsed_s, "memory_mode": "resident"})
@@ -30,24 +31,69 @@ def _write_glass_run(
         (path / "run_command.txt").write_text(command, encoding="utf-8")
     weights = {f"L{idx:04d}": 1.0 for idx in range(active)}
     weights.update({f"Z{idx:04d}": 0.0 for idx in range(zero)})
+    output = {
+        "backend": "cuda_resident_stack",
+        "memory_mode": "resident",
+        "frame_count": active + zero,
+        "master_path": "master.fits",
+    }
+    resident_artifact: dict[str, object] = {}
+    if resident_timing is not None:
+        resident_artifact["timing_s"] = resident_timing
+    if resident_dq:
+        dq_map = path / "dq_map.fits"
+        coverage_map = path / "coverage_map.fits"
+        dq_map.write_bytes(b"dq")
+        coverage_map.write_bytes(b"coverage")
+        dq_summary = {
+            "valid": 1000,
+            "no_data": 0,
+            "warp_edge": 12,
+            "low_rejected": 4,
+            "high_rejected": 5,
+        }
+        dq_coverage_provenance = {
+            "active_frame_count": active,
+            "source_terms": [
+                "post_rejection_coverage",
+                "low_rejection",
+                "high_rejection",
+                "geometric_warp_coverage",
+            ],
+            "finite_pre_rejection_coverage": {"finite_pixels": 1000},
+            "post_rejection_coverage": {"finite_pixels": 990},
+            "rejected_sample_count": 9,
+            "geometric_zero_pixels": 0,
+            "geometric_partial_pixels": 12,
+            "partial_pre_rejection_pixels": 12,
+        }
+        output.update(
+            {
+                "dq_map_path": str(dq_map),
+                "coverage_map_path": str(coverage_map),
+                "dq_summary": dq_summary,
+                "dq_coverage_provenance": dq_coverage_provenance,
+            }
+        )
+        resident_artifact.update(
+            {
+                "dq_map_path": str(dq_map),
+                "coverage_map_path": str(coverage_map),
+                "dq_summary": dq_summary,
+                "dq_coverage_provenance": dq_coverage_provenance,
+            }
+        )
     write_json(
         path / "integration_results.json",
         {
             "frame_weights": weights,
             "weighting": "none",
             "rejection": "winsorized_sigma",
-            "outputs": [
-                {
-                    "backend": "cuda_resident_stack",
-                    "memory_mode": "resident",
-                    "frame_count": active + zero,
-                    "master_path": "master.fits",
-                }
-            ],
+            "outputs": [output],
         },
     )
-    if resident_timing is not None:
-        write_json(path / "resident_artifacts.json", {"artifacts": [{"timing_s": resident_timing}]})
+    if resident_artifact:
+        write_json(path / "resident_artifacts.json", {"artifacts": [resident_artifact]})
 
 
 def _write_wbpp_result(path: Path, *, elapsed_s: float = 1000.0) -> None:
@@ -132,6 +178,25 @@ def _write_contract(path: Path, *, max_runtime_factor: float = 1.3) -> None:
             },
         },
     )
+
+
+def _add_dq_contract(path: Path) -> None:
+    payload = read_json(path)
+    payload["dq_provenance"] = {
+        "required": True,
+        "min_records": 1,
+        "required_source_schemas": ["resident_dq_coverage_provenance"],
+        "required_engines": ["cuda_resident_stack"],
+        "min_active_frame_count": 190,
+        "require_dq_map_path": True,
+        "require_existing_dq_map": True,
+        "require_coverage_map_path": True,
+        "required_summary_fields": ["zero_coverage_pixels", "partial_coverage_pixels"],
+        "required_output_dq_flags": ["valid", "warp_edge", "low_rejected", "high_rejected"],
+        "positive_output_dq_flags": ["valid", "warp_edge"],
+        "required_source_terms": ["geometric_warp_coverage"],
+    }
+    write_json(path, payload)
 
 
 def test_acceptance_audit_passes_real_benchmark_thresholds(tmp_path: Path):
@@ -224,6 +289,90 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert cumulative["actual_key"] == "light_read_worker_cumulative"
     assert cumulative["status"] == "informational_cumulative"
     assert cumulative["timing_kind"] == "worker_cumulative"
+
+
+def test_acceptance_audit_applies_dq_provenance_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        active=193,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_dq=True,
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_dq_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert audit["dq_provenance"]["record_count"] == 2
+    assert audit["dq_provenance"]["records"][0]["normalized_from_legacy"] is True
+    assert checks["contract_dq_provenance_records"] is True
+    assert checks["contract_dq_source_schema:resident_dq_coverage_provenance"] is True
+    assert checks["contract_dq_engine:cuda_resident_stack"] is True
+    assert checks["contract_dq_min_active_frame_count"] is True
+    assert checks["contract_dq_map_exists"] is True
+    assert checks["contract_dq_output_flag:warp_edge"] is True
+    assert checks["contract_dq_positive_output_flag:warp_edge"] is True
+    assert checks["contract_dq_source_term:geometric_warp_coverage"] is True
+
+
+def test_acceptance_audit_dq_contract_fails_when_artifact_missing(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_dq_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["dq_provenance"]["record_count"] == 0
+    assert checks["contract_dq_provenance_records"] is False
+    assert checks["contract_dq_source_schema:resident_dq_coverage_provenance"] is False
+    assert checks["contract_dq_map_path_present"] is False
 
 
 def test_acceptance_audit_contract_catches_missing_parameters(tmp_path: Path):

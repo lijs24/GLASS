@@ -482,6 +482,22 @@ integration where applicable.
 - A 200-light benchmark rerun is not required unless this gate changes resident
   CUDA image math or benchmark routing.
 
+### S2-Gate 28: DQ Provenance Acceptance Contract
+
+- Extend the benchmark acceptance contract so real-data audits can require DQ
+  provenance records, expected source schemas, engines, DQ maps, active-frame
+  counts, source terms, and output DQ summary flags.
+- Make `acceptance-audit` collect normalized DQ provenance records from
+  `integration_results.json` and `resident_artifacts.json`.
+- Preserve compatibility with S2-Gate 17-24 resident artifacts by normalizing
+  legacy `dq_coverage_provenance` plus `dq_summary` into the S2-Gate 27 compact
+  summary during audit.
+- Update the 200-light benchmark contract to require resident CUDA DQ
+  provenance without changing image math or resident execution routing.
+- Validate with acceptance-audit unit tests, ruff, full pytest, and a contract
+  audit against the latest preserved 200-light resident artifacts when those
+  artifacts are locally available.
+
 ## Gate Rules
 
 Each gate requires:

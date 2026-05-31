@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from glass.engine.dq import dq_provenance_summary_from_resident
 from glass.report.speedup_report import _read_json_lenient
 
 
@@ -62,6 +63,245 @@ def _load_resident_timing(glass_run: str | Path) -> dict[str, Any]:
         return {}
     timing = first.get("timing_s")
     return timing if isinstance(timing, dict) else {}
+
+
+def _load_json_object_if_present(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    payload = _read_json_lenient(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _path_exists_maybe_relative(path_value: Any, run_root: Path) -> bool:
+    if not path_value:
+        return False
+    path = Path(str(path_value))
+    if path.is_absolute():
+        return path.exists()
+    return (run_root / path).exists()
+
+
+def _dq_record_from_payload(
+    payload: dict[str, Any],
+    *,
+    run_root: Path,
+    source_file: str,
+    source_kind: str,
+    index: int,
+) -> dict[str, Any] | None:
+    summary = payload.get("dq_provenance_summary")
+    normalized_from_legacy = False
+    if not isinstance(summary, dict):
+        provenance = payload.get("dq_coverage_provenance")
+        dq_summary = payload.get("dq_summary")
+        if isinstance(provenance, dict) or isinstance(dq_summary, dict):
+            summary = dq_provenance_summary_from_resident(
+                provenance if isinstance(provenance, dict) else None,
+                dq_summary if isinstance(dq_summary, dict) else None,
+                item=payload.get("filter"),
+            )
+            normalized_from_legacy = True
+    if not isinstance(summary, dict):
+        return None
+    dq_map_path = payload.get("dq_map_path")
+    coverage_map_path = payload.get("coverage_map_path")
+    return {
+        "source_file": source_file,
+        "source_kind": source_kind,
+        "index": index,
+        "normalized_from_legacy": normalized_from_legacy,
+        "dq_map_path": dq_map_path,
+        "dq_map_exists": _path_exists_maybe_relative(dq_map_path, run_root),
+        "coverage_map_path": coverage_map_path,
+        "coverage_map_exists": _path_exists_maybe_relative(coverage_map_path, run_root),
+        "summary": summary,
+    }
+
+
+def collect_dq_provenance_records(glass_run: str | Path) -> list[dict[str, Any]]:
+    run_root = Path(glass_run)
+    records: list[dict[str, Any]] = []
+
+    integration = _load_json_object_if_present(run_root / "integration_results.json")
+    outputs = integration.get("outputs") or []
+    if isinstance(outputs, list):
+        for index, output in enumerate(outputs):
+            if not isinstance(output, dict):
+                continue
+            record = _dq_record_from_payload(
+                output,
+                run_root=run_root,
+                source_file="integration_results.json",
+                source_kind="integration_output",
+                index=index,
+            )
+            if record is not None:
+                records.append(record)
+
+    resident = _load_json_object_if_present(run_root / "resident_artifacts.json")
+    artifacts = resident.get("artifacts") or []
+    if isinstance(artifacts, list):
+        for index, artifact in enumerate(artifacts):
+            if not isinstance(artifact, dict):
+                continue
+            record = _dq_record_from_payload(
+                artifact,
+                run_root=run_root,
+                source_file="resident_artifacts.json",
+                source_kind="resident_artifact",
+                index=index,
+            )
+            if record is not None:
+                records.append(record)
+
+    return records
+
+
+def _record_summaries(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [record.get("summary") or {} for record in records]
+
+
+def _summary_number(summary: dict[str, Any], key: str) -> float | None:
+    value = summary.get(key)
+    return _numeric(value)
+
+
+def _summary_output_count(summary: dict[str, Any], key: str) -> float | None:
+    output = summary.get("output_dq_summary")
+    if not isinstance(output, dict):
+        return None
+    return _numeric(output.get(key))
+
+
+def _build_dq_provenance_contract_checks(
+    dq_contract: dict[str, Any],
+    *,
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    summaries = _record_summaries(records)
+    min_records = int(dq_contract.get("min_records") or (1 if dq_contract.get("required") else 0))
+    if dq_contract.get("required") or min_records:
+        checks.append(
+            _check(
+                "contract_dq_provenance_records",
+                len(records) >= min_records,
+                {"actual": len(records), "required_min": min_records},
+            )
+        )
+
+    for schema in dq_contract.get("required_source_schemas") or []:
+        schema_text = str(schema)
+        checks.append(
+            _check(
+                f"contract_dq_source_schema:{schema_text}",
+                any(summary.get("source_schema") == schema_text for summary in summaries),
+                {"required": schema_text, "available": sorted({str(s.get("source_schema")) for s in summaries})},
+            )
+        )
+
+    for engine in dq_contract.get("required_engines") or []:
+        engine_text = str(engine)
+        checks.append(
+            _check(
+                f"contract_dq_engine:{engine_text}",
+                any(summary.get("engine") == engine_text for summary in summaries),
+                {"required": engine_text, "available": sorted({str(s.get("engine")) for s in summaries})},
+            )
+        )
+
+    min_active = _numeric(dq_contract.get("min_active_frame_count"))
+    if min_active is not None:
+        available = [
+            _summary_number(summary, "active_frame_count")
+            for summary in summaries
+            if _summary_number(summary, "active_frame_count") is not None
+        ]
+        actual_max = max(available) if available else None
+        checks.append(
+            _check(
+                "contract_dq_min_active_frame_count",
+                actual_max is not None and actual_max >= min_active,
+                {"actual_max": actual_max, "required_min": min_active},
+            )
+        )
+
+    if dq_contract.get("require_dq_map_path"):
+        checks.append(
+            _check(
+                "contract_dq_map_path_present",
+                any(bool(record.get("dq_map_path")) for record in records),
+                {"records_with_dq_map_path": sum(1 for record in records if record.get("dq_map_path"))},
+            )
+        )
+    if dq_contract.get("require_existing_dq_map"):
+        checks.append(
+            _check(
+                "contract_dq_map_exists",
+                any(record.get("dq_map_exists") for record in records),
+                {"records_with_existing_dq_map": sum(1 for record in records if record.get("dq_map_exists"))},
+            )
+        )
+    if dq_contract.get("require_coverage_map_path"):
+        checks.append(
+            _check(
+                "contract_dq_coverage_map_path_present",
+                any(bool(record.get("coverage_map_path")) for record in records),
+                {"records_with_coverage_map_path": sum(1 for record in records if record.get("coverage_map_path"))},
+            )
+        )
+
+    for field in dq_contract.get("required_summary_fields") or []:
+        field_text = str(field)
+        checks.append(
+            _check(
+                f"contract_dq_summary_field:{field_text}",
+                any(summary.get(field_text) is not None for summary in summaries),
+                {"required": field_text},
+            )
+        )
+
+    for flag in dq_contract.get("required_output_dq_flags") or []:
+        flag_text = str(flag)
+        values = [
+            _summary_output_count(summary, flag_text)
+            for summary in summaries
+            if _summary_output_count(summary, flag_text) is not None
+        ]
+        checks.append(
+            _check(
+                f"contract_dq_output_flag:{flag_text}",
+                bool(values),
+                {"required": flag_text, "available_values": values},
+            )
+        )
+
+    for flag in dq_contract.get("positive_output_dq_flags") or []:
+        flag_text = str(flag)
+        values = [
+            _summary_output_count(summary, flag_text)
+            for summary in summaries
+            if _summary_output_count(summary, flag_text) is not None
+        ]
+        checks.append(
+            _check(
+                f"contract_dq_positive_output_flag:{flag_text}",
+                any(value > 0 for value in values),
+                {"required": flag_text, "available_values": values},
+            )
+        )
+
+    for term in dq_contract.get("required_source_terms") or []:
+        term_text = str(term)
+        checks.append(
+            _check(
+                f"contract_dq_source_term:{term_text}",
+                any(term_text in (summary.get("source_terms") or []) for summary in summaries),
+                {"required": term_text},
+            )
+        )
+
+    return checks
 
 
 def build_benchmark_performance_diagnostics(
@@ -273,6 +513,14 @@ def build_benchmark_contract_checks(
                 "contract_min_coverage_fraction",
                 coverage_fraction is not None and required is not None and coverage_fraction >= required,
                 {"actual": coverage_fraction, "required": required},
+            )
+        )
+    dq_contract = contract.get("dq_provenance") or {}
+    if isinstance(dq_contract, dict) and dq_contract:
+        checks.extend(
+            _build_dq_provenance_contract_checks(
+                dq_contract,
+                records=collect_dq_provenance_records(glass_run),
             )
         )
     return checks

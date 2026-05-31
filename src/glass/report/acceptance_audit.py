@@ -7,6 +7,7 @@ from glass.io.json_io import write_json
 from glass.report.benchmark_contract import (
     build_benchmark_contract_checks,
     build_benchmark_performance_diagnostics,
+    collect_dq_provenance_records,
     load_benchmark_contract,
 )
 from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
@@ -129,6 +130,7 @@ def build_acceptance_audit(
 
     contract_payload: dict[str, Any] | None = None
     performance_regression: dict[str, Any] | None = None
+    dq_provenance_records = collect_dq_provenance_records(glass_run)
     if benchmark_contract is not None:
         contract_payload = load_benchmark_contract(benchmark_contract)
         checks.extend(
@@ -164,6 +166,12 @@ def build_acceptance_audit(
         "frame_type_counts": counts,
         "checks": checks,
         "performance_regression": performance_regression,
+        "dq_provenance": {
+            "schema_version": 1,
+            "record_count": len(dq_provenance_records),
+            "records": dq_provenance_records,
+            "contract": (contract_payload or {}).get("dq_provenance") if contract_payload else None,
+        },
         "speedup_summary": speedup,
         "clean_room": {
             "status": "compliant",
@@ -183,6 +191,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         "",
         f"- Status: {audit['status']}",
         f"- Benchmark contract: {(audit.get('benchmark_contract') or {}).get('name')}",
+        f"- DQ provenance records: {(audit.get('dq_provenance') or {}).get('record_count')}",
         f"- Speedup vs WBPP: {speedup.get('speedup_vs_wbpp')}",
         f"- Frame counts: {audit.get('frame_type_counts')}",
         f"- Shape match: {comparison.get('shape_match')}",
@@ -196,6 +205,19 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
     for item in audit["checks"]:
         marker = "PASS" if item["passed"] else "FAIL"
         lines.append(f"- {marker}: {item['name']} - {item['evidence']}")
+    dq = audit.get("dq_provenance") or {}
+    if dq.get("records"):
+        lines.extend(["", "## DQ Provenance", ""])
+        for record in dq.get("records") or []:
+            summary = record.get("summary") or {}
+            lines.append(
+                "- "
+                f"{record.get('source_file')}[{record.get('index')}] "
+                f"schema={summary.get('source_schema')} engine={summary.get('engine')} "
+                f"stage={summary.get('stage')} item={summary.get('item')} "
+                f"dq_map_exists={record.get('dq_map_exists')} "
+                f"legacy_normalized={record.get('normalized_from_legacy')}"
+            )
     regression = audit.get("performance_regression")
     if regression:
         lines.extend(["", "## Performance Regression Diagnostics", ""])

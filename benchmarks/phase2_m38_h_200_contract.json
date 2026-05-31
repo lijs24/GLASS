@@ -57,6 +57,37 @@
     "numeric_abs_tolerance": 1.0e-12,
     "numeric_rel_tolerance": 1.0e-9
   },
+  "dq_provenance": {
+    "required": true,
+    "min_records": 1,
+    "required_source_schemas": [
+      "resident_dq_coverage_provenance"
+    ],
+    "required_engines": [
+      "cuda_resident_stack"
+    ],
+    "min_active_frame_count": 190,
+    "require_dq_map_path": true,
+    "require_existing_dq_map": true,
+    "require_coverage_map_path": true,
+    "required_summary_fields": [
+      "zero_coverage_pixels",
+      "partial_coverage_pixels"
+    ],
+    "required_output_dq_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
+    "positive_output_dq_flags": [
+      "valid",
+      "warp_edge"
+    ],
+    "required_source_terms": [
+      "geometric_warp_coverage"
+    ]
+  },
   "required_command_tokens": [
     "--backend cuda",
     "--until-stage integration",
