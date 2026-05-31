@@ -2771,6 +2771,11 @@ def run_resident_calibration_integration(
                     if pixel_refine_enabled
                     else "off"
                 )
+                triangle_pixel_refine_workspace_mode = "off"
+                triangle_pixel_refine_workspace_bytes = 0
+                triangle_pixel_refine_workspace_candidate_capacity = 0
+                triangle_pixel_refine_native_coarse_s = 0.0
+                triangle_pixel_refine_native_fine_s = 0.0
                 triangle_descriptor_fit_batch_enabled = bool(
                     triangle_catalog_batch_enabled
                     and hasattr(cuda_module, "estimate_similarity_from_triangle_descriptors_batch_f32")
@@ -3383,6 +3388,35 @@ def run_resident_calibration_integration(
                         batch_refine_elapsed = perf_counter() - batch_refine_start
                         _add_elapsed(registration_component_s, "triangle_pixel_refine", batch_refine_elapsed)
                         _add_elapsed(registration_component_s, "triangle_pixel_refine_batch", batch_refine_elapsed)
+                        if batch_refinements:
+                            first_refinement = dict(batch_refinements[0])
+                            triangle_pixel_refine_workspace_mode = str(
+                                first_refinement.get("workspace_mode", "unavailable")
+                            )
+                            triangle_pixel_refine_workspace_bytes = int(
+                                first_refinement.get("workspace_bytes", 0) or 0
+                            )
+                            triangle_pixel_refine_workspace_candidate_capacity = int(
+                                first_refinement.get("workspace_candidate_capacity", 0) or 0
+                            )
+                            triangle_pixel_refine_native_coarse_s = sum(
+                                float(item.get("coarse_metric_s", 0.0) or 0.0)
+                                for item in batch_refinements
+                            )
+                            triangle_pixel_refine_native_fine_s = sum(
+                                float(item.get("fine_metric_s", 0.0) or 0.0)
+                                for item in batch_refinements
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_pixel_refine_native_coarse",
+                                triangle_pixel_refine_native_coarse_s,
+                            )
+                            _add_elapsed(
+                                registration_component_s,
+                                "triangle_pixel_refine_native_fine",
+                                triangle_pixel_refine_native_fine_s,
+                            )
                     except Exception as exc:
                         batch_refinements = []
                         for item in pending_triangle_pixel_refines:
@@ -3404,6 +3438,12 @@ def run_resident_calibration_integration(
                                 f"triangle_pixel_refine_batch_index={int(refinement.get('batch_index', -1))}",
                                 f"triangle_pixel_refine_batch_count={int(refinement.get('batch_count', 0))}",
                                 f"triangle_pixel_refine_batch_model={refinement.get('batch_model')}",
+                                f"triangle_pixel_refine_workspace_mode={refinement.get('workspace_mode', 'unavailable')}",
+                                f"triangle_pixel_refine_workspace_bytes={int(refinement.get('workspace_bytes', 0) or 0)}",
+                                "triangle_pixel_refine_workspace_candidate_capacity="
+                                + str(int(refinement.get("workspace_candidate_capacity", 0) or 0)),
+                                f"triangle_pixel_refine_coarse_metric_s={float(refinement.get('coarse_metric_s', 0.0) or 0.0):.6g}",
+                                f"triangle_pixel_refine_fine_metric_s={float(refinement.get('fine_metric_s', 0.0) or 0.0):.6g}",
                                 f"triangle_pixel_rms_adu_batch={selected_pixel_rms:.6g}",
                                 f"triangle_pixel_ncc_batch={selected_pixel_ncc:.6g}",
                             ]
@@ -4246,6 +4286,23 @@ def run_resident_calibration_integration(
                         "triangle_pixel_refine_batch_mode": triangle_pixel_refine_batch_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
+                        "triangle_pixel_refine_workspace_mode": triangle_pixel_refine_workspace_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_pixel_refine_workspace_bytes": int(triangle_pixel_refine_workspace_bytes)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_workspace_candidate_capacity": int(
+                            triangle_pixel_refine_workspace_candidate_capacity
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_pixel_refine_native_coarse_s": float(triangle_pixel_refine_native_coarse_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_pixel_refine_native_fine_s": float(triangle_pixel_refine_native_fine_s)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
                         "triangle_min_pixel_ncc": _policy_optional_float(
                             registration_policy,
                             "cuda_triangle_min_pixel_ncc",

@@ -432,6 +432,20 @@ def _resident_rows(resident: dict[str, Any] | None) -> list[dict[str, Any]]:
                     / (1024.0**2),
                     3,
                 ),
+                "pixel_refine_workspace_mode": registration.get("triangle_pixel_refine_workspace_mode"),
+                "pixel_refine_workspace_mib": round(
+                    float(registration.get("triangle_pixel_refine_workspace_bytes") or 0.0)
+                    / (1024.0**2),
+                    3,
+                ),
+                "pixel_refine_native_coarse_s": round(
+                    float(registration.get("triangle_pixel_refine_native_coarse_s") or 0.0),
+                    3,
+                ),
+                "pixel_refine_native_fine_s": round(
+                    float(registration.get("triangle_pixel_refine_native_fine_s") or 0.0),
+                    3,
+                ),
                 "local_norm": local_norm.get("mode"),
                 "weighting": weighting.get("mode"),
                 "rejection": rejection.get("mode"),

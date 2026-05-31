@@ -910,6 +910,25 @@ integration where applicable.
   ruff, full pytest, and the 200-light benchmark because this gate changes the
   full-frame grid top-k GPU kernel.
 
+### S2-Gate 54: Resident Pixel-Refine Shared Candidate Metric Workspace
+
+- Reuse one native CUDA workspace for the matrix-translation pixel-refine
+  candidate inverse, metric partial-stat, and partial-count buffers across the
+  resident triangle-registration batch refine instead of allocating and freeing
+  those buffers for each moving frame and fine-search pass.
+- Preserve the existing candidate grid, NCC/RMS metric kernel, fine-search
+  semantics, quality gates, warp behavior, frame accounting, and output pixels.
+- Record workspace mode, candidate capacity, workspace bytes, and coarse/fine
+  native metric timings through Python normalization, per-frame registration
+  warnings, `resident_artifacts.json`, resident timing components, and the HTML
+  resident summary.
+- Keep older native builds and CPU-only installs compatible by treating missing
+  workspace diagnostics as unavailable or zero.
+- Validate with resident CUDA batch/single pixel-refine equivalence tests,
+  resident triangle-registration smoke tests, ruff, full pytest, and the
+  200-light benchmark because this gate changes native registration memory
+  scheduling.
+
 ## Gate Rules
 
 Each gate requires:

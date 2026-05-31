@@ -1016,6 +1016,9 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_batch"] is True
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "native_batch_one_seed_per_frame"
+    assert resident_registration["triangle_pixel_refine_workspace_mode"] == "shared_candidate_metric_buffers"
+    assert resident_registration["triangle_pixel_refine_workspace_bytes"] > 0
+    assert resident_registration["triangle_pixel_refine_workspace_candidate_capacity"] > 0
     timing = resident["artifacts"][0]["timing_s"]
     registration_components = resident["artifacts"][0]["fine_timing"]["registration_component_seconds"]
     assert timing["resident_registration_component_accounted"] >= 0.0
@@ -1027,6 +1030,8 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert registration_components["triangle_descriptor_fit_batch"] >= 0.0
     assert registration_components["triangle_warp"] >= 0.0
     assert registration_components["triangle_pixel_refine_batch"] >= 0.0
+    assert registration_components["triangle_pixel_refine_native_coarse"] >= 0.0
+    assert registration_components["triangle_pixel_refine_native_fine"] >= 0.0
     assert resident["artifacts"][0]["resident_warp_scratch_bytes"] > 0
     assert resident["artifacts"][0]["resident_io_pipeline"]["warp_scratch_bytes"] > 0
     assert resident["artifacts"][0]["resident_warp_copy_mode"] == "default_stream_async_device_to_device"
@@ -1048,6 +1053,10 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
         for warning in moving["warnings"]
     )
     assert any("triangle_pixel_refine_mode=native_batch" in warning for warning in moving["warnings"])
+    assert any(
+        "triangle_pixel_refine_workspace_mode=shared_candidate_metric_buffers" in warning
+        for warning in moving["warnings"]
+    )
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
 
 

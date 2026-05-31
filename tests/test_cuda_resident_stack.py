@@ -535,8 +535,18 @@ def test_resident_stack_batches_matrix_translation_refine():
     assert [item["moving_index"] for item in batch] == [1, 2]
     assert batch[0]["batch_model"] == "resident_cuda_matrix_metric_translation_batch_refine_grid"
     assert batch[0]["batch_count"] == 2
+    assert batch[0]["workspace_mode"] == "shared_candidate_metric_buffers"
+    assert batch[0]["workspace_candidate_capacity"] >= batch[0]["coarse_candidates_per_seed"]
+    assert batch[0]["workspace_bytes"] > 0
     for batch_result, single_result in zip(batch, singles, strict=True):
         assert batch_result["model"] == single_result["model"]
+        assert batch_result["workspace_mode"] == "shared_candidate_metric_buffers"
+        assert batch_result["workspace_candidate_capacity"] >= batch_result["coarse_candidates_per_seed"]
+        assert batch_result["workspace_bytes"] == batch[0]["workspace_bytes"]
+        assert batch_result["coarse_metric_s"] >= 0.0
+        assert batch_result["fine_metric_s"] >= 0.0
+        assert batch_result["native_coarse_total_s"] >= batch_result["coarse_metric_s"]
+        assert batch_result["native_fine_total_s"] >= batch_result["fine_metric_s"]
         assert np.allclose(batch_result["matrix"], single_result["matrix"], rtol=1e-6, atol=1e-6)
         assert abs(batch_result["metrics"]["ncc"] - single_result["metrics"]["ncc"]) < 1.0e-6
         assert abs(batch_result["metrics"]["rms"] - single_result["metrics"]["rms"]) < 1.0e-5
