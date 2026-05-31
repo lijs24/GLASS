@@ -263,6 +263,16 @@ integration where applicable.
 - Expand report coverage for all major stages.
 - Run the 200-light benchmark again and compare against Phase 1.
 
+### S2-Gate 11: Benchmark Contract And Regression Guard
+
+- Codify the Phase 1/2 200-light benchmark parameters, scale/offset, coverage
+  threshold, required command tokens, and runtime envelope as a machine-readable
+  contract.
+- Make the acceptance audit consume that contract and fail when benchmark
+  parameters drift silently.
+- Run the contract against the current 200-light real-data artifacts and record
+  whether runtime and numerical results remain within the allowed envelope.
+
 ## Gate Rules
 
 Each gate requires:

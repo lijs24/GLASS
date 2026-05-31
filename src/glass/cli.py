@@ -644,6 +644,7 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         min_coverage_fraction=args.min_coverage_fraction,
         max_rms_diff=args.max_rms_diff,
         max_abs_diff_p99=args.max_abs_diff_p99,
+        benchmark_contract=args.benchmark_contract,
     )
     write_acceptance_audit(args.out, audit, markdown=args.markdown)
     console.print(
@@ -1181,6 +1182,10 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance.add_argument("--min-coverage-fraction", type=float, default=0.95)
     acceptance.add_argument("--max-rms-diff", type=float, default=0.01)
     acceptance.add_argument("--max-abs-diff-p99", type=float, default=0.01)
+    acceptance.add_argument(
+        "--benchmark-contract",
+        help="optional JSON contract that pins real-data benchmark parameters and regression limits",
+    )
     acceptance.set_defaults(func=cmd_acceptance_audit)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")

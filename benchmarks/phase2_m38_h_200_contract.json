@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "name": "phase2_m38_h_200_resident_cuda",
+  "description": "Regression contract for the Phase 1/2 M38 H-alpha 200-light resident CUDA benchmark.",
+  "dataset_requirements": {
+    "light": 200,
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "active_light_frames": 190
+  },
+  "runtime": {
+    "release_baseline_elapsed_s": 30.361440100008622,
+    "max_runtime_regression_factor": 1.3,
+    "external_reference_elapsed_s": 1092.541,
+    "min_speedup_vs_reference": 20.0
+  },
+  "comparison": {
+    "required_scale": 8.764434957115609e-06,
+    "required_offset": 0.0006274500691899127,
+    "required_min_coverage": 190,
+    "min_coverage_fraction": 0.95,
+    "max_rms_diff": 0.01,
+    "max_abs_diff_p99": 0.01,
+    "numeric_abs_tolerance": 1.0e-12,
+    "numeric_rel_tolerance": 1.0e-9
+  },
+  "required_command_tokens": [
+    "--backend cuda",
+    "--until-stage integration",
+    "--memory-mode resident",
+    "--resident-h2d-mode pinned_ring",
+    "--resident-registration similarity_cuda_triangle",
+    "--resident-warp-interpolation lanczos3",
+    "--resident-warp-clamping-threshold 0.3",
+    "--resident-star-threshold 350",
+    "--resident-star-max-candidates 48",
+    "--resident-star-grid-cols 24",
+    "--resident-star-grid-rows 16",
+    "--resident-triangle-pixel-refine-coarse-stride 4",
+    "--resident-triangle-pixel-refine-final-stride 8",
+    "--reference-frame-id F000196",
+    "--local-normalization off",
+    "--integration-weighting none",
+    "--integration-rejection winsorized_sigma",
+    "--flat-floor 0.05",
+    "--exclude-frame-id LIGHT_H_0100",
+    "--exclude-frame-id LIGHT_H_0153",
+    "--exclude-frame-id LIGHT_H_0154",
+    "--exclude-frame-id LIGHT_H_0155",
+    "--exclude-frame-id LIGHT_H_0156",
+    "--exclude-frame-id LIGHT_H_0157",
+    "--exclude-frame-id LIGHT_H_0158"
+  ]
+}

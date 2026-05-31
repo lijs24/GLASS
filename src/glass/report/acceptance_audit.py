@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from glass.io.json_io import write_json
+from glass.report.benchmark_contract import build_benchmark_contract_checks, load_benchmark_contract
 from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
 
 
@@ -43,6 +44,7 @@ def build_acceptance_audit(
     min_coverage_fraction: float = 0.95,
     max_rms_diff: float | None = 0.01,
     max_abs_diff_p99: float | None = 0.01,
+    benchmark_contract: str | Path | None = None,
 ) -> dict[str, Any]:
     manifest = _read_json_lenient(manifest_path)
     speedup = summarize_wbpp_speedup(
@@ -52,6 +54,7 @@ def build_acceptance_audit(
         min_speedup=min_speedup,
     )
     counts = _frame_type_counts(manifest)
+    compare_payload = _read_json_lenient(compare_json)
     comparison = speedup.get("comparison") or {}
     gp = speedup["glass"]
 
@@ -120,6 +123,19 @@ def build_acceptance_audit(
             )
         )
 
+    contract_payload: dict[str, Any] | None = None
+    if benchmark_contract is not None:
+        contract_payload = load_benchmark_contract(benchmark_contract)
+        checks.extend(
+            build_benchmark_contract_checks(
+                contract_payload,
+                glass_run=glass_run,
+                speedup_summary=speedup,
+                compare_payload=compare_payload,
+                frame_type_counts=counts,
+            )
+        )
+
     passed = all(item["passed"] for item in checks)
     return {
         "schema_version": 1,
@@ -129,6 +145,13 @@ def build_acceptance_audit(
         "glass_run": str(glass_run),
         "wbpp_result": str(wbpp_result),
         "compare_json": str(compare_json),
+        "benchmark_contract": None
+        if benchmark_contract is None
+        else {
+            "path": str(benchmark_contract),
+            "name": contract_payload.get("name") if contract_payload else None,
+            "schema_version": contract_payload.get("schema_version") if contract_payload else None,
+        },
         "frame_type_counts": counts,
         "checks": checks,
         "speedup_summary": speedup,
@@ -149,6 +172,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         "# GLASS Acceptance Audit",
         "",
         f"- Status: {audit['status']}",
+        f"- Benchmark contract: {(audit.get('benchmark_contract') or {}).get('name')}",
         f"- Speedup vs WBPP: {speedup.get('speedup_vs_wbpp')}",
         f"- Frame counts: {audit.get('frame_type_counts')}",
         f"- Shape match: {comparison.get('shape_match')}",
