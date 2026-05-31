@@ -123,6 +123,55 @@ def test_resident_dq_coverage_provenance_separates_rejection_from_pre_rejection(
     assert provenance["partial_edge_inference"] == "deferred"
 
 
+def test_resident_dq_map_marks_geometric_warp_edges_without_no_data():
+    master = np.ones((2, 2), dtype=np.float32)
+    weight = np.full((2, 2), 2.0, dtype=np.float32)
+    coverage = np.full((2, 2), 2.0, dtype=np.float32)
+    geometric = np.array([[2.0, 1.0], [0.0, 2.0]], dtype=np.float32)
+
+    dq, summary = _resident_dq_map(
+        master,
+        weight,
+        coverage,
+        None,
+        None,
+        geometric_warp_coverage_map=geometric,
+        active_frame_count=2,
+    )
+
+    assert dq[0, 0] == 0
+    assert dq[0, 1] & int(DQFlag.WARP_EDGE)
+    assert not (dq[0, 1] & int(DQFlag.NO_DATA))
+    assert dq[1, 0] & int(DQFlag.WARP_EDGE)
+    assert dq[1, 0] & int(DQFlag.NO_DATA)
+    assert summary["valid"] == 2
+    assert summary["warp_edge"] == 2
+    assert summary["no_data"] == 1
+
+
+def test_resident_dq_coverage_provenance_includes_geometric_warp_coverage():
+    coverage = np.full((2, 2), 2.0, dtype=np.float32)
+    geometric = np.array([[2.0, 1.0], [0.0, 2.0]], dtype=np.float32)
+
+    provenance = _resident_dq_coverage_provenance(
+        coverage,
+        None,
+        None,
+        active_frame_count=2,
+        geometric_warp_coverage_map=geometric,
+        geometric_warp_coverage_frame_count=2,
+    )
+
+    assert provenance["available"] is True
+    assert provenance["source_terms"] == ["post_rejection_coverage", "geometric_warp_coverage"]
+    assert provenance["geometric_warp_coverage_frame_count"] == 2
+    assert provenance["geometric_frame_count_matches_active"] is True
+    assert provenance["geometric_zero_pixels"] == 1
+    assert provenance["geometric_partial_pixels"] == 1
+    assert provenance["geometric_full_pixels"] == 2
+    assert provenance["partial_edge_inference"] == "available_from_geometric_warp_coverage"
+
+
 def test_resident_output_map_selection_modes():
     assert _resident_output_map_selection("audit") == {
         "master": True,
@@ -483,13 +532,14 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert output["dq_coverage_provenance"] == artifact["dq_coverage_provenance"]
     provenance = output["dq_coverage_provenance"]
     assert provenance["available"] is True
-    assert provenance["source_terms"] == [
-        "post_rejection_coverage",
-        "low_rejection",
-        "high_rejection",
-    ]
+    assert provenance["source_terms"][:3] == ["post_rejection_coverage", "low_rejection", "high_rejection"]
+    assert "geometric_warp_coverage" in provenance["source_terms"]
     assert provenance["active_frame_count"] == 2
+    assert provenance["geometric_warp_coverage_frame_count"] == 2
+    assert provenance["geometric_frame_count_matches_active"] is True
     assert "finite_pre_rejection_coverage" in provenance
+    assert output["geometric_warp_coverage"]["available"] is True
+    assert artifact["resident_registration"]["warp_coverage"]["available"] is True
 
 
 def test_cli_resident_cuda_run_ncc_subpixel_registration_smoke(tmp_path: Path):

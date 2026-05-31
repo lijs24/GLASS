@@ -281,6 +281,34 @@ def test_resident_stack_translation_warp_uses_nan_coverage():
     assert np.allclose(weight_map, valid.astype(np.float32))
 
 
+def test_resident_stack_accumulates_geometric_warp_coverage():
+    module = cuda_module_or_skip()
+    required = [
+        "reset_warp_coverage",
+        "accumulate_full_warp_coverage_frame",
+        "warp_coverage_map",
+        "apply_translation_frame",
+    ]
+    missing = [name for name in required if not hasattr(module.ResidentCalibratedStack, name)]
+    if missing:
+        raise AssertionError(f"ResidentCalibratedStack is missing {missing}")
+
+    frame = np.arange(20, dtype=np.float32).reshape(4, 5)
+    stack = module.ResidentCalibratedStack(2, 4, 5)
+    stack.upload_calibrated_frame(0, frame)
+    stack.upload_calibrated_frame(1, frame)
+
+    stack.reset_warp_coverage()
+    stack.accumulate_full_warp_coverage_frame()
+    stack.apply_translation_frame(1, 1, 0, np.nan)
+    coverage = stack.warp_coverage_map()
+
+    expected = np.full_like(frame, 2.0, dtype=np.float32)
+    expected[:, 0] = 1.0
+    assert stack.warp_coverage_frame_count == 2
+    assert np.allclose(coverage, expected)
+
+
 def test_resident_stack_estimates_and_warps_subpixel_translation_on_device():
     module = cuda_module_or_skip()
     required = [

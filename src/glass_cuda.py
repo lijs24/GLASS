@@ -2178,6 +2178,12 @@ class ResidentCalibratedStack:
             return 0
         return int(self._impl.host_pinned_bytes)
 
+    @property
+    def warp_coverage_frame_count(self) -> int:
+        if not hasattr(self._impl, "warp_coverage_frame_count"):
+            return 0
+        return int(self._impl.warp_coverage_frame_count)
+
     def set_calibration_masters(
         self,
         bias: Any | None = None,
@@ -2189,6 +2195,23 @@ class ResidentCalibratedStack:
             None if dark is None else _as_f32_c(dark),
             None if flat is None else _as_f32_c(flat),
         )
+
+    def reset_warp_coverage(self) -> None:
+        if not hasattr(self._impl, "reset_warp_coverage"):
+            raise RuntimeError("native ResidentCalibratedStack.reset_warp_coverage is not available")
+        self._impl.reset_warp_coverage()
+
+    def accumulate_full_warp_coverage_frame(self) -> None:
+        if not hasattr(self._impl, "accumulate_full_warp_coverage_frame"):
+            raise RuntimeError(
+                "native ResidentCalibratedStack.accumulate_full_warp_coverage_frame is not available"
+            )
+        self._impl.accumulate_full_warp_coverage_frame()
+
+    def warp_coverage_map(self) -> np.ndarray:
+        if not hasattr(self._impl, "warp_coverage_map"):
+            raise RuntimeError("native ResidentCalibratedStack.warp_coverage_map is not available")
+        return np.asarray(self._impl.warp_coverage_map(), dtype=np.float32)
 
     def upload_calibrated_frame(self, index: int, frame: Any) -> None:
         self._impl.upload_calibrated_frame(int(index), _as_f32_c(frame))

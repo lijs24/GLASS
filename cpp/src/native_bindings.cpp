@@ -84,6 +84,8 @@ void glass_warp_matrix_lanczos3_f32_launch(
     int height,
     float fill,
     float clamping_threshold);
+void glass_coverage_accumulate_f32_launch(const float* coverage, float* accumulator, std::size_t n);
+void glass_coverage_accumulate_full_f32_launch(float* accumulator, std::size_t n);
 void glass_matrix_alignment_metrics_f32_launch(
     const float* reference,
     const float* moving,
@@ -936,6 +938,7 @@ class ResidentCalibratedStack {
     cudaFree(d_bias_);
     cudaFree(d_dark_);
     cudaFree(d_flat_);
+    cudaFree(d_warp_coverage_);
   }
 
   std::size_t frame_count() const { return frame_count_; }
@@ -959,7 +962,43 @@ class ResidentCalibratedStack {
     if (has_flat_) {
       total += frame_bytes;
     }
+    if (d_warp_coverage_ != nullptr) {
+      total += frame_bytes;
+    }
     return total;
+  }
+
+  std::size_t warp_coverage_frame_count() const { return warp_coverage_frame_count_; }
+
+  void reset_warp_coverage() {
+    allocate_warp_coverage_if_needed();
+    check_cuda(
+        cudaMemset(d_warp_coverage_, 0, pixels_per_frame_ * sizeof(float)),
+        "cudaMemset(resident warp coverage)");
+    warp_coverage_frame_count_ = 0;
+  }
+
+  void accumulate_full_warp_coverage_frame() {
+    allocate_warp_coverage_if_needed();
+    glass_coverage_accumulate_full_f32_launch(d_warp_coverage_, pixels_per_frame_);
+    check_cuda(cudaGetLastError(), "ResidentCalibratedStack.accumulate_full_warp_coverage_frame kernel launch");
+    check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.accumulate_full_warp_coverage_frame synchronize");
+    ++warp_coverage_frame_count_;
+  }
+
+  py::array_t<float> warp_coverage_map() const {
+    py::array_t<float> result(
+        {static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    const py::buffer_info info = result.request();
+    auto* output = static_cast<float*>(info.ptr);
+    if (d_warp_coverage_ == nullptr) {
+      std::fill(output, output + pixels_per_frame_, 0.0f);
+      return result;
+    }
+    check_cuda(
+        cudaMemcpy(output, d_warp_coverage_, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
+        "cudaMemcpy(resident warp coverage map)");
+    return result;
   }
 
   void set_calibration_masters(py::object bias_obj, py::object dark_obj, py::object flat_obj) {
@@ -1095,6 +1134,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident translated frame)");
+      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_translation_frame");
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -1126,6 +1166,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident bilinear translated frame)");
+      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_translation_bilinear_frame");
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -1162,6 +1203,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident matrix warped frame)");
+      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_matrix_bilinear_frame");
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -1205,6 +1247,7 @@ class ResidentCalibratedStack {
       check_cuda(
           cudaMemcpy(d_stack_ + index * pixels_per_frame_, d_output, frame_bytes, cudaMemcpyDeviceToDevice),
           "cudaMemcpy(resident matrix Lanczos3 warped frame)");
+      accumulate_warp_coverage_device(d_coverage, "ResidentCalibratedStack.apply_matrix_lanczos3_frame");
     } catch (...) {
       cudaFree(d_output);
       cudaFree(d_coverage);
@@ -3242,17 +3285,42 @@ class ResidentCalibratedStack {
     *present = true;
   }
 
+  void allocate_warp_coverage_if_needed() {
+    if (d_warp_coverage_ != nullptr) {
+      return;
+    }
+    check_cuda(
+        cudaMalloc(&d_warp_coverage_, pixels_per_frame_ * sizeof(float)),
+        "cudaMalloc(resident warp coverage accumulator)");
+    check_cuda(
+        cudaMemset(d_warp_coverage_, 0, pixels_per_frame_ * sizeof(float)),
+        "cudaMemset(resident warp coverage accumulator)");
+    warp_coverage_frame_count_ = 0;
+  }
+
+  void accumulate_warp_coverage_device(const float* d_coverage, const char* context) {
+    allocate_warp_coverage_if_needed();
+    glass_coverage_accumulate_f32_launch(d_coverage, d_warp_coverage_, pixels_per_frame_);
+    const std::string launch_operation = std::string(context) + " coverage accumulation kernel launch";
+    const std::string synchronize_operation = std::string(context) + " coverage accumulation synchronize";
+    check_cuda(cudaGetLastError(), launch_operation.c_str());
+    check_cuda(cudaDeviceSynchronize(), synchronize_operation.c_str());
+    ++warp_coverage_frame_count_;
+  }
+
   std::size_t frame_count_;
   std::size_t height_;
   std::size_t width_;
   std::size_t pixels_per_frame_;
   std::size_t loaded_count_ = 0;
+  std::size_t warp_coverage_frame_count_ = 0;
   std::vector<unsigned char> loaded_;
   float* d_stack_ = nullptr;
   float* d_light_ = nullptr;
   float* d_bias_ = nullptr;
   float* d_dark_ = nullptr;
   float* d_flat_ = nullptr;
+  float* d_warp_coverage_ = nullptr;
   float* h_pinned_light_ = nullptr;
   cudaStream_t calibrate_stream_ = nullptr;
   bool has_bias_ = false;
@@ -6715,12 +6783,16 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
       .def_property_readonly("loaded_count", &ResidentCalibratedStack::loaded_count)
       .def_property_readonly("host_pinned_bytes", &ResidentCalibratedStack::host_pinned_bytes)
       .def_property_readonly("bytes_allocated", &ResidentCalibratedStack::bytes_allocated)
+      .def_property_readonly("warp_coverage_frame_count", &ResidentCalibratedStack::warp_coverage_frame_count)
       .def(
           "set_calibration_masters",
           &ResidentCalibratedStack::set_calibration_masters,
           py::arg("bias") = py::none(),
           py::arg("dark") = py::none(),
           py::arg("flat") = py::none())
+      .def("reset_warp_coverage", &ResidentCalibratedStack::reset_warp_coverage)
+      .def("accumulate_full_warp_coverage_frame", &ResidentCalibratedStack::accumulate_full_warp_coverage_frame)
+      .def("warp_coverage_map", &ResidentCalibratedStack::warp_coverage_map)
       .def("upload_calibrated_frame", &ResidentCalibratedStack::upload_calibrated_frame)
       .def(
           "calibrate_frame",

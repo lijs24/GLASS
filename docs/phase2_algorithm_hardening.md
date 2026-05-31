@@ -398,6 +398,22 @@ integration where applicable.
   200-light benchmark because the artifact is produced on the resident fast
   path.
 
+### S2-Gate 22: Resident Geometric Warp Coverage
+
+- Add a resident CUDA geometric warp-footprint accumulator that consumes the
+  per-frame coverage output from resident translation, matrix bilinear, and
+  matrix Lanczos warp kernels.
+- Add a native method to record full-frame coverage for active frames that do
+  not need a warp, including reference frames and registration-off runs.
+- Record geometric warp coverage statistics and frame counts in
+  `resident_artifacts.json` and `integration_results.json`.
+- Use the geometric map to mark partial `WARP_EDGE` DQ pixels when the native
+  signal is available, while keeping post-rejection coverage and rejection
+  counts separate.
+- Validate with direct CUDA resident-stack tests, DQ helper tests, resident
+  CLI smoke tests, full pytest, and the 200-light benchmark because this changes
+  the resident fast path artifacts.
+
 ## Gate Rules
 
 Each gate requires:

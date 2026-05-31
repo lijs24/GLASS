@@ -3,6 +3,41 @@
 #include <cstddef>
 #include <math.h>
 
+__global__ void glass_coverage_accumulate_f32_kernel(
+    const float* coverage,
+    float* accumulator,
+    std::size_t n) {
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (i >= n) {
+    return;
+  }
+  const float value = coverage[i];
+  accumulator[i] += isfinite(value) && value > 0.5f ? 1.0f : 0.0f;
+}
+
+void glass_coverage_accumulate_f32_launch(
+    const float* coverage,
+    float* accumulator,
+    std::size_t n) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_coverage_accumulate_f32_kernel<<<blocks, threads>>>(coverage, accumulator, n);
+}
+
+__global__ void glass_coverage_accumulate_full_f32_kernel(float* accumulator, std::size_t n) {
+  const std::size_t i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (i >= n) {
+    return;
+  }
+  accumulator[i] += 1.0f;
+}
+
+void glass_coverage_accumulate_full_f32_launch(float* accumulator, std::size_t n) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((n + threads - 1) / threads);
+  glass_coverage_accumulate_full_f32_kernel<<<blocks, threads>>>(accumulator, n);
+}
+
 __global__ void glass_warp_translation_f32_kernel(
     const float* input,
     float* output,

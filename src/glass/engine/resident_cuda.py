@@ -570,6 +570,8 @@ def _resident_dq_map(
     coverage_map: np.ndarray | None,
     low_rejection_map: np.ndarray | None,
     high_rejection_map: np.ndarray | None,
+    geometric_warp_coverage_map: np.ndarray | None = None,
+    active_frame_count: int = 0,
 ) -> tuple[np.ndarray, dict[str, int]]:
     dq = np.zeros(np.asarray(master).shape, dtype=np.uint32)
     master_values = np.asarray(master, dtype=np.float32)
@@ -580,6 +582,19 @@ def _resident_dq_map(
         coverage_invalid = (~np.isfinite(coverage)) | (coverage <= 0.5)
         invalid |= coverage_invalid
         dq[coverage_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
+    if geometric_warp_coverage_map is not None:
+        geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
+        geometric_invalid = (~np.isfinite(geometric)) | (geometric <= 0.5)
+        invalid |= geometric_invalid
+        dq[geometric_invalid] |= np.uint32(int(DQFlag.WARP_EDGE))
+        expected_count = int(active_frame_count)
+        if expected_count > 0:
+            geometric_partial = (
+                np.isfinite(geometric)
+                & (geometric > 0.5)
+                & (geometric < float(expected_count) - 0.5)
+            )
+            dq[geometric_partial] |= np.uint32(int(DQFlag.WARP_EDGE))
     dq[invalid] |= np.uint32(int(DQFlag.NO_DATA))
     if low_rejection_map is not None:
         low = np.asarray(low_rejection_map, dtype=np.float32)
@@ -614,14 +629,42 @@ def _resident_dq_coverage_provenance(
     low_rejection_map: np.ndarray | None,
     high_rejection_map: np.ndarray | None,
     active_frame_count: int,
+    geometric_warp_coverage_map: np.ndarray | None = None,
+    geometric_warp_coverage_frame_count: int | None = None,
 ) -> dict[str, Any]:
     active_count = max(0, int(active_frame_count))
     if coverage_map is None:
-        return {
+        provenance = {
             "available": False,
             "active_frame_count": active_count,
             "reason": "resident integration did not emit a coverage map",
         }
+        if geometric_warp_coverage_map is not None:
+            geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
+            geometric_count = (
+                active_count
+                if geometric_warp_coverage_frame_count is None
+                else max(0, int(geometric_warp_coverage_frame_count))
+            )
+            finite_geometric = np.isfinite(geometric)
+            provenance.update(
+                {
+                    "geometric_warp_coverage": _resident_coverage_array_stats(geometric),
+                    "geometric_warp_coverage_frame_count": geometric_count,
+                    "geometric_zero_pixels": int(np.count_nonzero(finite_geometric & (geometric <= 0.5))),
+                    "geometric_partial_pixels": int(
+                        np.count_nonzero(
+                            finite_geometric
+                            & (geometric > 0.5)
+                            & (geometric < float(geometric_count) - 0.5)
+                        )
+                        if geometric_count > 0
+                        else 0
+                    ),
+                    "partial_edge_inference": "available_from_geometric_warp_coverage",
+                }
+            )
+        return provenance
 
     post_rejection = np.asarray(coverage_map, dtype=np.float32)
     finite_pre_rejection = post_rejection.copy()
@@ -632,6 +675,16 @@ def _resident_dq_coverage_provenance(
     if high_rejection_map is not None:
         finite_pre_rejection += np.nan_to_num(np.asarray(high_rejection_map, dtype=np.float32), nan=0.0)
         source_terms.append("high_rejection")
+    geometric = None
+    geometric_count = 0
+    if geometric_warp_coverage_map is not None:
+        geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
+        geometric_count = (
+            active_count
+            if geometric_warp_coverage_frame_count is None
+            else max(0, int(geometric_warp_coverage_frame_count))
+        )
+        source_terms.append("geometric_warp_coverage")
 
     finite_pre = np.isfinite(finite_pre_rejection)
     finite_post = np.isfinite(post_rejection)
@@ -647,7 +700,7 @@ def _resident_dq_coverage_provenance(
     rejected_samples = finite_pre_rejection - post_rejection
     np.maximum(rejected_samples, 0.0, out=rejected_samples)
 
-    return {
+    result: dict[str, Any] = {
         "available": True,
         "active_frame_count": active_count,
         "source_terms": source_terms,
@@ -665,6 +718,38 @@ def _resident_dq_coverage_provenance(
             "a pure geometric warp-footprint map."
         ),
     }
+    if geometric is not None:
+        finite_geometric = np.isfinite(geometric)
+        zero_geometric = finite_geometric & (geometric <= 0.5)
+        partial_geometric = (
+            finite_geometric
+            & (geometric > 0.5)
+            & (geometric < float(geometric_count) - 0.5)
+            if geometric_count > 0
+            else np.zeros_like(finite_geometric, dtype=bool)
+        )
+        full_geometric = (
+            finite_geometric & (geometric >= float(geometric_count) - 0.5)
+            if geometric_count > 0
+            else np.zeros_like(finite_geometric, dtype=bool)
+        )
+        result.update(
+            {
+                "geometric_warp_coverage": _resident_coverage_array_stats(geometric),
+                "geometric_warp_coverage_frame_count": geometric_count,
+                "geometric_frame_count_matches_active": geometric_count == active_count,
+                "geometric_zero_pixels": int(np.count_nonzero(zero_geometric)),
+                "geometric_partial_pixels": int(np.count_nonzero(partial_geometric)),
+                "geometric_full_pixels": int(np.count_nonzero(full_geometric)),
+                "partial_edge_inference": "available_from_geometric_warp_coverage",
+                "note": (
+                    "geometric_warp_coverage is accumulated by the resident CUDA warp path before "
+                    "sigma rejection. finite_pre_rejection_coverage remains coverage + low/high "
+                    "rejection counts for rejection accounting."
+                ),
+            }
+        )
+    return result
 
 
 def _resident_output_map_selection(policy: str) -> dict[str, bool]:
@@ -1499,6 +1584,18 @@ def run_resident_calibration_integration(
             allocate_start = perf_counter()
             stack = cuda_module.ResidentCalibratedStack(len(light_frames), height, width)
             allocate_elapsed = perf_counter() - allocate_start
+            coverage_native_stack = getattr(stack, "_impl", stack)
+            resident_warp_coverage_supported = all(
+                hasattr(coverage_native_stack, name)
+                for name in (
+                    "reset_warp_coverage",
+                    "accumulate_full_warp_coverage_frame",
+                    "warp_coverage_map",
+                )
+            )
+            warped_frame_indices: set[int] = set()
+            if resident_warp_coverage_supported:
+                stack.reset_warp_coverage()
 
             registration_start = perf_counter()
             selected_reference_frame_id = reference_frame_id or external_reference_frame_id
@@ -1641,6 +1738,7 @@ def run_resident_calibration_integration(
                                 dx = float(preview_dx * preview_scale)
                                 dy = float(preview_dy * preview_scale)
                                 stack.apply_translation_frame(index, int(round(dx)), int(round(dy)), np.nan)
+                                warped_frame_indices.add(index)
                             else:
                                 status = "reference"
                         except Exception as exc:
@@ -1740,6 +1838,7 @@ def run_resident_calibration_integration(
                             dy = float(refined["dy"])
                             score = float(refined["score"])
                             stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
+                            warped_frame_indices.add(index)
                             warnings.extend(
                                 [
                                     f"coarse_dx={int(coarse['dx'])}",
@@ -1894,6 +1993,7 @@ def run_resident_calibration_integration(
                                 warnings.append("resident star-catalog registration found no mutual inliers")
                             else:
                                 stack.apply_translation_bilinear_frame(index, dx, dy, np.nan)
+                                warped_frame_indices.add(index)
                             warnings.extend(
                                 [
                                     f"star_threshold_mode={threshold_mode}",
@@ -2459,6 +2559,7 @@ def run_resident_calibration_integration(
                                         resident_warp_interpolation,
                                         resident_warp_clamping_threshold,
                                     )
+                                    warped_frame_indices.add(index)
                                     warnings.append(f"resident_registration_application={warp_model}")
                                 warnings.extend(
                                     [
@@ -2936,6 +3037,7 @@ def run_resident_calibration_integration(
                                         resident_warp_interpolation,
                                         resident_warp_clamping_threshold,
                                     )
+                                    warped_frame_indices.add(index)
                                     _add_elapsed(
                                         registration_component_s,
                                         "triangle_warp",
@@ -3046,6 +3148,7 @@ def run_resident_calibration_integration(
                                     resident_warp_interpolation,
                                     resident_warp_clamping_threshold,
                                 )
+                                warped_frame_indices.add(index)
                                 warnings.append(f"external_registration_application={warp_model}")
                             if external_registration_path is not None:
                                 warnings.append(f"external_registration_results={external_registration_path}")
@@ -3265,6 +3368,15 @@ def run_resident_calibration_integration(
                 }
             )
 
+            geometric_warp_coverage_map = None
+            geometric_warp_coverage_frame_count = 0
+            if resident_warp_coverage_supported:
+                for index, weight in enumerate(frame_weight_values):
+                    if weight > 0.0 and index not in warped_frame_indices:
+                        stack.accumulate_full_warp_coverage_frame()
+                geometric_warp_coverage_frame_count = int(stack.warp_coverage_frame_count)
+                geometric_warp_coverage_map = stack.warp_coverage_map()
+
             integrate_start = perf_counter()
             coverage_map = None
             low_rejection_map = None
@@ -3317,12 +3429,16 @@ def run_resident_calibration_integration(
                     coverage_map,
                     low_rejection_map,
                     high_rejection_map,
+                    geometric_warp_coverage_map=geometric_warp_coverage_map,
+                    active_frame_count=active_frame_count,
                 )
             dq_coverage_provenance = _resident_dq_coverage_provenance(
                 coverage_map,
                 low_rejection_map,
                 high_rejection_map,
                 active_frame_count,
+                geometric_warp_coverage_map=geometric_warp_coverage_map,
+                geometric_warp_coverage_frame_count=geometric_warp_coverage_frame_count,
             )
             count_dtype = _count_map_dtype(len(light_frames))
             available_output_maps = ["master", "weight", "dq"]
@@ -3715,6 +3831,22 @@ def run_resident_calibration_integration(
                         else str(external_registration_path),
                         "failed_frame_count": int(np.count_nonzero(weights_array == 0.0)),
                         "excluded_frame_tokens": sorted(excluded_tokens),
+                        "warp_coverage": {
+                            "available": bool(geometric_warp_coverage_map is not None),
+                            "supported": bool(resident_warp_coverage_supported),
+                            "native_source": "ResidentCalibratedStack warp coverage accumulator",
+                            "frame_count": geometric_warp_coverage_frame_count,
+                            "warped_frame_count": len(warped_frame_indices),
+                            "full_frame_count": max(
+                                0,
+                                geometric_warp_coverage_frame_count - len(warped_frame_indices),
+                            ),
+                            "active_frame_count": active_frame_count,
+                            "frame_count_matches_active": geometric_warp_coverage_frame_count == active_frame_count,
+                            "statistics": None
+                            if geometric_warp_coverage_map is None
+                            else _resident_coverage_array_stats(geometric_warp_coverage_map),
+                        },
                     },
                     "resident_local_normalization": {
                         "enabled": local_norm_enabled,
@@ -3779,6 +3911,11 @@ def run_resident_calibration_integration(
                     "dq_map_path": None if dq_path is None else str(dq_path),
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
+                    "geometric_warp_coverage": {
+                        "available": bool(geometric_warp_coverage_map is not None),
+                        "frame_count": geometric_warp_coverage_frame_count,
+                        "frame_count_matches_active": geometric_warp_coverage_frame_count == active_frame_count,
+                    },
                     "output_map_policy": {
                         "mode": resident_output_maps,
                         "available": available_output_maps,
@@ -3797,7 +3934,16 @@ def run_resident_calibration_integration(
                     "output_diagnostics": output_diagnostics,
                 }
             )
-            del stack, master, weight_map, coverage_map, low_rejection_map, high_rejection_map, dq_map
+            del (
+                stack,
+                master,
+                weight_map,
+                coverage_map,
+                low_rejection_map,
+                high_rejection_map,
+                dq_map,
+                geometric_warp_coverage_map,
+            )
             gc.collect()
 
         if not outputs:
