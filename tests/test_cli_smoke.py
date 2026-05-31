@@ -349,6 +349,15 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     report = tmp_path / "resident_report.html"
     assert main(["report", "--run", str(run), "--out", str(report)]) == 0
     html = report.read_text(encoding="utf-8")
+    assert "Report navigation" in html
+    assert '<nav class="report-toc"' in html
+    assert 'class="section-anchor"' in html
+    assert 'href="#benchmark-comparison"' in html
+    assert 'id="benchmark-comparison"' in html
+    assert 'href="#resident-output-maps"' in html
+    assert 'id="resident-output-maps"' in html
+    assert 'href="#acceptance-check-failures"' in html
+    assert 'id="acceptance-check-failures"' in html
     assert "Benchmark comparison" in html
     assert "Acceptance check failures" in html
     assert "Only failed acceptance-audit checks" in html

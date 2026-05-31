@@ -616,6 +616,17 @@ integration where applicable.
   full pytest, and a report regeneration on the latest 200-light resident
   audit-map run.
 
+### S2-Gate 37: Report Navigation Anchors
+
+- Add a static table of contents to the main HTML report so large benchmark
+  reports can jump directly to timing, comparison, resident map, and failure
+  sections.
+- Give every major report section a stable `id` and include a lightweight
+  per-section anchor link for shareable diagnostics.
+- Keep this as static HTML with no JavaScript and no artifact schema changes.
+- Validate with CLI report tests, ruff, full pytest, and a report regeneration
+  on the latest 200-light resident audit-map run.
+
 ## Gate Rules
 
 Each gate requires:

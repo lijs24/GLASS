@@ -14,6 +14,38 @@ _RESIDENT_OUTPUT_MAP_FIELDS = [
     ("dq", "dq_map_path"),
 ]
 
+_REPORT_SECTIONS = [
+    ("project-summary", "Project summary"),
+    ("benchmark-comparison", "Benchmark comparison"),
+    ("acceptance-check-failures", "Acceptance check failures"),
+    ("stage-coverage-summary", "Stage coverage summary"),
+    ("input-frame-table", "Input frame table"),
+    ("frame-type-distribution", "Frame type distribution"),
+    ("calibration-group-matching", "Calibration group matching"),
+    ("master-frame-statistics", "Master frame statistics"),
+    ("xisf-input-cache", "XISF input cache"),
+    ("frame-quality-table", "Frame quality table"),
+    ("registration-table", "Registration table"),
+    ("local-normalization-summary", "Local normalization summary"),
+    ("integration-summary", "Integration summary"),
+    ("output-diagnostics", "Output diagnostics"),
+    ("integration-output-maps", "Integration output maps"),
+    ("output-map-policy", "Output map policy"),
+    ("resident-output-maps", "Resident output maps"),
+    ("dq-mask-summary", "DQ/mask summary"),
+    ("stackengine-dq-provenance", "StackEngine DQ provenance"),
+    ("dq-provenance-contract", "DQ provenance contract"),
+    ("geometric-warp-coverage", "Geometric warp coverage"),
+    ("resident-cuda-summary", "Resident CUDA summary"),
+    ("output-artifacts", "Output artifacts"),
+    ("memory-usage-summary", "Memory usage summary"),
+    ("runtime-summary", "Runtime summary"),
+    ("warnings-errors", "Warnings/errors"),
+    ("pixinsight-comparison-if-available", "PixInsight comparison if available"),
+    ("known-differences-from-wbpp", "Known differences from WBPP"),
+    ("clean-room-compliance-note", "Clean-room compliance note"),
+]
+
 
 def _resolve_report_path(path: Any, run_root: str | Path | None) -> Path | None:
     if not path:
@@ -51,6 +83,20 @@ def _table(rows: list[dict[str, Any]]) -> str:
     for row in rows:
         body.append("<tr>" + "".join(f"<td>{escape(str(row.get(k, '')))}</td>" for k in keys) + "</tr>")
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
+
+
+def _report_toc() -> str:
+    links = "".join(
+        f'<li><a href="#{escape(section_id)}">{escape(title)}</a></li>' for section_id, title in _REPORT_SECTIONS
+    )
+    return f'<nav class="report-toc" aria-label="Report sections"><h2>Report navigation</h2><ol>{links}</ol></nav>'
+
+
+def _h2(section_id: str, title: str) -> str:
+    return (
+        f'<h2 id="{escape(section_id)}">{escape(title)} '
+        f'<a class="section-anchor" href="#{escape(section_id)}" aria-label="Link to {escape(title)}">#</a></h2>'
+    )
 
 
 def _benchmark_comparison_rows(
@@ -696,99 +742,104 @@ def write_html_report(
     th, td {{ border: 1px solid #d0d7de; padding: 0.35rem 0.5rem; text-align: left; }}
     th {{ background: #f6f8fa; }}
     code {{ background: #f6f8fa; padding: 0.1rem 0.25rem; }}
+    .report-toc {{ border: 1px solid #d0d7de; padding: 0.75rem 1rem; margin: 1rem 0 1.5rem; }}
+    .report-toc h2 {{ margin-top: 0; }}
+    .report-toc ol {{ columns: 2; padding-left: 1.25rem; }}
+    .section-anchor {{ color: #57606a; text-decoration: none; font-size: 0.8em; }}
   </style>
 </head>
 <body>
   <h1>{escape(title)}</h1>
-  <h2>Project summary</h2>
+  {_report_toc()}
+  {_h2("project-summary", "Project summary")}
   <p>Clean-room GLASS report. Input directories are not modified.</p>
-  <h2>Benchmark comparison</h2>
+  {_h2("benchmark-comparison", "Benchmark comparison")}
   <p>When compare and acceptance-audit JSON artifacts are present, this table
   brings speed, image-difference, frame-count, and pass/fail evidence into the
   main report.</p>
   {_table(benchmark_comparison_rows)}
-  <h2>Acceptance check failures</h2>
+  {_h2("acceptance-check-failures", "Acceptance check failures")}
   <p>Only failed acceptance-audit checks are listed here. A green run reports no
   rows while retaining the authoritative check list in the audit JSON.</p>
   {_table(acceptance_failure_rows)}
-  <h2>Stage coverage summary</h2>
+  {_h2("stage-coverage-summary", "Stage coverage summary")}
   {_table(stage_coverage_rows)}
-  <h2>Input frame table</h2>
+  {_h2("input-frame-table", "Input frame table")}
   {_table(frames)}
-  <h2>Frame type distribution</h2>
+  {_h2("frame-type-distribution", "Frame type distribution")}
   <pre>{escape(str((manifest or {}).get("summary", {})))}</pre>
-  <h2>Calibration group matching</h2>
+  {_h2("calibration-group-matching", "Calibration group matching")}
   {_table(light_plans)}
-  <h2>Master frame statistics</h2>
+  {_h2("master-frame-statistics", "Master frame statistics")}
   <pre>{escape(str(calibration_policy))}</pre>
   {_table(master_rows)}
-  <h2>XISF input cache</h2>
+  {_h2("xisf-input-cache", "XISF input cache")}
   <p>XISF sources are streamed into run-local FITS cache files before calibration.</p>
   {_table(input_cache_rows)}
-  <h2>Frame quality table</h2>
+  {_h2("frame-quality-table", "Frame quality table")}
   <p>Detector: <code>{escape(str((quality or {}).get("star_detector", "pending")))}</code>.
   Weight source: <code>{escape(str((quality or {}).get("weight_source", "pending")))}</code>.</p>
   {_table(frame_quality)}
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
-  <h2>Registration table</h2>
+  {_h2("registration-table", "Registration table")}
   {_table(registration_results)}
-  <h2>Local normalization summary</h2>
+  {_h2("local-normalization-summary", "Local normalization summary")}
   <p>Enabled: <code>{escape(str((local_norm or {}).get("enabled", "pending")))}</code>.
   Reference frame: <code>{escape(str((local_norm or {}).get("reference_frame_id", "pending")))}</code>.</p>
   {_table(local_norm_results)}
-  <h2>Integration summary</h2>
+  {_h2("integration-summary", "Integration summary")}
   <p>Combine: <code>{escape(str((integration or {}).get("combine", "pending")))}</code>.
   Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
   Rejection: <code>{escape(str((integration or {}).get("rejection", "pending")))}</code>.</p>
   {_table(integration_summary_rows)}
-  <h2>Output diagnostics</h2>
+  {_h2("output-diagnostics", "Output diagnostics")}
   <p>Output diagnostics are flattened from integration and resident artifacts to
   avoid dumping nested JSON into the report.</p>
   {_table(output_diagnostic_rows)}
-  <h2>Integration output maps</h2>
+  {_h2("integration-output-maps", "Integration output maps")}
   {_table(integration_map_rows)}
-  <h2>Output map policy</h2>
+  {_h2("output-map-policy", "Output map policy")}
   {_table(output_policy_rows)}
-  <h2>Resident output maps</h2>
+  {_h2("resident-output-maps", "Resident output maps")}
   <p>Resident artifact records expose map paths, write policy status, storage
   dtype, estimated payload size, and per-map write timing for audit review.</p>
   {_table(resident_output_map_rows)}
-  <h2>DQ/mask summary</h2>
+  {_h2("dq-mask-summary", "DQ/mask summary")}
   {_table(dq_rows)}
-  <h2>StackEngine DQ provenance</h2>
+  {_h2("stackengine-dq-provenance", "StackEngine DQ provenance")}
   <p>StackEngine paths record source DQ flag counts, non-finite samples,
   zero-coverage pixels, rejection-touched pixels, and output DQ summaries.</p>
   {_table(stack_engine_dq_rows)}
-  <h2>DQ provenance contract</h2>
+  {_h2("dq-provenance-contract", "DQ provenance contract")}
   <p>This normalized summary bridges StackEngine and resident CUDA provenance
   schemas for report and audit consumers.</p>
   {_table(dq_provenance_contract_rows)}
-  <h2>Geometric warp coverage</h2>
+  {_h2("geometric-warp-coverage", "Geometric warp coverage")}
   <p>Resident CUDA runs can accumulate a pre-rejection geometric footprint from
   warp kernels. Partial geometric coverage is reported separately from low/high
   rejection counts.</p>
   {_table(geometric_warp_coverage_rows)}
-  <h2>Resident CUDA summary</h2>
+  {_h2("resident-cuda-summary", "Resident CUDA summary")}
   <p>Backend: <code>{escape(str((resident or {}).get("backend", "not used")))}</code>.
   Device: <code>{escape(str(((resident or {}).get("device") or {}).get("name", "pending")))}</code>.</p>
   {_table(resident_summary)}
-  <h2>Output artifacts</h2>
+  {_h2("output-artifacts", "Output artifacts")}
   <p>See adjacent JSON files in the run directory.</p>
-  <h2>Memory usage summary</h2>
+  {_h2("memory-usage-summary", "Memory usage summary")}
   <p>Heavy stages use explicit memory modes. Tile/slab streaming is the bounded
   fallback; resident mode is allowed only when the planned hot set fits within
   the configured device memory budget.</p>
-  <h2>Runtime summary</h2>
+  {_h2("runtime-summary", "Runtime summary")}
   <p>Total elapsed seconds: <code>{escape(str((timing or {}).get("total_elapsed_s", "pending")))}</code>.</p>
   {_table(timing_overview)}
   {_table(timing_rows)}
-  <h2>Warnings/errors</h2>
+  {_h2("warnings-errors", "Warnings/errors")}
   {_table(warning_rows)}
-  <h2>PixInsight comparison if available</h2>
+  {_h2("pixinsight-comparison-if-available", "PixInsight comparison if available")}
   <p>No comparison artifact attached.</p>
-  <h2>Known differences from WBPP</h2>
+  {_h2("known-differences-from-wbpp", "Known differences from WBPP")}
   <p>This is an independent implementation and does not claim numerical equivalence.</p>
-  <h2>Clean-room compliance note</h2>
+  {_h2("clean-room-compliance-note", "Clean-room compliance note")}
   <p>No official WBPP/PJSR source code is used as implementation input.</p>
 </body>
 </html>
