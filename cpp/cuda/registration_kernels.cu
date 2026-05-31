@@ -1271,24 +1271,65 @@ __global__ void catalog_similarity_best_kernel(
     int* best_inliers,
     int* best_index,
     int candidate_count) {
-  if (blockIdx.x != 0 || threadIdx.x != 0) {
+  if (blockIdx.x != 0) {
     return;
   }
+
+  extern __shared__ unsigned char best_scratch[];
+  int* shared_scores = reinterpret_cast<int*>(best_scratch);
+  float* shared_rms = reinterpret_cast<float*>(shared_scores + blockDim.x);
+  int* shared_indices = reinterpret_cast<int*>(shared_rms + blockDim.x);
+
   int selected_index = -1;
   int selected_inliers = -1;
   float selected_rms = 3.402823466e+38F;
-  for (int i = 0; i < candidate_count; ++i) {
+  for (int i = static_cast<int>(threadIdx.x); i < candidate_count; i += static_cast<int>(blockDim.x)) {
     const int score = candidate_scores[i];
     const float rms = candidate_rms[i];
     if (score < 0 || !isfinite(rms)) {
       continue;
     }
-    if (score > selected_inliers || (score == selected_inliers && rms < selected_rms)) {
+    if (score > selected_inliers ||
+        (score == selected_inliers &&
+         (rms < selected_rms || (rms == selected_rms && (selected_index < 0 || i < selected_index))))) {
       selected_index = i;
       selected_inliers = score;
       selected_rms = rms;
     }
   }
+
+  const int lane = static_cast<int>(threadIdx.x);
+  shared_scores[lane] = selected_inliers;
+  shared_rms[lane] = selected_rms;
+  shared_indices[lane] = selected_index;
+  __syncthreads();
+
+  for (int stride = static_cast<int>(blockDim.x) / 2; stride > 0; stride /= 2) {
+    if (lane < stride) {
+      const int other_score = shared_scores[lane + stride];
+      const float other_rms = shared_rms[lane + stride];
+      const int other_index = shared_indices[lane + stride];
+      const int current_score = shared_scores[lane];
+      const float current_rms = shared_rms[lane];
+      const int current_index = shared_indices[lane];
+      if (other_index >= 0 &&
+          (other_score > current_score ||
+           (other_score == current_score &&
+            (other_rms < current_rms || (other_rms == current_rms && (current_index < 0 || other_index < current_index)))))) {
+        shared_scores[lane] = other_score;
+        shared_rms[lane] = other_rms;
+        shared_indices[lane] = other_index;
+      }
+    }
+    __syncthreads();
+  }
+
+  if (lane != 0) {
+    return;
+  }
+  selected_inliers = shared_scores[0];
+  selected_rms = shared_rms[0];
+  selected_index = shared_indices[0];
 
   matrix[0] = 1.0f;
   matrix[1] = 0.0f;
@@ -1712,7 +1753,9 @@ void glass_estimate_similarity_from_triangle_descriptors_f32_launch(
       candidate_count,
       tolerance_px,
       descriptor_radius);
-  catalog_similarity_best_kernel<<<1, 1>>>(
+  constexpr int best_threads = 256;
+  constexpr std::size_t best_shared_bytes = best_threads * (2 * sizeof(int) + sizeof(float));
+  catalog_similarity_best_kernel<<<1, best_threads, best_shared_bytes>>>(
       candidate_params,
       candidate_scores,
       candidate_rms,
@@ -1977,7 +2020,9 @@ void glass_estimate_similarity_from_catalogs_f32_launch(
       min_scale,
       max_scale,
       max_abs_rotation_rad);
-  catalog_similarity_best_kernel<<<1, 1>>>(
+  constexpr int best_threads = 256;
+  constexpr std::size_t best_shared_bytes = best_threads * (2 * sizeof(int) + sizeof(float));
+  catalog_similarity_best_kernel<<<1, best_threads, best_shared_bytes>>>(
       candidate_params,
       candidate_scores,
       candidate_rms,

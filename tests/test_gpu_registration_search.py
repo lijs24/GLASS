@@ -240,6 +240,8 @@ def test_gpu_triangle_descriptor_similarity_batch_matches_single_fits():
         assert batch_result["moving_device_bytes"] > 0
         assert batch_result["output_device_reuse"] is True
         assert batch_result["output_device_bytes"] > 0
+        assert batch_result["best_reduction_mode"] == "single_block_parallel_score_rms_index"
+        assert single_result["best_reduction_mode"] == "single_block_parallel_score_rms_index"
         assert batch_result["batch_timing_model"] == "per_frame_reused_buffers_sync_timed"
         assert batch_result["batch_host_prepare_s"] >= 0.0
         assert batch_result["batch_reference_alloc_s"] >= 0.0

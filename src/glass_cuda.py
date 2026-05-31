@@ -1688,6 +1688,8 @@ def _normalize_triangle_similarity_result(result: dict[str, Any]) -> dict[str, A
         "status": str(result["status"]),
         "model": str(result.get("model", "triangle_descriptor_similarity_cuda")),
     }
+    if "best_reduction_mode" in result:
+        normalized["best_reduction_mode"] = str(result["best_reduction_mode"])
     if "batch_index" in result:
         normalized["batch_index"] = int(result["batch_index"])
     if "batch_count" in result:

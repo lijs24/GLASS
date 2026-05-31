@@ -1097,6 +1097,9 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_descriptor_fit_moving_device_bytes"] > 0
     assert resident_registration["triangle_descriptor_fit_output_device_reuse"] is True
     assert resident_registration["triangle_descriptor_fit_output_device_bytes"] > 0
+    assert resident_registration["triangle_descriptor_fit_best_reduction_mode"] == (
+        "single_block_parallel_score_rms_index"
+    )
     assert resident_registration["triangle_descriptor_fit_batch_timing_model"] == (
         "per_frame_reused_buffers_sync_timed"
     )
@@ -1171,6 +1174,10 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_catalog_topk_mode=deterministic_parallel_per_cell" in warning for warning in moving["warnings"])
     assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
     assert any("triangle_descriptor_fit_batch=true" in warning for warning in moving["warnings"])
+    assert any(
+        "triangle_descriptor_fit_best_reduction_mode=single_block_parallel_score_rms_index" in warning
+        for warning in moving["warnings"]
+    )
     assert any(
         "triangle_descriptor_fit_batch_timing_model=per_frame_reused_buffers_sync_timed" in warning
         for warning in moving["warnings"]

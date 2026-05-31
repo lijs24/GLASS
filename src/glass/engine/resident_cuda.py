@@ -2950,6 +2950,7 @@ def run_resident_calibration_integration(
                 triangle_descriptor_fit_moving_device_bytes = 0
                 triangle_descriptor_fit_output_device_reuse = False
                 triangle_descriptor_fit_output_device_bytes = 0
+                triangle_descriptor_fit_best_reduction_mode = "off"
                 triangle_descriptor_fit_batch_timing_model = "off"
                 triangle_descriptor_fit_native_host_prepare_s = 0.0
                 triangle_descriptor_fit_native_reference_alloc_s = 0.0
@@ -3150,6 +3151,7 @@ def run_resident_calibration_integration(
                     nonlocal triangle_descriptor_fit_moving_device_reuse
                     nonlocal triangle_descriptor_fit_output_device_bytes
                     nonlocal triangle_descriptor_fit_output_device_reuse
+                    nonlocal triangle_descriptor_fit_best_reduction_mode
                     nonlocal triangle_descriptor_fit_batch_timing_model
                     nonlocal triangle_descriptor_fit_native_frame_total_s
                     nonlocal triangle_descriptor_fit_native_host_prepare_s
@@ -3216,6 +3218,9 @@ def run_resident_calibration_integration(
                             else:
                                 batch_fits = []
                             if batch_fits:
+                                triangle_descriptor_fit_best_reduction_mode = str(
+                                    batch_fits[0].get("best_reduction_mode", "unavailable")
+                                )
                                 triangle_descriptor_fit_reference_device_reuse = bool(
                                     batch_fits[0].get("reference_device_reuse", False)
                                 )
@@ -3594,6 +3599,8 @@ def run_resident_calibration_integration(
                                         f"triangle_max_descriptors={max_descriptors}",
                                         f"triangle_descriptor_radius={descriptor_radius:.6g}",
                                         f"triangle_candidate_count={int(selected_fit.get('candidate_count', 0))}",
+                                        "triangle_descriptor_fit_best_reduction_mode="
+                                        + str(selected_fit.get("best_reduction_mode", "unavailable")),
                                         "triangle_descriptor_fit_batch="
                                         + str(bool("batch_model" in selected_fit)).lower(),
                                         "triangle_descriptor_fit_batch_mode="
@@ -4591,6 +4598,9 @@ def run_resident_calibration_integration(
                             and triangle_descriptor_fit_batch_enabled
                         ),
                         "triangle_descriptor_fit_batch_mode": triangle_descriptor_fit_batch_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_descriptor_fit_best_reduction_mode": triangle_descriptor_fit_best_reduction_mode
                         if resident_registration == "similarity_cuda_triangle"
                         else "off",
                         "triangle_descriptor_fit_batch_timing_model": triangle_descriptor_fit_batch_timing_model

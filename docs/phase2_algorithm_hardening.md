@@ -1059,6 +1059,19 @@ integration where applicable.
   full pytest, and a repeated 200-light resident determinism plus output-pixel
   audit.
 
+### S2-Gate 62: Parallel Descriptor Fit Best Reduction
+
+- Replace the descriptor similarity fit's single-thread best-candidate scan
+  with a deterministic single-block parallel reduction.
+- Preserve the existing selection contract exactly: higher inlier count wins,
+  lower RMS breaks ties, and the earliest candidate index breaks exact RMS ties.
+- Surface the reduction mode as `single_block_parallel_score_rms_index` in
+  native results, resident artifacts, and registration warnings.
+- Validate that native batch and single descriptor fits still match, resident
+  triangle registration still aligns synthetic shifted pairs, and repeated
+  200-light resident CUDA runs pass artifact, registration, frame-accounting,
+  and output-pixel determinism audits.
+
 ## Gate Rules
 
 Each gate requires:

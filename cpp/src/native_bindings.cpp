@@ -5835,6 +5835,7 @@ py::dict estimate_similarity_from_triangle_descriptors_f32(
   result["descriptor_radius"] = descriptor_radius;
   result["status"] = best_inliers > 0 ? "ok" : "failed";
   result["model"] = "triangle_descriptor_similarity_cuda";
+  result["best_reduction_mode"] = "single_block_parallel_score_rms_index";
   return result;
 }
 
@@ -6180,6 +6181,7 @@ py::list estimate_similarity_from_triangle_descriptors_batch_f32(
     result["descriptor_radius"] = descriptor_radius;
     result["status"] = best_inliers > 0 ? "ok" : "failed";
     result["model"] = "triangle_descriptor_similarity_cuda";
+    result["best_reduction_mode"] = "single_block_parallel_score_rms_index";
     result["batch_index"] = static_cast<int>(batch_index);
     result["batch_count"] = static_cast<int>(batch_count);
     result["batch_model"] = "triangle_descriptor_similarity_cuda_batch_shared_reference_device";
