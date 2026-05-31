@@ -80,6 +80,15 @@
       "low_rejected",
       "high_rejected"
     ],
+    "verify_dq_map_pixels": true,
+    "dq_map_verify_tile_size": 2048,
+    "dq_map_summary_tolerance_pixels": 0,
+    "dq_map_summary_match_flags": [
+      "valid",
+      "warp_edge",
+      "low_rejected",
+      "high_rejected"
+    ],
     "positive_output_dq_flags": [
       "valid",
       "warp_edge"

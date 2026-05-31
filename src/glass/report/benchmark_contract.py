@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from glass.engine.dq import dq_provenance_summary_from_resident
+from glass.report.dq_map_verify import summarize_dq_map_pixels
 from glass.report.speedup_report import _read_json_lenient
 
 
@@ -81,6 +82,13 @@ def _path_exists_maybe_relative(path_value: Any, run_root: Path) -> bool:
     return (run_root / path).exists()
 
 
+def _resolve_path_maybe_relative(path_value: Any, run_root: Path) -> Path | None:
+    if not path_value:
+        return None
+    path = Path(str(path_value))
+    return path if path.is_absolute() else run_root / path
+
+
 def _dq_record_from_payload(
     payload: dict[str, Any],
     *,
@@ -114,11 +122,86 @@ def _dq_record_from_payload(
         "dq_map_exists": _path_exists_maybe_relative(dq_map_path, run_root),
         "coverage_map_path": coverage_map_path,
         "coverage_map_exists": _path_exists_maybe_relative(coverage_map_path, run_root),
+        "dq_flag_bits": dict(payload.get("dq_flag_bits") or {}),
         "summary": summary,
     }
 
 
-def collect_dq_provenance_records(glass_run: str | Path) -> list[dict[str, Any]]:
+def _dq_contract_flags(dq_contract: dict[str, Any]) -> list[str]:
+    flags: list[str] = []
+    for key in (
+        "dq_map_summary_match_flags",
+        "required_output_dq_flags",
+        "positive_output_dq_flags",
+    ):
+        for flag in dq_contract.get(key) or []:
+            name = str(flag).lower()
+            if name not in flags:
+                flags.append(name)
+    return flags or ["valid", "no_data", "warp_edge", "low_rejected", "high_rejected"]
+
+
+def _attach_dq_map_pixel_verification(
+    records: list[dict[str, Any]],
+    *,
+    run_root: Path,
+    dq_contract: dict[str, Any],
+) -> None:
+    if not dq_contract.get("verify_dq_map_pixels"):
+        return
+    flags = _dq_contract_flags(dq_contract)
+    tile_size = int(dq_contract.get("dq_map_verify_tile_size") or 2048)
+    tolerance = int(dq_contract.get("dq_map_summary_tolerance_pixels") or 0)
+    cache: dict[str, dict[str, Any]] = {}
+    for record in records:
+        dq_path = _resolve_path_maybe_relative(record.get("dq_map_path"), run_root)
+        if dq_path is None:
+            record["dq_map_pixel_verification"] = {
+                "status": "missing_path",
+                "verified": False,
+                "error": "dq_map_path is missing",
+            }
+            continue
+        cache_key = str(dq_path)
+        try:
+            verification = cache.get(cache_key)
+            if verification is None:
+                verification = summarize_dq_map_pixels(dq_path, flags=flags, tile_size=tile_size)
+                cache[cache_key] = verification
+            output_summary = (record.get("summary") or {}).get("output_dq_summary") or {}
+            matches: dict[str, dict[str, Any]] = {}
+            for flag in flags:
+                actual = (verification.get("counts") or {}).get(flag)
+                expected = output_summary.get(flag)
+                actual_int = None if actual is None else int(actual)
+                expected_int = None if expected is None else int(expected)
+                delta = None if actual_int is None or expected_int is None else actual_int - expected_int
+                matches[flag] = {
+                    "actual": actual_int,
+                    "summary": expected_int,
+                    "delta": delta,
+                    "passed": delta is not None and abs(delta) <= tolerance,
+                }
+            record["dq_map_pixel_verification"] = {
+                "status": "verified",
+                "verified": True,
+                "summary_tolerance_pixels": tolerance,
+                "result": verification,
+                "summary_matches": matches,
+            }
+        except Exception as exc:  # pragma: no cover - exercised through audit failure path
+            record["dq_map_pixel_verification"] = {
+                "status": "error",
+                "verified": False,
+                "error": str(exc),
+            }
+
+
+def collect_dq_provenance_records(
+    glass_run: str | Path,
+    *,
+    dq_contract: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     run_root = Path(glass_run)
     records: list[dict[str, Any]] = []
 
@@ -154,6 +237,8 @@ def collect_dq_provenance_records(glass_run: str | Path) -> list[dict[str, Any]]
             if record is not None:
                 records.append(record)
 
+    if dq_contract:
+        _attach_dq_map_pixel_verification(records, run_root=run_root, dq_contract=dq_contract)
     return records
 
 
@@ -291,6 +376,37 @@ def _build_dq_provenance_contract_checks(
             )
         )
 
+    if dq_contract.get("verify_dq_map_pixels"):
+        verifications = [record.get("dq_map_pixel_verification") or {} for record in records]
+        verified = [item for item in verifications if item.get("verified")]
+        errors = [item for item in verifications if item and not item.get("verified")]
+        checks.append(
+            _check(
+                "contract_dq_map_pixel_verification",
+                bool(verified) and not errors,
+                {
+                    "verified_records": len(verified),
+                    "error_records": len(errors),
+                    "errors": [item.get("error") or item.get("status") for item in errors],
+                },
+            )
+        )
+        for flag in dq_contract.get("dq_map_summary_match_flags") or []:
+            flag_text = str(flag).lower()
+            matches = []
+            for record in records:
+                verification = record.get("dq_map_pixel_verification") or {}
+                match = (verification.get("summary_matches") or {}).get(flag_text)
+                if isinstance(match, dict):
+                    matches.append(match)
+            checks.append(
+                _check(
+                    f"contract_dq_map_summary_match:{flag_text}",
+                    bool(matches) and all(bool(match.get("passed")) for match in matches),
+                    {"matches": matches},
+                )
+            )
+
     for term in dq_contract.get("required_source_terms") or []:
         term_text = str(term)
         checks.append(
@@ -387,6 +503,7 @@ def build_benchmark_contract_checks(
     speedup_summary: dict[str, Any],
     compare_payload: dict[str, Any],
     frame_type_counts: dict[str, int],
+    dq_provenance_records: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     dataset = contract.get("dataset_requirements") or {}
@@ -517,10 +634,15 @@ def build_benchmark_contract_checks(
         )
     dq_contract = contract.get("dq_provenance") or {}
     if isinstance(dq_contract, dict) and dq_contract:
+        records = (
+            dq_provenance_records
+            if dq_provenance_records is not None
+            else collect_dq_provenance_records(glass_run, dq_contract=dq_contract)
+        )
         checks.extend(
             _build_dq_provenance_contract_checks(
                 dq_contract,
-                records=collect_dq_provenance_records(glass_run),
+                records=records,
             )
         )
     return checks

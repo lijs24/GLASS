@@ -498,6 +498,22 @@ integration where applicable.
   audit against the latest preserved 200-light resident artifacts when those
   artifacts are locally available.
 
+### S2-Gate 29: DQ FITS Map Pixel Verification
+
+- Add a tiled DQ FITS map verifier that counts bitfield flags from map pixels
+  without loading the whole image into memory.
+- Let benchmark contracts opt into pixel verification and require selected DQ
+  map counts to match artifact `output_dq_summary` values within an explicit
+  pixel tolerance.
+- Keep the verifier optional so normal acceptance audits can remain lightweight
+  and older contracts remain compatible.
+- Update the 200-light benchmark contract to verify resident `valid`,
+  `WARP_EDGE`, `LOW_REJECTED`, and `HIGH_REJECTED` DQ counts against the actual
+  resident DQ FITS map.
+- Validate with direct DQ map tests, acceptance-audit tests, ruff, full pytest,
+  and a contract audit against the latest preserved 200-light resident
+  artifacts.
+
 ## Gate Rules
 
 Each gate requires:

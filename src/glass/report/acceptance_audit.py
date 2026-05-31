@@ -129,10 +129,14 @@ def build_acceptance_audit(
         )
 
     contract_payload: dict[str, Any] | None = None
-    performance_regression: dict[str, Any] | None = None
-    dq_provenance_records = collect_dq_provenance_records(glass_run)
     if benchmark_contract is not None:
         contract_payload = load_benchmark_contract(benchmark_contract)
+    performance_regression: dict[str, Any] | None = None
+    dq_provenance_records = collect_dq_provenance_records(
+        glass_run,
+        dq_contract=(contract_payload or {}).get("dq_provenance"),
+    )
+    if benchmark_contract is not None:
         checks.extend(
             build_benchmark_contract_checks(
                 contract_payload,
@@ -140,6 +144,7 @@ def build_acceptance_audit(
                 speedup_summary=speedup,
                 compare_payload=compare_payload,
                 frame_type_counts=counts,
+                dq_provenance_records=dq_provenance_records,
             )
         )
         performance_regression = build_benchmark_performance_diagnostics(
@@ -210,13 +215,15 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         lines.extend(["", "## DQ Provenance", ""])
         for record in dq.get("records") or []:
             summary = record.get("summary") or {}
+            verification = record.get("dq_map_pixel_verification") or {}
             lines.append(
                 "- "
                 f"{record.get('source_file')}[{record.get('index')}] "
                 f"schema={summary.get('source_schema')} engine={summary.get('engine')} "
                 f"stage={summary.get('stage')} item={summary.get('item')} "
                 f"dq_map_exists={record.get('dq_map_exists')} "
-                f"legacy_normalized={record.get('normalized_from_legacy')}"
+                f"legacy_normalized={record.get('normalized_from_legacy')} "
+                f"pixel_verification={verification.get('status')}"
             )
     regression = audit.get("performance_regression")
     if regression:

@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
+
 from glass.cli import main
+from glass.engine.contracts import DQFlag
+from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.acceptance_audit import build_acceptance_audit
 
@@ -43,14 +47,21 @@ def _write_glass_run(
     if resident_dq:
         dq_map = path / "dq_map.fits"
         coverage_map = path / "coverage_map.fits"
-        dq_map.write_bytes(b"dq")
+        dq_values = np.array(
+            [
+                [0, int(DQFlag.WARP_EDGE), int(DQFlag.LOW_REJECTED)],
+                [int(DQFlag.HIGH_REJECTED), int(DQFlag.WARP_EDGE | DQFlag.HIGH_REJECTED), 0],
+            ],
+            dtype=np.uint32,
+        )
+        write_fits_data(dq_map, dq_values, dtype=np.float32)
         coverage_map.write_bytes(b"coverage")
         dq_summary = {
-            "valid": 1000,
+            "valid": 2,
             "no_data": 0,
-            "warp_edge": 12,
-            "low_rejected": 4,
-            "high_rejected": 5,
+            "warp_edge": 2,
+            "low_rejected": 1,
+            "high_rejected": 2,
         }
         dq_coverage_provenance = {
             "active_frame_count": active,
@@ -193,6 +204,10 @@ def _add_dq_contract(path: Path) -> None:
         "require_coverage_map_path": True,
         "required_summary_fields": ["zero_coverage_pixels", "partial_coverage_pixels"],
         "required_output_dq_flags": ["valid", "warp_edge", "low_rejected", "high_rejected"],
+        "verify_dq_map_pixels": True,
+        "dq_map_verify_tile_size": 2,
+        "dq_map_summary_tolerance_pixels": 0,
+        "dq_map_summary_match_flags": ["valid", "warp_edge", "low_rejected", "high_rejected"],
         "positive_output_dq_flags": ["valid", "warp_edge"],
         "required_source_terms": ["geometric_warp_coverage"],
     }
@@ -334,7 +349,13 @@ def test_acceptance_audit_applies_dq_provenance_contract(tmp_path: Path):
     assert checks["contract_dq_map_exists"] is True
     assert checks["contract_dq_output_flag:warp_edge"] is True
     assert checks["contract_dq_positive_output_flag:warp_edge"] is True
+    assert checks["contract_dq_map_pixel_verification"] is True
+    assert checks["contract_dq_map_summary_match:valid"] is True
+    assert checks["contract_dq_map_summary_match:warp_edge"] is True
     assert checks["contract_dq_source_term:geometric_warp_coverage"] is True
+    verification = audit["dq_provenance"]["records"][0]["dq_map_pixel_verification"]
+    assert verification["status"] == "verified"
+    assert verification["result"]["counts"]["high_rejected"] == 2
 
 
 def test_acceptance_audit_dq_contract_fails_when_artifact_missing(tmp_path: Path):
@@ -373,6 +394,7 @@ def test_acceptance_audit_dq_contract_fails_when_artifact_missing(tmp_path: Path
     assert checks["contract_dq_provenance_records"] is False
     assert checks["contract_dq_source_schema:resident_dq_coverage_provenance"] is False
     assert checks["contract_dq_map_path_present"] is False
+    assert checks["contract_dq_map_pixel_verification"] is False
 
 
 def test_acceptance_audit_contract_catches_missing_parameters(tmp_path: Path):
