@@ -1563,6 +1563,7 @@ def run_resident_calibration_integration(
     resident_star_core_preselect_top_k: int = 0,
     resident_triangle_pixel_refine_coarse_stride: int | None = None,
     resident_triangle_pixel_refine_final_stride: int | None = None,
+    resident_triangle_pixel_refine_fast_coarse: bool = False,
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -2876,6 +2877,24 @@ def run_resident_calibration_integration(
                     refine_kwargs["coarse_sample_stride"] = int(resident_triangle_pixel_refine_coarse_stride)
                 if resident_triangle_pixel_refine_final_stride is not None:
                     refine_kwargs["final_sample_stride"] = int(resident_triangle_pixel_refine_final_stride)
+                triangle_pixel_refine_requested_coarse_stride = int(refine_kwargs["coarse_sample_stride"])
+                triangle_pixel_refine_requested_final_stride = int(refine_kwargs["final_sample_stride"])
+                triangle_pixel_refine_fast_coarse_enabled = bool(
+                    resident_triangle_pixel_refine_fast_coarse
+                    or _policy_bool(registration_policy, "cuda_triangle_pixel_refine_fast_coarse", False)
+                )
+                triangle_pixel_refine_fast_coarse_mode = "off"
+                triangle_pixel_refine_coarse_stride_adjusted = False
+                if triangle_pixel_refine_fast_coarse_enabled:
+                    fast_coarse_stride = max(
+                        triangle_pixel_refine_requested_coarse_stride,
+                        triangle_pixel_refine_requested_final_stride,
+                    )
+                    triangle_pixel_refine_coarse_stride_adjusted = (
+                        fast_coarse_stride != triangle_pixel_refine_requested_coarse_stride
+                    )
+                    refine_kwargs["coarse_sample_stride"] = fast_coarse_stride
+                    triangle_pixel_refine_fast_coarse_mode = "coarse_stride_floor_to_final"
                 min_pixel_ncc = _policy_optional_float(
                     registration_policy,
                     "cuda_triangle_min_pixel_ncc",
@@ -3648,6 +3667,18 @@ def run_resident_calibration_integration(
                                         f"triangle_rotation_rad={float(selected_fit.get('rotation_rad', float('nan'))):.9g}",
                                         f"triangle_fit_rms_px={rms_px:.6g}",
                                         f"triangle_pixel_refine_enabled={pixel_refine_enabled}",
+                                        "triangle_pixel_refine_fast_coarse="
+                                        + str(bool(triangle_pixel_refine_fast_coarse_enabled)).lower(),
+                                        "triangle_pixel_refine_fast_coarse_mode="
+                                        + str(triangle_pixel_refine_fast_coarse_mode),
+                                        "triangle_pixel_refine_coarse_stride_adjusted="
+                                        + str(bool(triangle_pixel_refine_coarse_stride_adjusted)).lower(),
+                                        "triangle_pixel_refine_requested_coarse_stride="
+                                        + str(int(triangle_pixel_refine_requested_coarse_stride)),
+                                        "triangle_pixel_refine_effective_coarse_stride="
+                                        + str(int(refine_kwargs["coarse_sample_stride"])),
+                                        "triangle_pixel_refine_requested_final_stride="
+                                        + str(int(triangle_pixel_refine_requested_final_stride)),
                                         f"triangle_pixel_rms_adu={selected_pixel_rms:.6g}",
                                         f"triangle_pixel_ncc={selected_pixel_ncc:.6g}",
                                         "triangle_quality_gate_status="
@@ -3801,6 +3832,18 @@ def run_resident_calibration_integration(
                         result.warnings.extend(
                             [
                                 "triangle_pixel_refine_mode=native_batch",
+                                "triangle_pixel_refine_fast_coarse="
+                                + str(bool(triangle_pixel_refine_fast_coarse_enabled)).lower(),
+                                "triangle_pixel_refine_fast_coarse_mode="
+                                + str(triangle_pixel_refine_fast_coarse_mode),
+                                "triangle_pixel_refine_coarse_stride_adjusted="
+                                + str(bool(triangle_pixel_refine_coarse_stride_adjusted)).lower(),
+                                "triangle_pixel_refine_requested_coarse_stride="
+                                + str(int(triangle_pixel_refine_requested_coarse_stride)),
+                                "triangle_pixel_refine_effective_coarse_stride="
+                                + str(int(refine_kwargs["coarse_sample_stride"])),
+                                "triangle_pixel_refine_requested_final_stride="
+                                + str(int(triangle_pixel_refine_requested_final_stride)),
                                 f"triangle_pixel_refine_batch_index={int(refinement.get('batch_index', -1))}",
                                 f"triangle_pixel_refine_batch_count={int(refinement.get('batch_count', 0))}",
                                 f"triangle_pixel_refine_batch_model={refinement.get('batch_model')}",
@@ -4724,6 +4767,27 @@ def run_resident_calibration_integration(
                         "triangle_pixel_refine_final_stride": int(refine_kwargs["final_sample_stride"])
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
+                        "triangle_pixel_refine_requested_coarse_stride": int(
+                            triangle_pixel_refine_requested_coarse_stride
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_pixel_refine_requested_final_stride": int(
+                            triangle_pixel_refine_requested_final_stride
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_pixel_refine_fast_coarse": bool(triangle_pixel_refine_fast_coarse_enabled)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else False,
+                        "triangle_pixel_refine_fast_coarse_mode": triangle_pixel_refine_fast_coarse_mode
+                        if resident_registration == "similarity_cuda_triangle"
+                        else "off",
+                        "triangle_pixel_refine_coarse_stride_adjusted": bool(
+                            triangle_pixel_refine_coarse_stride_adjusted
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else False,
                         "triangle_pixel_refine_batch": bool(
                             resident_registration == "similarity_cuda_triangle"
                             and triangle_pixel_refine_batch_enabled

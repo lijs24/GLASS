@@ -1089,6 +1089,21 @@ integration where applicable.
   200-light resident determinism plus output-pixel audit because this gate is
   diagnostic-only and must not change image pixels.
 
+### S2-Gate 64: Explicit Fast-Coarse Pixel Refinement
+
+- Add an explicit resident CUDA triangle pixel-refine fast-coarse mode that
+  raises the coarse metric sample stride to at least the final metric sample
+  stride.
+- Keep the default path unchanged. The fast mode must be opt-in through CLI or
+  registration policy because it changes the pixel-refine sampling grid and can
+  change subpixel matrices and output pixels.
+- Surface requested/effective strides, whether the coarse stride was adjusted,
+  fast-coarse mode, workload counts, timing, and throughput in
+  `resident_artifacts.json` and per-frame registration warnings.
+- Validate the mode with focused resident CUDA smoke tests, ruff, full pytest,
+  repeated 200-light runs in fast-coarse mode, strict A/B determinism for those
+  runs, and a numerical drift note against the conservative Gate63 baseline.
+
 ## Gate Rules
 
 Each gate requires:

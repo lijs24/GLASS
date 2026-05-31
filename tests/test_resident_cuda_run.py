@@ -1061,6 +1061,7 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
             "--resident-star-catalog-deterministic",
             "--resident-triangle-pixel-refine-final-stride",
             "2",
+            "--resident-triangle-pixel-refine-fast-coarse",
             "--reference-frame-id",
             "light_001",
         ]
@@ -1117,6 +1118,12 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
         + resident_registration["triangle_descriptor_fit_native_reference_upload_s"]
         + resident_registration["triangle_descriptor_fit_native_workspace_alloc_s"]
     )
+    assert resident_registration["triangle_pixel_refine_requested_coarse_stride"] == 1
+    assert resident_registration["triangle_pixel_refine_requested_final_stride"] == 2
+    assert resident_registration["triangle_pixel_refine_fast_coarse"] is True
+    assert resident_registration["triangle_pixel_refine_fast_coarse_mode"] == "coarse_stride_floor_to_final"
+    assert resident_registration["triangle_pixel_refine_coarse_stride_adjusted"] is True
+    assert resident_registration["triangle_pixel_refine_coarse_stride"] == 2
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
     assert resident_registration["triangle_pixel_refine_batch"] is True
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "native_batch_one_seed_per_frame"
@@ -1205,6 +1212,13 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_determinism_moving_catalog_signature=" in warning for warning in moving["warnings"])
     assert any("triangle_determinism_selected_fit_signature=" in warning for warning in moving["warnings"])
     assert any("triangle_pixel_refine_mode=native_batch" in warning for warning in moving["warnings"])
+    assert any("triangle_pixel_refine_fast_coarse=true" in warning for warning in moving["warnings"])
+    assert any(
+        "triangle_pixel_refine_fast_coarse_mode=coarse_stride_floor_to_final" in warning
+        for warning in moving["warnings"]
+    )
+    assert any("triangle_pixel_refine_coarse_stride_adjusted=true" in warning for warning in moving["warnings"])
+    assert any("triangle_pixel_refine_effective_coarse_stride=2" in warning for warning in moving["warnings"])
     assert any(
         "triangle_pixel_refine_batch_metric_mode=flattened_frame_candidate_grid" in warning
         for warning in moving["warnings"]
