@@ -248,7 +248,7 @@ def _integrate_with_stack_engine(
     dq_path: Path,
     weighting: str,
     output_variance_map: bool,
-) -> tuple[int, dict[str, float | int | str], str, dict[str, int]]:
+) -> tuple[int, dict[str, Any], str, dict[str, int], dict[str, Any]]:
     method = _stack_engine_rejection_method(rejection)
     with ExitStack() as stack:
         sources = {
@@ -279,6 +279,8 @@ def _integrate_with_stack_engine(
             metadata={"stage": "integration", "coverage_source": "coverage_fits"},
         )
         result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+    stack_engine_metrics: dict[str, Any] = dict(result.metrics)
+    stack_engine_metrics["dq_provenance"] = result.dq_provenance
     tile_count, dq_summary = _write_stack_engine_result(
         result,
         master_path,
@@ -290,7 +292,7 @@ def _integrate_with_stack_engine(
         dq_path,
         tile_size,
     )
-    return tile_count, result.metrics, method, dq_summary
+    return tile_count, stack_engine_metrics, method, dq_summary, result.dq_provenance
 
 
 def integrate_registered_frames(
@@ -347,12 +349,19 @@ def integrate_registered_frames(
                 if use_stack_engine
                 else "cuda_streaming_accumulator_fast_path"
             )
-            stack_engine_metrics: dict[str, float | int | str] | None = None
+            stack_engine_metrics: dict[str, Any] | None = None
             stack_engine_rejection_method: str | None = None
+            stack_engine_dq_provenance: dict[str, Any] | None = None
             dq_summary: dict[str, int] = {}
 
             if use_stack_engine:
-                tile_count, stack_engine_metrics, stack_engine_rejection_method, dq_summary = _integrate_with_stack_engine(
+                (
+                    tile_count,
+                    stack_engine_metrics,
+                    stack_engine_rejection_method,
+                    dq_summary,
+                    stack_engine_dq_provenance,
+                ) = _integrate_with_stack_engine(
                     items,
                     frame_weights,
                     rejection,
@@ -459,6 +468,7 @@ def integrate_registered_frames(
                 "stack_engine_enabled": use_stack_engine,
                 "stack_engine_metrics": stack_engine_metrics,
                 "stack_engine_rejection_method": stack_engine_rejection_method,
+                "stack_engine_dq_provenance": stack_engine_dq_provenance,
                 "output_variance_map": output_variance_map,
             }
         )

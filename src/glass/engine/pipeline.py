@@ -206,7 +206,7 @@ def _stack_mean_master_with_engine(
     tile_size: int,
     header: dict[str, Any],
     subtract_path: str | None = None,
-) -> tuple[dict[str, float], dict[str, float | int | str]]:
+) -> tuple[dict[str, float], dict[str, Any]]:
     import numpy as np
 
     if not paths:
@@ -234,6 +234,8 @@ def _stack_mean_master_with_engine(
             metadata={"stage": "master_calibration"},
         )
         result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+        metrics: dict[str, Any] = dict(result.metrics)
+        metrics["dq_provenance"] = result.dq_provenance
         subtract_reader = stack.enter_context(FitsImageReader(subtract_path)) if subtract_path else None
         height, width = result.master.shape
         stats = _StreamingStats()
@@ -246,7 +248,7 @@ def _stack_mean_master_with_engine(
                     ).astype(np.float32)
                 writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, data)
                 stats.update(data)
-    return stats.as_dict(), result.metrics
+    return stats.as_dict(), metrics
 
 
 def _stack_mean_master(
@@ -257,7 +259,7 @@ def _stack_mean_master(
     subtract_path: str | None = None,
     use_stack_engine: bool = True,
     policy: CalibrationPolicy | None = None,
-) -> tuple[dict[str, float], str, str | None, dict[str, float | int | str]]:
+) -> tuple[dict[str, float], str, str | None, dict[str, Any]]:
     header = dict(header)
     if policy is not None:
         header["_calibration_policy"] = policy
@@ -412,7 +414,7 @@ def _stack_normalized_flat_master(
     header: dict[str, Any],
     subtract_path: str | None,
     policy: CalibrationPolicy,
-) -> tuple[dict[str, float], list[dict[str, Any]], str, str | None, dict[str, float | int | str]]:
+) -> tuple[dict[str, float], list[dict[str, Any]], str, str | None, dict[str, Any]]:
     import numpy as np
 
     per_flat: list[dict[str, Any]] = []
@@ -445,6 +447,8 @@ def _stack_normalized_flat_master(
                 metadata={"stage": "master_flat", "normalization": "per_flat"},
             )
             result = CPUStackEngine(tile_size=tile_size).stack(request, sources)
+            metrics: dict[str, Any] = dict(result.metrics)
+            metrics["dq_provenance"] = result.dq_provenance
         data = np.maximum(result.master, np.float32(flat_floor)).astype(np.float32)
         stats = _StreamingStats()
         height, width = data.shape
@@ -453,7 +457,7 @@ def _stack_normalized_flat_master(
                 tile_data = data[tile.y0 : tile.y1, tile.x0 : tile.x1]
                 writer.write_tile(tile.y0, tile.y1, tile.x0, tile.x1, tile_data)
                 stats.update(tile_data)
-        return stats.as_dict(), per_flat, "stack_engine_cpu_per_flat_normalized", None, result.metrics
+        return stats.as_dict(), per_flat, "stack_engine_cpu_per_flat_normalized", None, metrics
     except Exception as exc:
         raw_path = out_path.with_name(f"raw_{out_path.name}")
         _raw_stats, tile_stack_mode, fallback_reason, metrics = _stack_mean_master(
@@ -706,6 +710,9 @@ def run_calibration_stages(
                 "stack_engine_enabled": tile_stack_mode == "stack_engine_cpu",
                 "stack_engine_fallback_reason": fallback_reason,
                 "stack_engine_metrics": stack_metrics,
+                "stack_engine_dq_provenance": stack_metrics.get("dq_provenance")
+                if isinstance(stack_metrics, dict)
+                else None,
                 "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
             }
@@ -742,6 +749,9 @@ def run_calibration_stages(
                 "stack_engine_enabled": tile_stack_mode == "stack_engine_cpu",
                 "stack_engine_fallback_reason": fallback_reason,
                 "stack_engine_metrics": stack_metrics,
+                "stack_engine_dq_provenance": stack_metrics.get("dq_provenance")
+                if isinstance(stack_metrics, dict)
+                else None,
                 "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
             }
@@ -785,6 +795,9 @@ def run_calibration_stages(
                 "stack_engine_enabled": raw_tile_stack_mode.startswith("stack_engine_cpu"),
                 "stack_engine_fallback_reason": raw_fallback_reason,
                 "stack_engine_metrics": raw_stack_metrics,
+                "stack_engine_dq_provenance": raw_stack_metrics.get("dq_provenance")
+                if isinstance(raw_stack_metrics, dict)
+                else None,
                 "master_rejection": policy.master_rejection,
                 "tile_size": tile_size,
             }

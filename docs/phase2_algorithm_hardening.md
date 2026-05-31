@@ -453,6 +453,19 @@ integration where applicable.
 - A 200-light benchmark rerun is not required unless this gate changes the
   resident CUDA fast path or default pipeline routing.
 
+### S2-Gate 26: StackEngine DQ Provenance Artifacts
+
+- Write StackEngine DQ provenance into master calibration artifacts and CPU
+  integration outputs whenever those stages use StackEngine.
+- Surface StackEngine DQ provenance in the HTML report as a first-class table
+  rather than requiring users to inspect nested JSON.
+- Keep resident CUDA DQ provenance on its existing resident schema while the
+  CPU StackEngine bridge matures.
+- Validate with pipeline fixture tests, report HTML checks, ruff, and full
+  pytest.
+- A 200-light benchmark rerun is not required unless this gate changes resident
+  CUDA routing or image math.
+
 ## Gate Rules
 
 Each gate requires:

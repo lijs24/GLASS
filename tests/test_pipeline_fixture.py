@@ -63,10 +63,14 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert all(Path(output["variance_map_path"]).exists() for output in integration["outputs"])
     assert all(output["output_variance_map"] for output in integration["outputs"])
     assert all("valid" in output["dq_summary"] for output in integration["outputs"])
+    assert all(output["stack_engine_dq_provenance"]["schema_version"] == 1 for output in integration["outputs"])
+    assert all(output["stack_engine_dq_provenance"]["input_samples"] > 0 for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
     report_text = (run / "report.html").read_text(encoding="utf-8")
     assert "Stage coverage summary" in report_text
     assert "DQ/mask summary" in report_text
+    assert "StackEngine DQ provenance" in report_text
+    assert "flagged_samples" in report_text
     assert "Master frame statistics" in report_text
     assert "XISF input cache" in report_text
     assert "Integration output maps" in report_text
@@ -115,6 +119,8 @@ def test_pipeline_fixture_run_calibration(tmp_path: Path):
     assert all(master["stack_engine_enabled"] for master in artifacts["masters"].values())
     assert all(master["tile_stack_mode"].startswith("stack_engine_cpu") for master in artifacts["masters"].values())
     assert all(master["tile_size"] == 9 for master in artifacts["masters"].values())
+    assert all(master["stack_engine_dq_provenance"]["schema_version"] == 1 for master in artifacts["masters"].values())
+    assert all(master["stack_engine_dq_provenance"]["input_samples"] > 0 for master in artifacts["masters"].values())
     assert all(Path(item["dq_mask_path"]).exists() for item in artifacts["calibrated_lights"])
     assert all("valid" in item["dq_summary"] for item in artifacts["calibrated_lights"])
     flat_masters = [master for master in artifacts["masters"].values() if master["type"] == "flat"]
@@ -633,6 +639,11 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
     assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in integration["outputs"])
     assert all(output["stack_engine_enabled"] for output in integration["outputs"])
     assert all(output["stack_engine_rejection_method"] == "winsorized_sigma" for output in integration["outputs"])
+    assert all(output["stack_engine_dq_provenance"]["schema_version"] == 1 for output in integration["outputs"])
+    assert all(
+        output["stack_engine_dq_provenance"]["output_high_rejected_pixels"] >= 0
+        for output in integration["outputs"]
+    )
     assert all(Path(output["dq_map_path"]).exists() for output in integration["outputs"])
     assert all("high_rejected" in output["dq_summary"] or "valid" in output["dq_summary"] for output in integration["outputs"])
     assert list((run / "integration").glob("master_*.fits"))
@@ -657,7 +668,9 @@ def test_pipeline_fixture_run_integration(tmp_path: Path):
         )
         == 0
     )
-    assert "Integration summary" in report.read_text(encoding="utf-8")
+    report_text = report.read_text(encoding="utf-8")
+    assert "Integration summary" in report_text
+    assert "StackEngine DQ provenance" in report_text
 
 
 def test_resume_continues_from_warp_without_repeating_calibration(tmp_path: Path):

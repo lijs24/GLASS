@@ -199,6 +199,61 @@ def _output_policy_rows(
     return rows
 
 
+def _stack_engine_dq_rows(
+    calibration: dict[str, Any] | None,
+    integration: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    for group_id, master in (calibration or {}).get("masters", {}).items():
+        provenance = master.get("stack_engine_dq_provenance") or {}
+        if not provenance:
+            continue
+        flag_counts = provenance.get("input_dq_flag_counts") or {}
+        rows.append(
+            {
+                "stage": "master_calibration",
+                "item": group_id,
+                "type": master.get("type"),
+                "stack": master.get("tile_stack_mode"),
+                "input_samples": provenance.get("input_samples"),
+                "flagged_samples": provenance.get("input_flagged_samples"),
+                "nonfinite_samples": provenance.get("input_nonfinite_samples"),
+                "zero_coverage_pixels": provenance.get("output_coverage_zero_pixels"),
+                "low_rejected_pixels": provenance.get("output_low_rejected_pixels"),
+                "high_rejected_pixels": provenance.get("output_high_rejected_pixels"),
+                "hot_pixel_samples": flag_counts.get("hot_pixel"),
+                "no_data_samples": flag_counts.get("no_data"),
+                "output_dq": provenance.get("output_dq_summary"),
+            }
+        )
+
+    for item in (integration or {}).get("outputs", []):
+        provenance = item.get("stack_engine_dq_provenance") or {}
+        if not provenance:
+            continue
+        flag_counts = provenance.get("input_dq_flag_counts") or {}
+        rows.append(
+            {
+                "stage": "integration",
+                "item": item.get("filter"),
+                "type": "light",
+                "stack": item.get("tile_stack_mode"),
+                "input_samples": provenance.get("input_samples"),
+                "flagged_samples": provenance.get("input_flagged_samples"),
+                "nonfinite_samples": provenance.get("input_nonfinite_samples"),
+                "zero_coverage_pixels": provenance.get("output_coverage_zero_pixels"),
+                "low_rejected_pixels": provenance.get("output_low_rejected_pixels"),
+                "high_rejected_pixels": provenance.get("output_high_rejected_pixels"),
+                "hot_pixel_samples": flag_counts.get("hot_pixel"),
+                "no_data_samples": flag_counts.get("no_data"),
+                "output_dq": provenance.get("output_dq_summary"),
+            }
+        )
+
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -307,6 +362,7 @@ def write_html_report(
     resident_summary = _resident_rows(resident)
     geometric_warp_coverage_rows = _geometric_warp_coverage_rows(integration, resident)
     output_policy_rows = _output_policy_rows(integration, resident)
+    stack_engine_dq_rows = _stack_engine_dq_rows(calibration, integration)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
 <html lang="en">
@@ -361,6 +417,10 @@ def write_html_report(
   {_table(output_policy_rows)}
   <h2>DQ/mask summary</h2>
   {_table(dq_rows)}
+  <h2>StackEngine DQ provenance</h2>
+  <p>StackEngine paths record source DQ flag counts, non-finite samples,
+  zero-coverage pixels, rejection-touched pixels, and output DQ summaries.</p>
+  {_table(stack_engine_dq_rows)}
   <h2>Geometric warp coverage</h2>
   <p>Resident CUDA runs can accumulate a pre-rejection geometric footprint from
   warp kernels. Partial geometric coverage is reported separately from low/high
