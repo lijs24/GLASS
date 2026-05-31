@@ -361,6 +361,43 @@ def _add_frame_accounting_contract(path: Path, *, active: int = 193, zero: int =
     write_json(path, payload)
 
 
+def _write_resident_determinism(
+    path: Path,
+    *,
+    strict_passed: bool = False,
+    relative_rms: float = 0.011916,
+    rms: float = 3.751400,
+    mean_abs: float = 0.642260,
+) -> None:
+    write_json(
+        path,
+        {
+            "audit_type": "resident_triangle_determinism",
+            "summary": {
+                "passed": strict_passed,
+                "output_difference_count": 1,
+                "output_numerical_drift_count": 1,
+                "output_numerical_drift_max_relative_rms": relative_rms,
+            },
+            "timing": {"candidate_over_baseline_ratio": 0.95},
+            "output_numerical_drifts": [
+                {
+                    "key": "H:200:F000061:F000260",
+                    "field": "master_path",
+                    "drift": {
+                        "available": True,
+                        "joint_finite_pixels": 61651200,
+                        "mean_abs": mean_abs,
+                        "rms": rms,
+                        "p99_abs": 3.408920,
+                        "relative_rms_to_baseline_std": relative_rms,
+                    },
+                }
+            ],
+        },
+    )
+
+
 def test_acceptance_audit_passes_real_benchmark_thresholds(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     gp_run = tmp_path / "gp"
@@ -457,6 +494,108 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert cumulative["actual_key"] == "light_read_worker_cumulative"
     assert cumulative["status"] == "informational_cumulative"
     assert cumulative["timing_kind"] == "worker_cumulative"
+
+
+def test_acceptance_audit_applies_resident_drift_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    resident_det = tmp_path / "resident_determinism.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _write_resident_determinism(resident_det)
+    contract_payload = read_json(contract)
+    contract_payload["resident_determinism"] = {
+        "required": True,
+        "require_strict_passed": False,
+        "max_output_numerical_drift_count": 1,
+        "max_output_numerical_drift_relative_rms": 0.02,
+        "max_output_numerical_drift_rms": 4.0,
+        "max_output_numerical_drift_mean_abs": 1.0,
+    }
+    write_json(contract, contract_payload)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        resident_determinism_json=resident_det,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert checks["contract_resident_determinism_present"] is True
+    assert checks["contract_output_numerical_drift_count"] is True
+    assert checks["contract_output_numerical_drift_relative_rms"] is True
+    assert checks["contract_output_numerical_drift_rms"] is True
+    assert checks["contract_output_numerical_drift_mean_abs"] is True
+
+
+def test_acceptance_audit_resident_drift_contract_catches_excessive_drift(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    resident_det = tmp_path / "resident_determinism.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _write_resident_determinism(resident_det)
+    contract_payload = read_json(contract)
+    contract_payload["resident_determinism"] = {
+        "required": True,
+        "max_output_numerical_drift_count": 0,
+        "max_output_numerical_drift_relative_rms": 0.005,
+        "max_output_numerical_drift_rms": 1.0,
+        "max_output_numerical_drift_mean_abs": 0.1,
+    }
+    write_json(contract, contract_payload)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        resident_determinism_json=resident_det,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert checks["contract_resident_determinism_present"]["passed"] is True
+    assert checks["contract_output_numerical_drift_count"]["passed"] is False
+    assert checks["contract_output_numerical_drift_relative_rms"]["passed"] is False
+    assert checks["contract_output_numerical_drift_rms"]["passed"] is False
+    assert checks["contract_output_numerical_drift_mean_abs"]["passed"] is False
+    assert checks["contract_output_numerical_drift_relative_rms"]["evidence"]["actual_max"] == 0.011916
 
 
 def test_acceptance_audit_applies_dq_provenance_contract(tmp_path: Path):
@@ -766,33 +905,7 @@ def test_acceptance_audit_cli_writes_outputs_and_returns_failure(tmp_path: Path)
     _write_glass_run(gp_run, elapsed_s=100.0)
     _write_wbpp_result(wbpp, elapsed_s=150.0)
     _write_compare(compare, rms=0.02)
-    write_json(
-        resident_det,
-        {
-            "audit_type": "resident_triangle_determinism",
-            "summary": {
-                "passed": False,
-                "output_difference_count": 1,
-                "output_numerical_drift_count": 1,
-                "output_numerical_drift_max_relative_rms": 0.011916,
-            },
-            "timing": {"candidate_over_baseline_ratio": 0.95},
-            "output_numerical_drifts": [
-                {
-                    "key": "H:200:F000061:F000260",
-                    "field": "master_path",
-                    "drift": {
-                        "available": True,
-                        "joint_finite_pixels": 61651200,
-                        "mean_abs": 0.642260,
-                        "rms": 3.751400,
-                        "p99_abs": 3.408920,
-                        "relative_rms_to_baseline_std": 0.011916,
-                    },
-                }
-            ],
-        },
-    )
+    _write_resident_determinism(resident_det)
 
     result = main(
         [

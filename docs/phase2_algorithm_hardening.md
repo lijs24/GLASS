@@ -1147,6 +1147,23 @@ integration where applicable.
   full pytest, and a real Gate63-vs-Gate64 drift audit attached to an
   acceptance-style report.
 
+### S2-Gate 68: Resident Drift Contract Thresholds
+
+- Add optional benchmark-contract thresholds under `resident_determinism` so
+  output numerical drift can become a hard acceptance check when desired.
+- Keep defaults unchanged: no drift checks run unless a contract explicitly
+  declares the `resident_determinism` section.
+- Supported checks:
+  - resident determinism artifact presence;
+  - optional strict resident determinism pass requirement;
+  - maximum output numerical drift row count;
+  - maximum relative output RMS drift;
+  - maximum absolute RMS drift;
+  - maximum mean absolute drift.
+- Add a real M38 200-light resident drift contract fixture and validate it
+  against the Gate65 resident drift artifact plus the established 200-light
+  WBPP/GLASS comparison.
+
 ## Gate Rules
 
 Each gate requires:

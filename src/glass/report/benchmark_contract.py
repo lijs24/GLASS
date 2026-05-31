@@ -1024,6 +1024,91 @@ def build_benchmark_performance_diagnostics(
     }
 
 
+def _max_drift_metric(output_numerical_drifts: list[dict[str, Any]], metric: str) -> tuple[float | None, int]:
+    values: list[float] = []
+    missing = 0
+    for item in output_numerical_drifts:
+        drift = item.get("drift") if isinstance(item.get("drift"), dict) else {}
+        value = _numeric(drift.get(metric))
+        if value is None:
+            missing += 1
+            continue
+        values.append(value)
+    return (max(values) if values else None, missing)
+
+
+def _build_resident_determinism_contract_checks(
+    resident_contract: dict[str, Any],
+    *,
+    resident_determinism: dict[str, Any] | None,
+    output_numerical_drifts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    present = bool(resident_determinism)
+    if resident_contract.get("required"):
+        checks.append(
+            _check(
+                "contract_resident_determinism_present",
+                present,
+                {"required": True, "present": present},
+            )
+        )
+
+    if resident_contract.get("require_strict_passed"):
+        strict_passed = (resident_determinism or {}).get("strict_passed")
+        checks.append(
+            _check(
+                "contract_resident_determinism_strict_passed",
+                strict_passed is True,
+                {"actual": strict_passed, "required": True},
+            )
+        )
+
+    drift_count = len(output_numerical_drifts)
+    max_count = resident_contract.get("max_output_numerical_drift_count")
+    if max_count is not None:
+        required = int(max_count)
+        checks.append(
+            _check(
+                "contract_output_numerical_drift_count",
+                drift_count <= required,
+                {"actual": drift_count, "required_max": required},
+            )
+        )
+
+    metric_checks = [
+        (
+            "max_output_numerical_drift_relative_rms",
+            "relative_rms_to_baseline_std",
+            "contract_output_numerical_drift_relative_rms",
+        ),
+        ("max_output_numerical_drift_rms", "rms", "contract_output_numerical_drift_rms"),
+        ("max_output_numerical_drift_mean_abs", "mean_abs", "contract_output_numerical_drift_mean_abs"),
+    ]
+    for contract_key, metric_key, check_name in metric_checks:
+        if contract_key not in resident_contract:
+            continue
+        actual, missing_count = _max_drift_metric(output_numerical_drifts, metric_key)
+        required = _numeric(resident_contract.get(contract_key))
+        no_rows = drift_count == 0
+        passed = required is not None and (no_rows or (actual is not None and missing_count == 0 and actual <= required))
+        checks.append(
+            _check(
+                check_name,
+                passed,
+                {
+                    "actual_max": 0.0 if no_rows else actual,
+                    "required_max": required,
+                    "metric": metric_key,
+                    "drift_count": drift_count,
+                    "missing_metric_count": missing_count,
+                },
+            )
+        )
+
+    return checks
+
+
 def build_benchmark_contract_checks(
     contract: dict[str, Any],
     *,
@@ -1033,6 +1118,8 @@ def build_benchmark_contract_checks(
     frame_type_counts: dict[str, int],
     dq_provenance_records: list[dict[str, Any]] | None = None,
     frame_accounting_record: dict[str, Any] | None = None,
+    resident_determinism: dict[str, Any] | None = None,
+    output_numerical_drifts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     dataset = contract.get("dataset_requirements") or {}
@@ -1184,6 +1271,15 @@ def build_benchmark_contract_checks(
                 record=frame_accounting_record or collect_frame_accounting_record(glass_run),
                 speedup_summary=speedup_summary,
                 dq_provenance_records=records,
+            )
+        )
+    resident_contract = contract.get("resident_determinism") or {}
+    if isinstance(resident_contract, dict) and resident_contract:
+        checks.extend(
+            _build_resident_determinism_contract_checks(
+                resident_contract,
+                resident_determinism=resident_determinism,
+                output_numerical_drifts=output_numerical_drifts or [],
             )
         )
     return checks

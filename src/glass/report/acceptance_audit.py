@@ -134,33 +134,6 @@ def build_acceptance_audit(
     contract_payload: dict[str, Any] | None = None
     if benchmark_contract is not None:
         contract_payload = load_benchmark_contract(benchmark_contract)
-    performance_regression: dict[str, Any] | None = None
-    dq_provenance_records = collect_dq_provenance_records(
-        glass_run,
-        dq_contract=(contract_payload or {}).get("dq_provenance"),
-    )
-    frame_accounting_record = collect_frame_accounting_record(glass_run)
-    if benchmark_contract is not None:
-        checks.extend(
-            build_benchmark_contract_checks(
-                contract_payload,
-                glass_run=glass_run,
-                speedup_summary=speedup,
-                compare_payload=compare_payload,
-                frame_type_counts=counts,
-                dq_provenance_records=dq_provenance_records,
-                frame_accounting_record=frame_accounting_record,
-            )
-        )
-        performance_regression = build_benchmark_performance_diagnostics(
-            contract_payload,
-            glass_run=glass_run,
-        )
-    optimization_guidance = build_optimization_guidance(
-        performance_regression=performance_regression,
-        frame_accounting=frame_accounting_record,
-        glass_run=glass_run,
-    )
     resident_determinism_payload = (
         _read_json_lenient(resident_determinism_json) if resident_determinism_json is not None else {}
     )
@@ -187,6 +160,35 @@ def build_acceptance_audit(
                 "output_numerical_drift_max_relative_rms"
             ),
         }
+    performance_regression: dict[str, Any] | None = None
+    dq_provenance_records = collect_dq_provenance_records(
+        glass_run,
+        dq_contract=(contract_payload or {}).get("dq_provenance"),
+    )
+    frame_accounting_record = collect_frame_accounting_record(glass_run)
+    if benchmark_contract is not None:
+        checks.extend(
+            build_benchmark_contract_checks(
+                contract_payload,
+                glass_run=glass_run,
+                speedup_summary=speedup,
+                compare_payload=compare_payload,
+                frame_type_counts=counts,
+                dq_provenance_records=dq_provenance_records,
+                frame_accounting_record=frame_accounting_record,
+                resident_determinism=resident_determinism,
+                output_numerical_drifts=output_numerical_drifts,
+            )
+        )
+        performance_regression = build_benchmark_performance_diagnostics(
+            contract_payload,
+            glass_run=glass_run,
+        )
+    optimization_guidance = build_optimization_guidance(
+        performance_regression=performance_regression,
+        frame_accounting=frame_accounting_record,
+        glass_run=glass_run,
+    )
 
     passed = all(item["passed"] for item in checks)
     return {

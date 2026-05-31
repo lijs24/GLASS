@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "name": "phase2_m38_h_200_resident_drift",
+  "description": "Acceptance contract for attaching and bounding resident output numerical drift on the M38 H-alpha 200-light benchmark.",
+  "dataset_requirements": {
+    "light": 200,
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "active_light_frames": 190
+  },
+  "runtime": {
+    "release_baseline_elapsed_s": 31.516450299997814,
+    "max_runtime_regression_factor": 1.3,
+    "external_reference_elapsed_s": 1092.541,
+    "min_speedup_vs_reference": 20.0
+  },
+  "comparison": {
+    "required_scale": 8.764434957115609e-06,
+    "required_offset": 0.0006274500691899127,
+    "required_min_coverage": 190,
+    "min_coverage_fraction": 0.95,
+    "max_rms_diff": 0.01,
+    "max_abs_diff_p99": 0.01,
+    "numeric_abs_tolerance": 1e-12,
+    "numeric_rel_tolerance": 1e-09
+  },
+  "resident_determinism": {
+    "required": true,
+    "require_strict_passed": false,
+    "max_output_numerical_drift_count": 1,
+    "max_output_numerical_drift_relative_rms": 0.02,
+    "max_output_numerical_drift_rms": 4.0,
+    "max_output_numerical_drift_mean_abs": 1.0
+  }
+}
