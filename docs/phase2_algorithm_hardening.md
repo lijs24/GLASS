@@ -2069,6 +2069,23 @@ integration where applicable.
   decides whether the S2-Gate 123 frame-family finding survives closer
   interpolation parity with the resident Lanczos3 benchmark path.
 
+### S2-Gate 125: Residual Frame-Family Audit
+
+- Add a reusable `glass compare-frame-family` command that consumes a
+  `compare-tile-replay` JSON artifact and a GLASS run directory.
+- Let the audit select focus frames by explicit ids or an id range, then select
+  neighboring positive-weight control frames unless explicit controls are
+  provided.
+- Join replay tile ranks/deltas, frame-accounting weights/agreement warnings,
+  and registration matrices into per-frame rows with group summaries and
+  focus-vs-control contrasts.
+- Run the audit on the S2-Gate 124 `agr0p5` all-positive-weight Lanczos3
+  replay for the F000100-F000110 frame family against neighboring controls.
+- Treat this as an observability gate only. It must not change registration,
+  weighting, rejection, or integration defaults; it should decide whether the
+  next corrective gate should target a coherent motion/registration frame
+  family, agreement weighting, or exact resident replay capture.
+
 ## Gate Rules
 
 Each gate requires:

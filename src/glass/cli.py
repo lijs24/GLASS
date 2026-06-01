@@ -28,6 +28,7 @@ from glass.planner.subset import build_subset_manifest
 from glass.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from glass.report.compare_report import compare_fits, write_compare_report
 from glass.report.compare_outliers import build_compare_outlier_audit, write_compare_outlier_audit
+from glass.report.compare_frame_family import build_compare_frame_family_audit, write_compare_frame_family_audit
 from glass.report.compare_tile_attribution import build_compare_tile_attribution, write_compare_tile_attribution
 from glass.report.compare_tile_pack import build_compare_tile_pack
 from glass.report.compare_tile_replay import build_compare_tile_replay, write_compare_tile_replay
@@ -848,6 +849,36 @@ def cmd_compare_tile_replay(args: argparse.Namespace) -> int:
             "status": "completed",
             "tile_count": payload.get("tile_count"),
             "selected_frame_count": payload.get("selected_frame_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_compare_frame_family(args: argparse.Namespace) -> int:
+    payload = build_compare_frame_family_audit(
+        args.replay,
+        args.run,
+        focus_frames=args.focus_frame or None,
+        focus_range_start=args.focus_range_start,
+        focus_range_end=args.focus_range_end,
+        control_frames=args.control_frame or None,
+        control_before=args.control_before,
+        control_after=args.control_after,
+    )
+    write_compare_frame_family_audit(args.out, payload, markdown=args.markdown)
+    contrast = payload.get("focus_vs_control") if isinstance(payload.get("focus_vs_control"), dict) else {}
+    weighted_delta = contrast.get("weighted_delta_mean") if isinstance(contrast.get("weighted_delta_mean"), dict) else {}
+    console.print(
+        {
+            "status": "completed",
+            "focus_frame_count": len(payload.get("focus_ids") or []),
+            "control_frame_count": len(payload.get("control_ids") or []),
+            "top_focus_frame": (payload.get("interpretation") or {}).get("top_focus_frame")
+            if isinstance(payload.get("interpretation"), dict)
+            else None,
+            "weighted_delta_focus_minus_control": weighted_delta.get("focus_minus_control"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -1947,6 +1978,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="CPU interpolation used for bounded diagnostic replay",
     )
     tile_replay.set_defaults(func=cmd_compare_tile_replay)
+
+    frame_family = sub.add_parser(
+        "compare-frame-family",
+        help="compare a focused frame-id family against neighboring control frames",
+    )
+    frame_family.add_argument("--replay", required=True, help="compare-tile-replay JSON artifact")
+    frame_family.add_argument("--run", required=True, help="GLASS run directory containing frame artifacts")
+    frame_family.add_argument("--out", required=True, help="output frame-family audit JSON")
+    frame_family.add_argument("--markdown", help="optional output Markdown summary")
+    frame_family.add_argument("--focus-frame", action="append", default=[], help="focus frame id; may be repeated")
+    frame_family.add_argument("--focus-range-start", help="first focus frame id, for example F000100")
+    frame_family.add_argument("--focus-range-end", help="last focus frame id, for example F000110")
+    frame_family.add_argument("--control-frame", action="append", default=[], help="control frame id; may be repeated")
+    frame_family.add_argument(
+        "--control-before",
+        type=int,
+        default=5,
+        help="number of positive-weight frames before the focus range used as controls",
+    )
+    frame_family.add_argument(
+        "--control-after",
+        type=int,
+        default=5,
+        help="number of positive-weight frames after the focus range used as controls",
+    )
+    frame_family.set_defaults(func=cmd_compare_frame_family)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")
