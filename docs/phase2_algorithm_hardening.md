@@ -1785,6 +1785,21 @@ integration where applicable.
 - Record compare-contract provenance in the sweep summary and Markdown output.
 - Validate with dry-run tests and a real Phase 2 benchmark-contract dry run.
 
+### S2-Gate 108: Contract-Gated 200-Light Catalog Sweep
+
+- Run a bounded 200-light resident CUDA catalog-capacity sweep using imported
+  science arguments from a known-good run command.
+- Require GLASS benchmark-contract frame counts, guardrails with pixel
+  verification, candidate coverage maps, and strict compare-gate overrides
+  before any variant can be considered for promotion.
+- Sweep `triangle_grid_top_per_cell` over a small candidate set and record
+  total runtime, moving-catalog time, registration/warp time, frame counts,
+  guardrail status, and reference comparison metrics.
+- Treat speed-only wins as blocked when image agreement fails the strict
+  compare gate.
+- Record the result as evidence for the next registration-quality optimization
+  target rather than changing defaults.
+
 ## Gate Rules
 
 Each gate requires:
