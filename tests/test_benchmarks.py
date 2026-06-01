@@ -478,6 +478,65 @@ def test_bench_resident_prefetch_sweep_imports_baseline_run_command(tmp_path: Pa
     assert "66" not in command
 
 
+def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path):
+    plan = tmp_path / "processing_plan.json"
+    plan.write_text('{"frames": []}\n', encoding="utf-8")
+    out = tmp_path / "resident_sweep_registration_grid"
+
+    _run(
+        "benchmarks/bench_resident_prefetch_sweep.py",
+        "--plan",
+        str(plan),
+        "--out",
+        str(out),
+        "--prefetch-frames",
+        "16",
+        "--prefetch-workers",
+        "8",
+        "--batch-frames",
+        "8",
+        "--streams",
+        "4",
+        "--wave-frames",
+        "2",
+        "--release-modes",
+        "callback_queue",
+        "--triangle-fast-coarse-modes",
+        "off,on",
+        "--triangle-coarse-strides",
+        "4",
+        "--triangle-final-strides",
+        "8",
+        "--star-max-candidates",
+        "48",
+        "--dry-run",
+    )
+
+    payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    assert payload["variant_count"] == 2
+    assert {variant["variant_id"] for variant in payload["variants"]} == {
+        "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48",
+        "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48",
+    }
+    fast_command = next(
+        item["command"]
+        for item in payload["commands"]
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48"
+        and item["kind"] == "run"
+    )
+    base_command = next(
+        item["command"]
+        for item in payload["commands"]
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48"
+        and item["kind"] == "run"
+    )
+    assert "--resident-triangle-pixel-refine-fast-coarse" in fast_command
+    assert "--resident-triangle-pixel-refine-fast-coarse" not in base_command
+    assert fast_command[fast_command.index("--resident-triangle-pixel-refine-coarse-stride") + 1] == "4"
+    assert fast_command[fast_command.index("--resident-triangle-pixel-refine-final-stride") + 1] == "8"
+    assert fast_command[fast_command.index("--resident-star-max-candidates") + 1] == "48"
+
+
 def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path):
     from glass.report.resident_sweep import write_resident_sweep_summary
 

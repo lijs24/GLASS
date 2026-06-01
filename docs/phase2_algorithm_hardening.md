@@ -1661,6 +1661,23 @@ integration where applicable.
 - Use the resulting component table to choose the next real optimization target
   from evidence rather than from the aggregate stage total alone.
 
+### S2-Gate 100: Resident Registration Parameter Sweep
+
+- Extend the resident sweep harness beyond I/O tuning so it can sweep selected
+  registration parameters from the same audited command matrix.
+- Add variant dimensions for triangle pixel-refinement fast-coarse mode,
+  coarse stride, final stride, and star max candidates.
+- Encode registration-tuning dimensions in the variant id and generated command
+  line so each run is reproducible.
+- Preserve existing default sweep behavior when registration dimensions are not
+  provided.
+- Validate with dry-run tests and run a small 200-light guarded comparison of
+  baseline pixel refinement versus fast-coarse pixel refinement.
+- Compare the best fast-coarse candidate against the external reference and the
+  baseline-refine GLASS output, and keep it as a candidate rather than a new
+  default unless both performance and numerical agreement are convincingly
+  stable.
+
 ## Gate Rules
 
 Each gate requires:

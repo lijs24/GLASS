@@ -49,6 +49,33 @@ def _split_common_run_args(value: str | None) -> list[str]:
     return [part.strip("\"'") for part in shlex.split(value, posix=False)]
 
 
+def _parse_optional_int_grid(value: str | None) -> list[int | None]:
+    if value is None or value.strip() == "":
+        return [None]
+    parsed: list[int | None] = []
+    for raw in value.split(","):
+        item = str(raw).strip()
+        if item in {"", "inherit"}:
+            candidate = None
+        else:
+            numeric = int(item)
+            if numeric <= 0:
+                raise ValueError("optional integer grids must contain positive values or inherit")
+            candidate = numeric
+        if candidate not in parsed:
+            parsed.append(candidate)
+    return parsed
+
+
+def _parse_fast_coarse_modes(value: str | None) -> list[str]:
+    modes = parse_mode_grid(value, default=["inherit"])
+    allowed = {"inherit", "off", "on"}
+    invalid = [mode for mode in modes if mode not in allowed]
+    if invalid:
+        raise ValueError("triangle fast-coarse modes must be inherit, off, or on")
+    return modes
+
+
 def _common_run_args_from_command_file(path: Path) -> tuple[list[str], dict[str, Any]]:
     tokens = _split_common_run_args(path.read_text(encoding="utf-8"))
     try:
@@ -300,6 +327,23 @@ def main() -> int:
     parser.add_argument("--wave-frames", default="2,4")
     parser.add_argument("--release-modes", default="callback_queue")
     parser.add_argument("--refill-modes", default="immediate")
+    parser.add_argument(
+        "--triangle-fast-coarse-modes",
+        default="inherit",
+        help="comma grid for resident triangle pixel refine fast-coarse mode: inherit,off,on",
+    )
+    parser.add_argument(
+        "--triangle-coarse-strides",
+        help="comma grid for resident triangle coarse pixel-refine stride, or inherit",
+    )
+    parser.add_argument(
+        "--triangle-final-strides",
+        help="comma grid for resident triangle final pixel-refine stride, or inherit",
+    )
+    parser.add_argument(
+        "--star-max-candidates",
+        help="comma grid for resident star max candidates, or inherit",
+    )
     parser.add_argument("--baseline-total-seconds", type=float)
     parser.add_argument("--reference-master", help="optional master FITS used for post-run compare reports")
     parser.add_argument("--reference-time-seconds", type=float)
@@ -382,6 +426,10 @@ def main() -> int:
         wave_frames=parse_int_grid(args.wave_frames, default=[2, 4]),
         release_modes=parse_mode_grid(args.release_modes, default=["callback_queue"]),
         refill_modes=parse_mode_grid(args.refill_modes, default=["immediate"]),
+        triangle_fast_coarse_modes=_parse_fast_coarse_modes(args.triangle_fast_coarse_modes),
+        triangle_coarse_strides=_parse_optional_int_grid(args.triangle_coarse_strides),
+        triangle_final_strides=_parse_optional_int_grid(args.triangle_final_strides),
+        star_max_candidates=_parse_optional_int_grid(args.star_max_candidates),
     )
 
     summaries: list[dict[str, Any]] = []

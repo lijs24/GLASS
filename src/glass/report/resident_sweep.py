@@ -39,6 +39,10 @@ def build_resident_sweep_variants(
     wave_frames: Iterable[int],
     release_modes: Iterable[str],
     refill_modes: Iterable[str] = ("immediate",),
+    triangle_fast_coarse_modes: Iterable[str] = ("inherit",),
+    triangle_coarse_strides: Iterable[int | None] = (None,),
+    triangle_final_strides: Iterable[int | None] = (None,),
+    star_max_candidates: Iterable[int | None] = (None,),
 ) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     for prefetch_frame_count in prefetch_frames:
@@ -48,31 +52,86 @@ def build_resident_sweep_variants(
                     for wave_frame_count in wave_frames:
                         for release_mode in release_modes:
                             for refill_mode in refill_modes:
-                                if wave_frame_count > batch_frame_count:
-                                    continue
-                                refill_suffix = "" if str(refill_mode) == "immediate" else f"_rf{refill_mode}"
-                                variant_id = (
-                                    f"pf{prefetch_frame_count}_pw{prefetch_worker_count}_"
-                                    f"b{batch_frame_count}_s{stream_count}_w{wave_frame_count}_{release_mode}"
-                                    f"{refill_suffix}"
-                                )
-                                variants.append(
-                                    {
-                                        "variant_id": variant_id,
-                                        "prefetch_frames": int(prefetch_frame_count),
-                                        "prefetch_workers": int(prefetch_worker_count),
-                                        "batch_frames": int(batch_frame_count),
-                                        "streams": int(stream_count),
-                                        "wave_frames": int(wave_frame_count),
-                                        "release_mode": str(release_mode),
-                                        "refill_mode": str(refill_mode),
-                                    }
-                                )
+                                for fast_coarse_mode in triangle_fast_coarse_modes:
+                                    for coarse_stride in triangle_coarse_strides:
+                                        for final_stride in triangle_final_strides:
+                                            for max_candidates in star_max_candidates:
+                                                if wave_frame_count > batch_frame_count:
+                                                    continue
+                                                refill_suffix = (
+                                                    "" if str(refill_mode) == "immediate" else f"_rf{refill_mode}"
+                                                )
+                                                registration_suffix = _registration_variant_suffix(
+                                                    fast_coarse_mode=fast_coarse_mode,
+                                                    coarse_stride=coarse_stride,
+                                                    final_stride=final_stride,
+                                                    max_candidates=max_candidates,
+                                                )
+                                                variant_id = (
+                                                    f"pf{prefetch_frame_count}_pw{prefetch_worker_count}_"
+                                                    f"b{batch_frame_count}_s{stream_count}_w{wave_frame_count}_"
+                                                    f"{release_mode}{refill_suffix}{registration_suffix}"
+                                                )
+                                                variant = {
+                                                    "variant_id": variant_id,
+                                                    "prefetch_frames": int(prefetch_frame_count),
+                                                    "prefetch_workers": int(prefetch_worker_count),
+                                                    "batch_frames": int(batch_frame_count),
+                                                    "streams": int(stream_count),
+                                                    "wave_frames": int(wave_frame_count),
+                                                    "release_mode": str(release_mode),
+                                                    "refill_mode": str(refill_mode),
+                                                }
+                                                _attach_registration_variant_fields(
+                                                    variant,
+                                                    fast_coarse_mode=fast_coarse_mode,
+                                                    coarse_stride=coarse_stride,
+                                                    final_stride=final_stride,
+                                                    max_candidates=max_candidates,
+                                                )
+                                                variants.append(variant)
     return variants
 
 
+def _registration_variant_suffix(
+    *,
+    fast_coarse_mode: str,
+    coarse_stride: int | None,
+    final_stride: int | None,
+    max_candidates: int | None,
+) -> str:
+    parts: list[str] = []
+    if str(fast_coarse_mode) != "inherit":
+        parts.append("fcfast" if str(fast_coarse_mode) == "on" else "fcbase")
+    if coarse_stride is not None:
+        parts.append(f"cs{int(coarse_stride)}")
+    if final_stride is not None:
+        parts.append(f"fs{int(final_stride)}")
+    if max_candidates is not None:
+        parts.append(f"sm{int(max_candidates)}")
+    return "" if not parts else "_" + "_".join(parts)
+
+
+def _attach_registration_variant_fields(
+    variant: dict[str, Any],
+    *,
+    fast_coarse_mode: str,
+    coarse_stride: int | None,
+    final_stride: int | None,
+    max_candidates: int | None,
+) -> None:
+    if str(fast_coarse_mode) != "inherit":
+        variant["triangle_fast_coarse"] = str(fast_coarse_mode) == "on"
+    if coarse_stride is not None:
+        variant["triangle_coarse_stride"] = int(coarse_stride)
+    if final_stride is not None:
+        variant["triangle_final_stride"] = int(final_stride)
+    if max_candidates is not None:
+        variant["star_max_candidates"] = int(max_candidates)
+
+
 def variant_run_args(variant: dict[str, Any]) -> list[str]:
-    return [
+    args = [
         "--resident-prefetch-frames",
         str(int(variant["prefetch_frames"])),
         "--resident-prefetch-workers",
@@ -90,6 +149,15 @@ def variant_run_args(variant: dict[str, Any]) -> list[str]:
         "--resident-calibration-release-mode",
         str(variant["release_mode"]),
     ]
+    if "triangle_coarse_stride" in variant:
+        args.extend(["--resident-triangle-pixel-refine-coarse-stride", str(int(variant["triangle_coarse_stride"]))])
+    if "triangle_final_stride" in variant:
+        args.extend(["--resident-triangle-pixel-refine-final-stride", str(int(variant["triangle_final_stride"]))])
+    if variant.get("triangle_fast_coarse") is True:
+        args.append("--resident-triangle-pixel-refine-fast-coarse")
+    if "star_max_candidates" in variant:
+        args.extend(["--resident-star-max-candidates", str(int(variant["star_max_candidates"]))])
+    return args
 
 
 def load_resident_run_summary(run_dir: str | Path, *, variant: dict[str, Any] | None = None) -> dict[str, Any]:
