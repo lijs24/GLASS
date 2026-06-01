@@ -1945,6 +1945,25 @@ integration where applicable.
 - Do not change default fast catalog behavior in this gate. Use the result to
   rerun agreement-threshold experiments under deterministic catalog control.
 
+### S2-Gate 118: Deterministic Agreement Threshold Sweep
+
+- Rerun the S2-Gate 115 agreement-threshold experiment with
+  `--star-catalog-deterministic-modes on` so candidate/signature changes are
+  attributable to threshold logic instead of resident catalog nondeterminism.
+- Use the same benchmark-contract frame gate, compare normalization, strict
+  compare overrides, candidate coverage maps, and guardrails with pixel
+  verification as S2-Gate 115.
+- Audit each completed deterministic variant with
+  `glass resident-registration-audit`, join compare metrics with
+  `glass resident-registration-compare`, and repeat
+  `glass resident-registration-triage` against the deterministic audit-only
+  baseline.
+- Treat a threshold as blocked if it improves RMS or p99 only by rejecting
+  required frames from the 193-frame benchmark contract.
+- Do not change defaults in this gate. Use the result to design a less blunt
+  agreement policy, such as diagnostic flagging, down-weighting, or a
+  multi-condition rejection rule.
+
 ## Gate Rules
 
 Each gate requires:
