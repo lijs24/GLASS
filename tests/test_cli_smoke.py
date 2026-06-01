@@ -122,6 +122,7 @@ def test_cli_help_commands():
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",
+        "stack-engine-contract",
         "blackbox-package",
         "blackbox-finalize",
         "blackbox-history",

@@ -34,6 +34,10 @@ from glass.report.resident_determinism import (
     write_resident_determinism_audit,
 )
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
+from glass.report.stack_engine_contract import (
+    build_stack_engine_contract_audit,
+    write_stack_engine_contract_audit,
+)
 from glass.report.wbpp_history import read_fastintegration_history
 from glass.synthetic.generator import generate_synthetic_dataset
 from glass.models import now_iso
@@ -761,6 +765,25 @@ def cmd_resident_determinism(args: argparse.Namespace) -> int:
     return 2 if args.fail_on_mismatch and not audit["summary"]["passed"] else 0
 
 
+def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
+    audit = build_stack_engine_contract_audit(
+        args.run,
+        scope=args.scope,
+        expected_integration_engine=args.expected_integration_engine,
+    )
+    write_stack_engine_contract_audit(args.out, audit, markdown=args.markdown)
+    console.print(
+        {
+            "status": audit["status"],
+            "scope": audit["scope"],
+            "expected_integration_engine": audit["expected_integration_engine"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if audit["passed"] else 2
+
+
 def cmd_blackbox_package(args: argparse.Namespace) -> int:
     payload = create_blackbox_package(
         args.manifest,
@@ -1471,6 +1494,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when signatures, registration, frame accounting, or output pixels differ",
     )
     resident_det.set_defaults(func=cmd_resident_determinism)
+
+    stack_contract = sub.add_parser(
+        "stack-engine-contract",
+        help="audit StackEngine default routing and DQ provenance from a GLASS run",
+    )
+    stack_contract.add_argument("--run", required=True, help="GLASS run directory to audit")
+    stack_contract.add_argument("--out", required=True, help="output audit JSON")
+    stack_contract.add_argument("--markdown", help="optional output Markdown summary")
+    stack_contract.add_argument(
+        "--scope",
+        choices=["all", "calibration", "integration"],
+        default="all",
+        help="which StackEngine contract surface to audit",
+    )
+    stack_contract.add_argument(
+        "--expected-integration-engine",
+        choices=["stack_engine_cpu", "cuda_resident_stack", "any"],
+        default="stack_engine_cpu",
+        help="expected integration engine for the selected run type",
+    )
+    stack_contract.set_defaults(func=cmd_stack_engine_contract)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")
     blackbox.add_argument("--manifest", required=True)

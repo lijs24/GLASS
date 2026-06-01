@@ -1465,6 +1465,22 @@ integration where applicable.
 - Re-run the 200-light tuned bilinear triangle benchmark with auto dispatch and
   compare it against the Gate86 explicit fused bilinear result.
 
+### S2-Gate 88: StackEngine Default Contract Audit
+
+- Add a standalone `stack-engine-contract` audit command that verifies master
+  calibration artifacts and tile/CPU integration outputs use StackEngine by
+  default.
+- Require StackEngine DQ provenance and normalized `dq_provenance_summary`
+  records for the audited StackEngine surfaces.
+- Keep resident CUDA integration explicit: the audit can be pointed at resident
+  runs with `--expected-integration-engine cuda_resident_stack`, but the default
+  contract checks the tile/CPU StackEngine route.
+- Emit JSON and optional Markdown artifacts so future refactors can fail fast on
+  fallback routing, missing DQ provenance, or legacy accumulators.
+- Validate with a synthetic CPU audit run, a failing legacy fixture, ruff, and
+  full pytest. A 200-light benchmark rerun is not required because this gate is
+  diagnostic-only and does not change image math or resident CUDA routing.
+
 ## Gate Rules
 
 Each gate requires:
