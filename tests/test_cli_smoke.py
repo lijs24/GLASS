@@ -128,6 +128,7 @@ def test_cli_help_commands():
         "frame-weight-proposal-audit",
         "compare-frame-family",
         "resident-tile-capture",
+        "resident-tile-contribution",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",

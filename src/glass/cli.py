@@ -60,6 +60,10 @@ from glass.report.resident_registration_triage import (
     write_resident_registration_triage,
 )
 from glass.report.resident_tile_capture import build_resident_tile_capture, write_resident_tile_capture
+from glass.report.resident_tile_contribution import (
+    build_resident_tile_contribution,
+    write_resident_tile_contribution,
+)
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
@@ -1031,6 +1035,47 @@ def cmd_resident_tile_capture(args: argparse.Namespace) -> int:
             "tile_count": payload.get("tile_count"),
             "first_tile_resident_weighted_delta_mean": resident.get("mean"),
             "first_tile_resident_minus_cpu_mean": diff.get("mean"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_resident_tile_contribution(args: argparse.Namespace) -> int:
+    payload = build_resident_tile_contribution(
+        args.tile_pack,
+        args.run,
+        filter_name=args.filter,
+        frame_strategy=args.frame_strategy,
+        max_frames=args.max_frames,
+        max_tiles=args.max_tiles,
+        master_cache_dir=args.master_cache_dir,
+        interpolation=args.interpolation,
+        clamping_threshold=args.clamping_threshold,
+        rejection=args.rejection,
+        low_sigma=args.low_sigma,
+        high_sigma=args.high_sigma,
+        focus_frames=args.focus_frame or None,
+        focus_range_start=args.focus_range_start,
+        focus_range_end=args.focus_range_end,
+        control_frames=args.control_frame or None,
+        control_before=args.control_before,
+        control_after=args.control_after,
+    )
+    write_resident_tile_contribution(args.out, payload, markdown=args.markdown)
+    focus = payload.get("focus_summary") if isinstance(payload.get("focus_summary"), dict) else {}
+    contribution = (
+        focus.get("tile_normalized_delta_contribution_sum")
+        if isinstance(focus.get("tile_normalized_delta_contribution_sum"), dict)
+        else {}
+    )
+    console.print(
+        {
+            "status": "completed",
+            "selected_frame_count": payload.get("selected_frame_count"),
+            "tile_count": payload.get("tile_count"),
+            "focus_contribution_mean": contribution.get("mean"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2336,6 +2381,54 @@ def build_parser() -> argparse.ArgumentParser:
     )
     resident_capture.add_argument("--write-tiles", action="store_true", help="write captured FITS tile artifacts")
     resident_capture.set_defaults(func=cmd_resident_tile_capture)
+
+    resident_contribution = sub.add_parser(
+        "resident-tile-contribution",
+        help="capture resident CUDA post-warp tiles and replay contribution/rejection diagnostics",
+    )
+    resident_contribution.add_argument("--tile-pack", required=True, help="tile_pack_manifest.json from compare-tile-pack")
+    resident_contribution.add_argument("--run", required=True, help="GLASS run directory containing frame artifacts")
+    resident_contribution.add_argument("--out", required=True, help="output resident tile contribution JSON")
+    resident_contribution.add_argument("--markdown", help="optional output Markdown summary")
+    resident_contribution.add_argument("--filter", help="optional filter name used to select integration outputs")
+    resident_contribution.add_argument(
+        "--frame-strategy",
+        choices=["lowest_weight", "downweighted", "frame_id"],
+        default="frame_id",
+        help="which positive-weight frames to capture",
+    )
+    resident_contribution.add_argument(
+        "--max-frames",
+        type=int,
+        default=0,
+        help="maximum frames to capture; use 0 for all selected positive-weight frames",
+    )
+    resident_contribution.add_argument("--max-tiles", type=int, default=0, help="maximum tiles from tile pack; 0 captures all")
+    resident_contribution.add_argument("--master-cache-dir", help="resident master cache directory; defaults to run command discovery")
+    resident_contribution.add_argument(
+        "--interpolation",
+        choices=["bilinear", "lanczos3"],
+        help="resident matrix warp interpolation; defaults to run command discovery",
+    )
+    resident_contribution.add_argument(
+        "--clamping-threshold",
+        type=float,
+        help="Lanczos3 clamping threshold; defaults to run command discovery",
+    )
+    resident_contribution.add_argument(
+        "--rejection",
+        choices=["none", "sigma_clip", "winsorized_sigma"],
+        help="override rejection mode; defaults to integration_results.json",
+    )
+    resident_contribution.add_argument("--low-sigma", type=float, help="override low sigma for contribution replay")
+    resident_contribution.add_argument("--high-sigma", type=float, help="override high sigma for contribution replay")
+    resident_contribution.add_argument("--focus-frame", action="append", default=[], help="focus frame id; may be repeated")
+    resident_contribution.add_argument("--focus-range-start", help="first focus frame id, for example F000100")
+    resident_contribution.add_argument("--focus-range-end", help="last focus frame id, for example F000110")
+    resident_contribution.add_argument("--control-frame", action="append", default=[], help="control frame id; may be repeated")
+    resident_contribution.add_argument("--control-before", type=int, default=5)
+    resident_contribution.add_argument("--control-after", type=int, default=5)
+    resident_contribution.set_defaults(func=cmd_resident_tile_contribution)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

@@ -2192,6 +2192,26 @@ integration where applicable.
 - Run the audit on the S2-Gate 129 F000100-F000110 proposal and confirm whether
   the failed 200-light candidate was directionally predictable.
 
+### S2-Gate 131: Resident Tile Contribution Capture
+
+- Add a reusable `glass resident-tile-contribution` command that rebuilds
+  selected positive-weight frames into a small resident CUDA stack, applies the
+  same master calibration cache and registration matrices, downloads bounded
+  post-warp resident tile pixels, and replays rejection/contribution statistics
+  on those captured resident pixels.
+- Reuse the localized residual tile-pack manifest and support the same
+  frame-selection controls used by prior attribution tools: all positive frames
+  by frame id, lowest-weight frames, agreement-downweighted frames, plus
+  focus/control frame selection for group summaries.
+- Emit per-frame accepted/rejected pixel counts, weighted delta, normalized
+  contribution, focus/control summaries, diagnostic reconstructed-master delta,
+  and capture timing.
+- Treat this as a near-native observability gate: it avoids CPU interpolation
+  replay, but it still computes contribution/rejection summaries on the CPU
+  after downloading selected resident tiles.
+- Run the command on the S2-Gate 121 top residual tile package using the
+  S2-Gate 119/120 benchmark run and the F000100-F000110 focus family.
+
 ## Gate Rules
 
 Each gate requires:
