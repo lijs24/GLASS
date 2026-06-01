@@ -551,6 +551,84 @@ def test_bench_resident_prefetch_sweep_imports_frame_gate_contract(tmp_path: Pat
     assert "Frame gate contract" in markdown
 
 
+def test_bench_resident_prefetch_sweep_imports_compare_contract(tmp_path: Path):
+    plan = tmp_path / "processing_plan.json"
+    plan.write_text('{"frames": []}\n', encoding="utf-8")
+    contract = tmp_path / "contract.json"
+    contract.write_text(
+        json.dumps(
+            {
+                "name": "fixture_compare_contract",
+                "runtime": {"external_reference_elapsed_s": 1092.5},
+                "comparison": {
+                    "required_scale": 1.25,
+                    "required_offset": 0.5,
+                    "required_min_coverage": 190,
+                    "max_rms_diff": 0.0016,
+                    "max_abs_diff_p99": 0.00042,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "resident_sweep_compare_contract"
+
+    _run(
+        "benchmarks/bench_resident_prefetch_sweep.py",
+        "--plan",
+        str(plan),
+        "--out",
+        str(out),
+        "--compare-from-contract",
+        str(contract),
+        "--prefetch-frames",
+        "16",
+        "--prefetch-workers",
+        "8",
+        "--batch-frames",
+        "8",
+        "--streams",
+        "4",
+        "--wave-frames",
+        "2",
+        "--release-modes",
+        "callback_queue",
+        "--dry-run",
+    )
+
+    payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    markdown = (out / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
+    policy = payload["compare_gate"]["policy"]
+    provenance = payload["common_run_args"]["compare_contract"]
+    assert policy["require_shape_match"] is True
+    assert policy["max_rms_diff"] == 0.0016
+    assert policy["max_abs_diff_p99"] == 0.00042
+    assert payload["compare_gate"]["planned_count"] == 1
+    assert provenance["source_contract_path"] == str(contract)
+    assert provenance["contract_name"] == "fixture_compare_contract"
+    assert "max_rms_diff" in provenance["imported_gate_fields"]
+    assert "glass_scale" in provenance["imported_compare_defaults"]
+    assert "reference_time_seconds" in provenance["imported_compare_defaults"]
+    assert "Compare contract" in markdown
+
+    spec = importlib.util.spec_from_file_location(
+        "bench_resident_prefetch_sweep",
+        Path("benchmarks/bench_resident_prefetch_sweep.py"),
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    gate, defaults, helper_provenance = module._compare_settings_from_contract_file(contract)
+    assert gate["require_shape_match"] is True
+    assert gate["max_rms_diff"] == 0.0016
+    assert defaults["glass_scale"] == 1.25
+    assert defaults["glass_offset"] == 0.5
+    assert defaults["min_coverage"] == 190.0
+    assert defaults["reference_time_seconds"] == 1092.5
+    assert helper_provenance["contract_name"] == "fixture_compare_contract"
+
+
 def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path):
     plan = tmp_path / "processing_plan.json"
     plan.write_text('{"frames": []}\n', encoding="utf-8")

@@ -1768,6 +1768,23 @@ integration where applicable.
 - Record contract provenance in the sweep summary and Markdown output.
 - Validate with dry-run tests and a real Phase 2 benchmark-contract dry run.
 
+### S2-Gate 107: Resident Sweep Contract Compare Import
+
+- Let the resident sweep harness import compare-gate thresholds and compare
+  normalization defaults from an existing GLASS benchmark contract JSON.
+- Map benchmark-contract `comparison` fields into sweep compare policy and
+  compare command defaults:
+  - shape-match requirement
+  - maximum RMS difference
+  - maximum p99 absolute difference
+  - candidate scale and offset
+  - minimum coverage threshold
+  - external reference runtime
+- Preserve explicit CLI compare values as overrides when both CLI values and
+  contract values are supplied.
+- Record compare-contract provenance in the sweep summary and Markdown output.
+- Validate with dry-run tests and a real Phase 2 benchmark-contract dry run.
+
 ## Gate Rules
 
 Each gate requires:

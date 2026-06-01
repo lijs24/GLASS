@@ -659,6 +659,8 @@ def _evaluate_frame_gate(run: dict[str, Any], policy: dict[str, Any]) -> dict[st
 def _evaluate_compare_gate(run: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     if not policy.get("enabled"):
         return {"status": "disabled", "passed": None, "policy": policy}
+    if run.get("status") == "dry_run":
+        return {"status": "planned", "passed": None, "policy": policy}
     compare = run.get("compare") if isinstance(run.get("compare"), dict) else {}
     reasons: list[str] = []
     if compare.get("status") != "completed":
@@ -761,6 +763,9 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         frame_gate_contract = common_run_args.get("frame_gate_contract")
         if isinstance(frame_gate_contract, dict) and frame_gate_contract.get("source_contract_path"):
             lines.append(f"- Frame gate contract: `{frame_gate_contract['source_contract_path']}`")
+        compare_contract = common_run_args.get("compare_contract")
+        if isinstance(compare_contract, dict) and compare_contract.get("source_contract_path"):
+            lines.append(f"- Compare contract: `{compare_contract['source_contract_path']}`")
         lines.append(
             "- Common run args: "
             f"{common_run_args.get('total_arg_count', 0)} total, "
@@ -772,7 +777,8 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         lines.append(
             "- Compare gate: "
             f"{compare_gate.get('passed_count', 0)} passed, "
-            f"{compare_gate.get('failed_count', 0)} failed"
+            f"{compare_gate.get('failed_count', 0)} failed, "
+            f"{compare_gate.get('planned_count', 0)} planned"
         )
     frame_gate = payload.get("frame_gate") if isinstance(payload.get("frame_gate"), dict) else {}
     if frame_gate.get("enabled"):

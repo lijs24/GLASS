@@ -148,14 +148,58 @@ def _frame_gate_from_contract_file(path: Path) -> tuple[dict[str, int | None], d
     }
 
 
+def _compare_settings_from_contract_file(
+    path: Path,
+) -> tuple[dict[str, bool | float | None], dict[str, float | None], dict[str, Any]]:
+    contract = read_json(path)
+    comparison = contract.get("comparison") if isinstance(contract.get("comparison"), dict) else {}
+    runtime = contract.get("runtime") if isinstance(contract.get("runtime"), dict) else {}
+    compare_gate = {
+        "require_shape_match": bool(comparison) or None,
+        "max_rms_diff": _optional_float(comparison.get("max_rms_diff")),
+        "max_relative_rms_diff": _optional_float(comparison.get("max_relative_rms_diff")),
+        "max_abs_diff_p99": _optional_float(comparison.get("max_abs_diff_p99")),
+    }
+    compare_defaults = {
+        "glass_scale": _optional_float(comparison.get("required_scale")),
+        "glass_offset": _optional_float(comparison.get("required_offset")),
+        "min_coverage": _optional_float(comparison.get("required_min_coverage")),
+        "reference_time_seconds": _optional_float(runtime.get("external_reference_elapsed_s")),
+    }
+    imported_gate = {key: value for key, value in compare_gate.items() if value is not None}
+    imported_defaults = {key: value for key, value in compare_defaults.items() if value is not None}
+    if not imported_gate and not imported_defaults:
+        raise ValueError(f"contract does not define usable comparison requirements: {path}")
+    return compare_gate, compare_defaults, {
+        "source_contract_path": str(path),
+        "contract_name": contract.get("name"),
+        "imported_gate_fields": sorted(imported_gate),
+        "imported_compare_defaults": sorted(imported_defaults),
+    }
+
+
 def _optional_int(value: Any) -> int | None:
     if value is None:
         return None
     return int(value)
 
 
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
 def _prefer_cli_int(cli_value: int | None, contract_value: int | None) -> int | None:
     return cli_value if cli_value is not None else contract_value
+
+
+def _prefer_cli_float(cli_value: float | None, contract_value: float | None) -> float | None:
+    return cli_value if cli_value is not None else contract_value
+
+
+def _prefer_cli_bool(cli_value: bool, contract_value: bool | None) -> bool:
+    return cli_value if cli_value else bool(contract_value)
 
 
 def _variant_command(
@@ -416,6 +460,13 @@ def main() -> int:
         "--frame-gate-from-contract",
         help="import frame-count promotion requirements from a GLASS benchmark contract JSON",
     )
+    parser.add_argument(
+        "--compare-from-contract",
+        help=(
+            "import compare gate thresholds and compare normalization defaults "
+            "from a GLASS benchmark contract JSON"
+        ),
+    )
     parser.add_argument("--prefetch-frames", default="16,24,32")
     parser.add_argument("--prefetch-workers", default="8,12")
     parser.add_argument("--batch-frames", default="8")
@@ -595,6 +646,47 @@ def main() -> int:
             contract_frame_gate.get("min_active_light_frames"),
         ),
     }
+    contract_compare_gate: dict[str, bool | float | None] = {}
+    contract_compare_defaults: dict[str, float | None] = {}
+    compare_contract_provenance: dict[str, Any] | None = None
+    if args.compare_from_contract:
+        contract_compare_gate, contract_compare_defaults, compare_contract_provenance = (
+            _compare_settings_from_contract_file(Path(args.compare_from_contract))
+        )
+        common_run_args_provenance["compare_contract"] = compare_contract_provenance
+    compare_gate_policy = {
+        "require_shape_match": _prefer_cli_bool(
+            args.compare_require_shape_match,
+            contract_compare_gate.get("require_shape_match")
+            if isinstance(contract_compare_gate.get("require_shape_match"), bool)
+            else None,
+        ),
+        "max_rms_diff": _prefer_cli_float(
+            args.compare_max_rms,
+            contract_compare_gate.get("max_rms_diff")
+            if isinstance(contract_compare_gate.get("max_rms_diff"), float)
+            else None,
+        ),
+        "max_relative_rms_diff": _prefer_cli_float(
+            args.compare_max_relative_rms,
+            contract_compare_gate.get("max_relative_rms_diff")
+            if isinstance(contract_compare_gate.get("max_relative_rms_diff"), float)
+            else None,
+        ),
+        "max_abs_diff_p99": _prefer_cli_float(
+            args.compare_max_p99,
+            contract_compare_gate.get("max_abs_diff_p99")
+            if isinstance(contract_compare_gate.get("max_abs_diff_p99"), float)
+            else None,
+        ),
+    }
+    compare_glass_scale = _prefer_cli_float(args.compare_glass_scale, contract_compare_defaults.get("glass_scale"))
+    compare_glass_offset = _prefer_cli_float(args.compare_glass_offset, contract_compare_defaults.get("glass_offset"))
+    compare_min_coverage = _prefer_cli_float(args.compare_min_coverage, contract_compare_defaults.get("min_coverage"))
+    reference_time_seconds = _prefer_cli_float(
+        args.reference_time_seconds,
+        contract_compare_defaults.get("reference_time_seconds"),
+    )
     variants = build_resident_sweep_variants(
         prefetch_frames=parse_int_grid(args.prefetch_frames, default=[16, 24, 32]),
         prefetch_workers=parse_int_grid(args.prefetch_workers, default=[8, 12]),
@@ -696,16 +788,16 @@ def main() -> int:
                 reference_master=Path(args.reference_master),
                 out_html=compare_out,
                 candidate_total_s=summary.get("total_elapsed_s"),
-                reference_total_s=args.reference_time_seconds,
+                reference_total_s=reference_time_seconds,
                 candidate_label=variant_id,
                 reference_label=args.reference_label,
                 ignore_border_px=args.ignore_border_px,
-                glass_scale=args.compare_glass_scale,
-                glass_offset=args.compare_glass_offset,
+                glass_scale=compare_glass_scale,
+                glass_offset=compare_glass_offset,
                 clip_low=args.compare_clip_low,
                 clip_high=args.compare_clip_high,
                 glass_coverage_map=candidate_coverage_map,
-                min_coverage=args.compare_min_coverage,
+                min_coverage=compare_min_coverage,
             )
             commands.append({"variant_id": variant_id, "kind": "compare", "command": compare_command})
             subprocess.run(compare_command, check=True)
@@ -720,12 +812,7 @@ def main() -> int:
         baseline_total_s=args.baseline_total_seconds,
         commands=commands,
         common_run_args=common_run_args_provenance,
-        compare_gate={
-            "require_shape_match": args.compare_require_shape_match,
-            "max_rms_diff": args.compare_max_rms,
-            "max_relative_rms_diff": args.compare_max_relative_rms,
-            "max_abs_diff_p99": args.compare_max_p99,
-        },
+        compare_gate=compare_gate_policy,
         frame_gate=frame_gate_policy,
     )
     print(f"resident prefetch sweep summary: {out_dir / 'resident_prefetch_sweep_summary.json'}")
