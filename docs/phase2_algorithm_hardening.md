@@ -2107,6 +2107,30 @@ integration where applicable.
   whether the next corrective work should target the integration/rejection
   policy itself.
 
+### S2-Gate 127: Localized Integration Contribution Audit
+
+- Add a reusable `glass compare-tile-integration` command that consumes a
+  `compare-tile-pack` manifest and a GLASS run directory.
+- Replay all selected positive-weight frames for each localized residual tile,
+  applying the same bounded source-window, master-calibration-cache,
+  registration-matrix, and interpolation diagnostics established in
+  S2-Gates 123-126.
+- Recompute the resident CUDA rejection semantics over the replayed tile stack:
+  `none`, two-pass mean/std `sigma_clip`, and the current two-stage
+  `winsorized_sigma` approximation.
+- Emit per-frame accepted/rejected pixel counts, low/high rejection counts,
+  accepted weighted deltas, normalized contribution to the reconstructed tile,
+  focus/control group summaries, and diagnostic reconstructed-master delta to
+  the actual GLASS master tile.
+- Run the command on the S2-Gate 121 top residual tiles for all 193
+  positive-weight frames, focusing F000100-F000110 against neighboring control
+  frames.
+- Treat this as an observability gate only. It must not change registration,
+  weighting, rejection, local normalization, or integration defaults; it should
+  decide whether the localized residual family survives the actual rejection
+  policy and therefore should be handled by a motion-family/weighting policy
+  rather than by calibration, interpolation, or warp replay fixes.
+
 ## Gate Rules
 
 Each gate requires:

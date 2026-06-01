@@ -29,6 +29,10 @@ from glass.report.blackbox_package import create_blackbox_package, finalize_blac
 from glass.report.compare_report import compare_fits, write_compare_report
 from glass.report.compare_outliers import build_compare_outlier_audit, write_compare_outlier_audit
 from glass.report.compare_frame_family import build_compare_frame_family_audit, write_compare_frame_family_audit
+from glass.report.compare_tile_integration import (
+    build_compare_tile_integration_audit,
+    write_compare_tile_integration_audit,
+)
 from glass.report.compare_tile_attribution import build_compare_tile_attribution, write_compare_tile_attribution
 from glass.report.compare_tile_pack import build_compare_tile_pack
 from glass.report.compare_tile_replay import build_compare_tile_replay, write_compare_tile_replay
@@ -850,6 +854,47 @@ def cmd_compare_tile_replay(args: argparse.Namespace) -> int:
             "status": "completed",
             "tile_count": payload.get("tile_count"),
             "selected_frame_count": payload.get("selected_frame_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_compare_tile_integration(args: argparse.Namespace) -> int:
+    payload = build_compare_tile_integration_audit(
+        args.tile_pack,
+        args.run,
+        filter_name=args.filter,
+        master_cache_dir=args.master_cache_dir,
+        frame_strategy=args.frame_strategy,
+        max_frames=args.max_frames,
+        max_tiles=args.max_tiles,
+        low_sigma=args.low_sigma,
+        high_sigma=args.high_sigma,
+        rejection=args.rejection,
+        replay_interpolation=args.replay_interpolation,
+        focus_frames=args.focus_frame or None,
+        focus_range_start=args.focus_range_start,
+        focus_range_end=args.focus_range_end,
+        control_frames=args.control_frame or None,
+        control_before=args.control_before,
+        control_after=args.control_after,
+    )
+    write_compare_tile_integration_audit(args.out, payload, markdown=args.markdown)
+    contrast = payload.get("focus_vs_control") if isinstance(payload.get("focus_vs_control"), dict) else {}
+    contribution = (
+        contrast.get("tile_normalized_delta_contribution_sum")
+        if isinstance(contrast.get("tile_normalized_delta_contribution_sum"), dict)
+        else {}
+    )
+    console.print(
+        {
+            "status": "completed",
+            "tile_count": payload.get("tile_count"),
+            "selected_frame_count": payload.get("selected_frame_count"),
+            "focus_frame_count": len(payload.get("focus_ids") or []),
+            "focus_minus_control_contribution_mean": contribution.get("focus_minus_control"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2024,6 +2069,63 @@ def build_parser() -> argparse.ArgumentParser:
         help="CPU interpolation used for bounded diagnostic replay",
     )
     tile_replay.set_defaults(func=cmd_compare_tile_replay)
+
+    tile_integration = sub.add_parser(
+        "compare-tile-integration",
+        help="replay localized residual tiles through integration rejection diagnostics",
+    )
+    tile_integration.add_argument("--tile-pack", required=True, help="tile_pack_manifest.json from compare-tile-pack")
+    tile_integration.add_argument("--run", required=True, help="GLASS run directory containing integration/frame artifacts")
+    tile_integration.add_argument("--out", required=True, help="output integration audit JSON")
+    tile_integration.add_argument("--markdown", help="optional output Markdown summary")
+    tile_integration.add_argument("--filter", help="optional filter name used to select integration output maps")
+    tile_integration.add_argument(
+        "--master-cache-dir",
+        help="resident master cache directory; defaults to run_command discovery",
+    )
+    tile_integration.add_argument(
+        "--frame-strategy",
+        choices=["lowest_weight", "downweighted", "frame_id"],
+        default="frame_id",
+        help="which positive-weight frames to replay",
+    )
+    tile_integration.add_argument(
+        "--max-frames",
+        type=int,
+        default=0,
+        help="maximum frames to replay; use 0 for all selected positive-weight frames",
+    )
+    tile_integration.add_argument("--max-tiles", type=int, default=0, help="maximum tiles from tile pack; 0 audits all")
+    tile_integration.add_argument("--low-sigma", type=float, help="override low sigma for rejection replay")
+    tile_integration.add_argument("--high-sigma", type=float, help="override high sigma for rejection replay")
+    tile_integration.add_argument(
+        "--rejection",
+        choices=["none", "sigma_clip", "winsorized_sigma"],
+        help="override rejection mode; defaults to integration_results.json",
+    )
+    tile_integration.add_argument(
+        "--replay-interpolation",
+        choices=["bilinear", "lanczos3"],
+        default="lanczos3",
+        help="CPU interpolation used for bounded diagnostic replay",
+    )
+    tile_integration.add_argument("--focus-frame", action="append", default=[], help="focus frame id; may be repeated")
+    tile_integration.add_argument("--focus-range-start", help="first focus frame id, for example F000100")
+    tile_integration.add_argument("--focus-range-end", help="last focus frame id, for example F000110")
+    tile_integration.add_argument("--control-frame", action="append", default=[], help="control frame id; may be repeated")
+    tile_integration.add_argument(
+        "--control-before",
+        type=int,
+        default=5,
+        help="number of positive-weight frames before the focus range used as controls",
+    )
+    tile_integration.add_argument(
+        "--control-after",
+        type=int,
+        default=5,
+        help="number of positive-weight frames after the focus range used as controls",
+    )
+    tile_integration.set_defaults(func=cmd_compare_tile_integration)
 
     frame_family = sub.add_parser(
         "compare-frame-family",

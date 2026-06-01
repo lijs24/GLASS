@@ -123,6 +123,7 @@ def test_cli_help_commands():
         "compare-tile-pack",
         "compare-tile-attribution",
         "compare-tile-replay",
+        "compare-tile-integration",
         "compare-frame-family",
         "resident-tile-capture",
         "speedup-summary",
