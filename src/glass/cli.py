@@ -28,6 +28,7 @@ from glass.planner.subset import build_subset_manifest
 from glass.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from glass.report.compare_report import compare_fits, write_compare_report
 from glass.report.compare_outliers import build_compare_outlier_audit, write_compare_outlier_audit
+from glass.report.compare_tile_pack import build_compare_tile_pack
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
 from glass.report.resident_determinism import (
@@ -781,6 +782,25 @@ def cmd_compare_outliers(args: argparse.Namespace) -> int:
             else None,
             "out": args.out,
             "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_compare_tile_pack(args: argparse.Namespace) -> int:
+    manifest = build_compare_tile_pack(
+        args.audit,
+        args.out_dir,
+        max_tiles=args.max_tiles,
+        pad_px=args.pad_px,
+        include_png=not args.no_png,
+        preview_max_size=args.preview_max_size,
+    )
+    console.print(
+        {
+            "status": "completed",
+            "tile_count": manifest.get("tile_count"),
+            "manifest": str(Path(args.out_dir) / "tile_pack_manifest.json"),
         }
     )
     return 0
@@ -1822,6 +1842,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="distance from compared-region edge considered an edge-band tail pixel",
     )
     compare_outliers.set_defaults(func=cmd_compare_outliers)
+
+    tile_pack = sub.add_parser(
+        "compare-tile-pack",
+        help="export FITS/PNG cutouts for top compare outlier tiles",
+    )
+    tile_pack.add_argument("--audit", required=True, help="compare-outliers JSON artifact")
+    tile_pack.add_argument("--out-dir", required=True, help="output directory for tile cutout package")
+    tile_pack.add_argument("--max-tiles", type=int, default=4, help="number of top tiles to export")
+    tile_pack.add_argument("--pad-px", type=int, default=0, help="padding around each top tile")
+    tile_pack.add_argument(
+        "--preview-max-size",
+        type=int,
+        default=768,
+        help="maximum preview PNG dimension",
+    )
+    tile_pack.add_argument("--no-png", action="store_true", help="write FITS cutouts only")
+    tile_pack.set_defaults(func=cmd_compare_tile_pack)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

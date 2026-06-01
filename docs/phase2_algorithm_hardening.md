@@ -2000,6 +2000,23 @@ integration where applicable.
   residual tiles, crop/coverage policy, normalization, or per-frame contribution
   maps before designing another agreement-weighting rule.
 
+### S2-Gate 121: Localized Compare Tile Package
+
+- Add a reusable `glass compare-tile-pack` command that consumes a
+  `compare-outliers` JSON audit and exports the top residual tiles as small
+  FITS cutouts plus optional PNG previews for GLASS, reference, signed diff,
+  absolute diff, and coverage.
+- Preserve the compare audit transform so tile cutouts use the same scale,
+  offset, clipping, and source coordinates as the p99 residual audit.
+- Write a `tile_pack_manifest.json` with tile extents, paths, diff statistics,
+  and source top-tile metadata so localized residual evidence can be attached
+  to later benchmark and report work.
+- Run the package on the best S2-Gate 119 downweight candidate's S2-Gate 120
+  outlier audit and inspect top signed-diff previews.
+- Treat this as an observability gate only. It must not change defaults; it
+  prepares the next gate to attribute localized residuals to frame
+  contribution, rejection maps, local normalization, or registration.
+
 ## Gate Rules
 
 Each gate requires:

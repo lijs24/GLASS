@@ -120,6 +120,7 @@ def test_cli_help_commands():
         "audit",
         "compare",
         "compare-outliers",
+        "compare-tile-pack",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",
