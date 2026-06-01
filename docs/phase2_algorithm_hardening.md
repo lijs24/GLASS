@@ -2233,6 +2233,27 @@ integration where applicable.
   F000100-F000110 focus family and decide whether a future tile-local native
   implementation is directionally justified.
 
+### S2-Gate 133: Tile-Local Policy Replay
+
+- Add a reusable `glass tile-local-policy-replay` command that consumes a
+  `resident-tile-contribution` artifact and a matching
+  `tile-local-policy-proposal` artifact.
+- Reconstruct the proposal at summary level for each localized residual tile:
+  selected target-family frame rows, original contribution, proposed
+  contribution, delta contribution, signed residual before and predicted
+  residual after.
+- Keep canonical tile contribution values from the proposal while reporting
+  per-frame row sums from the resident contribution artifact, so mismatches
+  between stored group summaries and frame rows are visible.
+- Emit JSON and optional Markdown summaries with boost/downweight counts,
+  clamping counts, mean before/after residuals, multiplier statistics, and a
+  conservative recommendation.
+- Treat this as a pre-native replay gate only. It must not change production
+  integration, resident CUDA buffers, frame weights, or image pixels.
+- Run the command on the S2-Gate 132 F000100-F000110 focus proposal and use it
+  as the handoff contract for a future native tile-local integration
+  implementation.
+
 ## Gate Rules
 
 Each gate requires:

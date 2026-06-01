@@ -130,6 +130,7 @@ def test_cli_help_commands():
         "resident-tile-capture",
         "resident-tile-contribution",
         "tile-local-policy-proposal",
+        "tile-local-policy-replay",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",

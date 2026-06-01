@@ -66,6 +66,7 @@ from glass.report.resident_tile_contribution import (
 )
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
+from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -1103,6 +1104,24 @@ def cmd_tile_local_policy_proposal(args: argparse.Namespace) -> int:
             "away": summary.get("moves_away_from_reference"),
             "boost_tiles": summary.get("boost_tiles"),
             "clamped_tiles": summary.get("clamped_tiles"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_tile_local_policy_replay(args: argparse.Namespace) -> int:
+    payload = build_tile_local_policy_replay(args.contribution, args.proposal)
+    write_tile_local_policy_replay(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "recommendation": summary.get("recommendation"),
+            "toward": summary.get("moves_toward_reference"),
+            "away": summary.get("moves_away_from_reference"),
+            "mean_abs_residual_before": summary.get("mean_abs_residual_before"),
+            "mean_abs_residual_after": summary.get("mean_abs_residual_after"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2487,6 +2506,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional GLASS-to-reference scale; defaults to tile-pack candidate_transform.scale",
     )
     tile_local_policy.set_defaults(func=cmd_tile_local_policy_proposal)
+
+    tile_local_replay = sub.add_parser(
+        "tile-local-policy-replay",
+        help="replay a tile-local proposal against resident contribution summaries",
+    )
+    tile_local_replay.add_argument(
+        "--contribution",
+        required=True,
+        help="resident-tile-contribution JSON artifact",
+    )
+    tile_local_replay.add_argument(
+        "--proposal",
+        required=True,
+        help="tile-local-policy-proposal JSON artifact",
+    )
+    tile_local_replay.add_argument("--out", required=True, help="output tile-local policy replay JSON")
+    tile_local_replay.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_replay.set_defaults(func=cmd_tile_local_policy_replay)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")
