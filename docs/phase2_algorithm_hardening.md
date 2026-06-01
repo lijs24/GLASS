@@ -2212,6 +2212,27 @@ integration where applicable.
 - Run the command on the S2-Gate 121 top residual tile package using the
   S2-Gate 119/120 benchmark run and the F000100-F000110 focus family.
 
+### S2-Gate 132: Tile-Local Policy Proposal
+
+- Add a reusable `glass tile-local-policy-proposal` command that consumes a
+  `resident-tile-contribution` artifact and its matching residual tile-pack
+  manifest.
+- For each localized residual tile, solve a first-order tile-local multiplier
+  for a target group, initially `focus`, using signed GLASS-minus-reference
+  residuals and the resident-captured group contribution in reference units.
+- Support bounded multipliers so the proposal can express both downweight and
+  boost directions without silently pretending an unconstrained correction is
+  safe.
+- Emit per-tile action (`boost`, `downweight`, `hold`, or
+  `insufficient_signal`), unconstrained and clamped multiplier, predicted
+  residual after applying the local multiplier, residual-reduction fraction,
+  and summary recommendation.
+- Treat this as an artifact-only gate. It must not change the integration
+  output or enable tile-local weights in the production pipeline yet.
+- Run the command on the S2-Gate 131 resident contribution artifact for the
+  F000100-F000110 focus family and decide whether a future tile-local native
+  implementation is directionally justified.
+
 ## Gate Rules
 
 Each gate requires:

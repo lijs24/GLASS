@@ -65,6 +65,7 @@ from glass.report.resident_tile_contribution import (
     write_resident_tile_contribution,
 )
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
+from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -1076,6 +1077,32 @@ def cmd_resident_tile_contribution(args: argparse.Namespace) -> int:
             "selected_frame_count": payload.get("selected_frame_count"),
             "tile_count": payload.get("tile_count"),
             "focus_contribution_mean": contribution.get("mean"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_tile_local_policy_proposal(args: argparse.Namespace) -> int:
+    payload = build_tile_local_policy_proposal(
+        args.contribution,
+        tile_pack=args.tile_pack,
+        target_group=args.target_group,
+        residual_stat=args.residual_stat,
+        min_multiplier=args.min_multiplier,
+        max_multiplier=args.max_multiplier,
+        glass_scale=args.glass_scale,
+    )
+    write_tile_local_policy_proposal(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "recommendation": summary.get("recommendation"),
+            "toward": summary.get("moves_toward_reference"),
+            "away": summary.get("moves_away_from_reference"),
+            "boost_tiles": summary.get("boost_tiles"),
+            "clamped_tiles": summary.get("clamped_tiles"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2429,6 +2456,37 @@ def build_parser() -> argparse.ArgumentParser:
     resident_contribution.add_argument("--control-before", type=int, default=5)
     resident_contribution.add_argument("--control-after", type=int, default=5)
     resident_contribution.set_defaults(func=cmd_resident_tile_contribution)
+
+    tile_local_policy = sub.add_parser(
+        "tile-local-policy-proposal",
+        help="derive a tile-local multiplier proposal from resident contribution and residual direction",
+    )
+    tile_local_policy.add_argument(
+        "--contribution",
+        required=True,
+        help="resident-tile-contribution JSON artifact",
+    )
+    tile_local_policy.add_argument(
+        "--tile-pack",
+        help="optional tile_pack_manifest.json; defaults to the path recorded in the contribution artifact",
+    )
+    tile_local_policy.add_argument("--out", required=True, help="output tile-local policy proposal JSON")
+    tile_local_policy.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_policy.add_argument("--target-group", choices=["focus", "control"], default="focus")
+    tile_local_policy.add_argument(
+        "--residual-stat",
+        choices=["signed_mean", "tail_signed_mean"],
+        default="signed_mean",
+        help="residual summary used to solve the proposed tile-local multiplier",
+    )
+    tile_local_policy.add_argument("--min-multiplier", type=float, default=0.0)
+    tile_local_policy.add_argument("--max-multiplier", type=float, default=2.0)
+    tile_local_policy.add_argument(
+        "--glass-scale",
+        type=float,
+        help="optional GLASS-to-reference scale; defaults to tile-pack candidate_transform.scale",
+    )
+    tile_local_policy.set_defaults(func=cmd_tile_local_policy_proposal)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

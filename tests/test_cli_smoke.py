@@ -129,6 +129,7 @@ def test_cli_help_commands():
         "compare-frame-family",
         "resident-tile-capture",
         "resident-tile-contribution",
+        "tile-local-policy-proposal",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",
