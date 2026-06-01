@@ -1548,6 +1548,20 @@ integration where applicable.
 - No new 200-light benchmark is required because this gate reads existing
   artifacts and does not alter image math or resident CUDA routing.
 
+### S2-Gate 93: Pipeline Pixel Delta Reporting
+
+- Expand the HTML pipeline-contract section so optional pixel-verification
+  evidence includes per-map and per-flag `actual`, `summary`, `delta`, and
+  pass/fail rows.
+- Cover DQ bit counts, coverage `no_data` matching, and low/high rejection-map
+  positive-pixel matching when the fields are present in `pipeline_contract`.
+- Keep `pipeline_contract.json` authoritative. The report is only a review layer
+  for quickly locating the mismatched map or DQ flag.
+- Validate with report fixture tests, ruff, full pytest, and report
+  regeneration against the Gate92 real artifact JSON.
+- No new 200-light benchmark is required because this gate is report-only and
+  does not alter image math or resident CUDA routing.
+
 ## Gate Rules
 
 Each gate requires:

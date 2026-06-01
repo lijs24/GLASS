@@ -628,10 +628,29 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
                 "integration_outputs": [
                     {
                         "item": "H",
-                        "dq": {"status": "verified", "ok": False, "path": "integration/dq_H.fits"},
+                        "dq": {
+                            "status": "verified",
+                            "ok": False,
+                            "path": "integration/dq_H.fits",
+                            "summary_matches": {
+                                "valid": {"actual": 41, "summary": 42, "delta": -1, "passed": False}
+                            },
+                        },
                         "count_maps": {
-                            "coverage": {"status": "verified", "ok": False},
-                            "low_rejection": {"status": "not_required", "ok": True},
+                            "coverage": {
+                                "status": "verified",
+                                "ok": False,
+                                "summary_match": {
+                                    "no_data": {"actual": 2, "summary": 1, "delta": 1, "passed": False}
+                                },
+                            },
+                            "low_rejection": {
+                                "status": "verified",
+                                "ok": True,
+                                "summary_match": {
+                                    "low_rejected": {"actual": 5, "summary": 5, "delta": 0, "passed": True}
+                                },
+                            },
                             "high_rejection": {"status": "not_required", "ok": True},
                         },
                     }
@@ -680,6 +699,9 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
     assert "H:coverage" in html
     assert "pixel_verification" in html
     assert "integration/dq_H.fits" in html
+    assert "low_rejected" in html
+    assert "<td>-1</td>" in html
+    assert "<td>5</td><td>5</td><td>0</td><td>True</td>" in html
     assert "local-normalization" in html
     assert "bilinear" in html
     assert "integration_artifact_exists" not in html

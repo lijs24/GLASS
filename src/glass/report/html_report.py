@@ -1101,6 +1101,50 @@ def _pipeline_contract_pixel_rows(contract: dict[str, Any] | None) -> list[dict[
     return rows
 
 
+def _pipeline_contract_pixel_delta_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    pixel = (contract or {}).get("pixel_verification") or {}
+    for item in pixel.get("integration_outputs") or []:
+        item_id = item.get("item")
+        dq = item.get("dq") if isinstance(item.get("dq"), dict) else {}
+        for flag, match in (dq.get("summary_matches") or {}).items():
+            if not isinstance(match, dict):
+                continue
+            rows.append(
+                {
+                    "item": item_id,
+                    "map": "dq",
+                    "flag": flag,
+                    "status": dq.get("status"),
+                    "actual": match.get("actual"),
+                    "summary": match.get("summary"),
+                    "delta": match.get("delta"),
+                    "passed": match.get("passed"),
+                    "path": dq.get("path"),
+                }
+            )
+        count_maps = item.get("count_maps") if isinstance(item.get("count_maps"), dict) else {}
+        for map_name in ("coverage", "low_rejection", "high_rejection"):
+            map_payload = count_maps.get(map_name) if isinstance(count_maps.get(map_name), dict) else {}
+            for flag, match in (map_payload.get("summary_match") or {}).items():
+                if not isinstance(match, dict):
+                    continue
+                rows.append(
+                    {
+                        "item": item_id,
+                        "map": map_name,
+                        "flag": flag,
+                        "status": map_payload.get("status"),
+                        "actual": match.get("actual"),
+                        "summary": match.get("summary"),
+                        "delta": match.get("delta"),
+                        "passed": match.get("passed"),
+                        "path": map_payload.get("path"),
+                    }
+                )
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -1240,6 +1284,7 @@ def write_html_report(
     pipeline_contract_local_norm_rows = _pipeline_contract_local_norm_rows(pipeline_contract)
     pipeline_contract_warp_rows = _pipeline_contract_warp_rows(pipeline_contract)
     pipeline_contract_pixel_rows = _pipeline_contract_pixel_rows(pipeline_contract)
+    pipeline_contract_pixel_delta_rows = _pipeline_contract_pixel_delta_rows(pipeline_contract)
     dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
@@ -1360,6 +1405,7 @@ def write_html_report(
   {_table(pipeline_contract_failure_rows)}
   {_limited_table(pipeline_contract_map_rows, label="pipeline contract map rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_pixel_rows, label="pipeline contract pixel rows", artifact="pipeline_contract JSON")}
+  {_limited_table(pipeline_contract_pixel_delta_rows, label="pipeline contract pixel delta rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_local_norm_rows, label="pipeline contract local-normalization rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_warp_rows, label="pipeline contract warp rows", artifact="pipeline_contract JSON")}
   {_h2("dq-provenance-contract", "DQ provenance contract")}
