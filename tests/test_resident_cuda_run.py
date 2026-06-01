@@ -17,6 +17,7 @@ from glass.engine.resident_cuda import (
     _resident_descriptor_signature,
     _resident_fit_signature,
     _resident_output_map_selection,
+    _resident_registration_motion_weighting,
     _resident_triangle_agreement_policy,
     _resident_triangle_agreement_quality,
     _resident_triangle_determinism_summary,
@@ -411,6 +412,53 @@ def test_resident_triangle_agreement_policy_can_downweight_without_hard_failure(
     assert flagged["hard_failure"] is False
     assert flagged["status"] == "flagged"
     assert flagged["weight_multiplier"] == 1.0
+
+
+def test_resident_registration_motion_weighting_downweights_translation_outlier():
+    matrices = [
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        [[1.0, 0.0, 1.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        [[1.0, 0.0, 2.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        [[1.0, 0.0, 48.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    ]
+
+    summary = _resident_registration_motion_weighting(
+        ["F001", "F002", "F003", "F004"],
+        matrices,
+        [1.0, 1.0, 1.0, 1.0],
+        mode="translation_mad",
+        threshold_sigma=8.0,
+        min_weight=0.05,
+        power=2.0,
+        scale_floor_px=1.0,
+    )
+
+    assert summary["enabled"] is True
+    assert summary["eligible_frame_count"] == 4
+    assert summary["downweighted_frame_count"] == 1
+    assert summary["multipliers"][:3] == [1.0, 1.0, 1.0]
+    assert 0.05 <= summary["multipliers"][3] < 1.0
+    outlier = summary["frame_results"][3]
+    assert outlier["threshold_exceeded"] is True
+    assert outlier["weight_after_motion"] < outlier["weight_before_motion"]
+
+
+def test_resident_registration_motion_weighting_off_preserves_weights():
+    matrices = [
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        [[1.0, 0.0, 48.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    ]
+
+    summary = _resident_registration_motion_weighting(
+        ["F001", "F002"],
+        matrices,
+        [1.0, 1.0],
+        mode="off",
+    )
+
+    assert summary["enabled"] is False
+    assert summary["multipliers"] == [1.0, 1.0]
+    assert summary["downweighted_frame_count"] == 0
 
 
 def _two_dark_group_dataset(tmp_path: Path) -> Path:
@@ -2244,6 +2292,10 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
             "lanczos3",
             "--resident-warp-clamping-threshold",
             "0.30",
+            "--resident-registration-motion-weighting",
+            "translation_mad",
+            "--resident-registration-motion-threshold-sigma",
+            "8",
         ]
     ) == 0
 
@@ -2252,6 +2304,8 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     resident = read_json(run / "resident_artifacts.json")
     moving = [item for item in registration["results"] if item["frame_id"] == moving_id][0]
     resident_registration = resident["artifacts"][0]["resident_registration"]
+    weighting = resident["artifacts"][0]["resident_integration_weighting"]
+    motion = weighting["registration_motion_weighting"]
 
     assert integration["outputs"][0]["resident_registration"] == "external_matrix"
     assert registration["transform_model"] == "external_matrix"
@@ -2260,6 +2314,12 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert resident_registration["mode"] == "external_matrix"
     assert resident_registration["warp_interpolation"] == "lanczos3"
     assert resident_registration["warp_clamping_threshold"] == 0.30
+    assert resident_registration["registration_motion_weighting_mode"] == "translation_mad"
+    assert resident_registration["registration_motion_downweighted_frame_count"] == 0
+    assert motion["enabled"] is True
+    assert motion["mode"] == "translation_mad"
+    assert motion["threshold_sigma"] == 8.0
+    assert motion["reason"] == "fewer_than_three_eligible_frames"
     assert resident_registration["external_registration_results_path"] == str(external_registration)
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity"

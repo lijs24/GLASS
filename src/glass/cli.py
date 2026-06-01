@@ -470,6 +470,11 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
                 resident_triangle_agreement_action=args.resident_triangle_agreement_action,
                 resident_triangle_agreement_min_weight=args.resident_triangle_agreement_min_weight,
+                resident_registration_motion_weighting=args.resident_registration_motion_weighting,
+                resident_registration_motion_threshold_sigma=args.resident_registration_motion_threshold_sigma,
+                resident_registration_motion_min_weight=args.resident_registration_motion_min_weight,
+                resident_registration_motion_power=args.resident_registration_motion_power,
+                resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -574,6 +579,11 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
                 resident_triangle_agreement_action=args.resident_triangle_agreement_action,
                 resident_triangle_agreement_min_weight=args.resident_triangle_agreement_min_weight,
+                resident_registration_motion_weighting=args.resident_registration_motion_weighting,
+                resident_registration_motion_threshold_sigma=args.resident_registration_motion_threshold_sigma,
+                resident_registration_motion_min_weight=args.resident_registration_motion_min_weight,
+                resident_registration_motion_power=args.resident_registration_motion_power,
+                resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -1679,6 +1689,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="minimum multiplier for agreement downweight action; must be in [0, 1], default comes from the plan",
     )
     run.add_argument(
+        "--resident-registration-motion-weighting",
+        choices=["off", "translation_mad"],
+        default="off",
+        help="optional registration-motion robust outlier downweighting; default off",
+    )
+    run.add_argument(
+        "--resident-registration-motion-threshold-sigma",
+        type=float,
+        default=16.0,
+        help="robust motion score threshold for registration-motion downweighting",
+    )
+    run.add_argument(
+        "--resident-registration-motion-min-weight",
+        type=float,
+        default=0.05,
+        help="minimum multiplier for registration-motion downweighting; must be in [0, 1]",
+    )
+    run.add_argument(
+        "--resident-registration-motion-power",
+        type=float,
+        default=2.0,
+        help="power used by the smooth registration-motion multiplier falloff",
+    )
+    run.add_argument(
+        "--resident-registration-motion-scale-floor-px",
+        type=float,
+        default=1.0,
+        help="minimum robust motion scale in pixels to avoid divide-by-zero on tight dithers",
+    )
+    run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for registration",
     )
@@ -1934,6 +1974,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         help="minimum multiplier for audit-run agreement downweight action; must be in [0, 1]",
     )
+    audit.add_argument(
+        "--resident-registration-motion-weighting",
+        choices=["off", "translation_mad"],
+        default="off",
+        help="optional registration-motion robust outlier downweighting for resident audit; default off",
+    )
+    audit.add_argument("--resident-registration-motion-threshold-sigma", type=float, default=16.0)
+    audit.add_argument("--resident-registration-motion-min-weight", type=float, default=0.05)
+    audit.add_argument("--resident-registration-motion-power", type=float, default=2.0)
+    audit.add_argument("--resident-registration-motion-scale-floor-px", type=float, default=1.0)
     audit.add_argument(
         "--resident-local-normalization-mode",
         choices=["global_mean_std", "grid_mean_std"],

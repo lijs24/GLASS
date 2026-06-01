@@ -2131,6 +2131,26 @@ integration where applicable.
   policy and therefore should be handled by a motion-family/weighting policy
   rather than by calibration, interpolation, or warp replay fixes.
 
+### S2-Gate 128: Registration-Motion Weighting Candidate
+
+- Add an explicit opt-in resident registration-motion weighting policy.
+- The first supported mode is `translation_mad`: group accepted registration
+  matrices by orientation cluster, compute robust translation centers and MAD
+  scales per cluster, and downweight high-score motion outliers with a smooth
+  multiplier floor.
+- Apply the multiplier after normal integration weighting and triangle
+  agreement downweighting, so it composes with existing frame-quality and
+  agreement evidence without turning frames into hard registration failures.
+- Record per-frame motion cluster, distance, score, multiplier, and before/after
+  weight in `resident_artifacts.json`, and add registration warnings for frames
+  actually motion-downweighted so `frame_accounting.json` can surface the cause.
+- Preserve default behavior: the policy must default to `off`.
+- Run a 200-light candidate using the S2-Gate 119 benchmark settings plus the
+  opt-in policy, compare against the same user-generated external reference,
+  and decide whether the policy is promotable.
+- Do not promote if it fails to materially reduce the localized residual tail or
+  if it causes unexplained frame-count, timing, or artifact regressions.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1275,6 +1275,173 @@ def _resident_triangle_agreement_warnings(quality: dict[str, Any]) -> list[str]:
     return warnings
 
 
+def _registration_motion_translation(matrix: Any) -> tuple[float, float] | None:
+    try:
+        values = np.asarray(matrix, dtype=np.float64)
+    except (TypeError, ValueError):
+        return None
+    if values.shape != (3, 3) or not np.all(np.isfinite(values[:2, 2])):
+        return None
+    return float(values[0, 2]), float(values[1, 2])
+
+
+def _registration_motion_cluster(matrix: Any) -> str:
+    try:
+        values = np.asarray(matrix, dtype=np.float64)
+    except (TypeError, ValueError):
+        return "unavailable"
+    if values.shape != (3, 3) or not np.all(np.isfinite(values[:2, :2])):
+        return "unavailable"
+    trace = float(values[0, 0] + values[1, 1])
+    determinant = float(values[0, 0] * values[1, 1] - values[0, 1] * values[1, 0])
+    trace_bucket = "trace_pos" if trace >= 0.0 else "trace_neg"
+    det_bucket = "det_pos" if determinant >= 0.0 else "det_neg"
+    return f"{trace_bucket}_{det_bucket}"
+
+
+def _resident_registration_motion_weighting(
+    frame_ids: list[str],
+    matrices: list[Any],
+    weights: list[float],
+    *,
+    mode: str = "off",
+    threshold_sigma: float = 16.0,
+    min_weight: float = 0.05,
+    power: float = 2.0,
+    scale_floor_px: float = 1.0,
+) -> dict[str, Any]:
+    if mode not in {"off", "translation_mad"}:
+        raise ValueError("resident registration motion weighting must be off or translation_mad")
+    if threshold_sigma <= 0.0:
+        raise ValueError("resident registration motion threshold must be positive")
+    if min_weight < 0.0 or min_weight > 1.0:
+        raise ValueError("resident registration motion minimum weight must be in [0, 1]")
+    if power <= 0.0:
+        raise ValueError("resident registration motion power must be positive")
+    if scale_floor_px <= 0.0:
+        raise ValueError("resident registration motion scale floor must be positive")
+    multipliers = [1.0 for _ in frame_ids]
+    rows: list[dict[str, Any]] = []
+    base = {
+        "enabled": mode != "off",
+        "mode": mode,
+        "threshold_sigma": float(threshold_sigma),
+        "min_weight": float(min_weight),
+        "power": float(power),
+        "scale_floor_px": float(scale_floor_px),
+        "frame_count": len(frame_ids),
+        "eligible_frame_count": 0,
+        "downweighted_frame_count": 0,
+        "center_translation": None,
+        "clusters": [],
+        "median_distance_px": None,
+        "robust_scale_px": None,
+        "multipliers": multipliers,
+        "frame_results": rows,
+    }
+    translations_by_cluster: dict[str, list[tuple[int, float, float]]] = {}
+    for index, (frame_id, matrix, weight) in enumerate(zip(frame_ids, matrices, weights, strict=True)):
+        translation = _registration_motion_translation(matrix)
+        cluster = _registration_motion_cluster(matrix)
+        weight_value = float(weight)
+        if translation is None or weight_value <= 0.0 or not np.isfinite(weight_value):
+            rows.append(
+                {
+                    "frame_id": frame_id,
+                    "eligible": False,
+                    "reason": "zero_weight_or_missing_matrix",
+                    "multiplier": 1.0,
+                    "weight_before_motion": weight_value,
+                    "weight_after_motion": weight_value,
+                }
+            )
+            continue
+        tx, ty = translation
+        translations_by_cluster.setdefault(cluster, []).append((index, tx, ty))
+        rows.append(
+            {
+                "frame_id": frame_id,
+                "eligible": mode != "off",
+                "motion_cluster": cluster,
+                "translation_x": tx,
+                "translation_y": ty,
+                "multiplier": 1.0,
+                "weight_before_motion": weight_value,
+                "weight_after_motion": weight_value,
+            }
+        )
+    base["eligible_frame_count"] = sum(len(items) for items in translations_by_cluster.values())
+    if mode == "off" or base["eligible_frame_count"] < 3:
+        if mode != "off" and base["eligible_frame_count"] < 3:
+            base["reason"] = "fewer_than_three_eligible_frames"
+        return base
+
+    cluster_summaries: list[dict[str, Any]] = []
+    for cluster, translations in sorted(translations_by_cluster.items()):
+        if len(translations) < 3:
+            cluster_summaries.append(
+                {
+                    "cluster": cluster,
+                    "eligible_frame_count": len(translations),
+                    "reason": "fewer_than_three_eligible_frames",
+                }
+            )
+            continue
+        tx_values = np.asarray([item[1] for item in translations], dtype=np.float64)
+        ty_values = np.asarray([item[2] for item in translations], dtype=np.float64)
+        center_x = float(np.median(tx_values))
+        center_y = float(np.median(ty_values))
+        distances = np.sqrt((tx_values - center_x) ** 2 + (ty_values - center_y) ** 2)
+        median_distance = float(np.median(distances))
+        mad = float(np.median(np.abs(distances - median_distance)) * 1.4826)
+        robust_scale = max(mad, float(scale_floor_px))
+        cluster_summaries.append(
+            {
+                "cluster": cluster,
+                "eligible_frame_count": len(translations),
+                "center_translation": {"x": center_x, "y": center_y},
+                "median_distance_px": median_distance,
+                "robust_scale_px": robust_scale,
+            }
+        )
+        for local_index, (frame_index, _tx, _ty) in enumerate(translations):
+            distance = float(distances[local_index])
+            excess = max(0.0, distance - median_distance)
+            score = excess / robust_scale
+            multiplier = 1.0
+            if score > float(threshold_sigma):
+                multiplier = max(float(min_weight), (float(threshold_sigma) / score) ** float(power))
+            multipliers[frame_index] = float(multiplier)
+            rows[frame_index].update(
+                {
+                    "distance_px": distance,
+                    "excess_distance_px": excess,
+                    "score": float(score),
+                    "threshold_sigma": float(threshold_sigma),
+                    "threshold_exceeded": bool(score > float(threshold_sigma)),
+                    "multiplier": float(multiplier),
+                    "weight_after_motion": float(weights[frame_index]) * float(multiplier),
+                }
+            )
+    base["clusters"] = cluster_summaries
+    completed_clusters = [item for item in cluster_summaries if item.get("center_translation") is not None]
+    if len(completed_clusters) == 1:
+        base["center_translation"] = completed_clusters[0]["center_translation"]
+        base["median_distance_px"] = completed_clusters[0]["median_distance_px"]
+        base["robust_scale_px"] = completed_clusters[0]["robust_scale_px"]
+    base["downweighted_frame_count"] = int(sum(1 for value in multipliers if value < 1.0))
+    return base
+
+
+def _registration_motion_warning(row: dict[str, Any]) -> list[str]:
+    return [
+        f"registration_motion_weight_multiplier={float(row.get('multiplier', 1.0)):.6g}",
+        f"registration_motion_distance_px={float(row.get('distance_px', float('nan'))):.6g}",
+        f"registration_motion_score={float(row.get('score', float('nan'))):.6g}",
+        f"registration_motion_threshold_sigma={float(row.get('threshold_sigma', float('nan'))):.6g}",
+    ]
+
+
 def _select_star_core_preselected_seed_indices(
     seed_metrics: list[dict[str, Any]],
     max_count: int,
@@ -1840,6 +2007,11 @@ def run_resident_calibration_integration(
     resident_triangle_agreement_rms_scale: float | None = None,
     resident_triangle_agreement_action: str | None = None,
     resident_triangle_agreement_min_weight: float | None = None,
+    resident_registration_motion_weighting: str = "off",
+    resident_registration_motion_threshold_sigma: float = 16.0,
+    resident_registration_motion_min_weight: float = 0.05,
+    resident_registration_motion_power: float = 2.0,
+    resident_registration_motion_scale_floor_px: float = 1.0,
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -1947,6 +2119,16 @@ def run_resident_calibration_integration(
         resident_triangle_agreement_min_weight < 0.0 or resident_triangle_agreement_min_weight > 1.0
     ):
         raise ValueError("resident_triangle_agreement_min_weight must be in [0, 1] when provided")
+    if resident_registration_motion_weighting not in {"off", "translation_mad"}:
+        raise ValueError("resident_registration_motion_weighting must be off or translation_mad")
+    if resident_registration_motion_threshold_sigma <= 0.0:
+        raise ValueError("resident_registration_motion_threshold_sigma must be positive")
+    if resident_registration_motion_min_weight < 0.0 or resident_registration_motion_min_weight > 1.0:
+        raise ValueError("resident_registration_motion_min_weight must be in [0, 1]")
+    if resident_registration_motion_power <= 0.0:
+        raise ValueError("resident_registration_motion_power must be positive")
+    if resident_registration_motion_scale_floor_px <= 0.0:
+        raise ValueError("resident_registration_motion_scale_floor_px must be positive")
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
@@ -5011,6 +5193,44 @@ def run_resident_calibration_integration(
                 weighting_warnings.append(
                     f"resident triangle agreement downweighted {agreement_downweighted_frames} frame(s)"
                 )
+            motion_weighting_summary = _resident_registration_motion_weighting(
+                [str(frame["id"]) for frame in light_frames],
+                integration_matrices,
+                frame_weight_values,
+                mode=resident_registration_motion_weighting,
+                threshold_sigma=float(resident_registration_motion_threshold_sigma),
+                min_weight=float(resident_registration_motion_min_weight),
+                power=float(resident_registration_motion_power),
+                scale_floor_px=float(resident_registration_motion_scale_floor_px),
+            )
+            registration_by_frame_id = {str(result.frame_id): result for result in registration_results}
+            motion_downweighted_frames = 0
+            for index, row in enumerate(motion_weighting_summary.get("frame_results", [])):
+                multiplier = float(row.get("multiplier", 1.0))
+                if multiplier >= 1.0 or frame_weight_values[index] <= 0.0:
+                    if multiplier != 1.0:
+                        weighting_frame_results[index]["registration_motion_weight_multiplier"] = multiplier
+                    continue
+                motion_downweighted_frames += 1
+                frame_weight_values[index] = float(frame_weight_values[index]) * multiplier
+                frame_weights[str(light_frames[index]["id"])] = float(frame_weight_values[index])
+                previous_status = str(weighting_frame_results[index].get("status") or "")
+                weighting_frame_results[index]["weight"] = float(frame_weight_values[index])
+                weighting_frame_results[index]["registration_motion_weight_multiplier"] = multiplier
+                weighting_frame_results[index]["registration_motion_distance_px"] = row.get("distance_px")
+                weighting_frame_results[index]["registration_motion_score"] = row.get("score")
+                weighting_frame_results[index]["status"] = (
+                    "agreement_and_motion_downweighted"
+                    if previous_status == "agreement_downweighted"
+                    else "registration_motion_downweighted"
+                )
+                registration_result = registration_by_frame_id.get(str(light_frames[index]["id"]))
+                if registration_result is not None:
+                    registration_result.warnings.extend(_registration_motion_warning(row))
+            if motion_downweighted_frames:
+                weighting_warnings.append(
+                    f"resident registration motion downweighted {motion_downweighted_frames} frame(s)"
+                )
             weighting_elapsed = perf_counter() - weighting_start
 
             local_norm_start = perf_counter()
@@ -6215,6 +6435,8 @@ def run_resident_calibration_integration(
                         "triangle_agreement_downweighted_frame_count": int(agreement_downweighted_frames)
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
+                        "registration_motion_weighting_mode": resident_registration_motion_weighting,
+                        "registration_motion_downweighted_frame_count": int(motion_downweighted_frames),
                         "external_registration_results_path": None
                         if external_registration_path is None
                         else str(external_registration_path),
@@ -6258,6 +6480,7 @@ def run_resident_calibration_integration(
                     "resident_integration_weighting": {
                         "mode": weighting_mode,
                         "frame_results": weighting_frame_results,
+                        "registration_motion_weighting": motion_weighting_summary,
                         "timing_s": weighting_elapsed,
                         "warnings": weighting_warnings,
                     },
