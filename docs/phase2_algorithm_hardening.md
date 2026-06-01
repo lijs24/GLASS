@@ -1827,6 +1827,21 @@ integration where applicable.
 - Do not promote a default unless guardrails, frame gate, and strict compare
   gate all pass.
 
+### S2-Gate 111: Resident Registration Candidate Audit
+
+- Add a machine-readable audit for resident CUDA triangle registration candidate
+  selection without rerunning GPU stacking.
+- Parse existing `registration_results.json` warnings into stable JSON fields:
+  triangle trial counts, candidate counts, fit RMS, pixel-refine RMS/NCC,
+  quality-gate status, catalog parameters, and determinism signatures.
+- Provide a CLI command that writes JSON and optional Markdown from a run
+  directory or standalone `registration_results.json`.
+- Run the audit over the S2-Gate 110 200-light variants to determine whether
+  strict compare failures were caused by outright registration failures or by
+  subtler agreement drift.
+- Keep this as an observability gate; do not change registration defaults until
+  a follow-up gate uses the audit to justify a scoring or refinement change.
+
 ## Gate Rules
 
 Each gate requires:

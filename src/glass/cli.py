@@ -33,6 +33,10 @@ from glass.report.resident_determinism import (
     build_resident_determinism_audit,
     write_resident_determinism_audit,
 )
+from glass.report.resident_registration_audit import (
+    build_resident_registration_audit,
+    write_resident_registration_audit,
+)
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
@@ -796,6 +800,24 @@ def cmd_resident_determinism(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_mismatch and not audit["summary"]["passed"] else 0
+
+
+def cmd_resident_registration_audit(args: argparse.Namespace) -> int:
+    audit = build_resident_registration_audit(args.run)
+    write_resident_registration_audit(args.out, audit, markdown=args.markdown)
+    console.print(
+        {
+            "status": audit["status"],
+            "triangle_frames": audit["summary"]["triangle_frame_count"],
+            "failed_triangle_frames": audit["summary"]["failed_triangle_frame_count"],
+            "parse_errors": audit["summary"]["parse_error_count"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if args.fail_on_registration_failures and audit["summary"]["failed_triangle_frame_count"]:
+        return 2
+    return 0 if audit["passed"] else 2
 
 
 def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
@@ -1664,6 +1686,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when signatures, registration, frame accounting, or output pixels differ",
     )
     resident_det.set_defaults(func=cmd_resident_determinism)
+
+    resident_reg = sub.add_parser(
+        "resident-registration-audit",
+        help="summarize resident CUDA triangle registration candidate and pixel-refine diagnostics",
+    )
+    resident_reg.add_argument("--run", required=True, help="GLASS run directory or registration_results.json")
+    resident_reg.add_argument("--out", required=True, help="output candidate audit JSON")
+    resident_reg.add_argument("--markdown", help="optional output Markdown summary")
+    resident_reg.add_argument(
+        "--fail-on-registration-failures",
+        action="store_true",
+        help="return exit code 2 when any triangle registration frame failed or was quality-gated",
+    )
+    resident_reg.set_defaults(func=cmd_resident_registration_audit)
 
     stack_contract = sub.add_parser(
         "stack-engine-contract",

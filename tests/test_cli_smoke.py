@@ -122,6 +122,7 @@ def test_cli_help_commands():
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",
+        "resident-registration-audit",
         "stack-engine-contract",
         "pipeline-contract",
         "guardrails",
