@@ -1161,6 +1161,63 @@ def _resident_similarity_score(result: dict[str, Any]) -> tuple[int, float, int]
     return inliers, -finite_rms, support
 
 
+def _resident_triangle_agreement_quality(
+    pixel_ncc: float,
+    pixel_rms_adu: float,
+    fit_rms_px: float,
+    rms_scale_adu: float,
+    min_score: float | None = None,
+) -> dict[str, Any]:
+    rms_scale = float(rms_scale_adu)
+    if rms_scale <= 0.0:
+        raise ValueError("triangle agreement RMS scale must be positive")
+    min_score_value = None if min_score is None else float(min_score)
+    if min_score_value is not None and (min_score_value < 0.0 or min_score_value > 1.0):
+        raise ValueError("triangle minimum agreement score must be in [0, 1]")
+
+    ncc = _float_or_nan(pixel_ncc)
+    pixel_rms = _float_or_nan(pixel_rms_adu)
+    fit_rms = _float_or_nan(fit_rms_px)
+    score = float("nan")
+    reason = "ok"
+    if not np.isfinite(ncc):
+        reason = "pixel_ncc_unavailable"
+    elif not np.isfinite(pixel_rms):
+        reason = "pixel_rms_unavailable"
+    else:
+        score = float(ncc) / (1.0 + max(0.0, float(pixel_rms)) / rms_scale)
+
+    if min_score_value is None:
+        status = "audit_only" if np.isfinite(score) else "unavailable"
+    elif not np.isfinite(score) or score < min_score_value:
+        status = "failed"
+        if reason == "ok":
+            reason = "below_min_score"
+    else:
+        status = "ok"
+
+    return {
+        "score": score,
+        "status": status,
+        "reason": reason,
+        "pixel_ncc": ncc,
+        "pixel_rms_adu": pixel_rms,
+        "fit_rms_px": fit_rms,
+        "rms_scale_adu": rms_scale,
+        "min_score": min_score_value,
+    }
+
+
+def _resident_triangle_agreement_warnings(quality: dict[str, Any]) -> list[str]:
+    return [
+        f"triangle_agreement_score={float(quality.get('score', float('nan'))):.6g}",
+        f"triangle_agreement_status={quality.get('status', 'unavailable')}",
+        f"triangle_agreement_reason={quality.get('reason', 'unavailable')}",
+        f"triangle_agreement_rms_scale={float(quality.get('rms_scale_adu', float('nan'))):.6g}",
+        f"triangle_min_agreement_score={quality.get('min_score')}",
+    ]
+
+
 def _select_star_core_preselected_seed_indices(
     seed_metrics: list[dict[str, Any]],
     max_count: int,
@@ -1722,6 +1779,8 @@ def run_resident_calibration_integration(
     resident_triangle_pixel_refine_coarse_stride: int | None = None,
     resident_triangle_pixel_refine_final_stride: int | None = None,
     resident_triangle_pixel_refine_fast_coarse: bool = False,
+    resident_triangle_min_agreement_score: float | None = None,
+    resident_triangle_agreement_rms_scale: float | None = None,
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -1813,6 +1872,12 @@ def run_resident_calibration_integration(
         raise ValueError("resident_triangle_pixel_refine_coarse_stride must be positive when provided")
     if resident_triangle_pixel_refine_final_stride is not None and resident_triangle_pixel_refine_final_stride <= 0:
         raise ValueError("resident_triangle_pixel_refine_final_stride must be positive when provided")
+    if resident_triangle_min_agreement_score is not None and (
+        resident_triangle_min_agreement_score < 0.0 or resident_triangle_min_agreement_score > 1.0
+    ):
+        raise ValueError("resident_triangle_min_agreement_score must be in [0, 1] when provided")
+    if resident_triangle_agreement_rms_scale is not None and resident_triangle_agreement_rms_scale <= 0.0:
+        raise ValueError("resident_triangle_agreement_rms_scale must be positive when provided")
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
@@ -3445,6 +3510,26 @@ def run_resident_calibration_integration(
                     "cuda_triangle_min_pixel_ncc",
                     _policy_optional_float(registration_policy, "cuda_catalog_min_pixel_ncc", None),
                 )
+                min_agreement_score = _policy_optional_float(
+                    registration_policy,
+                    "cuda_triangle_min_agreement_score",
+                    None,
+                )
+                if resident_triangle_min_agreement_score is not None:
+                    min_agreement_score = float(resident_triangle_min_agreement_score)
+                triangle_agreement_rms_scale = _policy_float(
+                    registration_policy,
+                    "cuda_triangle_agreement_rms_scale",
+                    200.0,
+                )
+                if resident_triangle_agreement_rms_scale is not None:
+                    triangle_agreement_rms_scale = float(resident_triangle_agreement_rms_scale)
+                if triangle_agreement_rms_scale <= 0.0:
+                    raise ValueError("cuda_triangle_agreement_rms_scale must be positive")
+                if min_agreement_score is not None and (
+                    min_agreement_score < 0.0 or min_agreement_score > 1.0
+                ):
+                    raise ValueError("cuda_triangle_min_agreement_score must be in [0, 1]")
                 pixel_refine_enabled = _policy_bool(registration_policy, "cuda_triangle_pixel_refine", True)
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
@@ -4170,12 +4255,40 @@ def run_resident_calibration_integration(
                                     if pixel_metrics is None
                                     else _float_or_nan(pixel_metrics.get("rms"))
                                 )
+                                if deferred_triangle_refine is None:
+                                    agreement_quality = _resident_triangle_agreement_quality(
+                                        selected_pixel_ncc,
+                                        selected_pixel_rms,
+                                        rms_px,
+                                        triangle_agreement_rms_scale,
+                                        min_agreement_score,
+                                    )
+                                else:
+                                    agreement_quality = {
+                                        "score": float("nan"),
+                                        "status": "deferred_batch",
+                                        "reason": "native_batch_pending",
+                                        "pixel_ncc": selected_pixel_ncc,
+                                        "pixel_rms_adu": selected_pixel_rms,
+                                        "fit_rms_px": rms_px,
+                                        "rms_scale_adu": triangle_agreement_rms_scale,
+                                        "min_score": min_agreement_score,
+                                    }
                                 quality_failures: list[str] = []
                                 if deferred_triangle_refine is None and min_pixel_ncc is not None and (
                                     not np.isfinite(selected_pixel_ncc) or selected_pixel_ncc < float(min_pixel_ncc)
                                 ):
                                     quality_failures.append(
                                         f"pixel_ncc {selected_pixel_ncc:.6g} < {float(min_pixel_ncc):.6g}"
+                                    )
+                                if (
+                                    deferred_triangle_refine is None
+                                    and agreement_quality["status"] == "failed"
+                                ):
+                                    quality_failures.append(
+                                        "agreement_score "
+                                        + f"{float(agreement_quality['score']):.6g} < "
+                                        + f"{float(min_agreement_score):.6g}"
                                     )
                                 if quality_failures:
                                     status = "failed"
@@ -4300,6 +4413,7 @@ def run_resident_calibration_integration(
                                         "resident CUDA triangle descriptor similarity",
                                     ]
                                 )
+                                warnings.extend(_resident_triangle_agreement_warnings(agreement_quality))
                             warnings.append("triangle_trials=" + str(trial_results))
                     except Exception as exc:
                         status = "failed"
@@ -4436,6 +4550,13 @@ def run_resident_calibration_integration(
                         pixel_metrics = dict(refinement.get("metrics", {}))
                         selected_pixel_ncc = _float_or_nan(pixel_metrics.get("ncc"))
                         selected_pixel_rms = _float_or_nan(pixel_metrics.get("rms"))
+                        agreement_quality = _resident_triangle_agreement_quality(
+                            selected_pixel_ncc,
+                            selected_pixel_rms,
+                            _float_or_nan(result.rms_px),
+                            triangle_agreement_rms_scale,
+                            min_agreement_score,
+                        )
                         result.matrix = matrix_array.tolist()
                         result.warnings.extend(
                             [
@@ -4484,12 +4605,19 @@ def run_resident_calibration_integration(
                                 f"triangle_pixel_ncc_batch={selected_pixel_ncc:.6g}",
                             ]
                         )
+                        result.warnings.extend(_resident_triangle_agreement_warnings(agreement_quality))
                         quality_failures: list[str] = []
                         if min_pixel_ncc is not None and (
                             not np.isfinite(selected_pixel_ncc) or selected_pixel_ncc < float(min_pixel_ncc)
                         ):
                             quality_failures.append(
                                 f"pixel_ncc {selected_pixel_ncc:.6g} < {float(min_pixel_ncc):.6g}"
+                            )
+                        if agreement_quality["status"] == "failed":
+                            quality_failures.append(
+                                "agreement_score "
+                                + f"{float(agreement_quality['score']):.6g} < "
+                                + f"{float(min_agreement_score):.6g}"
                             )
                         if quality_failures:
                             result.status = "failed"
@@ -5943,6 +6071,12 @@ def run_resident_calibration_integration(
                             "cuda_triangle_min_pixel_ncc",
                             _policy_optional_float(registration_policy, "cuda_catalog_min_pixel_ncc", None),
                         ),
+                        "triangle_min_agreement_score": min_agreement_score
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_agreement_rms_scale": float(triangle_agreement_rms_scale)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
                         "external_registration_results_path": None
                         if external_registration_path is None
                         else str(external_registration_path),

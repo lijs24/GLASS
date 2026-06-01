@@ -58,7 +58,14 @@ def _write_sweep_summary(path: Path) -> None:
     )
 
 
-def _write_candidate_audit(path: Path, *, variant_id: str, candidate_median: float, pixel_ncc: float) -> None:
+def _write_candidate_audit(
+    path: Path,
+    *,
+    variant_id: str,
+    candidate_median: float,
+    pixel_ncc: float,
+    agreement_score: float,
+) -> None:
     write_json(
         path,
         {
@@ -83,6 +90,11 @@ def _write_candidate_audit(path: Path, *, variant_id: str, candidate_median: flo
                 "fit_rms_px_stats": {"count": 193, "median": 0.6, "mean": 0.61},
                 "pixel_rms_adu_stats": {"count": 192, "median": 160.0, "mean": 165.0},
                 "pixel_ncc_stats": {"count": 192, "median": pixel_ncc, "mean": pixel_ncc - 0.01},
+                "agreement_score_stats": {
+                    "count": 192,
+                    "median": agreement_score,
+                    "mean": agreement_score - 0.02,
+                },
             },
         },
     )
@@ -93,12 +105,19 @@ def test_resident_registration_compare_joins_sweep_and_candidate_audits(tmp_path
     audit_root = tmp_path / "audits"
     audit_root.mkdir()
     _write_sweep_summary(sweep)
-    _write_candidate_audit(audit_root / "fast_noisy_candidate_audit.json", variant_id="fast_noisy", candidate_median=150000, pixel_ncc=0.91)
+    _write_candidate_audit(
+        audit_root / "fast_noisy_candidate_audit.json",
+        variant_id="fast_noisy",
+        candidate_median=150000,
+        pixel_ncc=0.91,
+        agreement_score=0.54,
+    )
     _write_candidate_audit(
         audit_root / "slower_cleaner_candidate_audit.json",
         variant_id="slower_cleaner",
         candidate_median=170000,
         pixel_ncc=0.96,
+        agreement_score=0.68,
     )
 
     payload = build_resident_registration_compare(sweep, audit_root=audit_root)
@@ -110,6 +129,7 @@ def test_resident_registration_compare_joins_sweep_and_candidate_audits(tmp_path
     assert payload["recommendation"]["status"] == "compare_failures_without_registration_hard_failures"
     rows = {row["variant_id"]: row for row in payload["rows"]}
     assert rows["fast_noisy"]["candidate_count_median"] == 150000
+    assert rows["fast_noisy"]["agreement_score_median"] == 0.54
     assert rows["slower_cleaner"]["compare_gate_status"] == "passed"
     assert any(item["metric"] == "pixel_ncc_median" for item in payload["top_correlations"])
 
@@ -121,12 +141,19 @@ def test_resident_registration_compare_cli_writes_outputs_and_missing_audit_fail
     out = tmp_path / "resident_registration_compare.json"
     markdown = tmp_path / "resident_registration_compare.md"
     _write_sweep_summary(sweep)
-    _write_candidate_audit(audit_root / "fast_noisy_candidate_audit.json", variant_id="fast_noisy", candidate_median=150000, pixel_ncc=0.91)
+    _write_candidate_audit(
+        audit_root / "fast_noisy_candidate_audit.json",
+        variant_id="fast_noisy",
+        candidate_median=150000,
+        pixel_ncc=0.91,
+        agreement_score=0.54,
+    )
     _write_candidate_audit(
         audit_root / "slower_cleaner_candidate_audit.json",
         variant_id="slower_cleaner",
         candidate_median=170000,
         pixel_ncc=0.96,
+        agreement_score=0.68,
     )
 
     assert (

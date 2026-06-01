@@ -1858,6 +1858,22 @@ integration where applicable.
 - Keep this as an observability gate; do not change registration defaults until
   a follow-up gate proves a candidate change with guardrails and compare gates.
 
+### S2-Gate 113: Resident Triangle Agreement Gate
+
+- Add a project-defined resident triangle pixel-agreement score based on
+  pixel-refine NCC penalized by pixel RMS so candidate/refine drift can be
+  audited directly in `registration_results.json`.
+- Keep default behavior audit-only; only reject frames when
+  `cuda_triangle_min_agreement_score` or the matching CLI override is supplied.
+- Record the agreement score, status, reason, RMS scale, and threshold in
+  per-frame warnings and resident registration artifacts.
+- Validate the score helper, resident triangle smoke path, CLI help, ruff, full
+  pytest, and a lightweight real-data artifact/review before using the gate for
+  200-light promotion sweeps.
+- Treat this as a scoring-control gate, not a default-performance optimization;
+  any stricter threshold must still pass frame-count, guardrail, and image
+  compare gates before promotion.
+
 ## Gate Rules
 
 Each gate requires:

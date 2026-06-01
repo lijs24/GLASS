@@ -165,6 +165,11 @@ def _frame_candidate_audit(row: dict[str, Any]) -> dict[str, Any]:
     pixel_rms = _float_or_none(warnings.get("triangle_pixel_rms_adu_batch", warnings.get("triangle_pixel_rms_adu")))
     pixel_ncc = _float_or_none(warnings.get("triangle_pixel_ncc_batch", warnings.get("triangle_pixel_ncc")))
     fit_rms = _float_or_none(warnings.get("triangle_fit_rms_px", row.get("rms_px")))
+    agreement_score = _float_or_none(warnings.get("triangle_agreement_score"))
+    agreement_status = warnings.get("triangle_agreement_status")
+    agreement_reason = warnings.get("triangle_agreement_reason")
+    agreement_rms_scale = _float_or_none(warnings.get("triangle_agreement_rms_scale"))
+    agreement_min_score = _float_or_none(warnings.get("triangle_min_agreement_score"))
     status = str(row.get("status") or "unknown")
     failure_reasons: list[str] = []
     if status == "failed":
@@ -172,6 +177,8 @@ def _frame_candidate_audit(row: dict[str, Any]) -> dict[str, Any]:
     quality = warnings.get("triangle_quality_gate_status")
     if quality == "failed":
         failure_reasons.append("quality_gate_failed")
+    if agreement_status == "failed":
+        failure_reasons.append("agreement_gate_failed")
     if any("no accepted fit" in str(item).lower() for item in raw_warnings):
         failure_reasons.append("no_accepted_fit")
     if candidate_count is not None and candidate_count <= 0 and status not in {"reference", "excluded"}:
@@ -207,6 +214,11 @@ def _frame_candidate_audit(row: dict[str, Any]) -> dict[str, Any]:
         "pixel_rms_adu": pixel_rms,
         "pixel_ncc": pixel_ncc,
         "quality_gate_status": quality,
+        "agreement_score": agreement_score,
+        "agreement_status": agreement_status,
+        "agreement_reason": agreement_reason,
+        "agreement_rms_scale": agreement_rms_scale,
+        "agreement_min_score": agreement_min_score,
         "catalog_selector": warnings.get("triangle_catalog_selector"),
         "catalog_batch": warnings.get("triangle_catalog_batch"),
         "catalog_timing_model": warnings.get("triangle_catalog_timing_model"),
@@ -257,6 +269,12 @@ def build_resident_registration_audit(run_or_file: str | Path) -> dict[str, Any]
         float(frame["pixel_rms_adu"]) for frame in triangle_frames if frame.get("pixel_rms_adu") is not None
     ]
     pixel_ncc_values = [float(frame["pixel_ncc"]) for frame in triangle_frames if frame.get("pixel_ncc") is not None]
+    agreement_score_values = [
+        float(frame["agreement_score"]) for frame in triangle_frames if frame.get("agreement_score") is not None
+    ]
+    agreement_status_counts = Counter(
+        str(frame["agreement_status"]) for frame in triangle_frames if frame.get("agreement_status") is not None
+    )
     failure_counts: Counter[str] = Counter()
     for frame in failed_triangle_frames:
         for reason in frame["failure_reasons"]:
@@ -290,8 +308,11 @@ def build_resident_registration_audit(run_or_file: str | Path) -> dict[str, Any]
             "fit_rms_px_stats": _number_stats(fit_rms_values),
             "pixel_rms_adu_stats": _number_stats(pixel_rms_values),
             "pixel_ncc_stats": _number_stats(pixel_ncc_values),
+            "agreement_score_stats": _number_stats(agreement_score_values),
+            "agreement_status_counts": dict(agreement_status_counts),
             "triangle_trial_frame_count": sum(1 for frame in triangle_frames if frame["trial_summary"]["available"]),
             "quality_gate_failed_count": failure_counts.get("quality_gate_failed", 0),
+            "agreement_gate_failed_count": failure_counts.get("agreement_gate_failed", 0),
             "no_accepted_fit_count": failure_counts.get("no_accepted_fit", 0),
         },
         "resident_registration": {
@@ -299,6 +320,8 @@ def build_resident_registration_audit(run_or_file: str | Path) -> dict[str, Any]
             "active_frame_count": resident_registration.get("active_frame_count"),
             "triangle_grid_top_per_cell": resident_registration.get("triangle_grid_top_per_cell"),
             "triangle_nms_min_separation_px": resident_registration.get("triangle_nms_min_separation_px"),
+            "triangle_min_agreement_score": resident_registration.get("triangle_min_agreement_score"),
+            "triangle_agreement_rms_scale": resident_registration.get("triangle_agreement_rms_scale"),
             "triangle_determinism_signature_mode": resident_registration.get("triangle_determinism_signature_mode"),
             "triangle_determinism_moving_frame_count": resident_registration.get(
                 "triangle_determinism_moving_frame_count"
@@ -341,6 +364,10 @@ def write_resident_registration_audit_markdown(path: str | Path, audit: dict[str
     ]
     for key, value in sorted(summary["status_counts"].items()):
         lines.append(f"- `{key}`: `{value}`")
+    if summary.get("agreement_status_counts"):
+        lines.extend(["", "## Agreement Status Counts", ""])
+        for key, value in sorted(summary["agreement_status_counts"].items()):
+            lines.append(f"- `{key}`: `{value}`")
     lines.extend(["", "## Failure Reasons", ""])
     if summary["failure_reason_counts"]:
         for key, value in sorted(summary["failure_reason_counts"].items()):
@@ -348,7 +375,13 @@ def write_resident_registration_audit_markdown(path: str | Path, audit: dict[str
     else:
         lines.append("- none")
     lines.extend(["", "## Numeric Summary", ""])
-    for key in ("candidate_count_stats", "fit_rms_px_stats", "pixel_rms_adu_stats", "pixel_ncc_stats"):
+    for key in (
+        "candidate_count_stats",
+        "fit_rms_px_stats",
+        "pixel_rms_adu_stats",
+        "pixel_ncc_stats",
+        "agreement_score_stats",
+    ):
         stats = summary[key]
         lines.append(
             f"- `{key}`: count=`{stats['count']}`, min=`{stats['min']}`, "
@@ -364,8 +397,8 @@ def write_resident_registration_audit_markdown(path: str | Path, audit: dict[str
                 "",
                 "## First Ranked Frames",
                 "",
-                "| Frame | Status | Reasons | Candidates | Fit RMS px | Pixel RMS ADU | Pixel NCC |",
-                "| --- | --- | --- | ---: | ---: | ---: | ---: |",
+                "| Frame | Status | Reasons | Candidates | Fit RMS px | Pixel RMS ADU | Pixel NCC | Agreement |",
+                "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for frame in audit["ranked_frames"][:20]:
@@ -373,7 +406,8 @@ def write_resident_registration_audit_markdown(path: str | Path, audit: dict[str
             lines.append(
                 f"| `{frame['frame_id']}` | `{frame['status']}` | `{reasons}` | "
                 f"`{frame.get('candidate_count')}` | `{frame.get('fit_rms_px')}` | "
-                f"`{frame.get('pixel_rms_adu')}` | `{frame.get('pixel_ncc')}` |"
+                f"`{frame.get('pixel_rms_adu')}` | `{frame.get('pixel_ncc')}` | "
+                f"`{frame.get('agreement_score')}` |"
             )
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

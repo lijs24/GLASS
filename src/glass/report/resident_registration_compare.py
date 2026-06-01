@@ -16,6 +16,8 @@ _SUMMARY_STATS = (
     ("pixel_rms_adu_mean", "pixel_rms_adu_stats", "mean"),
     ("pixel_ncc_median", "pixel_ncc_stats", "median"),
     ("pixel_ncc_mean", "pixel_ncc_stats", "mean"),
+    ("agreement_score_median", "agreement_score_stats", "median"),
+    ("agreement_score_mean", "agreement_score_stats", "mean"),
 )
 
 
@@ -253,8 +255,8 @@ def write_resident_registration_compare_markdown(path: str | Path, payload: dict
         "",
         "## Rows",
         "",
-        "| Variant | Compare | RMS | P99 | Failed Reg | Cand Median | Fit RMS Median | Pixel RMS Median | Pixel NCC Median |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Variant | Compare | RMS | P99 | Failed Reg | Cand Median | Fit RMS Median | Pixel RMS Median | Pixel NCC Median | Agreement Median |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in payload["rows"]:
         lines.append(
@@ -262,7 +264,7 @@ def write_resident_registration_compare_markdown(path: str | Path, payload: dict
             f"`{row.get('rms_diff')}` | `{row.get('abs_diff_p99')}` | "
             f"`{row.get('failed_triangle_frame_count')}` | `{row.get('candidate_count_median')}` | "
             f"`{row.get('fit_rms_px_median')}` | `{row.get('pixel_rms_adu_median')}` | "
-            f"`{row.get('pixel_ncc_median')}` |"
+            f"`{row.get('pixel_ncc_median')}` | `{row.get('agreement_score_median')}` |"
         )
     if payload["top_correlations"]:
         lines.extend(["", "## Top Correlations", ""])

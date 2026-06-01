@@ -54,6 +54,11 @@ def _write_resident_registration_fixture(run: Path) -> None:
                         "triangle_pixel_rms_adu_batch=12.5",
                         "triangle_pixel_ncc_batch=0.97",
                         "triangle_quality_gate_status=ok",
+                        "triangle_agreement_score=0.912",
+                        "triangle_agreement_status=audit_only",
+                        "triangle_agreement_reason=ok",
+                        "triangle_agreement_rms_scale=200",
+                        "triangle_min_agreement_score=None",
                         "triangle_catalog_selector=grid_top_nms",
                         "triangle_catalog_batch=native_batch",
                         "triangle_catalog_timing_model=batch",
@@ -123,6 +128,8 @@ def _write_resident_registration_fixture(run: Path) -> None:
                         "active_frame_count": 2,
                         "triangle_grid_top_per_cell": 2,
                         "triangle_nms_min_separation_px": 48.0,
+                        "triangle_min_agreement_score": None,
+                        "triangle_agreement_rms_scale": 200.0,
                         "triangle_determinism_signature_mode": "catalog_descriptor_fit_exact_float32_sha256",
                         "triangle_determinism_moving_frame_count": 2,
                         "triangle_determinism_trial_combined_sha256": "combined",
@@ -153,11 +160,16 @@ def test_resident_registration_audit_summarizes_triangle_candidates(tmp_path: Pa
     assert audit["summary"]["failure_reason_counts"]["no_accepted_fit"] == 1
     assert audit["summary"]["candidate_count_stats"]["median"] == 128.0
     assert audit["summary"]["pixel_ncc_stats"]["median"] == 0.97
+    assert audit["summary"]["agreement_score_stats"]["median"] == 0.912
+    assert audit["summary"]["agreement_status_counts"]["audit_only"] == 1
+    assert audit["resident_registration"]["triangle_agreement_rms_scale"] == 200.0
     assert audit["resident_registration"]["triangle_grid_top_per_cell"] == 2
     assert audit["registration_component_seconds"]["triangle_pixel_refine"] == 0.9
     frame = {item["frame_id"]: item for item in audit["frames"]}["light_002"]
     assert frame["trial_summary"]["ok_trial_count"] == 1
     assert frame["trial_summary"]["total_candidate_count"] == 135
+    assert frame["agreement_score"] == 0.912
+    assert frame["agreement_status"] == "audit_only"
     assert frame["determinism"]["selected_fit_signature"] == "abc123"
 
 

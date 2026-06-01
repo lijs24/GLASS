@@ -452,6 +452,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
+                resident_triangle_min_agreement_score=args.resident_triangle_min_agreement_score,
+                resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -552,6 +554,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
+                resident_triangle_min_agreement_score=args.resident_triangle_min_agreement_score,
+                resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -1396,6 +1400,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-triangle-min-agreement-score",
+        type=float,
+        help=(
+            "optional resident triangle pixel-agreement gate; values in [0, 1] mark low-NCC/high-RMS "
+            "refinements as failed"
+        ),
+    )
+    run.add_argument(
+        "--resident-triangle-agreement-rms-scale",
+        type=float,
+        help="ADU RMS scale used to normalize resident triangle pixel-agreement scores; default comes from the plan",
+    )
+    run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for registration",
     )
@@ -1623,6 +1640,19 @@ def build_parser() -> argparse.ArgumentParser:
             "explicit fast mode: raise resident triangle pixel-refine coarse sample stride to at least "
             "the final stride for resident audit"
         ),
+    )
+    audit.add_argument(
+        "--resident-triangle-min-agreement-score",
+        type=float,
+        help=(
+            "optional resident triangle pixel-agreement gate for audit runs; values in [0, 1] "
+            "mark low-NCC/high-RMS refinements as failed"
+        ),
+    )
+    audit.add_argument(
+        "--resident-triangle-agreement-rms-scale",
+        type=float,
+        help="ADU RMS scale used to normalize resident triangle pixel-agreement scores for audit runs",
     )
     audit.add_argument(
         "--resident-local-normalization-mode",

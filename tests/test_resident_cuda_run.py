@@ -17,6 +17,7 @@ from glass.engine.resident_cuda import (
     _resident_descriptor_signature,
     _resident_fit_signature,
     _resident_output_map_selection,
+    _resident_triangle_agreement_quality,
     _resident_triangle_determinism_summary,
     _resident_similarity_frame_dispatch,
     _select_star_core_preselected_seed_indices,
@@ -355,6 +356,37 @@ def test_resident_similarity_auto_pierside_dispatches_prior_and_orientation():
     assert fallback["orientation_mode"] == "pierside_unknown"
     assert manual["prior"] == "ncc"
     assert manual["orientation_mode"] == "manual"
+
+
+def test_resident_triangle_agreement_quality_scores_pixel_refinement():
+    strong = _resident_triangle_agreement_quality(
+        pixel_ncc=0.96,
+        pixel_rms_adu=20.0,
+        fit_rms_px=0.3,
+        rms_scale_adu=200.0,
+        min_score=0.5,
+    )
+    weak = _resident_triangle_agreement_quality(
+        pixel_ncc=0.96,
+        pixel_rms_adu=400.0,
+        fit_rms_px=0.3,
+        rms_scale_adu=200.0,
+        min_score=0.5,
+    )
+    unavailable = _resident_triangle_agreement_quality(
+        pixel_ncc=np.nan,
+        pixel_rms_adu=20.0,
+        fit_rms_px=0.3,
+        rms_scale_adu=200.0,
+        min_score=None,
+    )
+
+    assert strong["status"] == "ok"
+    assert strong["score"] > weak["score"]
+    assert weak["status"] == "failed"
+    assert weak["reason"] == "below_min_score"
+    assert unavailable["status"] == "unavailable"
+    assert unavailable["reason"] == "pixel_ncc_unavailable"
 
 
 def _two_dark_group_dataset(tmp_path: Path) -> Path:
@@ -1509,6 +1541,10 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
             "--resident-triangle-pixel-refine-final-stride",
             "2",
             "--resident-triangle-pixel-refine-fast-coarse",
+            "--resident-triangle-min-agreement-score",
+            "0.01",
+            "--resident-triangle-agreement-rms-scale",
+            "200",
             "--reference-frame-id",
             "light_001",
         ]
@@ -1597,6 +1633,8 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_pixel_refine_coarse_stride_adjusted"] is True
     assert resident_registration["triangle_pixel_refine_coarse_stride"] == 2
     assert resident_registration["triangle_pixel_refine_final_stride"] == 2
+    assert resident_registration["triangle_min_agreement_score"] == 0.01
+    assert resident_registration["triangle_agreement_rms_scale"] == 200.0
     assert resident_registration["triangle_pixel_refine_batch"] is True
     assert resident_registration["triangle_pixel_refine_batch_mode"] == "native_batch_one_seed_per_frame"
     assert resident_registration["triangle_pixel_refine_batch_metric_mode"] == "flattened_frame_candidate_grid"
@@ -1672,6 +1710,9 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_nms_scan_candidates=96" in warning for warning in moving["warnings"])
     assert any("triangle_nms_min_separation_px=2" in warning for warning in moving["warnings"])
     assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
+    assert any("triangle_agreement_score=" in warning for warning in moving["warnings"])
+    assert any("triangle_agreement_status=ok" in warning for warning in moving["warnings"])
+    assert any("triangle_min_agreement_score=0.01" in warning for warning in moving["warnings"])
     assert any("triangle_descriptor_fit_batch=true" in warning for warning in moving["warnings"])
     assert any(
         "triangle_descriptor_fit_best_reduction_mode=single_block_parallel_score_rms_index" in warning
