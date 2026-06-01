@@ -1813,6 +1813,20 @@ integration where applicable.
 - Do not promote a default unless guardrails, frame gate, and strict compare
   gate all pass.
 
+### S2-Gate 110: Contract-Gated 200-Light Grid-Shape Sweep
+
+- Run a bounded 200-light resident CUDA sweep around the S2-Gate 109 near misses
+  by varying star-grid column density while keeping rows fixed.
+- Use the same contract-derived frame gate, strict compare gate, candidate
+  coverage maps, and guardrails with pixel verification as S2-Gates 108-109.
+- Record runtime, moving-catalog time, registration/warp time, frame counts,
+  guardrail status, and reference comparison metrics for each grid/separation
+  pair.
+- Use the result to decide whether grid-column density alone can recover strict
+  image agreement for the faster `triangle_grid_top_per_cell=2` path.
+- Do not promote a default unless guardrails, frame gate, and strict compare
+  gate all pass.
+
 ## Gate Rules
 
 Each gate requires:
