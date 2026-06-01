@@ -1756,6 +1756,18 @@ integration where applicable.
 - Validate with unit tests and regenerate a frame-gated 200-light catalog sweep
   analysis from existing S2-Gate 103 artifacts without rerunning CUDA.
 
+### S2-Gate 106: Resident Sweep Contract Frame-Gate Import
+
+- Let the resident sweep harness import frame-accounting promotion requirements
+  from an existing GLASS benchmark contract JSON.
+- Map benchmark-contract `frame_accounting` fields into sweep frame-gate policy:
+  input light frames, integrated frames, zero-weight frames, and minimum
+  integrated-frame floor.
+- Preserve explicit CLI frame-gate options as overrides when both CLI values and
+  contract values are supplied.
+- Record contract provenance in the sweep summary and Markdown output.
+- Validate with dry-run tests and a real Phase 2 benchmark-contract dry run.
+
 ## Gate Rules
 
 Each gate requires:

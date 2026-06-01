@@ -493,6 +493,64 @@ def test_bench_resident_prefetch_sweep_imports_baseline_run_command(tmp_path: Pa
     assert "66" not in command
 
 
+def test_bench_resident_prefetch_sweep_imports_frame_gate_contract(tmp_path: Path):
+    plan = tmp_path / "processing_plan.json"
+    plan.write_text('{"frames": []}\n', encoding="utf-8")
+    contract = tmp_path / "contract.json"
+    contract.write_text(
+        json.dumps(
+            {
+                "name": "fixture_contract",
+                "frame_accounting": {
+                    "required_input_light_frames": 200,
+                    "required_integrated_frames": 193,
+                    "required_zero_weight_frames": 7,
+                    "min_integrated_frames": 190,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "resident_sweep_contract"
+
+    _run(
+        "benchmarks/bench_resident_prefetch_sweep.py",
+        "--plan",
+        str(plan),
+        "--out",
+        str(out),
+        "--frame-gate-from-contract",
+        str(contract),
+        "--prefetch-frames",
+        "16",
+        "--prefetch-workers",
+        "8",
+        "--batch-frames",
+        "8",
+        "--streams",
+        "4",
+        "--wave-frames",
+        "2",
+        "--release-modes",
+        "callback_queue",
+        "--dry-run",
+    )
+
+    payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    markdown = (out / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
+    policy = payload["frame_gate"]["policy"]
+    provenance = payload["common_run_args"]["frame_gate_contract"]
+    assert policy["expected_input_light_frames"] == 200
+    assert policy["expected_active_light_frames"] == 193
+    assert policy["expected_zero_weight_frames"] == 7
+    assert policy["min_active_light_frames"] == 190
+    assert payload["frame_gate"]["planned_count"] == 1
+    assert provenance["source_contract_path"] == str(contract)
+    assert provenance["contract_name"] == "fixture_contract"
+    assert "expected_active_light_frames" in provenance["imported_fields"]
+    assert "Frame gate contract" in markdown
+
+
 def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path):
     plan = tmp_path / "processing_plan.json"
     plan.write_text('{"frames": []}\n', encoding="utf-8")

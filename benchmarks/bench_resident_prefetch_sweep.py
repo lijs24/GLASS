@@ -129,6 +129,35 @@ def _common_run_args_from_command_file(path: Path) -> tuple[list[str], dict[str,
     }
 
 
+def _frame_gate_from_contract_file(path: Path) -> tuple[dict[str, int | None], dict[str, Any]]:
+    contract = read_json(path)
+    frame_accounting = contract.get("frame_accounting") if isinstance(contract.get("frame_accounting"), dict) else {}
+    frame_gate = {
+        "expected_input_light_frames": _optional_int(frame_accounting.get("required_input_light_frames")),
+        "expected_active_light_frames": _optional_int(frame_accounting.get("required_integrated_frames")),
+        "expected_zero_weight_frames": _optional_int(frame_accounting.get("required_zero_weight_frames")),
+        "min_active_light_frames": _optional_int(frame_accounting.get("min_integrated_frames")),
+    }
+    imported = {key: value for key, value in frame_gate.items() if value is not None}
+    if not imported:
+        raise ValueError(f"contract does not define usable frame_accounting requirements: {path}")
+    return frame_gate, {
+        "source_contract_path": str(path),
+        "contract_name": contract.get("name"),
+        "imported_fields": sorted(imported),
+    }
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _prefer_cli_int(cli_value: int | None, contract_value: int | None) -> int | None:
+    return cli_value if cli_value is not None else contract_value
+
+
 def _variant_command(
     *,
     glass_command: list[str],
@@ -383,6 +412,10 @@ def main() -> int:
             "sweep-managed plan/out/backend/memory/prefetch/batch flags are filtered out"
         ),
     )
+    parser.add_argument(
+        "--frame-gate-from-contract",
+        help="import frame-count promotion requirements from a GLASS benchmark contract JSON",
+    )
     parser.add_argument("--prefetch-frames", default="16,24,32")
     parser.add_argument("--prefetch-workers", default="8,12")
     parser.add_argument("--batch-frames", default="8")
@@ -537,6 +570,31 @@ def main() -> int:
         "filtered_token_count": (import_provenance or {}).get("filtered_token_count", 0),
         "filtered_managed_options": (import_provenance or {}).get("filtered_managed_options", []),
     }
+    contract_frame_gate: dict[str, int | None] = {}
+    frame_gate_contract_provenance: dict[str, Any] | None = None
+    if args.frame_gate_from_contract:
+        contract_frame_gate, frame_gate_contract_provenance = _frame_gate_from_contract_file(
+            Path(args.frame_gate_from_contract)
+        )
+        common_run_args_provenance["frame_gate_contract"] = frame_gate_contract_provenance
+    frame_gate_policy = {
+        "expected_input_light_frames": _prefer_cli_int(
+            args.frame_gate_expected_input_light_frames,
+            contract_frame_gate.get("expected_input_light_frames"),
+        ),
+        "expected_active_light_frames": _prefer_cli_int(
+            args.frame_gate_expected_active_light_frames,
+            contract_frame_gate.get("expected_active_light_frames"),
+        ),
+        "expected_zero_weight_frames": _prefer_cli_int(
+            args.frame_gate_expected_zero_weight_frames,
+            contract_frame_gate.get("expected_zero_weight_frames"),
+        ),
+        "min_active_light_frames": _prefer_cli_int(
+            args.frame_gate_min_active_light_frames,
+            contract_frame_gate.get("min_active_light_frames"),
+        ),
+    }
     variants = build_resident_sweep_variants(
         prefetch_frames=parse_int_grid(args.prefetch_frames, default=[16, 24, 32]),
         prefetch_workers=parse_int_grid(args.prefetch_workers, default=[8, 12]),
@@ -668,12 +726,7 @@ def main() -> int:
             "max_relative_rms_diff": args.compare_max_relative_rms,
             "max_abs_diff_p99": args.compare_max_p99,
         },
-        frame_gate={
-            "expected_input_light_frames": args.frame_gate_expected_input_light_frames,
-            "expected_active_light_frames": args.frame_gate_expected_active_light_frames,
-            "expected_zero_weight_frames": args.frame_gate_expected_zero_weight_frames,
-            "min_active_light_frames": args.frame_gate_min_active_light_frames,
-        },
+        frame_gate=frame_gate_policy,
     )
     print(f"resident prefetch sweep summary: {out_dir / 'resident_prefetch_sweep_summary.json'}")
     if payload.get("best_variant"):

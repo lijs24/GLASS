@@ -758,6 +758,9 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         lines.append(f"- Common run args source: `{common_run_args.get('source')}`")
         if common_run_args.get("source_command_path"):
             lines.append(f"- Imported command: `{common_run_args['source_command_path']}`")
+        frame_gate_contract = common_run_args.get("frame_gate_contract")
+        if isinstance(frame_gate_contract, dict) and frame_gate_contract.get("source_contract_path"):
+            lines.append(f"- Frame gate contract: `{frame_gate_contract['source_contract_path']}`")
         lines.append(
             "- Common run args: "
             f"{common_run_args.get('total_arg_count', 0)} total, "
@@ -785,7 +788,7 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Frame gate | Compare gate | Read wait s | "
             "Native cal s | Reg/warp s | Catalog s | Pixel refine s | Warp s | Blocked slots | Callback waves | "
             "Release batches | Active frames | Zero-weight | Ref RMS | Ref p99 | Ref speedup |",
-            "| ---: | --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+            "| ---: | --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | "
             "---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
