@@ -10,6 +10,7 @@ from glass.engine.contracts import DQFlag
 from glass.io.fits_io import read_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
+    _load_frame_weight_proposal,
     _matches_any_token,
     _resident_dq_coverage_provenance,
     _resident_dq_map,
@@ -459,6 +460,37 @@ def test_resident_registration_motion_weighting_off_preserves_weights():
     assert summary["enabled"] is False
     assert summary["multipliers"] == [1.0, 1.0]
     assert summary["downweighted_frame_count"] == 0
+
+
+def test_frame_weight_proposal_loader_accepts_list_and_object(tmp_path: Path):
+    list_path = tmp_path / "proposal_list.json"
+    write_json(
+        list_path,
+        {
+            "artifact_type": "frame_weight_proposal",
+            "method": "control_ratio",
+            "source_integration_audit": "audit.json",
+            "frame_multipliers": [
+                {"frame_id": "F001", "multiplier": 0.25, "reason": "localized contribution"},
+                {"frame_id": "F002", "multiplier": 1.0},
+            ],
+        },
+    )
+    proposal = _load_frame_weight_proposal(list_path)
+
+    assert proposal["enabled"] is True
+    assert proposal["path"] == str(list_path)
+    assert proposal["frame_count"] == 2
+    assert proposal["frame_multipliers"] == {"F001": 0.25, "F002": 1.0}
+    assert proposal["rows"][0]["reason"] == "localized contribution"
+
+    object_path = tmp_path / "proposal_object.json"
+    write_json(object_path, {"frame_multipliers": {"F003": 0.5}})
+    object_proposal = _load_frame_weight_proposal(object_path)
+
+    assert object_proposal["frame_count"] == 1
+    assert object_proposal["rows"][0]["frame_id"] == "F003"
+    assert object_proposal["rows"][0]["multiplier"] == 0.5
 
 
 def _two_dark_group_dataset(tmp_path: Path) -> Path:
@@ -2217,6 +2249,7 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     plan = tmp_path / "processing_plan.json"
     external_registration = tmp_path / "external_registration_results.json"
+    frame_weight_proposal = tmp_path / "frame_weight_proposal.json"
     run = tmp_path / "resident_run_external_matrix"
 
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
@@ -2264,6 +2297,21 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
             ],
         },
     )
+    write_json(
+        frame_weight_proposal,
+        {
+            "artifact_type": "frame_weight_proposal",
+            "method": "control_ratio",
+            "source_integration_audit": "localized_audit.json",
+            "frame_multipliers": [
+                {
+                    "frame_id": moving_id,
+                    "multiplier": 0.25,
+                    "reason": "unit-test localized contribution proposal",
+                }
+            ],
+        },
+    )
 
     assert main(
         [
@@ -2296,6 +2344,8 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
             "translation_mad",
             "--resident-registration-motion-threshold-sigma",
             "8",
+            "--resident-frame-weight-proposal",
+            str(frame_weight_proposal),
         ]
     ) == 0
 
@@ -2306,8 +2356,11 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     resident_registration = resident["artifacts"][0]["resident_registration"]
     weighting = resident["artifacts"][0]["resident_integration_weighting"]
     motion = weighting["registration_motion_weighting"]
+    proposal = weighting["frame_weight_proposal"]
+    moving_weighting = [item for item in weighting["frame_results"] if item["frame_id"] == moving_id][0]
 
     assert integration["outputs"][0]["resident_registration"] == "external_matrix"
+    assert integration["frame_weights"][moving_id] == 0.25
     assert registration["transform_model"] == "external_matrix"
     assert registration["warnings"][0].startswith("resident registration consumed external matrices")
     assert "lanczos3" in registration["warnings"][0]
@@ -2316,10 +2369,18 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert resident_registration["warp_clamping_threshold"] == 0.30
     assert resident_registration["registration_motion_weighting_mode"] == "translation_mad"
     assert resident_registration["registration_motion_downweighted_frame_count"] == 0
+    assert resident_registration["frame_weight_proposal_path"] == str(frame_weight_proposal)
+    assert resident_registration["frame_weight_proposal_frame_count"] == 1
+    assert resident_registration["frame_weight_proposal_downweighted_frame_count"] == 1
     assert motion["enabled"] is True
     assert motion["mode"] == "translation_mad"
     assert motion["threshold_sigma"] == 8.0
     assert motion["reason"] == "fewer_than_three_eligible_frames"
+    assert proposal["enabled"] is True
+    assert proposal["path"] == str(frame_weight_proposal)
+    assert proposal["applied_downweighted_frame_count"] == 1
+    assert moving_weighting["frame_weight_proposal_multiplier"] == 0.25
+    assert moving_weighting["status"] == "frame_weight_proposal_downweighted"
     assert resident_registration["external_registration_results_path"] == str(external_registration)
     assert moving["status"] == "ok"
     assert moving["transform_model"] == "similarity"
@@ -2327,6 +2388,7 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert moving["inliers"] == 10
     assert np.allclose(np.asarray(moving["matrix"], dtype=np.float32), np.asarray(similarity_matrix, dtype=np.float32))
     assert any("external_registration_application=matrix_lanczos3" == item for item in moving["warnings"])
+    assert any("frame_weight_proposal_multiplier=0.25" == item for item in moving["warnings"])
 
 
 def test_cli_resident_cuda_run_fused_matrix_dispatch_matches_external_stack(tmp_path: Path):

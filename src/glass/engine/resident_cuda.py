@@ -1442,6 +1442,62 @@ def _registration_motion_warning(row: dict[str, Any]) -> list[str]:
     ]
 
 
+def _load_frame_weight_proposal(path: str | Path | None) -> dict[str, Any]:
+    if path is None:
+        return {
+            "enabled": False,
+            "path": None,
+            "frame_count": 0,
+            "frame_multipliers": {},
+            "rows": [],
+        }
+    source = Path(path)
+    payload = read_json(source)
+    rows_raw = payload.get("frame_multipliers")
+    if isinstance(rows_raw, dict):
+        rows = [
+            {"frame_id": str(frame_id), "multiplier": multiplier}
+            for frame_id, multiplier in rows_raw.items()
+        ]
+    elif isinstance(rows_raw, list):
+        rows = [row for row in rows_raw if isinstance(row, dict)]
+    else:
+        raise ValueError("frame weight proposal must contain frame_multipliers list or object")
+    multipliers: dict[str, float] = {}
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        frame_id = row.get("frame_id")
+        if frame_id is None:
+            raise ValueError("frame weight proposal row is missing frame_id")
+        multiplier = float(row.get("multiplier"))
+        if not np.isfinite(multiplier) or multiplier < 0.0 or multiplier > 1.0:
+            raise ValueError("frame weight proposal multipliers must be finite values in [0, 1]")
+        frame_id_text = str(frame_id)
+        multipliers[frame_id_text] = multiplier
+        normalized_rows.append({**row, "frame_id": frame_id_text, "multiplier": multiplier})
+    return {
+        "enabled": True,
+        "path": str(source),
+        "artifact_type": payload.get("artifact_type"),
+        "method": payload.get("method"),
+        "source_integration_audit": payload.get("source_integration_audit"),
+        "frame_count": len(multipliers),
+        "frame_multipliers": multipliers,
+        "rows": normalized_rows,
+    }
+
+
+def _frame_weight_proposal_warning(row: dict[str, Any], multiplier: float) -> list[str]:
+    warnings = [
+        f"frame_weight_proposal_multiplier={float(multiplier):.6g}",
+    ]
+    if row.get("method") is not None:
+        warnings.append(f"frame_weight_proposal_method={row.get('method')}")
+    if row.get("reason") is not None:
+        warnings.append(f"frame_weight_proposal_reason={row.get('reason')}")
+    return warnings
+
+
 def _select_star_core_preselected_seed_indices(
     seed_metrics: list[dict[str, Any]],
     max_count: int,
@@ -2012,6 +2068,7 @@ def run_resident_calibration_integration(
     resident_registration_motion_min_weight: float = 0.05,
     resident_registration_motion_power: float = 2.0,
     resident_registration_motion_scale_floor_px: float = 1.0,
+    resident_frame_weight_proposal: str | Path | None = None,
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -2129,6 +2186,7 @@ def run_resident_calibration_integration(
         raise ValueError("resident_registration_motion_power must be positive")
     if resident_registration_motion_scale_floor_px <= 0.0:
         raise ValueError("resident_registration_motion_scale_floor_px must be positive")
+    frame_weight_proposal = _load_frame_weight_proposal(resident_frame_weight_proposal)
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
@@ -5231,6 +5289,45 @@ def run_resident_calibration_integration(
                 weighting_warnings.append(
                     f"resident registration motion downweighted {motion_downweighted_frames} frame(s)"
                 )
+            proposal_downweighted_frames = 0
+            proposal_rows_by_id = {
+                str(row.get("frame_id")): row
+                for row in frame_weight_proposal.get("rows", [])
+                if isinstance(row, dict) and row.get("frame_id") is not None
+            }
+            for index, frame in enumerate(light_frames):
+                frame_id = str(frame["id"])
+                row = proposal_rows_by_id.get(frame_id)
+                if row is None:
+                    continue
+                multiplier = float(row.get("multiplier", 1.0))
+                weighting_frame_results[index]["frame_weight_proposal_multiplier"] = multiplier
+                weighting_frame_results[index]["frame_weight_proposal_path"] = frame_weight_proposal.get("path")
+                if row.get("method") is not None:
+                    weighting_frame_results[index]["frame_weight_proposal_method"] = row.get("method")
+                if multiplier >= 1.0 or frame_weight_values[index] <= 0.0:
+                    continue
+                proposal_downweighted_frames += 1
+                frame_weight_values[index] = float(frame_weight_values[index]) * multiplier
+                frame_weights[frame_id] = float(frame_weight_values[index])
+                previous_status = str(weighting_frame_results[index].get("status") or "")
+                weighting_frame_results[index]["weight"] = float(frame_weight_values[index])
+                weighting_frame_results[index]["status"] = (
+                    "frame_weight_proposal_downweighted"
+                    if previous_status in {"", "ok", "unit"}
+                    else f"{previous_status}_and_frame_weight_proposal_downweighted"
+                )
+                registration_result = registration_by_frame_id.get(frame_id)
+                if registration_result is not None:
+                    registration_result.warnings.extend(_frame_weight_proposal_warning(row, multiplier))
+            frame_weight_proposal_summary = {
+                **frame_weight_proposal,
+                "applied_downweighted_frame_count": int(proposal_downweighted_frames),
+            }
+            if proposal_downweighted_frames:
+                weighting_warnings.append(
+                    f"resident frame-weight proposal downweighted {proposal_downweighted_frames} frame(s)"
+                )
             weighting_elapsed = perf_counter() - weighting_start
 
             local_norm_start = perf_counter()
@@ -6437,6 +6534,9 @@ def run_resident_calibration_integration(
                         else None,
                         "registration_motion_weighting_mode": resident_registration_motion_weighting,
                         "registration_motion_downweighted_frame_count": int(motion_downweighted_frames),
+                        "frame_weight_proposal_path": frame_weight_proposal.get("path"),
+                        "frame_weight_proposal_frame_count": int(frame_weight_proposal.get("frame_count") or 0),
+                        "frame_weight_proposal_downweighted_frame_count": int(proposal_downweighted_frames),
                         "external_registration_results_path": None
                         if external_registration_path is None
                         else str(external_registration_path),
@@ -6481,6 +6581,7 @@ def run_resident_calibration_integration(
                         "mode": weighting_mode,
                         "frame_results": weighting_frame_results,
                         "registration_motion_weighting": motion_weighting_summary,
+                        "frame_weight_proposal": frame_weight_proposal_summary,
                         "timing_s": weighting_elapsed,
                         "warnings": weighting_warnings,
                     },

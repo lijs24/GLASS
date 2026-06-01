@@ -36,6 +36,7 @@ from glass.report.compare_tile_integration import (
 from glass.report.compare_tile_attribution import build_compare_tile_attribution, write_compare_tile_attribution
 from glass.report.compare_tile_pack import build_compare_tile_pack
 from glass.report.compare_tile_replay import build_compare_tile_replay, write_compare_tile_replay
+from glass.report.frame_weight_proposal import build_frame_weight_proposal, write_frame_weight_proposal
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
 from glass.report.resident_determinism import (
@@ -475,6 +476,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_registration_motion_min_weight=args.resident_registration_motion_min_weight,
                 resident_registration_motion_power=args.resident_registration_motion_power,
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
+                resident_frame_weight_proposal=args.resident_frame_weight_proposal,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -584,6 +586,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_registration_motion_min_weight=args.resident_registration_motion_min_weight,
                 resident_registration_motion_power=args.resident_registration_motion_power,
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
+                resident_frame_weight_proposal=args.resident_frame_weight_proposal,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -905,6 +908,27 @@ def cmd_compare_tile_integration(args: argparse.Namespace) -> int:
             "selected_frame_count": payload.get("selected_frame_count"),
             "focus_frame_count": len(payload.get("focus_ids") or []),
             "focus_minus_control_contribution_mean": contribution.get("focus_minus_control"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_frame_weight_proposal(args: argparse.Namespace) -> int:
+    payload = build_frame_weight_proposal(
+        args.integration_audit,
+        method=args.method,
+        min_multiplier=args.min_multiplier,
+        max_multiplier=args.max_multiplier,
+        reason=args.reason,
+    )
+    write_frame_weight_proposal(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload.get("status"),
+            "frame_count": len(payload.get("frame_multipliers") or []),
+            "proposed_multiplier": payload.get("proposed_multiplier"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -1719,6 +1743,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="minimum robust motion scale in pixels to avoid divide-by-zero on tight dithers",
     )
     run.add_argument(
+        "--resident-frame-weight-proposal",
+        help="optional frame-weight proposal JSON produced by frame-weight-proposal; default disabled",
+    )
+    run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for registration",
     )
@@ -1985,6 +2013,10 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--resident-registration-motion-power", type=float, default=2.0)
     audit.add_argument("--resident-registration-motion-scale-floor-px", type=float, default=1.0)
     audit.add_argument(
+        "--resident-frame-weight-proposal",
+        help="optional frame-weight proposal JSON produced by frame-weight-proposal for resident audit",
+    )
+    audit.add_argument(
         "--resident-local-normalization-mode",
         choices=["global_mean_std", "grid_mean_std"],
         default="global_mean_std",
@@ -2176,6 +2208,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="number of positive-weight frames after the focus range used as controls",
     )
     tile_integration.set_defaults(func=cmd_compare_tile_integration)
+
+    frame_weight_proposal = sub.add_parser(
+        "frame-weight-proposal",
+        help="derive an explicit frame multiplier proposal from localized integration diagnostics",
+    )
+    frame_weight_proposal.add_argument(
+        "--integration-audit",
+        required=True,
+        help="compare-tile-integration JSON artifact containing focus/control contribution summaries",
+    )
+    frame_weight_proposal.add_argument("--out", required=True, help="output frame-weight proposal JSON")
+    frame_weight_proposal.add_argument("--markdown", help="optional output Markdown summary")
+    frame_weight_proposal.add_argument(
+        "--method",
+        choices=["control_ratio"],
+        default="control_ratio",
+        help="proposal method; control_ratio scales focus frames by control/focus contribution mean",
+    )
+    frame_weight_proposal.add_argument("--min-multiplier", type=float, default=0.05)
+    frame_weight_proposal.add_argument("--max-multiplier", type=float, default=1.0)
+    frame_weight_proposal.add_argument("--reason", help="optional reason recorded on every proposed frame row")
+    frame_weight_proposal.set_defaults(func=cmd_frame_weight_proposal)
 
     frame_family = sub.add_parser(
         "compare-frame-family",

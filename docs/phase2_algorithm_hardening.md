@@ -2151,6 +2151,30 @@ integration where applicable.
 - Do not promote if it fails to materially reduce the localized residual tail or
   if it causes unexplained frame-count, timing, or artifact regressions.
 
+### S2-Gate 129: Localized Frame-Weight Proposal
+
+- Add a reusable `glass frame-weight-proposal` command that consumes a
+  `compare-tile-integration` JSON artifact and produces an explicit proposal
+  JSON containing per-frame multipliers for a localized focus family.
+- The first supported proposal method is `control_ratio`: compute the ratio of
+  neighboring control contribution mean to focus-family contribution mean, clamp
+  it to a configured multiplier range, and assign that multiplier to every
+  focus frame listed by the diagnostic artifact.
+- Add an opt-in resident CUDA input,
+  `--resident-frame-weight-proposal`, that applies proposal multipliers after
+  ordinary integration weighting, triangle agreement downweighting, and
+  registration-motion weighting.
+- Record the loaded proposal, applied downweighted frame count, per-frame
+  multiplier, and registration warnings in resident artifacts so frame
+  accounting can explain the experiment.
+- Preserve default behavior: no proposal is loaded unless the user supplies the
+  JSON path explicitly.
+- Run a 200-light candidate generated from the S2-Gate 127 F000100-F000110
+  localized integration audit and compare it against the same user-generated
+  external reference.
+- Do not promote if the candidate improves only the known focus tile while
+  damaging global residual statistics, frame counts, or timing.
+
 ## Gate Rules
 
 Each gate requires:

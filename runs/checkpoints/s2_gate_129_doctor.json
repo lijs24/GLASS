@@ -1,0 +1,143 @@
+{
+  "capabilities": {
+    "cpu_baseline": true,
+    "cuda_available": true,
+    "cuda_extension_importable": true,
+    "cuda_features": {
+      "calibrate_tile_f32": true,
+      "local_norm_apply_grid_f32": true,
+      "resident_grid_local_norm_apply": true,
+      "resident_grid_local_norm_stats": true,
+      "resident_lanczos3_warp": true,
+      "resident_sigma_rejection": true,
+      "resident_simple_snr_weighting": true,
+      "resident_stack": true,
+      "smoke_add_f32": true,
+      "warp_matrix_bilinear_f32": true,
+      "warp_matrix_lanczos3_f32": true
+    },
+    "html_report": true,
+    "local_normalization": {
+      "cpu": "tile median/std baseline with coefficient artifacts",
+      "cuda": "tile mean/std primitive, resident global/grid mean/std, resident grid apply",
+      "status": "partial; full interpolated/windowed LN is not complete"
+    },
+    "metadata_scan": true,
+    "out_of_core_design": true,
+    "planning": true,
+    "registration": {
+      "cpu": "star catalog translation/similarity helpers",
+      "cuda": "resident translation, catalog similarity, triangle descriptors, bilinear/Lanczos3 matrix warp",
+      "status": "partial WBPP-like registration; not PixInsight-equivalent"
+    },
+    "synthetic_data": true,
+    "weighted_integration": {
+      "cpu": "mean, simple_snr, sigma/winsorized rejection maps",
+      "cuda": "resident weighted mean, simple_snr weights, and sigma/winsorized rejection maps",
+      "status": "partial WBPP-like integration"
+    }
+  },
+  "cuda": {
+    "cuda_available": true,
+    "devices": [
+      {
+        "available_to_glass": true,
+        "compute_capability": "12.0",
+        "device_id": 0,
+        "driver_version": "596.21",
+        "memory_total_mib": 97886,
+        "multi_processor_count": 188,
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+        "native_backend": true
+      }
+    ],
+    "error": null,
+    "native_extension_loaded": true,
+    "wrapper_importable": true
+  },
+  "full_name": "GPU-Accelerated Lightframe Alignment and Stacking System",
+  "product": "GLASS",
+  "python": {
+    "executable": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.venv\\Scripts\\python.exe",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "version": "3.12.10"
+  },
+  "recommendation": "cuda",
+  "schema_version": 1,
+  "windows_cuda_packages": {
+    "fallbacks": [
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "packages": [
+      {
+        "architectures": [
+          "5.0",
+          "5.2",
+          "6.0",
+          "6.1",
+          "7.0",
+          "7.5",
+          "8.0",
+          "8.6"
+        ],
+        "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+        "compatible": true,
+        "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+        "label": "cuda11",
+        "match": "ptx_jit_forward",
+        "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+        "toolkit": "11.8"
+      },
+      {
+        "architectures": [
+          "7.5",
+          "8.0",
+          "8.6",
+          "8.9",
+          "9.0"
+        ],
+        "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+        "compatible": true,
+        "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+        "label": "cuda12",
+        "match": "ptx_jit_forward",
+        "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+        "toolkit": "12.4"
+      },
+      {
+        "architectures": [
+          "8.6",
+          "8.9",
+          "9.0",
+          "10.0",
+          "12.0"
+        ],
+        "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+        "compatible": true,
+        "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+        "label": "cuda13",
+        "match": "native_cubin",
+        "note": "This package contains native GPU code for this compute capability.",
+        "toolkit": "13.0"
+      }
+    ],
+    "primary": "cuda13",
+    "ptx_forward_compatibility": true,
+    "selected_device": {
+      "compute_capability": "12.0",
+      "compute_capability_code": 120,
+      "device_id": 0,
+      "driver_version": "596.21",
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+    }
+  }
+}
