@@ -1889,6 +1889,27 @@ integration where applicable.
 - Do not promote any threshold in this gate; promotion requires a later
   executed sweep with frame-count, guardrail, and image-compare gates.
 
+### S2-Gate 115: Contract-Gated Agreement Threshold Sweep
+
+- Run a bounded 200-light resident CUDA sweep over the S2-Gate 113 triangle
+  agreement threshold while importing the known-good 200-light command
+  arguments from the latest proven grid-shape run.
+- Use the benchmark-contract frame gate, benchmark-contract compare
+  normalization, candidate coverage maps, and per-variant guardrails with
+  pixel verification before any threshold can be considered rankable.
+- Record per-variant runtime, frame counts, guardrail status, agreement
+  threshold, agreement score statistics, registration component timings, and
+  external-reference comparison metrics.
+- Audit each completed variant with `glass resident-registration-audit` and
+  join audit statistics with compare metrics using
+  `glass resident-registration-compare`.
+- Treat agreement-threshold variants as rejected for promotion if they drop the
+  expected 193 integrated frames or fail strict image agreement, even if they
+  improve runtime.
+- Do not change defaults in this gate. Use the result only to decide whether
+  agreement gating should become a quality control, a diagnostic, or a tuning
+  dead end for the current M38 200-light benchmark.
+
 ## Gate Rules
 
 Each gate requires:
