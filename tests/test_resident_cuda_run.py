@@ -1822,6 +1822,190 @@ def test_cli_resident_cuda_triangle_fused_matrix_matches_stack_dispatch(tmp_path
     assert all("resident_registration_application=translation_bilinear" != warning for warning in moving["warnings"])
 
 
+def test_cli_resident_cuda_auto_dispatch_selects_verified_bilinear_fused_path(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "auto_bilinear_fused"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-integration-dispatch",
+            "auto",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--resident-star-catalog-deterministic",
+            "--resident-triangle-pixel-refine-final-stride",
+            "2",
+            "--resident-triangle-pixel-refine-fast-coarse",
+            "--resident-warp-interpolation",
+            "bilinear",
+            "--resident-output-maps",
+            "minimal",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    integration = read_json(run / "integration_results.json")
+    registration = read_json(run / "registration_results.json")
+    dispatch = resident["artifacts"][0]["resident_integration_dispatch"]
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+    moving = [item for item in registration["results"] if item["status"] != "reference"][0]
+
+    assert dispatch["requested_mode"] == "auto"
+    assert dispatch["mode"] == "fused_matrix"
+    assert dispatch["effective_mode"] == "fused_matrix"
+    assert dispatch["selection_reason"] == "auto_fused_bilinear_matrix_route"
+    assert dispatch["auto_policy"]["enabled"] is True
+    assert dispatch["auto_policy"]["verified_fast_path"] is True
+    assert dispatch["used"] is True
+    assert dispatch["deferred_matrix_frame_count"] == 1
+    assert integration["outputs"][0]["resident_integration_dispatch"] == "fused_matrix"
+    assert integration["outputs"][0]["resident_integration_dispatch_requested"] == "auto"
+    assert resident_registration["triangle_fused_matrix_deferred"] is True
+    assert resident_registration["triangle_fused_matrix_deferred_count"] == 1
+    assert any("resident_registration_application=fused_matrix_deferred" == warning for warning in moving["warnings"])
+
+
+def test_cli_resident_cuda_auto_dispatch_keeps_lanczos_rejection_on_stack(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "auto_lanczos_stack"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "winsorized_sigma",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "similarity_cuda_triangle",
+            "--resident-integration-dispatch",
+            "auto",
+            "--resident-star-threshold",
+            "30",
+            "--resident-star-max-candidates",
+            "16",
+            "--resident-star-tolerance-px",
+            "1.5",
+            "--resident-star-grid-cols",
+            "4",
+            "--resident-star-grid-rows",
+            "4",
+            "--resident-star-catalog-deterministic",
+            "--resident-triangle-pixel-refine-final-stride",
+            "2",
+            "--resident-triangle-pixel-refine-fast-coarse",
+            "--resident-warp-interpolation",
+            "lanczos3",
+            "--resident-output-maps",
+            "minimal",
+            "--reference-frame-id",
+            "light_001",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    integration = read_json(run / "integration_results.json")
+    registration = read_json(run / "registration_results.json")
+    dispatch = resident["artifacts"][0]["resident_integration_dispatch"]
+    resident_registration = resident["artifacts"][0]["resident_registration"]
+    moving = [item for item in registration["results"] if item["status"] != "reference"][0]
+
+    assert dispatch["requested_mode"] == "auto"
+    assert dispatch["mode"] == "stack"
+    assert dispatch["effective_mode"] == "stack"
+    assert dispatch["selection_reason"] == "auto_stack_non_bilinear_matrix_route"
+    assert dispatch["auto_policy"]["enabled"] is True
+    assert dispatch["auto_policy"]["verified_fast_path"] is False
+    assert dispatch["auto_policy"]["conservative_stack_for_non_bilinear"] is True
+    assert dispatch["used"] is False
+    assert dispatch["deferred_matrix_frame_count"] == 0
+    assert integration["outputs"][0]["resident_integration_dispatch"] == "stack"
+    assert integration["outputs"][0]["resident_integration_dispatch_requested"] == "auto"
+    assert resident_registration["triangle_fused_matrix_deferred"] is False
+    assert resident_registration["triangle_fused_matrix_deferred_count"] == 0
+    assert resident_registration["triangle_warp_batch_mode"] == "native_matrix_lanczos3_frames"
+    assert any("resident_registration_application=matrix_lanczos3" == warning for warning in moving["warnings"])
+
+
 def test_cli_resident_cuda_run_similarity_catalog_rejects_low_quality_matrix(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_star_dataset(tmp_path)

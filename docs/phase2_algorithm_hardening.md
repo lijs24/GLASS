@@ -1448,6 +1448,23 @@ integration where applicable.
   against triangle fused dispatch on the same synthetic shifted pair, plus
   native build, ruff, full pytest, and a 200-light triangle fused benchmark.
 
+### S2-Gate 87: Resident Integration Auto Dispatch Policy
+
+- Add `--resident-integration-dispatch auto` for resident CUDA runs and audits.
+- Use current measured evidence to select only verified fast fused routes:
+  bilinear matrix registration with local normalization off can automatically
+  use fused matrix integration.
+- Keep conservative stack routing for routes that are not yet verified as fast
+  and numerically identical, especially non-bilinear/Lanczos3 rejection paths
+  where Gate86 showed fused multi-pass sampling can be slower.
+- Record requested mode, effective mode, selection reason, and auto-policy
+  flags in resident artifacts and integration outputs.
+- Validate with focused CUDA CLI tests for both branches: bilinear triangle
+  auto selects fused dispatch, while Lanczos3+winsorized triangle auto remains
+  on stack dispatch.
+- Re-run the 200-light tuned bilinear triangle benchmark with auto dispatch and
+  compare it against the Gate86 explicit fused bilinear result.
+
 ## Gate Rules
 
 Each gate requires:

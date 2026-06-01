@@ -1771,8 +1771,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_warp_interpolation must be bilinear or lanczos3")
     if resident_warp_batch_dispatch not in {"loop", "chunked"}:
         raise ValueError("resident_warp_batch_dispatch must be loop or chunked")
-    if resident_integration_dispatch not in {"stack", "fused_matrix"}:
-        raise ValueError("resident_integration_dispatch must be stack or fused_matrix")
+    if resident_integration_dispatch not in {"stack", "fused_matrix", "auto"}:
+        raise ValueError("resident_integration_dispatch must be stack, fused_matrix, or auto")
     fused_matrix_registration_modes = {"off", "external_matrix", "similarity_cuda_triangle"}
     if (
         resident_integration_dispatch == "fused_matrix"
@@ -1860,6 +1860,25 @@ def run_resident_calibration_integration(
     if weighting_mode not in {"none", "simple_snr"}:
         raise ValueError("resident CUDA mode supports resolved integration weighting=none or simple_snr")
     rejection_mode = "none" if integration_rejection == "auto" else integration_rejection
+    local_norm_policy = plan.get("local_normalization_policy", {})
+    local_norm_enabled = local_normalization == "on" or (
+        local_normalization == "auto" and bool(local_norm_policy.get("enabled", False))
+    )
+    resident_integration_dispatch_requested = resident_integration_dispatch
+    resident_integration_dispatch_reason = f"explicit_{resident_integration_dispatch}"
+    if resident_integration_dispatch == "auto":
+        if local_norm_enabled:
+            resident_integration_dispatch = "stack"
+            resident_integration_dispatch_reason = "auto_stack_local_normalization_enabled"
+        elif resident_registration not in fused_matrix_registration_modes:
+            resident_integration_dispatch = "stack"
+            resident_integration_dispatch_reason = "auto_stack_registration_mode_not_fused_supported"
+        elif resident_warp_interpolation != "bilinear":
+            resident_integration_dispatch = "stack"
+            resident_integration_dispatch_reason = "auto_stack_non_bilinear_matrix_route"
+        else:
+            resident_integration_dispatch = "fused_matrix"
+            resident_integration_dispatch_reason = "auto_fused_bilinear_matrix_route"
     low_sigma = float(integration_policy.get("low_sigma", 3.0))
     high_sigma = float(integration_policy.get("high_sigma", 3.0))
     external_registration_path: Path | None = None
@@ -4721,10 +4740,6 @@ def run_resident_calibration_integration(
             weighting_elapsed = perf_counter() - weighting_start
 
             local_norm_start = perf_counter()
-            local_norm_policy = plan.get("local_normalization_policy", {})
-            local_norm_enabled = local_normalization == "on" or (
-                local_normalization == "auto" and bool(local_norm_policy.get("enabled", False))
-            )
             if resident_integration_dispatch == "fused_matrix" and local_norm_enabled:
                 raise RuntimeError("resident fused_matrix integration currently requires local_normalization=off")
             local_norm_mode = (
@@ -5950,6 +5965,22 @@ def run_resident_calibration_integration(
                     },
                     "resident_integration_dispatch": {
                         "mode": resident_integration_dispatch,
+                        "requested_mode": resident_integration_dispatch_requested,
+                        "effective_mode": resident_integration_dispatch,
+                        "selection_reason": resident_integration_dispatch_reason,
+                        "auto_policy": {
+                            "enabled": resident_integration_dispatch_requested == "auto",
+                            "selected_mode": resident_integration_dispatch,
+                            "reason": resident_integration_dispatch_reason,
+                            "verified_fast_path": (
+                                resident_integration_dispatch == "fused_matrix"
+                                and resident_warp_interpolation == "bilinear"
+                            ),
+                            "conservative_stack_for_non_bilinear": (
+                                resident_integration_dispatch_requested == "auto"
+                                and resident_warp_interpolation != "bilinear"
+                            ),
+                        },
                         "used": bool(fused_matrix_integration_used),
                         "eligible_registration_modes": [
                             "off",
@@ -6044,6 +6075,8 @@ def run_resident_calibration_integration(
                     "weighting": weighting_mode,
                     "resident_registration": resident_registration,
                     "resident_integration_dispatch": resident_integration_dispatch,
+                    "resident_integration_dispatch_requested": resident_integration_dispatch_requested,
+                    "resident_integration_dispatch_reason": resident_integration_dispatch_reason,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,

@@ -1084,9 +1084,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-integration-dispatch",
-        choices=["stack", "fused_matrix"],
+        choices=["stack", "fused_matrix", "auto"],
         default="stack",
-        help="resident integration dispatch mode; fused_matrix is experimental and consumes matrix registration at integration time",
+        help=(
+            "resident integration dispatch mode; auto selects the verified fused bilinear matrix route "
+            "and keeps conservative stack routing for unverified routes"
+        ),
     )
     run.add_argument("--resident-registration-max-shift", type=int, default=128)
     run.add_argument(
@@ -1324,9 +1327,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-integration-dispatch",
-        choices=["stack", "fused_matrix"],
+        choices=["stack", "fused_matrix", "auto"],
         default="stack",
-        help="resident integration dispatch mode; fused_matrix is experimental and consumes matrix registration at integration time",
+        help=(
+            "resident integration dispatch mode; auto selects the verified fused bilinear matrix route "
+            "and keeps conservative stack routing for unverified routes"
+        ),
     )
     audit.add_argument("--resident-registration-max-shift", type=int, default=128)
     audit.add_argument("--resident-ncc-sample-stride", type=int, default=1)
