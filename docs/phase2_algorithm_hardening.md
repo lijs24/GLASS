@@ -1594,6 +1594,22 @@ integration where applicable.
 - No new 200-light benchmark is required because this gate changes benchmark
   orchestration and reporting, not resident CUDA kernels or image math.
 
+### S2-Gate 96: Resident Sweep Runtime Guard
+
+- Add per-variant and per-guardrail timeout controls to the resident CUDA sweep
+  harness so a single pathological parameter set cannot monopolize the GPU.
+- Record run timeout/failure status, timeout seconds, exit code, error text, and
+  skipped guardrail status in `resident_prefetch_sweep_summary.json` instead of
+  crashing the whole sweep.
+- Keep timed-out, failed, and guardrail-failed variants out of the `best_variant`
+  slot while preserving completed green variants for ranking.
+- Preserve default behavior when no timeout is supplied.
+- Validate with a controlled timeout sweep test, dry-run sweep tests, direct
+  ranking tests, ruff, full pytest, native CUDA build, and `glass doctor`.
+- The attempted 200-light guarded sweep that motivated this gate was stopped
+  before completion after one variant ran far longer than the current baseline;
+  no performance result from that interrupted run is accepted as green.
+
 ## Gate Rules
 
 Each gate requires:

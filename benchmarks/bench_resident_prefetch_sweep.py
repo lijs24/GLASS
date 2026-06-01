@@ -149,6 +149,72 @@ def _attach_guardrails_summary(summary: dict[str, Any], guardrails_dir: Path) ->
     }
 
 
+def _run_subprocess(command: list[str], *, timeout_seconds: float | None = None) -> dict[str, Any]:
+    effective_timeout = None if timeout_seconds is None or timeout_seconds <= 0 else float(timeout_seconds)
+    try:
+        subprocess.run(command, check=True, timeout=effective_timeout)
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "status": "timeout",
+            "passed": False,
+            "timeout_s": effective_timeout,
+            "error": str(exc),
+        }
+    except subprocess.CalledProcessError as exc:
+        return {
+            "status": "failed",
+            "passed": False,
+            "exit_code": int(exc.returncode),
+            "error": str(exc),
+        }
+    return {"status": "completed", "passed": True}
+
+
+def _failed_variant_summary(
+    *,
+    variant: dict[str, Any],
+    variant_id: str,
+    run_dir: Path,
+    result: dict[str, Any],
+    guardrails_dir: Path,
+    guardrails_requested: bool,
+) -> dict[str, Any]:
+    summary = {
+        "variant": variant,
+        "variant_id": variant_id,
+        "run_dir": str(run_dir),
+        "status": result.get("status", "failed"),
+        "total_elapsed_s": None,
+        "error": result.get("error"),
+        "exit_code": result.get("exit_code"),
+        "timeout_s": result.get("timeout_s"),
+    }
+    if guardrails_requested:
+        summary["guardrails"] = {
+            "status": "skipped_run_failed",
+            "passed": False,
+            "out_dir": str(guardrails_dir),
+            "reason": result.get("status", "failed"),
+        }
+    return summary
+
+
+def _mark_guardrails_failed(
+    summary: dict[str, Any],
+    *,
+    guardrails_dir: Path,
+    result: dict[str, Any],
+) -> None:
+    summary["guardrails"] = {
+        "status": result.get("status", "failed"),
+        "passed": False,
+        "out_dir": str(guardrails_dir),
+        "error": result.get("error"),
+        "exit_code": result.get("exit_code"),
+        "timeout_s": result.get("timeout_s"),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run or dry-run a resident CUDA prefetch/batch/stream parameter sweep."
@@ -205,6 +271,16 @@ def main() -> int:
     )
     parser.add_argument("--guardrails-pixel-verify-tile-size", type=int, default=4096)
     parser.add_argument("--guardrails-pixel-tolerance", type=int, default=0)
+    parser.add_argument(
+        "--max-variant-seconds",
+        type=float,
+        help="maximum wall time for one GLASS run variant; non-positive or omitted disables the timeout",
+    )
+    parser.add_argument(
+        "--max-guardrails-seconds",
+        type=float,
+        help="maximum wall time for one per-variant guardrail bundle; non-positive or omitted disables the timeout",
+    )
     parser.add_argument("--dry-run", action="store_true", help="write planned commands without executing variants")
     parser.add_argument(
         "--reuse-existing",
@@ -270,12 +346,32 @@ def main() -> int:
             )
             continue
         if not (args.reuse_existing and (run_dir / "resident_artifacts.json").exists()):
-            subprocess.run(run_command, check=True)
+            run_result = _run_subprocess(run_command, timeout_seconds=args.max_variant_seconds)
+            if run_result["status"] != "completed":
+                summaries.append(
+                    _failed_variant_summary(
+                        variant=variant,
+                        variant_id=variant_id,
+                        run_dir=run_dir,
+                        result=run_result,
+                        guardrails_dir=guardrails_dir,
+                        guardrails_requested=args.guardrails,
+                    )
+                )
+                continue
         if args.guardrails:
-            subprocess.run(guardrails_command, check=True)
+            guardrails_result = _run_subprocess(
+                guardrails_command,
+                timeout_seconds=args.max_guardrails_seconds,
+            )
+        else:
+            guardrails_result = {"status": "disabled", "passed": None}
         summary = load_resident_run_summary(run_dir, variant=variant)
         if args.guardrails:
-            _attach_guardrails_summary(summary, guardrails_dir)
+            if guardrails_result["status"] == "completed":
+                _attach_guardrails_summary(summary, guardrails_dir)
+            else:
+                _mark_guardrails_failed(summary, guardrails_dir=guardrails_dir, result=guardrails_result)
         summaries.append(summary)
         if args.reference_master and summary.get("master_path"):
             compare_out = out_dir / f"compare_{variant_id}_vs_reference.html"

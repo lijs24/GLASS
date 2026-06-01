@@ -353,6 +353,49 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
     assert "Guardrails" in markdown
 
 
+def test_bench_resident_prefetch_sweep_records_variant_timeout(tmp_path: Path):
+    plan = tmp_path / "processing_plan.json"
+    plan.write_text('{"frames": []}\n', encoding="utf-8")
+    sleeper = tmp_path / "sleepy_glass.py"
+    sleeper.write_text("import time\n\ntime.sleep(2)\n", encoding="utf-8")
+    out = tmp_path / "resident_sweep_timeout"
+
+    _run(
+        "benchmarks/bench_resident_prefetch_sweep.py",
+        "--plan",
+        str(plan),
+        "--out",
+        str(out),
+        "--glass-command",
+        f"{sys.executable} {sleeper}",
+        "--prefetch-frames",
+        "16",
+        "--prefetch-workers",
+        "8",
+        "--batch-frames",
+        "8",
+        "--streams",
+        "4",
+        "--wave-frames",
+        "2",
+        "--release-modes",
+        "callback_queue",
+        "--guardrails",
+        "--max-variant-seconds",
+        "0.05",
+    )
+
+    payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    runs = payload["runs"]
+    assert len(runs) == 1
+    assert runs[0]["status"] == "timeout"
+    assert runs[0]["timeout_s"] == 0.05
+    assert runs[0]["guardrails"]["status"] == "skipped_run_failed"
+    assert runs[0]["guardrails"]["passed"] is False
+    assert payload["best_variant"] is None
+    assert payload["guardrails"]["failed_count"] == 1
+
+
 def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path):
     from glass.report.resident_sweep import write_resident_sweep_summary
 

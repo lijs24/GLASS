@@ -238,14 +238,15 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
     lines.extend(
         [
             "",
-            "| Rank | Variant | Total s | Speedup vs baseline | Guardrails | Read wait s | Native cal s | "
-            "Blocked slots | Callback waves | Release batches | Active frames | Zero-weight |",
-            "| ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Read wait s | "
+            "Native cal s | Blocked slots | Callback waves | Release batches | Active frames | Zero-weight |",
+            "| ---: | --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for run in payload["runs"]:
         total = _format_float(run.get("total_elapsed_s"))
         speedup = _format_float(run.get("speedup_vs_baseline"))
+        timeout = _format_float(run.get("timeout_s"))
         read_wait = _format_float(run.get("light_read_wait_wall_s"))
         native_cal = _format_float(run.get("native_calibration_total_s"))
         guardrails = run.get("guardrails") if isinstance(run.get("guardrails"), dict) else {}
@@ -253,8 +254,9 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         lines.append(
             "| "
             f"{run.get('rank', '')} | "
+            f"{run.get('status', '')} | "
             f"`{run.get('variant_id', '')}` | "
-            f"{total} | {speedup} | {guardrail_status} | {read_wait} | {native_cal} | "
+            f"{total} | {speedup} | {timeout} | {guardrail_status} | {read_wait} | {native_cal} | "
             f"{run.get('prefetch_blocked_no_slot_count', '')} | "
             f"{run.get('callback_wave_count', '')} | "
             f"{run.get('prefetch_release_batch_count', '')} | "
