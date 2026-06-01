@@ -124,6 +124,7 @@ def test_cli_help_commands():
         "resident-determinism",
         "stack-engine-contract",
         "pipeline-contract",
+        "guardrails",
         "blackbox-package",
         "blackbox-finalize",
         "blackbox-history",
@@ -133,6 +134,45 @@ def test_cli_help_commands():
             main([command, "--help"])
         except SystemExit as exc:
             assert exc.code == 0
+
+
+def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_path: Path):
+    run = tmp_path / "run"
+    out_dir = tmp_path / "guardrails"
+    assert main(["audit", "--root", str(small_fits_dataset), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
+
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(out_dir),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--pixel-verify",
+                "--pixel-verify-tile-size",
+                "8",
+            ]
+        )
+        == 0
+    )
+
+    summary = read_json(out_dir / "guardrails_summary.json")
+    stack_contract = read_json(out_dir / "stack_engine_contract.json")
+    pipeline_contract = read_json(out_dir / "pipeline_contract.json")
+    assert summary["passed"] is True
+    assert summary["pixel_verify"] is True
+    assert stack_contract["passed"] is True
+    assert pipeline_contract["passed"] is True
+    assert (out_dir / "stack_engine_contract.md").exists()
+    assert (out_dir / "pipeline_contract.md").exists()
+    assert (out_dir / "report.html").exists()
+    html = (out_dir / "report.html").read_text(encoding="utf-8")
+    assert "StackEngine contract audit" in html
+    assert "Pipeline contract audit" in html
+    assert "pixel_verification" in html
 
 
 def test_cli_doctor_cpu_only_success(tmp_path: Path):

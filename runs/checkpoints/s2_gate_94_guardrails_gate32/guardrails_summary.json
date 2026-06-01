@@ -1,0 +1,33 @@
+{
+  "artifacts": {
+    "pipeline_contract": "runs\\checkpoints\\s2_gate_94_guardrails_gate32\\pipeline_contract.json",
+    "pipeline_contract_markdown": "runs\\checkpoints\\s2_gate_94_guardrails_gate32\\pipeline_contract.md",
+    "report": "runs\\checkpoints\\s2_gate_94_guardrails_gate32\\report.html",
+    "stack_engine_contract": "runs\\checkpoints\\s2_gate_94_guardrails_gate32\\stack_engine_contract.json",
+    "stack_engine_contract_markdown": "runs\\checkpoints\\s2_gate_94_guardrails_gate32\\stack_engine_contract.md"
+  },
+  "audit_type": "glass_guardrails",
+  "checks": [
+    {
+      "failed": [],
+      "name": "stack_engine_contract",
+      "passed": true,
+      "status": "passed"
+    },
+    {
+      "failed": [],
+      "name": "pipeline_contract",
+      "passed": true,
+      "status": "passed"
+    }
+  ],
+  "created_at": "2026-06-01T00:55:33+00:00",
+  "expected_integration_engine": "cuda_resident_stack",
+  "out_dir": "runs\\checkpoints\\s2_gate_94_guardrails_gate32",
+  "passed": true,
+  "pixel_verify": true,
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531",
+  "schema_version": 1,
+  "stack_scope": "integration",
+  "status": "passed"
+}

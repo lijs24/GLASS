@@ -830,6 +830,92 @@ def cmd_pipeline_contract(args: argparse.Namespace) -> int:
     return 0 if audit["passed"] else 2
 
 
+def cmd_guardrails(args: argparse.Namespace) -> int:
+    run = Path(args.run)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stack_path = out_dir / "stack_engine_contract.json"
+    stack_markdown = out_dir / "stack_engine_contract.md"
+    pipeline_path = out_dir / "pipeline_contract.json"
+    pipeline_markdown = out_dir / "pipeline_contract.md"
+    report_path = Path(args.report) if args.report else out_dir / "report.html"
+    summary_path = out_dir / "guardrails_summary.json"
+
+    stack_audit = build_stack_engine_contract_audit(
+        run,
+        scope=args.stack_scope,
+        expected_integration_engine=args.expected_integration_engine,
+    )
+    write_stack_engine_contract_audit(stack_path, stack_audit, markdown=stack_markdown)
+    pipeline_audit = build_pipeline_contract_audit(
+        run,
+        pixel_verify=args.pixel_verify,
+        pixel_verify_tile_size=args.pixel_verify_tile_size,
+        pixel_tolerance=args.pixel_tolerance,
+    )
+    write_pipeline_contract_audit(pipeline_path, pipeline_audit, markdown=pipeline_markdown)
+    _write_run_report(
+        run,
+        report_path,
+        run / "manifest.json",
+        run / "processing_plan.json",
+        stack_engine_contract=stack_path,
+        pipeline_contract=pipeline_path,
+    )
+    passed = bool(stack_audit.get("passed")) and bool(pipeline_audit.get("passed"))
+    summary = {
+        "schema_version": 1,
+        "created_at": now_iso(),
+        "audit_type": "glass_guardrails",
+        "run_dir": str(run),
+        "out_dir": str(out_dir),
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "pixel_verify": bool(args.pixel_verify),
+        "stack_scope": args.stack_scope,
+        "expected_integration_engine": args.expected_integration_engine,
+        "artifacts": {
+            "stack_engine_contract": str(stack_path),
+            "stack_engine_contract_markdown": str(stack_markdown),
+            "pipeline_contract": str(pipeline_path),
+            "pipeline_contract_markdown": str(pipeline_markdown),
+            "report": str(report_path),
+        },
+        "checks": [
+            {
+                "name": "stack_engine_contract",
+                "passed": bool(stack_audit.get("passed")),
+                "status": stack_audit.get("status"),
+                "failed": [
+                    check.get("name")
+                    for check in stack_audit.get("checks") or []
+                    if not check.get("passed")
+                ],
+            },
+            {
+                "name": "pipeline_contract",
+                "passed": bool(pipeline_audit.get("passed")),
+                "status": pipeline_audit.get("status"),
+                "failed": [
+                    check.get("name")
+                    for check in pipeline_audit.get("checks") or []
+                    if not check.get("passed")
+                ],
+            },
+        ],
+    }
+    write_json(summary_path, summary)
+    console.print(
+        {
+            "status": summary["status"],
+            "summary": str(summary_path),
+            "report": str(report_path),
+            "pixel_verify": args.pixel_verify,
+        }
+    )
+    return 0 if passed else 2
+
+
 def cmd_blackbox_package(args: argparse.Namespace) -> int:
     payload = create_blackbox_package(
         args.manifest,
@@ -1589,6 +1675,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="allowed pixel-count delta for optional pipeline-contract FITS pixel verification",
     )
     pipeline_contract.set_defaults(func=cmd_pipeline_contract)
+
+    guardrails = sub.add_parser(
+        "guardrails",
+        help="generate StackEngine, pipeline, optional pixel, and HTML guardrail artifacts for a run",
+    )
+    guardrails.add_argument("--run", required=True, help="existing GLASS run directory to audit")
+    guardrails.add_argument("--out-dir", required=True, help="directory for guardrail JSON/Markdown/report outputs")
+    guardrails.add_argument("--report", help="optional HTML report path; defaults to OUT_DIR/report.html")
+    guardrails.add_argument(
+        "--stack-scope",
+        choices=["all", "calibration", "integration"],
+        default="all",
+        help="StackEngine contract scope",
+    )
+    guardrails.add_argument(
+        "--expected-integration-engine",
+        choices=["stack_engine_cpu", "cuda_resident_stack", "any"],
+        default="any",
+        help="expected integration engine for the StackEngine contract",
+    )
+    guardrails.add_argument(
+        "--pixel-verify",
+        action="store_true",
+        help="enable tiled FITS pixel verification in the pipeline contract",
+    )
+    guardrails.add_argument(
+        "--pixel-verify-tile-size",
+        type=int,
+        default=2048,
+        help="tile size for optional pipeline-contract FITS pixel verification",
+    )
+    guardrails.add_argument(
+        "--pixel-tolerance",
+        type=int,
+        default=0,
+        help="allowed pixel-count delta for optional pipeline-contract FITS pixel verification",
+    )
+    guardrails.set_defaults(func=cmd_guardrails)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")
     blackbox.add_argument("--manifest", required=True)

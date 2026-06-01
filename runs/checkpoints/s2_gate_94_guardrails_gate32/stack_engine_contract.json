@@ -1,0 +1,64 @@
+{
+  "audit_type": "stack_engine_default_contract",
+  "calibration": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\calibration_artifacts.json",
+    "master_count": 0,
+    "masters": []
+  },
+  "checks": [
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_output_records_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_outputs_use:cuda_resident_stack",
+      "note": "Tile/CPU light integration must use StackEngine by default; resident CUDA is explicit.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-01T00:55:32+00:00",
+  "expected_integration_engine": "cuda_resident_stack",
+  "integration": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration_results.json",
+    "output_count": 1,
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "contract_ok": true,
+        "expected_engine": "cuda_resident_stack",
+        "filter": "H",
+        "has_stack_engine_dq_provenance": false,
+        "index": 0,
+        "input_samples": null,
+        "source_stage": null,
+        "stack_engine_enabled": false,
+        "summary_engine": "cuda_resident_stack",
+        "summary_source_schema": "resident_dq_coverage_provenance",
+        "summary_stage": "integration",
+        "tile_stack_mode": null
+      }
+    ]
+  },
+  "passed": true,
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531",
+  "schema_version": 1,
+  "scope": "integration",
+  "status": "passed"
+}

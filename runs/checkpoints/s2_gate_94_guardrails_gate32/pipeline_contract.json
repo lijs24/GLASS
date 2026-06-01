@@ -1,0 +1,365 @@
+{
+  "artifacts": {
+    "integration": {
+      "exists": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration_results.json"
+    },
+    "local_norm": {
+      "exists": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\local_norm_results.json"
+    },
+    "warp": {
+      "exists": false,
+      "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\warp_results.json"
+    }
+  },
+  "audit_type": "pipeline_invariant_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "map_count": 6
+      },
+      "name": "integration_output_maps_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_dq_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_dq_map_pixels_match_summary",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_coverage_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 2
+      },
+      "name": "integration_rejection_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": false,
+        "failed": [],
+        "row_count": 0,
+        "top_level_crop_box_recorded": true
+      },
+      "name": "local_normalization_contract",
+      "note": "LN rows must record crop_box and DQ state; enabled LN rows must record coefficient grids.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-01T00:55:33+00:00",
+  "integration": {
+    "maps": [
+      {
+        "exists": true,
+        "item": "H",
+        "map": "master",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_master_H.fits",
+        "path_key": "master_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "weight",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_weight_map_H.fits",
+        "path_key": "weight_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "coverage",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_coverage_map_H.fits",
+        "path_key": "coverage_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "dq",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_dq_map_H.fits",
+        "path_key": "dq_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "low_rejection",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_low_rejection_map_H.fits",
+        "path_key": "low_rejection_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "high_rejection",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_high_rejection_map_H.fits",
+        "path_key": "high_rejection_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "dq_contract_ok": true,
+        "dq_map_exists": true,
+        "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_dq_map_H.fits",
+        "dq_provenance_engine": "cuda_resident_stack",
+        "dq_provenance_summary_present": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_count": 200,
+        "item": "H",
+        "rejection": "winsorized_sigma"
+      }
+    ]
+  },
+  "local_normalization": {
+    "crop_box": null,
+    "enabled": false,
+    "outputs": [],
+    "reference_frame_id": null
+  },
+  "passed": true,
+  "pixel_verification": {
+    "enabled": true,
+    "integration_outputs": [
+      {
+        "count_maps": {
+          "coverage": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_coverage_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 193.0,
+              "min": 1.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_coverage_map_H.fits",
+              "positive_pixels": 61651200,
+              "positive_threshold": 0.0,
+              "rounded_sum": 11735768644,
+              "schema_version": 1,
+              "sum": 11735768644.0,
+              "tile_size": 4096,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 0
+            },
+            "status": "verified",
+            "summary_match": {
+              "no_data": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "high_rejection": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_high_rejection_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 10.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_high_rejection_map_H.fits",
+              "positive_pixels": 32318219,
+              "positive_threshold": 0.0,
+              "rounded_sum": 43624888,
+              "schema_version": 1,
+              "sum": 43624888.0,
+              "tile_size": 4096,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 29332981
+            },
+            "status": "verified",
+            "summary_match": {
+              "high_rejected": {
+                "actual": 32318219,
+                "delta": 0,
+                "passed": true,
+                "summary": 32318219
+              }
+            },
+            "verified": true
+          },
+          "low_rejection": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_low_rejection_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 12.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_low_rejection_map_H.fits",
+              "positive_pixels": 13074085,
+              "positive_threshold": 0.0,
+              "rounded_sum": 18860098,
+              "schema_version": 1,
+              "sum": 18860098.0,
+              "tile_size": 4096,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 48577115
+            },
+            "status": "verified",
+            "summary_match": {
+              "low_rejected": {
+                "actual": 13074085,
+                "delta": 0,
+                "passed": true,
+                "summary": 13074085
+              }
+            },
+            "verified": true
+          }
+        },
+        "dq": {
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_dq_map_H.fits",
+          "required": true,
+          "result": {
+            "counts": {
+              "high_rejected": 32318219,
+              "low_rejected": 13074085,
+              "no_data": 0,
+              "valid": 20947307,
+              "warp_edge": 5396832
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "no_data": 1,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 6422,
+            "path": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531\\integration\\resident_dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 4096,
+            "total_pixels": 61651200,
+            "unknown_flags": [],
+            "width": 9600
+          },
+          "status": "verified",
+          "summary_matches": {
+            "high_rejected": {
+              "actual": 32318219,
+              "delta": 0,
+              "passed": true,
+              "summary": 32318219
+            },
+            "low_rejected": {
+              "actual": 13074085,
+              "delta": 0,
+              "passed": true,
+              "summary": 13074085
+            },
+            "no_data": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "valid": {
+              "actual": 20947307,
+              "delta": 0,
+              "passed": true,
+              "summary": 20947307
+            },
+            "warp_edge": {
+              "actual": 5396832,
+              "delta": 0,
+              "passed": true,
+              "summary": 5396832
+            }
+          },
+          "verified": true
+        },
+        "item": "H"
+      }
+    ],
+    "tile_size": 4096,
+    "tolerance_pixels": 0
+  },
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_32_200\\resident_artifact_paths_20260531",
+  "schema_version": 1,
+  "status": "passed",
+  "warp": {
+    "outputs": [],
+    "skipped_frames": []
+  }
+}

@@ -1562,6 +1562,23 @@ integration where applicable.
 - No new 200-light benchmark is required because this gate is report-only and
   does not alter image math or resident CUDA routing.
 
+### S2-Gate 94: Run Guardrail Bundle
+
+- Add a `glass guardrails` command that creates a run-local review bundle from
+  existing artifacts without modifying the original run directory or input
+  image directories.
+- The bundle must generate StackEngine contract JSON/Markdown, Pipeline
+  contract JSON/Markdown, optional tiled pixel verification, a compact
+  `guardrails_summary.json`, and an HTML report wired to those contract files.
+- Support CPU/tile and resident CUDA runs by allowing the expected integration
+  engine to be `stack_engine_cpu`, `cuda_resident_stack`, or `any`.
+- Return a failing exit code when either contract fails, so future optimization
+  scripts can use this as a regression guard.
+- Validate with a synthetic CPU audit run, CLI help tests, ruff, full pytest,
+  and a guardrail bundle over preserved 200-light audit-map artifacts.
+- No new 200-light benchmark is required because this gate only orchestrates
+  existing artifact audits and report generation.
+
 ## Gate Rules
 
 Each gate requires:
