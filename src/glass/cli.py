@@ -812,13 +812,19 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
 
 
 def cmd_pipeline_contract(args: argparse.Namespace) -> int:
-    audit = build_pipeline_contract_audit(args.run)
+    audit = build_pipeline_contract_audit(
+        args.run,
+        pixel_verify=args.pixel_verify,
+        pixel_verify_tile_size=args.pixel_verify_tile_size,
+        pixel_tolerance=args.pixel_tolerance,
+    )
     write_pipeline_contract_audit(args.out, audit, markdown=args.markdown)
     console.print(
         {
             "status": audit["status"],
             "out": args.out,
             "markdown": args.markdown,
+            "pixel_verify": args.pixel_verify,
         }
     )
     return 0 if audit["passed"] else 2
@@ -1565,6 +1571,23 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline_contract.add_argument("--run", required=True, help="GLASS run directory to audit")
     pipeline_contract.add_argument("--out", required=True, help="output audit JSON")
     pipeline_contract.add_argument("--markdown", help="optional output Markdown summary")
+    pipeline_contract.add_argument(
+        "--pixel-verify",
+        action="store_true",
+        help="read integration DQ and count maps in tiles and compare pixel counts to JSON summaries",
+    )
+    pipeline_contract.add_argument(
+        "--pixel-verify-tile-size",
+        type=int,
+        default=2048,
+        help="tile size for optional pipeline-contract FITS pixel verification",
+    )
+    pipeline_contract.add_argument(
+        "--pixel-tolerance",
+        type=int,
+        default=0,
+        help="allowed pixel-count delta for optional pipeline-contract FITS pixel verification",
+    )
     pipeline_contract.set_defaults(func=cmd_pipeline_contract)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")

@@ -972,6 +972,7 @@ def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dic
     if not contract:
         return []
     artifacts = contract.get("artifacts") if isinstance(contract.get("artifacts"), dict) else {}
+    pixel = contract.get("pixel_verification") if isinstance(contract.get("pixel_verification"), dict) else {}
     return [
         {
             "status": contract.get("status"),
@@ -980,6 +981,8 @@ def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dic
             "warp_artifact": (artifacts.get("warp") or {}).get("exists"),
             "local_norm_artifact": (artifacts.get("local_norm") or {}).get("exists"),
             "integration_artifact": (artifacts.get("integration") or {}).get("exists"),
+            "pixel_verification": pixel.get("enabled"),
+            "pixel_tile_size": pixel.get("tile_size"),
             "check_count": len(contract.get("checks") or []),
         }
     ]
@@ -1067,6 +1070,32 @@ def _pipeline_contract_warp_rows(contract: dict[str, Any] | None) -> list[dict[s
                 "contract_ok": row.get("contract_ok"),
                 "status": row.get("status"),
                 "has_reason": row.get("has_reason"),
+            }
+        )
+    return rows
+
+
+def _pipeline_contract_pixel_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    pixel = (contract or {}).get("pixel_verification") or {}
+    for item in pixel.get("integration_outputs") or []:
+        dq = item.get("dq") if isinstance(item.get("dq"), dict) else {}
+        count_maps = item.get("count_maps") if isinstance(item.get("count_maps"), dict) else {}
+        coverage = count_maps.get("coverage") if isinstance(count_maps.get("coverage"), dict) else {}
+        low = count_maps.get("low_rejection") if isinstance(count_maps.get("low_rejection"), dict) else {}
+        high = count_maps.get("high_rejection") if isinstance(count_maps.get("high_rejection"), dict) else {}
+        rows.append(
+            {
+                "item": item.get("item"),
+                "dq_status": dq.get("status"),
+                "dq_ok": dq.get("ok"),
+                "coverage_status": coverage.get("status"),
+                "coverage_ok": coverage.get("ok"),
+                "low_rejection_status": low.get("status"),
+                "low_rejection_ok": low.get("ok"),
+                "high_rejection_status": high.get("status"),
+                "high_rejection_ok": high.get("ok"),
+                "dq_path": dq.get("path"),
             }
         )
     return rows
@@ -1210,6 +1239,7 @@ def write_html_report(
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
     pipeline_contract_local_norm_rows = _pipeline_contract_local_norm_rows(pipeline_contract)
     pipeline_contract_warp_rows = _pipeline_contract_warp_rows(pipeline_contract)
+    pipeline_contract_pixel_rows = _pipeline_contract_pixel_rows(pipeline_contract)
     dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
@@ -1329,6 +1359,7 @@ def write_html_report(
   {_table(pipeline_contract_summary_rows)}
   {_table(pipeline_contract_failure_rows)}
   {_limited_table(pipeline_contract_map_rows, label="pipeline contract map rows", artifact="pipeline_contract JSON")}
+  {_limited_table(pipeline_contract_pixel_rows, label="pipeline contract pixel rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_local_norm_rows, label="pipeline contract local-normalization rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_warp_rows, label="pipeline contract warp rows", artifact="pipeline_contract JSON")}
   {_h2("dq-provenance-contract", "DQ provenance contract")}

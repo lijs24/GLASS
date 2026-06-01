@@ -621,6 +621,22 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
                     }
                 ]
             },
+            "pixel_verification": {
+                "enabled": True,
+                "tile_size": 32,
+                "tolerance_pixels": 0,
+                "integration_outputs": [
+                    {
+                        "item": "H",
+                        "dq": {"status": "verified", "ok": False, "path": "integration/dq_H.fits"},
+                        "count_maps": {
+                            "coverage": {"status": "verified", "ok": False},
+                            "low_rejection": {"status": "not_required", "ok": True},
+                            "high_rejection": {"status": "not_required", "ok": True},
+                        },
+                    }
+                ],
+            },
             "local_normalization": {
                 "outputs": [
                     {
@@ -662,6 +678,8 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
     assert "integration_output_maps_available" in html
     assert "fixture missing coverage" in html
     assert "H:coverage" in html
+    assert "pixel_verification" in html
+    assert "integration/dq_H.fits" in html
     assert "local-normalization" in html
     assert "bilinear" in html
     assert "integration_artifact_exists" not in html

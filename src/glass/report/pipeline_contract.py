@@ -5,6 +5,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.dq_map_verify import summarize_count_map_pixels, summarize_dq_map_pixels
 
 
 _CORE_INTEGRATION_MAPS = {
@@ -18,6 +19,8 @@ _REJECTION_MAPS = {
     "low_rejection": "low_rejection_map_path",
     "high_rejection": "high_rejection_map_path",
 }
+
+_DEFAULT_DQ_PIXEL_FLAGS = ["valid", "no_data", "warp_edge", "low_rejected", "high_rejected"]
 
 
 def _load_json_object(path: Path) -> dict[str, Any]:
@@ -41,6 +44,36 @@ def _resolve_path(path_value: Any, run_root: Path) -> Path | None:
 def _path_exists(path_value: Any, run_root: Path) -> bool:
     path = _resolve_path(path_value, run_root)
     return bool(path and path.exists())
+
+
+def _summary_count(summary: dict[str, Any], key: str, *, default_zero: bool = True) -> int | None:
+    value = summary.get(key)
+    if value is None:
+        return 0 if default_zero else None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _count_match(actual: Any, expected: int | None, tolerance: int) -> dict[str, Any]:
+    actual_int = None if actual is None else int(actual)
+    delta = None if actual_int is None or expected is None else actual_int - expected
+    return {
+        "actual": actual_int,
+        "summary": expected,
+        "delta": delta,
+        "passed": delta is not None and abs(delta) <= tolerance,
+    }
+
+
+def _dq_flags_to_verify(summary: dict[str, Any]) -> list[str]:
+    flags = list(_DEFAULT_DQ_PIXEL_FLAGS)
+    for key in summary:
+        name = str(key).lower()
+        if name not in flags:
+            flags.append(name)
+    return flags
 
 
 def _policy_items(payload: dict[str, Any], key: str) -> set[str]:
@@ -128,6 +161,187 @@ def _integration_map_rows(integration: dict[str, Any], run_root: Path) -> list[d
                     required=required,
                 )
             )
+    return rows
+
+
+def _verify_integration_dq_pixels(
+    output: dict[str, Any],
+    *,
+    run_root: Path,
+    tile_size: int,
+    tolerance_pixels: int,
+) -> dict[str, Any]:
+    path_value = output.get("dq_map_path")
+    path = _resolve_path(path_value, run_root)
+    available = _map_available_policy(output, "dq")
+    required = available is not False and not _map_skipped(output, "dq")
+    if path is None:
+        status = "skipped_by_policy" if _map_skipped(output, "dq") else "not_required"
+        if required:
+            status = "missing_path"
+        return {
+            "status": status,
+            "verified": False,
+            "ok": not required,
+            "path": path_value,
+            "required": required,
+        }
+
+    summary = output.get("dq_summary") if isinstance(output.get("dq_summary"), dict) else {}
+    if not summary:
+        provenance = output.get("dq_provenance_summary")
+        provenance_summary = provenance.get("output_dq_summary") if isinstance(provenance, dict) else None
+        summary = provenance_summary if isinstance(provenance_summary, dict) else {}
+    flags = _dq_flags_to_verify(summary)
+    try:
+        pixel_summary = summarize_dq_map_pixels(path, flags=flags, tile_size=tile_size)
+    except Exception as exc:  # pragma: no cover - exercised by malformed user artifacts
+        return {
+            "status": "error",
+            "verified": False,
+            "ok": False,
+            "path": path_value,
+            "error": str(exc),
+        }
+    matches = {
+        flag: _count_match(
+            (pixel_summary.get("counts") or {}).get(flag),
+            _summary_count(summary, flag),
+            tolerance_pixels,
+        )
+        for flag in flags
+    }
+    return {
+        "status": "verified",
+        "verified": True,
+        "ok": all(bool(match.get("passed")) for match in matches.values()),
+        "path": path_value,
+        "required": required,
+        "result": pixel_summary,
+        "summary_matches": matches,
+    }
+
+
+def _count_map_required(output: dict[str, Any], map_name: str, integration: dict[str, Any]) -> bool:
+    available = _map_available_policy(output, map_name)
+    if available is False or _map_skipped(output, map_name):
+        return False
+    if map_name == "coverage":
+        return True
+    return _integration_rejection_mode(integration, output) != "none"
+
+
+def _verify_integration_count_map_pixels(
+    output: dict[str, Any],
+    *,
+    integration: dict[str, Any],
+    map_name: str,
+    path_key: str,
+    expected_dq_flag: str,
+    run_root: Path,
+    tile_size: int,
+    tolerance_pixels: int,
+) -> dict[str, Any]:
+    path_value = output.get(path_key)
+    path = _resolve_path(path_value, run_root)
+    required = _count_map_required(output, map_name, integration)
+    if path is None:
+        status = "skipped_by_policy" if _map_skipped(output, map_name) else "not_required"
+        if required:
+            status = "missing_path"
+        return {
+            "status": status,
+            "verified": False,
+            "ok": not required,
+            "path": path_value,
+            "required": required,
+        }
+
+    try:
+        pixel_summary = summarize_count_map_pixels(path, tile_size=tile_size)
+    except Exception as exc:  # pragma: no cover - exercised by malformed user artifacts
+        return {
+            "status": "error",
+            "verified": False,
+            "ok": False,
+            "path": path_value,
+            "required": required,
+            "error": str(exc),
+        }
+
+    dq_summary = output.get("dq_summary") if isinstance(output.get("dq_summary"), dict) else {}
+    match_source = "zero_or_less_pixels" if map_name == "coverage" else "positive_pixels"
+    match = _count_match(
+        pixel_summary.get(match_source),
+        _summary_count(dq_summary, expected_dq_flag),
+        tolerance_pixels,
+    )
+    return {
+        "status": "verified",
+        "verified": True,
+        "ok": bool(match.get("passed")),
+        "path": path_value,
+        "required": required,
+        "result": pixel_summary,
+        "summary_match": {expected_dq_flag: match},
+    }
+
+
+def _integration_pixel_verification_rows(
+    integration: dict[str, Any],
+    run_root: Path,
+    *,
+    tile_size: int,
+    tolerance_pixels: int,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for index, output in enumerate(integration.get("outputs") or []):
+        if not isinstance(output, dict):
+            continue
+        item = str(output.get("filter") or index)
+        rows.append(
+            {
+                "item": item,
+                "dq": _verify_integration_dq_pixels(
+                    output,
+                    run_root=run_root,
+                    tile_size=tile_size,
+                    tolerance_pixels=tolerance_pixels,
+                ),
+                "count_maps": {
+                    "coverage": _verify_integration_count_map_pixels(
+                        output,
+                        integration=integration,
+                        map_name="coverage",
+                        path_key="coverage_map_path",
+                        expected_dq_flag="no_data",
+                        run_root=run_root,
+                        tile_size=tile_size,
+                        tolerance_pixels=tolerance_pixels,
+                    ),
+                    "low_rejection": _verify_integration_count_map_pixels(
+                        output,
+                        integration=integration,
+                        map_name="low_rejection",
+                        path_key="low_rejection_map_path",
+                        expected_dq_flag="low_rejected",
+                        run_root=run_root,
+                        tile_size=tile_size,
+                        tolerance_pixels=tolerance_pixels,
+                    ),
+                    "high_rejection": _verify_integration_count_map_pixels(
+                        output,
+                        integration=integration,
+                        map_name="high_rejection",
+                        path_key="high_rejection_map_path",
+                        expected_dq_flag="high_rejected",
+                        run_root=run_root,
+                        tile_size=tile_size,
+                        tolerance_pixels=tolerance_pixels,
+                    ),
+                },
+            }
+        )
     return rows
 
 
@@ -244,7 +458,13 @@ def _skipped_warp_rows(warp: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def build_pipeline_contract_audit(run_dir: str | Path) -> dict[str, Any]:
+def build_pipeline_contract_audit(
+    run_dir: str | Path,
+    *,
+    pixel_verify: bool = False,
+    pixel_verify_tile_size: int = 2048,
+    pixel_tolerance: int = 0,
+) -> dict[str, Any]:
     run_root = Path(run_dir)
     warp_path = run_root / "warp_results.json"
     local_norm_path = run_root / "local_norm_results.json"
@@ -258,6 +478,16 @@ def build_pipeline_contract_audit(run_dir: str | Path) -> dict[str, Any]:
     local_norm_rows = _local_norm_rows(local_norm, run_root)
     integration_rows = _integration_rows(integration, run_root)
     integration_map_rows = _integration_map_rows(integration, run_root)
+    pixel_verification_rows = (
+        _integration_pixel_verification_rows(
+            integration,
+            run_root,
+            tile_size=max(1, int(pixel_verify_tile_size)),
+            tolerance_pixels=max(0, int(pixel_tolerance)),
+        )
+        if pixel_verify
+        else []
+    )
 
     checks = [
         _check("integration_artifact_exists", integration_path.exists(), {"path": str(integration_path)}),
@@ -287,6 +517,61 @@ def build_pipeline_contract_audit(run_dir: str | Path) -> dict[str, Any]:
             },
         ),
     ]
+    if pixel_verify:
+        dq_rows = [row.get("dq") or {} for row in pixel_verification_rows]
+        coverage_rows = [(row.get("count_maps") or {}).get("coverage") or {} for row in pixel_verification_rows]
+        rejection_rows = [
+            (row.get("count_maps") or {}).get(map_name) or {}
+            for row in pixel_verification_rows
+            for map_name in ("low_rejection", "high_rejection")
+        ]
+        checks.extend(
+            [
+                _check(
+                    "integration_dq_map_pixels_match_summary",
+                    bool(dq_rows) and all(bool(row.get("ok")) for row in dq_rows),
+                    {
+                        "verified_records": sum(1 for row in dq_rows if row.get("verified")),
+                        "failed": [
+                            pixel_verification_rows[index].get("item")
+                            for index, row in enumerate(dq_rows)
+                            if not row.get("ok")
+                        ],
+                        "tolerance_pixels": max(0, int(pixel_tolerance)),
+                    },
+                ),
+                _check(
+                    "integration_coverage_map_pixels_match_dq",
+                    bool(coverage_rows) and all(bool(row.get("ok")) for row in coverage_rows),
+                    {
+                        "verified_records": sum(1 for row in coverage_rows if row.get("verified")),
+                        "failed": [
+                            pixel_verification_rows[index].get("item")
+                            for index, row in enumerate(coverage_rows)
+                            if not row.get("ok")
+                        ],
+                        "tolerance_pixels": max(0, int(pixel_tolerance)),
+                    },
+                ),
+                _check(
+                    "integration_rejection_map_pixels_match_dq",
+                    bool(rejection_rows) and all(bool(row.get("ok")) for row in rejection_rows),
+                    {
+                        "verified_records": sum(1 for row in rejection_rows if row.get("verified")),
+                        "failed": [
+                            {
+                                "item": pixel_verification_rows[index // 2].get("item"),
+                                "map": "low_rejection" if index % 2 == 0 else "high_rejection",
+                                "status": row.get("status"),
+                            }
+                            for index, row in enumerate(rejection_rows)
+                            if not row.get("ok")
+                        ],
+                        "tolerance_pixels": max(0, int(pixel_tolerance)),
+                    },
+                ),
+            ]
+        )
     if warp_path.exists():
         checks.extend(
             [
@@ -350,6 +635,12 @@ def build_pipeline_contract_audit(run_dir: str | Path) -> dict[str, Any]:
             "outputs": local_norm_rows,
         },
         "integration": {"outputs": integration_rows, "maps": integration_map_rows},
+        "pixel_verification": {
+            "enabled": bool(pixel_verify),
+            "tile_size": max(1, int(pixel_verify_tile_size)),
+            "tolerance_pixels": max(0, int(pixel_tolerance)),
+            "integration_outputs": pixel_verification_rows,
+        },
     }
 
 

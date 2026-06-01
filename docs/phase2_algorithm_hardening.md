@@ -1530,6 +1530,24 @@ integration where applicable.
 - No new 200-light benchmark is required because this gate is report-only and
   does not alter image math or resident CUDA routing.
 
+### S2-Gate 92: Pipeline Contract Pixel Verification
+
+- Add an explicit `pipeline-contract --pixel-verify` mode that reads integration
+  DQ, coverage, and rejection count maps in FITS tiles, not as full in-memory
+  images.
+- Compare DQ map pixel counts against integration `dq_summary` values with an
+  explicit pixel tolerance, treating absent zero-count flags as zero.
+- Compare coverage zero-or-less pixels against DQ `no_data` counts, and
+  rejection-map positive pixels against DQ `low_rejected` and `high_rejected`
+  counts when those maps are written or required by policy.
+- Surface the pixel-verification rows in the main HTML report while keeping
+  `pipeline_contract.json` authoritative for automated checks.
+- Validate with passing and failing synthetic/FITS fixtures, ruff, full pytest,
+  and a pixel-verification audit against preserved 200-light artifacts when the
+  required map files are locally available.
+- No new 200-light benchmark is required because this gate reads existing
+  artifacts and does not alter image math or resident CUDA routing.
+
 ## Gate Rules
 
 Each gate requires:
