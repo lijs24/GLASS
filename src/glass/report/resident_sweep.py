@@ -320,8 +320,10 @@ def rank_resident_sweep_summaries(
     *,
     baseline_total_s: float | None = None,
     compare_gate: dict[str, Any] | None = None,
+    frame_gate: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     compare_policy = _normalize_compare_gate_policy(compare_gate)
+    frame_policy = _normalize_frame_gate_policy(frame_gate)
     ranked = []
     for summary in summaries:
         item = dict(summary)
@@ -329,12 +331,14 @@ def rank_resident_sweep_summaries(
         item["speedup_vs_baseline"] = (
             None if baseline_total_s is None or total in (None, 0) else float(baseline_total_s) / float(total)
         )
+        item["frame_gate"] = _evaluate_frame_gate(item, frame_policy)
         item["compare_gate"] = _evaluate_compare_gate(item, compare_policy)
         ranked.append(item)
     ranked.sort(
         key=lambda item: (
             item.get("status") != "completed",
             (item.get("guardrails") or {}).get("passed") is False,
+            (item.get("frame_gate") or {}).get("passed") is False,
             (item.get("compare_gate") or {}).get("passed") is False,
             float("inf") if item.get("total_elapsed_s") is None else float(item["total_elapsed_s"]),
             int(item.get("prefetch_blocked_no_slot_count", 0) or 0),
@@ -356,18 +360,26 @@ def write_resident_sweep_summary(
     commands: list[dict[str, Any]] | None = None,
     common_run_args: dict[str, Any] | None = None,
     compare_gate: dict[str, Any] | None = None,
+    frame_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out_path = Path(out)
     compare_gate_policy = _normalize_compare_gate_policy(compare_gate)
+    frame_gate_policy = _normalize_frame_gate_policy(frame_gate)
     ranked = rank_resident_sweep_summaries(
         summaries,
         baseline_total_s=baseline_total_s,
         compare_gate=compare_gate_policy,
+        frame_gate=frame_gate_policy,
     )
     guardrail_records = [
         run.get("guardrails") or {}
         for run in ranked
         if isinstance(run.get("guardrails"), dict) and (run.get("guardrails") or {}).get("status") != "disabled"
+    ]
+    frame_gate_records = [
+        run.get("frame_gate") or {}
+        for run in ranked
+        if isinstance(run.get("frame_gate"), dict) and (run.get("frame_gate") or {}).get("status") != "disabled"
     ]
     compare_gate_records = [
         run.get("compare_gate") or {}
@@ -378,6 +390,8 @@ def write_resident_sweep_summary(
     if best_variant and (best_variant.get("guardrails") or {}).get("passed") is False:
         best_variant = None
     if best_variant and (best_variant.get("compare_gate") or {}).get("passed") is False:
+        best_variant = None
+    if best_variant and (best_variant.get("frame_gate") or {}).get("passed") is False:
         best_variant = None
     payload = {
         "benchmark": "resident_prefetch_sweep",
@@ -395,6 +409,13 @@ def write_resident_sweep_summary(
             "passed_count": sum(1 for item in guardrail_records if item.get("passed") is True),
             "failed_count": sum(1 for item in guardrail_records if item.get("passed") is False),
             "planned_count": sum(1 for item in guardrail_records if item.get("status") == "planned"),
+        },
+        "frame_gate": {
+            "enabled": bool(frame_gate_records),
+            "policy": frame_gate_policy,
+            "passed_count": sum(1 for item in frame_gate_records if item.get("passed") is True),
+            "failed_count": sum(1 for item in frame_gate_records if item.get("passed") is False),
+            "planned_count": sum(1 for item in frame_gate_records if item.get("status") == "planned"),
         },
         "compare_gate": {
             "enabled": bool(compare_gate_records),
@@ -418,11 +439,14 @@ def build_resident_sweep_analysis(payload: dict[str, Any]) -> dict[str, Any]:
     runs = [dict(run) for run in payload.get("runs", []) if isinstance(run, dict)]
     completed = [run for run in runs if run.get("status") == "completed"]
     guardrails_enabled = bool((payload.get("guardrails") or {}).get("enabled"))
+    frame_gate_enabled = bool((payload.get("frame_gate") or {}).get("enabled"))
     compare_gate_enabled = bool((payload.get("compare_gate") or {}).get("enabled"))
     promotion_candidates = [
         run
         for run in completed
-        if _run_guardrails_rankable(run, guardrails_enabled) and _run_compare_rankable(run, compare_gate_enabled)
+        if _run_guardrails_rankable(run, guardrails_enabled)
+        and _run_frame_rankable(run, frame_gate_enabled)
+        and _run_compare_rankable(run, compare_gate_enabled)
     ]
     fastest = _min_run_by(completed, "total_elapsed_s")
     lowest_catalog = _min_run_by(completed, "registration_triangle_moving_catalog_s")
@@ -438,6 +462,8 @@ def build_resident_sweep_analysis(payload: dict[str, Any]) -> dict[str, Any]:
         "completed_count": len(completed),
         "promotion_candidate_count": len(promotion_candidates),
         "guardrails_enabled": guardrails_enabled,
+        "frame_gate_enabled": frame_gate_enabled,
+        "frame_gate_policy": (payload.get("frame_gate") or {}).get("policy", {}),
         "compare_gate_enabled": compare_gate_enabled,
         "compare_gate_policy": (payload.get("compare_gate") or {}).get("policy", {}),
         "baseline_total_s": baseline_total,
@@ -470,6 +496,12 @@ def _run_compare_rankable(run: dict[str, Any], compare_gate_enabled: bool) -> bo
     return (run.get("compare_gate") or {}).get("passed") is True
 
 
+def _run_frame_rankable(run: dict[str, Any], frame_gate_enabled: bool) -> bool:
+    if not frame_gate_enabled:
+        return True
+    return (run.get("frame_gate") or {}).get("passed") is True
+
+
 def _min_run_by(runs: Iterable[dict[str, Any]], key: str) -> dict[str, Any] | None:
     candidates = [run for run in runs if run.get(key) is not None]
     if not candidates:
@@ -485,6 +517,7 @@ def _analysis_run_record(run: dict[str, Any] | None, baseline_total_s: float | N
     registration_warp = _optional_float(run.get("resident_registration_warp_s"))
     compare = run.get("compare") if isinstance(run.get("compare"), dict) else {}
     compare_gate = run.get("compare_gate") if isinstance(run.get("compare_gate"), dict) else {}
+    frame_gate = run.get("frame_gate") if isinstance(run.get("frame_gate"), dict) else {}
     guardrails = run.get("guardrails") if isinstance(run.get("guardrails"), dict) else {}
     return {
         "variant_id": run.get("variant_id"),
@@ -502,6 +535,9 @@ def _analysis_run_record(run: dict[str, Any] | None, baseline_total_s: float | N
         "registration_triangle_warp_s": _optional_float(run.get("registration_triangle_warp_s")),
         "guardrails_status": guardrails.get("status"),
         "guardrails_passed": guardrails.get("passed"),
+        "frame_gate_status": frame_gate.get("status"),
+        "frame_gate_passed": frame_gate.get("passed"),
+        "frame_gate_reasons": frame_gate.get("reasons", []),
         "compare_gate_status": compare_gate.get("status"),
         "compare_gate_passed": compare_gate.get("passed"),
         "compare_gate_reasons": compare_gate.get("reasons", []),
@@ -522,7 +558,14 @@ def _resident_sweep_recommendation(analysis: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "promotion_candidate_found",
             "variant_id": fastest_promotion.get("variant_id"),
-            "reason": "fastest completed variant satisfying enabled guardrails and compare gate",
+            "reason": "fastest completed variant satisfying all enabled promotion gates",
+        }
+    if lowest_catalog is not None and lowest_catalog.get("frame_gate_passed") is False:
+        return {
+            "status": "candidate_blocked_by_frame_gate",
+            "variant_id": lowest_catalog.get("variant_id"),
+            "reason": "lowest moving-catalog time did not satisfy the frame-accounting gate",
+            "frame_gate_reasons": lowest_catalog.get("frame_gate_reasons", []),
         }
     if lowest_catalog is not None and lowest_catalog.get("compare_gate_passed") is False:
         return {
@@ -536,6 +579,19 @@ def _resident_sweep_recommendation(analysis: dict[str, Any]) -> dict[str, Any]:
         "variant_id": None,
         "reason": "no completed variant satisfied all enabled ranking gates",
     }
+
+
+def _normalize_frame_gate_policy(frame_gate: dict[str, Any] | None) -> dict[str, Any]:
+    if not frame_gate:
+        return {"enabled": False}
+    policy = {
+        "expected_input_light_frames": _optional_int(frame_gate.get("expected_input_light_frames")),
+        "expected_active_light_frames": _optional_int(frame_gate.get("expected_active_light_frames")),
+        "expected_zero_weight_frames": _optional_int(frame_gate.get("expected_zero_weight_frames")),
+        "min_active_light_frames": _optional_int(frame_gate.get("min_active_light_frames")),
+    }
+    policy["enabled"] = any(value is not None for value in policy.values())
+    return policy
 
 
 def _normalize_compare_gate_policy(compare_gate: dict[str, Any] | None) -> dict[str, Any]:
@@ -554,6 +610,50 @@ def _normalize_compare_gate_policy(compare_gate: dict[str, Any] | None) -> dict[
         or policy["max_abs_diff_p99"] is not None
     )
     return policy
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _evaluate_frame_gate(run: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+    if not policy.get("enabled"):
+        return {"status": "disabled", "passed": None, "policy": policy}
+    if run.get("status") == "dry_run":
+        return {"status": "planned", "passed": None, "policy": policy}
+    reasons: list[str] = []
+    _append_expected_int_gate_reason(
+        reasons,
+        run.get("input_light_frames"),
+        policy.get("expected_input_light_frames"),
+        "input_light_frames",
+    )
+    _append_expected_int_gate_reason(
+        reasons,
+        run.get("active_light_frames"),
+        policy.get("expected_active_light_frames"),
+        "active_light_frames",
+    )
+    _append_expected_int_gate_reason(
+        reasons,
+        run.get("zero_weight_frames"),
+        policy.get("expected_zero_weight_frames"),
+        "zero_weight_frames",
+    )
+    _append_min_int_gate_reason(
+        reasons,
+        run.get("active_light_frames"),
+        policy.get("min_active_light_frames"),
+        "active_light_frames",
+    )
+    return {
+        "status": "failed" if reasons else "passed",
+        "passed": not reasons,
+        "reasons": reasons,
+        "policy": policy,
+    }
 
 
 def _evaluate_compare_gate(run: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
@@ -589,6 +689,40 @@ def _evaluate_compare_gate(run: dict[str, Any], policy: dict[str, Any]) -> dict[
         "reasons": reasons,
         "policy": policy,
     }
+
+
+def _append_expected_int_gate_reason(
+    reasons: list[str],
+    value: Any,
+    expected: Any,
+    name: str,
+) -> None:
+    if expected is None:
+        return
+    if value is None:
+        reasons.append(f"{name} is missing")
+        return
+    numeric = int(value)
+    required = int(expected)
+    if numeric != required:
+        reasons.append(f"{name} {numeric} != {required}")
+
+
+def _append_min_int_gate_reason(
+    reasons: list[str],
+    value: Any,
+    minimum: Any,
+    name: str,
+) -> None:
+    if minimum is None:
+        return
+    if value is None:
+        reasons.append(f"{name} is missing")
+        return
+    numeric = int(value)
+    required = int(minimum)
+    if numeric < required:
+        reasons.append(f"{name} {numeric} < {required}")
 
 
 def _append_max_float_gate_reason(
@@ -637,13 +771,21 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             f"{compare_gate.get('passed_count', 0)} passed, "
             f"{compare_gate.get('failed_count', 0)} failed"
         )
+    frame_gate = payload.get("frame_gate") if isinstance(payload.get("frame_gate"), dict) else {}
+    if frame_gate.get("enabled"):
+        lines.append(
+            "- Frame gate: "
+            f"{frame_gate.get('passed_count', 0)} passed, "
+            f"{frame_gate.get('failed_count', 0)} failed, "
+            f"{frame_gate.get('planned_count', 0)} planned"
+        )
     lines.extend(
         [
             "",
-            "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Compare gate | Read wait s | "
+            "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Frame gate | Compare gate | Read wait s | "
             "Native cal s | Reg/warp s | Catalog s | Pixel refine s | Warp s | Blocked slots | Callback waves | "
             "Release batches | Active frames | Zero-weight | Ref RMS | Ref p99 | Ref speedup |",
-            "| ---: | --- | --- | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+            "| ---: | --- | --- | ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
             "---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
@@ -666,12 +808,16 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         compare_gate_status = ""
         if isinstance(run.get("compare_gate"), dict):
             compare_gate_status = str(run["compare_gate"].get("status") or "")
+        frame_gate_status = ""
+        if isinstance(run.get("frame_gate"), dict):
+            frame_gate_status = str(run["frame_gate"].get("status") or "")
         lines.append(
             "| "
             f"{run.get('rank', '')} | "
             f"{run.get('status', '')} | "
             f"`{run.get('variant_id', '')}` | "
-            f"{total} | {speedup} | {timeout} | {guardrail_status} | {compare_gate_status} | "
+            f"{total} | {speedup} | {timeout} | {guardrail_status} | {frame_gate_status} | "
+            f"{compare_gate_status} | "
             f"{read_wait} | {native_cal} | "
             f"{registration_warp} | {catalog} | {pixel_refine} | {warp} | "
             f"{run.get('prefetch_blocked_no_slot_count', '')} | "
@@ -702,8 +848,8 @@ def _write_analysis_markdown(path: Path, analysis: dict[str, Any]) -> None:
     lines.extend(
         [
             "",
-            "| Kind | Variant | Total s | Catalog s | Reg/warp s | Compare gate | Ref RMS | Ref p99 |",
-            "| --- | --- | ---: | ---: | ---: | --- | ---: | ---: |",
+            "| Kind | Variant | Total s | Catalog s | Reg/warp s | Frame gate | Compare gate | Ref RMS | Ref p99 |",
+            "| --- | --- | ---: | ---: | ---: | --- | --- | ---: | ---: |",
         ]
     )
     rows = [
@@ -714,7 +860,7 @@ def _write_analysis_markdown(path: Path, analysis: dict[str, Any]) -> None:
     ]
     for label, row in rows:
         if not isinstance(row, dict):
-            lines.append(f"| {label} |  |  |  |  |  |  |  |")
+            lines.append(f"| {label} |  |  |  |  |  |  |  |  |")
             continue
         lines.append(
             "| "
@@ -723,6 +869,7 @@ def _write_analysis_markdown(path: Path, analysis: dict[str, Any]) -> None:
             f"{_format_float(row.get('total_elapsed_s'))} | "
             f"{_format_float(row.get('registration_triangle_moving_catalog_s'))} | "
             f"{_format_float(row.get('resident_registration_warp_s'))} | "
+            f"{row.get('frame_gate_status') or ''} | "
             f"{row.get('compare_gate_status') or ''} | "
             f"{_format_float(row.get('ref_rms'))} | "
             f"{_format_float(row.get('ref_p99'))} |"

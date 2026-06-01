@@ -449,6 +449,26 @@ def main() -> int:
     )
     parser.add_argument("--compare-max-p99", type=float, help="maximum abs_diff_p99 for compare-gated ranking")
     parser.add_argument(
+        "--frame-gate-expected-input-light-frames",
+        type=int,
+        help="exact input light frame count required for promotion ranking",
+    )
+    parser.add_argument(
+        "--frame-gate-expected-active-light-frames",
+        type=int,
+        help="exact integrated/active light frame count required for promotion ranking",
+    )
+    parser.add_argument(
+        "--frame-gate-expected-zero-weight-frames",
+        type=int,
+        help="exact zero-weight light frame count required for promotion ranking",
+    )
+    parser.add_argument(
+        "--frame-gate-min-active-light-frames",
+        type=int,
+        help="minimum integrated/active light frame count required for promotion ranking",
+    )
+    parser.add_argument(
         "--guardrails",
         action="store_true",
         help="run glass guardrails for each completed variant and include pass/fail in the sweep summary",
@@ -647,6 +667,12 @@ def main() -> int:
             "max_rms_diff": args.compare_max_rms,
             "max_relative_rms_diff": args.compare_max_relative_rms,
             "max_abs_diff_p99": args.compare_max_p99,
+        },
+        frame_gate={
+            "expected_input_light_frames": args.frame_gate_expected_input_light_frames,
+            "expected_active_light_frames": args.frame_gate_expected_active_light_frames,
+            "expected_zero_weight_frames": args.frame_gate_expected_zero_weight_frames,
+            "min_active_light_frames": args.frame_gate_min_active_light_frames,
         },
     )
     print(f"resident prefetch sweep summary: {out_dir / 'resident_prefetch_sweep_summary.json'}")

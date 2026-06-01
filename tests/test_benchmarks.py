@@ -323,6 +323,12 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
         "--guardrails-pixel-verify",
         "--guardrails-pixel-verify-tile-size",
         "128",
+        "--frame-gate-expected-input-light-frames",
+        "200",
+        "--frame-gate-expected-active-light-frames",
+        "193",
+        "--frame-gate-expected-zero-weight-frames",
+        "7",
         "--dry-run",
     )
 
@@ -334,6 +340,7 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
     assert payload["dry_run"] is True
     assert analysis["benchmark"] == "resident_prefetch_sweep"
     assert analysis["completed_count"] == 0
+    assert analysis["frame_gate_enabled"] is True
     assert "Resident Prefetch Sweep Analysis" in analysis_markdown
     assert payload["variant_count"] == 4
     assert payload["best_variant"] is None
@@ -346,6 +353,8 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
     assert all(run["status"] == "dry_run" for run in payload["runs"])
     assert payload["guardrails"]["enabled"] is True
     assert payload["guardrails"]["planned_count"] == 4
+    assert payload["frame_gate"]["enabled"] is True
+    assert payload["frame_gate"]["planned_count"] == 4
     assert len([command for command in payload["commands"] if command["kind"] == "run"]) == 4
     assert len([command for command in payload["commands"] if command["kind"] == "guardrails"]) == 4
     assert "--resident-output-maps" in payload["commands"][0]["command"]
@@ -356,6 +365,7 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
     assert "--pixel-verify-tile-size" in guardrail_command
     assert "Resident Prefetch Sweep" in markdown
     assert "Guardrails" in markdown
+    assert "Frame gate" in markdown
 
 
 def test_bench_resident_prefetch_sweep_records_variant_timeout(tmp_path: Path):
@@ -664,6 +674,92 @@ def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path)
     assert payload["best_variant"]["variant_id"] == "slower_green"
     assert payload["guardrails"]["passed_count"] == 1
     assert payload["guardrails"]["failed_count"] == 1
+
+
+def test_resident_sweep_ranking_applies_frame_gate(tmp_path: Path):
+    from glass.report.resident_sweep import write_resident_sweep_summary
+
+    payload = write_resident_sweep_summary(
+        tmp_path,
+        plan="processing_plan.json",
+        variants=[],
+        summaries=[
+            {
+                "variant_id": "fast_wrong_frame_count",
+                "status": "completed",
+                "total_elapsed_s": 10.0,
+                "registration_triangle_moving_catalog_s": 0.5,
+                "guardrails": {"status": "passed", "passed": True},
+                "input_light_frames": 200,
+                "active_light_frames": 192,
+                "zero_weight_frames": 8,
+            },
+            {
+                "variant_id": "slower_expected_frame_count",
+                "status": "completed",
+                "total_elapsed_s": 11.0,
+                "registration_triangle_moving_catalog_s": 0.8,
+                "guardrails": {"status": "passed", "passed": True},
+                "input_light_frames": 200,
+                "active_light_frames": 193,
+                "zero_weight_frames": 7,
+            },
+        ],
+        dry_run=False,
+        baseline_total_s=22.0,
+        frame_gate={
+            "expected_input_light_frames": 200,
+            "expected_active_light_frames": 193,
+            "expected_zero_weight_frames": 7,
+            "min_active_light_frames": 193,
+        },
+    )
+
+    markdown = (tmp_path / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
+    analysis = json.loads((tmp_path / "resident_prefetch_sweep_analysis.json").read_text(encoding="utf-8"))
+    runs_by_id = {run["variant_id"]: run for run in payload["runs"]}
+    assert payload["best_variant"]["variant_id"] == "slower_expected_frame_count"
+    assert payload["frame_gate"]["enabled"] is True
+    assert payload["frame_gate"]["passed_count"] == 1
+    assert payload["frame_gate"]["failed_count"] == 1
+    assert runs_by_id["fast_wrong_frame_count"]["frame_gate"]["passed"] is False
+    assert "active_light_frames 192 != 193" in runs_by_id["fast_wrong_frame_count"]["frame_gate"]["reasons"]
+    assert "zero_weight_frames 8 != 7" in runs_by_id["fast_wrong_frame_count"]["frame_gate"]["reasons"]
+    assert runs_by_id["slower_expected_frame_count"]["frame_gate"]["passed"] is True
+    assert analysis["frame_gate_enabled"] is True
+    assert analysis["promotion_candidate_count"] == 1
+    assert analysis["fastest_promotion_candidate"]["variant_id"] == "slower_expected_frame_count"
+    assert "Frame gate" in markdown
+
+    blocked = write_resident_sweep_summary(
+        tmp_path / "blocked",
+        plan="processing_plan.json",
+        variants=[],
+        summaries=[
+            {
+                "variant_id": "low_catalog_wrong_frame_count",
+                "status": "completed",
+                "total_elapsed_s": 10.0,
+                "registration_triangle_moving_catalog_s": 0.5,
+                "guardrails": {"status": "passed", "passed": True},
+                "input_light_frames": 200,
+                "active_light_frames": 192,
+                "zero_weight_frames": 8,
+            }
+        ],
+        dry_run=False,
+        baseline_total_s=22.0,
+        frame_gate={
+            "expected_input_light_frames": 200,
+            "expected_active_light_frames": 193,
+            "expected_zero_weight_frames": 7,
+        },
+    )
+    blocked_analysis = json.loads(
+        (tmp_path / "blocked" / "resident_prefetch_sweep_analysis.json").read_text(encoding="utf-8")
+    )
+    assert blocked["best_variant"] is None
+    assert blocked_analysis["recommendation"]["status"] == "candidate_blocked_by_frame_gate"
 
 
 def test_resident_sweep_ranking_applies_compare_gate(tmp_path: Path):

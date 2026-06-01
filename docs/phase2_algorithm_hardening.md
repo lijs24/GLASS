@@ -1742,6 +1742,20 @@ integration where applicable.
 - Validate with focused tests and generate analysis for the 200-light
   S2-Gate 103 catalog sweep without rerunning CUDA.
 
+### S2-Gate 105: Resident Sweep Frame-Accounting Gate
+
+- Add an optional frame-accounting promotion gate to resident sweeps so a fast
+  variant cannot become `best_variant` when it changes the expected input,
+  integrated, or zero-weight light frame counts.
+- Support exact expected counts for input light frames, active/integrated light
+  frames, and zero-weight frames, plus a minimum active-frame floor.
+- Record per-variant frame-gate pass/fail status and reasons in sweep JSON,
+  Markdown, and analysis artifacts.
+- Include top-level frame-gate policy and passed/failed/planned counts.
+- Keep default behavior unchanged when frame-gate requirements are omitted.
+- Validate with unit tests and regenerate a frame-gated 200-light catalog sweep
+  analysis from existing S2-Gate 103 artifacts without rerunning CUDA.
+
 ## Gate Rules
 
 Each gate requires:
