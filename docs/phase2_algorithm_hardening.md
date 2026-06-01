@@ -2054,6 +2054,21 @@ integration where applicable.
   identifies candidate frame families for the next numerical correction or
   exact replay gate.
 
+### S2-Gate 124: Lanczos3 Replay Parity
+
+- Extend `glass compare-tile-replay` with an explicit replay interpolation
+  choice, at least `bilinear` and `lanczos3`.
+- Implement bounded CPU Lanczos3 sampling in a vectorized way suitable for the
+  exported residual tiles.
+- Preserve the same source-window, master-calibration-cache, registration
+  matrix, frame-selection, and ranking contract from S2-Gate 123.
+- Run the Lanczos3 replay on the S2-Gate 121 `agr0p5` top residual tiles for
+  agreement-downweighted frames and all positive-weight frames.
+- Compare the top contributor ordering against the S2-Gate 123 bilinear replay.
+- Treat this as an observability gate only. It must not change defaults; it
+  decides whether the S2-Gate 123 frame-family finding survives closer
+  interpolation parity with the resident Lanczos3 benchmark path.
+
 ## Gate Rules
 
 Each gate requires:

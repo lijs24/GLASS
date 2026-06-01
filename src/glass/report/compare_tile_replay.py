@@ -12,6 +12,7 @@ from glass.report.compare_tile_attribution import _float_or_none, _stats, _warni
 
 _CACHE_DIR_RE = re.compile(r"--resident-master-cache-dir\s+(?P<path>\S+)")
 _WARP_INTERPOLATION_RE = re.compile(r"--resident-warp-interpolation\s+(?P<name>\S+)")
+_REPLAY_INTERPOLATIONS = {"bilinear", "lanczos3"}
 
 
 def _load_json_if_exists(path: Path) -> Any:
@@ -245,6 +246,87 @@ def _sample_bilinear_from_tile(
     return out
 
 
+def _sinc_array(values: np.ndarray) -> np.ndarray:
+    x = np.asarray(values, dtype=np.float64)
+    out = np.ones(x.shape, dtype=np.float64)
+    mask = np.abs(x) >= 1.0e-8
+    pix = np.pi * x[mask]
+    out[mask] = np.sin(pix) / pix
+    return out
+
+
+def _lanczos3_weight_array(values: np.ndarray) -> np.ndarray:
+    x = np.abs(np.asarray(values, dtype=np.float64))
+    out = _sinc_array(x) * _sinc_array(x / 3.0)
+    out[x >= 3.0] = 0.0
+    return out
+
+
+def _sample_lanczos3_from_tile(
+    source: np.ndarray,
+    src_x: np.ndarray,
+    src_y: np.ndarray,
+    valid: np.ndarray,
+    read_x0: int,
+    read_y0: int,
+) -> np.ndarray:
+    out = np.full(src_x.shape, np.nan, dtype=np.float32)
+    if not np.any(valid):
+        return out
+    vx = src_x[valid]
+    vy = src_y[valid]
+    base_x = np.floor(vx).astype(np.int64)
+    base_y = np.floor(vy).astype(np.int64)
+    weighted_sum = np.zeros(vx.shape, dtype=np.float64)
+    weight_sum = np.zeros(vx.shape, dtype=np.float64)
+    for oy in range(-2, 4):
+        sy = base_y + oy
+        wy = _lanczos3_weight_array(vy - sy)
+        ly = sy - int(read_y0)
+        for ox in range(-2, 4):
+            sx = base_x + ox
+            wx = _lanczos3_weight_array(vx - sx)
+            weights = wx * wy
+            lx = sx - int(read_x0)
+            weighted_sum += np.asarray(source[ly, lx], dtype=np.float64) * weights
+            weight_sum += weights
+    sampled = np.divide(
+        weighted_sum,
+        weight_sum,
+        out=np.zeros_like(weighted_sum),
+        where=np.abs(weight_sum) > 1.0e-12,
+    )
+    out[valid] = np.asarray(sampled, dtype=np.float32)
+    return out
+
+
+def _interpolation_radius(interpolation: str) -> int:
+    if interpolation == "bilinear":
+        return 1
+    if interpolation == "lanczos3":
+        return 3
+    raise ValueError(f"unsupported replay interpolation: {interpolation}")
+
+
+def _valid_for_interpolation(
+    src_x: np.ndarray,
+    src_y: np.ndarray,
+    *,
+    width: int,
+    height: int,
+    interpolation: str,
+) -> np.ndarray:
+    if interpolation == "bilinear":
+        return (src_x >= 0.0) & (src_x <= float(width - 1)) & (src_y >= 0.0) & (src_y <= float(height - 1))
+    radius = _interpolation_radius(interpolation)
+    return (
+        (src_x >= float(radius - 1))
+        & (src_x < float(width - radius))
+        & (src_y >= float(radius - 1))
+        & (src_y < float(height - radius))
+    )
+
+
 def _replay_frame_tile(
     frame: dict[str, Any],
     registration: dict[str, Any],
@@ -255,7 +337,10 @@ def _replay_frame_tile(
     dark: np.ndarray | None,
     flat: np.ndarray | None,
     policy: dict[str, Any],
+    interpolation: str,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    if interpolation not in _REPLAY_INTERPOLATIONS:
+        raise ValueError(f"unsupported replay interpolation: {interpolation}")
     path = frame.get("input_path")
     if not path:
         raise ValueError(f"frame has no input_path: {frame.get('frame_id')}")
@@ -265,13 +350,20 @@ def _replay_frame_tile(
     with FitsImageReader(path) as reader:
         height, width = reader.shape
         src_x, src_y, valid = _source_grid(extent, matrix)
-        valid &= (src_x >= 0.0) & (src_x <= float(width - 1)) & (src_y >= 0.0) & (src_y <= float(height - 1))
+        valid &= _valid_for_interpolation(
+            src_x,
+            src_y,
+            width=width,
+            height=height,
+            interpolation=interpolation,
+        )
         if not np.any(valid):
             return np.full(src_x.shape, np.nan, dtype=np.float32), valid, {"status": "no_overlap"}
-        read_x0 = max(0, int(np.floor(float(np.nanmin(src_x[valid])))) - 1)
-        read_y0 = max(0, int(np.floor(float(np.nanmin(src_y[valid])))) - 1)
-        read_x1 = min(width, int(np.ceil(float(np.nanmax(src_x[valid])))) + 2)
-        read_y1 = min(height, int(np.ceil(float(np.nanmax(src_y[valid])))) + 2)
+        radius = _interpolation_radius(interpolation)
+        read_x0 = max(0, int(np.floor(float(np.nanmin(src_x[valid])))) - radius)
+        read_y0 = max(0, int(np.floor(float(np.nanmin(src_y[valid])))) - radius)
+        read_x1 = min(width, int(np.ceil(float(np.nanmax(src_x[valid])))) + radius + 1)
+        read_y1 = min(height, int(np.ceil(float(np.nanmax(src_y[valid])))) + radius + 1)
         raw = reader.read_tile(read_y0, read_y1, read_x0, read_x1, dtype=np.float32)
     exposure = _float_or_none((plan_frame or {}).get("exposure_s"))
     calibrated = _calibrate_source_tile(
@@ -284,8 +376,11 @@ def _replay_frame_tile(
         light_exposure_s=exposure,
         policy=policy,
     )
-    sample = _sample_bilinear_from_tile(calibrated, src_x, src_y, valid, read_x0, read_y0)
-    return sample, valid, {"status": "replayed", "source_bbox": [read_x0, read_y0, read_x1, read_y1]}
+    if interpolation == "bilinear":
+        sample = _sample_bilinear_from_tile(calibrated, src_x, src_y, valid, read_x0, read_y0)
+    else:
+        sample = _sample_lanczos3_from_tile(calibrated, src_x, src_y, valid, read_x0, read_y0)
+    return sample, valid, {"status": "replayed", "source_bbox": [read_x0, read_y0, read_x1, read_y1], "interpolation": interpolation}
 
 
 def _frame_row_stats(
@@ -352,6 +447,7 @@ def _tile_replay(
     policy: dict[str, Any],
     low_sigma: float,
     high_sigma: float,
+    replay_interpolation: str,
 ) -> dict[str, Any]:
     extent = tile.get("extent")
     if not isinstance(extent, dict):
@@ -378,6 +474,7 @@ def _tile_replay(
                 dark=dark,
                 flat=flat,
                 policy=policy,
+                interpolation=replay_interpolation,
             )
         except (OSError, ValueError, np.linalg.LinAlgError) as exc:
             skipped.append({"frame_id": frame_id, "reason": str(exc)})
@@ -423,7 +520,7 @@ def _tile_replay(
         "frame_selection_count": len(selected_frames),
         "replayed_frame_count": len(replay_frames),
         "skipped": skipped,
-        "interpolation": "bilinear_diagnostic_replay",
+        "interpolation": replay_interpolation,
         "calibration": {
             "mode": "bounded_raw_master_calibration" if policy.get("masters_available") else "raw_or_partial_calibration",
             "policy": policy,
@@ -446,7 +543,10 @@ def build_compare_tile_replay(
     max_frames: int = 32,
     low_sigma: float | None = None,
     high_sigma: float | None = None,
+    replay_interpolation: str = "bilinear",
 ) -> dict[str, Any]:
+    if replay_interpolation not in _REPLAY_INTERPOLATIONS:
+        raise ValueError(f"unsupported replay interpolation: {replay_interpolation}")
     run = Path(run_dir)
     pack = read_json(tile_pack)
     tiles = pack.get("tiles")
@@ -479,6 +579,7 @@ def build_compare_tile_replay(
             policy=policy,
             low_sigma=low,
             high_sigma=high,
+            replay_interpolation=replay_interpolation,
         )
         for tile in tiles
     ]
@@ -492,14 +593,14 @@ def build_compare_tile_replay(
         "max_frames": int(max_frames),
         "selected_frame_count": len(selected_frames),
         "selected_frame_ids": [frame.get("frame_id") for frame in selected_frames],
-        "interpolation": "bilinear_diagnostic_replay",
+        "interpolation": replay_interpolation,
         "resident_run_interpolation": output.get("warp_interpolation")
         or resident_artifact.get("warp_interpolation")
         or _discover_run_command_value(run, _WARP_INTERPOLATION_RE),
         "tile_count": len(tile_rows),
         "tiles": tile_rows,
         "limitations": [
-            "Replay uses bounded CPU bilinear sampling for diagnostic attribution, while the resident benchmark may have used Lanczos3.",
+            "Replay is a bounded CPU diagnostic path; interpolation is selected explicitly and may still differ from native CUDA details.",
             "Sigma proxy is recomputed from replayed frames and is not a byte-exact replay of resident winsorized rejection.",
         ],
     }

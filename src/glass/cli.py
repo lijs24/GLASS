@@ -840,6 +840,7 @@ def cmd_compare_tile_replay(args: argparse.Namespace) -> int:
         max_frames=args.max_frames,
         low_sigma=args.low_sigma,
         high_sigma=args.high_sigma,
+        replay_interpolation=args.replay_interpolation,
     )
     write_compare_tile_replay(args.out, payload, markdown=args.markdown)
     console.print(
@@ -1939,6 +1940,12 @@ def build_parser() -> argparse.ArgumentParser:
     tile_replay.add_argument("--max-frames", type=int, default=32, help="maximum frames to replay; use 0 for all selected")
     tile_replay.add_argument("--low-sigma", type=float, help="override low sigma for diagnostic proxy rejection")
     tile_replay.add_argument("--high-sigma", type=float, help="override high sigma for diagnostic proxy rejection")
+    tile_replay.add_argument(
+        "--replay-interpolation",
+        choices=["bilinear", "lanczos3"],
+        default="bilinear",
+        help="CPU interpolation used for bounded diagnostic replay",
+    )
     tile_replay.set_defaults(func=cmd_compare_tile_replay)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")

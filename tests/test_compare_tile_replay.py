@@ -15,15 +15,16 @@ def _write_fits(path: Path, data: np.ndarray) -> None:
     fits.writeto(path, np.asarray(data, dtype=np.float32), overwrite=True)
 
 
-def _write_replay_fixture(tmp_path: Path) -> tuple[Path, Path]:
+def _write_replay_fixture(tmp_path: Path, *, shape: tuple[int, int] = (5, 5), extent: dict[str, int] | None = None) -> tuple[Path, Path]:
     run = tmp_path / "run"
     run.mkdir()
     light1 = tmp_path / "light1.fits"
     light2 = tmp_path / "light2.fits"
     master = run / "integration" / "master.fits"
-    _write_fits(light1, np.ones((5, 5), dtype=np.float32))
-    _write_fits(light2, np.full((5, 5), 3, dtype=np.float32))
-    _write_fits(master, np.full((5, 5), 2, dtype=np.float32))
+    extent = extent or {"x0": 1, "y0": 1, "x1": 4, "y1": 4, "pad_px": 0}
+    _write_fits(light1, np.ones(shape, dtype=np.float32))
+    _write_fits(light2, np.full(shape, 3, dtype=np.float32))
+    _write_fits(master, np.full(shape, 2, dtype=np.float32))
     identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
     write_json(
         run / "frame_accounting.json",
@@ -64,7 +65,7 @@ def _write_replay_fixture(tmp_path: Path) -> tuple[Path, Path]:
             "tiles": [
                 {
                     "index": 0,
-                    "extent": {"x0": 1, "y0": 1, "x1": 4, "y1": 4, "pad_px": 0},
+                    "extent": extent,
                     "paths": {},
                     "source_top_tile": {"tail_pixels": 9},
                 }
@@ -74,10 +75,17 @@ def _write_replay_fixture(tmp_path: Path) -> tuple[Path, Path]:
     return run, tile_pack
 
 
-def test_compare_tile_replay_ranks_frame_deltas(tmp_path: Path) -> None:
+def test_compare_tile_replay_ranks_frame_deltas_with_bilinear(tmp_path: Path) -> None:
     run, tile_pack = _write_replay_fixture(tmp_path)
 
-    payload = build_compare_tile_replay(tile_pack, run, filter_name="H", frame_strategy="frame_id", max_frames=0)
+    payload = build_compare_tile_replay(
+        tile_pack,
+        run,
+        filter_name="H",
+        frame_strategy="frame_id",
+        max_frames=0,
+        replay_interpolation="bilinear",
+    )
 
     assert payload["selected_frame_count"] == 2
     tile = payload["tiles"][0]
@@ -87,6 +95,30 @@ def test_compare_tile_replay_ranks_frame_deltas(tmp_path: Path) -> None:
     assert means["F001"] == -1.0
     assert means["F002"] == 1.0
     assert tile["proxy_weighted_mean_delta_to_master"]["mean"] == 0.0
+
+
+def test_compare_tile_replay_ranks_frame_deltas_with_lanczos3(tmp_path: Path) -> None:
+    run, tile_pack = _write_replay_fixture(
+        tmp_path,
+        shape=(9, 9),
+        extent={"x0": 3, "y0": 3, "x1": 6, "y1": 6, "pad_px": 0},
+    )
+
+    payload = build_compare_tile_replay(
+        tile_pack,
+        run,
+        filter_name="H",
+        frame_strategy="frame_id",
+        max_frames=0,
+        replay_interpolation="lanczos3",
+    )
+
+    assert payload["interpolation"] == "lanczos3"
+    tile = payload["tiles"][0]
+    assert tile["replayed_frame_count"] == 2
+    means = {row["frame_id"]: row["delta_to_master_stats"]["mean"] for row in tile["top_frames"]}
+    assert np.isclose(means["F001"], -1.0)
+    assert np.isclose(means["F002"], 1.0)
 
 
 def test_compare_tile_replay_cli_writes_markdown(tmp_path: Path) -> None:
@@ -112,6 +144,8 @@ def test_compare_tile_replay_cli_writes_markdown(tmp_path: Path) -> None:
                 "frame_id",
                 "--max-frames",
                 "0",
+                "--replay-interpolation",
+                "bilinear",
             ]
         )
         == 0
