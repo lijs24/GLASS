@@ -509,25 +509,35 @@ def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path)
         "8",
         "--star-max-candidates",
         "48",
+        "--star-grid-cols",
+        "8",
+        "--star-grid-rows",
+        "6",
+        "--triangle-grid-top-per-cell",
+        "2",
+        "--triangle-nms-scan-candidates",
+        "96",
+        "--triangle-nms-min-separation-px",
+        "32.5",
         "--dry-run",
     )
 
     payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
     assert payload["variant_count"] == 2
     assert {variant["variant_id"] for variant in payload["variants"]} == {
-        "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48",
-        "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48",
+        "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5",
+        "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5",
     }
     fast_command = next(
         item["command"]
         for item in payload["commands"]
-        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48"
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5"
         and item["kind"] == "run"
     )
     base_command = next(
         item["command"]
         for item in payload["commands"]
-        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48"
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5"
         and item["kind"] == "run"
     )
     assert "--resident-triangle-pixel-refine-fast-coarse" in fast_command
@@ -535,6 +545,11 @@ def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path)
     assert fast_command[fast_command.index("--resident-triangle-pixel-refine-coarse-stride") + 1] == "4"
     assert fast_command[fast_command.index("--resident-triangle-pixel-refine-final-stride") + 1] == "8"
     assert fast_command[fast_command.index("--resident-star-max-candidates") + 1] == "48"
+    assert fast_command[fast_command.index("--resident-star-grid-cols") + 1] == "8"
+    assert fast_command[fast_command.index("--resident-star-grid-rows") + 1] == "6"
+    assert fast_command[fast_command.index("--resident-triangle-grid-top-per-cell") + 1] == "2"
+    assert fast_command[fast_command.index("--resident-triangle-nms-scan-candidates") + 1] == "96"
+    assert fast_command[fast_command.index("--resident-triangle-nms-min-separation-px") + 1] == "32.5"
 
 
 def test_bench_resident_prefetch_sweep_compare_contract(tmp_path: Path):

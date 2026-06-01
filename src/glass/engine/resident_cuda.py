@@ -1716,6 +1716,9 @@ def run_resident_calibration_integration(
     resident_star_prior: str = "none",
     resident_star_prior_radius_px: float = 4.0,
     resident_star_core_preselect_top_k: int = 0,
+    resident_triangle_grid_top_per_cell: int | None = None,
+    resident_triangle_nms_scan_candidates: int | None = None,
+    resident_triangle_nms_min_separation_px: float | None = None,
     resident_triangle_pixel_refine_coarse_stride: int | None = None,
     resident_triangle_pixel_refine_final_stride: int | None = None,
     resident_triangle_pixel_refine_fast_coarse: bool = False,
@@ -1800,6 +1803,12 @@ def run_resident_calibration_integration(
         raise ValueError("resident_star_prior_radius_px must be non-negative")
     if resident_star_core_preselect_top_k < 0:
         raise ValueError("resident_star_core_preselect_top_k must be non-negative")
+    if resident_triangle_grid_top_per_cell is not None and resident_triangle_grid_top_per_cell <= 0:
+        raise ValueError("resident_triangle_grid_top_per_cell must be positive when provided")
+    if resident_triangle_nms_scan_candidates is not None and resident_triangle_nms_scan_candidates <= 0:
+        raise ValueError("resident_triangle_nms_scan_candidates must be positive when provided")
+    if resident_triangle_nms_min_separation_px is not None and resident_triangle_nms_min_separation_px < 0:
+        raise ValueError("resident_triangle_nms_min_separation_px must be non-negative when provided")
     if resident_triangle_pixel_refine_coarse_stride is not None and resident_triangle_pixel_refine_coarse_stride <= 0:
         raise ValueError("resident_triangle_pixel_refine_coarse_stride must be positive when provided")
     if resident_triangle_pixel_refine_final_stride is not None and resident_triangle_pixel_refine_final_stride <= 0:
@@ -3362,11 +3371,17 @@ def run_resident_calibration_integration(
                         max(resident_star_max_candidates, resident_star_max_candidates * 4),
                     ),
                 )
+                if resident_triangle_nms_scan_candidates is not None:
+                    nms_scan_candidates = int(resident_triangle_nms_scan_candidates)
                 grid_top_candidates_per_cell = _policy_int(
                     registration_policy,
                     "cuda_triangle_grid_top_per_cell",
                     _policy_int(registration_policy, "cuda_catalog_grid_top_per_cell", 4),
                 )
+                if resident_triangle_grid_top_per_cell is not None:
+                    grid_top_candidates_per_cell = int(resident_triangle_grid_top_per_cell)
+                if resident_triangle_nms_min_separation_px is not None:
+                    nms_min_separation_px = float(resident_triangle_nms_min_separation_px)
                 refine_kwargs = {
                     "search_radius_px": _policy_float(
                         registration_policy,
@@ -4279,6 +4294,8 @@ def run_resident_calibration_integration(
                                         f"triangle_catalog_timing_model={triangle_catalog_timing_model}",
                                         f"triangle_catalog_sort_mode={triangle_catalog_sort_mode}",
                                         f"triangle_catalog_topk_mode={triangle_catalog_topk_mode}",
+                                        f"triangle_grid_top_per_cell={grid_top_candidates_per_cell}",
+                                        f"triangle_nms_scan_candidates={nms_scan_candidates}",
                                         f"triangle_nms_min_separation_px={nms_min_separation_px:.6g}",
                                         "resident CUDA triangle descriptor similarity",
                                     ]
@@ -5525,6 +5542,15 @@ def run_resident_calibration_integration(
                             "cuda_triangle_max_descriptors",
                             1200,
                         ),
+                        "triangle_grid_top_per_cell": int(grid_top_candidates_per_cell)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_nms_scan_candidates": int(nms_scan_candidates)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_nms_min_separation_px": float(nms_min_separation_px)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
                         "triangle_pixel_refine": _policy_bool(
                             registration_policy,
                             "cuda_triangle_pixel_refine",

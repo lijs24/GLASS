@@ -1710,6 +1710,24 @@ integration where applicable.
   fast-coarse candidate is intentionally demoted because its reference RMS/p99
   exceed the selected benchmark contract.
 
+### S2-Gate 103: Resident Triangle Catalog Sweep Knobs
+
+- Promote resident triangle catalog tuning parameters from plan-only policy
+  values to explicit resident CLI overrides:
+  - grid top candidates retained per cell
+  - non-grid NMS scan candidate count
+  - NMS minimum separation in pixels
+- Add these catalog dimensions to the resident sweep harness and encode them in
+  variant ids and generated command lines.
+- Record the effective catalog parameters in resident registration artifacts and
+  per-frame registration warnings.
+- Preserve imported command behavior by appending sweep-owned overrides after
+  imported science arguments.
+- Validate with focused tests and a two-variant 200-light sweep over
+  `triangle_grid_top_per_cell=2,4` using guardrails and compare-gated ranking.
+- Use the result to decide whether lower per-cell catalog capacity is a viable
+  next optimization candidate for moving-catalog time.
+
 ## Gate Rules
 
 Each gate requires:

@@ -438,6 +438,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
+                resident_triangle_grid_top_per_cell=args.resident_triangle_grid_top_per_cell,
+                resident_triangle_nms_scan_candidates=args.resident_triangle_nms_scan_candidates,
+                resident_triangle_nms_min_separation_px=args.resident_triangle_nms_min_separation_px,
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
@@ -535,6 +538,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_star_prior=args.resident_star_prior,
                 resident_star_prior_radius_px=args.resident_star_prior_radius_px,
                 resident_star_core_preselect_top_k=args.resident_star_core_preselect_top_k,
+                resident_triangle_grid_top_per_cell=args.resident_triangle_grid_top_per_cell,
+                resident_triangle_nms_scan_candidates=args.resident_triangle_nms_scan_candidates,
+                resident_triangle_nms_min_separation_px=args.resident_triangle_nms_min_separation_px,
                 resident_triangle_pixel_refine_coarse_stride=args.resident_triangle_pixel_refine_coarse_stride,
                 resident_triangle_pixel_refine_final_stride=args.resident_triangle_pixel_refine_final_stride,
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
@@ -1311,6 +1317,21 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument(
+        "--resident-triangle-grid-top-per-cell",
+        type=int,
+        help="override resident triangle grid catalog top candidates retained per grid cell",
+    )
+    run.add_argument(
+        "--resident-triangle-nms-scan-candidates",
+        type=int,
+        help="override resident triangle top-NMS scan candidate count for non-grid fallback cataloging",
+    )
+    run.add_argument(
+        "--resident-triangle-nms-min-separation-px",
+        type=float,
+        help="override resident triangle catalog NMS minimum star separation in pixels",
+    )
+    run.add_argument(
         "--resident-triangle-pixel-refine-coarse-stride",
         type=int,
         help="override resident triangle pixel-refine coarse sample stride",
@@ -1523,6 +1544,21 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="preselect resident similarity candidates with GPU star-core metrics before pixel refinement",
+    )
+    audit.add_argument(
+        "--resident-triangle-grid-top-per-cell",
+        type=int,
+        help="override resident triangle grid catalog top candidates retained per grid cell for resident audit",
+    )
+    audit.add_argument(
+        "--resident-triangle-nms-scan-candidates",
+        type=int,
+        help="override resident triangle top-NMS scan candidate count for resident audit",
+    )
+    audit.add_argument(
+        "--resident-triangle-nms-min-separation-px",
+        type=float,
+        help="override resident triangle catalog NMS minimum star separation in pixels for resident audit",
     )
     audit.add_argument(
         "--resident-triangle-pixel-refine-coarse-stride",

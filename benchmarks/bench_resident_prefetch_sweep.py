@@ -67,6 +67,24 @@ def _parse_optional_int_grid(value: str | None) -> list[int | None]:
     return parsed
 
 
+def _parse_optional_float_grid(value: str | None) -> list[float | None]:
+    if value is None or value.strip() == "":
+        return [None]
+    parsed: list[float | None] = []
+    for raw in value.split(","):
+        item = str(raw).strip()
+        if item in {"", "inherit"}:
+            candidate = None
+        else:
+            numeric = float(item)
+            if numeric < 0:
+                raise ValueError("optional float grids must contain non-negative values or inherit")
+            candidate = numeric
+        if candidate not in parsed:
+            parsed.append(candidate)
+    return parsed
+
+
 def _parse_fast_coarse_modes(value: str | None) -> list[str]:
     modes = parse_mode_grid(value, default=["inherit"])
     allowed = {"inherit", "off", "on"}
@@ -389,6 +407,20 @@ def main() -> int:
         "--star-max-candidates",
         help="comma grid for resident star max candidates, or inherit",
     )
+    parser.add_argument("--star-grid-cols", help="comma grid for resident star grid column counts, or inherit")
+    parser.add_argument("--star-grid-rows", help="comma grid for resident star grid row counts, or inherit")
+    parser.add_argument(
+        "--triangle-grid-top-per-cell",
+        help="comma grid for resident triangle grid top-per-cell counts, or inherit",
+    )
+    parser.add_argument(
+        "--triangle-nms-scan-candidates",
+        help="comma grid for resident triangle non-grid NMS scan counts, or inherit",
+    )
+    parser.add_argument(
+        "--triangle-nms-min-separation-px",
+        help="comma grid for resident triangle NMS minimum separation values, or inherit",
+    )
     parser.add_argument("--baseline-total-seconds", type=float)
     parser.add_argument("--reference-master", help="optional master FITS used for post-run compare reports")
     parser.add_argument("--reference-time-seconds", type=float)
@@ -497,6 +529,11 @@ def main() -> int:
         triangle_coarse_strides=_parse_optional_int_grid(args.triangle_coarse_strides),
         triangle_final_strides=_parse_optional_int_grid(args.triangle_final_strides),
         star_max_candidates=_parse_optional_int_grid(args.star_max_candidates),
+        star_grid_cols=_parse_optional_int_grid(args.star_grid_cols),
+        star_grid_rows=_parse_optional_int_grid(args.star_grid_rows),
+        triangle_grid_top_per_cell=_parse_optional_int_grid(args.triangle_grid_top_per_cell),
+        triangle_nms_scan_candidates=_parse_optional_int_grid(args.triangle_nms_scan_candidates),
+        triangle_nms_min_separation_px=_parse_optional_float_grid(args.triangle_nms_min_separation_px),
     )
 
     summaries: list[dict[str, Any]] = []

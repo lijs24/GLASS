@@ -1500,6 +1500,12 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
             "--resident-star-grid-rows",
             "4",
             "--resident-star-catalog-deterministic",
+            "--resident-triangle-grid-top-per-cell",
+            "2",
+            "--resident-triangle-nms-scan-candidates",
+            "96",
+            "--resident-triangle-nms-min-separation-px",
+            "2.0",
             "--resident-triangle-pixel-refine-final-stride",
             "2",
             "--resident-triangle-pixel-refine-fast-coarse",
@@ -1520,6 +1526,9 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert resident_registration["triangle_descriptor_radius"] == 0.08
     assert resident_registration["triangle_neighbors"] == 5
     assert resident_registration["triangle_max_descriptors"] == 256
+    assert resident_registration["triangle_grid_top_per_cell"] == 2
+    assert resident_registration["triangle_nms_scan_candidates"] == 96
+    assert resident_registration["triangle_nms_min_separation_px"] == 2.0
     assert resident_registration["triangle_catalog_batch"] is True
     assert resident_registration["triangle_catalog_batch_mode"] == "grid_top_nms_fixed_threshold"
     assert resident_registration["triangle_catalog_timing_model"] == "per_frame_launch_sync_download"
@@ -1659,6 +1668,9 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("triangle_catalog_timing_model=per_frame_launch_sync_download" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_sort_mode=shared_bitonic_power2" in warning for warning in moving["warnings"])
     assert any("triangle_catalog_topk_mode=deterministic_parallel_per_cell" in warning for warning in moving["warnings"])
+    assert any("triangle_grid_top_per_cell=2" in warning for warning in moving["warnings"])
+    assert any("triangle_nms_scan_candidates=96" in warning for warning in moving["warnings"])
+    assert any("triangle_nms_min_separation_px=2" in warning for warning in moving["warnings"])
     assert any("triangle_quality_gate_status=ok" in warning for warning in moving["warnings"])
     assert any("triangle_descriptor_fit_batch=true" in warning for warning in moving["warnings"])
     assert any(
