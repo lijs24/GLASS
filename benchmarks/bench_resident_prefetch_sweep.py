@@ -49,7 +49,7 @@ def _split_common_run_args(value: str | None) -> list[str]:
     return [part.strip("\"'") for part in shlex.split(value, posix=False)]
 
 
-def _common_run_args_from_command_file(path: Path) -> list[str]:
+def _common_run_args_from_command_file(path: Path) -> tuple[list[str], dict[str, Any]]:
     tokens = _split_common_run_args(path.read_text(encoding="utf-8"))
     try:
         run_index = tokens.index("run")
@@ -57,17 +57,31 @@ def _common_run_args_from_command_file(path: Path) -> list[str]:
         raise ValueError(f"baseline command file does not contain a glass run command: {path}") from exc
 
     imported: list[str] = []
+    filtered: list[dict[str, Any]] = []
     source_args = tokens[run_index + 1 :]
     index = 0
     while index < len(source_args):
         token = source_args[index]
         value_count = _SWEEP_MANAGED_RUN_OPTIONS.get(token)
         if value_count is not None:
+            filtered.append(
+                {
+                    "option": token,
+                    "value_count": value_count,
+                    "values": source_args[index + 1 : index + 1 + value_count],
+                }
+            )
             index += value_count + 1
             continue
         imported.append(token)
         index += 1
-    return imported
+    return imported, {
+        "source_command_path": str(path),
+        "source_arg_count": len(source_args),
+        "imported_arg_count": len(imported),
+        "filtered_token_count": sum(1 + int(item["value_count"]) for item in filtered),
+        "filtered_managed_options": sorted({str(item["option"]) for item in filtered}),
+    }
 
 
 def _variant_command(
@@ -337,16 +351,29 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     plan = Path(args.plan)
     glass_command = _split_command(args.glass_command)
-    imported_common_run_args = (
-        _common_run_args_from_command_file(Path(args.common_run_args_from_command))
-        if args.common_run_args_from_command
-        else []
-    )
+    imported_common_run_args: list[str] = []
+    import_provenance: dict[str, Any] | None = None
+    if args.common_run_args_from_command:
+        imported_common_run_args, import_provenance = _common_run_args_from_command_file(
+            Path(args.common_run_args_from_command)
+        )
+    inline_common_run_args = _split_common_run_args(args.common_run_args)
     common_run_args = [
         *imported_common_run_args,
-        *_split_common_run_args(args.common_run_args),
+        *inline_common_run_args,
         *args.common_run_arg,
     ]
+    common_run_args_provenance = {
+        "source": "command_file" if import_provenance else "inline",
+        "source_command_path": (import_provenance or {}).get("source_command_path"),
+        "source_arg_count": (import_provenance or {}).get("source_arg_count", 0),
+        "imported_arg_count": len(imported_common_run_args),
+        "inline_arg_count": len(inline_common_run_args),
+        "repeated_arg_count": len(args.common_run_arg),
+        "total_arg_count": len(common_run_args),
+        "filtered_token_count": (import_provenance or {}).get("filtered_token_count", 0),
+        "filtered_managed_options": (import_provenance or {}).get("filtered_managed_options", []),
+    }
     variants = build_resident_sweep_variants(
         prefetch_frames=parse_int_grid(args.prefetch_frames, default=[16, 24, 32]),
         prefetch_workers=parse_int_grid(args.prefetch_workers, default=[8, 12]),
@@ -450,6 +477,7 @@ def main() -> int:
         dry_run=args.dry_run,
         baseline_total_s=args.baseline_total_seconds,
         commands=commands,
+        common_run_args=common_run_args_provenance,
     )
     print(f"resident prefetch sweep summary: {out_dir / 'resident_prefetch_sweep_summary.json'}")
     if payload.get("best_variant"):

@@ -183,6 +183,7 @@ def write_resident_sweep_summary(
     dry_run: bool,
     baseline_total_s: float | None = None,
     commands: list[dict[str, Any]] | None = None,
+    common_run_args: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out_path = Path(out)
     ranked = rank_resident_sweep_summaries(summaries, baseline_total_s=baseline_total_s)
@@ -211,6 +212,7 @@ def write_resident_sweep_summary(
             "failed_count": sum(1 for item in guardrail_records if item.get("passed") is False),
             "planned_count": sum(1 for item in guardrail_records if item.get("status") == "planned"),
         },
+        "common_run_args": common_run_args or {},
         "commands": commands or [],
     }
     write_json(out_path / "resident_prefetch_sweep_summary.json", payload)
@@ -235,6 +237,17 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
     ]
     if payload.get("baseline_total_s") is not None:
         lines.append(f"- Baseline total: {payload['baseline_total_s']:.6f} s")
+    common_run_args = payload.get("common_run_args") if isinstance(payload.get("common_run_args"), dict) else {}
+    if common_run_args:
+        lines.append(f"- Common run args source: `{common_run_args.get('source')}`")
+        if common_run_args.get("source_command_path"):
+            lines.append(f"- Imported command: `{common_run_args['source_command_path']}`")
+        lines.append(
+            "- Common run args: "
+            f"{common_run_args.get('total_arg_count', 0)} total, "
+            f"{common_run_args.get('imported_arg_count', 0)} imported, "
+            f"{common_run_args.get('filtered_token_count', 0)} filtered"
+        )
     lines.extend(
         [
             "",

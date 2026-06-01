@@ -1628,6 +1628,25 @@ integration where applicable.
 - Compare the imported-run master against the external reference output and
   record runtime, frame counts, guardrail status, and image agreement.
 
+### S2-Gate 98: Resident Sweep Provenance And Mini Matrix
+
+- Record common-run-argument provenance in resident sweep JSON and Markdown
+  summaries, including source type, imported command path, source argument
+  count, imported/inline/repeated argument counts, total argument count, and
+  filtered sweep-managed options.
+- Validate provenance in dry-run tests so imported benchmark matrices are
+  auditable without manually reconstructing long command lines.
+- Run a small imported 200-light sweep matrix over prefetch depth and refill
+  mode with timeout guards and per-variant guardrails.
+- Require all completed variants to preserve 200 input lights, 193 active
+  frames, 7 zero-weight frames, and passing guardrails before considering them
+  rankable.
+- Compare the best variant against the external reference master and record
+  runtime, speedup, shape match, coverage-masked RMS, and p99 absolute
+  difference.
+- Use the result to decide whether queued refill is worth carrying forward into
+  the next resident registration/warp optimization sweep.
+
 ## Gate Rules
 
 Each gate requires:

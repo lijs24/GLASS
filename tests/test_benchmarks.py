@@ -448,7 +448,17 @@ def test_bench_resident_prefetch_sweep_imports_baseline_run_command(tmp_path: Pa
     )
 
     payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    markdown = (out / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
     command = next(item["command"] for item in payload["commands"] if item["kind"] == "run")
+    common_run_args = payload["common_run_args"]
+    assert common_run_args["source"] == "command_file"
+    assert common_run_args["source_command_path"] == str(baseline_command)
+    assert common_run_args["imported_arg_count"] > 0
+    assert common_run_args["filtered_token_count"] > 0
+    assert "--plan" in common_run_args["filtered_managed_options"]
+    assert "--out" in common_run_args["filtered_managed_options"]
+    assert "--resident-prefetch-frames" in common_run_args["filtered_managed_options"]
+    assert "Imported command" in markdown
     assert command[command.index("--plan") + 1] == str(plan)
     assert command[command.index("--out") + 1] == str(out / "pf16_pw8_b8_s4_w2_callback_queue")
     assert command[command.index("--resident-prefetch-frames") + 1] == "16"
