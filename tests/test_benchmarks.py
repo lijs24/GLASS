@@ -319,6 +319,10 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
         "12.2",
         "--common-run-args",
         "--resident-output-maps minimal",
+        "--guardrails",
+        "--guardrails-pixel-verify",
+        "--guardrails-pixel-verify-tile-size",
+        "128",
         "--dry-run",
     )
 
@@ -335,7 +339,44 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
         "pf32_pw8_b8_s4_w4_callback_queue",
     }
     assert all(run["status"] == "dry_run" for run in payload["runs"])
+    assert payload["guardrails"]["enabled"] is True
+    assert payload["guardrails"]["planned_count"] == 4
     assert len([command for command in payload["commands"] if command["kind"] == "run"]) == 4
+    assert len([command for command in payload["commands"] if command["kind"] == "guardrails"]) == 4
     assert "--resident-output-maps" in payload["commands"][0]["command"]
     assert "--resident-prefetch-refill-mode" in payload["commands"][0]["command"]
+    guardrail_command = next(command["command"] for command in payload["commands"] if command["kind"] == "guardrails")
+    assert "guardrails" in guardrail_command
+    assert "--pixel-verify" in guardrail_command
+    assert "--pixel-verify-tile-size" in guardrail_command
     assert "Resident Prefetch Sweep" in markdown
+    assert "Guardrails" in markdown
+
+
+def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path):
+    from glass.report.resident_sweep import write_resident_sweep_summary
+
+    payload = write_resident_sweep_summary(
+        tmp_path,
+        plan="processing_plan.json",
+        variants=[],
+        summaries=[
+            {
+                "variant_id": "fast_broken",
+                "status": "completed",
+                "total_elapsed_s": 10.0,
+                "guardrails": {"status": "failed", "passed": False},
+            },
+            {
+                "variant_id": "slower_green",
+                "status": "completed",
+                "total_elapsed_s": 11.0,
+                "guardrails": {"status": "passed", "passed": True},
+            },
+        ],
+        dry_run=False,
+        baseline_total_s=22.0,
+    )
+    assert payload["best_variant"]["variant_id"] == "slower_green"
+    assert payload["guardrails"]["passed_count"] == 1
+    assert payload["guardrails"]["failed_count"] == 1

@@ -1579,6 +1579,21 @@ integration where applicable.
 - No new 200-light benchmark is required because this gate only orchestrates
   existing artifact audits and report generation.
 
+### S2-Gate 95: Guarded Resident Sweep
+
+- Extend the resident CUDA sweep harness so each executed variant can optionally
+  run `glass guardrails` after the variant completes.
+- Record guardrail command lines in dry-run plans, and record guardrail
+  pass/fail status, summary path, report path, and failed contract names in the
+  sweep summary for completed variants.
+- Rank guardrail-failed variants behind guardrail-passed variants so the
+  "best" sweep result cannot silently prefer a faster but contract-broken run.
+- Preserve existing sweep behavior when guardrails are not requested.
+- Validate with dry-run sweep tests, direct ranking tests, ruff, full pytest,
+  and a dry-run command matrix suitable for the 200-light resident benchmark.
+- No new 200-light benchmark is required because this gate changes benchmark
+  orchestration and reporting, not resident CUDA kernels or image math.
+
 ## Gate Rules
 
 Each gate requires:

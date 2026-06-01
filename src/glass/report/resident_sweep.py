@@ -164,6 +164,7 @@ def rank_resident_sweep_summaries(
     ranked.sort(
         key=lambda item: (
             item.get("status") != "completed",
+            (item.get("guardrails") or {}).get("passed") is False,
             float("inf") if item.get("total_elapsed_s") is None else float(item["total_elapsed_s"]),
             int(item.get("prefetch_blocked_no_slot_count", 0) or 0),
         )
@@ -185,6 +186,14 @@ def write_resident_sweep_summary(
 ) -> dict[str, Any]:
     out_path = Path(out)
     ranked = rank_resident_sweep_summaries(summaries, baseline_total_s=baseline_total_s)
+    guardrail_records = [
+        run.get("guardrails") or {}
+        for run in ranked
+        if isinstance(run.get("guardrails"), dict) and (run.get("guardrails") or {}).get("status") != "disabled"
+    ]
+    best_variant = ranked[0] if ranked and ranked[0].get("status") == "completed" else None
+    if best_variant and (best_variant.get("guardrails") or {}).get("passed") is False:
+        best_variant = None
     payload = {
         "benchmark": "resident_prefetch_sweep",
         "schema_version": 1,
@@ -194,8 +203,14 @@ def write_resident_sweep_summary(
         "variant_count": len(variants),
         "variants": variants,
         "runs": ranked,
-        "best_variant": ranked[0] if ranked and ranked[0].get("status") == "completed" else None,
+        "best_variant": best_variant,
         "baseline_total_s": baseline_total_s,
+        "guardrails": {
+            "enabled": bool(guardrail_records),
+            "passed_count": sum(1 for item in guardrail_records if item.get("passed") is True),
+            "failed_count": sum(1 for item in guardrail_records if item.get("passed") is False),
+            "planned_count": sum(1 for item in guardrail_records if item.get("status") == "planned"),
+        },
         "commands": commands or [],
     }
     write_json(out_path / "resident_prefetch_sweep_summary.json", payload)
@@ -223,9 +238,9 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
     lines.extend(
         [
             "",
-            "| Rank | Variant | Total s | Speedup vs baseline | Read wait s | Native cal s | "
+            "| Rank | Variant | Total s | Speedup vs baseline | Guardrails | Read wait s | Native cal s | "
             "Blocked slots | Callback waves | Release batches | Active frames | Zero-weight |",
-            "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "| ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for run in payload["runs"]:
@@ -233,11 +248,13 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         speedup = _format_float(run.get("speedup_vs_baseline"))
         read_wait = _format_float(run.get("light_read_wait_wall_s"))
         native_cal = _format_float(run.get("native_calibration_total_s"))
+        guardrails = run.get("guardrails") if isinstance(run.get("guardrails"), dict) else {}
+        guardrail_status = str(guardrails.get("status") or "")
         lines.append(
             "| "
             f"{run.get('rank', '')} | "
             f"`{run.get('variant_id', '')}` | "
-            f"{total} | {speedup} | {read_wait} | {native_cal} | "
+            f"{total} | {speedup} | {guardrail_status} | {read_wait} | {native_cal} | "
             f"{run.get('prefetch_blocked_no_slot_count', '')} | "
             f"{run.get('callback_wave_count', '')} | "
             f"{run.get('prefetch_release_batch_count', '')} | "

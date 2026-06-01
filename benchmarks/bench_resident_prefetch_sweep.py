@@ -10,6 +10,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from glass.io.json_io import read_json
 from glass.report.resident_sweep import (
     build_resident_sweep_variants,
     load_resident_run_summary,
@@ -93,6 +94,61 @@ def _compare_command(
     return command
 
 
+def _guardrails_command(
+    *,
+    glass_command: list[str],
+    run_dir: Path,
+    out_dir: Path,
+    stack_scope: str,
+    expected_integration_engine: str,
+    pixel_verify: bool,
+    pixel_verify_tile_size: int,
+    pixel_tolerance: int,
+) -> list[str]:
+    command = [
+        *glass_command,
+        "guardrails",
+        "--run",
+        str(run_dir),
+        "--out-dir",
+        str(out_dir),
+        "--stack-scope",
+        stack_scope,
+        "--expected-integration-engine",
+        expected_integration_engine,
+        "--pixel-verify-tile-size",
+        str(pixel_verify_tile_size),
+        "--pixel-tolerance",
+        str(pixel_tolerance),
+    ]
+    if pixel_verify:
+        command.append("--pixel-verify")
+    return command
+
+
+def _attach_guardrails_summary(summary: dict[str, Any], guardrails_dir: Path) -> None:
+    guardrails_summary_path = guardrails_dir / "guardrails_summary.json"
+    if not guardrails_summary_path.exists():
+        summary["guardrails"] = {
+            "status": "missing",
+            "passed": False,
+            "summary_path": str(guardrails_summary_path),
+        }
+        return
+    guardrails = read_json(guardrails_summary_path)
+    summary["guardrails"] = {
+        "status": guardrails.get("status"),
+        "passed": bool(guardrails.get("passed")),
+        "summary_path": str(guardrails_summary_path),
+        "report": (guardrails.get("artifacts") or {}).get("report"),
+        "failed": [
+            {"name": item.get("name"), "failed": item.get("failed")}
+            for item in guardrails.get("checks") or []
+            if not item.get("passed")
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run or dry-run a resident CUDA prefetch/batch/stream parameter sweep."
@@ -125,6 +181,30 @@ def main() -> int:
     parser.add_argument("--reference-time-seconds", type=float)
     parser.add_argument("--reference-label", default="reference")
     parser.add_argument("--ignore-border-px", type=int, default=16)
+    parser.add_argument(
+        "--guardrails",
+        action="store_true",
+        help="run glass guardrails for each completed variant and include pass/fail in the sweep summary",
+    )
+    parser.add_argument(
+        "--guardrails-stack-scope",
+        choices=["all", "calibration", "integration"],
+        default="integration",
+        help="StackEngine contract scope used by per-variant guardrails",
+    )
+    parser.add_argument(
+        "--guardrails-expected-integration-engine",
+        choices=["stack_engine_cpu", "cuda_resident_stack", "any"],
+        default="cuda_resident_stack",
+        help="expected integration engine used by per-variant guardrails",
+    )
+    parser.add_argument(
+        "--guardrails-pixel-verify",
+        action="store_true",
+        help="enable tiled FITS pixel verification inside per-variant guardrails",
+    )
+    parser.add_argument("--guardrails-pixel-verify-tile-size", type=int, default=4096)
+    parser.add_argument("--guardrails-pixel-tolerance", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true", help="write planned commands without executing variants")
     parser.add_argument(
         "--reuse-existing",
@@ -161,12 +241,41 @@ def main() -> int:
             variant=variant,
         )
         commands.append({"variant_id": variant_id, "kind": "run", "command": run_command})
+        guardrails_dir = out_dir / f"guardrails_{variant_id}"
+        if args.guardrails:
+            guardrails_command = _guardrails_command(
+                glass_command=glass_command,
+                run_dir=run_dir,
+                out_dir=guardrails_dir,
+                stack_scope=args.guardrails_stack_scope,
+                expected_integration_engine=args.guardrails_expected_integration_engine,
+                pixel_verify=args.guardrails_pixel_verify,
+                pixel_verify_tile_size=args.guardrails_pixel_verify_tile_size,
+                pixel_tolerance=args.guardrails_pixel_tolerance,
+            )
+            commands.append({"variant_id": variant_id, "kind": "guardrails", "command": guardrails_command})
         if args.dry_run:
-            summaries.append({"variant": variant, "variant_id": variant_id, "run_dir": str(run_dir), "status": "dry_run"})
+            summaries.append(
+                {
+                    "variant": variant,
+                    "variant_id": variant_id,
+                    "run_dir": str(run_dir),
+                    "status": "dry_run",
+                    "guardrails": {
+                        "status": "planned" if args.guardrails else "disabled",
+                        "passed": None,
+                        "out_dir": str(guardrails_dir) if args.guardrails else None,
+                    },
+                }
+            )
             continue
         if not (args.reuse_existing and (run_dir / "resident_artifacts.json").exists()):
             subprocess.run(run_command, check=True)
+        if args.guardrails:
+            subprocess.run(guardrails_command, check=True)
         summary = load_resident_run_summary(run_dir, variant=variant)
+        if args.guardrails:
+            _attach_guardrails_summary(summary, guardrails_dir)
         summaries.append(summary)
         if args.reference_master and summary.get("master_path"):
             compare_out = out_dir / f"compare_{variant_id}_vs_reference.html"
