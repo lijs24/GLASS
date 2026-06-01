@@ -33,6 +33,7 @@ from glass.report.resident_determinism import (
     build_resident_determinism_audit,
     write_resident_determinism_audit,
 )
+from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -798,6 +799,19 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
     return 0 if audit["passed"] else 2
 
 
+def cmd_pipeline_contract(args: argparse.Namespace) -> int:
+    audit = build_pipeline_contract_audit(args.run)
+    write_pipeline_contract_audit(args.out, audit, markdown=args.markdown)
+    console.print(
+        {
+            "status": audit["status"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if audit["passed"] else 2
+
+
 def cmd_blackbox_package(args: argparse.Namespace) -> int:
     payload = create_blackbox_package(
         args.manifest,
@@ -1530,6 +1544,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="expected integration engine for the selected run type",
     )
     stack_contract.set_defaults(func=cmd_stack_engine_contract)
+
+    pipeline_contract = sub.add_parser(
+        "pipeline-contract",
+        help="audit DQ, LN, rejection, crop, and output-map invariants from a GLASS run",
+    )
+    pipeline_contract.add_argument("--run", required=True, help="GLASS run directory to audit")
+    pipeline_contract.add_argument("--out", required=True, help="output audit JSON")
+    pipeline_contract.add_argument("--markdown", help="optional output Markdown summary")
+    pipeline_contract.set_defaults(func=cmd_pipeline_contract)
 
     blackbox = sub.add_parser("blackbox-package", help="write a PixInsight/WBPP black-box handoff package")
     blackbox.add_argument("--manifest", required=True)

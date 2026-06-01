@@ -1496,6 +1496,24 @@ integration where applicable.
 - No new 200-light benchmark is required because this gate is report-only and
   does not alter image math or resident CUDA routing.
 
+### S2-Gate 90: Pipeline Invariant Contract Audit
+
+- Add a standalone `pipeline-contract` audit command for structural invariants
+  that should hold across warp, local normalization, and integration artifacts.
+- Check integration output map paths, rejection-map policy, DQ map summaries,
+  and normalized DQ provenance summaries without loading full science images.
+- Check local-normalization crop-box recording, coefficient-grid artifacts,
+  DQ summaries, and normalized/coverage output paths when LN artifacts exist.
+- Check warp registered outputs, coverage maps, DQ maps, DQ summaries, and
+  explained skipped-frame records when warp artifacts exist.
+- Emit JSON and optional Markdown so missing maps, silent crop changes, and
+  missing DQ/LN records fail in a machine-readable way.
+- Validate with a passing synthetic CPU audit run, a failing fixture, ruff, full
+  pytest, and a contract audit against the latest preserved 200-light resident
+  artifact. A new 200-light benchmark is not required because this gate is
+  artifact-contract only and does not change image math or resident CUDA
+  routing.
+
 ## Gate Rules
 
 Each gate requires:

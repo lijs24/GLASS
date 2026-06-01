@@ -123,6 +123,7 @@ def test_cli_help_commands():
         "acceptance-audit",
         "resident-determinism",
         "stack-engine-contract",
+        "pipeline-contract",
         "blackbox-package",
         "blackbox-finalize",
         "blackbox-history",
