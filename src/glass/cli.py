@@ -28,6 +28,7 @@ from glass.planner.subset import build_subset_manifest
 from glass.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from glass.report.compare_report import compare_fits, write_compare_report
 from glass.report.compare_outliers import build_compare_outlier_audit, write_compare_outlier_audit
+from glass.report.compare_tile_attribution import build_compare_tile_attribution, write_compare_tile_attribution
 from glass.report.compare_tile_pack import build_compare_tile_pack
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
@@ -801,6 +802,28 @@ def cmd_compare_tile_pack(args: argparse.Namespace) -> int:
             "status": "completed",
             "tile_count": manifest.get("tile_count"),
             "manifest": str(Path(args.out_dir) / "tile_pack_manifest.json"),
+        }
+    )
+    return 0
+
+
+def cmd_compare_tile_attribution(args: argparse.Namespace) -> int:
+    payload = build_compare_tile_attribution(
+        args.tile_pack,
+        args.run,
+        filter_name=args.filter,
+        frame_limit=args.frame_limit,
+    )
+    write_compare_tile_attribution(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": "completed",
+            "tile_count": payload.get("tile_count"),
+            "downweighted_count": (payload.get("frame_accounting") or {}).get("downweighted_count")
+            if isinstance(payload.get("frame_accounting"), dict)
+            else None,
+            "out": args.out,
+            "markdown": args.markdown,
         }
     )
     return 0
@@ -1859,6 +1882,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tile_pack.add_argument("--no-png", action="store_true", help="write FITS cutouts only")
     tile_pack.set_defaults(func=cmd_compare_tile_pack)
+
+    tile_attr = sub.add_parser(
+        "compare-tile-attribution",
+        help="join compare residual tiles with GLASS output maps and frame accounting",
+    )
+    tile_attr.add_argument("--tile-pack", required=True, help="tile_pack_manifest.json from compare-tile-pack")
+    tile_attr.add_argument("--run", required=True, help="GLASS run directory containing integration/frame artifacts")
+    tile_attr.add_argument("--out", required=True, help="output attribution JSON")
+    tile_attr.add_argument("--markdown", help="optional output Markdown summary")
+    tile_attr.add_argument("--filter", help="optional filter name used to select integration output maps")
+    tile_attr.add_argument("--frame-limit", type=int, default=16, help="number of frame-accounting rows to include")
+    tile_attr.set_defaults(func=cmd_compare_tile_attribution)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

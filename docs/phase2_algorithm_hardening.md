@@ -2017,6 +2017,22 @@ integration where applicable.
   prepares the next gate to attribute localized residuals to frame
   contribution, rejection maps, local normalization, or registration.
 
+### S2-Gate 122: Localized Tile Map Attribution
+
+- Add a reusable `glass compare-tile-attribution` command that consumes a
+  `compare-tile-pack` manifest and a GLASS run directory.
+- Join localized residual tile extents with available integration output maps:
+  coverage, weight, DQ, low rejection, and high rejection.
+- Join the same report with `frame_accounting.json`, including integrated,
+  zero-weight, low-weight, and agreement-downweighted frame counts and rows.
+- Emit JSON and Markdown with per-tile coverage/rejection/weight/DQ summaries,
+  frame-weight context, and explicit limitations when per-frame registered
+  caches are unavailable.
+- Run the command on the S2-Gate 121 `agr0p5` tile package.
+- Treat this as an attribution-observability gate only. It must not change
+  defaults; it decides whether map-level evidence explains the localized
+  residuals or whether the next gate must save/replay per-frame tile samples.
+
 ## Gate Rules
 
 Each gate requires:
