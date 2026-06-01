@@ -2175,6 +2175,23 @@ integration where applicable.
 - Do not promote if the candidate improves only the known focus tile while
   damaging global residual statistics, frame counts, or timing.
 
+### S2-Gate 130: Frame-Weight Proposal Direction Audit
+
+- Add a reusable `glass frame-weight-proposal-audit` command that consumes a
+  `compare-tile-integration` audit, a frame-weight proposal JSON, and the
+  matching tile-pack residual manifest.
+- For each localized residual tile, compare the signed GLASS-minus-reference
+  residual direction against the first-order master change implied by applying
+  the proposal multiplier to the focus-family contribution.
+- Emit per-tile predicted master delta in GLASS ADU and transformed reference
+  units, before/after signed residual estimates, and `moves_toward_reference`
+  booleans for both mean residual and tail residual summaries.
+- Use this as a gate before any further weighting experiment: a proposal that
+  moves residuals away from the reference direction should not be promoted, even
+  if its source contribution audit identified a coherent frame family.
+- Run the audit on the S2-Gate 129 F000100-F000110 proposal and confirm whether
+  the failed 200-light candidate was directionally predictable.
+
 ## Gate Rules
 
 Each gate requires:

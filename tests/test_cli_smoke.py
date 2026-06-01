@@ -125,6 +125,7 @@ def test_cli_help_commands():
         "compare-tile-replay",
         "compare-tile-integration",
         "frame-weight-proposal",
+        "frame-weight-proposal-audit",
         "compare-frame-family",
         "resident-tile-capture",
         "speedup-summary",

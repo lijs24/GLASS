@@ -37,6 +37,10 @@ from glass.report.compare_tile_attribution import build_compare_tile_attribution
 from glass.report.compare_tile_pack import build_compare_tile_pack
 from glass.report.compare_tile_replay import build_compare_tile_replay, write_compare_tile_replay
 from glass.report.frame_weight_proposal import build_frame_weight_proposal, write_frame_weight_proposal
+from glass.report.frame_weight_proposal_audit import (
+    build_frame_weight_proposal_audit,
+    write_frame_weight_proposal_audit,
+)
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
 from glass.report.resident_determinism import (
@@ -929,6 +933,29 @@ def cmd_frame_weight_proposal(args: argparse.Namespace) -> int:
             "status": payload.get("status"),
             "frame_count": len(payload.get("frame_multipliers") or []),
             "proposed_multiplier": payload.get("proposed_multiplier"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_frame_weight_proposal_audit(args: argparse.Namespace) -> int:
+    payload = build_frame_weight_proposal_audit(
+        args.integration_audit,
+        args.proposal,
+        tile_pack=args.tile_pack,
+        glass_scale=args.glass_scale,
+    )
+    write_frame_weight_proposal_audit(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "recommendation": summary.get("recommendation"),
+            "mean_toward": summary.get("mean_moves_toward_reference"),
+            "mean_away": summary.get("mean_moves_away_from_reference"),
+            "tail_toward": summary.get("tail_moves_toward_reference"),
+            "tail_away": summary.get("tail_moves_away_from_reference"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2230,6 +2257,29 @@ def build_parser() -> argparse.ArgumentParser:
     frame_weight_proposal.add_argument("--max-multiplier", type=float, default=1.0)
     frame_weight_proposal.add_argument("--reason", help="optional reason recorded on every proposed frame row")
     frame_weight_proposal.set_defaults(func=cmd_frame_weight_proposal)
+
+    frame_weight_proposal_audit = sub.add_parser(
+        "frame-weight-proposal-audit",
+        help="check whether a frame-weight proposal moves localized residual tiles in the right direction",
+    )
+    frame_weight_proposal_audit.add_argument(
+        "--integration-audit",
+        required=True,
+        help="compare-tile-integration JSON artifact containing focus contribution summaries",
+    )
+    frame_weight_proposal_audit.add_argument("--proposal", required=True, help="frame-weight proposal JSON")
+    frame_weight_proposal_audit.add_argument(
+        "--tile-pack",
+        help="optional tile_pack_manifest.json; defaults to the path recorded in the integration audit",
+    )
+    frame_weight_proposal_audit.add_argument("--out", required=True, help="output direction-audit JSON")
+    frame_weight_proposal_audit.add_argument("--markdown", help="optional output Markdown summary")
+    frame_weight_proposal_audit.add_argument(
+        "--glass-scale",
+        type=float,
+        help="optional GLASS-to-reference scale; defaults to tile-pack candidate_transform.scale",
+    )
+    frame_weight_proposal_audit.set_defaults(func=cmd_frame_weight_proposal_audit)
 
     frame_family = sub.add_parser(
         "compare-frame-family",
