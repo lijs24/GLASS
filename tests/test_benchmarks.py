@@ -396,6 +396,78 @@ def test_bench_resident_prefetch_sweep_records_variant_timeout(tmp_path: Path):
     assert payload["guardrails"]["failed_count"] == 1
 
 
+def test_bench_resident_prefetch_sweep_imports_baseline_run_command(tmp_path: Path):
+    plan = tmp_path / "processing_plan.json"
+    plan.write_text('{"frames": []}\n', encoding="utf-8")
+    baseline_command = tmp_path / "run_command.txt"
+    baseline_command.write_text(
+        "glass run "
+        f"--plan {tmp_path / 'old_plan.json'} "
+        f"--out {tmp_path / 'old_run'} "
+        "--backend cuda --until-stage integration --memory-mode resident "
+        "--resident-master-cache-dir C:\\glass_runs\\cache "
+        "--resident-registration similarity_cuda_triangle "
+        "--resident-warp-interpolation bilinear "
+        "--reference-frame-id F000196 "
+        "--resident-star-threshold 350 "
+        "--resident-output-maps audit "
+        "--flat-floor 0.05 "
+        "--exclude-frame-id LIGHT_H_0100 "
+        "--resident-prefetch-frames 99 "
+        "--resident-prefetch-workers 77 "
+        "--resident-h2d-mode pinned_ring "
+        "--resident-calibration-batch-frames 66 "
+        "--resident-calibration-streams 55 "
+        "--resident-calibration-wave-frames 44 "
+        "--resident-calibration-release-mode synchronized\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "resident_sweep_import"
+
+    _run(
+        "benchmarks/bench_resident_prefetch_sweep.py",
+        "--plan",
+        str(plan),
+        "--out",
+        str(out),
+        "--common-run-args-from-command",
+        str(baseline_command),
+        "--prefetch-frames",
+        "16",
+        "--prefetch-workers",
+        "8",
+        "--batch-frames",
+        "8",
+        "--streams",
+        "4",
+        "--wave-frames",
+        "2",
+        "--release-modes",
+        "callback_queue",
+        "--dry-run",
+    )
+
+    payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    command = next(item["command"] for item in payload["commands"] if item["kind"] == "run")
+    assert command[command.index("--plan") + 1] == str(plan)
+    assert command[command.index("--out") + 1] == str(out / "pf16_pw8_b8_s4_w2_callback_queue")
+    assert command[command.index("--resident-prefetch-frames") + 1] == "16"
+    assert command[command.index("--resident-prefetch-workers") + 1] == "8"
+    assert command[command.index("--resident-calibration-batch-frames") + 1] == "8"
+    assert command[command.index("--resident-calibration-streams") + 1] == "4"
+    assert command[command.index("--resident-calibration-wave-frames") + 1] == "2"
+    assert command[command.index("--resident-calibration-release-mode") + 1] == "callback_queue"
+    assert "--reference-frame-id" in command
+    assert command[command.index("--reference-frame-id") + 1] == "F000196"
+    assert "--exclude-frame-id" in command
+    assert "LIGHT_H_0100" in command
+    assert "--resident-output-maps" in command
+    assert command[command.index("--resident-output-maps") + 1] == "audit"
+    assert "99" not in command
+    assert "77" not in command
+    assert "66" not in command
+
+
 def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path):
     from glass.report.resident_sweep import write_resident_sweep_summary
 

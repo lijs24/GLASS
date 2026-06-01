@@ -20,6 +20,22 @@ from glass.report.resident_sweep import (
     write_resident_sweep_summary,
 )
 
+_SWEEP_MANAGED_RUN_OPTIONS = {
+    "--plan": 1,
+    "--out": 1,
+    "--backend": 1,
+    "--until-stage": 1,
+    "--memory-mode": 1,
+    "--resident-prefetch-frames": 1,
+    "--resident-prefetch-workers": 1,
+    "--resident-prefetch-refill-mode": 1,
+    "--resident-h2d-mode": 1,
+    "--resident-calibration-batch-frames": 1,
+    "--resident-calibration-streams": 1,
+    "--resident-calibration-wave-frames": 1,
+    "--resident-calibration-release-mode": 1,
+}
+
 
 def _split_command(value: str | None) -> list[str]:
     if value is None or value.strip() == "":
@@ -31,6 +47,27 @@ def _split_common_run_args(value: str | None) -> list[str]:
     if value is None or value.strip() == "":
         return []
     return [part.strip("\"'") for part in shlex.split(value, posix=False)]
+
+
+def _common_run_args_from_command_file(path: Path) -> list[str]:
+    tokens = _split_common_run_args(path.read_text(encoding="utf-8"))
+    try:
+        run_index = tokens.index("run")
+    except ValueError as exc:
+        raise ValueError(f"baseline command file does not contain a glass run command: {path}") from exc
+
+    imported: list[str] = []
+    source_args = tokens[run_index + 1 :]
+    index = 0
+    while index < len(source_args):
+        token = source_args[index]
+        value_count = _SWEEP_MANAGED_RUN_OPTIONS.get(token)
+        if value_count is not None:
+            index += value_count + 1
+            continue
+        imported.append(token)
+        index += 1
+    return imported
 
 
 def _variant_command(
@@ -235,6 +272,13 @@ def main() -> int:
         "--common-run-args",
         help="space-separated GLASS run argument string applied to every variant",
     )
+    parser.add_argument(
+        "--common-run-args-from-command",
+        help=(
+            "import shared GLASS run arguments from a previous run_command.txt; "
+            "sweep-managed plan/out/backend/memory/prefetch/batch flags are filtered out"
+        ),
+    )
     parser.add_argument("--prefetch-frames", default="16,24,32")
     parser.add_argument("--prefetch-workers", default="8,12")
     parser.add_argument("--batch-frames", default="8")
@@ -293,7 +337,16 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     plan = Path(args.plan)
     glass_command = _split_command(args.glass_command)
-    common_run_args = [*_split_common_run_args(args.common_run_args), *args.common_run_arg]
+    imported_common_run_args = (
+        _common_run_args_from_command_file(Path(args.common_run_args_from_command))
+        if args.common_run_args_from_command
+        else []
+    )
+    common_run_args = [
+        *imported_common_run_args,
+        *_split_common_run_args(args.common_run_args),
+        *args.common_run_arg,
+    ]
     variants = build_resident_sweep_variants(
         prefetch_frames=parse_int_grid(args.prefetch_frames, default=[16, 24, 32]),
         prefetch_workers=parse_int_grid(args.prefetch_workers, default=[8, 12]),

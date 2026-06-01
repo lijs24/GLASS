@@ -1610,6 +1610,24 @@ integration where applicable.
   before completion after one variant ran far longer than the current baseline;
   no performance result from that interrupted run is accepted as green.
 
+### S2-Gate 97: Resident Sweep Baseline Command Import
+
+- Add a `--common-run-args-from-command` option to the resident sweep harness so
+  a known-good `run_command.txt` can seed shared science and tuning arguments.
+- Filter out sweep-managed arguments from the imported command: plan, output
+  directory, backend, stage, memory mode, prefetch, H2D, batch, stream, wave,
+  and release-mode knobs.
+- Preserve imported science and benchmark-stability arguments such as shared
+  resident master cache, reference frame, registration model, interpolation,
+  star-catalog thresholds, flat floor, output-map policy, and excluded frame
+  ids.
+- Validate with dry-run import tests that prove the sweep owns only the swept
+  parameters while carrying forward the proven 200-light run settings.
+- Run a bounded 200-light guarded single-variant sweep imported from the latest
+  proven audit-map command, with timeout guards and pixel-verifying guardrails.
+- Compare the imported-run master against the external reference output and
+  record runtime, frame counts, guardrail status, and image agreement.
+
 ## Gate Rules
 
 Each gate requires:
