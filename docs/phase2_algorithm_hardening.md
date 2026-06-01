@@ -2254,6 +2254,23 @@ integration where applicable.
   as the handoff contract for a future native tile-local integration
   implementation.
 
+### S2-Gate 134: Resident Tile-Local Policy Contract
+
+- Add an explicit resident-run input for a `tile-local-policy-replay` artifact.
+- Validate the replay contract before integration: artifact type, target group,
+  target frame ids, non-negative multipliers, positive tile extents, summary
+  direction fields, and per-tile canonical deltas.
+- Record the validated contract in `resident_artifacts.json` under resident
+  integration weighting diagnostics.
+- Preserve current science output. This gate must mark the contract as
+  `validated_not_applied` and must not alter frame weights, resident CUDA
+  buffers, integration maps, or output pixels.
+- Add tests for the contract loader and an opt-in resident CUDA smoke path that
+  records the contract while leaving the existing frame-weight proposal behavior
+  intact.
+- Treat this as the interface lock for a future native tile-local integration
+  implementation.
+
 ## Gate Rules
 
 Each gate requires:

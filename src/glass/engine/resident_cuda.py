@@ -1487,6 +1487,112 @@ def _load_frame_weight_proposal(path: str | Path | None) -> dict[str, Any]:
     }
 
 
+def _validated_tile_extent(extent: Any) -> dict[str, int]:
+    if not isinstance(extent, dict):
+        raise ValueError("tile-local policy row is missing extent")
+    try:
+        x0 = int(extent["x0"])
+        y0 = int(extent["y0"])
+        x1 = int(extent["x1"])
+        y1 = int(extent["y1"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("tile-local policy extent must contain integer x0, y0, x1, y1") from exc
+    if x0 < 0 or y0 < 0 or x1 <= x0 or y1 <= y0:
+        raise ValueError("tile-local policy extent must be a positive rectangle")
+    return {"x0": x0, "y0": y0, "x1": x1, "y1": y1}
+
+
+def _load_tile_local_policy_replay(path: str | Path | None) -> dict[str, Any]:
+    if path is None:
+        return {
+            "enabled": False,
+            "path": None,
+            "applied": False,
+            "application_status": "disabled",
+            "target_frame_ids": [],
+            "tiles": [],
+            "tile_count": 0,
+            "target_frame_count": 0,
+        }
+    source = Path(path)
+    payload = read_json(source)
+    if payload.get("artifact_type") != "tile_local_policy_replay":
+        raise ValueError("resident tile-local policy replay must be a tile_local_policy_replay artifact")
+    target_group = str(payload.get("target_group") or "")
+    if target_group not in {"focus", "control"}:
+        raise ValueError("tile-local policy replay target_group must be focus or control")
+    target_frame_ids_raw = payload.get("target_frame_ids")
+    if not isinstance(target_frame_ids_raw, list):
+        raise ValueError("tile-local policy replay must contain target_frame_ids")
+    target_frame_ids = [str(value) for value in target_frame_ids_raw]
+    tiles_raw = payload.get("tiles")
+    if not isinstance(tiles_raw, list) or not tiles_raw:
+        raise ValueError("tile-local policy replay must contain at least one tile")
+    tiles: list[dict[str, Any]] = []
+    for row in tiles_raw:
+        if not isinstance(row, dict):
+            continue
+        tile_index = int(row.get("tile_index"))
+        multiplier = float(row.get("multiplier", 1.0))
+        if not np.isfinite(multiplier) or multiplier < 0.0:
+            raise ValueError("tile-local policy replay multipliers must be finite non-negative values")
+        extent = _validated_tile_extent(row.get("extent"))
+        tiles.append(
+            {
+                "tile_index": tile_index,
+                "extent": extent,
+                "target_group": str(row.get("target_group") or target_group),
+                "action": row.get("action"),
+                "multiplier": multiplier,
+                "clamped": bool(row.get("clamped")),
+                "selected_frame_row_count": int(row.get("selected_frame_row_count") or 0),
+                "canonical_delta_contribution_adu": _finite_float_or_none(
+                    row.get("canonical_delta_contribution_adu")
+                ),
+                "signed_residual_reference_units_before": _finite_float_or_none(
+                    row.get("signed_residual_reference_units_before")
+                ),
+                "signed_residual_reference_units_after": _finite_float_or_none(
+                    row.get("signed_residual_reference_units_after")
+                ),
+                "moves_toward_reference": row.get("moves_toward_reference"),
+            }
+        )
+    if not tiles:
+        raise ValueError("tile-local policy replay contained no usable tile rows")
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    return {
+        "enabled": True,
+        "path": str(source),
+        "artifact_type": payload.get("artifact_type"),
+        "target_group": target_group,
+        "residual_stat": payload.get("residual_stat"),
+        "target_frame_ids": target_frame_ids,
+        "target_frame_count": len(target_frame_ids),
+        "tile_count": len(tiles),
+        "tiles": tiles,
+        "summary": {
+            "recommendation": summary.get("recommendation"),
+            "known_direction_tiles": int(summary.get("known_direction_tiles") or 0),
+            "moves_toward_reference": int(summary.get("moves_toward_reference") or 0),
+            "moves_away_from_reference": int(summary.get("moves_away_from_reference") or 0),
+            "boost_tiles": int(summary.get("boost_tiles") or 0),
+            "downweight_tiles": int(summary.get("downweight_tiles") or 0),
+            "hold_tiles": int(summary.get("hold_tiles") or 0),
+            "clamped_tiles": int(summary.get("clamped_tiles") or 0),
+            "mean_abs_residual_before": _finite_float_or_none(summary.get("mean_abs_residual_before")),
+            "mean_abs_residual_after": _finite_float_or_none(summary.get("mean_abs_residual_after")),
+        },
+        "applied": False,
+        "application_status": "validated_not_applied",
+        "native_requirement": "future resident tile-local integration kernel",
+        "limitations": [
+            "The replay is validated and recorded only; current resident integration weights remain unchanged.",
+            "Boost multipliers are tile-local contribution modifiers, not frame-global weight multipliers.",
+        ],
+    }
+
+
 def _frame_weight_proposal_warning(row: dict[str, Any], multiplier: float) -> list[str]:
     warnings = [
         f"frame_weight_proposal_multiplier={float(multiplier):.6g}",
@@ -2069,6 +2175,7 @@ def run_resident_calibration_integration(
     resident_registration_motion_power: float = 2.0,
     resident_registration_motion_scale_floor_px: float = 1.0,
     resident_frame_weight_proposal: str | Path | None = None,
+    resident_tile_local_policy_replay: str | Path | None = None,
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -2187,6 +2294,7 @@ def run_resident_calibration_integration(
     if resident_registration_motion_scale_floor_px <= 0.0:
         raise ValueError("resident_registration_motion_scale_floor_px must be positive")
     frame_weight_proposal = _load_frame_weight_proposal(resident_frame_weight_proposal)
+    tile_local_policy_replay = _load_tile_local_policy_replay(resident_tile_local_policy_replay)
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
@@ -5328,6 +5436,10 @@ def run_resident_calibration_integration(
                 weighting_warnings.append(
                     f"resident frame-weight proposal downweighted {proposal_downweighted_frames} frame(s)"
                 )
+            if tile_local_policy_replay.get("enabled"):
+                weighting_warnings.append(
+                    "resident tile-local policy replay validated but not applied; native tile-local integration is pending"
+                )
             weighting_elapsed = perf_counter() - weighting_start
 
             local_norm_start = perf_counter()
@@ -6582,6 +6694,7 @@ def run_resident_calibration_integration(
                         "frame_results": weighting_frame_results,
                         "registration_motion_weighting": motion_weighting_summary,
                         "frame_weight_proposal": frame_weight_proposal_summary,
+                        "tile_local_policy_replay": tile_local_policy_replay,
                         "timing_s": weighting_elapsed,
                         "warnings": weighting_warnings,
                     },
@@ -6800,6 +6913,10 @@ def run_resident_calibration_integration(
             integration_warnings.append("resident CUDA used two-pass mean/std sigma clipping")
         if weighting_mode == "simple_snr":
             integration_warnings.append("resident CUDA used frame-global mean/std simple_snr weights")
+        if tile_local_policy_replay.get("enabled"):
+            integration_warnings.append(
+                "resident tile-local policy replay was validated and recorded but not applied to integration output"
+            )
         if any(group["enabled"] for group in local_norm_groups):
             mode = next((group["mode"] for group in local_norm_groups if group["enabled"]), "unknown")
             integration_warnings.append(f"resident CUDA used {mode} local normalization before integration")

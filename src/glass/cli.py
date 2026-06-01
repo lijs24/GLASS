@@ -487,6 +487,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_registration_motion_power=args.resident_registration_motion_power,
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
                 resident_frame_weight_proposal=args.resident_frame_weight_proposal,
+                resident_tile_local_policy_replay=args.resident_tile_local_policy_replay,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -597,6 +598,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_registration_motion_power=args.resident_registration_motion_power,
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
                 resident_frame_weight_proposal=args.resident_frame_weight_proposal,
+                resident_tile_local_policy_replay=args.resident_tile_local_policy_replay,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -1865,6 +1867,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional frame-weight proposal JSON produced by frame-weight-proposal; default disabled",
     )
     run.add_argument(
+        "--resident-tile-local-policy-replay",
+        help=(
+            "optional tile-local-policy-replay JSON recorded as a future native tile-local integration "
+            "contract; current resident output is not modified"
+        ),
+    )
+    run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for registration",
     )
@@ -2133,6 +2142,13 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-frame-weight-proposal",
         help="optional frame-weight proposal JSON produced by frame-weight-proposal for resident audit",
+    )
+    audit.add_argument(
+        "--resident-tile-local-policy-replay",
+        help=(
+            "optional tile-local-policy-replay JSON recorded as a future native tile-local integration "
+            "contract for resident audit"
+        ),
     )
     audit.add_argument(
         "--resident-local-normalization-mode",

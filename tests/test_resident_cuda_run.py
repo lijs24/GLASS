@@ -11,6 +11,7 @@ from glass.io.fits_io import read_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
     _load_frame_weight_proposal,
+    _load_tile_local_policy_replay,
     _matches_any_token,
     _resident_dq_coverage_provenance,
     _resident_dq_map,
@@ -491,6 +492,54 @@ def test_frame_weight_proposal_loader_accepts_list_and_object(tmp_path: Path):
     assert object_proposal["frame_count"] == 1
     assert object_proposal["rows"][0]["frame_id"] == "F003"
     assert object_proposal["rows"][0]["multiplier"] == 0.5
+
+
+def test_tile_local_policy_replay_loader_validates_contract(tmp_path: Path):
+    replay_path = tmp_path / "tile_local_replay.json"
+    write_json(
+        replay_path,
+        {
+            "artifact_type": "tile_local_policy_replay",
+            "target_group": "focus",
+            "residual_stat": "signed_mean",
+            "target_frame_ids": ["F001", "F002"],
+            "summary": {
+                "recommendation": "tile_local_replay_promising",
+                "known_direction_tiles": 1,
+                "moves_toward_reference": 1,
+                "boost_tiles": 1,
+                "mean_abs_residual_before": 0.1,
+                "mean_abs_residual_after": 0.02,
+            },
+            "tiles": [
+                {
+                    "tile_index": 3,
+                    "extent": {"x0": 4, "y0": 5, "x1": 12, "y1": 16},
+                    "target_group": "focus",
+                    "action": "boost",
+                    "multiplier": 2.0,
+                    "clamped": True,
+                    "selected_frame_row_count": 2,
+                    "canonical_delta_contribution_adu": 5.0,
+                    "signed_residual_reference_units_before": -0.1,
+                    "signed_residual_reference_units_after": -0.02,
+                    "moves_toward_reference": True,
+                }
+            ],
+        },
+    )
+
+    contract = _load_tile_local_policy_replay(replay_path)
+
+    assert contract["enabled"] is True
+    assert contract["applied"] is False
+    assert contract["application_status"] == "validated_not_applied"
+    assert contract["target_group"] == "focus"
+    assert contract["target_frame_count"] == 2
+    assert contract["tile_count"] == 1
+    assert contract["summary"]["recommendation"] == "tile_local_replay_promising"
+    assert contract["tiles"][0]["extent"] == {"x0": 4, "y0": 5, "x1": 12, "y1": 16}
+    assert contract["tiles"][0]["multiplier"] == 2.0
 
 
 def _two_dark_group_dataset(tmp_path: Path) -> Path:
@@ -2250,6 +2299,7 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     plan = tmp_path / "processing_plan.json"
     external_registration = tmp_path / "external_registration_results.json"
     frame_weight_proposal = tmp_path / "frame_weight_proposal.json"
+    tile_local_policy_replay = tmp_path / "tile_local_policy_replay.json"
     run = tmp_path / "resident_run_external_matrix"
 
     assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
@@ -2312,6 +2362,38 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
             ],
         },
     )
+    write_json(
+        tile_local_policy_replay,
+        {
+            "artifact_type": "tile_local_policy_replay",
+            "target_group": "focus",
+            "residual_stat": "signed_mean",
+            "target_frame_ids": [moving_id],
+            "summary": {
+                "recommendation": "tile_local_replay_promising",
+                "known_direction_tiles": 1,
+                "moves_toward_reference": 1,
+                "boost_tiles": 1,
+                "mean_abs_residual_before": 0.1,
+                "mean_abs_residual_after": 0.02,
+            },
+            "tiles": [
+                {
+                    "tile_index": 0,
+                    "extent": {"x0": 0, "y0": 0, "x1": 8, "y1": 8},
+                    "target_group": "focus",
+                    "action": "boost",
+                    "multiplier": 2.0,
+                    "clamped": True,
+                    "selected_frame_row_count": 1,
+                    "canonical_delta_contribution_adu": 1.0,
+                    "signed_residual_reference_units_before": -0.1,
+                    "signed_residual_reference_units_after": -0.02,
+                    "moves_toward_reference": True,
+                }
+            ],
+        },
+    )
 
     assert main(
         [
@@ -2346,6 +2428,8 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
             "8",
             "--resident-frame-weight-proposal",
             str(frame_weight_proposal),
+            "--resident-tile-local-policy-replay",
+            str(tile_local_policy_replay),
         ]
     ) == 0
 
@@ -2357,6 +2441,7 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     weighting = resident["artifacts"][0]["resident_integration_weighting"]
     motion = weighting["registration_motion_weighting"]
     proposal = weighting["frame_weight_proposal"]
+    tile_local = weighting["tile_local_policy_replay"]
     moving_weighting = [item for item in weighting["frame_results"] if item["frame_id"] == moving_id][0]
 
     assert integration["outputs"][0]["resident_registration"] == "external_matrix"
@@ -2379,6 +2464,11 @@ def test_cli_resident_cuda_run_external_matrix_registration(tmp_path: Path):
     assert proposal["enabled"] is True
     assert proposal["path"] == str(frame_weight_proposal)
     assert proposal["applied_downweighted_frame_count"] == 1
+    assert tile_local["enabled"] is True
+    assert tile_local["path"] == str(tile_local_policy_replay)
+    assert tile_local["applied"] is False
+    assert tile_local["target_frame_ids"] == [moving_id]
+    assert tile_local["tiles"][0]["multiplier"] == 2.0
     assert moving_weighting["frame_weight_proposal_multiplier"] == 0.25
     assert moving_weighting["status"] == "frame_weight_proposal_downweighted"
     assert resident_registration["external_registration_results_path"] == str(external_registration)
