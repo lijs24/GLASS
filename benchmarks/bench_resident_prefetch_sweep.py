@@ -405,6 +405,18 @@ def main() -> int:
     )
     parser.add_argument("--compare-min-coverage", type=float, help="minimum coverage for per-variant compare metrics")
     parser.add_argument(
+        "--compare-require-shape-match",
+        action="store_true",
+        help="require shape_match=true for a variant to pass the compare gate",
+    )
+    parser.add_argument("--compare-max-rms", type=float, help="maximum rms_diff for compare-gated ranking")
+    parser.add_argument(
+        "--compare-max-relative-rms",
+        type=float,
+        help="maximum relative_rms_diff for compare-gated ranking",
+    )
+    parser.add_argument("--compare-max-p99", type=float, help="maximum abs_diff_p99 for compare-gated ranking")
+    parser.add_argument(
         "--guardrails",
         action="store_true",
         help="run glass guardrails for each completed variant and include pass/fail in the sweep summary",
@@ -593,6 +605,12 @@ def main() -> int:
         baseline_total_s=args.baseline_total_seconds,
         commands=commands,
         common_run_args=common_run_args_provenance,
+        compare_gate={
+            "require_shape_match": args.compare_require_shape_match,
+            "max_rms_diff": args.compare_max_rms,
+            "max_relative_rms_diff": args.compare_max_relative_rms,
+            "max_abs_diff_p99": args.compare_max_p99,
+        },
     )
     print(f"resident prefetch sweep summary: {out_dir / 'resident_prefetch_sweep_summary.json'}")
     if payload.get("best_variant"):

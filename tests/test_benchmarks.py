@@ -646,6 +646,64 @@ def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path)
     assert payload["guardrails"]["failed_count"] == 1
 
 
+def test_resident_sweep_ranking_applies_compare_gate(tmp_path: Path):
+    from glass.report.resident_sweep import write_resident_sweep_summary
+
+    payload = write_resident_sweep_summary(
+        tmp_path,
+        plan="processing_plan.json",
+        variants=[],
+        summaries=[
+            {
+                "variant_id": "fast_noisy",
+                "status": "completed",
+                "total_elapsed_s": 10.0,
+                "guardrails": {"status": "passed", "passed": True},
+                "compare": {
+                    "status": "completed",
+                    "shape_match": True,
+                    "rms_diff": 0.0020,
+                    "relative_rms_diff": 0.1,
+                    "abs_diff_p99": 0.0005,
+                },
+            },
+            {
+                "variant_id": "slower_clean",
+                "status": "completed",
+                "total_elapsed_s": 11.0,
+                "guardrails": {"status": "passed", "passed": True},
+                "compare": {
+                    "status": "completed",
+                    "shape_match": True,
+                    "rms_diff": 0.0010,
+                    "relative_rms_diff": 0.05,
+                    "abs_diff_p99": 0.0002,
+                },
+            },
+        ],
+        dry_run=False,
+        baseline_total_s=22.0,
+        compare_gate={
+            "require_shape_match": True,
+            "max_rms_diff": 0.0015,
+            "max_abs_diff_p99": 0.0003,
+        },
+    )
+
+    markdown = (tmp_path / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
+    runs_by_id = {run["variant_id"]: run for run in payload["runs"]}
+    assert payload["best_variant"]["variant_id"] == "slower_clean"
+    assert payload["compare_gate"]["enabled"] is True
+    assert payload["compare_gate"]["passed_count"] == 1
+    assert payload["compare_gate"]["failed_count"] == 1
+    assert runs_by_id["fast_noisy"]["compare_gate"]["passed"] is False
+    assert "rms_diff 0.002" in runs_by_id["fast_noisy"]["compare_gate"]["reasons"][0]
+    assert runs_by_id["slower_clean"]["compare_gate"]["passed"] is True
+    assert "Compare gate" in markdown
+    assert "failed" in markdown
+    assert "passed" in markdown
+
+
 def test_resident_sweep_summary_extracts_registration_components(tmp_path: Path):
     from glass.report.resident_sweep import load_resident_run_summary, write_resident_sweep_summary
 

@@ -241,8 +241,12 @@ def load_resident_run_summary(run_dir: str | Path, *, variant: dict[str, Any] | 
 
 
 def rank_resident_sweep_summaries(
-    summaries: Iterable[dict[str, Any]], *, baseline_total_s: float | None = None
+    summaries: Iterable[dict[str, Any]],
+    *,
+    baseline_total_s: float | None = None,
+    compare_gate: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    compare_policy = _normalize_compare_gate_policy(compare_gate)
     ranked = []
     for summary in summaries:
         item = dict(summary)
@@ -250,11 +254,13 @@ def rank_resident_sweep_summaries(
         item["speedup_vs_baseline"] = (
             None if baseline_total_s is None or total in (None, 0) else float(baseline_total_s) / float(total)
         )
+        item["compare_gate"] = _evaluate_compare_gate(item, compare_policy)
         ranked.append(item)
     ranked.sort(
         key=lambda item: (
             item.get("status") != "completed",
             (item.get("guardrails") or {}).get("passed") is False,
+            (item.get("compare_gate") or {}).get("passed") is False,
             float("inf") if item.get("total_elapsed_s") is None else float(item["total_elapsed_s"]),
             int(item.get("prefetch_blocked_no_slot_count", 0) or 0),
         )
@@ -274,16 +280,29 @@ def write_resident_sweep_summary(
     baseline_total_s: float | None = None,
     commands: list[dict[str, Any]] | None = None,
     common_run_args: dict[str, Any] | None = None,
+    compare_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out_path = Path(out)
-    ranked = rank_resident_sweep_summaries(summaries, baseline_total_s=baseline_total_s)
+    compare_gate_policy = _normalize_compare_gate_policy(compare_gate)
+    ranked = rank_resident_sweep_summaries(
+        summaries,
+        baseline_total_s=baseline_total_s,
+        compare_gate=compare_gate_policy,
+    )
     guardrail_records = [
         run.get("guardrails") or {}
         for run in ranked
         if isinstance(run.get("guardrails"), dict) and (run.get("guardrails") or {}).get("status") != "disabled"
     ]
+    compare_gate_records = [
+        run.get("compare_gate") or {}
+        for run in ranked
+        if isinstance(run.get("compare_gate"), dict) and (run.get("compare_gate") or {}).get("status") != "disabled"
+    ]
     best_variant = ranked[0] if ranked and ranked[0].get("status") == "completed" else None
     if best_variant and (best_variant.get("guardrails") or {}).get("passed") is False:
+        best_variant = None
+    if best_variant and (best_variant.get("compare_gate") or {}).get("passed") is False:
         best_variant = None
     payload = {
         "benchmark": "resident_prefetch_sweep",
@@ -302,6 +321,13 @@ def write_resident_sweep_summary(
             "failed_count": sum(1 for item in guardrail_records if item.get("passed") is False),
             "planned_count": sum(1 for item in guardrail_records if item.get("status") == "planned"),
         },
+        "compare_gate": {
+            "enabled": bool(compare_gate_records),
+            "policy": compare_gate_policy,
+            "passed_count": sum(1 for item in compare_gate_records if item.get("passed") is True),
+            "failed_count": sum(1 for item in compare_gate_records if item.get("passed") is False),
+            "planned_count": sum(1 for item in compare_gate_records if item.get("status") == "planned"),
+        },
         "common_run_args": common_run_args or {},
         "commands": commands or [],
     }
@@ -314,6 +340,76 @@ def _optional_float(value: Any) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _normalize_compare_gate_policy(compare_gate: dict[str, Any] | None) -> dict[str, Any]:
+    if not compare_gate:
+        return {"enabled": False}
+    policy = {
+        "require_shape_match": bool(compare_gate.get("require_shape_match", False)),
+        "max_rms_diff": _optional_float(compare_gate.get("max_rms_diff")),
+        "max_relative_rms_diff": _optional_float(compare_gate.get("max_relative_rms_diff")),
+        "max_abs_diff_p99": _optional_float(compare_gate.get("max_abs_diff_p99")),
+    }
+    policy["enabled"] = bool(
+        policy["require_shape_match"]
+        or policy["max_rms_diff"] is not None
+        or policy["max_relative_rms_diff"] is not None
+        or policy["max_abs_diff_p99"] is not None
+    )
+    return policy
+
+
+def _evaluate_compare_gate(run: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
+    if not policy.get("enabled"):
+        return {"status": "disabled", "passed": None, "policy": policy}
+    compare = run.get("compare") if isinstance(run.get("compare"), dict) else {}
+    reasons: list[str] = []
+    if compare.get("status") != "completed":
+        reasons.append("compare status is not completed")
+    if policy.get("require_shape_match") and compare.get("shape_match") is not True:
+        reasons.append("shape_match is not true")
+    _append_max_float_gate_reason(
+        reasons,
+        compare.get("rms_diff"),
+        policy.get("max_rms_diff"),
+        "rms_diff",
+    )
+    _append_max_float_gate_reason(
+        reasons,
+        compare.get("relative_rms_diff"),
+        policy.get("max_relative_rms_diff"),
+        "relative_rms_diff",
+    )
+    _append_max_float_gate_reason(
+        reasons,
+        compare.get("abs_diff_p99"),
+        policy.get("max_abs_diff_p99"),
+        "abs_diff_p99",
+    )
+    return {
+        "status": "failed" if reasons else "passed",
+        "passed": not reasons,
+        "reasons": reasons,
+        "policy": policy,
+    }
+
+
+def _append_max_float_gate_reason(
+    reasons: list[str],
+    value: Any,
+    limit: Any,
+    name: str,
+) -> None:
+    if limit is None:
+        return
+    if value is None:
+        reasons.append(f"{name} is missing")
+        return
+    numeric = float(value)
+    maximum = float(limit)
+    if numeric > maximum:
+        reasons.append(f"{name} {numeric:.6g} > {maximum:.6g}")
 
 
 def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
@@ -338,13 +434,20 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             f"{common_run_args.get('imported_arg_count', 0)} imported, "
             f"{common_run_args.get('filtered_token_count', 0)} filtered"
         )
+    compare_gate = payload.get("compare_gate") if isinstance(payload.get("compare_gate"), dict) else {}
+    if compare_gate.get("enabled"):
+        lines.append(
+            "- Compare gate: "
+            f"{compare_gate.get('passed_count', 0)} passed, "
+            f"{compare_gate.get('failed_count', 0)} failed"
+        )
     lines.extend(
         [
             "",
-            "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Read wait s | "
+            "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Compare gate | Read wait s | "
             "Native cal s | Reg/warp s | Catalog s | Pixel refine s | Warp s | Blocked slots | Callback waves | "
             "Release batches | Active frames | Zero-weight | Ref RMS | Ref p99 | Ref speedup |",
-            "| ---: | --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+            "| ---: | --- | --- | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
             "---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
@@ -364,12 +467,16 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         compare_speedup = _format_float(compare.get("speedup_vs_reference"))
         guardrails = run.get("guardrails") if isinstance(run.get("guardrails"), dict) else {}
         guardrail_status = str(guardrails.get("status") or "")
+        compare_gate_status = ""
+        if isinstance(run.get("compare_gate"), dict):
+            compare_gate_status = str(run["compare_gate"].get("status") or "")
         lines.append(
             "| "
             f"{run.get('rank', '')} | "
             f"{run.get('status', '')} | "
             f"`{run.get('variant_id', '')}` | "
-            f"{total} | {speedup} | {timeout} | {guardrail_status} | {read_wait} | {native_cal} | "
+            f"{total} | {speedup} | {timeout} | {guardrail_status} | {compare_gate_status} | "
+            f"{read_wait} | {native_cal} | "
             f"{registration_warp} | {catalog} | {pixel_refine} | {warp} | "
             f"{run.get('prefetch_blocked_no_slot_count', '')} | "
             f"{run.get('callback_wave_count', '')} | "

@@ -1694,6 +1694,22 @@ integration where applicable.
 - Treat a fast variant as a candidate only when guardrails and comparison
   metrics are both acceptable for the intended benchmark contract.
 
+### S2-Gate 102: Compare-Gated Resident Sweep Ranking
+
+- Add optional compare-gate thresholds to resident sweep summaries so rankable
+  variants must satisfy image-agreement constraints before speed decides the
+  best result.
+- Support shape-match requirement, maximum RMS difference, maximum relative RMS
+  difference, and maximum p99 absolute difference.
+- Record per-variant compare-gate pass/fail status and reasons in the sweep JSON
+  and Markdown table.
+- Include a top-level compare-gate summary with policy, passed count, failed
+  count, and planned count.
+- Keep default behavior unchanged when compare-gate thresholds are not supplied.
+- Validate with unit tests and a reused 200-light sweep in which the faster
+  fast-coarse candidate is intentionally demoted because its reference RMS/p99
+  exceed the selected benchmark contract.
+
 ## Gate Rules
 
 Each gate requires:
