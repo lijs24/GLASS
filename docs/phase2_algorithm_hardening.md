@@ -1800,6 +1800,19 @@ integration where applicable.
 - Record the result as evidence for the next registration-quality optimization
   target rather than changing defaults.
 
+### S2-Gate 109: Contract-Gated 200-Light NMS Separation Sweep
+
+- Run a bounded 200-light resident CUDA sweep over triangle catalog NMS minimum
+  separation while keeping `triangle_grid_top_per_cell=2`.
+- Use the same contract-derived frame gate, strict compare gate, candidate
+  coverage maps, and guardrails with pixel verification as S2-Gate 108.
+- Record the runtime, moving-catalog time, registration/warp time, frame counts,
+  guardrail status, and reference comparison metrics for each separation value.
+- Use the result to decide whether NMS separation alone can recover strict image
+  agreement for the faster low-catalog-capacity path.
+- Do not promote a default unless guardrails, frame gate, and strict compare
+  gate all pass.
+
 ## Gate Rules
 
 Each gate requires:
