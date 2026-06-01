@@ -42,6 +42,7 @@ _REPORT_SECTIONS = [
     ("resident-output-maps", "Resident output maps"),
     ("dq-mask-summary", "DQ/mask summary"),
     ("stackengine-dq-provenance", "StackEngine DQ provenance"),
+    ("stackengine-contract-audit", "StackEngine contract audit"),
     ("dq-provenance-contract", "DQ provenance contract"),
     ("geometric-warp-coverage", "Geometric warp coverage"),
     ("resident-cuda-summary", "Resident CUDA summary"),
@@ -900,6 +901,72 @@ def _dq_provenance_contract_rows(
     return rows
 
 
+def _stack_engine_contract_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not contract:
+        return []
+    return [
+        {
+            "status": contract.get("status"),
+            "passed": contract.get("passed"),
+            "scope": contract.get("scope"),
+            "expected_integration_engine": contract.get("expected_integration_engine"),
+            "source": contract.get("_report_source_path"),
+            "master_count": ((contract.get("calibration") or {}).get("master_count")),
+            "integration_output_count": ((contract.get("integration") or {}).get("output_count")),
+        }
+    ]
+
+
+def _stack_engine_contract_failure_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("checks") or []:
+        if item.get("passed"):
+            continue
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        compact_evidence = ", ".join(f"{key}={value}" for key, value in evidence.items())
+        rows.append(
+            {
+                "check": item.get("name"),
+                "note": item.get("note"),
+                "evidence": compact_evidence,
+            }
+        )
+    return rows
+
+
+def _stack_engine_contract_surface_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    calibration = (contract or {}).get("calibration") or {}
+    for master in calibration.get("masters") or []:
+        rows.append(
+            {
+                "surface": "master_calibration",
+                "item": master.get("name"),
+                "type": master.get("type"),
+                "engine": master.get("tile_stack_mode"),
+                "contract_ok": master.get("contract_ok"),
+                "dq_provenance": master.get("has_dq_provenance"),
+                "summary_schema": master.get("summary_source_schema"),
+                "fallback_reason": master.get("fallback_reason"),
+            }
+        )
+    integration = (contract or {}).get("integration") or {}
+    for item in integration.get("outputs") or []:
+        rows.append(
+            {
+                "surface": "integration",
+                "item": item.get("filter", item.get("index")),
+                "type": "light",
+                "engine": item.get("summary_engine") or item.get("tile_stack_mode"),
+                "contract_ok": item.get("contract_ok"),
+                "dq_provenance": bool(item.get("has_stack_engine_dq_provenance") or item.get("summary_source_schema")),
+                "summary_schema": item.get("summary_source_schema"),
+                "expected_engine": item.get("expected_engine"),
+            }
+        )
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -914,6 +981,7 @@ def write_html_report(
     frame_accounting: dict[str, Any] | None = None,
     compare: dict[str, Any] | None = None,
     acceptance_audit: dict[str, Any] | None = None,
+    stack_engine_contract: dict[str, Any] | None = None,
     title: str = "GLASS Report",
     run_root: str | Path | None = None,
 ) -> None:
@@ -1028,6 +1096,9 @@ def write_html_report(
     output_policy_rows = _output_policy_rows(integration, resident)
     resident_output_map_rows = _resident_output_map_rows(resident, run_root)
     stack_engine_dq_rows = _stack_engine_dq_rows(calibration, integration)
+    stack_engine_contract_summary_rows = _stack_engine_contract_summary_rows(stack_engine_contract)
+    stack_engine_contract_failure_rows = _stack_engine_contract_failure_rows(stack_engine_contract)
+    stack_engine_contract_surface_rows = _stack_engine_contract_surface_rows(stack_engine_contract)
     dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
@@ -1134,6 +1205,13 @@ def write_html_report(
   <p>StackEngine paths record source DQ flag counts, non-finite samples,
   zero-coverage pixels, rejection-touched pixels, and output DQ summaries.</p>
   {_table(stack_engine_dq_rows)}
+  {_h2("stackengine-contract-audit", "StackEngine contract audit")}
+  <p>The standalone StackEngine contract audit verifies default routing and DQ
+  provenance from GLASS artifacts. Failed checks are shown here while the JSON
+  audit remains authoritative.</p>
+  {_table(stack_engine_contract_summary_rows)}
+  {_table(stack_engine_contract_failure_rows)}
+  {_limited_table(stack_engine_contract_surface_rows, label="StackEngine contract surface rows", artifact="stack_engine_contract JSON")}
   {_h2("dq-provenance-contract", "DQ provenance contract")}
   <p>This normalized summary bridges StackEngine and resident CUDA provenance
   schemas for report and audit consumers.</p>

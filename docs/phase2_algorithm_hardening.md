@@ -1481,6 +1481,21 @@ integration where applicable.
   full pytest. A 200-light benchmark rerun is not required because this gate is
   diagnostic-only and does not change image math or resident CUDA routing.
 
+### S2-Gate 89: StackEngine Contract Reporting
+
+- Let `glass report` auto-discover `*stack_engine_contract*.json` or consume an
+  explicit `--stack-engine-contract` audit artifact.
+- Surface StackEngine contract status, expected integration engine, artifact
+  source path, failed checks, and audited calibration/integration surfaces in
+  the main HTML report.
+- Keep the standalone contract JSON authoritative; the report is a readable
+  triage layer for default-route and DQ-provenance failures.
+- Validate with report fixture tests, ruff, full pytest, and report
+  regeneration against the latest preserved 200-light resident artifact using
+  the Gate88 contract JSON.
+- No new 200-light benchmark is required because this gate is report-only and
+  does not alter image math or resident CUDA routing.
+
 ## Gate Rules
 
 Each gate requires:

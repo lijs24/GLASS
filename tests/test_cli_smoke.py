@@ -510,6 +510,75 @@ def test_cli_report_lists_failed_acceptance_checks(tmp_path: Path):
     assert "minimum_speedup" not in html
 
 
+def test_cli_report_summarizes_stack_engine_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    write_json(
+        run / "stack_engine_contract.json",
+        {
+            "audit_type": "stack_engine_default_contract",
+            "status": "failed",
+            "passed": False,
+            "scope": "all",
+            "expected_integration_engine": "stack_engine_cpu",
+            "checks": [
+                {
+                    "name": "calibration_masters_use_stack_engine",
+                    "passed": False,
+                    "note": "fixture legacy fallback",
+                    "evidence": {"master_count": 1, "failed": ["bias_bad"]},
+                },
+                {
+                    "name": "integration_outputs_use:stack_engine_cpu",
+                    "passed": True,
+                    "evidence": {"output_count": 1, "failed": []},
+                },
+            ],
+            "calibration": {
+                "master_count": 1,
+                "masters": [
+                    {
+                        "name": "bias_bad",
+                        "type": "bias",
+                        "tile_stack_mode": "legacy_streaming_accumulator",
+                        "contract_ok": False,
+                        "has_dq_provenance": False,
+                        "summary_source_schema": None,
+                        "fallback_reason": "fixture fallback",
+                    }
+                ],
+            },
+            "integration": {
+                "output_count": 1,
+                "outputs": [
+                    {
+                        "index": 0,
+                        "filter": "H",
+                        "tile_stack_mode": "stack_engine_cpu",
+                        "summary_engine": "stack_engine_cpu",
+                        "summary_source_schema": "stack_engine_dq_provenance",
+                        "contract_ok": True,
+                        "has_stack_engine_dq_provenance": True,
+                        "expected_engine": "stack_engine_cpu",
+                    }
+                ],
+            },
+        },
+    )
+
+    report = tmp_path / "stack_contract_report.html"
+    assert main(["report", "--run", str(run), "--out", str(report)]) == 0
+    html = report.read_text(encoding="utf-8")
+
+    assert "StackEngine contract audit" in html
+    assert "stack_engine_contract.json" in html
+    assert "calibration_masters_use_stack_engine" in html
+    assert "fixture legacy fallback" in html
+    assert "bias_bad" in html
+    assert "legacy_streaming_accumulator" in html
+    assert "integration_outputs_use:stack_engine_cpu" not in html
+
+
 def test_cli_report_limits_large_audit_tables(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()

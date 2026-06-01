@@ -79,6 +79,12 @@ def _report_acceptance_audit_path(run: Path, explicit: str | Path | None = None)
     return _newest_matching_json(run, ["*acceptance_audit*.json"])
 
 
+def _report_stack_engine_contract_path(run: Path, explicit: str | Path | None = None) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    return _newest_matching_json(run, ["*stack_engine_contract*.json", "*stack-engine-contract*.json"])
+
+
 def _local_norm_override_from_arg(value: str) -> bool | None:
     if value == "on":
         return True
@@ -137,6 +143,7 @@ def _write_run_report(
     *,
     compare_json: str | Path | None = None,
     acceptance_audit: str | Path | None = None,
+    stack_engine_contract: str | Path | None = None,
 ) -> None:
     write_html_report(
         report_path,
@@ -152,6 +159,9 @@ def _write_run_report(
         frame_accounting=_read_json_if_exists(run / "frame_accounting.json"),
         compare=_read_report_json_if_exists(_report_compare_path(run, compare_json)),
         acceptance_audit=_read_report_json_if_exists(_report_acceptance_audit_path(run, acceptance_audit)),
+        stack_engine_contract=_read_report_json_if_exists(
+            _report_stack_engine_contract_path(run, stack_engine_contract)
+        ),
         run_root=run,
     )
 
@@ -348,6 +358,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     frame_accounting = _read_json_if_exists(frame_accounting_path)
     compare_payload = _read_report_json_if_exists(_report_compare_path(run, args.compare_json))
     acceptance_payload = _read_report_json_if_exists(_report_acceptance_audit_path(run, args.acceptance_audit))
+    stack_contract_payload = _read_report_json_if_exists(
+        _report_stack_engine_contract_path(run, args.stack_engine_contract)
+    )
     write_html_report(
         args.out,
         manifest=manifest,
@@ -362,6 +375,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         frame_accounting=frame_accounting,
         compare=compare_payload,
         acceptance_audit=acceptance_payload,
+        stack_engine_contract=stack_contract_payload,
         run_root=run,
     )
     console.print(f"Wrote report: {args.out}")
@@ -1219,6 +1233,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--plan")
     report.add_argument("--compare-json", help="optional compare JSON to summarize in the report")
     report.add_argument("--acceptance-audit", help="optional acceptance-audit JSON to summarize in the report")
+    report.add_argument("--stack-engine-contract", help="optional StackEngine contract audit JSON to summarize")
     report.set_defaults(func=cmd_report)
 
     audit = sub.add_parser("audit", help="scan, plan, and report in one command")
