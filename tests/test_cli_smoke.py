@@ -119,6 +119,7 @@ def test_cli_help_commands():
         "resume",
         "audit",
         "compare",
+        "compare-outliers",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",

@@ -27,6 +27,7 @@ from glass.planner.plan_builder import build_processing_plan
 from glass.planner.subset import build_subset_manifest
 from glass.report.blackbox_package import create_blackbox_package, finalize_blackbox_package
 from glass.report.compare_report import compare_fits, write_compare_report
+from glass.report.compare_outliers import build_compare_outlier_audit, write_compare_outlier_audit
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
 from glass.report.resident_determinism import (
@@ -749,6 +750,39 @@ def cmd_compare(args: argparse.Namespace) -> int:
     write_json(Path(args.out).with_suffix(".json"), comparison)
     write_compare_report(args.out, comparison)
     console.print(f"Wrote compare report: {args.out}")
+    return 0
+
+
+def cmd_compare_outliers(args: argparse.Namespace) -> int:
+    payload = build_compare_outlier_audit(
+        args.glass,
+        args.reference,
+        glass_scale=args.glass_scale,
+        glass_offset=args.glass_offset,
+        clip_low=args.clip_low,
+        clip_high=args.clip_high,
+        glass_coverage_map=args.glass_coverage_map,
+        min_coverage=args.min_coverage,
+        ignore_border_px=args.ignore_border_px,
+        tail_percentile=args.tail_percentile,
+        target_abs_diff=args.target_abs_diff,
+        tile_size=args.tile_size,
+        top_tiles=args.top_tiles,
+        top_pixels=args.top_pixels,
+        edge_band_px=args.edge_band_px,
+    )
+    write_compare_outlier_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload.get("status"),
+            "tail_pixels": (payload.get("tail") or {}).get("pixels") if isinstance(payload.get("tail"), dict) else None,
+            "target_pixels": (payload.get("target_exceedance") or {}).get("pixels")
+            if isinstance(payload.get("target_exceedance"), dict)
+            else None,
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
     return 0
 
 
@@ -1739,6 +1773,55 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--glass-coverage-map", help="optional GLASS coverage map used to mask comparison metrics")
     compare.add_argument("--min-coverage", type=float, help="minimum GLASS coverage required for comparison metrics")
     compare.set_defaults(func=cmd_compare)
+
+    compare_outliers = sub.add_parser(
+        "compare-outliers",
+        help="audit spatial locations of comparison tail/outlier residuals",
+    )
+    compare_outliers.add_argument("--glass", required=True)
+    compare_outliers.add_argument("--reference", required=True)
+    compare_outliers.add_argument("--out", required=True, help="output outlier audit JSON")
+    compare_outliers.add_argument("--markdown", help="optional output Markdown summary")
+    compare_outliers.add_argument("--glass-scale", type=float, help="scale GLASS pixels before comparison")
+    compare_outliers.add_argument("--glass-offset", type=float, help="offset GLASS pixels before comparison")
+    compare_outliers.add_argument("--clip-low", type=float, help="clip transformed GLASS pixels to this lower bound")
+    compare_outliers.add_argument("--clip-high", type=float, help="clip transformed GLASS pixels to this upper bound")
+    compare_outliers.add_argument(
+        "--glass-coverage-map",
+        help="optional GLASS coverage map used to mask comparison metrics",
+    )
+    compare_outliers.add_argument(
+        "--min-coverage",
+        type=float,
+        help="minimum GLASS coverage required for comparison metrics",
+    )
+    compare_outliers.add_argument(
+        "--ignore-border-px",
+        type=int,
+        default=0,
+        help="ignore this many pixels on each edge for metrics",
+    )
+    compare_outliers.add_argument(
+        "--tail-percentile",
+        type=float,
+        default=99.0,
+        help="absolute-difference percentile used to define the tail mask",
+    )
+    compare_outliers.add_argument(
+        "--target-abs-diff",
+        type=float,
+        help="optional strict target threshold; exceedance pixels are reported separately",
+    )
+    compare_outliers.add_argument("--tile-size", type=int, default=512, help="tile size for outlier localization")
+    compare_outliers.add_argument("--top-tiles", type=int, default=16, help="number of top outlier tiles to report")
+    compare_outliers.add_argument("--top-pixels", type=int, default=32, help="number of top pixels to report")
+    compare_outliers.add_argument(
+        "--edge-band-px",
+        type=int,
+        default=64,
+        help="distance from compared-region edge considered an edge-band tail pixel",
+    )
+    compare_outliers.set_defaults(func=cmd_compare_outliers)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

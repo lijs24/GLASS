@@ -1983,6 +1983,23 @@ integration where applicable.
   passes strict RMS and p99 compare gates. If linear downweighting fails, use
   the result to design a non-linear or multi-signal agreement weighting rule.
 
+### S2-Gate 120: Compare Tail Outlier Audit
+
+- Add a reusable `glass compare-outliers` audit that localizes strict compare
+  p99 tails and target-threshold exceedance pixels after the same scale/offset,
+  clipping, border, and coverage-mask policy used by benchmark compare gates.
+- Report compared-pixel accounting, tail threshold, top residual tiles, top
+  residual pixels, signed tail counts, edge-band fraction, and a machine-readable
+  recommendation that classifies the tail as edge-dominated, localized,
+  signed-global, or diffuse.
+- Run the audit on the deterministic agreement baseline and the best
+  S2-Gate 119 downweight candidate against the same user-generated external
+  reference output.
+- Treat this as an observability gate only. It must not promote weighting
+  defaults; it decides whether the next optimization should inspect localized
+  residual tiles, crop/coverage policy, normalization, or per-frame contribution
+  maps before designing another agreement-weighting rule.
+
 ## Gate Rules
 
 Each gate requires:
