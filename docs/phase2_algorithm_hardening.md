@@ -1429,6 +1429,25 @@ integration where applicable.
   does not write or report unavailable diagnostic maps, and reduces 200-light
   fused output traffic without changing the master.
 
+### S2-Gate 86: Triangle Registration Fused Matrix Dispatch
+
+- Extend the opt-in `--resident-integration-dispatch fused_matrix` route from
+  identity/external matrices to resident `similarity_cuda_triangle`.
+- Keep triangle catalog, descriptor fit, pixel refinement, quality gates, and
+  frame zero-weight decisions unchanged; only defer the accepted matrix
+  application from the registration stage into the fused integration kernel.
+- In fused dispatch, avoid writing accepted triangle-registered full-frame
+  intermediates back into the resident stack. The resident stack keeps
+  calibrated frames; integration samples each frame through its accepted
+  triangle matrix.
+- Record explicit artifacts and per-frame warnings for
+  `triangle_warp_batch_mode=fused_matrix_deferred`,
+  `triangle_warp_batch_timing_model=fused_integration_deferred`, and
+  `triangle_fused_matrix_deferred_count`.
+- Validate with a CLI-level CUDA A/B test comparing triangle stack dispatch
+  against triangle fused dispatch on the same synthetic shifted pair, plus
+  native build, ruff, full pytest, and a 200-light triangle fused benchmark.
+
 ## Gate Rules
 
 Each gate requires:

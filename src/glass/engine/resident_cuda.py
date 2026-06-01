@@ -1773,8 +1773,15 @@ def run_resident_calibration_integration(
         raise ValueError("resident_warp_batch_dispatch must be loop or chunked")
     if resident_integration_dispatch not in {"stack", "fused_matrix"}:
         raise ValueError("resident_integration_dispatch must be stack or fused_matrix")
-    if resident_integration_dispatch == "fused_matrix" and resident_registration not in {"off", "external_matrix"}:
-        raise ValueError("resident fused_matrix integration currently supports registration=off or external_matrix")
+    fused_matrix_registration_modes = {"off", "external_matrix", "similarity_cuda_triangle"}
+    if (
+        resident_integration_dispatch == "fused_matrix"
+        and resident_registration not in fused_matrix_registration_modes
+    ):
+        raise ValueError(
+            "resident fused_matrix integration currently supports registration=off, "
+            "external_matrix, or similarity_cuda_triangle"
+        )
     if resident_ncc_sample_stride <= 0:
         raise ValueError("resident_ncc_sample_stride must be positive")
     if resident_ncc_fallback_score_threshold < 0.0 or resident_ncc_fallback_score_threshold > 1.0:
@@ -3491,7 +3498,9 @@ def run_resident_calibration_integration(
                 triangle_descriptor_fit_native_output_download_s = 0.0
                 triangle_descriptor_fit_native_frame_total_s = 0.0
                 triangle_descriptor_fit_native_total_s = 0.0
-                triangle_warp_batch_enabled = bool(
+                triangle_fused_matrix_deferred_enabled = resident_integration_dispatch == "fused_matrix"
+                triangle_fused_matrix_deferred_count = 0
+                triangle_warp_batch_available = bool(
                     (
                         resident_warp_interpolation == "bilinear"
                         and hasattr(native_stack, "apply_matrix_bilinear_frames")
@@ -3501,12 +3510,19 @@ def run_resident_calibration_integration(
                         and hasattr(native_stack, "apply_matrix_lanczos3_frames")
                     )
                 )
-                triangle_warp_batch_mode = (
-                    f"native_matrix_{resident_warp_interpolation}_frames"
-                    if triangle_warp_batch_enabled
-                    else "per_frame"
+                triangle_warp_batch_enabled = bool(
+                    triangle_warp_batch_available and not triangle_fused_matrix_deferred_enabled
                 )
-                triangle_warp_batch_timing_model = "off"
+                if triangle_fused_matrix_deferred_enabled:
+                    triangle_warp_batch_mode = "fused_matrix_deferred"
+                    triangle_warp_batch_timing_model = "fused_integration_deferred"
+                else:
+                    triangle_warp_batch_mode = (
+                        f"native_matrix_{resident_warp_interpolation}_frames"
+                        if triangle_warp_batch_enabled
+                        else "per_frame"
+                    )
+                    triangle_warp_batch_timing_model = "off"
                 triangle_warp_batch_frame_count = 0
                 triangle_warp_batch_fallback_frame_count = 0
                 triangle_warp_batch_native_inverse_upload_mode = "off"
@@ -4137,6 +4153,19 @@ def run_resident_calibration_integration(
                                     )
                                 elif deferred_triangle_refine is not None:
                                     warnings.append("triangle_pixel_refine_quality_gate=deferred_batch")
+                                elif triangle_fused_matrix_deferred_enabled:
+                                    integration_matrices[index] = matrix
+                                    fused_matrix_deferred_frame_indices.add(index)
+                                    triangle_fused_matrix_deferred_count += 1
+                                    warnings.extend(
+                                        [
+                                            "resident_registration_application=fused_matrix_deferred",
+                                            "triangle_warp_batch=false",
+                                            f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
+                                            f"triangle_warp_batch_dispatch={resident_warp_batch_dispatch}",
+                                            f"triangle_warp_batch_timing_model={triangle_warp_batch_timing_model}",
+                                        ]
+                                    )
                                 else:
                                     warp_start = perf_counter()
                                     warp_model = _apply_resident_registration_matrix(
@@ -4433,6 +4462,20 @@ def run_resident_calibration_integration(
                             result.warnings.append(
                                 "resident triangle descriptor registration failed batch quality gate: "
                                 + "; ".join(quality_failures)
+                            )
+                            continue
+                        integration_matrices[int(item["index"])] = result.matrix
+                        if triangle_fused_matrix_deferred_enabled:
+                            fused_matrix_deferred_frame_indices.add(int(item["index"]))
+                            triangle_fused_matrix_deferred_count += 1
+                            result.warnings.extend(
+                                [
+                                    "resident_registration_application=fused_matrix_deferred",
+                                    "triangle_warp_batch=false",
+                                    f"triangle_warp_batch_mode={triangle_warp_batch_mode}",
+                                    f"triangle_warp_batch_dispatch={resident_warp_batch_dispatch}",
+                                    f"triangle_warp_batch_timing_model={triangle_warp_batch_timing_model}",
+                                ]
                             )
                             continue
                         valid_triangle_batch_warps.append((item, result))
@@ -5704,6 +5747,13 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0,
+                        "triangle_fused_matrix_deferred": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_fused_matrix_deferred_enabled
+                        ),
+                        "triangle_fused_matrix_deferred_count": int(triangle_fused_matrix_deferred_count)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_pixel_refine_coarse_stride": int(refine_kwargs["coarse_sample_stride"])
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
@@ -5901,7 +5951,11 @@ def run_resident_calibration_integration(
                     "resident_integration_dispatch": {
                         "mode": resident_integration_dispatch,
                         "used": bool(fused_matrix_integration_used),
-                        "eligible_registration_modes": ["off", "external_matrix"],
+                        "eligible_registration_modes": [
+                            "off",
+                            "external_matrix",
+                            "similarity_cuda_triangle",
+                        ],
                         "matrix_count": len(integration_matrices),
                         "deferred_matrix_frame_count": len(fused_matrix_deferred_frame_indices),
                         "interpolation": resident_warp_interpolation,
@@ -5942,8 +5996,13 @@ def run_resident_calibration_integration(
                             if resident_registration == "external_matrix"
                             else "Resident registration estimated CUDA similarity matrices and applied resident matrix warp."
                             if resident_registration == "similarity_cuda_catalog"
-                            else "Resident registration estimated CUDA triangle-descriptor similarity matrices and "
-                            "applied resident matrix warp."
+                            else (
+                                "Resident registration estimated CUDA triangle-descriptor similarity matrices and "
+                                "deferred accepted matrices to fused integration."
+                                if fused_matrix_integration_used
+                                else "Resident registration estimated CUDA triangle-descriptor similarity matrices and "
+                                "applied resident matrix warp."
+                            )
                             if resident_registration == "similarity_cuda_triangle"
                             else "Resident registration is optional and currently limited to translation."
                         ),
@@ -6039,6 +6098,9 @@ def run_resident_calibration_integration(
                             if resident_registration == "similarity_cuda_catalog"
                             else (
                                 "resident registration estimated CUDA triangle descriptor matrices and applied them "
+                                "through fused matrix integration"
+                                if resident_integration_dispatch == "fused_matrix"
+                                else "resident registration estimated CUDA triangle descriptor matrices and applied them "
                                 f"with resident matrix {resident_warp_interpolation} warp"
                             )
                             if resident_registration == "similarity_cuda_triangle"

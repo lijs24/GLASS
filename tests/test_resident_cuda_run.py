@@ -1710,6 +1710,118 @@ def test_cli_resident_cuda_run_similarity_triangle_aligns_shifted_pair(tmp_path:
     assert any("resident CUDA triangle descriptor similarity" in warning for warning in moving["warnings"])
 
 
+def test_cli_resident_cuda_triangle_fused_matrix_matches_stack_dispatch(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_star_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    stack_run = tmp_path / "resident_run_similarity_triangle_stack"
+    fused_run = tmp_path / "resident_run_similarity_triangle_fused"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    plan_payload.setdefault("registration_policy", {}).update(
+        {
+            "cuda_triangle_tolerance_px": 1.5,
+            "cuda_triangle_descriptor_radius": 0.08,
+            "cuda_triangle_neighbors": 5,
+            "cuda_triangle_max_descriptors": 256,
+            "cuda_triangle_pixel_refine_coarse_stride": 1,
+            "cuda_triangle_pixel_refine_final_stride": 1,
+            "cuda_triangle_min_pixel_ncc": 0.1,
+        }
+    )
+    write_json(plan, plan_payload)
+
+    common_args = [
+        "--plan",
+        str(plan),
+        "--backend",
+        "cuda",
+        "--memory-mode",
+        "resident",
+        "--until-stage",
+        "integration",
+        "--local-normalization",
+        "off",
+        "--integration-rejection",
+        "none",
+        "--integration-weighting",
+        "none",
+        "--resident-registration",
+        "similarity_cuda_triangle",
+        "--resident-star-threshold",
+        "30",
+        "--resident-star-max-candidates",
+        "16",
+        "--resident-star-tolerance-px",
+        "1.5",
+        "--resident-star-grid-cols",
+        "4",
+        "--resident-star-grid-rows",
+        "4",
+        "--resident-star-catalog-deterministic",
+        "--resident-triangle-pixel-refine-final-stride",
+        "2",
+        "--resident-triangle-pixel-refine-fast-coarse",
+        "--resident-warp-interpolation",
+        "bilinear",
+        "--resident-output-maps",
+        "minimal",
+        "--reference-frame-id",
+        "light_001",
+    ]
+
+    assert main(["run", "--out", str(stack_run), *common_args]) == 0
+    assert main(
+        [
+            "run",
+            "--out",
+            str(fused_run),
+            *common_args,
+            "--resident-integration-dispatch",
+            "fused_matrix",
+        ]
+    ) == 0
+
+    stack_master = read_fits_data(stack_run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    fused_master = read_fits_data(fused_run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    fused_registration = read_json(fused_run / "registration_results.json")
+    fused_resident = read_json(fused_run / "resident_artifacts.json")
+    fused_integration = read_json(fused_run / "integration_results.json")
+    moving = [item for item in fused_registration["results"] if item["status"] != "reference"][0]
+    artifact = fused_resident["artifacts"][0]
+    resident_registration = artifact["resident_registration"]
+    dispatch = artifact["resident_integration_dispatch"]
+    warp_coverage = resident_registration["warp_coverage"]
+
+    assert np.allclose(stack_master, fused_master, rtol=2e-5, atol=2e-4, equal_nan=True)
+    assert fused_integration["outputs"][0]["resident_integration_dispatch"] == "fused_matrix"
+    assert dispatch["mode"] == "fused_matrix"
+    assert dispatch["used"] is True
+    assert "similarity_cuda_triangle" in dispatch["eligible_registration_modes"]
+    assert dispatch["deferred_matrix_frame_count"] == 1
+    assert dispatch["download_mode"] == "master_weight"
+    assert dispatch["diagnostic_maps_downloaded"] is False
+    assert resident_registration["mode"] == "similarity_cuda_triangle"
+    assert resident_registration["triangle_warp_batch"] is False
+    assert resident_registration["triangle_warp_batch_mode"] == "fused_matrix_deferred"
+    assert resident_registration["triangle_warp_batch_timing_model"] == "fused_integration_deferred"
+    assert resident_registration["triangle_warp_batch_frame_count"] == 0
+    assert resident_registration["triangle_warp_batch_fallback_frame_count"] == 0
+    assert resident_registration["triangle_fused_matrix_deferred"] is True
+    assert resident_registration["triangle_fused_matrix_deferred_count"] == 1
+    assert warp_coverage["native_source"] == "ResidentCalibratedStack fused matrix integration geometric coverage"
+    assert warp_coverage["fused_deferred_frame_count"] == 1
+    assert moving["status"] == "ok"
+    assert moving["transform_model"] == "similarity_cuda_triangle"
+    assert any("resident_registration_application=fused_matrix_deferred" == warning for warning in moving["warnings"])
+    assert any("triangle_warp_batch=false" == warning for warning in moving["warnings"])
+    assert any("triangle_warp_batch_mode=fused_matrix_deferred" == warning for warning in moving["warnings"])
+    assert all("resident_registration_application=translation_bilinear" != warning for warning in moving["warnings"])
+
+
 def test_cli_resident_cuda_run_similarity_catalog_rejects_low_quality_matrix(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_star_dataset(tmp_path)
