@@ -37,6 +37,10 @@ from glass.report.resident_registration_audit import (
     build_resident_registration_audit,
     write_resident_registration_audit,
 )
+from glass.report.resident_registration_compare import (
+    build_resident_registration_compare,
+    write_resident_registration_compare,
+)
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
@@ -818,6 +822,26 @@ def cmd_resident_registration_audit(args: argparse.Namespace) -> int:
     if args.fail_on_registration_failures and audit["summary"]["failed_triangle_frame_count"]:
         return 2
     return 0 if audit["passed"] else 2
+
+
+def cmd_resident_registration_compare(args: argparse.Namespace) -> int:
+    payload = build_resident_registration_compare(
+        args.sweep_summary,
+        audit_root=args.audit_root,
+        audit_jsons=args.audit_json,
+    )
+    write_resident_registration_compare(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "variants": payload["variant_count"],
+            "missing_audits": payload["missing_audit_count"],
+            "compare_failed": payload["summary"]["compare_failed_count"],
+            "recommendation": payload["recommendation"]["status"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_missing_audits and payload["missing_audit_count"] else 0
 
 
 def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
@@ -1700,6 +1724,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when any triangle registration frame failed or was quality-gated",
     )
     resident_reg.set_defaults(func=cmd_resident_registration_audit)
+
+    resident_reg_compare = sub.add_parser(
+        "resident-registration-compare",
+        help="join resident sweep compare results with resident registration candidate audits",
+    )
+    resident_reg_compare.add_argument("--sweep-summary", required=True, help="resident_prefetch_sweep_summary.json")
+    resident_reg_compare.add_argument("--audit-root", help="directory containing *_candidate_audit.json files")
+    resident_reg_compare.add_argument(
+        "--audit-json",
+        action="append",
+        default=[],
+        help="explicit resident-registration-audit JSON; can be repeated",
+    )
+    resident_reg_compare.add_argument("--out", required=True, help="output candidate/compare JSON")
+    resident_reg_compare.add_argument("--markdown", help="optional output Markdown summary")
+    resident_reg_compare.add_argument(
+        "--fail-on-missing-audits",
+        action="store_true",
+        help="return exit code 2 if any sweep variant is missing a candidate audit",
+    )
+    resident_reg_compare.set_defaults(func=cmd_resident_registration_compare)
 
     stack_contract = sub.add_parser(
         "stack-engine-contract",

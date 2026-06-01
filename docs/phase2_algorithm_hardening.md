@@ -1842,6 +1842,22 @@ integration where applicable.
 - Keep this as an observability gate; do not change registration defaults until
   a follow-up gate uses the audit to justify a scoring or refinement change.
 
+### S2-Gate 112: Resident Candidate/Compare Correlation
+
+- Join resident sweep compare metrics with S2-Gate 111 candidate audits so
+  registration tuning can relate candidate/refine statistics to image
+  difference outcomes.
+- Provide a CLI command that reads `resident_prefetch_sweep_summary.json` plus
+  a directory of `*_candidate_audit.json` files and writes JSON/Markdown.
+- Record per-variant compare RMS, p99, frame failure counts, candidate-count
+  statistics, fit RMS, pixel-refine RMS/NCC, and registration component timing.
+- Compute simple correlation rows between candidate/refine statistics and
+  compare metrics to identify the next optimization target.
+- Run the join over the S2-Gate 110/111 200-light artifacts and keep the result
+  as evidence for the next scoring/refinement gate.
+- Keep this as an observability gate; do not change registration defaults until
+  a follow-up gate proves a candidate change with guardrails and compare gates.
+
 ## Gate Rules
 
 Each gate requires:

@@ -123,6 +123,7 @@ def test_cli_help_commands():
         "acceptance-audit",
         "resident-determinism",
         "resident-registration-audit",
+        "resident-registration-compare",
         "stack-engine-contract",
         "pipeline-contract",
         "guardrails",
