@@ -1647,6 +1647,20 @@ integration where applicable.
 - Use the result to decide whether queued refill is worth carrying forward into
   the next resident registration/warp optimization sweep.
 
+### S2-Gate 99: Resident Registration Component Sweep Reporting
+
+- Promote resident registration/warp component timings from
+  `resident_artifacts.json` into resident sweep JSON and Markdown summaries.
+- Include at least total resident registration/warp time, moving star-catalog
+  extraction, descriptor fit, moving descriptor generation, pixel refinement,
+  total warp, and native batch-warp timings when present.
+- Keep older runs reportable when component timings are absent.
+- Validate with synthetic summary fixtures and reuse the latest 200-light mini
+  matrix to regenerate a component-visible sweep summary without rerunning the
+  GPU stack.
+- Use the resulting component table to choose the next real optimization target
+  from evidence rather than from the aggregate stage total alone.
+
 ## Gate Rules
 
 Each gate requires:

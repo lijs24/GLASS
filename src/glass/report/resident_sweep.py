@@ -105,6 +105,8 @@ def load_resident_run_summary(run_dir: str | Path, *, variant: dict[str, Any] | 
     artifact = (resident.get("artifacts") or [{}])[0]
     artifact_timing = artifact.get("timing_s") or {}
     io_pipeline = artifact.get("resident_io_pipeline") or {}
+    fine_timing = artifact.get("fine_timing") or {}
+    registration_components = fine_timing.get("registration_component_seconds") or {}
 
     total_elapsed = timing.get("total_elapsed_s")
     if total_elapsed is None:
@@ -123,6 +125,25 @@ def load_resident_run_summary(run_dir: str | Path, *, variant: dict[str, Any] | 
         "native_calibration_total_s": _optional_float(io_pipeline.get("calibration_batch_native_total_s")),
         "native_calibration_sync_s": _optional_float(io_pipeline.get("calibration_batch_sync_s")),
         "resident_registration_warp_s": _optional_float(artifact_timing.get("resident_registration_warp")),
+        "registration_component_accounted_s": _optional_float(
+            registration_components.get("component_accounted_total")
+        ),
+        "registration_triangle_moving_catalog_s": _optional_float(
+            registration_components.get("triangle_moving_catalog")
+        ),
+        "registration_triangle_descriptor_fit_s": _optional_float(
+            registration_components.get("triangle_descriptor_fit")
+        ),
+        "registration_triangle_moving_descriptors_s": _optional_float(
+            registration_components.get("triangle_moving_descriptors")
+        ),
+        "registration_triangle_pixel_refine_s": _optional_float(
+            registration_components.get("triangle_pixel_refine")
+        ),
+        "registration_triangle_warp_s": _optional_float(registration_components.get("triangle_warp")),
+        "registration_triangle_warp_native_batch_s": _optional_float(
+            registration_components.get("triangle_warp_native_batch")
+        ),
         "prefetch_blocked_no_slot_count": int(io_pipeline.get("prefetch_fill_blocked_no_slot_count", 0) or 0),
         "prefetch_release_batch_count": int(io_pipeline.get("prefetch_release_batch_count", 0) or 0),
         "prefetch_refill_mode": io_pipeline.get("prefetch_refill_mode"),
@@ -252,8 +273,10 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         [
             "",
             "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Read wait s | "
-            "Native cal s | Blocked slots | Callback waves | Release batches | Active frames | Zero-weight |",
-            "| ---: | --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            "Native cal s | Reg/warp s | Catalog s | Pixel refine s | Warp s | Blocked slots | Callback waves | "
+            "Release batches | Active frames | Zero-weight |",
+            "| ---: | --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+            "---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for run in payload["runs"]:
@@ -262,6 +285,10 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         timeout = _format_float(run.get("timeout_s"))
         read_wait = _format_float(run.get("light_read_wait_wall_s"))
         native_cal = _format_float(run.get("native_calibration_total_s"))
+        registration_warp = _format_float(run.get("resident_registration_warp_s"))
+        catalog = _format_float(run.get("registration_triangle_moving_catalog_s"))
+        pixel_refine = _format_float(run.get("registration_triangle_pixel_refine_s"))
+        warp = _format_float(run.get("registration_triangle_warp_s"))
         guardrails = run.get("guardrails") if isinstance(run.get("guardrails"), dict) else {}
         guardrail_status = str(guardrails.get("status") or "")
         lines.append(
@@ -270,6 +297,7 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             f"{run.get('status', '')} | "
             f"`{run.get('variant_id', '')}` | "
             f"{total} | {speedup} | {timeout} | {guardrail_status} | {read_wait} | {native_cal} | "
+            f"{registration_warp} | {catalog} | {pixel_refine} | {warp} | "
             f"{run.get('prefetch_blocked_no_slot_count', '')} | "
             f"{run.get('callback_wave_count', '')} | "
             f"{run.get('prefetch_release_batch_count', '')} | "

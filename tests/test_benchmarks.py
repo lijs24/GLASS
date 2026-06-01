@@ -505,3 +505,70 @@ def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path)
     assert payload["best_variant"]["variant_id"] == "slower_green"
     assert payload["guardrails"]["passed_count"] == 1
     assert payload["guardrails"]["failed_count"] == 1
+
+
+def test_resident_sweep_summary_extracts_registration_components(tmp_path: Path):
+    from glass.report.resident_sweep import load_resident_run_summary, write_resident_sweep_summary
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run_timing.json").write_text('{"total_elapsed_s": 12.5}\n', encoding="utf-8")
+    (run_dir / "frame_accounting.json").write_text(
+        json.dumps({"summary": {"input_light_frames": 3, "integrated_frames": 2, "zero_weight_frames": 1}}),
+        encoding="utf-8",
+    )
+    (run_dir / "resident_artifacts.json").write_text(
+        json.dumps(
+            {
+                "artifacts": [
+                    {
+                        "master_path": "master.fits",
+                        "timing_s": {"resident_registration_warp": 2.4},
+                        "resident_io_pipeline": {
+                            "calibration_batch_native_total_s": 1.1,
+                            "calibration_batch_sync_s": 0.1,
+                        },
+                        "fine_timing": {
+                            "registration_component_seconds": {
+                                "component_accounted_total": 2.4,
+                                "triangle_moving_catalog": 0.7,
+                                "triangle_descriptor_fit": 0.2,
+                                "triangle_moving_descriptors": 0.1,
+                                "triangle_pixel_refine": 0.9,
+                                "triangle_warp": 0.4,
+                                "triangle_warp_native_batch": 0.35,
+                            }
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = load_resident_run_summary(
+        run_dir,
+        variant={"variant_id": "pf16_pw8_b8_s4_w2_callback_queue"},
+    )
+    assert summary["resident_registration_warp_s"] == 2.4
+    assert summary["registration_component_accounted_s"] == 2.4
+    assert summary["registration_triangle_moving_catalog_s"] == 0.7
+    assert summary["registration_triangle_descriptor_fit_s"] == 0.2
+    assert summary["registration_triangle_moving_descriptors_s"] == 0.1
+    assert summary["registration_triangle_pixel_refine_s"] == 0.9
+    assert summary["registration_triangle_warp_s"] == 0.4
+    assert summary["registration_triangle_warp_native_batch_s"] == 0.35
+
+    payload = write_resident_sweep_summary(
+        tmp_path / "summary",
+        plan="processing_plan.json",
+        variants=[summary["variant"]],
+        summaries=[summary],
+        dry_run=False,
+        baseline_total_s=25.0,
+    )
+    markdown = (tmp_path / "summary" / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
+    assert payload["runs"][0]["registration_triangle_pixel_refine_s"] == 0.9
+    assert "Catalog s" in markdown
+    assert "Pixel refine s" in markdown
+    assert "0.900000" in markdown
