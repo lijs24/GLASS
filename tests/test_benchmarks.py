@@ -327,9 +327,14 @@ def test_bench_resident_prefetch_sweep_dry_run_outputs_matrix(tmp_path: Path):
     )
 
     payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    analysis = json.loads((out / "resident_prefetch_sweep_analysis.json").read_text(encoding="utf-8"))
     markdown = (out / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
+    analysis_markdown = (out / "resident_prefetch_sweep_analysis.md").read_text(encoding="utf-8")
     assert payload["benchmark"] == "resident_prefetch_sweep"
     assert payload["dry_run"] is True
+    assert analysis["benchmark"] == "resident_prefetch_sweep"
+    assert analysis["completed_count"] == 0
+    assert "Resident Prefetch Sweep Analysis" in analysis_markdown
     assert payload["variant_count"] == 4
     assert payload["best_variant"] is None
     assert {variant["variant_id"] for variant in payload["variants"]} == {
@@ -717,6 +722,66 @@ def test_resident_sweep_ranking_applies_compare_gate(tmp_path: Path):
     assert "Compare gate" in markdown
     assert "failed" in markdown
     assert "passed" in markdown
+
+
+def test_resident_sweep_analysis_blocks_low_catalog_variant_on_compare_gate(tmp_path: Path):
+    from glass.report.resident_sweep import write_resident_sweep_summary
+
+    payload = write_resident_sweep_summary(
+        tmp_path,
+        plan="processing_plan.json",
+        variants=[],
+        summaries=[
+            {
+                "variant_id": "low_catalog_noisy",
+                "variant": {"triangle_grid_top_per_cell": 2},
+                "status": "completed",
+                "total_elapsed_s": 10.0,
+                "registration_triangle_moving_catalog_s": 0.5,
+                "resident_registration_warp_s": 1.6,
+                "guardrails": {"status": "passed", "passed": True},
+                "compare": {
+                    "status": "completed",
+                    "shape_match": True,
+                    "rms_diff": 0.0020,
+                    "abs_diff_p99": 0.0005,
+                },
+            },
+            {
+                "variant_id": "slower_clean",
+                "variant": {"triangle_grid_top_per_cell": 4},
+                "status": "completed",
+                "total_elapsed_s": 11.0,
+                "registration_triangle_moving_catalog_s": 0.9,
+                "resident_registration_warp_s": 2.0,
+                "guardrails": {"status": "passed", "passed": True},
+                "compare": {
+                    "status": "completed",
+                    "shape_match": True,
+                    "rms_diff": 0.0010,
+                    "abs_diff_p99": 0.0002,
+                },
+            },
+        ],
+        dry_run=False,
+        baseline_total_s=22.0,
+        compare_gate={
+            "require_shape_match": True,
+            "max_rms_diff": 0.0015,
+            "max_abs_diff_p99": 0.0003,
+        },
+    )
+
+    analysis = json.loads((tmp_path / "resident_prefetch_sweep_analysis.json").read_text(encoding="utf-8"))
+    analysis_markdown = (tmp_path / "resident_prefetch_sweep_analysis.md").read_text(encoding="utf-8")
+    assert payload["best_variant"]["variant_id"] == "slower_clean"
+    assert analysis["promotion_candidate_count"] == 1
+    assert analysis["lowest_catalog_variant"]["variant_id"] == "low_catalog_noisy"
+    assert analysis["lowest_catalog_variant"]["compare_gate_passed"] is False
+    assert analysis["fastest_promotion_candidate"]["variant_id"] == "slower_clean"
+    assert analysis["recommendation"]["status"] == "promotion_candidate_found"
+    assert "Lowest catalog" in analysis_markdown
+    assert "Fastest promotion" in analysis_markdown
 
 
 def test_resident_sweep_summary_extracts_registration_components(tmp_path: Path):

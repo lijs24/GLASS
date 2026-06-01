@@ -1728,6 +1728,20 @@ integration where applicable.
 - Use the result to decide whether lower per-cell catalog capacity is a viable
   next optimization candidate for moving-catalog time.
 
+### S2-Gate 104: Resident Sweep Analysis Artifact
+
+- Emit a machine-readable `resident_prefetch_sweep_analysis.json` and companion
+  Markdown summary for every resident sweep.
+- Identify completed variants, promotion candidates, fastest variant, lowest
+  moving-catalog variant, lowest registration/warp variant, and fastest variant
+  satisfying all enabled guardrail and compare gates.
+- Record recommendation status and reasons, especially when a faster catalog
+  candidate is blocked by compare-gated image agreement.
+- Preserve the existing sweep summary schema while adding the analysis artifact
+  beside it.
+- Validate with focused tests and generate analysis for the 200-light
+  S2-Gate 103 catalog sweep without rerunning CUDA.
+
 ## Gate Rules
 
 Each gate requires:

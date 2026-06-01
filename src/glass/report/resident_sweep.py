@@ -408,13 +408,134 @@ def write_resident_sweep_summary(
     }
     write_json(out_path / "resident_prefetch_sweep_summary.json", payload)
     _write_markdown(out_path / "resident_prefetch_sweep_summary.md", payload)
+    analysis = build_resident_sweep_analysis(payload)
+    write_json(out_path / "resident_prefetch_sweep_analysis.json", analysis)
+    _write_analysis_markdown(out_path / "resident_prefetch_sweep_analysis.md", analysis)
     return payload
+
+
+def build_resident_sweep_analysis(payload: dict[str, Any]) -> dict[str, Any]:
+    runs = [dict(run) for run in payload.get("runs", []) if isinstance(run, dict)]
+    completed = [run for run in runs if run.get("status") == "completed"]
+    guardrails_enabled = bool((payload.get("guardrails") or {}).get("enabled"))
+    compare_gate_enabled = bool((payload.get("compare_gate") or {}).get("enabled"))
+    promotion_candidates = [
+        run
+        for run in completed
+        if _run_guardrails_rankable(run, guardrails_enabled) and _run_compare_rankable(run, compare_gate_enabled)
+    ]
+    fastest = _min_run_by(completed, "total_elapsed_s")
+    lowest_catalog = _min_run_by(completed, "registration_triangle_moving_catalog_s")
+    lowest_registration_warp = _min_run_by(completed, "resident_registration_warp_s")
+    fastest_promotion = _min_run_by(promotion_candidates, "total_elapsed_s")
+    baseline_total = _optional_float(payload.get("baseline_total_s"))
+    best_variant = payload.get("best_variant") if isinstance(payload.get("best_variant"), dict) else None
+    analysis = {
+        "schema_version": 1,
+        "benchmark": payload.get("benchmark"),
+        "summary_path": str(Path(str(payload.get("out_dir", "."))) / "resident_prefetch_sweep_summary.json"),
+        "variant_count": int(payload.get("variant_count", len(runs)) or 0),
+        "completed_count": len(completed),
+        "promotion_candidate_count": len(promotion_candidates),
+        "guardrails_enabled": guardrails_enabled,
+        "compare_gate_enabled": compare_gate_enabled,
+        "compare_gate_policy": (payload.get("compare_gate") or {}).get("policy", {}),
+        "baseline_total_s": baseline_total,
+        "best_variant_id": None if best_variant is None else best_variant.get("variant_id"),
+        "fastest_variant": _analysis_run_record(fastest, baseline_total),
+        "lowest_catalog_variant": _analysis_run_record(lowest_catalog, baseline_total),
+        "lowest_registration_warp_variant": _analysis_run_record(lowest_registration_warp, baseline_total),
+        "fastest_promotion_candidate": _analysis_run_record(fastest_promotion, baseline_total),
+        "runs": [_analysis_run_record(run, baseline_total) for run in runs],
+    }
+    analysis["recommendation"] = _resident_sweep_recommendation(analysis)
+    return analysis
 
 
 def _optional_float(value: Any) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _run_guardrails_rankable(run: dict[str, Any], guardrails_enabled: bool) -> bool:
+    if not guardrails_enabled:
+        return True
+    return (run.get("guardrails") or {}).get("passed") is True
+
+
+def _run_compare_rankable(run: dict[str, Any], compare_gate_enabled: bool) -> bool:
+    if not compare_gate_enabled:
+        return True
+    return (run.get("compare_gate") or {}).get("passed") is True
+
+
+def _min_run_by(runs: Iterable[dict[str, Any]], key: str) -> dict[str, Any] | None:
+    candidates = [run for run in runs if run.get(key) is not None]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda run: float(run[key]))
+
+
+def _analysis_run_record(run: dict[str, Any] | None, baseline_total_s: float | None) -> dict[str, Any] | None:
+    if run is None:
+        return None
+    total = _optional_float(run.get("total_elapsed_s"))
+    catalog = _optional_float(run.get("registration_triangle_moving_catalog_s"))
+    registration_warp = _optional_float(run.get("resident_registration_warp_s"))
+    compare = run.get("compare") if isinstance(run.get("compare"), dict) else {}
+    compare_gate = run.get("compare_gate") if isinstance(run.get("compare_gate"), dict) else {}
+    guardrails = run.get("guardrails") if isinstance(run.get("guardrails"), dict) else {}
+    return {
+        "variant_id": run.get("variant_id"),
+        "rank": run.get("rank"),
+        "status": run.get("status"),
+        "total_elapsed_s": total,
+        "speedup_vs_baseline": None
+        if baseline_total_s in (None, 0) or total in (None, 0)
+        else float(baseline_total_s) / float(total),
+        "registration_triangle_moving_catalog_s": catalog,
+        "resident_registration_warp_s": registration_warp,
+        "registration_triangle_pixel_refine_s": _optional_float(
+            run.get("registration_triangle_pixel_refine_s")
+        ),
+        "registration_triangle_warp_s": _optional_float(run.get("registration_triangle_warp_s")),
+        "guardrails_status": guardrails.get("status"),
+        "guardrails_passed": guardrails.get("passed"),
+        "compare_gate_status": compare_gate.get("status"),
+        "compare_gate_passed": compare_gate.get("passed"),
+        "compare_gate_reasons": compare_gate.get("reasons", []),
+        "ref_rms": compare.get("rms_diff"),
+        "ref_p99": compare.get("abs_diff_p99"),
+        "ref_speedup": compare.get("speedup_vs_reference"),
+        "input_light_frames": run.get("input_light_frames"),
+        "active_light_frames": run.get("active_light_frames"),
+        "zero_weight_frames": run.get("zero_weight_frames"),
+        "variant": run.get("variant", {}),
+    }
+
+
+def _resident_sweep_recommendation(analysis: dict[str, Any]) -> dict[str, Any]:
+    fastest_promotion = analysis.get("fastest_promotion_candidate")
+    lowest_catalog = analysis.get("lowest_catalog_variant")
+    if fastest_promotion is not None:
+        return {
+            "status": "promotion_candidate_found",
+            "variant_id": fastest_promotion.get("variant_id"),
+            "reason": "fastest completed variant satisfying enabled guardrails and compare gate",
+        }
+    if lowest_catalog is not None and lowest_catalog.get("compare_gate_passed") is False:
+        return {
+            "status": "candidate_blocked_by_compare_gate",
+            "variant_id": lowest_catalog.get("variant_id"),
+            "reason": "lowest moving-catalog time did not satisfy the compare gate",
+            "compare_gate_reasons": lowest_catalog.get("compare_gate_reasons", []),
+        }
+    return {
+        "status": "no_promotion_candidate",
+        "variant_id": None,
+        "reason": "no completed variant satisfied all enabled ranking gates",
+    }
 
 
 def _normalize_compare_gate_policy(compare_gate: dict[str, Any] | None) -> dict[str, Any]:
@@ -559,6 +680,52 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             f"{run.get('active_light_frames', '')} | "
             f"{run.get('zero_weight_frames', '')} | "
             f"{compare_rms} | {compare_p99} | {compare_speedup} |"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_analysis_markdown(path: Path, analysis: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    recommendation = analysis.get("recommendation") if isinstance(analysis.get("recommendation"), dict) else {}
+    lines = [
+        "# Resident Prefetch Sweep Analysis",
+        "",
+        f"- Variants: {analysis.get('variant_count', 0)}",
+        f"- Completed: {analysis.get('completed_count', 0)}",
+        f"- Promotion candidates: {analysis.get('promotion_candidate_count', 0)}",
+        f"- Recommendation: `{recommendation.get('status')}`",
+    ]
+    if recommendation.get("variant_id"):
+        lines.append(f"- Recommendation variant: `{recommendation['variant_id']}`")
+    if recommendation.get("reason"):
+        lines.append(f"- Reason: {recommendation['reason']}")
+    lines.extend(
+        [
+            "",
+            "| Kind | Variant | Total s | Catalog s | Reg/warp s | Compare gate | Ref RMS | Ref p99 |",
+            "| --- | --- | ---: | ---: | ---: | --- | ---: | ---: |",
+        ]
+    )
+    rows = [
+        ("Fastest", analysis.get("fastest_variant")),
+        ("Lowest catalog", analysis.get("lowest_catalog_variant")),
+        ("Lowest reg/warp", analysis.get("lowest_registration_warp_variant")),
+        ("Fastest promotion", analysis.get("fastest_promotion_candidate")),
+    ]
+    for label, row in rows:
+        if not isinstance(row, dict):
+            lines.append(f"| {label} |  |  |  |  |  |  |  |")
+            continue
+        lines.append(
+            "| "
+            f"{label} | "
+            f"`{row.get('variant_id', '')}` | "
+            f"{_format_float(row.get('total_elapsed_s'))} | "
+            f"{_format_float(row.get('registration_triangle_moving_catalog_s'))} | "
+            f"{_format_float(row.get('resident_registration_warp_s'))} | "
+            f"{row.get('compare_gate_status') or ''} | "
+            f"{_format_float(row.get('ref_rms'))} | "
+            f"{_format_float(row.get('ref_p99'))} |"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
