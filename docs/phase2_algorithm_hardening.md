@@ -1910,6 +1910,22 @@ integration where applicable.
   agreement gating should become a quality control, a diagnostic, or a tuning
   dead end for the current M38 200-light benchmark.
 
+### S2-Gate 116: Agreement Rejection Triage
+
+- Add a reusable resident registration triage artifact that compares an
+  audit-only baseline candidate audit against one or more agreement-threshold
+  candidate audits.
+- Report frames newly rejected by agreement gating, recovered frames, per-frame
+  agreement score/RMS/NCC deltas, and signature drift for reference catalog,
+  reference descriptor, moving catalog, moving descriptor, selected fit, and
+  trial signatures.
+- Run the triage over the S2-Gate 115 threshold sweep to determine whether the
+  extra rejected frames are isolated threshold decisions or are mixed with
+  resident catalog nondeterminism.
+- Do not change thresholds or registration defaults in this gate; use the
+  result to choose between deterministic catalog hardening and agreement-score
+  tuning as the next real optimization step.
+
 ## Gate Rules
 
 Each gate requires:

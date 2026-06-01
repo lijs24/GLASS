@@ -41,6 +41,10 @@ from glass.report.resident_registration_compare import (
     build_resident_registration_compare,
     write_resident_registration_compare,
 )
+from glass.report.resident_registration_triage import (
+    build_resident_registration_triage,
+    write_resident_registration_triage,
+)
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
@@ -846,6 +850,25 @@ def cmd_resident_registration_compare(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_missing_audits and payload["missing_audit_count"] else 0
+
+
+def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
+    payload = build_resident_registration_triage(args.baseline_audit, args.candidate_audit)
+    write_resident_registration_triage(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "baseline": payload["baseline_variant_id"],
+            "candidates": payload["candidate_count"],
+            "extra_failed_variants": payload["summary"]["extra_failed_variant_count"],
+            "reference_catalog_drift_variants": payload["summary"]["reference_catalog_drift_variant_count"],
+            "recommendation": payload["recommendation"]["status"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if args.fail_on_extra_rejections and payload["summary"]["extra_failed_variant_count"]:
+        return 2
+    return 0
 
 
 def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
@@ -1775,6 +1798,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if any sweep variant is missing a candidate audit",
     )
     resident_reg_compare.set_defaults(func=cmd_resident_registration_compare)
+
+    resident_reg_triage = sub.add_parser(
+        "resident-registration-triage",
+        help="triage resident registration failures and determinism drift between candidate audits",
+    )
+    resident_reg_triage.add_argument("--baseline-audit", required=True, help="baseline candidate audit JSON")
+    resident_reg_triage.add_argument(
+        "--candidate-audit",
+        action="append",
+        required=True,
+        help="candidate audit JSON; repeat for multiple variants",
+    )
+    resident_reg_triage.add_argument("--out", required=True, help="output triage JSON")
+    resident_reg_triage.add_argument("--markdown", help="optional output Markdown summary")
+    resident_reg_triage.add_argument(
+        "--fail-on-extra-rejections",
+        action="store_true",
+        help="return exit code 2 when any candidate rejects frames accepted by the baseline",
+    )
+    resident_reg_triage.set_defaults(func=cmd_resident_registration_triage)
 
     stack_contract = sub.add_parser(
         "stack-engine-contract",
