@@ -1678,6 +1678,22 @@ integration where applicable.
   default unless both performance and numerical agreement are convincingly
   stable.
 
+### S2-Gate 101: Resident Sweep Compare Contract
+
+- Attach per-variant reference-comparison metrics directly to resident sweep
+  summaries when `--reference-master` is supplied.
+- Forward compare normalization controls through the sweep harness: candidate
+  scale, offset, clip limits, candidate coverage map, and minimum coverage.
+- Record compare JSON/HTML paths, shape match, RMS difference, relative RMS,
+  p99 absolute difference, compared-pixel counts, coverage fraction, and
+  speedup versus the reference in `resident_prefetch_sweep_summary.json`.
+- Surface the key compare metrics in the Markdown sweep table so faster variants
+  can be reviewed alongside image agreement without manual follow-up commands.
+- Validate with unit tests and regenerate the Gate 100 two-variant 200-light
+  sweep summary from existing runs using per-candidate coverage maps.
+- Treat a fast variant as a candidate only when guardrails and comparison
+  metrics are both acceptable for the intended benchmark contract.
+
 ## Gate Rules
 
 Each gate requires:

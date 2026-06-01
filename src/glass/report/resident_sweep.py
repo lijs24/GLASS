@@ -232,6 +232,7 @@ def load_resident_run_summary(run_dir: str | Path, *, variant: dict[str, Any] | 
         "calibration_batch_count": int(io_pipeline.get("calibration_batch_count", 0) or 0),
         "calibration_release_mode_effective": io_pipeline.get("calibration_release_mode_effective"),
         "master_path": artifact.get("master_path"),
+        "coverage_map_path": artifact.get("coverage_map_path"),
         "input_light_frames": int(frame_accounting_summary.get("input_light_frames", 0) or 0),
         "active_light_frames": int(frame_accounting_summary.get("integrated_frames", 0) or 0),
         "zero_weight_frames": int(frame_accounting_summary.get("zero_weight_frames", 0) or 0),
@@ -342,9 +343,9 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             "",
             "| Rank | Status | Variant | Total s | Speedup vs baseline | Timeout s | Guardrails | Read wait s | "
             "Native cal s | Reg/warp s | Catalog s | Pixel refine s | Warp s | Blocked slots | Callback waves | "
-            "Release batches | Active frames | Zero-weight |",
+            "Release batches | Active frames | Zero-weight | Ref RMS | Ref p99 | Ref speedup |",
             "| ---: | --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-            "---: | ---: | ---: | ---: | ---: |",
+            "---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
     for run in payload["runs"]:
@@ -357,6 +358,10 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
         catalog = _format_float(run.get("registration_triangle_moving_catalog_s"))
         pixel_refine = _format_float(run.get("registration_triangle_pixel_refine_s"))
         warp = _format_float(run.get("registration_triangle_warp_s"))
+        compare = run.get("compare") if isinstance(run.get("compare"), dict) else {}
+        compare_rms = _format_float(compare.get("rms_diff"))
+        compare_p99 = _format_float(compare.get("abs_diff_p99"))
+        compare_speedup = _format_float(compare.get("speedup_vs_reference"))
         guardrails = run.get("guardrails") if isinstance(run.get("guardrails"), dict) else {}
         guardrail_status = str(guardrails.get("status") or "")
         lines.append(
@@ -370,7 +375,8 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             f"{run.get('callback_wave_count', '')} | "
             f"{run.get('prefetch_release_batch_count', '')} | "
             f"{run.get('active_light_frames', '')} | "
-            f"{run.get('zero_weight_frames', '')} |"
+            f"{run.get('zero_weight_frames', '')} | "
+            f"{compare_rms} | {compare_p99} | {compare_speedup} |"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

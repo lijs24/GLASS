@@ -537,6 +537,86 @@ def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path)
     assert fast_command[fast_command.index("--resident-star-max-candidates") + 1] == "48"
 
 
+def test_bench_resident_prefetch_sweep_compare_contract(tmp_path: Path):
+    spec = importlib.util.spec_from_file_location(
+        "bench_resident_prefetch_sweep",
+        Path("benchmarks/bench_resident_prefetch_sweep.py"),
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    command = module._compare_command(
+        glass_command=["glass"],
+        candidate_master="candidate.fits",
+        reference_master=tmp_path / "reference.xisf",
+        out_html=tmp_path / "compare.html",
+        candidate_total_s=14.5,
+        reference_total_s=100.0,
+        candidate_label="candidate",
+        reference_label="reference",
+        ignore_border_px=0,
+        glass_scale=1.25,
+        glass_offset=0.5,
+        clip_low=0.0,
+        clip_high=1.0,
+        glass_coverage_map="coverage.fits",
+        min_coverage=190.0,
+    )
+    assert "--glass-scale" in command
+    assert command[command.index("--glass-scale") + 1] == "1.25"
+    assert "--glass-offset" in command
+    assert command[command.index("--glass-offset") + 1] == "0.5"
+    assert "--clip-low" in command
+    assert command[command.index("--clip-low") + 1] == "0.0"
+    assert "--clip-high" in command
+    assert command[command.index("--clip-high") + 1] == "1.0"
+    assert "--glass-coverage-map" in command
+    assert command[command.index("--glass-coverage-map") + 1] == "coverage.fits"
+    assert "--min-coverage" in command
+    assert command[command.index("--min-coverage") + 1] == "190.0"
+
+    compare_html = tmp_path / "compare.html"
+    compare_json = tmp_path / "compare.json"
+    compare_json.write_text(
+        json.dumps(
+            {
+                "shape_match": True,
+                "rms_diff": 0.0012,
+                "relative_rms_diff": 0.02,
+                "abs_diff_p99": 0.0003,
+                "max_abs_diff": 0.9,
+                "comparison_region": {
+                    "compared_pixels": 12345,
+                    "coverage_fraction": 0.98,
+                    "min_coverage": 190.0,
+                },
+                "timing": {"speedup_vs_reference": 6.9},
+            }
+        ),
+        encoding="utf-8",
+    )
+    summary: dict[str, object] = {}
+    module._attach_compare_summary(summary, compare_json, compare_html)
+
+    compare = summary["compare"]
+    assert compare["status"] == "completed"
+    assert compare["shape_match"] is True
+    assert compare["rms_diff"] == 0.0012
+    assert compare["relative_rms_diff"] == 0.02
+    assert compare["abs_diff_p99"] == 0.0003
+    assert compare["max_abs_diff"] == 0.9
+    assert compare["compared_pixels"] == 12345
+    assert compare["coverage_fraction"] == 0.98
+    assert compare["min_coverage"] == 190.0
+    assert compare["speedup_vs_reference"] == 6.9
+
+    missing_summary: dict[str, object] = {}
+    module._attach_compare_summary(missing_summary, tmp_path / "missing.json", compare_html)
+    assert missing_summary["compare"]["status"] == "missing"
+
+
 def test_resident_sweep_ranking_prefers_guardrail_passed_variant(tmp_path: Path):
     from glass.report.resident_sweep import write_resident_sweep_summary
 
@@ -582,6 +662,7 @@ def test_resident_sweep_summary_extracts_registration_components(tmp_path: Path)
                 "artifacts": [
                     {
                         "master_path": "master.fits",
+                        "coverage_map_path": "coverage.fits",
                         "timing_s": {"resident_registration_warp": 2.4},
                         "resident_io_pipeline": {
                             "calibration_batch_native_total_s": 1.1,
@@ -609,6 +690,13 @@ def test_resident_sweep_summary_extracts_registration_components(tmp_path: Path)
         run_dir,
         variant={"variant_id": "pf16_pw8_b8_s4_w2_callback_queue"},
     )
+    summary["compare"] = {
+        "status": "completed",
+        "rms_diff": 0.0012,
+        "abs_diff_p99": 0.0003,
+        "speedup_vs_reference": 6.9,
+    }
+    assert summary["coverage_map_path"] == "coverage.fits"
     assert summary["resident_registration_warp_s"] == 2.4
     assert summary["registration_component_accounted_s"] == 2.4
     assert summary["registration_triangle_moving_catalog_s"] == 0.7
@@ -628,6 +716,9 @@ def test_resident_sweep_summary_extracts_registration_components(tmp_path: Path)
     )
     markdown = (tmp_path / "summary" / "resident_prefetch_sweep_summary.md").read_text(encoding="utf-8")
     assert payload["runs"][0]["registration_triangle_pixel_refine_s"] == 0.9
+    assert payload["runs"][0]["compare"]["rms_diff"] == 0.0012
     assert "Catalog s" in markdown
     assert "Pixel refine s" in markdown
+    assert "Ref RMS" in markdown
+    assert "0.001200" in markdown
     assert "0.900000" in markdown

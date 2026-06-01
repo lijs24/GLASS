@@ -148,6 +148,12 @@ def _compare_command(
     candidate_label: str,
     reference_label: str,
     ignore_border_px: int,
+    glass_scale: float | None,
+    glass_offset: float | None,
+    clip_low: float | None,
+    clip_high: float | None,
+    glass_coverage_map: str | None,
+    min_coverage: float | None,
 ) -> list[str]:
     command = [
         *glass_command,
@@ -169,6 +175,18 @@ def _compare_command(
         command.extend(["--glass-time-seconds", str(candidate_total_s)])
     if reference_total_s is not None:
         command.extend(["--reference-time-seconds", str(reference_total_s)])
+    if glass_scale is not None:
+        command.extend(["--glass-scale", str(glass_scale)])
+    if glass_offset is not None:
+        command.extend(["--glass-offset", str(glass_offset)])
+    if clip_low is not None:
+        command.extend(["--clip-low", str(clip_low)])
+    if clip_high is not None:
+        command.extend(["--clip-high", str(clip_high)])
+    if glass_coverage_map:
+        command.extend(["--glass-coverage-map", str(glass_coverage_map)])
+    if min_coverage is not None:
+        command.extend(["--min-coverage", str(min_coverage)])
     return command
 
 
@@ -293,6 +311,33 @@ def _mark_guardrails_failed(
     }
 
 
+def _attach_compare_summary(summary: dict[str, Any], compare_json_path: Path, compare_html_path: Path) -> None:
+    if not compare_json_path.exists():
+        summary["compare"] = {
+            "status": "missing",
+            "json_path": str(compare_json_path),
+            "report": str(compare_html_path),
+        }
+        return
+    comparison = read_json(compare_json_path)
+    timing = comparison.get("timing") if isinstance(comparison.get("timing"), dict) else {}
+    region = comparison.get("comparison_region") if isinstance(comparison.get("comparison_region"), dict) else {}
+    summary["compare"] = {
+        "status": "completed",
+        "json_path": str(compare_json_path),
+        "report": str(compare_html_path),
+        "shape_match": comparison.get("shape_match"),
+        "rms_diff": comparison.get("rms_diff"),
+        "relative_rms_diff": comparison.get("relative_rms_diff"),
+        "abs_diff_p99": comparison.get("abs_diff_p99"),
+        "max_abs_diff": comparison.get("max_abs_diff"),
+        "compared_pixels": region.get("compared_pixels"),
+        "coverage_fraction": region.get("coverage_fraction"),
+        "min_coverage": region.get("min_coverage"),
+        "speedup_vs_reference": timing.get("speedup_vs_reference"),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run or dry-run a resident CUDA prefetch/batch/stream parameter sweep."
@@ -349,6 +394,16 @@ def main() -> int:
     parser.add_argument("--reference-time-seconds", type=float)
     parser.add_argument("--reference-label", default="reference")
     parser.add_argument("--ignore-border-px", type=int, default=16)
+    parser.add_argument("--compare-glass-scale", type=float, help="scale candidate pixels before per-variant compare")
+    parser.add_argument("--compare-glass-offset", type=float, help="offset candidate pixels before per-variant compare")
+    parser.add_argument("--compare-clip-low", type=float, help="clip transformed candidate pixels to this lower bound")
+    parser.add_argument("--compare-clip-high", type=float, help="clip transformed candidate pixels to this upper bound")
+    parser.add_argument(
+        "--compare-use-candidate-coverage-map",
+        action="store_true",
+        help="pass each candidate resident coverage map to glass compare when available",
+    )
+    parser.add_argument("--compare-min-coverage", type=float, help="minimum coverage for per-variant compare metrics")
     parser.add_argument(
         "--guardrails",
         action="store_true",
@@ -503,6 +558,11 @@ def main() -> int:
         summaries.append(summary)
         if args.reference_master and summary.get("master_path"):
             compare_out = out_dir / f"compare_{variant_id}_vs_reference.html"
+            candidate_coverage_map = (
+                str(summary.get("coverage_map_path"))
+                if args.compare_use_candidate_coverage_map and summary.get("coverage_map_path")
+                else None
+            )
             compare_command = _compare_command(
                 glass_command=glass_command,
                 candidate_master=str(summary["master_path"]),
@@ -513,9 +573,16 @@ def main() -> int:
                 candidate_label=variant_id,
                 reference_label=args.reference_label,
                 ignore_border_px=args.ignore_border_px,
+                glass_scale=args.compare_glass_scale,
+                glass_offset=args.compare_glass_offset,
+                clip_low=args.compare_clip_low,
+                clip_high=args.compare_clip_high,
+                glass_coverage_map=candidate_coverage_map,
+                min_coverage=args.compare_min_coverage,
             )
             commands.append({"variant_id": variant_id, "kind": "compare", "command": compare_command})
             subprocess.run(compare_command, check=True)
+            _attach_compare_summary(summary, compare_out.with_suffix(".json"), compare_out)
 
     payload = write_resident_sweep_summary(
         out_dir,
