@@ -85,6 +85,22 @@ def _parse_optional_float_grid(value: str | None) -> list[float | None]:
     return parsed
 
 
+def _parse_optional_unit_float_grid(value: str | None) -> list[float | None]:
+    parsed = _parse_optional_float_grid(value)
+    invalid = [item for item in parsed if item is not None and item > 1.0]
+    if invalid:
+        raise ValueError("optional unit float grids must contain values in [0, 1] or inherit")
+    return parsed
+
+
+def _parse_optional_positive_float_grid(value: str | None) -> list[float | None]:
+    parsed = _parse_optional_float_grid(value)
+    invalid = [item for item in parsed if item is not None and item <= 0.0]
+    if invalid:
+        raise ValueError("optional positive float grids must contain positive values or inherit")
+    return parsed
+
+
 def _parse_fast_coarse_modes(value: str | None) -> list[str]:
     modes = parse_mode_grid(value, default=["inherit"])
     allowed = {"inherit", "off", "on"}
@@ -505,6 +521,14 @@ def main() -> int:
         "--triangle-nms-min-separation-px",
         help="comma grid for resident triangle NMS minimum separation values, or inherit",
     )
+    parser.add_argument(
+        "--triangle-min-agreement-scores",
+        help="comma grid for resident triangle minimum agreement score values in [0, 1], or inherit",
+    )
+    parser.add_argument(
+        "--triangle-agreement-rms-scales",
+        help="comma grid for resident triangle agreement RMS scale values, or inherit",
+    )
     parser.add_argument("--baseline-total-seconds", type=float)
     parser.add_argument("--reference-master", help="optional master FITS used for post-run compare reports")
     parser.add_argument("--reference-time-seconds", type=float)
@@ -704,6 +728,8 @@ def main() -> int:
         triangle_grid_top_per_cell=_parse_optional_int_grid(args.triangle_grid_top_per_cell),
         triangle_nms_scan_candidates=_parse_optional_int_grid(args.triangle_nms_scan_candidates),
         triangle_nms_min_separation_px=_parse_optional_float_grid(args.triangle_nms_min_separation_px),
+        triangle_min_agreement_scores=_parse_optional_unit_float_grid(args.triangle_min_agreement_scores),
+        triangle_agreement_rms_scales=_parse_optional_positive_float_grid(args.triangle_agreement_rms_scales),
     )
 
     summaries: list[dict[str, Any]] = []

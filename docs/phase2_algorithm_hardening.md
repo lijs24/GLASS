@@ -1874,6 +1874,21 @@ integration where applicable.
   any stricter threshold must still pass frame-count, guardrail, and image
   compare gates before promotion.
 
+### S2-Gate 114: Agreement-Threshold Sweep Dimension
+
+- Extend the resident sweep harness so agreement thresholds and agreement RMS
+  scales can be swept as first-class variant dimensions.
+- Encode agreement threshold values in variant ids and generated `glass run`
+  commands using `--resident-triangle-min-agreement-score` and
+  `--resident-triangle-agreement-rms-scale`.
+- Preserve existing sweep behavior when the new dimensions are omitted or set
+  to `inherit`.
+- Validate with dry-run matrix tests, ruff, full pytest, and a real-data dry run
+  generated from the 200-light benchmark command before running expensive
+  threshold sweeps.
+- Do not promote any threshold in this gate; promotion requires a later
+  executed sweep with frame-count, guardrail, and image-compare gates.
+
 ## Gate Rules
 
 Each gate requires:

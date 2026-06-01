@@ -670,25 +670,29 @@ def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path)
         "96",
         "--triangle-nms-min-separation-px",
         "32.5",
+        "--triangle-min-agreement-scores",
+        "0.1",
+        "--triangle-agreement-rms-scales",
+        "200",
         "--dry-run",
     )
 
     payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
     assert payload["variant_count"] == 2
     assert {variant["variant_id"] for variant in payload["variants"]} == {
-        "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5",
-        "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5",
+        "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5_agr0p1_agrs200",
+        "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5_agr0p1_agrs200",
     }
     fast_command = next(
         item["command"]
         for item in payload["commands"]
-        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5"
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcfast_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5_agr0p1_agrs200"
         and item["kind"] == "run"
     )
     base_command = next(
         item["command"]
         for item in payload["commands"]
-        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5"
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_fcbase_cs4_fs8_sm48_g8x6_gt2_ns96_sep32p5_agr0p1_agrs200"
         and item["kind"] == "run"
     )
     assert "--resident-triangle-pixel-refine-fast-coarse" in fast_command
@@ -701,6 +705,8 @@ def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path)
     assert fast_command[fast_command.index("--resident-triangle-grid-top-per-cell") + 1] == "2"
     assert fast_command[fast_command.index("--resident-triangle-nms-scan-candidates") + 1] == "96"
     assert fast_command[fast_command.index("--resident-triangle-nms-min-separation-px") + 1] == "32.5"
+    assert fast_command[fast_command.index("--resident-triangle-min-agreement-score") + 1] == "0.1"
+    assert fast_command[fast_command.index("--resident-triangle-agreement-rms-scale") + 1] == "200.0"
 
 
 def test_bench_resident_prefetch_sweep_compare_contract(tmp_path: Path):

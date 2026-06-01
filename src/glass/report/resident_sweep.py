@@ -48,6 +48,8 @@ def build_resident_sweep_variants(
     triangle_grid_top_per_cell: Iterable[int | None] = (None,),
     triangle_nms_scan_candidates: Iterable[int | None] = (None,),
     triangle_nms_min_separation_px: Iterable[float | None] = (None,),
+    triangle_min_agreement_scores: Iterable[float | None] = (None,),
+    triangle_agreement_rms_scales: Iterable[float | None] = (None,),
 ) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     for prefetch_frame_count in prefetch_frames:
@@ -66,56 +68,62 @@ def build_resident_sweep_variants(
                                                         for top_per_cell in triangle_grid_top_per_cell:
                                                             for nms_scan in triangle_nms_scan_candidates:
                                                                 for nms_sep in triangle_nms_min_separation_px:
-                                                                    if wave_frame_count > batch_frame_count:
-                                                                        continue
-                                                                    if (grid_cols is None) != (grid_rows is None):
-                                                                        continue
-                                                                    refill_suffix = (
-                                                                        ""
-                                                                        if str(refill_mode) == "immediate"
-                                                                        else f"_rf{refill_mode}"
-                                                                    )
-                                                                    registration_suffix = _registration_variant_suffix(
-                                                                        fast_coarse_mode=fast_coarse_mode,
-                                                                        coarse_stride=coarse_stride,
-                                                                        final_stride=final_stride,
-                                                                        max_candidates=max_candidates,
-                                                                        grid_cols=grid_cols,
-                                                                        grid_rows=grid_rows,
-                                                                        top_per_cell=top_per_cell,
-                                                                        nms_scan=nms_scan,
-                                                                        nms_sep=nms_sep,
-                                                                    )
-                                                                    variant_id = (
-                                                                        f"pf{prefetch_frame_count}_"
-                                                                        f"pw{prefetch_worker_count}_"
-                                                                        f"b{batch_frame_count}_s{stream_count}_"
-                                                                        f"w{wave_frame_count}_{release_mode}"
-                                                                        f"{refill_suffix}{registration_suffix}"
-                                                                    )
-                                                                    variant = {
-                                                                        "variant_id": variant_id,
-                                                                        "prefetch_frames": int(prefetch_frame_count),
-                                                                        "prefetch_workers": int(prefetch_worker_count),
-                                                                        "batch_frames": int(batch_frame_count),
-                                                                        "streams": int(stream_count),
-                                                                        "wave_frames": int(wave_frame_count),
-                                                                        "release_mode": str(release_mode),
-                                                                        "refill_mode": str(refill_mode),
-                                                                    }
-                                                                    _attach_registration_variant_fields(
-                                                                        variant,
-                                                                        fast_coarse_mode=fast_coarse_mode,
-                                                                        coarse_stride=coarse_stride,
-                                                                        final_stride=final_stride,
-                                                                        max_candidates=max_candidates,
-                                                                        grid_cols=grid_cols,
-                                                                        grid_rows=grid_rows,
-                                                                        top_per_cell=top_per_cell,
-                                                                        nms_scan=nms_scan,
-                                                                        nms_sep=nms_sep,
-                                                                    )
-                                                                    variants.append(variant)
+                                                                    for min_agreement in triangle_min_agreement_scores:
+                                                                        for agreement_rms_scale in triangle_agreement_rms_scales:
+                                                                            if wave_frame_count > batch_frame_count:
+                                                                                continue
+                                                                            if (grid_cols is None) != (grid_rows is None):
+                                                                                continue
+                                                                            refill_suffix = (
+                                                                                ""
+                                                                                if str(refill_mode) == "immediate"
+                                                                                else f"_rf{refill_mode}"
+                                                                            )
+                                                                            registration_suffix = _registration_variant_suffix(
+                                                                                fast_coarse_mode=fast_coarse_mode,
+                                                                                coarse_stride=coarse_stride,
+                                                                                final_stride=final_stride,
+                                                                                max_candidates=max_candidates,
+                                                                                grid_cols=grid_cols,
+                                                                                grid_rows=grid_rows,
+                                                                                top_per_cell=top_per_cell,
+                                                                                nms_scan=nms_scan,
+                                                                                nms_sep=nms_sep,
+                                                                                min_agreement=min_agreement,
+                                                                                agreement_rms_scale=agreement_rms_scale,
+                                                                            )
+                                                                            variant_id = (
+                                                                                f"pf{prefetch_frame_count}_"
+                                                                                f"pw{prefetch_worker_count}_"
+                                                                                f"b{batch_frame_count}_s{stream_count}_"
+                                                                                f"w{wave_frame_count}_{release_mode}"
+                                                                                f"{refill_suffix}{registration_suffix}"
+                                                                            )
+                                                                            variant = {
+                                                                                "variant_id": variant_id,
+                                                                                "prefetch_frames": int(prefetch_frame_count),
+                                                                                "prefetch_workers": int(prefetch_worker_count),
+                                                                                "batch_frames": int(batch_frame_count),
+                                                                                "streams": int(stream_count),
+                                                                                "wave_frames": int(wave_frame_count),
+                                                                                "release_mode": str(release_mode),
+                                                                                "refill_mode": str(refill_mode),
+                                                                            }
+                                                                            _attach_registration_variant_fields(
+                                                                                variant,
+                                                                                fast_coarse_mode=fast_coarse_mode,
+                                                                                coarse_stride=coarse_stride,
+                                                                                final_stride=final_stride,
+                                                                                max_candidates=max_candidates,
+                                                                                grid_cols=grid_cols,
+                                                                                grid_rows=grid_rows,
+                                                                                top_per_cell=top_per_cell,
+                                                                                nms_scan=nms_scan,
+                                                                                nms_sep=nms_sep,
+                                                                                min_agreement=min_agreement,
+                                                                                agreement_rms_scale=agreement_rms_scale,
+                                                                            )
+                                                                            variants.append(variant)
     return variants
 
 
@@ -130,6 +138,8 @@ def _registration_variant_suffix(
     top_per_cell: int | None,
     nms_scan: int | None,
     nms_sep: float | None,
+    min_agreement: float | None,
+    agreement_rms_scale: float | None,
 ) -> str:
     parts: list[str] = []
     if str(fast_coarse_mode) != "inherit":
@@ -148,6 +158,10 @@ def _registration_variant_suffix(
         parts.append(f"ns{int(nms_scan)}")
     if nms_sep is not None:
         parts.append("sep" + _variant_float_token(float(nms_sep)))
+    if min_agreement is not None:
+        parts.append("agr" + _variant_float_token(float(min_agreement)))
+    if agreement_rms_scale is not None:
+        parts.append("agrs" + _variant_float_token(float(agreement_rms_scale)))
     return "" if not parts else "_" + "_".join(parts)
 
 
@@ -163,6 +177,8 @@ def _attach_registration_variant_fields(
     top_per_cell: int | None,
     nms_scan: int | None,
     nms_sep: float | None,
+    min_agreement: float | None,
+    agreement_rms_scale: float | None,
 ) -> None:
     if str(fast_coarse_mode) != "inherit":
         variant["triangle_fast_coarse"] = str(fast_coarse_mode) == "on"
@@ -181,6 +197,10 @@ def _attach_registration_variant_fields(
         variant["triangle_nms_scan_candidates"] = int(nms_scan)
     if nms_sep is not None:
         variant["triangle_nms_min_separation_px"] = float(nms_sep)
+    if min_agreement is not None:
+        variant["triangle_min_agreement_score"] = float(min_agreement)
+    if agreement_rms_scale is not None:
+        variant["triangle_agreement_rms_scale"] = float(agreement_rms_scale)
 
 
 def variant_run_args(variant: dict[str, Any]) -> list[str]:
@@ -226,6 +246,20 @@ def variant_run_args(variant: dict[str, Any]) -> list[str]:
             [
                 "--resident-triangle-nms-min-separation-px",
                 str(float(variant["triangle_nms_min_separation_px"])),
+            ]
+        )
+    if "triangle_min_agreement_score" in variant:
+        args.extend(
+            [
+                "--resident-triangle-min-agreement-score",
+                str(float(variant["triangle_min_agreement_score"])),
+            ]
+        )
+    if "triangle_agreement_rms_scale" in variant:
+        args.extend(
+            [
+                "--resident-triangle-agreement-rms-scale",
+                str(float(variant["triangle_agreement_rms_scale"])),
             ]
         )
     return args
