@@ -45,6 +45,7 @@ def build_resident_sweep_variants(
     star_max_candidates: Iterable[int | None] = (None,),
     star_grid_cols: Iterable[int | None] = (None,),
     star_grid_rows: Iterable[int | None] = (None,),
+    star_catalog_deterministic_modes: Iterable[str] = ("inherit",),
     triangle_grid_top_per_cell: Iterable[int | None] = (None,),
     triangle_nms_scan_candidates: Iterable[int | None] = (None,),
     triangle_nms_min_separation_px: Iterable[float | None] = (None,),
@@ -62,68 +63,71 @@ def build_resident_sweep_variants(
                                 for fast_coarse_mode in triangle_fast_coarse_modes:
                                     for coarse_stride in triangle_coarse_strides:
                                         for final_stride in triangle_final_strides:
-                                            for max_candidates in star_max_candidates:
-                                                for grid_cols in star_grid_cols:
-                                                    for grid_rows in star_grid_rows:
-                                                        for top_per_cell in triangle_grid_top_per_cell:
-                                                            for nms_scan in triangle_nms_scan_candidates:
-                                                                for nms_sep in triangle_nms_min_separation_px:
-                                                                    for min_agreement in triangle_min_agreement_scores:
-                                                                        for agreement_rms_scale in triangle_agreement_rms_scales:
-                                                                            if wave_frame_count > batch_frame_count:
-                                                                                continue
-                                                                            if (grid_cols is None) != (grid_rows is None):
-                                                                                continue
-                                                                            refill_suffix = (
-                                                                                ""
-                                                                                if str(refill_mode) == "immediate"
-                                                                                else f"_rf{refill_mode}"
-                                                                            )
-                                                                            registration_suffix = _registration_variant_suffix(
-                                                                                fast_coarse_mode=fast_coarse_mode,
-                                                                                coarse_stride=coarse_stride,
-                                                                                final_stride=final_stride,
-                                                                                max_candidates=max_candidates,
-                                                                                grid_cols=grid_cols,
-                                                                                grid_rows=grid_rows,
-                                                                                top_per_cell=top_per_cell,
-                                                                                nms_scan=nms_scan,
-                                                                                nms_sep=nms_sep,
-                                                                                min_agreement=min_agreement,
-                                                                                agreement_rms_scale=agreement_rms_scale,
-                                                                            )
-                                                                            variant_id = (
-                                                                                f"pf{prefetch_frame_count}_"
-                                                                                f"pw{prefetch_worker_count}_"
-                                                                                f"b{batch_frame_count}_s{stream_count}_"
-                                                                                f"w{wave_frame_count}_{release_mode}"
-                                                                                f"{refill_suffix}{registration_suffix}"
-                                                                            )
-                                                                            variant = {
-                                                                                "variant_id": variant_id,
-                                                                                "prefetch_frames": int(prefetch_frame_count),
-                                                                                "prefetch_workers": int(prefetch_worker_count),
-                                                                                "batch_frames": int(batch_frame_count),
-                                                                                "streams": int(stream_count),
-                                                                                "wave_frames": int(wave_frame_count),
-                                                                                "release_mode": str(release_mode),
-                                                                                "refill_mode": str(refill_mode),
-                                                                            }
-                                                                            _attach_registration_variant_fields(
-                                                                                variant,
-                                                                                fast_coarse_mode=fast_coarse_mode,
-                                                                                coarse_stride=coarse_stride,
-                                                                                final_stride=final_stride,
-                                                                                max_candidates=max_candidates,
-                                                                                grid_cols=grid_cols,
-                                                                                grid_rows=grid_rows,
-                                                                                top_per_cell=top_per_cell,
-                                                                                nms_scan=nms_scan,
-                                                                                nms_sep=nms_sep,
-                                                                                min_agreement=min_agreement,
-                                                                                agreement_rms_scale=agreement_rms_scale,
-                                                                            )
-                                                                            variants.append(variant)
+                                                for max_candidates in star_max_candidates:
+                                                    for grid_cols in star_grid_cols:
+                                                        for grid_rows in star_grid_rows:
+                                                            for deterministic_mode in star_catalog_deterministic_modes:
+                                                                for top_per_cell in triangle_grid_top_per_cell:
+                                                                    for nms_scan in triangle_nms_scan_candidates:
+                                                                        for nms_sep in triangle_nms_min_separation_px:
+                                                                            for min_agreement in triangle_min_agreement_scores:
+                                                                                for agreement_rms_scale in triangle_agreement_rms_scales:
+                                                                                    if wave_frame_count > batch_frame_count:
+                                                                                        continue
+                                                                                    if (grid_cols is None) != (grid_rows is None):
+                                                                                        continue
+                                                                                    refill_suffix = (
+                                                                                        ""
+                                                                                        if str(refill_mode) == "immediate"
+                                                                                        else f"_rf{refill_mode}"
+                                                                                    )
+                                                                                    registration_suffix = _registration_variant_suffix(
+                                                                                        fast_coarse_mode=fast_coarse_mode,
+                                                                                        coarse_stride=coarse_stride,
+                                                                                        final_stride=final_stride,
+                                                                                        max_candidates=max_candidates,
+                                                                                        grid_cols=grid_cols,
+                                                                                        grid_rows=grid_rows,
+                                                                                        deterministic_mode=deterministic_mode,
+                                                                                        top_per_cell=top_per_cell,
+                                                                                        nms_scan=nms_scan,
+                                                                                        nms_sep=nms_sep,
+                                                                                        min_agreement=min_agreement,
+                                                                                        agreement_rms_scale=agreement_rms_scale,
+                                                                                    )
+                                                                                    variant_id = (
+                                                                                        f"pf{prefetch_frame_count}_"
+                                                                                        f"pw{prefetch_worker_count}_"
+                                                                                        f"b{batch_frame_count}_s{stream_count}_"
+                                                                                        f"w{wave_frame_count}_{release_mode}"
+                                                                                        f"{refill_suffix}{registration_suffix}"
+                                                                                    )
+                                                                                    variant = {
+                                                                                        "variant_id": variant_id,
+                                                                                        "prefetch_frames": int(prefetch_frame_count),
+                                                                                        "prefetch_workers": int(prefetch_worker_count),
+                                                                                        "batch_frames": int(batch_frame_count),
+                                                                                        "streams": int(stream_count),
+                                                                                        "wave_frames": int(wave_frame_count),
+                                                                                        "release_mode": str(release_mode),
+                                                                                        "refill_mode": str(refill_mode),
+                                                                                    }
+                                                                                    _attach_registration_variant_fields(
+                                                                                        variant,
+                                                                                        fast_coarse_mode=fast_coarse_mode,
+                                                                                        coarse_stride=coarse_stride,
+                                                                                        final_stride=final_stride,
+                                                                                        max_candidates=max_candidates,
+                                                                                        grid_cols=grid_cols,
+                                                                                        grid_rows=grid_rows,
+                                                                                        deterministic_mode=deterministic_mode,
+                                                                                        top_per_cell=top_per_cell,
+                                                                                        nms_scan=nms_scan,
+                                                                                        nms_sep=nms_sep,
+                                                                                        min_agreement=min_agreement,
+                                                                                        agreement_rms_scale=agreement_rms_scale,
+                                                                                    )
+                                                                                    variants.append(variant)
     return variants
 
 
@@ -135,6 +139,7 @@ def _registration_variant_suffix(
     max_candidates: int | None,
     grid_cols: int | None,
     grid_rows: int | None,
+    deterministic_mode: str,
     top_per_cell: int | None,
     nms_scan: int | None,
     nms_sep: float | None,
@@ -152,6 +157,8 @@ def _registration_variant_suffix(
         parts.append(f"sm{int(max_candidates)}")
     if grid_cols is not None and grid_rows is not None:
         parts.append(f"g{int(grid_cols)}x{int(grid_rows)}")
+    if str(deterministic_mode) != "inherit":
+        parts.append("catdet" if str(deterministic_mode) == "on" else "catfast")
     if top_per_cell is not None:
         parts.append(f"gt{int(top_per_cell)}")
     if nms_scan is not None:
@@ -174,6 +181,7 @@ def _attach_registration_variant_fields(
     max_candidates: int | None,
     grid_cols: int | None,
     grid_rows: int | None,
+    deterministic_mode: str,
     top_per_cell: int | None,
     nms_scan: int | None,
     nms_sep: float | None,
@@ -191,6 +199,8 @@ def _attach_registration_variant_fields(
     if grid_cols is not None and grid_rows is not None:
         variant["star_grid_cols"] = int(grid_cols)
         variant["star_grid_rows"] = int(grid_rows)
+    if str(deterministic_mode) != "inherit":
+        variant["star_catalog_deterministic"] = str(deterministic_mode) == "on"
     if top_per_cell is not None:
         variant["triangle_grid_top_per_cell"] = int(top_per_cell)
     if nms_scan is not None:
@@ -233,6 +243,8 @@ def variant_run_args(variant: dict[str, Any]) -> list[str]:
     if "star_grid_cols" in variant and "star_grid_rows" in variant:
         args.extend(["--resident-star-grid-cols", str(int(variant["star_grid_cols"]))])
         args.extend(["--resident-star-grid-rows", str(int(variant["star_grid_rows"]))])
+    if variant.get("star_catalog_deterministic") is True:
+        args.append("--resident-star-catalog-deterministic")
     if "triangle_grid_top_per_cell" in variant:
         args.extend(
             ["--resident-triangle-grid-top-per-cell", str(int(variant["triangle_grid_top_per_cell"]))]

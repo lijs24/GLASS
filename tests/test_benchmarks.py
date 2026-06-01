@@ -709,6 +709,73 @@ def test_bench_resident_prefetch_sweep_dry_run_registration_grid(tmp_path: Path)
     assert fast_command[fast_command.index("--resident-triangle-agreement-rms-scale") + 1] == "200.0"
 
 
+def test_bench_resident_prefetch_sweep_dry_run_star_catalog_deterministic_modes(tmp_path: Path):
+    plan = tmp_path / "processing_plan.json"
+    plan.write_text('{"frames": []}\n', encoding="utf-8")
+    command_file = tmp_path / "run_command.txt"
+    command_file.write_text(
+        "glass run --plan old_plan.json --out old_run --backend cuda --until-stage integration "
+        "--memory-mode resident --resident-registration similarity_cuda_triangle "
+        "--resident-star-catalog-deterministic",
+        encoding="utf-8",
+    )
+    out = tmp_path / "resident_sweep_deterministic_catalog"
+
+    _run(
+        "benchmarks/bench_resident_prefetch_sweep.py",
+        "--plan",
+        str(plan),
+        "--out",
+        str(out),
+        "--common-run-args-from-command",
+        str(command_file),
+        "--prefetch-frames",
+        "16",
+        "--prefetch-workers",
+        "8",
+        "--batch-frames",
+        "8",
+        "--streams",
+        "4",
+        "--wave-frames",
+        "2",
+        "--release-modes",
+        "callback_queue",
+        "--star-grid-cols",
+        "8",
+        "--star-grid-rows",
+        "6",
+        "--star-catalog-deterministic-modes",
+        "off,on",
+        "--dry-run",
+    )
+
+    payload = json.loads((out / "resident_prefetch_sweep_summary.json").read_text(encoding="utf-8"))
+    assert payload["variant_count"] == 2
+    assert payload["common_run_args"]["deterministic_catalog_flag_removed_count"] == 1
+    assert {variant["variant_id"] for variant in payload["variants"]} == {
+        "pf16_pw8_b8_s4_w2_callback_queue_g8x6_catfast",
+        "pf16_pw8_b8_s4_w2_callback_queue_g8x6_catdet",
+    }
+    off_command = next(
+        item["command"]
+        for item in payload["commands"]
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_g8x6_catfast"
+        and item["kind"] == "run"
+    )
+    on_command = next(
+        item["command"]
+        for item in payload["commands"]
+        if item["variant_id"] == "pf16_pw8_b8_s4_w2_callback_queue_g8x6_catdet"
+        and item["kind"] == "run"
+    )
+    assert "--resident-star-catalog-deterministic" not in off_command
+    assert "--resident-star-catalog-deterministic" in on_command
+    variants = {variant["variant_id"]: variant for variant in payload["variants"]}
+    assert variants["pf16_pw8_b8_s4_w2_callback_queue_g8x6_catfast"]["star_catalog_deterministic"] is False
+    assert variants["pf16_pw8_b8_s4_w2_callback_queue_g8x6_catdet"]["star_catalog_deterministic"] is True
+
+
 def test_bench_resident_prefetch_sweep_compare_contract(tmp_path: Path):
     spec = importlib.util.spec_from_file_location(
         "bench_resident_prefetch_sweep",

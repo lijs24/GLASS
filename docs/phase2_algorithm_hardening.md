@@ -1926,6 +1926,25 @@ integration where applicable.
   result to choose between deterministic catalog hardening and agreement-score
   tuning as the next real optimization step.
 
+### S2-Gate 117: Deterministic Catalog Sweep Control
+
+- Promote resident star-catalog deterministic mode into the resident sweep
+  harness so matrices can explicitly run `inherit`, `off`, or `on` with stable
+  variant ids and reproducible `glass run` commands.
+- When this dimension is explicitly supplied, make the sweep harness own the
+  `--resident-star-catalog-deterministic` flag so imported command files cannot
+  accidentally keep deterministic mode enabled for an `off` variant.
+- Validate the new sweep dimension with dry-run tests and a 200-light dry-run
+  imported from the current benchmark command.
+- Run two 200-light deterministic resident CUDA variants with the same
+  parameters and compare them with `glass resident-determinism
+  --fail-on-mismatch`.
+- Accept this as a control-surface gate only if repeated deterministic runs
+  match artifact signatures, per-frame signatures, registration results, frame
+  accounting, and output pixels/maps.
+- Do not change default fast catalog behavior in this gate. Use the result to
+  rerun agreement-threshold experiments under deterministic catalog control.
+
 ## Gate Rules
 
 Each gate requires:

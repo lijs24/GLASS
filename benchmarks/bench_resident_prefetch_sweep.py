@@ -110,6 +110,26 @@ def _parse_fast_coarse_modes(value: str | None) -> list[str]:
     return modes
 
 
+def _parse_optional_bool_modes(value: str | None, *, name: str) -> list[str]:
+    modes = parse_mode_grid(value, default=["inherit"])
+    allowed = {"inherit", "off", "on"}
+    invalid = [mode for mode in modes if mode not in allowed]
+    if invalid:
+        raise ValueError(f"{name} modes must be inherit, off, or on")
+    return modes
+
+
+def _strip_common_flag(args: list[str], flag: str) -> tuple[list[str], int]:
+    stripped: list[str] = []
+    removed = 0
+    for token in args:
+        if token == flag:
+            removed += 1
+            continue
+        stripped.append(token)
+    return stripped, removed
+
+
 def _common_run_args_from_command_file(path: Path) -> tuple[list[str], dict[str, Any]]:
     tokens = _split_common_run_args(path.read_text(encoding="utf-8"))
     try:
@@ -510,6 +530,10 @@ def main() -> int:
     parser.add_argument("--star-grid-cols", help="comma grid for resident star grid column counts, or inherit")
     parser.add_argument("--star-grid-rows", help="comma grid for resident star grid row counts, or inherit")
     parser.add_argument(
+        "--star-catalog-deterministic-modes",
+        help="comma grid for resident star catalog deterministic mode: inherit,off,on",
+    )
+    parser.add_argument(
         "--triangle-grid-top-per-cell",
         help="comma grid for resident triangle grid top-per-cell counts, or inherit",
     )
@@ -634,6 +658,16 @@ def main() -> int:
         *inline_common_run_args,
         *args.common_run_arg,
     ]
+    star_catalog_deterministic_modes = _parse_optional_bool_modes(
+        args.star_catalog_deterministic_modes,
+        name="star catalog deterministic",
+    )
+    deterministic_common_flag_removed = 0
+    if args.star_catalog_deterministic_modes is not None:
+        common_run_args, deterministic_common_flag_removed = _strip_common_flag(
+            common_run_args,
+            "--resident-star-catalog-deterministic",
+        )
     common_run_args_provenance = {
         "source": "command_file" if import_provenance else "inline",
         "source_command_path": (import_provenance or {}).get("source_command_path"),
@@ -644,6 +678,7 @@ def main() -> int:
         "total_arg_count": len(common_run_args),
         "filtered_token_count": (import_provenance or {}).get("filtered_token_count", 0),
         "filtered_managed_options": (import_provenance or {}).get("filtered_managed_options", []),
+        "deterministic_catalog_flag_removed_count": deterministic_common_flag_removed,
     }
     contract_frame_gate: dict[str, int | None] = {}
     frame_gate_contract_provenance: dict[str, Any] | None = None
@@ -725,6 +760,7 @@ def main() -> int:
         star_max_candidates=_parse_optional_int_grid(args.star_max_candidates),
         star_grid_cols=_parse_optional_int_grid(args.star_grid_cols),
         star_grid_rows=_parse_optional_int_grid(args.star_grid_rows),
+        star_catalog_deterministic_modes=star_catalog_deterministic_modes,
         triangle_grid_top_per_cell=_parse_optional_int_grid(args.triangle_grid_top_per_cell),
         triangle_nms_scan_candidates=_parse_optional_int_grid(args.triangle_nms_scan_candidates),
         triangle_nms_min_separation_px=_parse_optional_float_grid(args.triangle_nms_min_separation_px),
