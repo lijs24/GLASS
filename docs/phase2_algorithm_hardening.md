@@ -1514,6 +1514,22 @@ integration where applicable.
   artifact-contract only and does not change image math or resident CUDA
   routing.
 
+### S2-Gate 91: Pipeline Contract Reporting
+
+- Let `glass report` auto-discover `*pipeline_contract*.json` or consume an
+  explicit `--pipeline-contract` audit artifact.
+- Surface pipeline contract status, artifact source path, failed checks,
+  integration map rows, local-normalization rows, and warp rows in the main HTML
+  report.
+- Keep the standalone pipeline contract JSON authoritative; the report should be
+  a readable triage layer for missing maps, DQ/LN records, crop-box omissions,
+  and unexplained skipped frames.
+- Validate with report fixture tests, ruff, full pytest, and report
+  regeneration against the latest preserved 200-light resident artifact using
+  the Gate90 contract JSON.
+- No new 200-light benchmark is required because this gate is report-only and
+  does not alter image math or resident CUDA routing.
+
 ## Gate Rules
 
 Each gate requires:

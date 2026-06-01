@@ -580,6 +580,93 @@ def test_cli_report_summarizes_stack_engine_contract(tmp_path: Path):
     assert "integration_outputs_use:stack_engine_cpu" not in html
 
 
+def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    write_json(
+        run / "pipeline_contract.json",
+        {
+            "audit_type": "pipeline_invariant_contract",
+            "status": "failed",
+            "passed": False,
+            "artifacts": {
+                "warp": {"exists": True, "path": "warp_results.json"},
+                "local_norm": {"exists": True, "path": "local_norm_results.json"},
+                "integration": {"exists": True, "path": "integration_results.json"},
+            },
+            "checks": [
+                {
+                    "name": "integration_output_maps_available",
+                    "passed": False,
+                    "note": "fixture missing coverage",
+                    "evidence": {"map_count": 2, "failed": ["H:coverage"]},
+                },
+                {
+                    "name": "integration_artifact_exists",
+                    "passed": True,
+                    "evidence": {"path": "integration_results.json"},
+                },
+            ],
+            "integration": {
+                "maps": [
+                    {
+                        "surface": "integration",
+                        "item": "H",
+                        "map": "coverage",
+                        "exists": False,
+                        "required": True,
+                        "policy_skipped": False,
+                        "ok": False,
+                        "path": None,
+                    }
+                ]
+            },
+            "local_normalization": {
+                "outputs": [
+                    {
+                        "frame_id": "F1",
+                        "enabled": True,
+                        "status": "ok",
+                        "crop_box_recorded": True,
+                        "normalized_path_exists": True,
+                        "coverage_path_exists": True,
+                        "dq_mask_path_exists": True,
+                        "coefficient_grid_exists": True,
+                        "contract_ok": True,
+                    }
+                ]
+            },
+            "warp": {
+                "outputs": [
+                    {
+                        "frame_id": "F1",
+                        "interpolation": "bilinear",
+                        "registered_path_exists": True,
+                        "coverage_path_exists": True,
+                        "dq_mask_path_exists": True,
+                        "dq_summary_has_valid": True,
+                        "contract_ok": True,
+                    }
+                ],
+                "skipped_frames": [],
+            },
+        },
+    )
+
+    report = tmp_path / "pipeline_contract_report.html"
+    assert main(["report", "--run", str(run), "--out", str(report)]) == 0
+    html = report.read_text(encoding="utf-8")
+
+    assert "Pipeline contract audit" in html
+    assert "pipeline_contract.json" in html
+    assert "integration_output_maps_available" in html
+    assert "fixture missing coverage" in html
+    assert "H:coverage" in html
+    assert "local-normalization" in html
+    assert "bilinear" in html
+    assert "integration_artifact_exists" not in html
+
+
 def test_cli_report_limits_large_audit_tables(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()

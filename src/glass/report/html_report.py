@@ -43,6 +43,7 @@ _REPORT_SECTIONS = [
     ("dq-mask-summary", "DQ/mask summary"),
     ("stackengine-dq-provenance", "StackEngine DQ provenance"),
     ("stackengine-contract-audit", "StackEngine contract audit"),
+    ("pipeline-contract-audit", "Pipeline contract audit"),
     ("dq-provenance-contract", "DQ provenance contract"),
     ("geometric-warp-coverage", "Geometric warp coverage"),
     ("resident-cuda-summary", "Resident CUDA summary"),
@@ -967,6 +968,110 @@ def _stack_engine_contract_surface_rows(contract: dict[str, Any] | None) -> list
     return rows
 
 
+def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not contract:
+        return []
+    artifacts = contract.get("artifacts") if isinstance(contract.get("artifacts"), dict) else {}
+    return [
+        {
+            "status": contract.get("status"),
+            "passed": contract.get("passed"),
+            "source": contract.get("_report_source_path"),
+            "warp_artifact": (artifacts.get("warp") or {}).get("exists"),
+            "local_norm_artifact": (artifacts.get("local_norm") or {}).get("exists"),
+            "integration_artifact": (artifacts.get("integration") or {}).get("exists"),
+            "check_count": len(contract.get("checks") or []),
+        }
+    ]
+
+
+def _pipeline_contract_failure_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("checks") or []:
+        if item.get("passed"):
+            continue
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        rows.append(
+            {
+                "check": item.get("name"),
+                "note": item.get("note"),
+                "evidence": ", ".join(f"{key}={value}" for key, value in evidence.items()),
+            }
+        )
+    return rows
+
+
+def _pipeline_contract_map_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    integration = (contract or {}).get("integration") or {}
+    for row in integration.get("maps") or []:
+        rows.append(
+            {
+                "surface": row.get("surface"),
+                "item": row.get("item"),
+                "map": row.get("map"),
+                "exists": row.get("exists"),
+                "required": row.get("required"),
+                "policy_skipped": row.get("policy_skipped"),
+                "ok": row.get("ok"),
+                "path": row.get("path"),
+            }
+        )
+    return rows
+
+
+def _pipeline_contract_local_norm_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    local_norm = (contract or {}).get("local_normalization") or {}
+    for row in local_norm.get("outputs") or []:
+        rows.append(
+            {
+                "frame_id": row.get("frame_id"),
+                "enabled": row.get("enabled"),
+                "status": row.get("status"),
+                "crop_box_recorded": row.get("crop_box_recorded"),
+                "normalized_path_exists": row.get("normalized_path_exists"),
+                "coverage_path_exists": row.get("coverage_path_exists"),
+                "dq_mask_path_exists": row.get("dq_mask_path_exists"),
+                "coefficient_grid_exists": row.get("coefficient_grid_exists"),
+                "contract_ok": row.get("contract_ok"),
+            }
+        )
+    return rows
+
+
+def _pipeline_contract_warp_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    warp = (contract or {}).get("warp") or {}
+    for row in warp.get("outputs") or []:
+        rows.append(
+            {
+                "frame_id": row.get("frame_id"),
+                "interpolation": row.get("interpolation"),
+                "registered_path_exists": row.get("registered_path_exists"),
+                "coverage_path_exists": row.get("coverage_path_exists"),
+                "dq_mask_path_exists": row.get("dq_mask_path_exists"),
+                "dq_summary_has_valid": row.get("dq_summary_has_valid"),
+                "contract_ok": row.get("contract_ok"),
+            }
+        )
+    for row in warp.get("skipped_frames") or []:
+        rows.append(
+            {
+                "frame_id": row.get("frame_id"),
+                "interpolation": "skipped",
+                "registered_path_exists": "",
+                "coverage_path_exists": "",
+                "dq_mask_path_exists": "",
+                "dq_summary_has_valid": "",
+                "contract_ok": row.get("contract_ok"),
+                "status": row.get("status"),
+                "has_reason": row.get("has_reason"),
+            }
+        )
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -982,6 +1087,7 @@ def write_html_report(
     compare: dict[str, Any] | None = None,
     acceptance_audit: dict[str, Any] | None = None,
     stack_engine_contract: dict[str, Any] | None = None,
+    pipeline_contract: dict[str, Any] | None = None,
     title: str = "GLASS Report",
     run_root: str | Path | None = None,
 ) -> None:
@@ -1099,6 +1205,11 @@ def write_html_report(
     stack_engine_contract_summary_rows = _stack_engine_contract_summary_rows(stack_engine_contract)
     stack_engine_contract_failure_rows = _stack_engine_contract_failure_rows(stack_engine_contract)
     stack_engine_contract_surface_rows = _stack_engine_contract_surface_rows(stack_engine_contract)
+    pipeline_contract_summary_rows = _pipeline_contract_summary_rows(pipeline_contract)
+    pipeline_contract_failure_rows = _pipeline_contract_failure_rows(pipeline_contract)
+    pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
+    pipeline_contract_local_norm_rows = _pipeline_contract_local_norm_rows(pipeline_contract)
+    pipeline_contract_warp_rows = _pipeline_contract_warp_rows(pipeline_contract)
     dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
@@ -1212,6 +1323,14 @@ def write_html_report(
   {_table(stack_engine_contract_summary_rows)}
   {_table(stack_engine_contract_failure_rows)}
   {_limited_table(stack_engine_contract_surface_rows, label="StackEngine contract surface rows", artifact="stack_engine_contract JSON")}
+  {_h2("pipeline-contract-audit", "Pipeline contract audit")}
+  <p>The pipeline invariant contract audit verifies structural DQ, LN, warp,
+  rejection-map, crop-box, and output-map expectations from GLASS artifacts.</p>
+  {_table(pipeline_contract_summary_rows)}
+  {_table(pipeline_contract_failure_rows)}
+  {_limited_table(pipeline_contract_map_rows, label="pipeline contract map rows", artifact="pipeline_contract JSON")}
+  {_limited_table(pipeline_contract_local_norm_rows, label="pipeline contract local-normalization rows", artifact="pipeline_contract JSON")}
+  {_limited_table(pipeline_contract_warp_rows, label="pipeline contract warp rows", artifact="pipeline_contract JSON")}
   {_h2("dq-provenance-contract", "DQ provenance contract")}
   <p>This normalized summary bridges StackEngine and resident CUDA provenance
   schemas for report and audit consumers.</p>
