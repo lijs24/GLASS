@@ -122,6 +122,7 @@ def test_cli_help_commands():
         "compare-outliers",
         "compare-tile-pack",
         "compare-tile-attribution",
+        "compare-tile-replay",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",

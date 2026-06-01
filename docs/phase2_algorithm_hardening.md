@@ -2033,6 +2033,27 @@ integration where applicable.
   defaults; it decides whether map-level evidence explains the localized
   residuals or whether the next gate must save/replay per-frame tile samples.
 
+### S2-Gate 123: Bounded Per-Frame Tile Replay
+
+- Add a reusable `glass compare-tile-replay` command that consumes a
+  `compare-tile-pack` manifest and a GLASS run directory.
+- For each localized residual tile, replay selected source frames through a
+  bounded CPU diagnostic path: read only the required source window, apply the
+  available master calibration cache, apply the registration matrix, and sample
+  the destination tile.
+- Support frame selection strategies for all positive-weight frames,
+  lowest-weight frames, and agreement-downweighted frames.
+- Rank replayed frames by signed/weighted local delta to the final GLASS master
+  tile and report diagnostic sigma-proxy low/high outlier counts.
+- Record interpolation and limitation metadata. This diagnostic replay may use
+  bilinear sampling even when the resident CUDA benchmark used Lanczos3, so it
+  is attribution evidence rather than a byte-exact resident replay.
+- Run the command on the S2-Gate 121 `agr0p5` tile package for all positive
+  weight frames and compare with lower-cost low-weight/downweighted subsets.
+- Treat this as an observability gate only. It must not change defaults; it
+  identifies candidate frame families for the next numerical correction or
+  exact replay gate.
+
 ## Gate Rules
 
 Each gate requires:

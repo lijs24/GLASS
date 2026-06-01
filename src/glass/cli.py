@@ -30,6 +30,7 @@ from glass.report.compare_report import compare_fits, write_compare_report
 from glass.report.compare_outliers import build_compare_outlier_audit, write_compare_outlier_audit
 from glass.report.compare_tile_attribution import build_compare_tile_attribution, write_compare_tile_attribution
 from glass.report.compare_tile_pack import build_compare_tile_pack
+from glass.report.compare_tile_replay import build_compare_tile_replay, write_compare_tile_replay
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
 from glass.report.resident_determinism import (
@@ -822,6 +823,30 @@ def cmd_compare_tile_attribution(args: argparse.Namespace) -> int:
             "downweighted_count": (payload.get("frame_accounting") or {}).get("downweighted_count")
             if isinstance(payload.get("frame_accounting"), dict)
             else None,
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_compare_tile_replay(args: argparse.Namespace) -> int:
+    payload = build_compare_tile_replay(
+        args.tile_pack,
+        args.run,
+        filter_name=args.filter,
+        master_cache_dir=args.master_cache_dir,
+        frame_strategy=args.frame_strategy,
+        max_frames=args.max_frames,
+        low_sigma=args.low_sigma,
+        high_sigma=args.high_sigma,
+    )
+    write_compare_tile_replay(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": "completed",
+            "tile_count": payload.get("tile_count"),
+            "selected_frame_count": payload.get("selected_frame_count"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -1894,6 +1919,27 @@ def build_parser() -> argparse.ArgumentParser:
     tile_attr.add_argument("--filter", help="optional filter name used to select integration output maps")
     tile_attr.add_argument("--frame-limit", type=int, default=16, help="number of frame-accounting rows to include")
     tile_attr.set_defaults(func=cmd_compare_tile_attribution)
+
+    tile_replay = sub.add_parser(
+        "compare-tile-replay",
+        help="bounded per-frame replay of localized compare residual tiles",
+    )
+    tile_replay.add_argument("--tile-pack", required=True, help="tile_pack_manifest.json from compare-tile-pack")
+    tile_replay.add_argument("--run", required=True, help="GLASS run directory containing integration/frame artifacts")
+    tile_replay.add_argument("--out", required=True, help="output replay JSON")
+    tile_replay.add_argument("--markdown", help="optional output Markdown summary")
+    tile_replay.add_argument("--filter", help="optional filter name used to select integration output maps")
+    tile_replay.add_argument("--master-cache-dir", help="resident master cache directory; defaults to run_command discovery")
+    tile_replay.add_argument(
+        "--frame-strategy",
+        choices=["lowest_weight", "downweighted", "frame_id"],
+        default="lowest_weight",
+        help="which frames to replay first",
+    )
+    tile_replay.add_argument("--max-frames", type=int, default=32, help="maximum frames to replay; use 0 for all selected")
+    tile_replay.add_argument("--low-sigma", type=float, help="override low sigma for diagnostic proxy rejection")
+    tile_replay.add_argument("--high-sigma", type=float, help="override high sigma for diagnostic proxy rejection")
+    tile_replay.set_defaults(func=cmd_compare_tile_replay)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")
