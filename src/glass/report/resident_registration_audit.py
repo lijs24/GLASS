@@ -170,6 +170,8 @@ def _frame_candidate_audit(row: dict[str, Any]) -> dict[str, Any]:
     agreement_reason = warnings.get("triangle_agreement_reason")
     agreement_rms_scale = _float_or_none(warnings.get("triangle_agreement_rms_scale"))
     agreement_min_score = _float_or_none(warnings.get("triangle_min_agreement_score"))
+    agreement_action = warnings.get("triangle_agreement_action")
+    agreement_weight_multiplier = _float_or_none(warnings.get("triangle_agreement_weight_multiplier"))
     status = str(row.get("status") or "unknown")
     failure_reasons: list[str] = []
     if status == "failed":
@@ -219,6 +221,8 @@ def _frame_candidate_audit(row: dict[str, Any]) -> dict[str, Any]:
         "agreement_reason": agreement_reason,
         "agreement_rms_scale": agreement_rms_scale,
         "agreement_min_score": agreement_min_score,
+        "agreement_action": agreement_action,
+        "agreement_weight_multiplier": agreement_weight_multiplier,
         "catalog_selector": warnings.get("triangle_catalog_selector"),
         "catalog_batch": warnings.get("triangle_catalog_batch"),
         "catalog_timing_model": warnings.get("triangle_catalog_timing_model"),
@@ -275,6 +279,9 @@ def build_resident_registration_audit(run_or_file: str | Path) -> dict[str, Any]
     agreement_status_counts = Counter(
         str(frame["agreement_status"]) for frame in triangle_frames if frame.get("agreement_status") is not None
     )
+    agreement_action_counts = Counter(
+        str(frame["agreement_action"]) for frame in triangle_frames if frame.get("agreement_action") is not None
+    )
     failure_counts: Counter[str] = Counter()
     for frame in failed_triangle_frames:
         for reason in frame["failure_reasons"]:
@@ -310,6 +317,7 @@ def build_resident_registration_audit(run_or_file: str | Path) -> dict[str, Any]
             "pixel_ncc_stats": _number_stats(pixel_ncc_values),
             "agreement_score_stats": _number_stats(agreement_score_values),
             "agreement_status_counts": dict(agreement_status_counts),
+            "agreement_action_counts": dict(agreement_action_counts),
             "triangle_trial_frame_count": sum(1 for frame in triangle_frames if frame["trial_summary"]["available"]),
             "quality_gate_failed_count": failure_counts.get("quality_gate_failed", 0),
             "agreement_gate_failed_count": failure_counts.get("agreement_gate_failed", 0),
@@ -322,6 +330,11 @@ def build_resident_registration_audit(run_or_file: str | Path) -> dict[str, Any]
             "triangle_nms_min_separation_px": resident_registration.get("triangle_nms_min_separation_px"),
             "triangle_min_agreement_score": resident_registration.get("triangle_min_agreement_score"),
             "triangle_agreement_rms_scale": resident_registration.get("triangle_agreement_rms_scale"),
+            "triangle_agreement_action": resident_registration.get("triangle_agreement_action"),
+            "triangle_agreement_min_weight": resident_registration.get("triangle_agreement_min_weight"),
+            "triangle_agreement_downweighted_frame_count": resident_registration.get(
+                "triangle_agreement_downweighted_frame_count"
+            ),
             "triangle_determinism_signature_mode": resident_registration.get("triangle_determinism_signature_mode"),
             "triangle_determinism_moving_frame_count": resident_registration.get(
                 "triangle_determinism_moving_frame_count"
@@ -367,6 +380,10 @@ def write_resident_registration_audit_markdown(path: str | Path, audit: dict[str
     if summary.get("agreement_status_counts"):
         lines.extend(["", "## Agreement Status Counts", ""])
         for key, value in sorted(summary["agreement_status_counts"].items()):
+            lines.append(f"- `{key}`: `{value}`")
+    if summary.get("agreement_action_counts"):
+        lines.extend(["", "## Agreement Action Counts", ""])
+        for key, value in sorted(summary["agreement_action_counts"].items()):
             lines.append(f"- `{key}`: `{value}`")
     lines.extend(["", "## Failure Reasons", ""])
     if summary["failure_reason_counts"]:

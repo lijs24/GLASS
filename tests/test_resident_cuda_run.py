@@ -17,6 +17,7 @@ from glass.engine.resident_cuda import (
     _resident_descriptor_signature,
     _resident_fit_signature,
     _resident_output_map_selection,
+    _resident_triangle_agreement_policy,
     _resident_triangle_agreement_quality,
     _resident_triangle_determinism_summary,
     _resident_similarity_frame_dispatch,
@@ -387,6 +388,29 @@ def test_resident_triangle_agreement_quality_scores_pixel_refinement():
     assert weak["reason"] == "below_min_score"
     assert unavailable["status"] == "unavailable"
     assert unavailable["reason"] == "pixel_ncc_unavailable"
+
+
+def test_resident_triangle_agreement_policy_can_downweight_without_hard_failure():
+    weak = _resident_triangle_agreement_quality(
+        pixel_ncc=0.96,
+        pixel_rms_adu=400.0,
+        fit_rms_px=0.3,
+        rms_scale_adu=200.0,
+        min_score=0.5,
+    )
+
+    hard_fail = _resident_triangle_agreement_policy(weak, "fail")
+    downweight = _resident_triangle_agreement_policy(weak, "downweight")
+    flagged = _resident_triangle_agreement_policy(weak, "flag")
+
+    assert hard_fail["hard_failure"] is True
+    assert hard_fail["weight_multiplier"] == 1.0
+    assert downweight["hard_failure"] is False
+    assert downweight["status"] == "downweighted"
+    assert downweight["weight_multiplier"] == weak["score"] / weak["min_score"]
+    assert flagged["hard_failure"] is False
+    assert flagged["status"] == "flagged"
+    assert flagged["weight_multiplier"] == 1.0
 
 
 def _two_dark_group_dataset(tmp_path: Path) -> Path:

@@ -1208,14 +1208,71 @@ def _resident_triangle_agreement_quality(
     }
 
 
+def _resident_triangle_agreement_policy(
+    quality: dict[str, Any],
+    action: str,
+    min_weight: float = 0.0,
+) -> dict[str, Any]:
+    if action not in {"fail", "downweight", "flag"}:
+        raise ValueError("triangle agreement action must be fail, downweight, or flag")
+    floor = float(min_weight)
+    if floor < 0.0 or floor > 1.0:
+        raise ValueError("triangle agreement minimum weight must be in [0, 1]")
+
+    status = str(quality.get("status") or "unavailable")
+    result = {
+        "action": action,
+        "status": status,
+        "hard_failure": False,
+        "weight_multiplier": 1.0,
+        "failure_message": None,
+    }
+    if status != "failed":
+        return result
+
+    score = _float_or_nan(quality.get("score"))
+    min_score = quality.get("min_score")
+    if min_score is None:
+        min_score_value = float("nan")
+    else:
+        min_score_value = float(min_score)
+    failure_message = "agreement_score " + f"{score:.6g} < {min_score_value:.6g}"
+    if action == "fail":
+        result["hard_failure"] = True
+        result["failure_message"] = failure_message
+        return result
+    if action == "flag":
+        result["status"] = "flagged"
+        return result
+
+    multiplier = 0.0
+    if np.isfinite(score) and np.isfinite(min_score_value) and min_score_value > 0.0:
+        multiplier = min(1.0, max(floor, max(0.0, score) / min_score_value))
+    elif floor > 0.0:
+        multiplier = floor
+    result["weight_multiplier"] = float(multiplier)
+    result["status"] = "downweighted" if multiplier > 0.0 else "failed"
+    if multiplier <= 0.0:
+        result["hard_failure"] = True
+        result["failure_message"] = failure_message + "; downweight multiplier was zero"
+    return result
+
+
 def _resident_triangle_agreement_warnings(quality: dict[str, Any]) -> list[str]:
-    return [
+    warnings = [
         f"triangle_agreement_score={float(quality.get('score', float('nan'))):.6g}",
         f"triangle_agreement_status={quality.get('status', 'unavailable')}",
         f"triangle_agreement_reason={quality.get('reason', 'unavailable')}",
         f"triangle_agreement_rms_scale={float(quality.get('rms_scale_adu', float('nan'))):.6g}",
         f"triangle_min_agreement_score={quality.get('min_score')}",
     ]
+    if "action" in quality:
+        warnings.append(f"triangle_agreement_action={quality.get('action')}")
+    if "weight_multiplier" in quality:
+        warnings.append(
+            f"triangle_agreement_weight_multiplier={float(quality.get('weight_multiplier', 1.0)):.6g}"
+        )
+    return warnings
 
 
 def _select_star_core_preselected_seed_indices(
@@ -1781,6 +1838,8 @@ def run_resident_calibration_integration(
     resident_triangle_pixel_refine_fast_coarse: bool = False,
     resident_triangle_min_agreement_score: float | None = None,
     resident_triangle_agreement_rms_scale: float | None = None,
+    resident_triangle_agreement_action: str | None = None,
+    resident_triangle_agreement_min_weight: float | None = None,
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -1878,6 +1937,16 @@ def run_resident_calibration_integration(
         raise ValueError("resident_triangle_min_agreement_score must be in [0, 1] when provided")
     if resident_triangle_agreement_rms_scale is not None and resident_triangle_agreement_rms_scale <= 0.0:
         raise ValueError("resident_triangle_agreement_rms_scale must be positive when provided")
+    if resident_triangle_agreement_action is not None and resident_triangle_agreement_action not in {
+        "fail",
+        "downweight",
+        "flag",
+    }:
+        raise ValueError("resident_triangle_agreement_action must be fail, downweight, or flag")
+    if resident_triangle_agreement_min_weight is not None and (
+        resident_triangle_agreement_min_weight < 0.0 or resident_triangle_agreement_min_weight > 1.0
+    ):
+        raise ValueError("resident_triangle_agreement_min_weight must be in [0, 1] when provided")
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
@@ -2047,6 +2116,7 @@ def run_resident_calibration_integration(
             registration_during_load_elapsed = 0.0
             gc_elapsed = 0.0
             frame_weight_values: list[float] = []
+            agreement_weight_multipliers = [1.0 for _ in light_frames]
             current_master_key: str | None = None
             current_dark_exposure: float | None = None
             prefetch_host_pinned_bytes = 0
@@ -3530,6 +3600,22 @@ def run_resident_calibration_integration(
                     min_agreement_score < 0.0 or min_agreement_score > 1.0
                 ):
                     raise ValueError("cuda_triangle_min_agreement_score must be in [0, 1]")
+                triangle_agreement_action = str(
+                    registration_policy.get("cuda_triangle_agreement_action") or "fail"
+                )
+                if resident_triangle_agreement_action is not None:
+                    triangle_agreement_action = str(resident_triangle_agreement_action)
+                if triangle_agreement_action not in {"fail", "downweight", "flag"}:
+                    raise ValueError("cuda_triangle_agreement_action must be fail, downweight, or flag")
+                triangle_agreement_min_weight = _policy_float(
+                    registration_policy,
+                    "cuda_triangle_agreement_min_weight",
+                    0.0,
+                )
+                if resident_triangle_agreement_min_weight is not None:
+                    triangle_agreement_min_weight = float(resident_triangle_agreement_min_weight)
+                if triangle_agreement_min_weight < 0.0 or triangle_agreement_min_weight > 1.0:
+                    raise ValueError("cuda_triangle_agreement_min_weight must be in [0, 1]")
                 pixel_refine_enabled = _policy_bool(registration_policy, "cuda_triangle_pixel_refine", True)
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
@@ -4274,6 +4360,17 @@ def run_resident_calibration_integration(
                                         "rms_scale_adu": triangle_agreement_rms_scale,
                                         "min_score": min_agreement_score,
                                     }
+                                agreement_policy = _resident_triangle_agreement_policy(
+                                    agreement_quality,
+                                    triangle_agreement_action,
+                                    triangle_agreement_min_weight,
+                                )
+                                agreement_quality = {
+                                    **agreement_quality,
+                                    "status": agreement_policy["status"],
+                                    "action": agreement_policy["action"],
+                                    "weight_multiplier": agreement_policy["weight_multiplier"],
+                                }
                                 quality_failures: list[str] = []
                                 if deferred_triangle_refine is None and min_pixel_ncc is not None and (
                                     not np.isfinite(selected_pixel_ncc) or selected_pixel_ncc < float(min_pixel_ncc)
@@ -4281,15 +4378,8 @@ def run_resident_calibration_integration(
                                     quality_failures.append(
                                         f"pixel_ncc {selected_pixel_ncc:.6g} < {float(min_pixel_ncc):.6g}"
                                     )
-                                if (
-                                    deferred_triangle_refine is None
-                                    and agreement_quality["status"] == "failed"
-                                ):
-                                    quality_failures.append(
-                                        "agreement_score "
-                                        + f"{float(agreement_quality['score']):.6g} < "
-                                        + f"{float(min_agreement_score):.6g}"
-                                    )
+                                if deferred_triangle_refine is None and agreement_policy["hard_failure"]:
+                                    quality_failures.append(str(agreement_policy["failure_message"]))
                                 if quality_failures:
                                     status = "failed"
                                     frame_weight_values[index] = 0.0
@@ -4297,6 +4387,16 @@ def run_resident_calibration_integration(
                                     warnings.append(
                                         "resident triangle descriptor registration failed quality gate: "
                                         + "; ".join(quality_failures)
+                                    )
+                                elif (
+                                    deferred_triangle_refine is None
+                                    and float(agreement_policy["weight_multiplier"]) < 1.0
+                                ):
+                                    multiplier = float(agreement_policy["weight_multiplier"])
+                                    agreement_weight_multipliers[index] *= multiplier
+                                    warnings.append(
+                                        "resident triangle agreement downweighted frame by "
+                                        + f"{multiplier:.6g}"
                                     )
                                 elif deferred_triangle_refine is not None:
                                     warnings.append("triangle_pixel_refine_quality_gate=deferred_batch")
@@ -4557,6 +4657,17 @@ def run_resident_calibration_integration(
                             triangle_agreement_rms_scale,
                             min_agreement_score,
                         )
+                        agreement_policy = _resident_triangle_agreement_policy(
+                            agreement_quality,
+                            triangle_agreement_action,
+                            triangle_agreement_min_weight,
+                        )
+                        agreement_quality = {
+                            **agreement_quality,
+                            "status": agreement_policy["status"],
+                            "action": agreement_policy["action"],
+                            "weight_multiplier": agreement_policy["weight_multiplier"],
+                        }
                         result.matrix = matrix_array.tolist()
                         result.warnings.extend(
                             [
@@ -4613,12 +4724,8 @@ def run_resident_calibration_integration(
                             quality_failures.append(
                                 f"pixel_ncc {selected_pixel_ncc:.6g} < {float(min_pixel_ncc):.6g}"
                             )
-                        if agreement_quality["status"] == "failed":
-                            quality_failures.append(
-                                "agreement_score "
-                                + f"{float(agreement_quality['score']):.6g} < "
-                                + f"{float(min_agreement_score):.6g}"
-                            )
+                        if agreement_policy["hard_failure"]:
+                            quality_failures.append(str(agreement_policy["failure_message"]))
                         if quality_failures:
                             result.status = "failed"
                             frame_weight_values[int(item["index"])] = 0.0
@@ -4628,6 +4735,13 @@ def run_resident_calibration_integration(
                                 + "; ".join(quality_failures)
                             )
                             continue
+                        if float(agreement_policy["weight_multiplier"]) < 1.0:
+                            multiplier = float(agreement_policy["weight_multiplier"])
+                            agreement_weight_multipliers[int(item["index"])] *= multiplier
+                            result.warnings.append(
+                                "resident triangle agreement downweighted frame by "
+                                + f"{multiplier:.6g}"
+                            )
                         integration_matrices[int(item["index"])] = result.matrix
                         if triangle_fused_matrix_deferred_enabled:
                             fused_matrix_deferred_frame_indices.add(int(item["index"]))
@@ -4882,6 +4996,21 @@ def run_resident_calibration_integration(
                     }
                     for index, frame in enumerate(light_frames)
                 ]
+            agreement_downweighted_frames = 0
+            for index, multiplier in enumerate(agreement_weight_multipliers):
+                if frame_weight_values[index] > 0.0 and float(multiplier) < 1.0:
+                    agreement_downweighted_frames += 1
+                    frame_weight_values[index] = float(frame_weight_values[index]) * float(multiplier)
+                    frame_weights[str(light_frames[index]["id"])] = float(frame_weight_values[index])
+                    weighting_frame_results[index]["weight"] = float(frame_weight_values[index])
+                    weighting_frame_results[index]["agreement_weight_multiplier"] = float(multiplier)
+                    weighting_frame_results[index]["status"] = "agreement_downweighted"
+                elif float(multiplier) != 1.0:
+                    weighting_frame_results[index]["agreement_weight_multiplier"] = float(multiplier)
+            if agreement_downweighted_frames:
+                weighting_warnings.append(
+                    f"resident triangle agreement downweighted {agreement_downweighted_frames} frame(s)"
+                )
             weighting_elapsed = perf_counter() - weighting_start
 
             local_norm_start = perf_counter()
@@ -6075,6 +6204,15 @@ def run_resident_calibration_integration(
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
                         "triangle_agreement_rms_scale": float(triangle_agreement_rms_scale)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_agreement_action": triangle_agreement_action
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_agreement_min_weight": float(triangle_agreement_min_weight)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_agreement_downweighted_frame_count": int(agreement_downweighted_frames)
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
                         "external_registration_results_path": None

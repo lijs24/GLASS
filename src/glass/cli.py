@@ -458,6 +458,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
                 resident_triangle_min_agreement_score=args.resident_triangle_min_agreement_score,
                 resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
+                resident_triangle_agreement_action=args.resident_triangle_agreement_action,
+                resident_triangle_agreement_min_weight=args.resident_triangle_agreement_min_weight,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -560,6 +562,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_triangle_pixel_refine_fast_coarse=args.resident_triangle_pixel_refine_fast_coarse,
                 resident_triangle_min_agreement_score=args.resident_triangle_min_agreement_score,
                 resident_triangle_agreement_rms_scale=args.resident_triangle_agreement_rms_scale,
+                resident_triangle_agreement_action=args.resident_triangle_agreement_action,
+                resident_triangle_agreement_min_weight=args.resident_triangle_agreement_min_weight,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -1436,6 +1440,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="ADU RMS scale used to normalize resident triangle pixel-agreement scores; default comes from the plan",
     )
     run.add_argument(
+        "--resident-triangle-agreement-action",
+        choices=["fail", "downweight", "flag"],
+        help=(
+            "action when --resident-triangle-min-agreement-score is missed; "
+            "fail preserves the hard gate, downweight keeps the frame with a score/threshold multiplier, "
+            "flag records the miss without changing the frame weight"
+        ),
+    )
+    run.add_argument(
+        "--resident-triangle-agreement-min-weight",
+        type=float,
+        help="minimum multiplier for agreement downweight action; must be in [0, 1], default comes from the plan",
+    )
+    run.add_argument(
         "--reference-frame-id",
         help="reference frame id, file name, or stem for registration",
     )
@@ -1676,6 +1694,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--resident-triangle-agreement-rms-scale",
         type=float,
         help="ADU RMS scale used to normalize resident triangle pixel-agreement scores for audit runs",
+    )
+    audit.add_argument(
+        "--resident-triangle-agreement-action",
+        choices=["fail", "downweight", "flag"],
+        help=(
+            "audit-run action when --resident-triangle-min-agreement-score is missed; "
+            "fail preserves the hard gate, downweight keeps the frame with a score/threshold multiplier, "
+            "flag records the miss without changing the frame weight"
+        ),
+    )
+    audit.add_argument(
+        "--resident-triangle-agreement-min-weight",
+        type=float,
+        help="minimum multiplier for audit-run agreement downweight action; must be in [0, 1]",
     )
     audit.add_argument(
         "--resident-local-normalization-mode",

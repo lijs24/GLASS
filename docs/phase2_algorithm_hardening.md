@@ -1964,6 +1964,25 @@ integration where applicable.
   agreement policy, such as diagnostic flagging, down-weighting, or a
   multi-condition rejection rule.
 
+### S2-Gate 119: Agreement Downweight Policy
+
+- Add an explicit resident triangle agreement action with default behavior
+  unchanged: hard fail remains the default when a minimum agreement score is
+  supplied.
+- Support `downweight` and `flag` actions so low-agreement frames can be kept
+  in the 193-frame benchmark contract while still emitting audit warnings and
+  per-frame diagnostics.
+- Ensure downweighting composes with resident `simple_snr` weighting by applying
+  agreement multipliers after frame-quality weights are computed and before
+  local normalization/integration.
+- Record agreement action, minimum weight, downweighted-frame count, and
+  per-frame multipliers in resident artifacts and registration audits.
+- Run deterministic 200-light sweeps over several downweight thresholds under
+  the same strict frame gate, compare gate, and guardrails used in S2-Gate 118.
+- Do not promote the policy unless it preserves 200/193/7 frame accounting and
+  passes strict RMS and p99 compare gates. If linear downweighting fails, use
+  the result to design a non-linear or multi-signal agreement weighting rule.
+
 ## Gate Rules
 
 Each gate requires:
