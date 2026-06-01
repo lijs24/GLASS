@@ -2440,6 +2440,14 @@ class ResidentCalibratedStack:
             raise RuntimeError("native ResidentCalibratedStack.warp_coverage_map is not available")
         return np.asarray(self._impl.warp_coverage_map(), dtype=np.float32)
 
+    def download_frame_tile(self, index: int, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+        if not hasattr(self._impl, "download_frame_tile"):
+            raise RuntimeError("native ResidentCalibratedStack.download_frame_tile is not available")
+        return np.asarray(
+            self._impl.download_frame_tile(int(index), int(x0), int(y0), int(x1), int(y1)),
+            dtype=np.float32,
+        )
+
     def upload_calibrated_frame(self, index: int, frame: Any) -> None:
         self._impl.upload_calibrated_frame(int(index), _as_f32_c(frame))
 

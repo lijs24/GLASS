@@ -50,6 +50,7 @@ from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
 )
+from glass.report.resident_tile_capture import build_resident_tile_capture, write_resident_tile_capture
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
@@ -879,6 +880,51 @@ def cmd_compare_frame_family(args: argparse.Namespace) -> int:
             if isinstance(payload.get("interpretation"), dict)
             else None,
             "weighted_delta_focus_minus_control": weighted_delta.get("focus_minus_control"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_resident_tile_capture(args: argparse.Namespace) -> int:
+    payload = build_resident_tile_capture(
+        args.tile_pack,
+        args.run,
+        args.out_dir,
+        replay_json=args.replay,
+        filter_name=args.filter,
+        frame_ids=args.frame_id or None,
+        frame_range_start=args.frame_range_start,
+        frame_range_end=args.frame_range_end,
+        max_frames=args.max_frames,
+        max_tiles=args.max_tiles,
+        master_cache_dir=args.master_cache_dir,
+        interpolation=args.interpolation,
+        clamping_threshold=args.clamping_threshold,
+        write_tiles=args.write_tiles,
+    )
+    write_resident_tile_capture(args.out, payload, markdown=args.markdown)
+    first_summary = payload.get("tile_summaries", [{}])[0] if payload.get("tile_summaries") else {}
+    resident = (
+        first_summary.get("resident_weighted_delta_mean")
+        if isinstance(first_summary, dict)
+        and isinstance(first_summary.get("resident_weighted_delta_mean"), dict)
+        else {}
+    )
+    diff = (
+        first_summary.get("resident_minus_cpu_weighted_delta_mean")
+        if isinstance(first_summary, dict)
+        and isinstance(first_summary.get("resident_minus_cpu_weighted_delta_mean"), dict)
+        else {}
+    )
+    console.print(
+        {
+            "status": "completed",
+            "selected_frame_count": payload.get("selected_frame_count"),
+            "tile_count": payload.get("tile_count"),
+            "first_tile_resident_weighted_delta_mean": resident.get("mean"),
+            "first_tile_resident_minus_cpu_mean": diff.get("mean"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2004,6 +2050,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="number of positive-weight frames after the focus range used as controls",
     )
     frame_family.set_defaults(func=cmd_compare_frame_family)
+
+    resident_capture = sub.add_parser(
+        "resident-tile-capture",
+        help="capture selected post-warp resident CUDA frame tiles for residual diagnostics",
+    )
+    resident_capture.add_argument("--tile-pack", required=True, help="tile_pack_manifest.json from compare-tile-pack")
+    resident_capture.add_argument("--run", required=True, help="GLASS run directory containing frame artifacts")
+    resident_capture.add_argument("--out-dir", required=True, help="directory for optional captured tile FITS files")
+    resident_capture.add_argument("--out", required=True, help="output resident tile capture JSON")
+    resident_capture.add_argument("--markdown", help="optional output Markdown summary")
+    resident_capture.add_argument("--replay", help="optional compare-tile-replay JSON used for CPU replay comparison")
+    resident_capture.add_argument("--filter", help="optional filter name used to select integration outputs")
+    resident_capture.add_argument("--frame-id", action="append", default=[], help="frame id to capture; may be repeated")
+    resident_capture.add_argument("--frame-range-start", help="first frame id in a capture range, for example F000100")
+    resident_capture.add_argument("--frame-range-end", help="last frame id in a capture range, for example F000110")
+    resident_capture.add_argument("--max-frames", type=int, default=0, help="maximum selected frames; 0 captures all")
+    resident_capture.add_argument("--max-tiles", type=int, default=0, help="maximum tiles from tile pack; 0 captures all")
+    resident_capture.add_argument("--master-cache-dir", help="resident master cache directory; defaults to run command discovery")
+    resident_capture.add_argument(
+        "--interpolation",
+        choices=["bilinear", "lanczos3"],
+        help="resident matrix warp interpolation; defaults to run command discovery",
+    )
+    resident_capture.add_argument(
+        "--clamping-threshold",
+        type=float,
+        help="Lanczos3 clamping threshold; defaults to run command discovery",
+    )
+    resident_capture.add_argument("--write-tiles", action="store_true", help="write captured FITS tile artifacts")
+    resident_capture.set_defaults(func=cmd_resident_tile_capture)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

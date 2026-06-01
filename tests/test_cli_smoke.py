@@ -124,6 +124,7 @@ def test_cli_help_commands():
         "compare-tile-attribution",
         "compare-tile-replay",
         "compare-frame-family",
+        "resident-tile-capture",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",

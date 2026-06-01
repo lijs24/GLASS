@@ -2086,6 +2086,27 @@ integration where applicable.
   next corrective gate should target a coherent motion/registration frame
   family, agreement weighting, or exact resident replay capture.
 
+### S2-Gate 126: Resident Tile Capture Parity
+
+- Add a native read-only resident CUDA API that downloads a bounded tile from a
+  selected resident frame without downloading the full calibrated stack.
+- Add a reusable `glass resident-tile-capture` command that rebuilds only
+  selected positive-weight frames into a small resident CUDA stack, applies the
+  run's master calibration cache and registration matrices, then captures the
+  localized residual tiles after resident CUDA calibration and warp.
+- Join the captured tile statistics with an optional `compare-tile-replay` JSON
+  artifact so the resident CUDA capture can be checked against the bounded CPU
+  Lanczos3 replay used in S2-Gates 123-124.
+- Write JSON and optional Markdown summaries, and optionally write captured
+  FITS tile artifacts for visual inspection.
+- Run the command on the S2-Gate 121 top residual tiles for the F000100-F000110
+  focus family identified by S2-Gate 125.
+- Treat this as a parity/observability gate only. It must not change default
+  registration, weighting, rejection, local normalization, or integration
+  behavior; it should decide whether replay disagreement is a likely cause or
+  whether the next corrective work should target the integration/rejection
+  policy itself.
+
 ## Gate Rules
 
 Each gate requires:
