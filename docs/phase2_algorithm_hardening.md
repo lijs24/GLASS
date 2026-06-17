@@ -3481,6 +3481,21 @@ integration where applicable.
   `master_calibration_science_contract_failed` so release guardrails can point
   at missing stats/semantics instead of reporting a generic StackEngine gap.
 
+### S2-Gate 207: Calibration Pipeline Contract
+
+- Extend `glass pipeline-contract` so `calibration_artifacts.json`, when
+  present, participates in the same pipeline invariant audit as warp, local
+  normalization, integration maps, and DQ maps.
+- Reuse the master calibration surface contract introduced in Gate206 for
+  local master bias/dark/flat records.
+- Add calibrated-light DQ contract rows requiring calibrated image path,
+  DQ mask path, DQ summary with valid-pixel accounting, tile count, and tile
+  size.
+- Keep integration-only diagnostic fixtures compatible by making calibration
+  checks active only when `calibration_artifacts.json` exists.
+- Surface calibration master and calibrated-light rows in the HTML report's
+  Pipeline contract audit section.
+
 ## Gate Rules
 
 Each gate requires:

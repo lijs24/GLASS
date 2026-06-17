@@ -178,6 +178,16 @@ def _master_science_contract(payload: dict[str, Any], *, path_exists: bool) -> d
     }
 
 
+def build_master_calibration_surface_contract(
+    payload: dict[str, Any],
+    *,
+    path_exists: bool,
+) -> dict[str, Any]:
+    """Audit the output-side science metadata for one master calibration frame."""
+
+    return _master_science_contract(payload, path_exists=path_exists)
+
+
 def _result_contract_passed(provenance: Any) -> bool:
     if not isinstance(provenance, dict):
         return False

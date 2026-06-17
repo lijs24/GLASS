@@ -1109,6 +1109,7 @@ def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dic
             "status": contract.get("status"),
             "passed": contract.get("passed"),
             "source": contract.get("_report_source_path"),
+            "calibration_artifact": (artifacts.get("calibration") or {}).get("exists"),
             "warp_artifact": (artifacts.get("warp") or {}).get("exists"),
             "local_norm_artifact": (artifacts.get("local_norm") or {}).get("exists"),
             "integration_artifact": (artifacts.get("integration") or {}).get("exists"),
@@ -1130,6 +1131,47 @@ def _pipeline_contract_failure_rows(contract: dict[str, Any] | None) -> list[dic
                 "check": item.get("name"),
                 "note": item.get("note"),
                 "evidence": ", ".join(f"{key}={value}" for key, value in evidence.items()),
+            }
+        )
+    return rows
+
+
+def _pipeline_contract_calibration_master_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    calibration = (contract or {}).get("calibration") or {}
+    for row in calibration.get("masters") or []:
+        stack_result = row.get("stack_result_contract") if isinstance(row.get("stack_result_contract"), dict) else {}
+        science = row.get("science_contract") if isinstance(row.get("science_contract"), dict) else {}
+        stats = science.get("stats") if isinstance(science.get("stats"), dict) else {}
+        rows.append(
+            {
+                "name": row.get("name"),
+                "type": row.get("type"),
+                "path_exists": row.get("path_exists"),
+                "tile_stack_mode": row.get("tile_stack_mode"),
+                "stats_ok": stats.get("passed"),
+                "science_ok": science.get("passed"),
+                "stack_result_ok": stack_result.get("passed"),
+                "contract_ok": row.get("contract_ok"),
+            }
+        )
+    return rows
+
+
+def _pipeline_contract_calibrated_light_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    calibration = (contract or {}).get("calibration") or {}
+    for row in calibration.get("calibrated_lights") or []:
+        rows.append(
+            {
+                "frame_id": row.get("frame_id"),
+                "backend": row.get("backend"),
+                "path_exists": row.get("path_exists"),
+                "dq_mask_path_exists": row.get("dq_mask_path_exists"),
+                "dq_summary_has_valid": row.get("dq_summary_has_valid"),
+                "tile_count": row.get("tile_count"),
+                "tile_size": row.get("tile_size"),
+                "contract_ok": row.get("contract_ok"),
             }
         )
     return rows
@@ -1415,6 +1457,8 @@ def write_html_report(
     stack_engine_default_promotion_rows = _stack_engine_default_promotion_rows(stack_engine_contract)
     pipeline_contract_summary_rows = _pipeline_contract_summary_rows(pipeline_contract)
     pipeline_contract_failure_rows = _pipeline_contract_failure_rows(pipeline_contract)
+    pipeline_contract_calibration_master_rows = _pipeline_contract_calibration_master_rows(pipeline_contract)
+    pipeline_contract_calibrated_light_rows = _pipeline_contract_calibrated_light_rows(pipeline_contract)
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
     pipeline_contract_local_norm_rows = _pipeline_contract_local_norm_rows(pipeline_contract)
     pipeline_contract_warp_rows = _pipeline_contract_warp_rows(pipeline_contract)
@@ -1546,6 +1590,8 @@ def write_html_report(
   rejection-map, crop-box, and output-map expectations from GLASS artifacts.</p>
   {_table(pipeline_contract_summary_rows)}
   {_table(pipeline_contract_failure_rows)}
+  {_limited_table(pipeline_contract_calibration_master_rows, label="pipeline contract calibration master rows", artifact="pipeline_contract JSON")}
+  {_limited_table(pipeline_contract_calibrated_light_rows, label="pipeline contract calibrated light rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_map_rows, label="pipeline contract map rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_pixel_rows, label="pipeline contract pixel rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_pixel_delta_rows, label="pipeline contract pixel delta rows", artifact="pipeline_contract JSON")}

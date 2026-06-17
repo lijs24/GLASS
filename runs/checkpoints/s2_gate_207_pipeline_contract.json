@@ -1,0 +1,1128 @@
+{
+  "artifacts": {
+    "calibration": {
+      "exists": true,
+      "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calibration_artifacts.json"
+    },
+    "integration": {
+      "exists": true,
+      "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration_results.json"
+    },
+    "local_norm": {
+      "exists": true,
+      "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\local_norm_results.json"
+    },
+    "warp": {
+      "exists": true,
+      "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\warp_results.json"
+    }
+  },
+  "audit_type": "pipeline_invariant_contract",
+  "calibration": {
+    "artifact_path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calibration_artifacts.json",
+    "calibrated_light_count": 3,
+    "calibrated_lights": [
+      {
+        "backend": "cpu",
+        "contract_ok": true,
+        "dq_mask_path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\dq\\dq_calibrated_F000010.fits",
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000010",
+        "index": 0,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\calibrated\\calibrated_F000010.fits",
+        "path_exists": true,
+        "tile_count": 9,
+        "tile_size": 8
+      },
+      {
+        "backend": "cpu",
+        "contract_ok": true,
+        "dq_mask_path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\dq\\dq_calibrated_F000011.fits",
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000011",
+        "index": 1,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\calibrated\\calibrated_F000011.fits",
+        "path_exists": true,
+        "tile_count": 9,
+        "tile_size": 8
+      },
+      {
+        "backend": "cpu",
+        "contract_ok": true,
+        "dq_mask_path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\dq\\dq_calibrated_F000012.fits",
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000012",
+        "index": 2,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\calibrated\\calibrated_F000012.fits",
+        "path_exists": true,
+        "tile_count": 9,
+        "tile_size": 8
+      }
+    ],
+    "exists": true,
+    "master_count": 3,
+    "masters": [
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "name": "G409bfdf826",
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\masters\\master_dark_G409bfdf826.fits",
+        "path_exists": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\masters\\master_dark_G409bfdf826.fits"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 2025.7490234375,
+                  "mean": 1041.3527510960896,
+                  "median": 1024.1392042371963,
+                  "min": 1017.2991943359375,
+                  "std": 96.19414916781047
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "dark"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 8
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_dark_includes_bias": true
+                    },
+                    "name": "dark_bias_semantics_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "bias_subtracted_from_source": false
+                    },
+                    "name": "dark_source_bias_subtraction_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "dark",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "dark"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 8
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_dark_includes_bias": true
+                },
+                "name": "dark_bias_semantics_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "bias_subtracted_from_source": false
+                },
+                "name": "dark_source_bias_subtraction_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "dark",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 2025.7490234375,
+              "mean": 1041.3527510960896,
+              "median": 1024.1392042371963,
+              "min": 1017.2991943359375,
+              "std": 96.19414916781047
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 5,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "dark"
+      },
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "name": "G9e8d28c798",
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\masters\\master_flat_G9e8d28c798.fits",
+        "path_exists": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\masters\\master_flat_G9e8d28c798.fits"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 1.070944905281067,
+                  "mean": 1.0000486090365384,
+                  "median": 1.0000192787912157,
+                  "min": 0.9305070042610168,
+                  "std": 0.032395267786598486
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "flat"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 8
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "normalization": "median"
+                    },
+                    "name": "flat_normalization_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "normalization_stage": "per_flat"
+                    },
+                    "name": "flat_normalization_stage_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "flat_floor": 1e-06
+                    },
+                    "name": "flat_floor_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "count": 3
+                    },
+                    "name": "per_flat_normalization_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "flat",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "flat"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 8
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "normalization": "median"
+                },
+                "name": "flat_normalization_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "normalization_stage": "per_flat"
+                },
+                "name": "flat_normalization_stage_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "flat_floor": 1e-06
+                },
+                "name": "flat_floor_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "count": 3
+                },
+                "name": "per_flat_normalization_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "flat",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 1.070944905281067,
+              "mean": 1.0000486090365384,
+              "median": 1.0000192787912157,
+              "min": 0.9305070042610168,
+              "std": 0.032395267786598486
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 5,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "stack_engine_cpu_per_flat_normalized",
+        "type": "flat"
+      },
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "name": "Ga8f40c9e17",
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\masters\\master_bias_Ga8f40c9e17.fits",
+        "path_exists": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\calib_cache\\masters\\master_bias_Ga8f40c9e17.fits"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 1005.453125,
+                  "mean": 999.8807636896769,
+                  "median": 999.8793402777778,
+                  "min": 995.1305541992188,
+                  "std": 1.746991620802354
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "bias"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 8
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "bias",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "bias"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 8
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "bias",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 1005.453125,
+              "mean": 999.8807636896769,
+              "median": 999.8793402777778,
+              "min": 995.1305541992188,
+              "std": 1.746991620802354
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 5,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "bias"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "map_count": 6
+      },
+      "name": "integration_output_maps_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_dq_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 1
+      },
+      "name": "integration_stack_result_contract",
+      "note": "CPU StackEngine integration outputs must carry an embedded passing result contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 0
+      },
+      "name": "integration_resident_result_contract",
+      "note": "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 1
+      },
+      "name": "calibration_master_surfaces_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 3
+      },
+      "name": "calibration_master_surface_contract",
+      "note": "Master calibration surfaces must expose stats, semantics, and StackEngine result contracts.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 1
+      },
+      "name": "calibrated_lights_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "light_count": 3
+      },
+      "name": "calibrated_light_dq_contract",
+      "note": "Calibrated light records must carry a calibrated image path, DQ map path, DQ summary, and tile metadata.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_dq_map_pixels_match_summary",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_coverage_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 2
+      },
+      "name": "integration_rejection_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "warp_output_count": 1
+      },
+      "name": "warp_outputs_have_dq_and_coverage",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "skipped_count": 2
+      },
+      "name": "warp_skipped_frames_are_explained",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": false,
+        "failed": [],
+        "row_count": 1,
+        "top_level_crop_box_recorded": true
+      },
+      "name": "local_normalization_contract",
+      "note": "LN rows must record crop_box and DQ state; enabled LN rows must record coefficient grids.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T18:55:11+00:00",
+  "integration": {
+    "maps": [
+      {
+        "exists": true,
+        "item": "H",
+        "map": "master",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\master_H.fits",
+        "path_key": "master_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "weight",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\weight_map_H.fits",
+        "path_key": "weight_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "coverage",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\coverage_map_H.fits",
+        "path_key": "coverage_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "dq",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\dq_map_H.fits",
+        "path_key": "dq_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "low_rejection",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\low_rejection_H.fits",
+        "path_key": "low_rejection_map_path",
+        "policy_skipped": false,
+        "required": false,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "high_rejection",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\high_rejection_H.fits",
+        "path_key": "high_rejection_map_path",
+        "policy_skipped": false,
+        "required": false,
+        "surface": "integration"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cpu",
+        "dq_contract_ok": true,
+        "dq_map_exists": true,
+        "dq_map_path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\dq_map_H.fits",
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_count": 1,
+        "item": "H",
+        "rejection": "none",
+        "resident_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 10,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "tile_stack_mode": "stack_engine_cpu"
+      }
+    ]
+  },
+  "local_normalization": {
+    "crop_box": null,
+    "enabled": false,
+    "outputs": [
+      {
+        "coefficient_grid_exists": true,
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "crop_box": null,
+        "crop_box_recorded": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_present": true,
+        "enabled": false,
+        "frame_id": "F000010",
+        "model": "disabled_passthrough",
+        "normalized_path_exists": true,
+        "status": "disabled_passthrough"
+      }
+    ],
+    "reference_frame_id": "F000010"
+  },
+  "passed": true,
+  "pixel_verification": {
+    "enabled": true,
+    "integration_outputs": [
+      {
+        "count_maps": {
+          "coverage": {
+            "ok": true,
+            "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\coverage_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 576,
+              "height": 24,
+              "max": 1.0,
+              "min": 1.0,
+              "nonfinite_pixels": 0,
+              "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\coverage_map_H.fits",
+              "positive_pixels": 576,
+              "positive_threshold": 0.0,
+              "rounded_sum": 576,
+              "schema_version": 1,
+              "sum": 576.0,
+              "tile_size": 8,
+              "total_pixels": 576,
+              "width": 24,
+              "zero_or_less_pixels": 0
+            },
+            "status": "verified",
+            "summary_match": {
+              "no_data": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "high_rejection": {
+            "ok": true,
+            "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\high_rejection_H.fits",
+            "required": false,
+            "result": {
+              "finite_pixels": 576,
+              "height": 24,
+              "max": 0.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\high_rejection_H.fits",
+              "positive_pixels": 0,
+              "positive_threshold": 0.0,
+              "rounded_sum": 0,
+              "schema_version": 1,
+              "sum": 0.0,
+              "tile_size": 8,
+              "total_pixels": 576,
+              "width": 24,
+              "zero_or_less_pixels": 576
+            },
+            "status": "verified",
+            "summary_match": {
+              "high_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "low_rejection": {
+            "ok": true,
+            "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\low_rejection_H.fits",
+            "required": false,
+            "result": {
+              "finite_pixels": 576,
+              "height": 24,
+              "max": 0.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\low_rejection_H.fits",
+              "positive_pixels": 0,
+              "positive_threshold": 0.0,
+              "rounded_sum": 0,
+              "schema_version": 1,
+              "sum": 0.0,
+              "tile_size": 8,
+              "total_pixels": 576,
+              "width": 24,
+              "zero_or_less_pixels": 576
+            },
+            "status": "verified",
+            "summary_match": {
+              "low_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          }
+        },
+        "dq": {
+          "ok": true,
+          "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\dq_map_H.fits",
+          "required": true,
+          "result": {
+            "counts": {
+              "high_rejected": 0,
+              "low_rejected": 0,
+              "no_data": 0,
+              "valid": 576,
+              "warp_edge": 0
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "no_data": 1,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 24,
+            "path": "runs\\checkpoints\\s2_gate_207_synthetic_run\\integration\\dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 8,
+            "total_pixels": 576,
+            "unknown_flags": [],
+            "width": 24
+          },
+          "status": "verified",
+          "summary_matches": {
+            "high_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "low_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "no_data": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "valid": {
+              "actual": 576,
+              "delta": 0,
+              "passed": true,
+              "summary": 576
+            },
+            "warp_edge": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            }
+          },
+          "verified": true
+        },
+        "item": "H"
+      }
+    ],
+    "tile_size": 8,
+    "tolerance_pixels": 0
+  },
+  "run_dir": "runs\\checkpoints\\s2_gate_207_synthetic_run",
+  "schema_version": 1,
+  "status": "passed",
+  "warp": {
+    "outputs": [
+      {
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000010",
+        "interpolation": "bilinear",
+        "registered_path_exists": true
+      }
+    ],
+    "skipped_frames": [
+      {
+        "contract_ok": true,
+        "frame_id": "F000011",
+        "has_reason": true,
+        "status": "quality_rejected"
+      },
+      {
+        "contract_ok": true,
+        "frame_id": "F000012",
+        "has_reason": true,
+        "status": "quality_rejected"
+      }
+    ]
+  }
+}

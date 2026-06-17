@@ -105,8 +105,14 @@ def test_pipeline_contract_passes_for_cpu_audit_run(tmp_path: Path):
     checks = {item["name"]: item for item in audit["checks"]}
     assert checks["integration_output_maps_available"]["passed"] is True
     assert checks["integration_dq_contract"]["passed"] is True
+    assert checks["calibration_master_surface_contract"]["passed"] is True
+    assert checks["calibrated_light_dq_contract"]["passed"] is True
     assert checks["local_normalization_contract"]["passed"] is True
     assert checks["warp_outputs_have_dq_and_coverage"]["passed"] is True
+    assert audit["calibration"]["master_count"] >= 3
+    assert audit["calibration"]["calibrated_light_count"] >= 3
+    assert all(item["contract_ok"] for item in audit["calibration"]["masters"])
+    assert all(item["contract_ok"] for item in audit["calibration"]["calibrated_lights"])
     assert "GLASS Pipeline Invariant Contract Audit" in markdown.read_text(encoding="utf-8")
 
 
@@ -267,6 +273,54 @@ def test_pipeline_contract_fails_missing_maps_and_crop_records(tmp_path: Path):
     assert checks["integration_output_maps_available"]["passed"] is False
     assert checks["integration_dq_contract"]["passed"] is False
     assert checks["local_normalization_contract"]["passed"] is False
+
+
+def test_pipeline_contract_fails_malformed_calibration_artifacts(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "masters": {
+                "bad_bias": {
+                    "type": "bias",
+                    "path": "calib_cache/masters/missing_bias.fits",
+                    "tile_stack_mode": "stack_engine_cpu",
+                    "stack_engine_enabled": True,
+                    "stack_engine_dq_provenance": {
+                        "result_contract": {
+                            "contract_type": "stack_engine_result_contract",
+                            "passed": True,
+                        }
+                    },
+                }
+            },
+            "calibrated_lights": [
+                {
+                    "frame_id": "L1",
+                    "path": "calib_cache/calibrated/missing_L1.fits",
+                    "dq_mask_path": None,
+                    "dq_summary": {},
+                    "tile_count": 1,
+                    "tile_size": 8,
+                }
+            ],
+        },
+    )
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    master = audit["calibration"]["masters"][0]
+    light = audit["calibration"]["calibrated_lights"][0]
+
+    assert audit["passed"] is False
+    assert checks["calibration_master_surface_contract"]["passed"] is False
+    assert checks["calibrated_light_dq_contract"]["passed"] is False
+    assert master["science_contract"]["stats"]["missing_keys"] == ["min", "max", "mean", "median", "std"]
+    assert master["contract_ok"] is False
+    assert light["dq_mask_path_exists"] is False
+    assert light["dq_summary_has_valid"] is False
+    assert light["contract_ok"] is False
 
 
 def test_pipeline_contract_requires_stack_result_contract_for_cpu_stack_output(tmp_path: Path):

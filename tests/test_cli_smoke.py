@@ -358,6 +358,10 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert "StackEngine contract audit" in html
     assert "Pipeline contract audit" in html
     assert "pixel_verification" in html
+    assert "calibration_artifact" in html
+    assert "stats_ok" in html
+    assert "science_ok" in html
+    assert "dq_summary_has_valid" in html
 
 
 def test_cli_doctor_cpu_only_success(tmp_path: Path):

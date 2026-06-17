@@ -7,6 +7,7 @@ from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 from glass.report.dq_map_verify import summarize_count_map_pixels, summarize_dq_map_pixels
 from glass.report.resident_result_contract import build_resident_output_contract
+from glass.report.stack_engine_contract import build_master_calibration_surface_contract
 
 
 _CORE_INTEGRATION_MAPS = {
@@ -39,7 +40,11 @@ def _resolve_path(path_value: Any, run_root: Path) -> Path | None:
     if not path_value:
         return None
     path = Path(str(path_value))
-    return path if path.is_absolute() else run_root / path
+    if path.is_absolute():
+        return path
+    if path.exists():
+        return path
+    return run_root / path
 
 
 def _path_exists(path_value: Any, run_root: Path) -> bool:
@@ -55,6 +60,32 @@ def _summary_count(summary: dict[str, Any], key: str, *, default_zero: bool = Tr
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _positive_int(value: Any) -> bool:
+    try:
+        return int(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _stack_result_contract_state_from_provenance(
+    provenance: Any,
+    *,
+    required: bool,
+) -> dict[str, Any]:
+    contract = provenance.get("result_contract") if isinstance(provenance, dict) else None
+    present = isinstance(contract, dict)
+    passed = bool(contract.get("passed")) if isinstance(contract, dict) else False
+    check_count = len(contract.get("checks") or []) if isinstance(contract, dict) else 0
+    return {
+        "required": required,
+        "present": present,
+        "passed": passed,
+        "check_count": check_count,
+        "status": "not_required" if not required else ("passed" if passed else "missing_or_failed"),
+        "contract_type": contract.get("contract_type") if isinstance(contract, dict) else None,
+    }
 
 
 def _count_match(actual: Any, expected: int | None, tolerance: int) -> dict[str, Any]:
@@ -119,6 +150,80 @@ def _map_row(
         "policy_skipped": skipped,
         "ok": ok,
     }
+
+
+def _calibration_master_rows(calibration: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    masters = calibration.get("masters") if isinstance(calibration.get("masters"), dict) else {}
+    for name, payload in masters.items():
+        if not isinstance(payload, dict):
+            continue
+        path_exists = _path_exists(payload.get("path"), run_root)
+        science_contract = build_master_calibration_surface_contract(
+            payload,
+            path_exists=path_exists,
+        )
+        summary = payload.get("dq_provenance_summary")
+        provenance = payload.get("stack_engine_dq_provenance")
+        tile_mode = str(payload.get("tile_stack_mode") or "")
+        stack_required = bool(payload.get("stack_engine_enabled")) or tile_mode.startswith("stack_engine_cpu")
+        stack_result = _stack_result_contract_state_from_provenance(
+            provenance,
+            required=stack_required,
+        )
+        rows.append(
+            {
+                "name": str(name),
+                "type": payload.get("type"),
+                "path": payload.get("path"),
+                "path_exists": path_exists,
+                "tile_stack_mode": payload.get("tile_stack_mode"),
+                "stack_engine_enabled": bool(payload.get("stack_engine_enabled")),
+                "stats_present": isinstance(payload.get("stats"), dict),
+                "dq_provenance_summary_present": isinstance(summary, dict),
+                "dq_provenance_engine": summary.get("engine") if isinstance(summary, dict) else None,
+                "stack_result_contract": stack_result,
+                "science_contract": science_contract,
+                "contract_ok": bool(science_contract.get("passed"))
+                and (not stack_result["required"] or bool(stack_result["passed"])),
+            }
+        )
+    return rows
+
+
+def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    lights = calibration.get("calibrated_lights") if isinstance(calibration.get("calibrated_lights"), list) else []
+    for index, payload in enumerate(lights):
+        if not isinstance(payload, dict):
+            continue
+        dq_summary = payload.get("dq_summary") if isinstance(payload.get("dq_summary"), dict) else {}
+        path_exists = _path_exists(payload.get("path"), run_root)
+        dq_path_exists = _path_exists(payload.get("dq_mask_path"), run_root)
+        rows.append(
+            {
+                "index": index,
+                "frame_id": payload.get("frame_id"),
+                "backend": payload.get("backend"),
+                "path": payload.get("path"),
+                "path_exists": path_exists,
+                "dq_mask_path": payload.get("dq_mask_path"),
+                "dq_mask_path_exists": dq_path_exists,
+                "dq_summary_present": isinstance(payload.get("dq_summary"), dict),
+                "dq_summary_has_valid": "valid" in dq_summary,
+                "tile_count": payload.get("tile_count"),
+                "tile_size": payload.get("tile_size"),
+                "contract_ok": (
+                    path_exists
+                    and dq_path_exists
+                    and isinstance(payload.get("dq_summary"), dict)
+                    and "valid" in dq_summary
+                    and _positive_int(payload.get("tile_count"))
+                    and _positive_int(payload.get("tile_size"))
+                ),
+            }
+        )
+    return rows
 
 
 def _integration_rejection_mode(integration: dict[str, Any], output: dict[str, Any]) -> str:
@@ -356,18 +461,7 @@ def _stack_result_contract_state(output: dict[str, Any]) -> dict[str, Any]:
         or tile_mode.startswith("stack_engine_cpu")
         or summary_engine == "stack_engine_cpu"
     )
-    contract = provenance.get("result_contract") if isinstance(provenance, dict) else None
-    present = isinstance(contract, dict)
-    passed = bool(contract.get("passed")) if isinstance(contract, dict) else False
-    check_count = len(contract.get("checks") or []) if isinstance(contract, dict) else 0
-    return {
-        "required": required,
-        "present": present,
-        "passed": passed,
-        "check_count": check_count,
-        "status": "not_required" if not required else ("passed" if passed else "missing_or_failed"),
-        "contract_type": contract.get("contract_type") if isinstance(contract, dict) else None,
-    }
+    return _stack_result_contract_state_from_provenance(provenance, required=required)
 
 
 def _resident_result_contract_state(
@@ -537,13 +631,17 @@ def build_pipeline_contract_audit(
     pixel_tolerance: int = 0,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
+    calibration_path = run_root / "calibration_artifacts.json"
     warp_path = run_root / "warp_results.json"
     local_norm_path = run_root / "local_norm_results.json"
     integration_path = run_root / "integration_results.json"
+    calibration = _load_json_object(calibration_path)
     warp = _load_json_object(warp_path)
     local_norm = _load_json_object(local_norm_path)
     integration = _load_json_object(integration_path)
 
+    calibration_master_rows = _calibration_master_rows(calibration, run_root)
+    calibrated_light_rows = _calibrated_light_rows(calibration, run_root)
     warp_rows = _warp_rows(warp, run_root)
     skipped_warp_rows = _skipped_warp_rows(warp)
     local_norm_rows = _local_norm_rows(local_norm, run_root)
@@ -624,6 +722,49 @@ def build_pipeline_contract_audit(
             "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
         ),
     ]
+    if calibration_path.exists():
+        checks.extend(
+            [
+                _check(
+                    "calibration_master_surfaces_present",
+                    bool(calibration_master_rows),
+                    {"actual": len(calibration_master_rows), "required_min": 1},
+                ),
+                _check(
+                    "calibration_master_surface_contract",
+                    bool(calibration_master_rows)
+                    and all(bool(row["contract_ok"]) for row in calibration_master_rows),
+                    {
+                        "master_count": len(calibration_master_rows),
+                        "failed": [
+                            row["name"]
+                            for row in calibration_master_rows
+                            if not row["contract_ok"]
+                        ],
+                    },
+                    "Master calibration surfaces must expose stats, semantics, and StackEngine result contracts.",
+                ),
+                _check(
+                    "calibrated_lights_present",
+                    bool(calibrated_light_rows),
+                    {"actual": len(calibrated_light_rows), "required_min": 1},
+                ),
+                _check(
+                    "calibrated_light_dq_contract",
+                    bool(calibrated_light_rows)
+                    and all(bool(row["contract_ok"]) for row in calibrated_light_rows),
+                    {
+                        "light_count": len(calibrated_light_rows),
+                        "failed": [
+                            row["frame_id"] or row["index"]
+                            for row in calibrated_light_rows
+                            if not row["contract_ok"]
+                        ],
+                    },
+                    "Calibrated light records must carry a calibrated image path, DQ map path, DQ summary, and tile metadata.",
+                ),
+            ]
+        )
     if pixel_verify:
         dq_rows = [row.get("dq") or {} for row in pixel_verification_rows]
         coverage_rows = [(row.get("count_maps") or {}).get("coverage") or {} for row in pixel_verification_rows]
@@ -730,9 +871,18 @@ def build_pipeline_contract_audit(
         "passed": passed,
         "checks": checks,
         "artifacts": {
+            "calibration": {"path": str(calibration_path), "exists": calibration_path.exists()},
             "warp": {"path": str(warp_path), "exists": warp_path.exists()},
             "local_norm": {"path": str(local_norm_path), "exists": local_norm_path.exists()},
             "integration": {"path": str(integration_path), "exists": integration_path.exists()},
+        },
+        "calibration": {
+            "artifact_path": str(calibration_path),
+            "exists": calibration_path.exists(),
+            "master_count": len(calibration_master_rows),
+            "calibrated_light_count": len(calibrated_light_rows),
+            "masters": calibration_master_rows,
+            "calibrated_lights": calibrated_light_rows,
         },
         "warp": {"outputs": warp_rows, "skipped_frames": skipped_warp_rows},
         "local_normalization": {
