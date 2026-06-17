@@ -164,6 +164,7 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
         "resident_calibration_release_mode": "callback_queue",
     },
 }
+DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v1"
 
 RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_prefetch_frames": "--resident-prefetch-frames",
@@ -2324,10 +2325,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resident-runtime-preset",
         choices=sorted(RESIDENT_RUNTIME_PRESETS),
-        default="manual",
+        default=DEFAULT_RESIDENT_RUNTIME_PRESET,
         help=(
-            "resident runtime scheduling preset; throughput-v1 applies the Gate158 "
-            "prefetch/H2D/calibration settings unless an individual option is explicitly provided"
+            "resident runtime scheduling preset; throughput-v1 is the default promoted by Gate180 and "
+            "applies prefetch/H2D/calibration settings unless an individual option is explicitly provided; "
+            "use manual for the legacy conservative schedule"
         ),
     )
     run.add_argument(
@@ -2690,10 +2692,11 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-runtime-preset",
         choices=sorted(RESIDENT_RUNTIME_PRESETS),
-        default="manual",
+        default=DEFAULT_RESIDENT_RUNTIME_PRESET,
         help=(
-            "resident runtime scheduling preset for the audit run; throughput-v1 applies the Gate158 "
-            "prefetch/H2D/calibration settings unless an individual option is explicitly provided"
+            "resident runtime scheduling preset for the audit run; throughput-v1 is the default promoted by "
+            "Gate180 and applies prefetch/H2D/calibration settings unless an individual option is explicitly "
+            "provided; use manual for the legacy conservative schedule"
         ),
     )
     audit.add_argument(

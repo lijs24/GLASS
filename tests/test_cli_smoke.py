@@ -42,6 +42,42 @@ def test_resident_runtime_preset_applies_gate158_values() -> None:
     assert args._resident_runtime_preset_effective["preset"] == "throughput-v1"
 
 
+def test_resident_runtime_preset_defaults_to_throughput_v1() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_runtime_preset == "throughput-v1"
+    assert args.resident_prefetch_frames == 12
+    assert args.resident_prefetch_workers == 7
+    assert args.resident_h2d_mode == "pinned_ring"
+    assert args.resident_calibration_release_mode == "callback_queue"
+    assert args._resident_runtime_preset_effective["preset"] == "throughput-v1"
+
+
+def test_resident_runtime_preset_manual_keeps_legacy_values() -> None:
+    args = _parse_cli(
+        [
+            "audit",
+            "--root",
+            "data",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "manual",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_runtime_preset == "manual"
+    assert args.resident_prefetch_frames == 0
+    assert args.resident_prefetch_workers == 1
+    assert args.resident_h2d_mode == "pageable"
+    assert args.resident_calibration_release_mode == "sync"
+    assert args._resident_runtime_preset_effective["applied"] == {}
+
+
 def test_resident_runtime_preset_respects_explicit_overrides() -> None:
     args = _parse_cli(
         [

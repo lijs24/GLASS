@@ -3060,6 +3060,32 @@ integration where applicable.
   slowest/best ratio `1.0021999002314625`, and final decision
   `default_change_ready=true` with recommendation `promote_default_candidate`.
 
+### S2-Gate 181: Promote Resident Throughput Preset Default
+
+- Promote `throughput-v1` from an opt-in resident CUDA runtime preset to the
+  default for `glass run` and `glass audit`.
+- Keep explicit `--resident-runtime-preset manual` as the legacy conservative
+  resident schedule for diagnostics and fallback comparisons.
+- Preserve user overrides: any explicitly supplied prefetch, worker, H2D,
+  batch, wave, or release-mode option still wins over the preset defaults.
+- Extend benchmark acceptance token-group checks so a defaulted runtime can be
+  validated from `resident_artifacts.json` effective `resident_io_pipeline`
+  fields, while individual required command-token checks remain strict.
+- Run a no-preset 200-light resident CUDA benchmark under
+  `C:\glass_runs\phase2_s2_gate_181_default_runtime\default_resident`; the
+  command contains no `--resident-runtime-preset`, but the effective runtime
+  schedule records `prefetch_frames=12`, `prefetch_workers=7`,
+  `h2d_mode=pinned_ring`, `calibration_batch_requested_frames=8`,
+  `calibration_batch_requested_streams=4`,
+  `calibration_wave_requested_frames=2`, and callback-queue release.
+- Current real artifact result: default no-preset elapsed time
+  `18.80478299999959 s`, compare coverage `0.9577924192878646`, RMS
+  difference `0.0014945534429799121`, p99 absolute difference
+  `0.00043544556712731865`, acceptance status `passed`, speedup
+  `58.099101701945926x`, runtime slowest/best ratio `1.0140343433372492` with
+  zero ignored warm-up runs, and release decision
+  `default_change_ready=true` / recommendation `promote_default_candidate`.
+
 ## Gate Rules
 
 Each gate requires:

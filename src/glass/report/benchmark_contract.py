@@ -66,6 +66,126 @@ def _load_resident_timing(glass_run: str | Path) -> dict[str, Any]:
     return timing if isinstance(timing, dict) else {}
 
 
+def _load_resident_io_pipelines(glass_run: str | Path) -> list[dict[str, Any]]:
+    path = Path(glass_run) / "resident_artifacts.json"
+    if not path.exists():
+        return []
+    payload = _read_json_lenient(path)
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        return []
+    pipelines: list[dict[str, Any]] = []
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        pipeline = artifact.get("resident_io_pipeline")
+        if isinstance(pipeline, dict):
+            pipelines.append(pipeline)
+    return pipelines
+
+
+def _pipeline_expected_value_matches(actual: Any, expected: Any) -> bool:
+    if isinstance(expected, (int, float)) and not isinstance(expected, bool):
+        actual_number = _numeric(actual)
+        return actual_number is not None and actual_number == float(expected)
+    return str(actual) == str(expected)
+
+
+def _resident_pipeline_expectation_match(
+    pipelines: list[dict[str, Any]],
+    expectations: dict[str, Any],
+) -> dict[str, Any] | None:
+    for index, pipeline in enumerate(pipelines):
+        observed: dict[str, Any] = {}
+        missing: list[str] = []
+        mismatched: dict[str, dict[str, Any]] = {}
+        for key, expected in expectations.items():
+            if key not in pipeline:
+                missing.append(key)
+                continue
+            actual = pipeline.get(key)
+            observed[key] = actual
+            if not _pipeline_expected_value_matches(actual, expected):
+                mismatched[key] = {"actual": actual, "required": expected}
+        if not missing and not mismatched:
+            return {
+                "artifact": "resident_artifacts.json",
+                "artifact_index": index,
+                "resident_io_pipeline": observed,
+            }
+    return None
+
+
+def _resident_runtime_preset_expectations(preset: str) -> dict[str, Any] | None:
+    if preset == "throughput-v1":
+        return {
+            "h2d_mode": "pinned_ring",
+            "prefetch_frames": 12,
+            "prefetch_workers": 7,
+            "calibration_batch_requested_frames": 8,
+            "calibration_batch_requested_streams": 4,
+            "calibration_wave_requested_frames": 2,
+            "calibration_release_mode_requested": "callback_queue",
+            "calibration_release_mode_effective": "callback_queue",
+        }
+    if preset == "manual":
+        return {
+            "h2d_mode": "pageable",
+            "prefetch_frames": 0,
+            "prefetch_workers": 1,
+            "calibration_release_mode_requested": "sync",
+            "calibration_release_mode_effective": "sync",
+        }
+    return None
+
+
+def _resident_pipeline_match_for_command_token(
+    token_text: str,
+    pipelines: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    parts = token_text.split()
+    if len(parts) != 2 or not pipelines:
+        return None
+    flag, value = parts
+    if flag == "--resident-runtime-preset":
+        expectations = _resident_runtime_preset_expectations(value)
+        if expectations is None:
+            return None
+        match = _resident_pipeline_expectation_match(pipelines, expectations)
+        if match is not None:
+            match["token"] = token_text
+            match["preset"] = value
+        return match
+    field_by_flag = {
+        "--resident-h2d-mode": "h2d_mode",
+        "--resident-prefetch-frames": "prefetch_frames",
+        "--resident-prefetch-workers": "prefetch_workers",
+        "--resident-calibration-batch-frames": "calibration_batch_requested_frames",
+        "--resident-calibration-batch-streams": "calibration_batch_requested_streams",
+        "--resident-calibration-wave-frames": "calibration_wave_requested_frames",
+        "--resident-calibration-release-mode": "calibration_release_mode_requested",
+    }
+    field = field_by_flag.get(flag)
+    if field is None:
+        return None
+    expected: Any = value
+    if field in {
+        "prefetch_frames",
+        "prefetch_workers",
+        "calibration_batch_requested_frames",
+        "calibration_batch_requested_streams",
+        "calibration_wave_requested_frames",
+    }:
+        try:
+            expected = int(value)
+        except ValueError:
+            return None
+    match = _resident_pipeline_expectation_match(pipelines, {field: expected})
+    if match is not None:
+        match["token"] = token_text
+    return match
+
+
 def _load_json_object_if_present(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -1402,6 +1522,7 @@ def build_benchmark_contract_checks(
         )
 
     command_text = _read_run_command(glass_run)
+    resident_io_pipelines = _load_resident_io_pipelines(glass_run)
     for token in contract.get("required_command_tokens") or []:
         token_text = str(token)
         checks.append(
@@ -1422,13 +1543,21 @@ def build_benchmark_contract_checks(
             tokens = [str(token) for token in group]
             group_name = f"group_{index}"
         matched = [token for token in tokens if command_text is not None and token in command_text]
+        artifact_matches = [
+            match
+            for token in tokens
+            for match in [_resident_pipeline_match_for_command_token(token, resident_io_pipelines)]
+            if match is not None
+        ]
         checks.append(
             _check(
                 f"contract_required_command_token_group:{group_name}",
-                bool(matched),
+                bool(matched) or bool(artifact_matches),
                 {
                     "any_of": tokens,
                     "matched": matched,
+                    "artifact_matches": artifact_matches,
+                    "resident_io_pipeline_records": len(resident_io_pipelines),
                     "run_command_present": command_text is not None,
                 },
             )
