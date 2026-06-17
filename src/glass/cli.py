@@ -67,6 +67,7 @@ from glass.report.resident_tile_contribution import (
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
+from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
     build_tile_local_apply_experiment,
     write_tile_local_apply_experiment,
@@ -1130,6 +1131,26 @@ def cmd_tile_local_policy_replay(args: argparse.Namespace) -> int:
             "away": summary.get("moves_away_from_reference"),
             "mean_abs_residual_before": summary.get("mean_abs_residual_before"),
             "mean_abs_residual_after": summary.get("mean_abs_residual_after"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_tile_local_policy_subset(args: argparse.Namespace) -> int:
+    payload = build_tile_local_policy_subset(
+        args.replay,
+        strategy=args.strategy,
+        max_tiles=args.max_tiles,
+    )
+    write_tile_local_policy_subset(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "selected_tiles": payload.get("tile_count"),
+            "dropped_overlap_tiles": len(payload.get("dropped_overlap_tiles") or []),
+            "recommendation": summary.get("recommendation"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2590,6 +2611,27 @@ def build_parser() -> argparse.ArgumentParser:
     tile_local_replay.add_argument("--out", required=True, help="output tile-local policy replay JSON")
     tile_local_replay.add_argument("--markdown", help="optional output Markdown summary")
     tile_local_replay.set_defaults(func=cmd_tile_local_policy_replay)
+
+    tile_local_subset = sub.add_parser(
+        "tile-local-policy-subset",
+        help="select a non-overlapping subset from a tile-local policy replay",
+    )
+    tile_local_subset.add_argument("--replay", required=True, help="tile-local-policy-replay JSON artifact")
+    tile_local_subset.add_argument("--out", required=True, help="output subset replay JSON")
+    tile_local_subset.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_subset.add_argument(
+        "--strategy",
+        choices=["canonical_delta_abs", "residual_reduction", "tile_index"],
+        default="canonical_delta_abs",
+        help="greedy priority used when selecting non-overlapping tiles",
+    )
+    tile_local_subset.add_argument(
+        "--max-tiles",
+        type=int,
+        default=0,
+        help="maximum selected tiles; 0 keeps all non-overlapping tiles selected by strategy",
+    )
+    tile_local_subset.set_defaults(func=cmd_tile_local_policy_subset)
 
     tile_local_apply = sub.add_parser(
         "tile-local-apply-experiment",

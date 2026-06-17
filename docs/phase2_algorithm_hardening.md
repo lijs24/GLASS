@@ -2331,6 +2331,26 @@ integration where applicable.
   F000100-F000110 bounded replay contract before planning any broader
   tile-local policy sweep.
 
+### S2-Gate 138: Non-Overlapping Tile-Local Policy Subsets
+
+- Add `glass tile-local-policy-subset` to convert a tile-local replay artifact
+  into a native-apply-compatible non-overlapping replay subset.
+- Preserve the `tile_local_policy_replay` artifact type so the resident CUDA
+  pipeline can consume the subset directly, while recording source replay,
+  selection strategy, original tile count, selected tile count, overlap drops,
+  limit drops, and recalculated replay summary statistics.
+- Support greedy strategies for `canonical_delta_abs`, `residual_reduction`,
+  and `tile_index`, plus an optional maximum selected tile count.
+- Add tests proving overlapping tiles are dropped deterministically and the
+  summary is recomputed from the selected subset.
+- Run the command on the S2-Gate 133 F000100-F000110 replay, then run a
+  200-light resident CUDA bounded apply experiment with the selected subset and
+  verify it through compare, `tile-local-apply-experiment`, and
+  `acceptance-audit`.
+- Keep this as an experiment-only gate. Do not enable tile-local apply by
+  default and do not promote global policy selection until localized post-apply
+  residual verification exists.
+
 ## Gate Rules
 
 Each gate requires:
