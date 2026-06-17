@@ -91,6 +91,80 @@ def _resident_contract_for_output(
     return lookup.get(("filter", str(filter_value)))
 
 
+def _resident_calibration_lookup(payload: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    if payload.get("artifact_type") != "resident_cuda_calibration_contract":
+        return {}
+    top_level_passed = payload.get("passed") is True
+    outputs = payload.get("outputs") if isinstance(payload.get("outputs"), list) else []
+    lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        index_key = str(output.get("index"))
+        filter_key = str(output.get("filter") or "")
+        checks = output.get("checks") if isinstance(output.get("checks"), list) else []
+        record = {
+            "artifact_type": payload.get("artifact_type"),
+            "top_level_passed": top_level_passed,
+            "passed": top_level_passed and output.get("passed") is True,
+            "status": output.get("status"),
+            "check_count": len([item for item in checks if isinstance(item, dict)]),
+            "frame_count": output.get("frame_count"),
+            "set_count": output.get("set_count"),
+            "bias_count": output.get("bias_count"),
+            "dark_count": output.get("dark_count"),
+            "flat_count": output.get("flat_count"),
+            "calibration_group_policy": output.get("calibration_group_policy"),
+        }
+        lookup[("index", index_key)] = record
+        if filter_key:
+            lookup[("filter", filter_key)] = record
+    return lookup
+
+
+def _resident_calibration_records(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if payload.get("artifact_type") != "resident_cuda_calibration_contract":
+        return []
+    outputs = payload.get("outputs") if isinstance(payload.get("outputs"), list) else []
+    records: list[dict[str, Any]] = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        passed = payload.get("passed") is True and output.get("passed") is True
+        records.append(
+            {
+                "name": f"resident_calibration_{output.get('filter') or output.get('index')}",
+                "type": "resident_calibration",
+                "path": output.get("master_path"),
+                "path_exists": output.get("master_path_exists"),
+                "tile_stack_mode": "cuda_resident_stack",
+                "backend": "cuda_resident_stack",
+                "stack_engine_enabled": True,
+                "fallback_reason": None,
+                "has_dq_provenance": True,
+                "input_samples": output.get("frame_count"),
+                "result_contract_passed": passed,
+                "resident_calibration_contract_passed": passed,
+                "resident_calibration_contract_status": output.get("status"),
+                "resident_calibration_contract_check_count": len(
+                    [item for item in output.get("checks") or [] if isinstance(item, dict)]
+                ),
+                "resident_calibration_frame_count": output.get("frame_count"),
+                "resident_calibration_set_count": output.get("set_count"),
+                "resident_calibration_bias_count": output.get("bias_count"),
+                "resident_calibration_dark_count": output.get("dark_count"),
+                "resident_calibration_flat_count": output.get("flat_count"),
+                "summary_source_schema": "resident_cuda_calibration_contract",
+                "summary_engine": "cuda_resident_stack",
+                "summary_stage": "master_calibration",
+                "contract_ok": passed,
+            }
+        )
+    return records
+
+
 def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[str, Any]:
     path_value = payload.get("path")
     path = Path(str(path_value)) if path_value else None
@@ -218,6 +292,7 @@ def _adoption_surface_record(surface: str, record: dict[str, Any]) -> dict[str, 
         "result_contract_passed": record.get("result_contract_passed"),
         "stack_result_contract_passed": record.get("stack_result_contract_passed"),
         "resident_result_contract_passed": record.get("resident_result_contract_passed"),
+        "resident_calibration_contract_passed": record.get("resident_calibration_contract_passed"),
         "contract_ok": record.get("contract_ok"),
         "fallback_reason": fallback,
         "stack_engine_contract_ready": stack_engine_contract_ready,
@@ -359,6 +434,7 @@ def build_stack_engine_contract_audit(
     scope: str = "all",
     expected_integration_engine: str = "stack_engine_cpu",
     resident_result_contract: dict[str, Any] | None = None,
+    resident_calibration_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
     calibration_path = run_root / "calibration_artifacts.json"
@@ -366,6 +442,7 @@ def build_stack_engine_contract_audit(
     calibration = _load_json_object(calibration_path)
     integration = _load_json_object(integration_path)
     resident_contracts = _resident_contract_lookup(resident_result_contract or {})
+    resident_calibration_contracts = _resident_calibration_lookup(resident_calibration_contract or {})
     checks: list[dict[str, Any]] = []
 
     include_calibration = scope in {"all", "calibration"}
@@ -376,12 +453,18 @@ def build_stack_engine_contract_audit(
     if include_calibration:
         master_payloads = calibration.get("masters") if isinstance(calibration.get("masters"), dict) else {}
         masters = [_master_record(str(name), payload, run_root) for name, payload in master_payloads.items()]
+        masters.extend(_resident_calibration_records(resident_calibration_contract or {}))
+        calibration_artifact_available = calibration_path.exists() or bool(resident_calibration_contracts)
         checks.extend(
             [
                 _check(
                     "calibration_artifact_exists",
-                    calibration_path.exists(),
-                    {"path": str(calibration_path)},
+                    calibration_artifact_available,
+                    {
+                        "path": str(calibration_path),
+                        "exists": calibration_path.exists(),
+                        "resident_calibration_contract_attached": bool(resident_calibration_contracts),
+                    },
                 ),
                 _check(
                     "calibration_master_records_present",
@@ -447,6 +530,7 @@ def build_stack_engine_contract_audit(
         "run_dir": str(run_root),
         "scope": scope,
         "expected_integration_engine": expected_integration_engine,
+        "resident_calibration_contract_attached": bool(resident_calibration_contracts),
         "resident_result_contract_attached": bool(resident_contracts),
         "status": "passed" if passed else "failed",
         "passed": passed,
@@ -474,6 +558,7 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         f"- Run: `{audit['run_dir']}`",
         f"- Scope: `{audit['scope']}`",
         f"- Expected integration engine: `{audit['expected_integration_engine']}`",
+        f"- Resident calibration contract attached: `{audit.get('resident_calibration_contract_attached')}`",
         f"- Resident result contract attached: `{audit.get('resident_result_contract_attached')}`",
         f"- StackEngine adoption recommendation: `{(audit.get('adoption') or {}).get('recommendation')}`",
         f"- Phase 2 StackEngine default gaps: `{(audit.get('adoption') or {}).get('phase2_stack_engine_default_gap_count')}`",

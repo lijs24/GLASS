@@ -76,6 +76,10 @@ from glass.report.resident_result_contract import (
     build_resident_result_contract,
     write_resident_result_contract,
 )
+from glass.report.resident_calibration_contract import (
+    build_resident_calibration_contract,
+    write_resident_calibration_contract,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1892,6 +1896,21 @@ def cmd_resident_result_contract(args: argparse.Namespace) -> int:
     return 0 if payload.get("passed") or not args.fail_on_failed else 2
 
 
+def cmd_resident_calibration_contract(args: argparse.Namespace) -> int:
+    payload = build_resident_calibration_contract(args.run)
+    write_resident_calibration_contract(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "output_count": payload.get("output_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if payload.get("passed") or not args.fail_on_failed else 2
+
+
 def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
     payload = build_resident_registration_triage(args.baseline_audit, args.candidate_audit)
     write_resident_registration_triage(args.out, payload, markdown=args.markdown)
@@ -1912,6 +1931,11 @@ def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
 
 
 def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
+    resident_calibration_contract = (
+        read_json(args.resident_calibration_contract_json)
+        if getattr(args, "resident_calibration_contract_json", None)
+        else None
+    )
     resident_result_contract = (
         read_json(args.resident_result_contract_json)
         if getattr(args, "resident_result_contract_json", None)
@@ -1921,6 +1945,9 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
         args.run,
         scope=args.scope,
         expected_integration_engine=args.expected_integration_engine,
+        resident_calibration_contract=resident_calibration_contract
+        if isinstance(resident_calibration_contract, dict)
+        else None,
         resident_result_contract=resident_result_contract if isinstance(resident_result_contract, dict) else None,
     )
     write_stack_engine_contract_audit(args.out, audit, markdown=args.markdown)
@@ -1930,6 +1957,7 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
             "status": audit["status"],
             "scope": audit["scope"],
             "expected_integration_engine": audit["expected_integration_engine"],
+            "resident_calibration_contract_attached": audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": audit.get("resident_result_contract_attached"),
             "default_promotion_ready": default_promotion.get("ready"),
             "default_promotion_status": default_promotion.get("status"),
@@ -3994,6 +4022,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     resident_runtime_repeat_preflight.set_defaults(func=cmd_resident_runtime_repeat_preflight)
 
+    resident_calibration_contract = sub.add_parser(
+        "resident-calibration-contract",
+        help="audit resident CUDA master-calibration evidence from resident_artifacts.json",
+    )
+    resident_calibration_contract.add_argument(
+        "--run",
+        required=True,
+        help="GLASS run directory with resident_artifacts.json",
+    )
+    resident_calibration_contract.add_argument(
+        "--out",
+        required=True,
+        help="output resident calibration-contract JSON",
+    )
+    resident_calibration_contract.add_argument("--markdown", help="optional output Markdown summary")
+    resident_calibration_contract.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 if the contract fails",
+    )
+    resident_calibration_contract.set_defaults(func=cmd_resident_calibration_contract)
+
     resident_result_contract = sub.add_parser(
         "resident-result-contract",
         help="audit resident CUDA integration outputs for result-contract invariants",
@@ -4063,6 +4113,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["stack_engine_cpu", "cuda_resident_stack", "any"],
         default="stack_engine_cpu",
         help="expected integration engine for the selected run type",
+    )
+    stack_contract.add_argument(
+        "--resident-calibration-contract-json",
+        help="optional resident-calibration-contract JSON used to prove resident CUDA master-calibration parity",
     )
     stack_contract.add_argument(
         "--resident-result-contract-json",

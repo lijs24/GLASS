@@ -988,6 +988,7 @@ def _stack_engine_contract_summary_rows(contract: dict[str, Any] | None) -> list
             "passed": contract.get("passed"),
             "scope": contract.get("scope"),
             "expected_integration_engine": contract.get("expected_integration_engine"),
+            "resident_calibration_contract_attached": contract.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": contract.get("resident_result_contract_attached"),
             "source": contract.get("_report_source_path"),
             "master_count": ((contract.get("calibration") or {}).get("master_count")),
@@ -1033,6 +1034,7 @@ def _stack_engine_contract_surface_rows(contract: dict[str, Any] | None) -> list
                 "engine": master.get("tile_stack_mode"),
                 "contract_ok": master.get("contract_ok"),
                 "dq_provenance": master.get("has_dq_provenance"),
+                "resident_calibration_contract_passed": master.get("resident_calibration_contract_passed"),
                 "summary_schema": master.get("summary_source_schema"),
                 "fallback_reason": master.get("fallback_reason"),
             }

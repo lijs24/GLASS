@@ -13,6 +13,7 @@ def _commands(
     *,
     pipeline_contract: bool = False,
     stack_engine_contract: bool = False,
+    resident_calibration_contract: bool = False,
     resident_result_contract: bool = False,
 ) -> dict[str, str]:
     commands = {
@@ -31,10 +32,19 @@ def _commands(
         commands["resident_result_contract"] = (
             f"glass resident-result-contract --run runs/{name} --out resident_result_contract/{name}.json"
         )
+    if resident_calibration_contract:
+        commands["resident_calibration_contract"] = (
+            f"glass resident-calibration-contract --run runs/{name} "
+            f"--out resident_calibration_contract/{name}.json"
+        )
     if stack_engine_contract:
         commands["stack_engine_contract"] = (
             f"glass stack-engine-contract --run runs/{name} --out stack_engine_contract/{name}.json"
         )
+        if resident_calibration_contract:
+            commands["stack_engine_contract"] += (
+                f" --resident-calibration-contract-json resident_calibration_contract/{name}.json"
+            )
         if resident_result_contract:
             commands["stack_engine_contract"] += (
                 f" --resident-result-contract-json resident_result_contract/{name}.json"
@@ -96,6 +106,7 @@ def test_candidate_runtime_sweep_execute_records_contract_steps(tmp_path: Path) 
                     "commands": _commands(
                         "a",
                         pipeline_contract=True,
+                        resident_calibration_contract=True,
                         resident_result_contract=True,
                         stack_engine_contract=True,
                     ),
@@ -110,6 +121,7 @@ def test_candidate_runtime_sweep_execute_records_contract_steps(tmp_path: Path) 
         "run",
         "compare_reference",
         "compare_baseline",
+        "resident_calibration_contract",
         "resident_result_contract",
         "stack_engine_contract",
         "pipeline_contract",

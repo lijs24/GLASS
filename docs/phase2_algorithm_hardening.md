@@ -2982,6 +2982,34 @@ integration where applicable.
   and release acceptance failed on only the remaining scope/calibration
   promotion blockers instead of the previous resident CUDA surface gap.
 
+### S2-Gate 178: Resident Calibration-Contract Parity In StackEngine Audit
+
+- Add `glass resident-calibration-contract`, auditing resident CUDA
+  `resident_artifacts.json` for master-calibration evidence: resident artifact
+  presence, master set records, bias/dark/flat source counts, master statistics,
+  cache file presence, light frame IDs, calibration timing, and downstream
+  resident master output existence.
+- Extend `glass stack-engine-contract` with optional
+  `--resident-calibration-contract-json`, converting a passing resident
+  calibration contract into a resident CUDA master-calibration surface.
+- With both resident calibration-contract and resident result-contract parity
+  attached, resident CUDA runs can satisfy all-surface StackEngine default
+  promotion without fabricating a legacy `calibration_artifacts.json`.
+- Update candidate runtime sweep plans/executor so each candidate emits
+  `resident-calibration-contract` before `resident-result-contract` and
+  `stack-engine-contract`, passing both resident contract JSON files into the
+  StackEngine audit.
+- Surface resident calibration-contract attachment and per-surface status in
+  StackEngine JSON, Markdown, and HTML reports.
+- Run the updated resident calibration/result/StackEngine/acceptance chain
+  against the Gate160 200-light resident CUDA run under
+  `C:\glass_runs\phase2_s2_gate_178_resident_calibration_parity`.
+- Current real artifact result: resident calibration contract passed, resident
+  result contract passed, StackEngine contract passed with
+  `default_promotion.ready=true`, and release acceptance passed with the
+  measured `46.82815250883293x` speedup and zero StackEngine default-promotion
+  blockers.
+
 ## Gate Rules
 
 Each gate requires:

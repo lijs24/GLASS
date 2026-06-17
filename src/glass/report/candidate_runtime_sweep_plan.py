@@ -211,6 +211,21 @@ def _pipeline_contract_command(*, glass_run: Path, out: Path, markdown: Path) ->
     )
 
 
+def _resident_calibration_contract_command(*, glass_run: Path, out: Path, markdown: Path) -> str:
+    return _command(
+        [
+            "glass",
+            "resident-calibration-contract",
+            "--run",
+            glass_run,
+            "--out",
+            out,
+            "--markdown",
+            markdown,
+        ]
+    )
+
+
 def _resident_result_contract_command(*, glass_run: Path, out: Path, markdown: Path) -> str:
     return _command(
         [
@@ -231,6 +246,7 @@ def _stack_engine_contract_command(
     glass_run: Path,
     out: Path,
     markdown: Path,
+    resident_calibration_contract_json: Path | None,
     resident_result_contract_json: Path | None,
 ) -> str:
     tokens: list[str | Path | int | float] = [
@@ -247,6 +263,8 @@ def _stack_engine_contract_command(
         "--markdown",
         markdown,
     ]
+    if resident_calibration_contract_json is not None:
+        tokens.extend(["--resident-calibration-contract-json", resident_calibration_contract_json])
     if resident_result_contract_json is not None:
         tokens.extend(["--resident-result-contract-json", resident_result_contract_json])
     return _command(tokens)
@@ -360,6 +378,12 @@ def build_candidate_runtime_sweep_plan(
         master, coverage = _run_master_paths(run_dir)
         compare_reference_html = root_path / "compare" / f"{variant_id}_vs_reference.html"
         compare_baseline_html = root_path / "compare" / f"{variant_id}_vs_baseline.html"
+        resident_calibration_contract_json = (
+            root_path / "resident_calibration_contract" / f"{variant_id}_resident_calibration_contract.json"
+        )
+        resident_calibration_contract_md = (
+            root_path / "resident_calibration_contract" / f"{variant_id}_resident_calibration_contract.md"
+        )
         resident_result_contract_json = root_path / "resident_result_contract" / f"{variant_id}_resident_result_contract.json"
         resident_result_contract_md = root_path / "resident_result_contract" / f"{variant_id}_resident_result_contract.md"
         stack_engine_contract_json = root_path / "stack_engine_contract" / f"{variant_id}_stack_engine_contract.json"
@@ -397,6 +421,11 @@ def build_candidate_runtime_sweep_plan(
                 out=pipeline_contract_json,
                 markdown=pipeline_contract_md,
             ),
+            "resident_calibration_contract": _resident_calibration_contract_command(
+                glass_run=run_dir,
+                out=resident_calibration_contract_json,
+                markdown=resident_calibration_contract_md,
+            ),
             "resident_result_contract": _resident_result_contract_command(
                 glass_run=run_dir,
                 out=resident_result_contract_json,
@@ -406,6 +435,7 @@ def build_candidate_runtime_sweep_plan(
                 glass_run=run_dir,
                 out=stack_engine_contract_json,
                 markdown=stack_engine_contract_md,
+                resident_calibration_contract_json=resident_calibration_contract_json,
                 resident_result_contract_json=resident_result_contract_json,
             ),
             "acceptance_audit": _acceptance_command(
@@ -453,6 +483,7 @@ def build_candidate_runtime_sweep_plan(
                 "artifacts": {
                     "compare_reference_json": str(compare_reference_html.with_suffix(".json")),
                     "compare_baseline_json": str(compare_baseline_html.with_suffix(".json")),
+                    "resident_calibration_contract_json": str(resident_calibration_contract_json),
                     "resident_result_contract_json": str(resident_result_contract_json),
                     "stack_engine_contract_json": str(stack_engine_contract_json),
                     "pipeline_contract_json": str(pipeline_contract_json),

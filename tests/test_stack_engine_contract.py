@@ -257,6 +257,84 @@ def test_stack_engine_contract_accepts_resident_result_contract_parity(tmp_path:
     assert "missing_calibration_surface" in promotion_blockers
 
 
+def test_stack_engine_contract_accepts_resident_calibration_for_default_ready(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_calibration_contract = {
+        "artifact_type": "resident_cuda_calibration_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "master_path": str(run / "integration" / "resident_master_H.fits"),
+                "master_path_exists": True,
+                "frame_count": 200,
+                "set_count": 1,
+                "bias_count": 20,
+                "dark_count": 20,
+                "flat_count": 20,
+                "calibration_group_policy": "planner_matching_groups_per_light",
+                "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+            }
+        ],
+    }
+    resident_result_contract = {
+        "artifact_type": "resident_cuda_result_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "active_frame_count": 193,
+                "frame_count": 200,
+                "checks": [{"name": "resident_identity", "passed": True}],
+            }
+        ],
+    }
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                        "active_frame_count": 193,
+                    },
+                }
+            ]
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(
+        run,
+        scope="all",
+        expected_integration_engine="cuda_resident_stack",
+        resident_calibration_contract=resident_calibration_contract,
+        resident_result_contract=resident_result_contract,
+    )
+
+    promotion = audit["default_promotion"]
+    assert audit["passed"] is True
+    assert audit["resident_calibration_contract_attached"] is True
+    assert audit["resident_result_contract_attached"] is True
+    assert audit["calibration"]["master_count"] == 1
+    assert audit["calibration"]["masters"][0]["resident_calibration_contract_passed"] is True
+    assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
+    assert audit["adoption"]["cuda_resident_surface_count"] == 2
+    assert promotion["ready"] is True
+    assert promotion["status"] == "ready"
+    assert promotion["blocker_count"] == 0
+
+
 def test_stack_engine_contract_require_default_ready_rejects_resident_only_gap(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
@@ -364,3 +442,90 @@ def test_stack_engine_contract_cli_uses_resident_result_contract_json(tmp_path: 
     assert audit["resident_result_contract_attached"] is True
     assert audit["integration"]["outputs"][0]["resident_result_contract_passed"] is True
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
+
+
+def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_calibration_contract = tmp_path / "resident_calibration_contract.json"
+    resident_result_contract = tmp_path / "resident_result_contract.json"
+    out = tmp_path / "stack_engine_contract.json"
+    write_json(
+        resident_calibration_contract,
+        {
+            "artifact_type": "resident_cuda_calibration_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "frame_count": 200,
+                    "set_count": 1,
+                    "bias_count": 20,
+                    "dark_count": 20,
+                    "flat_count": 20,
+                    "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+                }
+            ],
+        },
+    )
+    write_json(
+        resident_result_contract,
+        {
+            "artifact_type": "resident_cuda_result_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "checks": [{"name": "resident_identity", "passed": True}],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                }
+            ]
+        },
+    )
+
+    assert (
+        main(
+            [
+                "stack-engine-contract",
+                "--run",
+                str(run),
+                "--scope",
+                "all",
+                "--expected-integration-engine",
+                "cuda_resident_stack",
+                "--resident-calibration-contract-json",
+                str(resident_calibration_contract),
+                "--resident-result-contract-json",
+                str(resident_result_contract),
+                "--out",
+                str(out),
+                "--require-default-ready",
+            ]
+        )
+        == 0
+    )
+
+    audit = read_json(out)
+    assert audit["resident_calibration_contract_attached"] is True
+    assert audit["default_promotion"]["ready"] is True

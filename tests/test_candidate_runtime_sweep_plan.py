@@ -82,12 +82,17 @@ def test_candidate_runtime_sweep_plan_generates_runtime_only_variants(tmp_path: 
     assert payload["variants"][1]["changed_options"]["--resident-prefetch-frames"] == 12
     assert "--resident-triangle-min-agreement-score 0.6" in payload["variants"][1]["commands"]["run"]
     assert "--resident-prefetch-frames 12" in payload["variants"][1]["commands"]["run"]
+    assert "resident-calibration-contract" in payload["variants"][1]["commands"]["resident_calibration_contract"]
     assert "resident-result-contract" in payload["variants"][1]["commands"]["resident_result_contract"]
     assert "pipeline-contract" in payload["variants"][1]["commands"]["pipeline_contract"]
     assert "stack-engine-contract" in payload["variants"][1]["commands"]["stack_engine_contract"]
+    assert "--resident-calibration-contract-json" in payload["variants"][1]["commands"]["stack_engine_contract"]
     assert "--resident-result-contract-json" in payload["variants"][1]["commands"]["stack_engine_contract"]
     assert "--pipeline-contract-json" in payload["variants"][1]["commands"]["acceptance_audit"]
     assert "--stack-engine-contract-json" in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert payload["variants"][1]["artifacts"]["resident_calibration_contract_json"].endswith(
+        "prefetch12_workers6_resident_calibration_contract.json"
+    )
     assert payload["variants"][1]["artifacts"]["resident_result_contract_json"].endswith(
         "prefetch12_workers6_resident_result_contract.json"
     )
