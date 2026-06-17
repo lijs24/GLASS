@@ -1,0 +1,27 @@
+{
+    "schema_version":  1,
+    "artifact_type":  "cuda_toolkit_minimal_install",
+    "label":  "cuda11",
+    "status":  "installed",
+    "toolkit":  "11.8",
+    "installer_url":  "https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda_11.8.0_522.06_windows.exe",
+    "installer_path":  "C:\\Users\\ljs\\AppData\\Local\\GLASS\\cuda-installers\\cuda_11.8.0_522.06_windows.exe",
+    "installer_present":  true,
+    "installer_sha256":  "b70f38f27321c0a53993438a91970a2e3c426f46da4c42eceff1eeea031a6555",
+    "expected_sha256":  "b70f38f27321c0a53993438a91970a2e3c426f46da4c42eceff1eeea031a6555",
+    "components":  [
+                       "nvcc_11.8",
+                       "cudart_11.8"
+                   ],
+    "driver_component_included":  false,
+    "install_requested":  true,
+    "download_requested":  true,
+    "install_exit_code":  0,
+    "expected_root":  "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8",
+    "nvcc_expected":  "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8\\bin\\nvcc.exe",
+    "notes":  [
+                  "This script intentionally installs only nvcc and cudart components.",
+                  "Display driver components are not requested.",
+                  "Run glass windows-package-build-plan after install to verify nvcc discovery."
+              ]
+}

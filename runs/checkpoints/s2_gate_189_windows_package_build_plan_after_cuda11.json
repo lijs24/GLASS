@@ -1,0 +1,304 @@
+{
+  "artifact_type": "windows_package_build_plan",
+  "checks": [
+    {
+      "evidence": {
+        "requested_labels": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ],
+        "unknown_labels": []
+      },
+      "name": "all_package_labels_known",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ready_variants": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ]
+      },
+      "name": "cpu_package_planned",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "missing_cuda_variants": [],
+        "ready_cuda_variants": [
+          "cuda13",
+          "cuda12",
+          "cuda11"
+        ]
+      },
+      "name": "at_least_one_cuda_variant_ready",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T16:22:57+00:00",
+  "discovered_toolkits": [
+    {
+      "major": 13,
+      "minor": 2,
+      "name": "v13.2",
+      "nvcc_exists": true,
+      "nvcc_path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2\\bin\\nvcc.exe",
+      "path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2",
+      "version": "13.2"
+    },
+    {
+      "major": 12,
+      "minor": 4,
+      "name": "v12.4",
+      "nvcc_exists": true,
+      "nvcc_path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4\\bin\\nvcc.exe",
+      "path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4",
+      "version": "12.4"
+    },
+    {
+      "major": 11,
+      "minor": 8,
+      "name": "v11.8",
+      "nvcc_exists": true,
+      "nvcc_path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8\\bin\\nvcc.exe",
+      "path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8",
+      "version": "11.8"
+    }
+  ],
+  "failed_checks": [],
+  "inputs": {
+    "configuration": "Release",
+    "cuda_base": "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA",
+    "package_labels": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "python": ".\\.venv\\Scripts\\python.exe",
+    "release_root": ".release\\windows",
+    "require_all_toolkits": false,
+    "static_cuda_runtime": true,
+    "toolkit_root_overrides": {}
+  },
+  "limitations": [
+    "This artifact plans package builds; it does not install CUDA Toolkits or build packages.",
+    "CUDA Toolkit compatibility is matched by major version unless an exact version is discovered.",
+    "Each build_portable.ps1 invocation overwrites the shared .release/windows/GLASS package root."
+  ],
+  "missing_cuda_variants": [],
+  "passed": true,
+  "ready_variants": [
+    "cuda13",
+    "cuda12",
+    "cuda11",
+    "cpu"
+  ],
+  "recommendation": "build_all_variants",
+  "schema_version": 1,
+  "status": "build_plan_ready",
+  "variants": [
+    {
+      "build_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/build_portable.ps1",
+        "-Python",
+        ".\\.venv\\Scripts\\python.exe",
+        "-Configuration",
+        "Release",
+        "-PackageLabel",
+        "cuda13",
+        "-BuildCuda",
+        "-CudaArchitectures",
+        "86;89;90;100;120",
+        "-StaticCudaRuntime",
+        "-CudaToolkitRoot",
+        "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2"
+      ],
+      "build_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build_portable.ps1 -Python .\\.venv\\Scripts\\python.exe -Configuration Release -PackageLabel cuda13 -BuildCuda -CudaArchitectures \"86;89;90;100;120\" -StaticCudaRuntime -CudaToolkitRoot \"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2\"",
+      "build_cuda": true,
+      "build_ready": true,
+      "cuda_architectures": "86;89;90;100;120",
+      "known_label": true,
+      "label": "cuda13",
+      "nvcc_exists": true,
+      "nvcc_path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2\\bin\\nvcc.exe",
+      "package_root": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS",
+      "skip_reason": null,
+      "toolkit_download_command": null,
+      "toolkit_download_command_text": null,
+      "toolkit_install_command": null,
+      "toolkit_install_command_text": null,
+      "toolkit_match": "major_compatible",
+      "toolkit_required": "13.0",
+      "toolkit_root": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2",
+      "toolkit_source": "discovered",
+      "toolkit_version": "13.2",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+    },
+    {
+      "build_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/build_portable.ps1",
+        "-Python",
+        ".\\.venv\\Scripts\\python.exe",
+        "-Configuration",
+        "Release",
+        "-PackageLabel",
+        "cuda12",
+        "-BuildCuda",
+        "-CudaArchitectures",
+        "75;80;86;89;90",
+        "-StaticCudaRuntime",
+        "-CudaToolkitRoot",
+        "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4"
+      ],
+      "build_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build_portable.ps1 -Python .\\.venv\\Scripts\\python.exe -Configuration Release -PackageLabel cuda12 -BuildCuda -CudaArchitectures \"75;80;86;89;90\" -StaticCudaRuntime -CudaToolkitRoot \"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4\"",
+      "build_cuda": true,
+      "build_ready": true,
+      "cuda_architectures": "75;80;86;89;90",
+      "known_label": true,
+      "label": "cuda12",
+      "nvcc_exists": true,
+      "nvcc_path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4\\bin\\nvcc.exe",
+      "package_root": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS",
+      "skip_reason": null,
+      "toolkit_download_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/install_cuda_toolkit_minimal.ps1",
+        "-Label",
+        "cuda12",
+        "-Download"
+      ],
+      "toolkit_download_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/install_cuda_toolkit_minimal.ps1 -Label cuda12 -Download",
+      "toolkit_install_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/install_cuda_toolkit_minimal.ps1",
+        "-Label",
+        "cuda12",
+        "-Install"
+      ],
+      "toolkit_install_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/install_cuda_toolkit_minimal.ps1 -Label cuda12 -Install",
+      "toolkit_match": "exact",
+      "toolkit_required": "12.4",
+      "toolkit_root": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4",
+      "toolkit_source": "discovered",
+      "toolkit_version": "12.4",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+    },
+    {
+      "build_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/build_portable.ps1",
+        "-Python",
+        ".\\.venv\\Scripts\\python.exe",
+        "-Configuration",
+        "Release",
+        "-PackageLabel",
+        "cuda11",
+        "-BuildCuda",
+        "-CudaArchitectures",
+        "50;52;60;61;70;75;80;86",
+        "-StaticCudaRuntime",
+        "-CudaToolkitRoot",
+        "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8"
+      ],
+      "build_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build_portable.ps1 -Python .\\.venv\\Scripts\\python.exe -Configuration Release -PackageLabel cuda11 -BuildCuda -CudaArchitectures \"50;52;60;61;70;75;80;86\" -StaticCudaRuntime -CudaToolkitRoot \"C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8\"",
+      "build_cuda": true,
+      "build_ready": true,
+      "cuda_architectures": "50;52;60;61;70;75;80;86",
+      "known_label": true,
+      "label": "cuda11",
+      "nvcc_exists": true,
+      "nvcc_path": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8\\bin\\nvcc.exe",
+      "package_root": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS",
+      "skip_reason": null,
+      "toolkit_download_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/install_cuda_toolkit_minimal.ps1",
+        "-Label",
+        "cuda11",
+        "-Download"
+      ],
+      "toolkit_download_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/install_cuda_toolkit_minimal.ps1 -Label cuda11 -Download",
+      "toolkit_install_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/install_cuda_toolkit_minimal.ps1",
+        "-Label",
+        "cuda11",
+        "-Install"
+      ],
+      "toolkit_install_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/install_cuda_toolkit_minimal.ps1 -Label cuda11 -Install",
+      "toolkit_match": "exact",
+      "toolkit_required": "11.8",
+      "toolkit_root": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.8",
+      "toolkit_source": "discovered",
+      "toolkit_version": "11.8",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+    },
+    {
+      "build_command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/build_portable.ps1",
+        "-Python",
+        ".\\.venv\\Scripts\\python.exe",
+        "-Configuration",
+        "Release",
+        "-PackageLabel",
+        "cpu"
+      ],
+      "build_command_text": "powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build_portable.ps1 -Python .\\.venv\\Scripts\\python.exe -Configuration Release -PackageLabel cpu",
+      "build_cuda": false,
+      "build_ready": true,
+      "cuda_architectures": null,
+      "known_label": true,
+      "label": "cpu",
+      "package_root": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS",
+      "skip_reason": null,
+      "toolkit_match": "not_required",
+      "toolkit_required": null,
+      "toolkit_root": null,
+      "toolkit_version": null,
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+    }
+  ]
+}

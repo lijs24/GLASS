@@ -3230,6 +3230,22 @@ integration where applicable.
   native extension loaded, CUDA available on RTX PRO 6000 Blackwell cc 12.0,
   driver `596.21`, and zero failed checks.
 
+### S2-Gate 189: CUDA11 Minimal Toolkit Install
+
+- Use the Gate186 minimal installer helper to download and install CUDA11
+  Toolkit components needed for release-package compilation.
+- Download `cuda_11.8.0_522.06_windows.exe` with BITS, verify SHA256
+  `b70f38f27321c0a53993438a91970a2e3c426f46da4c42eceff1eeea031a6555`, then
+  install only `nvcc_11.8` and `cudart_11.8`.
+- Confirm `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\bin\nvcc.exe`
+  reports CUDA compilation tools `V11.8.89`.
+- Confirm `cuda_runtime.h`, `cudart.lib`, and `cudart64_110.dll` exist under
+  the CUDA11 Toolkit root.
+- Confirm `nvidia-smi` still reports driver `596.21` after install.
+- Refresh `glass windows-package-build-plan --fail-on-missing`; current result
+  reports status `build_plan_ready`, ready variants `cuda13,cuda12,cuda11,cpu`,
+  no missing CUDA variants, and recommendation `build_all_variants`.
+
 ## Gate Rules
 
 Each gate requires:
