@@ -2487,6 +2487,20 @@ integration where applicable.
 - Keep this as a search/diagnostic gate only. It must not change resident
   integration defaults, image pixels, or promotion thresholds.
 
+### S2-Gate 148: Tile-Local Residual Source Audit
+
+- Add `glass tile-local-residual-source-audit` to summarize coverage,
+  rejection-map, focus/control rejection, and top frame-family explanatory
+  signals for residual candidate tiles.
+- Consume the S2-Gate 144 new-region contribution artifact and S2-Gate 147
+  frame-family search artifact without reading image pixels.
+- Separate obvious coverage/valid-mask problems from rejection/registration
+  interaction clues and weak frame-family explanations.
+- Use this gate to decide whether the next native experiment should continue
+  frame-family weighting or pivot toward rejection/registration diagnostics.
+- Keep this as an artifact/diagnostic gate only. It must not change resident
+  integration defaults, image pixels, or promotion thresholds.
+
 ## Gate Rules
 
 Each gate requires:

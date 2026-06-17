@@ -71,6 +71,10 @@ from glass.report.tile_local_frame_family_search import (
     build_tile_local_frame_family_search,
     write_tile_local_frame_family_search,
 )
+from glass.report.tile_local_residual_source_audit import (
+    build_tile_local_residual_source_audit,
+    write_tile_local_residual_source_audit,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -1183,6 +1187,31 @@ def cmd_tile_local_frame_family_search(args: argparse.Namespace) -> int:
             "top_candidate": top.get("candidate_id"),
             "top_reduction": top_summary.get("total_abs_residual_reduction"),
             "top_mean_abs_after": top_summary.get("mean_abs_residual_after"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_tile_local_residual_source_audit(args: argparse.Namespace) -> int:
+    payload = build_tile_local_residual_source_audit(
+        args.contribution,
+        tile_pack=args.tile_pack,
+        frame_family_search=args.frame_family_search,
+        residual_stat=args.residual_stat,
+        high_rejection_excess_threshold=args.high_rejection_excess_threshold,
+        min_coverage_fraction=args.min_coverage_fraction,
+    )
+    write_tile_local_residual_source_audit(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "recommendation": summary.get("recommendation"),
+            "coverage_below_threshold_tiles": summary.get("coverage_below_threshold_tiles"),
+            "focus_high_rejection_excess_tiles": summary.get("focus_high_rejection_excess_tiles"),
+            "top_frame_family_explained_fraction": summary.get("top_frame_family_explained_fraction"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2850,6 +2879,45 @@ def build_parser() -> argparse.ArgumentParser:
     tile_local_frame_family.add_argument("--stride", type=int, default=1, help="frame-window stride")
     tile_local_frame_family.add_argument("--top-n", type=int, default=20, help="number of ranked candidates to retain")
     tile_local_frame_family.set_defaults(func=cmd_tile_local_frame_family_search)
+
+    tile_local_residual_source = sub.add_parser(
+        "tile-local-residual-source-audit",
+        help="summarize coverage, rejection, and frame-family clues for tile-local residuals",
+    )
+    tile_local_residual_source.add_argument(
+        "--contribution",
+        required=True,
+        help="resident-tile-contribution JSON artifact",
+    )
+    tile_local_residual_source.add_argument(
+        "--tile-pack",
+        help="optional tile_pack_manifest.json; defaults to the path recorded in the contribution artifact",
+    )
+    tile_local_residual_source.add_argument(
+        "--frame-family-search",
+        help="optional tile-local-frame-family-search JSON artifact",
+    )
+    tile_local_residual_source.add_argument("--out", required=True, help="output residual-source audit JSON")
+    tile_local_residual_source.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_residual_source.add_argument(
+        "--residual-stat",
+        choices=["signed_mean", "tail_signed_mean"],
+        default="tail_signed_mean",
+        help="residual summary used to score audited tiles",
+    )
+    tile_local_residual_source.add_argument(
+        "--high-rejection-excess-threshold",
+        type=float,
+        default=0.01,
+        help="focus-minus-control high rejection fraction treated as excess",
+    )
+    tile_local_residual_source.add_argument(
+        "--min-coverage-fraction",
+        type=float,
+        default=0.95,
+        help="minimum mean coverage fraction before coverage is flagged",
+    )
+    tile_local_residual_source.set_defaults(func=cmd_tile_local_residual_source_audit)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",
