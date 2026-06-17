@@ -33,6 +33,44 @@ def _read_json_object(path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def _windows_release_matrix_summary(path: str | Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    target = Path(path)
+    payload = _read_json_object(target) if target.exists() else {}
+    machine = payload.get("current_machine") if isinstance(payload.get("current_machine"), dict) else {}
+    default_promotion = (
+        payload.get("default_promotion_manifest")
+        if isinstance(payload.get("default_promotion_manifest"), dict)
+        else {}
+    )
+    packages = [row for row in payload.get("packages") or [] if isinstance(row, dict)]
+    labels = [str(row.get("label")) for row in packages if row.get("label")]
+    return {
+        "path": str(target),
+        "exists": target.exists(),
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "recommendation": payload.get("recommendation"),
+        "primary_package": machine.get("primary_package"),
+        "ordered_try_list": [str(item) for item in machine.get("ordered_try_list") or []],
+        "package_labels": labels,
+        "package_count": len(labels),
+        "default_promotion_status": default_promotion.get("status"),
+        "default_promotion_passed": default_promotion.get("passed"),
+        "default_promotion_default_change_ready": default_promotion.get("default_change_ready"),
+        "default_route_passed": default_promotion.get("default_route_passed"),
+        "default_route_route_contract_passed": default_promotion.get(
+            "default_route_route_contract_passed"
+        ),
+        "default_route_route_check_count": default_promotion.get("default_route_route_check_count"),
+        "default_route_speedup_vs_reference": default_promotion.get(
+            "default_route_speedup_vs_reference"
+        ),
+    }
+
+
 def _zip_row(row: dict[str, Any], overrides: dict[str, str]) -> dict[str, Any]:
     label = str(row.get("label") or "")
     zip_path = overrides.get(label) or row.get("zip_path")
@@ -62,12 +100,15 @@ def build_windows_release_manifest(
     suite_artifact: str | Path,
     zip_overrides: dict[str, str] | None = None,
     require_same_source_stamp: bool = False,
+    windows_release_matrix: str | Path | None = None,
+    require_windows_release_matrix: bool = True,
 ) -> dict[str, Any]:
     suite_path = Path(suite_artifact)
     suite = _read_json_object(suite_path)
     rows = suite.get("rows") if isinstance(suite.get("rows"), list) else []
     zip_rows = [_zip_row(row, zip_overrides or {}) for row in rows if isinstance(row, dict)]
     source_stamps = sorted({str(row["source_stamp"]) for row in zip_rows if row.get("source_stamp")})
+    matrix_summary = _windows_release_matrix_summary(windows_release_matrix)
 
     checks: list[dict[str, Any]] = [
         _check(
@@ -111,6 +152,82 @@ def build_windows_release_manifest(
                 ),
             ]
         )
+    matrix_for_checks = matrix_summary or {}
+    if require_windows_release_matrix or matrix_summary is not None:
+        manifest_labels = {str(row.get("label")) for row in zip_rows if row.get("label")}
+        matrix_labels = [str(label) for label in matrix_for_checks.get("package_labels") or []]
+        missing_manifest_assets = [label for label in matrix_labels if label not in manifest_labels]
+        checks.extend(
+            [
+                _check(
+                    "windows_release_matrix_present",
+                    bool(matrix_summary and matrix_summary.get("exists")),
+                    {
+                        "path": matrix_for_checks.get("path"),
+                        "required": bool(require_windows_release_matrix),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_type",
+                    matrix_for_checks.get("artifact_type") == "windows_release_matrix",
+                    {
+                        "artifact_type": matrix_for_checks.get("artifact_type"),
+                        "required": "windows_release_matrix",
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_ready",
+                    matrix_for_checks.get("status") == "release_matrix_ready"
+                    and matrix_for_checks.get("passed") is True,
+                    {
+                        "status": matrix_for_checks.get("status"),
+                        "passed": matrix_for_checks.get("passed"),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_default_promotion_ready",
+                    matrix_for_checks.get("default_promotion_status") == "default_promotion_ready"
+                    and matrix_for_checks.get("default_promotion_passed") is True
+                    and matrix_for_checks.get("default_promotion_default_change_ready") is True,
+                    {
+                        "status": matrix_for_checks.get("default_promotion_status"),
+                        "passed": matrix_for_checks.get("default_promotion_passed"),
+                        "default_change_ready": matrix_for_checks.get(
+                            "default_promotion_default_change_ready"
+                        ),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_default_route_passed",
+                    matrix_for_checks.get("default_route_passed") is True
+                    and matrix_for_checks.get("default_route_route_contract_passed") is True
+                    and int(matrix_for_checks.get("default_route_route_check_count") or 0) >= 4,
+                    {
+                        "default_route_passed": matrix_for_checks.get("default_route_passed"),
+                        "route_contract_passed": matrix_for_checks.get(
+                            "default_route_route_contract_passed"
+                        ),
+                        "route_check_count": matrix_for_checks.get(
+                            "default_route_route_check_count"
+                        ),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_assets_present",
+                    bool(matrix_labels) and not missing_manifest_assets,
+                    {
+                        "matrix_labels": matrix_labels,
+                        "manifest_labels": sorted(manifest_labels),
+                        "missing": missing_manifest_assets,
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_try_order_has_cpu_fallback",
+                    "cpu" in (matrix_for_checks.get("ordered_try_list") or []),
+                    {"ordered_try_list": matrix_for_checks.get("ordered_try_list")},
+                ),
+            ]
+        )
     if require_same_source_stamp:
         checks.append(
             _check(
@@ -133,7 +250,9 @@ def build_windows_release_manifest(
         "suite_recommendation": suite.get("recommendation"),
         "requirements": {
             "require_same_source_stamp": bool(require_same_source_stamp),
+            "require_windows_release_matrix": bool(require_windows_release_matrix),
         },
+        "windows_release_matrix": matrix_summary,
         "source_stamps": source_stamps,
         "packages": zip_rows,
         "checks": checks,
@@ -147,6 +266,11 @@ def build_windows_release_manifest(
 
 
 def _markdown(payload: dict[str, Any]) -> str:
+    matrix = (
+        payload.get("windows_release_matrix")
+        if isinstance(payload.get("windows_release_matrix"), dict)
+        else {}
+    )
     lines = [
         "# GLASS Windows Release Manifest",
         "",
@@ -166,6 +290,29 @@ def _markdown(payload: dict[str, Any]) -> str:
             "| "
             f"{row.get('label')} | {row.get('size_bytes')} | `{row.get('sha256')}` | "
             f"{row.get('source_stamp')} | `{row.get('zip_path')}` |"
+        )
+    if matrix:
+        lines.extend(
+            [
+                "",
+                "## Windows Release Matrix",
+                "",
+                f"- Matrix path: `{matrix.get('path')}`",
+                f"- Matrix status: `{matrix.get('status')}`",
+                f"- Matrix passed: `{matrix.get('passed')}`",
+                f"- Primary package: `{matrix.get('primary_package')}`",
+                f"- Try order: `{', '.join(matrix.get('ordered_try_list') or [])}`",
+                (
+                    "- Default promotion: "
+                    f"`{matrix.get('default_promotion_status')}` "
+                    f"passed `{matrix.get('default_promotion_passed')}`"
+                ),
+                (
+                    "- Default route contract/checks: "
+                    f"`{matrix.get('default_route_route_contract_passed')}`/"
+                    f"`{matrix.get('default_route_route_check_count')}`"
+                ),
+            ]
         )
     lines.extend(["", "## Checks", ""])
     for item in payload.get("checks") or []:

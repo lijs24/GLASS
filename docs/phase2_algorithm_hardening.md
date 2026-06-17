@@ -3805,6 +3805,24 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 228: Release Manifest Matrix Contract
+
+- Extend `glass windows-release-manifest` with a `--windows-release-matrix`
+  input so the manifest that records actual ZIP size and SHA256 also consumes
+  the Windows package/default-promotion matrix.
+- Require the matrix by default, unless explicitly waived, to be present,
+  `release_matrix_ready`, passed, backed by ready default-promotion evidence,
+  and backed by a passing default-route route contract with at least four route
+  checks.
+- Verify every matrix package label has a matching release-manifest package row,
+  and preserve the CPU fallback in the matrix install order before the manifest
+  can become `release_manifest_ready`.
+- Surface the matrix primary package, install order, default-promotion status,
+  and default-route evidence in release-manifest JSON and Markdown, then generate
+  the Gate 228 GitHub handoff from that stricter manifest.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

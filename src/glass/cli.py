@@ -2036,6 +2036,8 @@ def cmd_windows_release_manifest(args: argparse.Namespace) -> int:
         suite_artifact=args.suite,
         zip_overrides=parse_labeled_zip_paths(args.zip),
         require_same_source_stamp=args.require_same_source_stamp,
+        windows_release_matrix=args.windows_release_matrix,
+        require_windows_release_matrix=not args.allow_missing_windows_release_matrix,
     )
     write_windows_release_manifest(args.out, payload, markdown=args.markdown)
     console.print(
@@ -2044,6 +2046,9 @@ def cmd_windows_release_manifest(args: argparse.Namespace) -> int:
             "passed": payload["passed"],
             "recommendation": payload["recommendation"],
             "packages": len(payload["packages"]),
+            "windows_release_matrix_status": (
+                payload.get("windows_release_matrix") or {}
+            ).get("status"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -4764,9 +4769,18 @@ def build_parser() -> argparse.ArgumentParser:
     windows_release_manifest.add_argument("--out", required=True, help="output release manifest JSON")
     windows_release_manifest.add_argument("--markdown", help="optional output Markdown summary")
     windows_release_manifest.add_argument(
+        "--windows-release-matrix",
+        help="optional Windows release-matrix JSON artifact required for strict release manifests",
+    )
+    windows_release_manifest.add_argument(
         "--require-same-source-stamp",
         action="store_true",
         help="fail unless every package in the manifest reports the same source stamp",
+    )
+    windows_release_manifest.add_argument(
+        "--allow-missing-windows-release-matrix",
+        action="store_true",
+        help="do not require a Windows release-matrix artifact in the release manifest",
     )
     windows_release_manifest.add_argument(
         "--fail-on-failure",
