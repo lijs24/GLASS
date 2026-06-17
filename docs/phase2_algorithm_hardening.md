@@ -4001,6 +4001,28 @@ integration where applicable.
 - Keep this gate release-matrix scoped: no image math, CUDA kernel, runtime
   default change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 239: GitHub Release Plan Rejection Sample Handoff
+
+- Extend `glass windows-github-release-plan` so Phase 2 and Windows release
+  matrix rejection sample accounting are visible in final release handoff
+  artifacts.
+- Carry Phase 2 fields
+  `pipeline_integration_rejection_sample_counts_match_maps`,
+  `pipeline_rejection_sample_accounting_status`, and failed count into release
+  plan summaries.
+- Carry release-matrix fields
+  `integration_rejection_sample_counts_match_maps`,
+  `rejection_sample_accounting_status`, and failed count into release plan
+  summaries.
+- Add checks so publication plans fail when Phase 2 or release-matrix
+  rejected-sample accounting is missing or failed.
+- Add release notes, Markdown, and generated PowerShell dry-run validation for
+  release-matrix rejection sample accounting.
+- Add GitHub release-plan tests for passing accounting and matrix drift
+  blockers.
+- Keep this gate release-handoff scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

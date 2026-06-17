@@ -33,6 +33,7 @@ def _manifest(path: Path, *, zip_paths: dict[str, Path], source: str = "abc1234"
 
 
 def _phase2_status(path: Path, *, passed: bool = True, gate: int = 204) -> None:
+    accounting_passed = passed
     write_json(
         path,
         {
@@ -112,6 +113,9 @@ def _phase2_status(path: Path, *, passed: bool = True, gate: int = 204) -> None:
                 "integration_dq_map_pixels_match_summary": passed,
                 "integration_coverage_map_pixels_match_dq": passed,
                 "integration_rejection_map_pixels_match_dq": passed,
+                "integration_rejection_sample_counts_match_maps": accounting_passed,
+                "rejection_sample_accounting_status": "passed" if accounting_passed else "failed",
+                "rejection_sample_accounting_failed_count": 0 if accounting_passed else 1,
             },
             "release_decision": {
                 "status": "default_change_ready" if passed else "release_candidate_ready",
@@ -145,17 +149,24 @@ def _phase2_compare(path: Path, *, passed: bool = True, baseline_gate: int = 203
     )
 
 
-def _release_matrix(path: Path, *, labels: list[str], ready: bool = True) -> None:
+def _release_matrix(
+    path: Path,
+    *,
+    labels: list[str],
+    ready: bool = True,
+    rejection_sample_accounting_ready: bool = True,
+) -> None:
     ordered_try_list = labels if "cpu" in labels else [*labels, "cpu"]
+    matrix_ready = ready and rejection_sample_accounting_ready
     write_json(
         path,
         {
             "schema_version": 1,
             "artifact_type": "windows_release_matrix",
-            "status": "release_matrix_ready" if ready else "blocked",
-            "passed": ready,
+            "status": "release_matrix_ready" if matrix_ready else "blocked",
+            "passed": matrix_ready,
             "recommendation": "publish_windows_cuda_matrix"
-            if ready
+            if matrix_ready
             else "fix_release_matrix_blockers",
             "current_machine": {
                 "primary_package": labels[0] if labels else None,
@@ -164,13 +175,20 @@ def _release_matrix(path: Path, *, labels: list[str], ready: bool = True) -> Non
                 "native_extension_loaded": "cpu" not in labels[:1],
             },
             "default_promotion_manifest": {
-                "status": "default_promotion_ready" if ready else "blocked",
-                "passed": ready,
-                "default_change_ready": ready,
+                "status": "default_promotion_ready" if matrix_ready else "blocked",
+                "passed": matrix_ready,
+                "default_change_ready": matrix_ready,
                 "default_route_passed": ready,
                 "default_route_route_contract_passed": ready,
                 "default_route_route_check_count": 4 if ready else 2,
                 "default_route_speedup_vs_reference": 28.75,
+                "integration_rejection_sample_counts_match_maps": rejection_sample_accounting_ready,
+                "rejection_sample_accounting_status": "passed"
+                if rejection_sample_accounting_ready
+                else "failed",
+                "rejection_sample_accounting_failed_count": 0
+                if rejection_sample_accounting_ready
+                else 1,
             },
             "packages": [
                 {
@@ -180,7 +198,9 @@ def _release_matrix(path: Path, *, labels: list[str], ready: bool = True) -> Non
                 }
                 for label in labels
             ],
-            "failed_checks": [] if ready else ["default_promotion_manifest_ready"],
+            "failed_checks": []
+            if matrix_ready
+            else ["default_promotion_manifest_ready"],
         },
     )
 
@@ -245,17 +265,21 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["phase2"]["status"]["pipeline_contract_status"] == "passed"
     assert payload["phase2"]["status"]["pipeline_integration_dq_contract"] is True
     assert payload["phase2"]["status"]["pipeline_pixel_verification_enabled"] is True
+    assert payload["phase2"]["status"]["pipeline_rejection_sample_accounting_status"] == "passed"
     assert payload["phase2"]["status"]["release_decision_status"] == "default_change_ready"
     assert payload["phase2"]["status"]["release_decision_default_change_ready"] is True
     assert payload["phase2"]["status"]["release_runtime_repeat_elapsed_ratio_vs_best"] == 1.053
     assert payload["phase2"]["status_compare"]["candidate_gate"] == 204
     assert payload["release_matrix"]["primary_package"] == "cuda13"
+    assert payload["release_matrix"]["rejection_sample_accounting_status"] == "passed"
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
+    assert checks["phase2_pipeline_rejection_sample_accounting_passed"] is True
     assert checks["phase2_status_compare_present"] is True
     assert checks["phase2_status_compare_passed"] is True
     assert checks["windows_release_matrix_ready"] is True
     assert checks["windows_release_matrix_default_route_passed"] is True
+    assert checks["windows_release_matrix_rejection_sample_accounting_passed"] is True
 
 
 def test_windows_github_release_plan_blocks_failed_phase2_handoff_evidence(tmp_path: Path):
@@ -324,6 +348,34 @@ def test_windows_github_release_plan_blocks_failed_windows_release_matrix(tmp_pa
     assert checks["windows_release_matrix_present"] is True
     assert checks["windows_release_matrix_ready"] is False
     assert checks["windows_release_matrix_default_promotion_ready"] is False
+
+
+def test_windows_github_release_plan_blocks_release_matrix_rejection_sample_drift(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(matrix, labels=["cuda13"], rejection_sample_accounting_ready=False)
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert payload["release_matrix"]["rejection_sample_accounting_status"] == "failed"
+    assert checks["windows_release_matrix_rejection_sample_accounting_passed"]["passed"] is False
+    assert checks["windows_release_matrix_rejection_sample_accounting_passed"]["evidence"] == {
+        "check": False,
+        "status": "failed",
+        "failed_count": 1,
+    }
 
 
 def test_windows_github_release_plan_blocks_mixed_sources(tmp_path: Path):
@@ -413,6 +465,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Windows Release Matrix Handoff" in markdown_text
     assert "Matrix status: `release_matrix_ready`" in markdown_text
     assert "Default route contract/checks: `True`/`4`" in markdown_text
+    assert "Rejection sample accounting: `passed` failed `0`" in markdown_text
     assert "Phase 2 Handoff Preflight" in markdown_text
     assert "Native resident contract source: `run_default`" in markdown_text
     assert "Native calibrated lights: `200`" in markdown_text
@@ -420,18 +473,21 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Triangle warp batch: `True`" in markdown_text
     assert "Pipeline contract: `passed`" in markdown_text
     assert "Pipeline integration DQ contract: `True`" in markdown_text
+    assert "Pipeline rejection sample accounting: `passed`" in markdown_text
     assert "Release decision: `default_change_ready`" in markdown_text
     assert "Runtime repeat ratio vs best: `1.053`" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
     notes_text = notes.read_text(encoding="utf-8")
     assert "Windows Release Matrix Evidence" in notes_text
     assert "Default route contract: `True` checks `4`" in notes_text
+    assert "Rejection sample accounting: `passed` failed `0`" in notes_text
     assert "Native resident contract source: `run_default`" in notes_text
     assert "calibrated lights `200`" in notes_text
     assert "Resident registration fast path: `present`" in notes_text
     assert "warp batch `True` frames `188`" in notes_text
     assert "Pipeline DQ contract: `passed` passed `True` DQ `True`" in notes_text
     assert "Pipeline pixel verification: `True`" in notes_text
+    assert "Pipeline rejection sample accounting: `passed` check `True` failed `0`" in notes_text
     assert "Default-change decision: `default_change_ready` ready `True`" in notes_text
     assert "Runtime repeat evidence: runs `3`" in notes_text
     script_text = script.read_text(encoding="utf-8")
@@ -439,6 +495,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "$WindowsReleaseMatrixFile =" in script_text
     assert "Windows release matrix check failed" in script_text
     assert "Windows release matrix default-promotion evidence failed" in script_text
+    assert "Windows release matrix rejection sample accounting failed" in script_text
     assert "$Phase2StatusFile =" in script_text
     assert "$Phase2StatusCompareFile =" in script_text
     assert "Phase 2 status check failed" in script_text

@@ -191,6 +191,15 @@ def _phase2_artifact_summary(
         "pipeline_integration_rejection_map_pixels_match_dq": (pipeline_contract or {}).get(
             "integration_rejection_map_pixels_match_dq"
         ),
+        "pipeline_integration_rejection_sample_counts_match_maps": (
+            pipeline_contract or {}
+        ).get("integration_rejection_sample_counts_match_maps"),
+        "pipeline_rejection_sample_accounting_status": (pipeline_contract or {}).get(
+            "rejection_sample_accounting_status"
+        ),
+        "pipeline_rejection_sample_accounting_failed_count": (
+            pipeline_contract or {}
+        ).get("rejection_sample_accounting_failed_count"),
         "release_decision": release_decision,
         "release_decision_status": (release_decision or {}).get("status"),
         "release_decision_recommendation": (release_decision or {}).get("recommendation"),
@@ -257,6 +266,15 @@ def _windows_release_matrix_summary(path: str | Path | None) -> dict[str, Any] |
         "default_route_route_check_count": default_promotion.get("default_route_route_check_count"),
         "default_route_speedup_vs_reference": default_promotion.get(
             "default_route_speedup_vs_reference"
+        ),
+        "rejection_sample_accounting_status": default_promotion.get(
+            "rejection_sample_accounting_status"
+        ),
+        "rejection_sample_accounting_failed_count": default_promotion.get(
+            "rejection_sample_accounting_failed_count"
+        ),
+        "integration_rejection_sample_counts_match_maps": default_promotion.get(
+            "integration_rejection_sample_counts_match_maps"
         ),
     }
 
@@ -338,6 +356,9 @@ def _has_pipeline_contract_phase2_provenance(phase2_status: dict[str, Any]) -> b
             "pipeline_integration_dq_map_pixels_match_summary",
             "pipeline_integration_coverage_map_pixels_match_dq",
             "pipeline_integration_rejection_map_pixels_match_dq",
+            "pipeline_integration_rejection_sample_counts_match_maps",
+            "pipeline_rejection_sample_accounting_status",
+            "pipeline_rejection_sample_accounting_failed_count",
         )
     )
 
@@ -414,6 +435,11 @@ def _release_notes(payload: dict[str, Any]) -> str:
                     f"checks `{release_matrix.get('default_route_route_check_count')}` "
                     f"speedup `{release_matrix.get('default_route_speedup_vs_reference')}`"
                 ),
+                (
+                    "- Rejection sample accounting: "
+                    f"`{release_matrix.get('rejection_sample_accounting_status')}` "
+                    f"failed `{release_matrix.get('rejection_sample_accounting_failed_count')}`"
+                ),
                 "",
             ]
         )
@@ -479,6 +505,13 @@ def _release_notes(payload: dict[str, Any]) -> str:
                         f"`{phase2_status.get('pipeline_integration_coverage_map_pixels_match_dq')}` "
                         "rejection "
                         f"`{phase2_status.get('pipeline_integration_rejection_map_pixels_match_dq')}`"
+                    ),
+                    (
+                        "- Pipeline rejection sample accounting: "
+                        f"`{phase2_status.get('pipeline_rejection_sample_accounting_status')}` "
+                        "check "
+                        f"`{phase2_status.get('pipeline_integration_rejection_sample_counts_match_maps')}` "
+                        f"failed `{phase2_status.get('pipeline_rejection_sample_accounting_failed_count')}`"
                     ),
                 ]
             )
@@ -591,6 +624,9 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "    }",
             "    if (-not $matrix.default_promotion_manifest -or $matrix.default_promotion_manifest.status -ne 'default_promotion_ready' -or $matrix.default_promotion_manifest.passed -ne $true -or $matrix.default_promotion_manifest.default_route_passed -ne $true) {",
             "        throw \"Windows release matrix default-promotion evidence failed: $WindowsReleaseMatrixFile\"",
+            "    }",
+            "    if ($matrix.default_promotion_manifest.integration_rejection_sample_counts_match_maps -ne $true -or $matrix.default_promotion_manifest.rejection_sample_accounting_status -ne 'passed' -or [int]$matrix.default_promotion_manifest.rejection_sample_accounting_failed_count -ne 0) {",
+            "        throw \"Windows release matrix rejection sample accounting failed: $WindowsReleaseMatrixFile\"",
             "    }",
             "}",
             "if ($Phase2StatusFile) {",
@@ -740,6 +776,33 @@ def build_windows_github_release_plan(
                         "latest_gate": phase2_status_summary.get("latest_gate"),
                     },
                 ),
+                _check(
+                    "phase2_pipeline_rejection_sample_accounting_passed",
+                    phase2_status_summary.get(
+                        "pipeline_integration_rejection_sample_counts_match_maps"
+                    )
+                    is True
+                    and phase2_status_summary.get("pipeline_rejection_sample_accounting_status")
+                    == "passed"
+                    and int(
+                        phase2_status_summary.get(
+                            "pipeline_rejection_sample_accounting_failed_count"
+                        )
+                        or 0
+                    )
+                    == 0,
+                    {
+                        "check": phase2_status_summary.get(
+                            "pipeline_integration_rejection_sample_counts_match_maps"
+                        ),
+                        "status": phase2_status_summary.get(
+                            "pipeline_rejection_sample_accounting_status"
+                        ),
+                        "failed_count": phase2_status_summary.get(
+                            "pipeline_rejection_sample_accounting_failed_count"
+                        ),
+                    },
+                ),
             ]
         )
     if phase2_compare_summary is not None:
@@ -835,6 +898,29 @@ def build_windows_github_release_plan(
                         ),
                         "route_check_count": release_matrix_for_checks.get(
                             "default_route_route_check_count"
+                        ),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_rejection_sample_accounting_passed",
+                    release_matrix_for_checks.get("integration_rejection_sample_counts_match_maps")
+                    is True
+                    and release_matrix_for_checks.get("rejection_sample_accounting_status")
+                    == "passed"
+                    and int(
+                        release_matrix_for_checks.get("rejection_sample_accounting_failed_count")
+                        or 0
+                    )
+                    == 0,
+                    {
+                        "check": release_matrix_for_checks.get(
+                            "integration_rejection_sample_counts_match_maps"
+                        ),
+                        "status": release_matrix_for_checks.get(
+                            "rejection_sample_accounting_status"
+                        ),
+                        "failed_count": release_matrix_for_checks.get(
+                            "rejection_sample_accounting_failed_count"
                         ),
                     },
                 ),
@@ -989,6 +1075,11 @@ def _markdown(payload: dict[str, Any]) -> str:
                     f"`{release_matrix.get('default_route_route_contract_passed')}`/"
                     f"`{release_matrix.get('default_route_route_check_count')}`"
                 ),
+                (
+                    "- Rejection sample accounting: "
+                    f"`{release_matrix.get('rejection_sample_accounting_status')}` "
+                    f"failed `{release_matrix.get('rejection_sample_accounting_failed_count')}`"
+                ),
             ]
         )
     if phase2_status or phase2_compare:
@@ -1103,6 +1194,13 @@ def _markdown(payload: dict[str, Any]) -> str:
                     (
                         "- Pipeline rejection pixels match DQ: "
                         f"`{phase2_status.get('pipeline_integration_rejection_map_pixels_match_dq')}`"
+                    ),
+                    (
+                        "- Pipeline rejection sample accounting: "
+                        f"`{phase2_status.get('pipeline_rejection_sample_accounting_status')}` "
+                        "check "
+                        f"`{phase2_status.get('pipeline_integration_rejection_sample_counts_match_maps')}` "
+                        f"failed `{phase2_status.get('pipeline_rejection_sample_accounting_failed_count')}`"
                     ),
                 ]
             )
