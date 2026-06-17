@@ -305,6 +305,92 @@ def _write_contract(path: Path, *, max_runtime_factor: float = 1.3) -> None:
     )
 
 
+def _add_resident_registration_fastpath_contract(path: Path) -> None:
+    payload = read_json(path)
+    payload["resident_registration_fastpath"] = {
+        "required": True,
+        "required_values": {
+            "resident_registration.mode": "similarity_cuda_triangle",
+            "resident_registration.triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+            "resident_registration.triangle_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+            "resident_registration.triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+            "resident_registration.triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+            "artifact.resident_warp_copy_mode": "default_stream_async_device_to_device",
+            "resident_io_pipeline.warp_copy_mode": "default_stream_async_device_to_device",
+        },
+        "required_true_fields": [
+            "resident_registration.triangle_descriptor_fit_batch",
+            "resident_registration.triangle_descriptor_fit_reference_device_reuse",
+            "resident_registration.triangle_descriptor_fit_moving_device_reuse",
+            "resident_registration.triangle_descriptor_fit_output_device_reuse",
+            "resident_registration.triangle_pixel_refine_batch",
+            "resident_registration.triangle_warp_batch",
+        ],
+        "required_positive_fields": [
+            "resident_registration.triangle_descriptor_fit_reference_device_bytes",
+            "resident_registration.triangle_descriptor_fit_moving_device_bytes",
+            "resident_registration.triangle_descriptor_fit_output_device_bytes",
+            "resident_registration.triangle_pixel_refine_workspace_bytes",
+            "artifact.resident_warp_scratch_bytes",
+            "resident_io_pipeline.warp_scratch_bytes",
+        ],
+        "required_min_fields": {
+            "resident_registration.triangle_warp_batch_frame_count": 1,
+        },
+        "required_component_seconds": [
+            "triangle_descriptor_fit_batch",
+            "triangle_pixel_refine_batch",
+        ],
+    }
+    write_json(path, payload)
+
+
+def _write_resident_registration_fastpath_artifact(
+    run: Path,
+    *,
+    descriptor_batch: bool = True,
+) -> None:
+    write_json(
+        run / "resident_artifacts.json",
+        {
+            "artifacts": [
+                {
+                    "resident_warp_scratch_bytes": 4096,
+                    "resident_warp_copy_mode": "default_stream_async_device_to_device",
+                    "resident_io_pipeline": {
+                        "warp_scratch_bytes": 4096,
+                        "warp_copy_mode": "default_stream_async_device_to_device",
+                    },
+                    "resident_registration": {
+                        "mode": "similarity_cuda_triangle",
+                        "triangle_descriptor_fit_batch": descriptor_batch,
+                        "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+                        "triangle_descriptor_fit_reference_device_reuse": True,
+                        "triangle_descriptor_fit_reference_device_bytes": 128,
+                        "triangle_descriptor_fit_moving_device_reuse": True,
+                        "triangle_descriptor_fit_moving_device_bytes": 256,
+                        "triangle_descriptor_fit_output_device_reuse": True,
+                        "triangle_descriptor_fit_output_device_bytes": 512,
+                        "triangle_pixel_refine_batch": True,
+                        "triangle_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+                        "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+                        "triangle_pixel_refine_workspace_bytes": 1024,
+                        "triangle_warp_batch": True,
+                        "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                        "triangle_warp_batch_frame_count": 3,
+                    },
+                    "fine_timing": {
+                        "registration_component_seconds": {
+                            "triangle_descriptor_fit_batch": 0.1,
+                            "triangle_pixel_refine_batch": 0.2,
+                        }
+                    },
+                }
+            ]
+        },
+    )
+
+
 def _add_dq_contract(path: Path) -> None:
     payload = read_json(path)
     payload["dq_provenance"] = {
@@ -1579,6 +1665,99 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert cumulative["actual_key"] == "light_read_worker_cumulative"
     assert cumulative["status"] == "informational_cumulative"
     assert cumulative["timing_kind"] == "worker_cumulative"
+
+
+def test_acceptance_audit_applies_resident_registration_fastpath_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=20.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_resident_registration_fastpath_artifact(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_resident_registration_fastpath_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert audit["resident_registration_fastpath"]["available"] is True
+    assert audit["resident_registration_fastpath"]["resident_registration"]["triangle_descriptor_fit_batch"] is True
+    assert checks["contract_resident_registration_fastpath_present"] is True
+    assert (
+        checks[
+            "contract_resident_registration_fastpath_true:"
+            "resident_registration.triangle_descriptor_fit_batch"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "contract_resident_registration_fastpath_positive:"
+            "artifact.resident_warp_scratch_bytes"
+        ]
+        is True
+    )
+
+
+def test_acceptance_audit_blocks_resident_registration_fastpath_regression(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=20.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_resident_registration_fastpath_artifact(gp_run, descriptor_batch=False)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_resident_registration_fastpath_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    failed_check = checks[
+        "contract_resident_registration_fastpath_true:"
+        "resident_registration.triangle_descriptor_fit_batch"
+    ]
+    assert audit["passed"] is False
+    assert failed_check["passed"] is False
+    assert failed_check["evidence"]["actual"] is False
 
 
 def test_acceptance_audit_accepts_resident_runtime_preset_from_artifact(tmp_path: Path):

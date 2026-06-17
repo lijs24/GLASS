@@ -3586,6 +3586,22 @@ integration where applicable.
 - Keep this gate reporting/release-handoff only: no image processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 214: Resident Registration Fast-Path Acceptance Contract
+
+- Add a benchmark-contract section that verifies the resident CUDA
+  `similarity_cuda_triangle` fast path is actually active in real runs.
+- Require descriptor-fit batching, shared reference/moving/output device buffer
+  reuse, batch pixel refinement, native matrix-Lanczos warp batching,
+  asynchronous resident warp copy mode, positive warp scratch allocation, and
+  required registration component timing rows.
+- Surface the collected fast-path evidence in acceptance-audit JSON and
+  Markdown so release handoff cannot silently pass if resident registration
+  falls back to slower per-frame orchestration.
+- Update the M38 H-alpha 200-light benchmark contract with these requirements
+  and validate it on the preserved real resident CUDA run.
+- Keep this gate contract/reporting only: no image processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

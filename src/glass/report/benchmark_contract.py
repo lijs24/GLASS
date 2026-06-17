@@ -84,6 +84,67 @@ def _load_resident_io_pipelines(glass_run: str | Path) -> list[dict[str, Any]]:
     return pipelines
 
 
+def collect_resident_registration_fastpath_record(glass_run: str | Path) -> dict[str, Any]:
+    run_root = Path(glass_run)
+    resident_path = run_root / "resident_artifacts.json"
+    resident = _load_json_object_if_present(resident_path)
+    artifacts = resident.get("artifacts") if isinstance(resident.get("artifacts"), list) else []
+    artifact = artifacts[0] if artifacts and isinstance(artifacts[0], dict) else {}
+    registration = (
+        artifact.get("resident_registration")
+        if isinstance(artifact.get("resident_registration"), dict)
+        else {}
+    )
+    io_pipeline = (
+        artifact.get("resident_io_pipeline")
+        if isinstance(artifact.get("resident_io_pipeline"), dict)
+        else {}
+    )
+    fine_timing = artifact.get("fine_timing") if isinstance(artifact.get("fine_timing"), dict) else {}
+    components = (
+        fine_timing.get("registration_component_seconds")
+        if isinstance(fine_timing.get("registration_component_seconds"), dict)
+        else {}
+    )
+    return {
+        "schema_version": 1,
+        "path": str(resident_path),
+        "exists": resident_path.exists(),
+        "artifact_count": len(artifacts),
+        "artifact_index": 0 if artifact else None,
+        "available": bool(registration),
+        "resident_registration": registration,
+        "resident_io_pipeline": io_pipeline,
+        "artifact": {
+            "resident_warp_scratch_bytes": artifact.get("resident_warp_scratch_bytes"),
+            "resident_warp_copy_mode": artifact.get("resident_warp_copy_mode"),
+        },
+        "registration_component_seconds": {
+            str(key): value for key, value in components.items()
+        },
+    }
+
+
+def _fastpath_value(record: dict[str, Any], field_path: str) -> Any:
+    if "." not in field_path:
+        for section in (
+            "resident_registration",
+            "resident_io_pipeline",
+            "artifact",
+            "registration_component_seconds",
+        ):
+            section_payload = record.get(section)
+            if isinstance(section_payload, dict) and field_path in section_payload:
+                return section_payload.get(field_path)
+        return None
+    value: Any = record
+    for part in field_path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
 def _pipeline_expected_value_matches(actual: Any, expected: Any) -> bool:
     if isinstance(expected, (int, float)) and not isinstance(expected, bool):
         actual_number = _numeric(actual)
@@ -184,6 +245,91 @@ def _resident_pipeline_match_for_command_token(
     if match is not None:
         match["token"] = token_text
     return match
+
+
+def _build_resident_registration_fastpath_contract_checks(
+    requirements: dict[str, Any],
+    *,
+    record: dict[str, Any],
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    if requirements.get("required"):
+        checks.append(
+            _check(
+                "contract_resident_registration_fastpath_present",
+                bool(record.get("exists")) and bool(record.get("available")),
+                {
+                    "path": record.get("path"),
+                    "exists": bool(record.get("exists")),
+                    "available": bool(record.get("available")),
+                    "artifact_count": record.get("artifact_count"),
+                },
+            )
+        )
+
+    required_values = requirements.get("required_values") or {}
+    if isinstance(required_values, dict):
+        for field_path, expected in required_values.items():
+            field_text = str(field_path)
+            actual = _fastpath_value(record, field_text)
+            checks.append(
+                _check(
+                    f"contract_resident_registration_fastpath_value:{field_text}",
+                    _pipeline_expected_value_matches(actual, expected),
+                    {"field": field_text, "actual": actual, "required": expected},
+                )
+            )
+
+    for field_path in requirements.get("required_true_fields") or []:
+        field_text = str(field_path)
+        actual = _fastpath_value(record, field_text)
+        checks.append(
+            _check(
+                f"contract_resident_registration_fastpath_true:{field_text}",
+                actual is True,
+                {"field": field_text, "actual": actual, "required": True},
+            )
+        )
+
+    for field_path in requirements.get("required_positive_fields") or []:
+        field_text = str(field_path)
+        actual = _numeric(_fastpath_value(record, field_text))
+        checks.append(
+            _check(
+                f"contract_resident_registration_fastpath_positive:{field_text}",
+                actual is not None and actual > 0.0,
+                {"field": field_text, "actual": actual, "required": "> 0"},
+            )
+        )
+
+    required_min_fields = requirements.get("required_min_fields") or {}
+    if isinstance(required_min_fields, dict):
+        for field_path, minimum in required_min_fields.items():
+            field_text = str(field_path)
+            actual = _numeric(_fastpath_value(record, field_text))
+            required = _numeric(minimum)
+            checks.append(
+                _check(
+                    f"contract_resident_registration_fastpath_min:{field_text}",
+                    actual is not None and required is not None and actual >= required,
+                    {"field": field_text, "actual": actual, "required_min": required},
+                )
+            )
+
+    for component in requirements.get("required_component_seconds") or []:
+        component_text = str(component)
+        actual = _numeric(
+            _fastpath_value(record, f"registration_component_seconds.{component_text}")
+        )
+        checks.append(
+            _check(
+                f"contract_resident_registration_fastpath_component:{component_text}",
+                actual is not None and actual >= 0.0,
+                {"component": component_text, "actual_s": actual},
+            )
+        )
+
+    return checks
 
 
 def _load_json_object_if_present(path: Path) -> dict[str, Any]:
@@ -1461,6 +1607,7 @@ def build_benchmark_contract_checks(
     dq_provenance_records: list[dict[str, Any]] | None = None,
     frame_accounting_record: dict[str, Any] | None = None,
     resident_determinism: dict[str, Any] | None = None,
+    resident_registration_fastpath: dict[str, Any] | None = None,
     output_numerical_drifts: list[dict[str, Any]] | None = None,
     pipeline_contract: dict[str, Any] | None = None,
     stack_engine_contract: dict[str, Any] | None = None,
@@ -1655,6 +1802,15 @@ def build_benchmark_contract_checks(
                 resident_contract,
                 resident_determinism=resident_determinism,
                 output_numerical_drifts=output_numerical_drifts or [],
+            )
+        )
+    registration_fastpath_contract = contract.get("resident_registration_fastpath") or {}
+    if isinstance(registration_fastpath_contract, dict) and registration_fastpath_contract:
+        checks.extend(
+            _build_resident_registration_fastpath_contract_checks(
+                registration_fastpath_contract,
+                record=resident_registration_fastpath
+                or collect_resident_registration_fastpath_record(glass_run),
             )
         )
     pipeline_contract_requirements = contract.get("pipeline_contract") or {}

@@ -121,6 +121,42 @@
     "match_dq_active_frame_count": true,
     "match_registration_accepted_frames": true
   },
+  "resident_registration_fastpath": {
+    "required": true,
+    "required_values": {
+      "resident_registration.mode": "similarity_cuda_triangle",
+      "resident_registration.triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+      "resident_registration.triangle_descriptor_fit_batch_timing_model": "per_frame_reused_buffers_sync_timed",
+      "resident_registration.triangle_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+      "resident_registration.triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+      "resident_registration.triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+      "artifact.resident_warp_copy_mode": "default_stream_async_device_to_device",
+      "resident_io_pipeline.warp_copy_mode": "default_stream_async_device_to_device"
+    },
+    "required_true_fields": [
+      "resident_registration.triangle_descriptor_fit_batch",
+      "resident_registration.triangle_descriptor_fit_reference_device_reuse",
+      "resident_registration.triangle_descriptor_fit_moving_device_reuse",
+      "resident_registration.triangle_descriptor_fit_output_device_reuse",
+      "resident_registration.triangle_pixel_refine_batch",
+      "resident_registration.triangle_warp_batch"
+    ],
+    "required_positive_fields": [
+      "resident_registration.triangle_descriptor_fit_reference_device_bytes",
+      "resident_registration.triangle_descriptor_fit_moving_device_bytes",
+      "resident_registration.triangle_descriptor_fit_output_device_bytes",
+      "resident_registration.triangle_pixel_refine_workspace_bytes",
+      "artifact.resident_warp_scratch_bytes",
+      "resident_io_pipeline.warp_scratch_bytes"
+    ],
+    "required_min_fields": {
+      "resident_registration.triangle_warp_batch_frame_count": 180
+    },
+    "required_component_seconds": [
+      "triangle_descriptor_fit_batch",
+      "triangle_pixel_refine_batch"
+    ]
+  },
   "pipeline_contract": {
     "required": true,
     "required_audit_type": "pipeline_invariant_contract",

@@ -9,6 +9,7 @@ from glass.report.benchmark_contract import (
     build_benchmark_performance_diagnostics,
     collect_dq_provenance_records,
     collect_frame_accounting_record,
+    collect_resident_registration_fastpath_record,
     load_benchmark_contract,
 )
 from glass.report.optimization_guide import build_optimization_guidance
@@ -649,6 +650,7 @@ def build_acceptance_audit(
         dq_contract=(contract_payload or {}).get("dq_provenance"),
     )
     frame_accounting_record = collect_frame_accounting_record(glass_run)
+    resident_registration_fastpath = collect_resident_registration_fastpath_record(glass_run)
     if benchmark_contract is not None:
         checks.extend(
             build_benchmark_contract_checks(
@@ -660,6 +662,7 @@ def build_acceptance_audit(
                 dq_provenance_records=dq_provenance_records,
                 frame_accounting_record=frame_accounting_record,
                 resident_determinism=resident_determinism,
+                resident_registration_fastpath=resident_registration_fastpath,
                 output_numerical_drifts=output_numerical_drifts,
                 pipeline_contract=pipeline_contract,
                 stack_engine_contract=stack_engine_contract,
@@ -715,6 +718,7 @@ def build_acceptance_audit(
         },
         "frame_accounting": frame_accounting_record,
         "resident_determinism": resident_determinism,
+        "resident_registration_fastpath": resident_registration_fastpath,
         "contract_bundle": contract_bundle,
         "contract_bundle_schema": contract_bundle_schema,
         "native_guardrails_bundle": native_guardrails_bundle,
@@ -922,6 +926,36 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                 f"{item.get('frame_id')} status={item.get('final_status')} "
                 f"stage={item.get('primary_stage')} reason={item.get('primary_reason')}"
             )
+    fastpath = audit.get("resident_registration_fastpath") or {}
+    if fastpath:
+        fast_registration = fastpath.get("resident_registration") or {}
+        io_pipeline = fastpath.get("resident_io_pipeline") or {}
+        artifact = fastpath.get("artifact") or {}
+        components = fastpath.get("registration_component_seconds") or {}
+        lines.extend(["", "## Resident Registration Fast Path", ""])
+        lines.append(f"- Exists: {fastpath.get('exists')}")
+        lines.append(f"- Available: {fastpath.get('available')}")
+        lines.append(f"- Mode: {fast_registration.get('mode')}")
+        lines.append(f"- Descriptor fit batch: {fast_registration.get('triangle_descriptor_fit_batch')}")
+        lines.append(
+            f"- Descriptor fit batch mode: {fast_registration.get('triangle_descriptor_fit_batch_mode')}"
+        )
+        lines.append(
+            "- Descriptor device reuse: "
+            f"reference={fast_registration.get('triangle_descriptor_fit_reference_device_reuse')} "
+            f"moving={fast_registration.get('triangle_descriptor_fit_moving_device_reuse')} "
+            f"output={fast_registration.get('triangle_descriptor_fit_output_device_reuse')}"
+        )
+        lines.append(f"- Pixel refine batch: {fast_registration.get('triangle_pixel_refine_batch')}")
+        lines.append(
+            f"- Pixel refine metric mode: {fast_registration.get('triangle_pixel_refine_batch_metric_mode')}"
+        )
+        lines.append(f"- Triangle warp batch: {fast_registration.get('triangle_warp_batch')}")
+        lines.append(f"- Triangle warp batch mode: {fast_registration.get('triangle_warp_batch_mode')}")
+        lines.append(f"- Warp copy mode: {artifact.get('resident_warp_copy_mode')}")
+        lines.append(f"- I/O pipeline warp copy mode: {io_pipeline.get('warp_copy_mode')}")
+        lines.append(f"- Warp scratch bytes: {artifact.get('resident_warp_scratch_bytes')}")
+        lines.append(f"- Component seconds: {components}")
     regression = audit.get("performance_regression")
     if regression:
         lines.extend(["", "## Performance Regression Diagnostics", ""])
