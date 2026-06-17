@@ -72,6 +72,10 @@ from glass.report.tile_local_apply_experiment import (
     build_tile_local_apply_experiment,
     write_tile_local_apply_experiment,
 )
+from glass.report.tile_local_apply_verify import (
+    build_tile_local_apply_verification,
+    write_tile_local_apply_verification,
+)
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -1175,6 +1179,34 @@ def cmd_tile_local_apply_experiment(args: argparse.Namespace) -> int:
             "status": summary.get("status"),
             "recommendation": summary.get("recommendation"),
             "required_failed_count": summary.get("required_failed_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failed and not summary.get("passed") else 0
+
+
+def cmd_tile_local_apply_verify(args: argparse.Namespace) -> int:
+    payload = build_tile_local_apply_verification(
+        baseline=args.baseline,
+        candidate=args.candidate,
+        reference=args.reference,
+        replay=args.replay,
+        glass_scale=args.glass_scale,
+        glass_offset=args.glass_offset,
+        clip_low=args.clip_low,
+        clip_high=args.clip_high,
+        coverage_map=args.coverage_map,
+        min_coverage=args.min_coverage,
+        pad_px=args.pad_px,
+    )
+    write_tile_local_apply_verification(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "status": summary.get("status"),
+            "recommendation": summary.get("recommendation"),
+            "mean_abs_delta": summary.get("mean_abs_delta"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2655,6 +2687,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when required checks fail",
     )
     tile_local_apply.set_defaults(func=cmd_tile_local_apply_experiment)
+
+    tile_local_verify = sub.add_parser(
+        "tile-local-apply-verify",
+        help="measure selected tile-local apply residuals against a reference image",
+    )
+    tile_local_verify.add_argument("--baseline", required=True, help="baseline GLASS master image")
+    tile_local_verify.add_argument("--candidate", required=True, help="candidate GLASS master image")
+    tile_local_verify.add_argument("--reference", required=True, help="reference master image")
+    tile_local_verify.add_argument("--replay", required=True, help="tile-local replay or subset JSON")
+    tile_local_verify.add_argument("--out", required=True, help="output verification JSON")
+    tile_local_verify.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_verify.add_argument("--glass-scale", type=float, help="scale GLASS pixels before comparison")
+    tile_local_verify.add_argument("--glass-offset", type=float, help="offset GLASS pixels before comparison")
+    tile_local_verify.add_argument("--clip-low", type=float, help="clip transformed GLASS pixels to this lower bound")
+    tile_local_verify.add_argument("--clip-high", type=float, help="clip transformed GLASS pixels to this upper bound")
+    tile_local_verify.add_argument("--coverage-map", help="optional coverage map used to mask compared tile pixels")
+    tile_local_verify.add_argument("--min-coverage", type=float, help="minimum coverage required for tile pixels")
+    tile_local_verify.add_argument("--pad-px", type=int, default=0, help="optional padding around replay tile extents")
+    tile_local_verify.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when measured tile residuals fail to improve",
+    )
+    tile_local_verify.set_defaults(func=cmd_tile_local_apply_verify)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

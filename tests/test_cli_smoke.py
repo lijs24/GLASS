@@ -133,6 +133,7 @@ def test_cli_help_commands():
         "tile-local-policy-replay",
         "tile-local-policy-subset",
         "tile-local-apply-experiment",
+        "tile-local-apply-verify",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",

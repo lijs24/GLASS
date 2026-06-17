@@ -2351,6 +2351,23 @@ integration where applicable.
   default and do not promote global policy selection until localized post-apply
   residual verification exists.
 
+### S2-Gate 139: Localized Tile-Local Apply Verification
+
+- Add `glass tile-local-apply-verify` to measure selected tile-local apply
+  residuals directly from baseline master, candidate master, reference master,
+  and replay/subset tile extents.
+- Apply the same GLASS-to-reference scale/offset/clip transform used by the
+  benchmark compare, and optionally mask tile pixels by coverage.
+- Emit per-tile measured residual statistics before and after apply:
+  signed mean, mean absolute residual, median absolute residual, RMS, p90/p99,
+  maximum absolute residual, compared pixels, and measured improvement flags.
+- Emit summary-level measured before/after mean absolute residual and RMS,
+  improved-tile counts, pass/fail status, and recommendation.
+- Add synthetic FITS tests and run the command on the S2-Gate 138 two-tile
+  200-light candidate to verify measured local residual movement.
+- Keep this as a diagnostic gate. It must not mutate pipeline outputs and must
+  not enable tile-local apply by default.
+
 ## Gate Rules
 
 Each gate requires:
