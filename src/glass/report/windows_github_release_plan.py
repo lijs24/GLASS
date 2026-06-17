@@ -65,6 +65,12 @@ def _phase2_artifact_summary(
         if isinstance(payload.get("latest_checkpoint"), dict)
         else {}
     )
+    acceptance = payload.get("acceptance_audit") if isinstance(payload.get("acceptance_audit"), dict) else {}
+    native_guardrails_bundle = (
+        acceptance.get("native_guardrails_bundle")
+        if isinstance(acceptance.get("native_guardrails_bundle"), dict)
+        else None
+    )
     baseline = payload.get("baseline") if isinstance(payload.get("baseline"), dict) else {}
     candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
     return {
@@ -77,6 +83,24 @@ def _phase2_artifact_summary(
         "latest_gate": latest_checkpoint.get("gate"),
         "baseline_gate": baseline.get("latest_gate"),
         "candidate_gate": candidate.get("latest_gate"),
+        "acceptance_status": acceptance.get("status"),
+        "native_guardrails_bundle": native_guardrails_bundle,
+        "native_guardrails_bundle_status": acceptance.get("native_guardrails_bundle_status")
+        or (native_guardrails_bundle or {}).get("status"),
+        "resident_result_contract_source": acceptance.get("resident_result_contract_source")
+        or (native_guardrails_bundle or {}).get("resident_result_contract_source"),
+        "resident_result_contract_run_default": acceptance.get("resident_result_contract_run_default")
+        if acceptance.get("resident_result_contract_run_default") is not None
+        else (native_guardrails_bundle or {}).get("resident_result_contract_run_default"),
+        "resident_result_contract_json": acceptance.get("resident_result_contract_json")
+        or (native_guardrails_bundle or {}).get("resident_result_contract_json"),
+        "resident_native_calibration_artifact": acceptance.get("resident_native_calibration_artifact")
+        if acceptance.get("resident_native_calibration_artifact") is not None
+        else (native_guardrails_bundle or {}).get("resident_native_calibration_artifact"),
+        "resident_calibration_master_count": acceptance.get("resident_calibration_master_count")
+        or (native_guardrails_bundle or {}).get("resident_calibration_master_count"),
+        "resident_calibrated_light_count": acceptance.get("resident_calibrated_light_count")
+        or (native_guardrails_bundle or {}).get("resident_calibrated_light_count"),
     }
 
 
@@ -104,6 +128,21 @@ def _run_gh(command: list[str], *, timeout_s: int = 30) -> dict[str, Any]:
         "stderr_tail": completed.stderr[-4000:],
         "exception": None,
     }
+
+
+def _has_native_phase2_provenance(phase2_status: dict[str, Any]) -> bool:
+    return any(
+        phase2_status.get(key) is not None
+        for key in (
+            "native_guardrails_bundle_status",
+            "resident_result_contract_source",
+            "resident_result_contract_run_default",
+            "resident_result_contract_json",
+            "resident_native_calibration_artifact",
+            "resident_calibration_master_count",
+            "resident_calibrated_light_count",
+        )
+    )
 
 
 def _release_notes(payload: dict[str, Any]) -> str:
@@ -142,6 +181,26 @@ def _release_notes(payload: dict[str, Any]) -> str:
                 "## Phase 2 Handoff Evidence",
                 "",
                 f"- Phase 2 status: `{phase2_status.get('status')}` gate `{phase2_status.get('latest_gate')}`",
+            ]
+        )
+        if _has_native_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    (
+                        "- Native resident contract source: "
+                        f"`{phase2_status.get('resident_result_contract_source')}` "
+                        f"run-default `{phase2_status.get('resident_result_contract_run_default')}`"
+                    ),
+                    (
+                        "- Native calibration artifact: "
+                        f"`{phase2_status.get('resident_native_calibration_artifact')}` "
+                        f"masters `{phase2_status.get('resident_calibration_master_count')}` "
+                        f"calibrated lights `{phase2_status.get('resident_calibrated_light_count')}`"
+                    ),
+                ]
+            )
+        lines.extend(
+            [
                 (
                     "- Phase 2 status compare: "
                     f"`{phase2_compare.get('status')}` "
@@ -506,6 +565,28 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"- Phase 2 status path: `{phase2_status.get('path')}`",
                 f"- Phase 2 status: `{phase2_status.get('status')}`",
                 f"- Phase 2 latest gate: `{phase2_status.get('latest_gate')}`",
+            ]
+        )
+        if _has_native_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    f"- Native guardrails bundle: `{phase2_status.get('native_guardrails_bundle_status')}`",
+                    f"- Native resident contract source: `{phase2_status.get('resident_result_contract_source')}`",
+                    (
+                        "- Native resident result run default: "
+                        f"`{phase2_status.get('resident_result_contract_run_default')}`"
+                    ),
+                    f"- Native resident result contract: `{phase2_status.get('resident_result_contract_json')}`",
+                    (
+                        "- Native calibration artifact: "
+                        f"`{phase2_status.get('resident_native_calibration_artifact')}`"
+                    ),
+                    f"- Native calibration masters: `{phase2_status.get('resident_calibration_master_count')}`",
+                    f"- Native calibrated lights: `{phase2_status.get('resident_calibrated_light_count')}`",
+                ]
+            )
+        lines.extend(
+            [
                 f"- Phase 2 status compare path: `{phase2_compare.get('path')}`",
                 f"- Phase 2 status compare: `{phase2_compare.get('status')}`",
                 f"- Phase 2 compare baseline gate: `{phase2_compare.get('baseline_gate')}`",

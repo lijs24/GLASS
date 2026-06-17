@@ -66,6 +66,12 @@ def _contract_bundle_paths(
         artifact_map.get("resident_result_contract")
         or bundle_payload.get("resident_result_contract_json")
     )
+    bundle_guardrails_summary = artifact_map.get("guardrails_summary")
+    resident_native_calibration = (
+        bundle_payload.get("resident_native_calibration")
+        if isinstance(bundle_payload.get("resident_native_calibration"), dict)
+        else {}
+    )
     resolved_pipeline = pipeline_contract_json if pipeline_contract_json is not None else bundle_pipeline
     resolved_stack = stack_engine_contract_json if stack_engine_contract_json is not None else bundle_stack
     bundle = {
@@ -83,17 +89,68 @@ def _contract_bundle_paths(
         else 0,
         "pipeline_contract_json": None if resolved_pipeline is None else str(resolved_pipeline),
         "stack_engine_contract_json": None if resolved_stack is None else str(resolved_stack),
+        "guardrails_summary_json": None
+        if bundle_guardrails_summary is None
+        else str(bundle_guardrails_summary),
         "resident_calibration_contract_json": None
         if bundle_resident_calibration is None
         else str(bundle_resident_calibration),
         "resident_result_contract_json": None if bundle_resident_result is None else str(bundle_resident_result),
         "resident_calibration_contract_attached": bundle_payload.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": bundle_payload.get("resident_result_contract_attached"),
+        "resident_result_contract_source": bundle_payload.get("resident_result_contract_source"),
+        "resident_native_calibration": resident_native_calibration,
+        "expected_integration_engine": bundle_payload.get("expected_integration_engine"),
+        "run_dir": bundle_payload.get("run_dir"),
+        "stack_scope": bundle_payload.get("stack_scope"),
         "explicit_pipeline_contract_overrode_bundle": pipeline_contract_json is not None,
         "explicit_stack_engine_contract_overrode_bundle": stack_engine_contract_json is not None,
         "checks": bundle_payload.get("checks") if isinstance(bundle_payload.get("checks"), list) else [],
     }
     return resolved_pipeline, resolved_stack, bundle
+
+
+def _native_guardrails_bundle_summary(contract_bundle: dict[str, Any] | None) -> dict[str, Any] | None:
+    if contract_bundle is None:
+        return None
+    resident_native_calibration = (
+        contract_bundle.get("resident_native_calibration")
+        if isinstance(contract_bundle.get("resident_native_calibration"), dict)
+        else {}
+    )
+    resident_result_path = contract_bundle.get("resident_result_contract_json")
+    resident_result_attached = (
+        bool(contract_bundle.get("resident_result_contract_attached"))
+        or resident_result_path is not None
+    )
+    resident_calibration_path = contract_bundle.get("resident_calibration_contract_json")
+    resident_calibration_attached = (
+        bool(contract_bundle.get("resident_calibration_contract_attached"))
+        or resident_calibration_path is not None
+    )
+    resident_result_source = contract_bundle.get("resident_result_contract_source")
+    native_calibration_present = bool(resident_native_calibration.get("artifact_present"))
+    return {
+        "schema_version": 1,
+        "status": "present" if contract_bundle.get("exists") else "missing",
+        "bundle_path": contract_bundle.get("path"),
+        "bundle_status": contract_bundle.get("status"),
+        "guardrails_summary_json": contract_bundle.get("guardrails_summary_json"),
+        "expected_integration_engine": contract_bundle.get("expected_integration_engine"),
+        "run_dir": contract_bundle.get("run_dir"),
+        "stack_scope": contract_bundle.get("stack_scope"),
+        "resident_result_contract_json": resident_result_path,
+        "resident_result_contract_attached": resident_result_attached,
+        "resident_result_contract_source": resident_result_source,
+        "resident_result_contract_run_default": resident_result_source == "run_default",
+        "resident_calibration_contract_json": resident_calibration_path,
+        "resident_calibration_contract_attached": resident_calibration_attached,
+        "resident_native_calibration_artifact": native_calibration_present,
+        "resident_calibration_master_count": resident_native_calibration.get("master_count"),
+        "resident_calibrated_light_count": resident_native_calibration.get(
+            "resident_calibrated_light_count"
+        ),
+    }
 
 
 def _contract_bundle_schema_audit(
@@ -445,6 +502,7 @@ def build_acceptance_audit(
     )
     checks.extend(resident_calibration_checks)
     checks.extend(resident_result_checks)
+    native_guardrails_bundle = _native_guardrails_bundle_summary(contract_bundle)
 
     pipeline_contract_path = Path(pipeline_contract_json) if pipeline_contract_json is not None else None
     pipeline_contract_payload = (
@@ -659,6 +717,7 @@ def build_acceptance_audit(
         "resident_determinism": resident_determinism,
         "contract_bundle": contract_bundle,
         "contract_bundle_schema": contract_bundle_schema,
+        "native_guardrails_bundle": native_guardrails_bundle,
         "resident_contracts": {
             "calibration": resident_calibration_contract,
             "result": resident_result_contract,
@@ -774,6 +833,33 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         lines.append(f"- Missing artifacts: {bundle_schema.get('missing_required_artifacts')}")
         lines.append(f"- Argument map keys: {bundle_schema.get('argument_map_keys')}")
         lines.append(f"- Missing argument map keys: {bundle_schema.get('missing_required_argument_map_keys')}")
+        lines.append("")
+    native_bundle = (
+        audit.get("native_guardrails_bundle")
+        if isinstance(audit.get("native_guardrails_bundle"), dict)
+        else {}
+    )
+    if native_bundle:
+        lines.extend(["## Native Guardrails Bundle Provenance", ""])
+        lines.append(f"- Status: {native_bundle.get('status')}")
+        lines.append(f"- Bundle status: {native_bundle.get('bundle_status')}")
+        lines.append(f"- Guardrails summary: {native_bundle.get('guardrails_summary_json')}")
+        lines.append(
+            f"- Resident result contract source: {native_bundle.get('resident_result_contract_source')}"
+        )
+        lines.append(
+            f"- Resident result contract run default: {native_bundle.get('resident_result_contract_run_default')}"
+        )
+        lines.append(f"- Resident result contract: {native_bundle.get('resident_result_contract_json')}")
+        lines.append(
+            f"- Resident native calibration artifact: {native_bundle.get('resident_native_calibration_artifact')}"
+        )
+        lines.append(
+            f"- Resident calibration master count: {native_bundle.get('resident_calibration_master_count')}"
+        )
+        lines.append(
+            f"- Resident calibrated light count: {native_bundle.get('resident_calibrated_light_count')}"
+        )
         lines.append("")
     resident_contracts = audit.get("resident_contracts") if isinstance(audit.get("resident_contracts"), dict) else {}
     resident_rows = [

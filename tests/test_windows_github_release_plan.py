@@ -41,6 +41,24 @@ def _phase2_status(path: Path, *, passed: bool = True, gate: int = 204) -> None:
             "status": "green" if passed else "attention_required",
             "passed": passed,
             "latest_checkpoint": {"gate": gate, "status": "green" if passed else "failed", "green": passed},
+            "acceptance_audit": {
+                "status": "passed" if passed else "failed",
+                "native_guardrails_bundle_status": "present",
+                "resident_result_contract_source": "run_default",
+                "resident_result_contract_run_default": True,
+                "resident_result_contract_json": "C:/glass_runs/run/resident_result_contract.json",
+                "resident_native_calibration_artifact": True,
+                "resident_calibration_master_count": 3,
+                "resident_calibrated_light_count": 200,
+                "native_guardrails_bundle": {
+                    "status": "present",
+                    "resident_result_contract_source": "run_default",
+                    "resident_result_contract_run_default": True,
+                    "resident_native_calibration_artifact": True,
+                    "resident_calibration_master_count": 3,
+                    "resident_calibrated_light_count": 200,
+                },
+            },
         },
     )
 
@@ -100,6 +118,10 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     checks = {str(item["name"]): item["passed"] for item in payload["checks"]}
     assert payload["passed"] is True
     assert payload["phase2"]["status"]["latest_gate"] == 204
+    assert payload["phase2"]["status"]["resident_result_contract_source"] == "run_default"
+    assert payload["phase2"]["status"]["resident_result_contract_run_default"] is True
+    assert payload["phase2"]["status"]["resident_native_calibration_artifact"] is True
+    assert payload["phase2"]["status"]["resident_calibrated_light_count"] == 200
     assert payload["phase2"]["status_compare"]["candidate_gate"] == 204
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
@@ -211,7 +233,12 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "GLASS Windows GitHub Release Plan" in markdown_text
     assert "Publish script" in markdown_text
     assert "Phase 2 Handoff Preflight" in markdown_text
+    assert "Native resident contract source: `run_default`" in markdown_text
+    assert "Native calibrated lights: `200`" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
+    notes_text = notes.read_text(encoding="utf-8")
+    assert "Native resident contract source: `run_default`" in notes_text
+    assert "calibrated lights `200`" in notes_text
     script_text = script.read_text(encoding="utf-8")
     assert "$ExpectedTag = 'v0.1.0-test'" in script_text
     assert "$Phase2StatusFile =" in script_text

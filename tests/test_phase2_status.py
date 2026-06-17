@@ -35,6 +35,16 @@ def _write_acceptance(path: Path) -> None:
             "benchmark_contract": {"name": "fixture_contract"},
             "frame_type_counts": {"light": 200, "bias": 20, "dark": 20, "flat": 20},
             "contract_bundle_schema": {"status": "passed"},
+            "native_guardrails_bundle": {
+                "status": "present",
+                "bundle_status": "passed",
+                "resident_result_contract_source": "run_default",
+                "resident_result_contract_run_default": True,
+                "resident_result_contract_json": "C:/glass_runs/run/resident_result_contract.json",
+                "resident_native_calibration_artifact": True,
+                "resident_calibration_master_count": 3,
+                "resident_calibrated_light_count": 200,
+            },
             "resident_contracts": {
                 "calibration": {"passed": True},
                 "result": {"passed": True},
@@ -145,6 +155,11 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["status"] == "green"
     assert payload["latest_checkpoint"]["path"] == str(latest)
     assert payload["acceptance_audit"]["speedup_vs_reference"] == 58.0
+    assert payload["acceptance_audit"]["native_guardrails_bundle_status"] == "present"
+    assert payload["acceptance_audit"]["resident_result_contract_source"] == "run_default"
+    assert payload["acceptance_audit"]["resident_result_contract_run_default"] is True
+    assert payload["acceptance_audit"]["resident_native_calibration_artifact"] is True
+    assert payload["acceptance_audit"]["resident_calibrated_light_count"] == 200
     assert payload["doctor"]["primary_gpu"] == "Fixture GPU"
     assert payload["release_manifest"]["package_count"] == 4
     assert payload["github_release_plan"]["status"] == "release_plan_ready"
@@ -179,9 +194,12 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["artifact_type"] == "glass_phase2_status"
     assert payload["latest_checkpoint"]["gate"] == 202
     assert payload["acceptance_audit"]["contract_bundle_schema_status"] == "passed"
+    assert payload["acceptance_audit"]["resident_result_contract_source"] == "run_default"
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
+    assert "Native resident result source: run_default" in text
+    assert "Native calibrated lights: 200" in text
 
 
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):

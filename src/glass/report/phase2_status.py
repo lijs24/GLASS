@@ -82,6 +82,7 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
     resident_contracts = (
         payload.get("resident_contracts") if isinstance(payload.get("resident_contracts"), dict) else {}
     )
+    native_guardrails_bundle = _native_guardrails_summary(payload)
     return {
         "path": payload.get("_path"),
         "exists": True,
@@ -97,12 +98,90 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
         "abs_diff_p99": comparison.get("abs_diff_p99"),
         "coverage_fraction": comparison.get("coverage_fraction"),
         "contract_bundle_schema_status": bundle_schema.get("status"),
+        "native_guardrails_bundle": native_guardrails_bundle,
+        "native_guardrails_bundle_status": native_guardrails_bundle.get("status")
+        if native_guardrails_bundle
+        else None,
+        "resident_result_contract_source": native_guardrails_bundle.get("resident_result_contract_source")
+        if native_guardrails_bundle
+        else None,
+        "resident_result_contract_run_default": native_guardrails_bundle.get(
+            "resident_result_contract_run_default"
+        )
+        if native_guardrails_bundle
+        else None,
+        "resident_result_contract_json": native_guardrails_bundle.get("resident_result_contract_json")
+        if native_guardrails_bundle
+        else None,
+        "resident_native_calibration_artifact": native_guardrails_bundle.get(
+            "resident_native_calibration_artifact"
+        )
+        if native_guardrails_bundle
+        else None,
+        "resident_calibration_master_count": native_guardrails_bundle.get(
+            "resident_calibration_master_count"
+        )
+        if native_guardrails_bundle
+        else None,
+        "resident_calibrated_light_count": native_guardrails_bundle.get(
+            "resident_calibrated_light_count"
+        )
+        if native_guardrails_bundle
+        else None,
         "resident_calibration_contract_passed": (resident_contracts.get("calibration") or {}).get("passed")
         if isinstance(resident_contracts.get("calibration"), dict)
         else None,
         "resident_result_contract_passed": (resident_contracts.get("result") or {}).get("passed")
         if isinstance(resident_contracts.get("result"), dict)
         else None,
+    }
+
+
+def _native_guardrails_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
+    native_guardrails_bundle = (
+        payload.get("native_guardrails_bundle")
+        if isinstance(payload.get("native_guardrails_bundle"), dict)
+        else None
+    )
+    if native_guardrails_bundle is not None:
+        return dict(native_guardrails_bundle)
+
+    contract_bundle = (
+        payload.get("contract_bundle") if isinstance(payload.get("contract_bundle"), dict) else None
+    )
+    if contract_bundle is None:
+        return None
+    resident_native_calibration = (
+        contract_bundle.get("resident_native_calibration")
+        if isinstance(contract_bundle.get("resident_native_calibration"), dict)
+        else {}
+    )
+    resident_result_source = contract_bundle.get("resident_result_contract_source")
+    return {
+        "schema_version": 1,
+        "status": "present" if contract_bundle.get("exists") else "missing",
+        "bundle_path": contract_bundle.get("path"),
+        "bundle_status": contract_bundle.get("status"),
+        "guardrails_summary_json": contract_bundle.get("guardrails_summary_json"),
+        "resident_result_contract_json": contract_bundle.get("resident_result_contract_json"),
+        "resident_result_contract_attached": bool(
+            contract_bundle.get("resident_result_contract_attached")
+        )
+        or contract_bundle.get("resident_result_contract_json") is not None,
+        "resident_result_contract_source": resident_result_source,
+        "resident_result_contract_run_default": resident_result_source == "run_default",
+        "resident_calibration_contract_json": contract_bundle.get("resident_calibration_contract_json"),
+        "resident_calibration_contract_attached": bool(
+            contract_bundle.get("resident_calibration_contract_attached")
+        )
+        or contract_bundle.get("resident_calibration_contract_json") is not None,
+        "resident_native_calibration_artifact": bool(
+            resident_native_calibration.get("artifact_present")
+        ),
+        "resident_calibration_master_count": resident_native_calibration.get("master_count"),
+        "resident_calibrated_light_count": resident_native_calibration.get(
+            "resident_calibrated_light_count"
+        ),
     }
 
 
@@ -275,6 +354,13 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Contract bundle schema: {acceptance.get('contract_bundle_schema_status')}",
                 f"- Resident calibration contract: {acceptance.get('resident_calibration_contract_passed')}",
                 f"- Resident result contract: {acceptance.get('resident_result_contract_passed')}",
+                f"- Native guardrails bundle: {acceptance.get('native_guardrails_bundle_status')}",
+                f"- Native resident result source: {acceptance.get('resident_result_contract_source')}",
+                f"- Native resident result run default: {acceptance.get('resident_result_contract_run_default')}",
+                f"- Native resident result contract: {acceptance.get('resident_result_contract_json')}",
+                f"- Native calibration artifact: {acceptance.get('resident_native_calibration_artifact')}",
+                f"- Native calibration masters: {acceptance.get('resident_calibration_master_count')}",
+                f"- Native calibrated lights: {acceptance.get('resident_calibrated_light_count')}",
             ]
         )
     if doctor:

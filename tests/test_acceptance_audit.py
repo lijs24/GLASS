@@ -9,7 +9,7 @@ from glass.cli import main
 from glass.engine.contracts import DQFlag
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
-from glass.report.acceptance_audit import build_acceptance_audit
+from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit_markdown
 
 
 def _write_manifest(path: Path, *, light: int = 200, bias: int = 20, dark: int = 20, flat: int = 20) -> None:
@@ -578,6 +578,8 @@ def _write_contract_bundle(
     passed: bool = True,
     resident_calibration: Path | None = None,
     resident_result: Path | None = None,
+    resident_result_source: str | None = None,
+    resident_native_calibration: dict | None = None,
 ) -> None:
     artifacts = {
         "pipeline_contract": str(pipeline),
@@ -603,6 +605,8 @@ def _write_contract_bundle(
             "resident_result_contract_json": None if resident_result is None else str(resident_result),
             "resident_calibration_contract_attached": resident_calibration is not None,
             "resident_result_contract_attached": resident_result is not None,
+            "resident_result_contract_source": resident_result_source,
+            "resident_native_calibration": resident_native_calibration or {},
             "acceptance_audit_argument_map": {
                 "pipeline_contract_json": str(pipeline),
                 "stack_engine_contract_json": str(stack),
@@ -767,6 +771,65 @@ def test_acceptance_audit_enforces_resident_contract_bundle_attachments(tmp_path
     assert checks["resident_result_contract_present"]["passed"] is True
     assert checks["resident_result_contract_type"]["passed"] is True
     assert checks["resident_result_contract_passed"]["passed"] is True
+
+
+def test_acceptance_audit_summarizes_native_guardrails_bundle_provenance(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    stack = tmp_path / "stack_engine_contract.json"
+    resident_result = tmp_path / "resident_result_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+    _write_stack_engine_contract(stack, passed=True, ready=True)
+    _write_resident_contract(
+        resident_result,
+        artifact_type="resident_cuda_result_contract",
+        passed=True,
+    )
+    _write_contract_bundle(
+        bundle,
+        pipeline=pipeline,
+        stack=stack,
+        resident_result=resident_result,
+        resident_result_source="run_default",
+        resident_native_calibration={
+            "artifact_present": True,
+            "master_count": 3,
+            "resident_calibrated_light_count": 200,
+        },
+    )
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=bundle,
+    )
+
+    native_bundle = audit["native_guardrails_bundle"]
+    assert native_bundle["status"] == "present"
+    assert native_bundle["resident_result_contract_source"] == "run_default"
+    assert native_bundle["resident_result_contract_run_default"] is True
+    assert native_bundle["resident_result_contract_json"] == str(resident_result)
+    assert native_bundle["resident_native_calibration_artifact"] is True
+    assert native_bundle["resident_calibration_master_count"] == 3
+    assert native_bundle["resident_calibrated_light_count"] == 200
+    markdown = tmp_path / "audit.md"
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "Native Guardrails Bundle Provenance" in text
+    assert "Resident result contract source: run_default" in text
+    assert "Resident calibrated light count: 200" in text
 
 
 def test_acceptance_audit_fails_failed_resident_contract_bundle_attachment(tmp_path: Path):

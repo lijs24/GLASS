@@ -3572,6 +3572,20 @@ integration where applicable.
 - Keep this gate planning/orchestration only: no image processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 213: Native Guardrails Bundle Release Provenance
+
+- Surface native guardrails-bundle provenance in acceptance-audit JSON and
+  Markdown, including resident result contract source/path, run-default
+  discovery status, native resident calibration artifact presence, master
+  count, and resident calibrated-light count.
+- Propagate the same provenance through `glass phase2-status` so handoff
+  status artifacts can be consumed without reparsing acceptance audit internals.
+- Include native resident contract source and native calibration artifact
+  counts in Windows GitHub release plan notes and preflight Markdown when a
+  Phase 2 status artifact is supplied.
+- Keep this gate reporting/release-handoff only: no image processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:
