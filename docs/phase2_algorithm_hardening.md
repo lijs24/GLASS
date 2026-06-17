@@ -2591,6 +2591,19 @@ integration where applicable.
 - Keep this as a planning gate only. It must not execute integration, run image
   compares, mutate image pixels, or alter resident defaults.
 
+### S2-Gate 155: Runtime-Focused Candidate Sweep Execution
+
+- Execute the S2-Gate 154 runtime-only variants sequentially on the 200-light
+  benchmark dataset.
+- For each variant, run integration, reference compare, baseline compare,
+  acceptance audit, and candidate-comparison without changing science options.
+- Run the generated `candidate-comparison-sweep` summary to rank all measured
+  variants by acceptance, speedup, runtime, and reference agreement.
+- Record stage timing differences so the next gate can decide whether to
+  promote a runtime setting or run a narrower confirmation sweep.
+- Keep this as a measured benchmark gate only. It must not alter resident
+  defaults until a follow-up promotion gate explicitly accepts a variant.
+
 ## Gate Rules
 
 Each gate requires:
