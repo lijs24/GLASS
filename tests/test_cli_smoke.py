@@ -755,6 +755,43 @@ def test_cli_report_summarizes_stack_engine_contract(tmp_path: Path):
                     }
                 ],
             },
+            "adoption": {
+                "schema_version": 1,
+                "target_engine": "stack_engine_cpu",
+                "surface_count": 2,
+                "stack_engine_surface_count": 1,
+                "cuda_resident_surface_count": 0,
+                "other_surface_count": 1,
+                "engine_counts": {"legacy_streaming_accumulator": 1, "stack_engine_cpu": 1},
+                "contract_ready_count": 1,
+                "result_contract_passed_count": 1,
+                "fallback_count": 1,
+                "phase2_stack_engine_default_gap_count": 1,
+                "recommendation": "stack_engine_contract_gaps_remain",
+                "surfaces": [
+                    {
+                        "surface": "master_calibration",
+                        "item": "bias_bad",
+                        "type": "bias",
+                        "engine_family": "legacy_streaming_accumulator",
+                        "stack_engine_contract_ready": False,
+                        "phase2_stack_engine_default_gap": True,
+                        "gap_reason": "stack_engine_fallback",
+                        "result_contract_passed": False,
+                        "fallback_reason": "fixture fallback",
+                    },
+                    {
+                        "surface": "integration",
+                        "item": "H",
+                        "type": "light",
+                        "engine_family": "stack_engine_cpu",
+                        "stack_engine_contract_ready": True,
+                        "phase2_stack_engine_default_gap": False,
+                        "gap_reason": "",
+                        "result_contract_passed": True,
+                    },
+                ],
+            },
         },
     )
 
@@ -766,6 +803,9 @@ def test_cli_report_summarizes_stack_engine_contract(tmp_path: Path):
     assert "stack_engine_contract.json" in html
     assert "calibration_masters_use_stack_engine" in html
     assert "fixture legacy fallback" in html
+    assert "phase2_stack_engine_default_gaps" in html
+    assert "stack_engine_contract_gaps_remain" in html
+    assert "stack_engine_fallback" in html
     assert "bias_bad" in html
     assert "legacy_streaming_accumulator" in html
     assert "integration_outputs_use:stack_engine_cpu" not in html

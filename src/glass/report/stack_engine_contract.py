@@ -119,6 +119,106 @@ def _integration_record(index: int, payload: dict[str, Any], expected_engine: st
     }
 
 
+def _engine_family(record: dict[str, Any]) -> str:
+    mode = str(record.get("tile_stack_mode") or "")
+    summary_engine = str(record.get("summary_engine") or "")
+    backend = str(record.get("backend") or "")
+    if mode.startswith("stack_engine_cpu") or summary_engine == "stack_engine_cpu":
+        return "stack_engine_cpu"
+    if summary_engine == "cuda_resident_stack" or backend == "cuda_resident_stack":
+        return "cuda_resident_stack"
+    if mode:
+        return mode
+    return "unknown"
+
+
+def _adoption_surface_record(surface: str, record: dict[str, Any]) -> dict[str, Any]:
+    family = _engine_family(record)
+    fallback = record.get("fallback_reason")
+    result_contract_passed = bool(record.get("result_contract_passed"))
+    stack_engine_contract_ready = (
+        family == "stack_engine_cpu"
+        and bool(record.get("contract_ok"))
+        and result_contract_passed
+        and not fallback
+    )
+    if stack_engine_contract_ready:
+        gap_reason = ""
+    elif family == "cuda_resident_stack":
+        gap_reason = "resident_cuda_surface"
+    elif family == "stack_engine_cpu" and not result_contract_passed:
+        gap_reason = "missing_or_failed_result_contract"
+    elif fallback:
+        gap_reason = "stack_engine_fallback"
+    else:
+        gap_reason = "legacy_or_unknown_engine"
+    return {
+        "surface": surface,
+        "item": record.get("name", record.get("filter", record.get("index"))),
+        "type": record.get("type", "light" if surface == "integration" else None),
+        "engine_family": family,
+        "tile_stack_mode": record.get("tile_stack_mode"),
+        "summary_engine": record.get("summary_engine"),
+        "stack_engine_enabled": record.get("stack_engine_enabled"),
+        "result_contract_passed": record.get("result_contract_passed"),
+        "contract_ok": record.get("contract_ok"),
+        "fallback_reason": fallback,
+        "stack_engine_contract_ready": stack_engine_contract_ready,
+        "phase2_stack_engine_default_gap": not stack_engine_contract_ready,
+        "gap_reason": gap_reason,
+    }
+
+
+def _build_adoption_summary(
+    masters: list[dict[str, Any]],
+    integration_records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    surfaces = [
+        *[_adoption_surface_record("master_calibration", record) for record in masters],
+        *[_adoption_surface_record("integration", record) for record in integration_records],
+    ]
+    engine_counts: dict[str, int] = {}
+    for surface in surfaces:
+        family = str(surface.get("engine_family") or "unknown")
+        engine_counts[family] = engine_counts.get(family, 0) + 1
+    gap_surfaces = [surface for surface in surfaces if surface.get("phase2_stack_engine_default_gap")]
+    fallback_surfaces = [surface for surface in surfaces if surface.get("fallback_reason")]
+    if not surfaces:
+        recommendation = "no_surfaces_to_audit"
+    elif not gap_surfaces:
+        recommendation = "stack_engine_default_ready"
+    elif engine_counts.get("cuda_resident_stack"):
+        recommendation = "resident_cuda_surfaces_remain"
+    else:
+        recommendation = "stack_engine_contract_gaps_remain"
+    return {
+        "schema_version": 1,
+        "target_engine": "stack_engine_cpu",
+        "surface_count": len(surfaces),
+        "stack_engine_surface_count": engine_counts.get("stack_engine_cpu", 0),
+        "cuda_resident_surface_count": engine_counts.get("cuda_resident_stack", 0),
+        "other_surface_count": len(surfaces)
+        - engine_counts.get("stack_engine_cpu", 0)
+        - engine_counts.get("cuda_resident_stack", 0),
+        "engine_counts": engine_counts,
+        "contract_ready_count": sum(1 for surface in surfaces if surface.get("stack_engine_contract_ready")),
+        "result_contract_passed_count": sum(1 for surface in surfaces if surface.get("result_contract_passed")),
+        "fallback_count": len(fallback_surfaces),
+        "phase2_stack_engine_default_gap_count": len(gap_surfaces),
+        "gap_surfaces": [
+            {
+                "surface": surface.get("surface"),
+                "item": surface.get("item"),
+                "engine_family": surface.get("engine_family"),
+                "gap_reason": surface.get("gap_reason"),
+            }
+            for surface in gap_surfaces
+        ],
+        "recommendation": recommendation,
+        "surfaces": surfaces,
+    }
+
+
 def build_stack_engine_contract_audit(
     run_dir: str | Path,
     *,
@@ -195,6 +295,7 @@ def build_stack_engine_contract_audit(
             ]
         )
 
+    adoption = _build_adoption_summary(masters, integration_records)
     passed = all(item["passed"] for item in checks)
     return {
         "schema_version": 1,
@@ -216,6 +317,7 @@ def build_stack_engine_contract_audit(
             "output_count": len(integration_records),
             "outputs": integration_records,
         },
+        "adoption": adoption,
     }
 
 
@@ -227,6 +329,8 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         f"- Run: `{audit['run_dir']}`",
         f"- Scope: `{audit['scope']}`",
         f"- Expected integration engine: `{audit['expected_integration_engine']}`",
+        f"- StackEngine adoption recommendation: `{(audit.get('adoption') or {}).get('recommendation')}`",
+        f"- Phase 2 StackEngine default gaps: `{(audit.get('adoption') or {}).get('phase2_stack_engine_default_gap_count')}`",
         "",
         "## Checks",
         "",
@@ -234,6 +338,25 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
     for item in audit.get("checks") or []:
         marker = "PASS" if item.get("passed") else "FAIL"
         lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
+    adoption = audit.get("adoption") if isinstance(audit.get("adoption"), dict) else {}
+    if adoption:
+        lines.extend(["", "## StackEngine Adoption", ""])
+        lines.append(f"- Target engine: `{adoption.get('target_engine')}`")
+        lines.append(f"- Surface count: `{adoption.get('surface_count')}`")
+        lines.append(f"- StackEngine surfaces: `{adoption.get('stack_engine_surface_count')}`")
+        lines.append(f"- Resident CUDA surfaces: `{adoption.get('cuda_resident_surface_count')}`")
+        lines.append(f"- Contract-ready surfaces: `{adoption.get('contract_ready_count')}`")
+        lines.append(f"- Gap count: `{adoption.get('phase2_stack_engine_default_gap_count')}`")
+        lines.append(f"- Recommendation: `{adoption.get('recommendation')}`")
+        for surface in adoption.get("surfaces") or []:
+            lines.append(
+                "- "
+                f"{surface.get('surface')}:{surface.get('item')} "
+                f"engine={surface.get('engine_family')} "
+                f"ready={surface.get('stack_engine_contract_ready')} "
+                f"gap={surface.get('phase2_stack_engine_default_gap')} "
+                f"reason={surface.get('gap_reason')}"
+            )
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 

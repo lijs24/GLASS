@@ -2886,6 +2886,26 @@ integration where applicable.
   `2` direct pipeline checks, `6` benchmark pipeline checks, `0` failed
   pipeline checks, and visible Markdown/HTML evidence rows.
 
+### S2-Gate 174: StackEngine Adoption Evidence
+
+- Extend `glass stack-engine-contract` with a StackEngine adoption summary that
+  classifies each audited surface by engine family, result-contract readiness,
+  fallback status, and Phase 2 default-readiness gap reason.
+- Preserve resident CUDA acceptance: integration-only audits may still pass with
+  `--expected-integration-engine cuda_resident_stack`, while adoption evidence
+  records the remaining `resident_cuda_surface` gap before CPU StackEngine can be
+  declared the default across all audited surfaces.
+- Surface adoption counts and recommendations in Markdown and HTML reports,
+  including `stack_engine_default_ready`, `resident_cuda_surfaces_remain`, and
+  `stack_engine_contract_gaps_remain`.
+- Add regression coverage for all-ready CPU StackEngine surfaces, legacy/fallback
+  surfaces, missing result contracts, and resident CUDA integration adoption gaps.
+- Run the adoption audit against the Gate160 `throughput_v1` resident run under
+  `C:\glass_runs\phase2_s2_gate_174_stack_engine_adoption`.
+- Current real artifact result: stack-engine contract passed for resident CUDA
+  integration, with `1` resident CUDA surface, `0` StackEngine CPU surfaces,
+  `1` Phase 2 default gap, and recommendation `resident_cuda_surfaces_remain`.
+
 ## Gate Rules
 
 Each gate requires:

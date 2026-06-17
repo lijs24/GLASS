@@ -951,6 +951,7 @@ def _dq_provenance_contract_rows(
 def _stack_engine_contract_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not contract:
         return []
+    adoption = contract.get("adoption") if isinstance(contract.get("adoption"), dict) else {}
     return [
         {
             "status": contract.get("status"),
@@ -960,6 +961,11 @@ def _stack_engine_contract_summary_rows(contract: dict[str, Any] | None) -> list
             "source": contract.get("_report_source_path"),
             "master_count": ((contract.get("calibration") or {}).get("master_count")),
             "integration_output_count": ((contract.get("integration") or {}).get("output_count")),
+            "target_engine": adoption.get("target_engine"),
+            "stack_engine_surfaces": adoption.get("stack_engine_surface_count"),
+            "resident_cuda_surfaces": adoption.get("cuda_resident_surface_count"),
+            "phase2_stack_engine_default_gaps": adoption.get("phase2_stack_engine_default_gap_count"),
+            "adoption_recommendation": adoption.get("recommendation"),
         }
     ]
 
@@ -1012,6 +1018,27 @@ def _stack_engine_contract_surface_rows(contract: dict[str, Any] | None) -> list
             }
         )
     return rows
+
+
+def _stack_engine_adoption_surface_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    adoption = (contract or {}).get("adoption")
+    if not isinstance(adoption, dict):
+        return []
+    return [
+        {
+            "surface": row.get("surface"),
+            "item": row.get("item"),
+            "type": row.get("type"),
+            "engine_family": row.get("engine_family"),
+            "contract_ready": row.get("stack_engine_contract_ready"),
+            "default_gap": row.get("phase2_stack_engine_default_gap"),
+            "gap_reason": row.get("gap_reason"),
+            "result_contract_passed": row.get("result_contract_passed"),
+            "fallback_reason": row.get("fallback_reason"),
+        }
+        for row in adoption.get("surfaces") or []
+        if isinstance(row, dict)
+    ]
 
 
 def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -1326,6 +1353,7 @@ def write_html_report(
     stack_engine_contract_summary_rows = _stack_engine_contract_summary_rows(stack_engine_contract)
     stack_engine_contract_failure_rows = _stack_engine_contract_failure_rows(stack_engine_contract)
     stack_engine_contract_surface_rows = _stack_engine_contract_surface_rows(stack_engine_contract)
+    stack_engine_adoption_surface_rows = _stack_engine_adoption_surface_rows(stack_engine_contract)
     pipeline_contract_summary_rows = _pipeline_contract_summary_rows(pipeline_contract)
     pipeline_contract_failure_rows = _pipeline_contract_failure_rows(pipeline_contract)
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
@@ -1451,6 +1479,7 @@ def write_html_report(
   audit remains authoritative.</p>
   {_table(stack_engine_contract_summary_rows)}
   {_table(stack_engine_contract_failure_rows)}
+  {_limited_table(stack_engine_adoption_surface_rows, label="StackEngine adoption surface rows", artifact="stack_engine_contract JSON")}
   {_limited_table(stack_engine_contract_surface_rows, label="StackEngine contract surface rows", artifact="stack_engine_contract JSON")}
   {_h2("pipeline-contract-audit", "Pipeline contract audit")}
   <p>The pipeline invariant contract audit verifies structural DQ, LN, warp,
