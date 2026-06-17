@@ -3823,6 +3823,25 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 229: Windows Publish Preflight Bundle Contract
+
+- Add `glass windows-publish-preflight` to verify the release manifest, GitHub
+  release handoff plan, Windows release matrix, and default-promotion manifest
+  as one publication bundle before any real GitHub release is attempted.
+- Require the release manifest to be `release_manifest_ready`, the GitHub handoff
+  plan to be `release_plan_ready`, the Windows matrix to be
+  `release_matrix_ready`, and the default-promotion manifest to be
+  `default_promotion_ready`.
+- Verify cross-artifact provenance: the manifest and GitHub handoff must
+  reference the supplied matrix, the GitHub handoff must reference the supplied
+  manifest, matrix package labels must match manifest package rows, and manifest
+  ZIP path/size/SHA256 rows must match GitHub release assets.
+- Preserve the CPU fallback and default-route route-contract evidence in the
+  preflight JSON and Markdown so a future publish script can depend on a single
+  artifact.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

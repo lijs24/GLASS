@@ -119,6 +119,10 @@ from glass.report.windows_github_release_plan import (
     build_windows_github_release_plan,
     write_windows_github_release_plan,
 )
+from glass.report.windows_publish_preflight import (
+    build_windows_publish_preflight,
+    write_windows_publish_preflight,
+)
 from glass.report.windows_package_smoke import (
     build_windows_package_smoke,
     write_windows_package_smoke,
@@ -2097,6 +2101,33 @@ def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
             "markdown": args.markdown,
             "notes": args.notes,
             "script": args.script,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_windows_publish_preflight(args: argparse.Namespace) -> int:
+    payload = build_windows_publish_preflight(
+        release_manifest=args.release_manifest,
+        github_release_plan=args.github_release_plan,
+        windows_release_matrix=args.windows_release_matrix,
+        default_promotion_manifest=args.default_promotion_manifest,
+        require_publication_ready=not args.allow_not_publication_ready,
+    )
+    write_windows_publish_preflight(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "recommendation": payload["recommendation"],
+            "release_tag": summary.get("release_tag"),
+            "asset_count": summary.get("asset_count"),
+            "primary_package": summary.get("primary_package"),
+            "out": args.out,
+            "markdown": args.markdown,
         }
     )
     if bool(args.fail_on_failure) and not payload.get("passed"):
@@ -4859,6 +4890,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the release plan checks pass",
     )
     windows_github_release_plan.set_defaults(func=cmd_windows_github_release_plan)
+
+    windows_publish_preflight = sub.add_parser(
+        "windows-publish-preflight",
+        help="verify manifest, GitHub handoff, matrix, and default-promotion artifacts before publishing",
+    )
+    windows_publish_preflight.add_argument(
+        "--release-manifest",
+        required=True,
+        help="windows-release-manifest JSON artifact",
+    )
+    windows_publish_preflight.add_argument(
+        "--github-release-plan",
+        required=True,
+        help="windows-github-release-plan JSON artifact",
+    )
+    windows_publish_preflight.add_argument(
+        "--windows-release-matrix",
+        required=True,
+        help="windows-release-matrix JSON artifact",
+    )
+    windows_publish_preflight.add_argument(
+        "--default-promotion-manifest",
+        required=True,
+        help="default-promotion-manifest JSON artifact",
+    )
+    windows_publish_preflight.add_argument("--out", required=True, help="output publish-preflight JSON")
+    windows_publish_preflight.add_argument("--markdown", help="optional output Markdown summary")
+    windows_publish_preflight.add_argument(
+        "--allow-not-publication-ready",
+        action="store_true",
+        help="do not require github-release-plan publication_ready=true",
+    )
+    windows_publish_preflight.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the publish preflight passes",
+    )
+    windows_publish_preflight.set_defaults(func=cmd_windows_publish_preflight)
 
     windows_package_smoke = sub.add_parser(
         "windows-package-smoke",
