@@ -67,6 +67,10 @@ from glass.report.resident_tile_contribution import (
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
+from glass.report.tile_local_apply_experiment import (
+    build_tile_local_apply_experiment,
+    write_tile_local_apply_experiment,
+)
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -1131,6 +1135,30 @@ def cmd_tile_local_policy_replay(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def cmd_tile_local_apply_experiment(args: argparse.Namespace) -> int:
+    payload = build_tile_local_apply_experiment(
+        baseline_run=args.baseline_run,
+        candidate_run=args.candidate_run,
+        replay=args.replay,
+        benchmark_contract=args.benchmark_contract,
+        baseline_compare_json=args.baseline_compare_json,
+        candidate_compare_json=args.candidate_compare_json,
+        candidate_vs_baseline_json=args.candidate_vs_baseline_json,
+    )
+    write_tile_local_apply_experiment(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "status": summary.get("status"),
+            "recommendation": summary.get("recommendation"),
+            "required_failed_count": summary.get("required_failed_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failed and not summary.get("passed") else 0
 
 
 def cmd_speedup_summary(args: argparse.Namespace) -> int:
@@ -2562,6 +2590,29 @@ def build_parser() -> argparse.ArgumentParser:
     tile_local_replay.add_argument("--out", required=True, help="output tile-local policy replay JSON")
     tile_local_replay.add_argument("--markdown", help="optional output Markdown summary")
     tile_local_replay.set_defaults(func=cmd_tile_local_policy_replay)
+
+    tile_local_apply = sub.add_parser(
+        "tile-local-apply-experiment",
+        help="audit a bounded resident CUDA tile-local apply experiment",
+    )
+    tile_local_apply.add_argument("--baseline-run", required=True, help="baseline GLASS run directory")
+    tile_local_apply.add_argument("--candidate-run", required=True, help="candidate GLASS run directory")
+    tile_local_apply.add_argument("--replay", required=True, help="tile-local-policy-replay JSON used by candidate")
+    tile_local_apply.add_argument("--out", required=True, help="output tile-local apply experiment JSON")
+    tile_local_apply.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_apply.add_argument(
+        "--benchmark-contract",
+        help="optional benchmark contract that pins frame accounting, runtime, and compare thresholds",
+    )
+    tile_local_apply.add_argument("--baseline-compare-json", help="optional baseline-vs-reference compare JSON")
+    tile_local_apply.add_argument("--candidate-compare-json", help="candidate-vs-reference compare JSON")
+    tile_local_apply.add_argument("--candidate-vs-baseline-json", help="optional candidate-vs-baseline compare JSON")
+    tile_local_apply.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when required checks fail",
+    )
+    tile_local_apply.set_defaults(func=cmd_tile_local_apply_experiment)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

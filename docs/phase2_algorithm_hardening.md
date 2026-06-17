@@ -2309,6 +2309,28 @@ integration where applicable.
   resident CLI smoke test proving `apply` routes through the rejection-aware
   primitive and writes rejection maps.
 
+### S2-Gate 137: Bounded 200-Light Tile-Local Apply Experiment
+
+- Add a reusable `glass tile-local-apply-experiment` command that audits a
+  real resident CUDA baseline run, a candidate tile-local `apply` run, the
+  replay contract used by the candidate, optional compare artifacts, and the
+  pinned 200-light benchmark contract.
+- Treat candidate promotion as a hard evidence gate: the candidate must record
+  a native applied tile-local policy, match baseline and contract frame
+  accounting, remain within the runtime regression budget, preserve the
+  benchmark speedup floor, and pass the same reference-compare RMS/p99/coverage
+  thresholds.
+- Keep localized improvement evidence explicit. The command must surface the
+  replay-predicted before/after residuals, the count of tiles moving toward the
+  reference, multiplier statistics, applied tile count, applied target-frame
+  count, and native tile-local timing.
+- Keep this as an opt-in experiment. Do not change the default resident
+  `record` mode, do not automatically promote the policy globally, and do not
+  hide missing compare artifacts as success.
+- Run the command on the M38 H-alpha 200-light benchmark using the
+  F000100-F000110 bounded replay contract before planning any broader
+  tile-local policy sweep.
+
 ## Gate Rules
 
 Each gate requires:

@@ -129,6 +129,7 @@ def test_resident_dq_coverage_provenance_separates_rejection_from_pre_rejection(
     assert provenance["partial_pre_rejection_pixels"] == 1
     assert provenance["rejection_reduced_pixels"] == 2
     assert provenance["rejected_sample_count"] == 2.0
+    assert provenance["rejected_sample_count_source"] == "low_high_rejection_maps"
     assert provenance["finite_pre_rejection_coverage"]["max"] == 3.0
     assert provenance["partial_edge_inference"] == "deferred"
 
@@ -771,6 +772,7 @@ def test_cli_resident_cuda_tile_local_policy_apply_winsorized_sigma_records_reje
     assert tile_local["effective_mode"] == "apply"
     assert tile_local["applied"] is True
     assert tile_local["application_status"] == "applied_winsorized_sigma"
+    assert tile_local["native_method"] == "ResidentCalibratedStack.integrate_tile_local_sigma_clip"
     assert tile_local["native_timing_s"]["timing_model"] == "native_resident_tile_local_sigma_clip_one_sync"
     assert tile_local["native_timing_s"]["rejection"] == "winsorized_sigma"
     assert output["coverage_map_path"] is not None

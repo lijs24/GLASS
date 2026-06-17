@@ -916,6 +916,23 @@ def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
     }
 
 
+def _resident_rejection_map_sample_count(
+    low_rejection_map: np.ndarray | None,
+    high_rejection_map: np.ndarray | None,
+) -> int | None:
+    if low_rejection_map is None and high_rejection_map is None:
+        return None
+    total = 0
+    for rejection_map in (low_rejection_map, high_rejection_map):
+        if rejection_map is None:
+            continue
+        values = np.nan_to_num(np.asarray(rejection_map, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+        rounded = np.rint(values)
+        np.maximum(rounded, 0.0, out=rounded)
+        total += int(round(float(np.sum(rounded, dtype=np.float64))))
+    return total
+
+
 def _resident_dq_coverage_provenance(
     coverage_map: np.ndarray | None,
     low_rejection_map: np.ndarray | None,
@@ -991,6 +1008,13 @@ def _resident_dq_coverage_provenance(
     rejection_reduced = finite_pre & finite_post & (post_rejection < finite_pre_rejection - 0.5)
     rejected_samples = finite_pre_rejection - post_rejection
     np.maximum(rejected_samples, 0.0, out=rejected_samples)
+    rejection_map_sample_count = _resident_rejection_map_sample_count(low_rejection_map, high_rejection_map)
+    if rejection_map_sample_count is None:
+        rejected_sample_count = float(np.nansum(rejected_samples))
+        rejected_sample_count_source = "coverage_difference"
+    else:
+        rejected_sample_count = float(rejection_map_sample_count)
+        rejected_sample_count_source = "low_high_rejection_maps"
 
     result: dict[str, Any] = {
         "available": True,
@@ -1002,7 +1026,8 @@ def _resident_dq_coverage_provenance(
         "partial_pre_rejection_pixels": int(np.count_nonzero(partial_pre)),
         "post_rejection_zero_pixels": int(np.count_nonzero(finite_post & (post_rejection <= 0.5))),
         "rejection_reduced_pixels": int(np.count_nonzero(rejection_reduced)),
-        "rejected_sample_count": float(np.nansum(rejected_samples)),
+        "rejected_sample_count": rejected_sample_count,
+        "rejected_sample_count_source": rejected_sample_count_source,
         "partial_edge_inference": "deferred",
         "note": (
             "finite_pre_rejection_coverage is coverage + low/high rejection counts. "
@@ -5793,6 +5818,7 @@ def run_resident_calibration_integration(
                         weights_arg,
                     )
                     tile_local_status = "applied_mean_rejection_none"
+                    tile_local_native_method = "ResidentCalibratedStack.integrate_tile_local_mean"
                     tile_local_limitations = [
                         "This opt-in path applies tile-local multipliers to rejection=none weighted mean.",
                     ]
@@ -5817,6 +5843,7 @@ def run_resident_calibration_integration(
                         winsorize,
                     )
                     tile_local_status = f"applied_{rejection_mode}"
+                    tile_local_native_method = "ResidentCalibratedStack.integrate_tile_local_sigma_clip"
                     tile_local_limitations = [
                         "This opt-in path applies tile-local multipliers before resident rejection accumulation.",
                         "Fused-matrix dispatch remains unsupported for tile-local policy application.",
@@ -5827,6 +5854,7 @@ def run_resident_calibration_integration(
                         "applied": True,
                         "effective_mode": resident_tile_local_policy_mode,
                         "application_status": tile_local_status,
+                        "native_method": tile_local_native_method,
                         "native_timing_s": tile_local_timing,
                         "native_requirement": "satisfied",
                         "limitations": tile_local_limitations,
