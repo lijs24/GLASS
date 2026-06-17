@@ -83,6 +83,7 @@ from glass.report.tile_local_rejection_registration_plan import (
     build_tile_local_rejection_registration_plan,
     write_tile_local_rejection_registration_plan,
 )
+from glass.report.candidate_comparison import build_candidate_comparison, write_candidate_comparison
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -1278,6 +1279,36 @@ def cmd_tile_local_rejection_registration_plan(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def cmd_candidate_comparison(args: argparse.Namespace) -> int:
+    payload = build_candidate_comparison(
+        baseline_run=args.baseline_run,
+        candidate_run=args.candidate_run,
+        candidate_id=args.candidate_id,
+        baseline_compare_json=args.baseline_compare_json,
+        candidate_compare_json=args.candidate_compare_json,
+        candidate_vs_baseline_json=args.candidate_vs_baseline_json,
+        baseline_acceptance_json=args.baseline_acceptance_json,
+        candidate_acceptance_json=args.candidate_acceptance_json,
+        max_reference_rms_growth=args.max_reference_rms_growth,
+        max_reference_p99_growth=args.max_reference_p99_growth,
+        max_candidate_vs_baseline_rms=args.max_candidate_vs_baseline_rms,
+        min_speedup_vs_reference=args.min_speedup_vs_reference,
+    )
+    write_candidate_comparison(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "status": summary.get("status"),
+            "recommendation": summary.get("recommendation"),
+            "candidate_elapsed_s": summary.get("candidate_elapsed_s"),
+            "elapsed_ratio_candidate_over_baseline": summary.get("elapsed_ratio_candidate_over_baseline"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failed and not summary.get("passed") else 0
 
 
 def cmd_tile_local_policy_replay(args: argparse.Namespace) -> int:
@@ -3046,6 +3077,31 @@ def build_parser() -> argparse.ArgumentParser:
     tile_local_rejection_registration_plan.add_argument("--strict-agreement-score", type=float, default=0.9)
     tile_local_rejection_registration_plan.add_argument("--exclude-top-count", type=int, default=6)
     tile_local_rejection_registration_plan.set_defaults(func=cmd_tile_local_rejection_registration_plan)
+
+    candidate_comparison = sub.add_parser(
+        "candidate-comparison",
+        help="compare a measured candidate run against a baseline run and reference metrics",
+    )
+    candidate_comparison.add_argument("--baseline-run", required=True, help="baseline GLASS run directory")
+    candidate_comparison.add_argument("--candidate-run", required=True, help="candidate GLASS run directory")
+    candidate_comparison.add_argument("--candidate-id", default="candidate", help="human-readable candidate id")
+    candidate_comparison.add_argument("--out", required=True, help="output candidate comparison JSON")
+    candidate_comparison.add_argument("--markdown", help="optional output Markdown summary")
+    candidate_comparison.add_argument("--baseline-compare-json", help="baseline-vs-reference compare JSON")
+    candidate_comparison.add_argument("--candidate-compare-json", help="candidate-vs-reference compare JSON")
+    candidate_comparison.add_argument("--candidate-vs-baseline-json", help="candidate-vs-baseline compare JSON")
+    candidate_comparison.add_argument("--baseline-acceptance-json", help="optional baseline acceptance-audit JSON")
+    candidate_comparison.add_argument("--candidate-acceptance-json", help="candidate acceptance-audit JSON")
+    candidate_comparison.add_argument("--max-reference-rms-growth", type=float, default=1.05)
+    candidate_comparison.add_argument("--max-reference-p99-growth", type=float, default=1.05)
+    candidate_comparison.add_argument("--max-candidate-vs-baseline-rms", type=float)
+    candidate_comparison.add_argument("--min-speedup-vs-reference", type=float)
+    candidate_comparison.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when required candidate-comparison checks fail",
+    )
+    candidate_comparison.set_defaults(func=cmd_candidate_comparison)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",

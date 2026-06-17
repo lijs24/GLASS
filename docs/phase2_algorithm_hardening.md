@@ -2546,6 +2546,23 @@ integration where applicable.
   promote the candidate to default behavior; it only makes it eligible for
   broader candidate comparison.
 
+### S2-Gate 152: Candidate-vs-Baseline Comparison
+
+- Add `glass candidate-comparison` to compare a measured candidate run against
+  a baseline GLASS run using existing run timing, frame accounting, reference
+  compare, candidate-vs-baseline compare, and acceptance-audit artifacts.
+- Recompute the baseline-vs-reference compare for the same no-border,
+  minimum-coverage region used by the Gate151 retry candidate, then compare the
+  Gate151 retry candidate directly against the Gate119 historical baseline.
+- Require candidate acceptance, minimum speedup versus the black-box reference,
+  shape agreement, bounded reference RMS/p99 growth, and unchanged frame
+  accounting before marking the candidate as passed.
+- Preserve a conservative recommendation: a passing candidate can enter broader
+  sweeps, but if it is slower than the historical baseline it is not promoted
+  as a default policy.
+- Keep this as an artifact/decision gate only. It must not execute integration,
+  mutate image pixels, alter CUDA kernels, or change resident defaults.
+
 ## Gate Rules
 
 Each gate requires:
