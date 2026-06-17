@@ -213,6 +213,31 @@ def _write_release_decision(path: Path, *, ready: bool = True) -> None:
     )
 
 
+def _write_publish_preflight(path: Path, *, ready: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "windows_publish_preflight",
+            "status": "publish_preflight_ready" if ready else "blocked",
+            "passed": ready,
+            "recommendation": "publish_release_bundle" if ready else "fix_publish_preflight_blockers",
+            "failed_checks": [] if ready else ["manifest_assets_match_github_plan"],
+            "summary": {
+                "release_tag": "v0.1.0-test",
+                "asset_count": 4,
+                "package_count": 4,
+                "primary_package": "cuda13",
+                "ordered_try_list": ["cuda13", "cuda12", "cuda11", "cpu"],
+                "source_stamps": ["abcdef0"],
+                "default_promotion_status": "default_promotion_ready" if ready else "blocked",
+                "default_route_check_count": 4 if ready else 2,
+                "default_route_speedup_vs_reference": 28.75,
+            },
+        },
+    )
+
+
 def _doctor_payload() -> dict:
     return {
         "recommendation": "cuda",
@@ -248,6 +273,7 @@ def _status_payload(
     cuda_available: bool = True,
     release_status: str = "release_manifest_ready",
     github_status: str = "release_plan_ready",
+    publish_preflight_status: str = "publish_preflight_ready",
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -278,6 +304,7 @@ def _status_payload(
         "doctor": {"cuda_available": cuda_available},
         "release_manifest": {"status": release_status},
         "github_release_plan": {"status": github_status},
+        "publish_preflight": {"status": publish_preflight_status},
         "pipeline_contract": {
             "status": "passed" if pipeline_passed else "failed",
             "passed": pipeline_passed,
@@ -302,12 +329,14 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     default_route_acceptance = tmp_path / "default_route_acceptance.json"
     release = tmp_path / "release_manifest.json"
     github_plan = tmp_path / "github_release_plan.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
     pipeline_contract = tmp_path / "pipeline_contract.json"
     release_decision = tmp_path / "release_decision.json"
     _write_acceptance(acceptance)
     _write_default_route_acceptance(default_route_acceptance)
     _write_pipeline_contract(pipeline_contract)
     _write_release_decision(release_decision)
+    _write_publish_preflight(publish_preflight)
     write_json(
         release,
         {
@@ -337,6 +366,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         default_route_acceptance_audit=default_route_acceptance,
         release_manifest=release,
         github_release_plan=github_plan,
+        publish_preflight=publish_preflight,
         pipeline_contract=pipeline_contract,
         release_decision=release_decision,
         doctor_payload=_doctor_payload(),
@@ -362,6 +392,9 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["doctor"]["primary_gpu"] == "Fixture GPU"
     assert payload["release_manifest"]["package_count"] == 4
     assert payload["github_release_plan"]["status"] == "release_plan_ready"
+    assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert payload["publish_preflight"]["asset_count"] == 4
+    assert payload["publish_preflight"]["primary_package"] == "cuda13"
     assert payload["pipeline_contract"]["status"] == "passed"
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
@@ -375,6 +408,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["resident_registration_fastpath_contract_passed_for_default"] is True
     assert checks["default_route_acceptance_passed"] is True
     assert checks["default_route_acceptance_route_contract_passed"] is True
+    assert checks["windows_publish_preflight_ready"] is True
 
 
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
@@ -387,10 +421,12 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     markdown = tmp_path / "phase2_status.md"
     pipeline_contract = tmp_path / "pipeline_contract.json"
     release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
     _write_acceptance(acceptance)
     _write_default_route_acceptance(default_route_acceptance)
     _write_pipeline_contract(pipeline_contract)
     _write_release_decision(release_decision)
+    _write_publish_preflight(publish_preflight)
 
     result = main(
         [
@@ -405,6 +441,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(pipeline_contract),
             "--release-decision",
             str(release_decision),
+            "--publish-preflight",
+            str(publish_preflight),
             "--out",
             str(out),
             "--markdown",
@@ -422,6 +460,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["default_route_acceptance"]["route_contract_passed"] is True
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["release_decision"]["default_change_ready"] is True
+    assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -438,6 +477,9 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Release Decision" in text
     assert "Default change ready: True" in text
     assert "Runtime repeat ratio vs best: 1.053" in text
+    assert "Windows Publish Preflight" in text
+    assert "Preflight status: publish_preflight_ready" in text
+    assert "Default route checks: 4" in text
 
 
 def test_phase2_status_blocks_default_ready_without_fastpath_contract(tmp_path: Path):
@@ -508,6 +550,37 @@ def test_phase2_status_blocks_failed_default_route_acceptance_when_supplied(tmp_
     ]
 
 
+def test_phase2_status_blocks_failed_publish_preflight_when_supplied(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=230)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(publish_preflight, ready=False)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert checks["windows_publish_preflight_ready"]["passed"] is False
+    assert checks["windows_publish_preflight_ready"]["evidence"]["failed_checks"] == [
+        "manifest_assets_match_github_plan"
+    ]
+
+
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     baseline = tmp_path / "baseline.json"
     candidate = tmp_path / "candidate.json"
@@ -529,6 +602,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["resident_registration_fastpath_contract_check_count_preserved"] is True
     assert checks["cuda_available_preserved"] is True
     assert checks["release_manifest_ready_preserved"] is True
+    assert checks["github_release_plan_ready_preserved"] is True
+    assert checks["windows_publish_preflight_ready_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
@@ -551,6 +626,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             cuda_available=False,
             release_status="failed",
             github_status="failed",
+            publish_preflight_status="blocked",
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
@@ -578,6 +654,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["cuda_available_preserved"] is False
     assert checks["release_manifest_ready_preserved"] is False
     assert checks["github_release_plan_ready_preserved"] is False
+    assert checks["windows_publish_preflight_ready_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["pipeline_integration_dq_contract_preserved"] is False
     assert checks["pipeline_pixel_verification_preserved"] is False

@@ -433,6 +433,40 @@ def _github_release_plan_summary(path: str | Path | None) -> dict[str, Any] | No
     }
 
 
+def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+        }
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    return {
+        "path": payload.get("_path"),
+        "exists": True,
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "recommendation": payload.get("recommendation"),
+        "release_tag": summary.get("release_tag"),
+        "asset_count": summary.get("asset_count"),
+        "package_count": summary.get("package_count"),
+        "primary_package": summary.get("primary_package"),
+        "ordered_try_list": summary.get("ordered_try_list"),
+        "source_stamps": summary.get("source_stamps"),
+        "default_promotion_status": summary.get("default_promotion_status"),
+        "default_route_check_count": summary.get("default_route_check_count"),
+        "default_route_speedup_vs_reference": summary.get(
+            "default_route_speedup_vs_reference"
+        ),
+        "failed_checks": payload.get("failed_checks"),
+    }
+
+
 def _check_passed(payload: dict[str, Any], name: str) -> bool | None:
     checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
     for item in checks:
@@ -579,6 +613,7 @@ def build_phase2_status(
     default_route_acceptance_audit: str | Path | None = None,
     release_manifest: str | Path | None = None,
     github_release_plan: str | Path | None = None,
+    publish_preflight: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
     release_decision: str | Path | None = None,
     doctor_payload: dict[str, Any] | None = None,
@@ -589,6 +624,7 @@ def build_phase2_status(
     doctor = _doctor_summary(doctor_payload)
     release = _release_manifest_summary(release_manifest)
     github_plan = _github_release_plan_summary(github_release_plan)
+    preflight = _publish_preflight_summary(publish_preflight)
     pipeline = _pipeline_contract_summary(pipeline_contract)
     decision = _release_decision_summary(release_decision)
     checks = [
@@ -665,6 +701,23 @@ def build_phase2_status(
                 },
             }
         )
+    if preflight is not None:
+        checks.append(
+            {
+                "name": "windows_publish_preflight_ready",
+                "passed": preflight.get("status") == "publish_preflight_ready"
+                and preflight.get("passed") is True,
+                "evidence": {
+                    "status": preflight.get("status"),
+                    "passed": preflight.get("passed"),
+                    "asset_count": preflight.get("asset_count"),
+                    "package_count": preflight.get("package_count"),
+                    "primary_package": preflight.get("primary_package"),
+                    "default_route_check_count": preflight.get("default_route_check_count"),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
     if pipeline is not None:
         checks.append(
             {
@@ -729,6 +782,7 @@ def build_phase2_status(
         "doctor": doctor,
         "release_manifest": release,
         "github_release_plan": github_plan,
+        "publish_preflight": preflight,
         "pipeline_contract": pipeline,
         "release_decision": decision,
         "checks": checks,
@@ -742,6 +796,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     doctor = payload.get("doctor") or {}
     release = payload.get("release_manifest") or {}
     github_plan = payload.get("github_release_plan") or {}
+    preflight = payload.get("publish_preflight") or {}
     pipeline = payload.get("pipeline_contract") or {}
     decision = payload.get("release_decision") or {}
     lines = [
@@ -845,6 +900,27 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Publication ready: {github_plan.get('publication_ready')}",
                 f"- GitHub auth OK: {github_plan.get('gh_auth_ok')}",
                 f"- Script path: {github_plan.get('script_path')}",
+            ]
+        )
+    if preflight:
+        lines.extend(
+            [
+                "",
+                "## Windows Publish Preflight",
+                "",
+                f"- Preflight status: {preflight.get('status')}",
+                f"- Passed: {preflight.get('passed')}",
+                f"- Recommendation: {preflight.get('recommendation')}",
+                f"- Release tag: {preflight.get('release_tag')}",
+                f"- Assets/packages: {preflight.get('asset_count')}/{preflight.get('package_count')}",
+                f"- Primary package: {preflight.get('primary_package')}",
+                f"- Try order: {preflight.get('ordered_try_list')}",
+                f"- Default promotion: {preflight.get('default_promotion_status')}",
+                f"- Default route checks: {preflight.get('default_route_check_count')}",
+                (
+                    "- Default route speedup vs reference: "
+                    f"{preflight.get('default_route_speedup_vs_reference')}"
+                ),
             ]
         )
     if pipeline:
@@ -1130,6 +1206,13 @@ def build_phase2_status_compare(
             candidate=_status_value(candidate, "github_release_plan", "status"),
         ),
         _compare_check(
+            "windows_publish_preflight_ready_preserved",
+            _status_value(baseline, "publish_preflight", "status") != "publish_preflight_ready"
+            or _status_value(candidate, "publish_preflight", "status") == "publish_preflight_ready",
+            baseline=_status_value(baseline, "publish_preflight", "status"),
+            candidate=_status_value(candidate, "publish_preflight", "status"),
+        ),
+        _compare_check(
             "pipeline_contract_passed_preserved",
             _status_value(baseline, "pipeline_contract", "passed") is not True
             or _status_value(candidate, "pipeline_contract", "passed") is True,
@@ -1193,6 +1276,7 @@ def build_phase2_status_compare(
             "cuda_available": _status_value(baseline, "doctor", "cuda_available"),
             "release_manifest_status": _status_value(baseline, "release_manifest", "status"),
             "github_release_plan_status": _status_value(baseline, "github_release_plan", "status"),
+            "publish_preflight_status": _status_value(baseline, "publish_preflight", "status"),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "release_decision_status": _status_value(baseline, "release_decision", "status"),
@@ -1219,6 +1303,7 @@ def build_phase2_status_compare(
             "cuda_available": _status_value(candidate, "doctor", "cuda_available"),
             "release_manifest_status": _status_value(candidate, "release_manifest", "status"),
             "github_release_plan_status": _status_value(candidate, "github_release_plan", "status"),
+            "publish_preflight_status": _status_value(candidate, "publish_preflight", "status"),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
             "release_decision_status": _status_value(candidate, "release_decision", "status"),

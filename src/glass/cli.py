@@ -2788,6 +2788,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         default_route_acceptance_audit=args.default_route_acceptance_audit,
         release_manifest=args.release_manifest,
         github_release_plan=args.github_release_plan,
+        publish_preflight=args.publish_preflight,
         pipeline_contract=args.pipeline_contract,
         release_decision=args.release_decision,
         doctor_payload=_doctor_payload(skip_cuda_probe=args.skip_cuda_probe),
@@ -2802,6 +2803,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
     )
     pipeline = payload.get("pipeline_contract") if isinstance(payload.get("pipeline_contract"), dict) else {}
     decision = payload.get("release_decision") if isinstance(payload.get("release_decision"), dict) else {}
+    preflight = payload.get("publish_preflight") if isinstance(payload.get("publish_preflight"), dict) else {}
     console.print(
         {
             "status": payload.get("status"),
@@ -2811,6 +2813,8 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             "speedup_vs_reference": acceptance.get("speedup_vs_reference"),
             "default_route_acceptance_status": default_route.get("status"),
             "default_route_acceptance_passed": default_route.get("passed"),
+            "publish_preflight_status": preflight.get("status"),
+            "publish_preflight_passed": preflight.get("passed"),
             "pipeline_contract_status": pipeline.get("status"),
             "release_decision_status": decision.get("status"),
             "default_change_ready": decision.get("default_change_ready"),
@@ -2866,6 +2870,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     phase2_status.add_argument("--release-manifest", help="optional Windows release-manifest JSON artifact")
     phase2_status.add_argument("--github-release-plan", help="optional Windows GitHub release-plan JSON artifact")
+    phase2_status.add_argument("--publish-preflight", help="optional Windows publish-preflight JSON artifact")
     phase2_status.add_argument("--pipeline-contract", help="optional pipeline-contract JSON artifact")
     phase2_status.add_argument("--release-decision", help="optional release-promotion-decision JSON artifact")
     phase2_status.add_argument("--out", required=True, help="output Phase 2 status JSON")

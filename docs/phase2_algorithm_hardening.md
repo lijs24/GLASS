@@ -3842,6 +3842,21 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 230: Phase 2 Status Publish-Preflight Handoff
+
+- Extend `glass phase2-status` with `--publish-preflight` so the Phase 2 status
+  artifact can consume the Gate 229 single publication-bundle contract.
+- Require the supplied publish-preflight artifact to be
+  `publish_preflight_ready` and passed, carrying asset/package counts, primary
+  package, CPU fallback order, default-promotion status, and default-route
+  route-contract evidence.
+- Surface publish-preflight summary in Phase 2 status JSON, Markdown, and CLI
+  console output beside release manifest and GitHub release-plan evidence.
+- Extend `glass phase2-status-compare` to flag regressions if a candidate drops
+  a previously ready publish-preflight handoff.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

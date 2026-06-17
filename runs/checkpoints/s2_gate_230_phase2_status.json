@@ -1,0 +1,510 @@
+{
+  "acceptance_audit": {
+    "abs_diff_p99": 0.00043544556712731865,
+    "active_frames": 193,
+    "benchmark_contract": {
+      "name": "phase2_m38_h_200_resident_cuda",
+      "path": "benchmarks\\phase2_m38_h_200_contract.json",
+      "schema_version": 1
+    },
+    "contract_bundle_schema_status": "passed",
+    "coverage_fraction": 0.9577924192878646,
+    "exists": true,
+    "frame_type_counts": {
+      "bias": 20,
+      "dark": 20,
+      "flat": 20,
+      "light": 200
+    },
+    "native_guardrails_bundle": {
+      "bundle_path": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\acceptance_contract_bundle.json",
+      "bundle_status": "passed",
+      "expected_integration_engine": "cuda_resident_stack",
+      "guardrails_summary_json": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\guardrails_summary.json",
+      "resident_calibrated_light_count": 200,
+      "resident_calibration_contract_attached": false,
+      "resident_calibration_contract_json": null,
+      "resident_calibration_master_count": 3,
+      "resident_native_calibration_artifact": true,
+      "resident_result_contract_attached": true,
+      "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_result_contract.json",
+      "resident_result_contract_run_default": true,
+      "resident_result_contract_source": "run_default",
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view",
+      "schema_version": 1,
+      "stack_scope": "all",
+      "status": "present"
+    },
+    "native_guardrails_bundle_status": "present",
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_214_acceptance_real_fastpath_contract.json",
+    "resident_calibrated_light_count": 200,
+    "resident_calibration_contract_passed": null,
+    "resident_calibration_master_count": 3,
+    "resident_native_calibration_artifact": true,
+    "resident_registration_fastpath": {
+      "artifact_count": 1,
+      "available": true,
+      "contract_check_count": 24,
+      "contract_failed_check_count": 0,
+      "contract_failed_checks": [],
+      "contract_status": "passed",
+      "exists": true,
+      "mode": "similarity_cuda_triangle",
+      "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_artifacts.json",
+      "resident_io_pipeline_warp_copy_mode": "default_stream_async_device_to_device",
+      "resident_io_pipeline_warp_scratch_bytes": 493209636,
+      "resident_warp_copy_mode": "default_stream_async_device_to_device",
+      "resident_warp_scratch_bytes": 493209636,
+      "schema_version": 1,
+      "status": "present",
+      "triangle_descriptor_fit_batch": true,
+      "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+      "triangle_descriptor_fit_device_reuse": {
+        "moving": true,
+        "output": true,
+        "reference": true
+      },
+      "triangle_pixel_refine_batch": true,
+      "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+      "triangle_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+      "triangle_warp_batch": true,
+      "triangle_warp_batch_frame_count": 188,
+      "triangle_warp_batch_mode": "native_matrix_lanczos3_frames"
+    },
+    "resident_registration_fastpath_contract_check_count": 24,
+    "resident_registration_fastpath_contract_failed_check_count": 0,
+    "resident_registration_fastpath_contract_status": "passed",
+    "resident_registration_fastpath_mode": "similarity_cuda_triangle",
+    "resident_registration_fastpath_status": "present",
+    "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_result_contract.json",
+    "resident_result_contract_passed": true,
+    "resident_result_contract_run_default": true,
+    "resident_result_contract_source": "run_default",
+    "resident_warp_copy_mode": "default_stream_async_device_to_device",
+    "resident_warp_scratch_bytes": 493209636,
+    "rms_diff": 0.0014945534429799121,
+    "speedup_vs_reference": 58.099101701945926,
+    "status": "passed",
+    "triangle_descriptor_fit_batch": true,
+    "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+    "triangle_descriptor_fit_device_reuse": {
+      "moving": true,
+      "output": true,
+      "reference": true
+    },
+    "triangle_pixel_refine_batch": true,
+    "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+    "triangle_warp_batch": true,
+    "triangle_warp_batch_frame_count": 188,
+    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames"
+  },
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 230,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "speedup_vs_reference": 58.099101701945926,
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_passed": true,
+        "speedup_vs_reference": 28.75107894736842,
+        "status": "passed"
+      },
+      "name": "default_route_acceptance_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "route_check_count": 4,
+        "route_failed_checks": []
+      },
+      "name": "default_route_acceptance_route_contract_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      },
+      "name": "cuda_doctor_available",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "package_count": 4,
+        "status": "release_manifest_ready"
+      },
+      "name": "release_manifest_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "gh_auth_ok": false,
+        "publication_ready": true,
+        "status": "release_plan_ready"
+      },
+      "name": "github_release_plan_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "asset_count": 4,
+        "default_route_check_count": 4,
+        "failed_checks": [],
+        "package_count": 4,
+        "passed": true,
+        "primary_package": "cuda13",
+        "status": "publish_preflight_ready"
+      },
+      "name": "windows_publish_preflight_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_check_count": 0,
+        "integration_dq_contract": true,
+        "pixel_verification_enabled": true,
+        "status": "passed"
+      },
+      "name": "pipeline_contract_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_change_ready": true,
+        "recommendation": "promote_default_candidate",
+        "release_candidate_ready": true,
+        "runtime_repeat_elapsed_ratio_vs_best": 1.053510511049479,
+        "status": "default_change_ready"
+      },
+      "name": "release_decision_default_change_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_count": 24,
+        "failed_check_count": 0,
+        "fastpath_status": "present",
+        "mode": "similarity_cuda_triangle",
+        "status": "passed"
+      },
+      "name": "resident_registration_fastpath_contract_passed_for_default",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T22:07:18+00:00",
+  "default_route_acceptance": {
+    "abs_diff_p99": 0.002,
+    "acceptance_passed": true,
+    "active_frames": 193,
+    "benchmark_contract": {
+      "name": "s2_gate_222_default_route_contract",
+      "path": "runs\\tmp_s2_gate_222_default_route_acceptance\\contract.json",
+      "schema_version": 1
+    },
+    "coverage_fraction": 0.97,
+    "exists": true,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_222_default_route_acceptance_audit.json",
+    "rms_diff": 0.001,
+    "route_check_count": 4,
+    "route_checks": {
+      "backend": {
+        "evidence": {
+          "artifact_match": {
+            "actual": "cuda",
+            "field": "backend",
+            "reason": "resident_cuda_default",
+            "requested": "auto",
+            "source": "run_timing",
+            "token": "--backend cuda"
+          },
+          "command_match": false,
+          "run_command_present": true,
+          "run_timing_present": true,
+          "token": "--backend cuda"
+        },
+        "name": "contract_required_command_token:--backend cuda",
+        "passed": true,
+        "present": true
+      },
+      "memory_mode": {
+        "evidence": {
+          "artifact_match": {
+            "actual": "resident",
+            "field": "memory_mode",
+            "reason": "resident_cuda_default",
+            "requested": "resident",
+            "source": "run_timing",
+            "token": "--memory-mode resident"
+          },
+          "command_match": false,
+          "run_command_present": true,
+          "run_timing_present": true,
+          "token": "--memory-mode resident"
+        },
+        "name": "contract_required_command_token:--memory-mode resident",
+        "passed": true,
+        "present": true
+      },
+      "resident_registration": {
+        "evidence": {
+          "artifact_match": {
+            "actual": "similarity_cuda_triangle",
+            "artifact": "runs\\tmp_s2_gate_222_default_route_acceptance\\glass_run\\resident_artifacts.json",
+            "field": "resident_registration.mode",
+            "source": "resident_artifacts",
+            "token": "--resident-registration similarity_cuda_triangle"
+          },
+          "command_match": false,
+          "run_command_present": true,
+          "run_timing_present": true,
+          "token": "--resident-registration similarity_cuda_triangle"
+        },
+        "name": "contract_required_command_token:--resident-registration similarity_cuda_triangle",
+        "passed": true,
+        "present": true
+      },
+      "runtime_preset": {
+        "evidence": {
+          "any_of": [
+            "--resident-h2d-mode pinned_ring",
+            "--resident-runtime-preset throughput-v1"
+          ],
+          "artifact_matches": [
+            {
+              "actual": "throughput-v1",
+              "field": "resident_runtime_preset",
+              "reason": "resident_cuda_default",
+              "source": "run_timing",
+              "token": "--resident-runtime-preset throughput-v1"
+            }
+          ],
+          "matched": [],
+          "resident_io_pipeline_records": 0,
+          "run_command_present": true,
+          "run_timing_present": true
+        },
+        "name": "contract_required_command_token_group:resident_h2d_or_runtime_preset",
+        "passed": true,
+        "present": true
+      }
+    },
+    "route_contract_passed": true,
+    "route_failed_checks": [],
+    "schema_version": 1,
+    "speedup_vs_reference": 28.75107894736842,
+    "status": "passed"
+  },
+  "doctor": {
+    "compute_capability": "12.0",
+    "cuda_available": true,
+    "device_count": 1,
+    "driver_version": "596.21",
+    "native_extension_loaded": true,
+    "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "recommendation": "cuda",
+    "vram_mib": 97886,
+    "windows_cuda_packages": {
+      "fallbacks": [
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+      "ordered_try_list": [
+        "cuda13",
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "packages": [
+        {
+          "architectures": [
+            "5.0",
+            "5.2",
+            "6.0",
+            "6.1",
+            "7.0",
+            "7.5",
+            "8.0",
+            "8.6"
+          ],
+          "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+          "label": "cuda11",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "11.8"
+        },
+        {
+          "architectures": [
+            "7.5",
+            "8.0",
+            "8.6",
+            "8.9",
+            "9.0"
+          ],
+          "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+          "label": "cuda12",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "12.4"
+        },
+        {
+          "architectures": [
+            "8.6",
+            "8.9",
+            "9.0",
+            "10.0",
+            "12.0"
+          ],
+          "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+          "label": "cuda13",
+          "match": "native_cubin",
+          "note": "This package contains native GPU code for this compute capability.",
+          "toolkit": "13.0"
+        }
+      ],
+      "primary": "cuda13",
+      "ptx_forward_compatibility": true,
+      "selected_device": {
+        "compute_capability": "12.0",
+        "compute_capability_code": 120,
+        "device_id": 0,
+        "driver_version": "596.21",
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      }
+    },
+    "wrapper_importable": true
+  },
+  "github_release_plan": {
+    "exists": true,
+    "gh_auth_ok": false,
+    "gh_available": false,
+    "package_count": null,
+    "path": "runs\\checkpoints\\s2_gate_228_github_release_plan.json",
+    "publication_ready": true,
+    "recommendation": "run_release_command",
+    "script_path": null,
+    "script_publish_default": null,
+    "status": "release_plan_ready",
+    "tag": null
+  },
+  "latest_checkpoint": {
+    "checkpoint_dir": "runs\\checkpoints",
+    "date": "2026-06-18",
+    "exists": true,
+    "gate": 230,
+    "green": true,
+    "path": "runs\\checkpoints\\s2_gate_230_status.md",
+    "scope": "Phase 2 Status Publish-Preflight Handoff",
+    "status": "green"
+  },
+  "passed": true,
+  "pipeline_contract": {
+    "audit_type": "pipeline_invariant_contract",
+    "calibrated_light_count": 200,
+    "calibration_master_count": 3,
+    "check_count": 15,
+    "exists": true,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "integration_coverage_map_pixels_match_dq": true,
+    "integration_dq_contract": true,
+    "integration_dq_map_pixels_match_summary": true,
+    "integration_map_count": 6,
+    "integration_output_count": 1,
+    "integration_output_maps_available": true,
+    "integration_rejection_map_pixels_match_dq": true,
+    "integration_resident_result_contract": true,
+    "integration_stack_result_contract": true,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_211_pipeline_contract.json",
+    "pixel_verification_enabled": true,
+    "pixel_verification_tile_size": 2048,
+    "pixel_verification_tolerance_pixels": 0,
+    "resident_calibrated_light_count": 200,
+    "resident_native_calibration_artifact": true,
+    "status": "passed"
+  },
+  "publish_preflight": {
+    "artifact_type": "windows_publish_preflight",
+    "asset_count": 4,
+    "default_promotion_status": "default_promotion_ready",
+    "default_route_check_count": 4,
+    "default_route_speedup_vs_reference": 28.75107894736842,
+    "exists": true,
+    "failed_checks": [],
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "package_count": 4,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_229_windows_publish_preflight.json",
+    "primary_package": "cuda13",
+    "recommendation": "publish_release_bundle",
+    "release_tag": "v0.1.0-phase2-gate228",
+    "source_stamps": [
+      "aa63510"
+    ],
+    "status": "publish_preflight_ready"
+  },
+  "release_decision": {
+    "artifact_type": "release_promotion_decision",
+    "default_change_ready": true,
+    "exists": true,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_218_release_promotion_decision.json",
+    "pipeline_handoff_passed": true,
+    "pipeline_handoff_pixel_verification_enabled": true,
+    "pipeline_handoff_source": "explicit_pipeline_contract",
+    "pipeline_handoff_status": "passed",
+    "recommendation": "promote_default_candidate",
+    "release_candidate_ready": true,
+    "runtime_repeat_best_elapsed_s": 22.598500299995067,
+    "runtime_repeat_best_label": "gate218_default_repeat02",
+    "runtime_repeat_considered_run_count": 3,
+    "runtime_repeat_elapsed_ratio_vs_best": 1.053510511049479,
+    "runtime_repeat_max_elapsed_ratio_vs_best": 1.25,
+    "runtime_repeat_present": true,
+    "runtime_repeat_recommendation": "best_observed:gate218_default_repeat02",
+    "runtime_repeat_run_count": 3,
+    "runtime_repeat_slowest_elapsed_s": 23.807757599999604,
+    "speedup_actual": 58.099101701945926,
+    "speedup_required_min": 2.0,
+    "status": "default_change_ready"
+  },
+  "release_manifest": {
+    "exists": true,
+    "package_count": 4,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_228_windows_release_manifest.json",
+    "recommendation": "ready_for_upload",
+    "source_stamp": null,
+    "status": "release_manifest_ready"
+  },
+  "schema_version": 1,
+  "status": "green"
+}
