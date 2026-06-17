@@ -200,6 +200,91 @@ void glass_integrate_resident_weighted_mean_f32_launch(
       pixels_per_frame);
 }
 
+__global__ void glass_integrate_resident_tile_local_weighted_mean_f32_kernel(
+    const float* stack,
+    const float* weights,
+    const unsigned char* target_mask,
+    const int* tile_extents,
+    const float* tile_multipliers,
+    float* master,
+    float* weight_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int tile_count) {
+  const std::size_t pixels_per_frame =
+      static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+  const std::size_t pixel = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (pixel >= pixels_per_frame) {
+    return;
+  }
+
+  const int x = static_cast<int>(pixel % static_cast<std::size_t>(width));
+  const int y = static_cast<int>(pixel / static_cast<std::size_t>(width));
+  float tile_multiplier = 1.0f;
+  for (int tile = 0; tile < tile_count; ++tile) {
+    const int base = tile * 4;
+    const int x0 = tile_extents[base + 0];
+    const int y0 = tile_extents[base + 1];
+    const int x1 = tile_extents[base + 2];
+    const int y1 = tile_extents[base + 3];
+    if (x >= x0 && x < x1 && y >= y0 && y < y1) {
+      tile_multiplier = tile_multipliers[tile];
+      break;
+    }
+  }
+
+  float sum = 0.0f;
+  float weight_sum = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    float weight = weights[frame];
+    if (target_mask[frame] != 0) {
+      weight *= tile_multiplier;
+    }
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    const float value = stack[frame * pixels_per_frame + pixel];
+    if (!isfinite(value)) {
+      continue;
+    }
+    sum += value * weight;
+    weight_sum += weight;
+  }
+  weight_map[pixel] = weight_sum;
+  master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
+}
+
+void glass_integrate_resident_tile_local_weighted_mean_f32_launch(
+    const float* stack,
+    const float* weights,
+    const unsigned char* target_mask,
+    const int* tile_extents,
+    const float* tile_multipliers,
+    float* master,
+    float* weight_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int tile_count) {
+  const std::size_t pixels_per_frame =
+      static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_integrate_resident_tile_local_weighted_mean_f32_kernel<<<blocks, threads>>>(
+      stack,
+      weights,
+      target_mask,
+      tile_extents,
+      tile_multipliers,
+      master,
+      weight_map,
+      frame_count,
+      width,
+      height,
+      tile_count);
+}
+
 __global__ void glass_integrate_resident_sigma_clip_f32_kernel(
     const float* stack,
     const float* weights,

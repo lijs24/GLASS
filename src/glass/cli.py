@@ -488,6 +488,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
                 resident_frame_weight_proposal=args.resident_frame_weight_proposal,
                 resident_tile_local_policy_replay=args.resident_tile_local_policy_replay,
+                resident_tile_local_policy_mode=args.resident_tile_local_policy_mode,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -599,6 +600,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
                 resident_frame_weight_proposal=args.resident_frame_weight_proposal,
                 resident_tile_local_policy_replay=args.resident_tile_local_policy_replay,
+                resident_tile_local_policy_mode=args.resident_tile_local_policy_mode,
                 resident_registration_results=args.resident_registration_results,
                 resident_warp_interpolation=args.resident_warp_interpolation,
                 resident_warp_clamping_threshold=args.resident_warp_clamping_threshold,
@@ -1869,8 +1871,17 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resident-tile-local-policy-replay",
         help=(
-            "optional tile-local-policy-replay JSON recorded as a future native tile-local integration "
-            "contract; current resident output is not modified"
+            "optional tile-local-policy-replay JSON; recorded by default and applied only with "
+            "--resident-tile-local-policy-mode apply_mean"
+        ),
+    )
+    run.add_argument(
+        "--resident-tile-local-policy-mode",
+        choices=["record", "apply_mean"],
+        default="record",
+        help=(
+            "how to consume --resident-tile-local-policy-replay; record preserves current output, "
+            "apply_mean enables the opt-in resident stack weighted-mean path for rejection=none"
         ),
     )
     run.add_argument(
@@ -2146,8 +2157,17 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-tile-local-policy-replay",
         help=(
-            "optional tile-local-policy-replay JSON recorded as a future native tile-local integration "
-            "contract for resident audit"
+            "optional tile-local-policy-replay JSON for resident audit; recorded by default and applied only with "
+            "--resident-tile-local-policy-mode apply_mean"
+        ),
+    )
+    audit.add_argument(
+        "--resident-tile-local-policy-mode",
+        choices=["record", "apply_mean"],
+        default="record",
+        help=(
+            "how to consume --resident-tile-local-policy-replay in resident audit; record preserves current "
+            "output, apply_mean enables the opt-in stack weighted-mean path for rejection=none"
         ),
     )
     audit.add_argument(

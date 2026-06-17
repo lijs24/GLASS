@@ -380,6 +380,18 @@ void glass_integrate_resident_weighted_mean_f32_launch(
     float* weight_map,
     std::size_t frame_count,
     std::size_t pixels_per_frame);
+void glass_integrate_resident_tile_local_weighted_mean_f32_launch(
+    const float* stack,
+    const float* weights,
+    const unsigned char* target_mask,
+    const int* tile_extents,
+    const float* tile_multipliers,
+    float* master,
+    float* weight_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int tile_count);
 void glass_integrate_resident_sigma_clip_f32_launch(
     const float* stack,
     const float* weights,
@@ -4996,6 +5008,235 @@ class ResidentCalibratedStack {
     cudaFree(d_master);
     cudaFree(d_weight_map);
     return py::make_tuple(master, weight_map);
+  }
+
+  py::tuple integrate_tile_local_mean(
+      py::object target_mask_obj,
+      py::object tile_extents_obj,
+      py::object tile_multipliers_obj,
+      py::object weights_obj) const {
+    if (loaded_count_ != frame_count_) {
+      throw std::runtime_error("all resident frames must be loaded before integration");
+    }
+    if (width_ > static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
+        height_ > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+      throw std::invalid_argument("resident tile-local integration requires image dimensions within int range");
+    }
+
+    const auto total_start = Clock::now();
+    std::vector<float> weights(frame_count_, 1.0f);
+    py::array_t<float, py::array::c_style | py::array::forcecast> weights_array;
+    if (!weights_obj.is_none()) {
+      weights_array = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(weights_obj);
+      const py::buffer_info weights_info = weights_array.request();
+      if (weights_info.ndim != 1 || static_cast<std::size_t>(weights_info.shape[0]) != frame_count_) {
+        throw std::invalid_argument("weights must have shape (frame_count,)");
+      }
+      const auto* ptr = static_cast<const float*>(weights_info.ptr);
+      weights.assign(ptr, ptr + frame_count_);
+    }
+
+    auto target_mask_array =
+        py::cast<py::array_t<unsigned char, py::array::c_style | py::array::forcecast>>(target_mask_obj);
+    const py::buffer_info target_mask_info = target_mask_array.request();
+    if (target_mask_info.ndim != 1 ||
+        static_cast<std::size_t>(target_mask_info.shape[0]) != frame_count_) {
+      throw std::invalid_argument("target_mask must have shape (frame_count,)");
+    }
+    const auto* target_mask_ptr = static_cast<const unsigned char*>(target_mask_info.ptr);
+    std::vector<unsigned char> target_mask(target_mask_ptr, target_mask_ptr + frame_count_);
+    std::size_t target_frame_count = 0;
+    for (const unsigned char value : target_mask) {
+      if (value != 0) {
+        ++target_frame_count;
+      }
+    }
+    if (target_frame_count == 0) {
+      throw std::invalid_argument("target_mask must select at least one resident frame");
+    }
+
+    auto tile_extents_array =
+        py::cast<py::array_t<int, py::array::c_style | py::array::forcecast>>(tile_extents_obj);
+    const py::buffer_info tile_extents_info = tile_extents_array.request();
+    if (tile_extents_info.ndim != 2 || tile_extents_info.shape[1] != 4) {
+      throw std::invalid_argument("tile_extents must have shape (tile_count, 4)");
+    }
+    const std::size_t tile_count = static_cast<std::size_t>(tile_extents_info.shape[0]);
+    if (tile_count == 0 || tile_count > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+      throw std::invalid_argument("tile_extents must contain between 1 and INT_MAX tiles");
+    }
+    const auto* tile_extents_ptr = static_cast<const int*>(tile_extents_info.ptr);
+    std::vector<int> tile_extents(tile_extents_ptr, tile_extents_ptr + tile_count * 4);
+
+    auto tile_multipliers_array =
+        py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(tile_multipliers_obj);
+    const py::buffer_info tile_multipliers_info = tile_multipliers_array.request();
+    if (tile_multipliers_info.ndim != 1 ||
+        static_cast<std::size_t>(tile_multipliers_info.shape[0]) != tile_count) {
+      throw std::invalid_argument("tile_multipliers must have shape (tile_count,)");
+    }
+    const auto* tile_multipliers_ptr = static_cast<const float*>(tile_multipliers_info.ptr);
+    std::vector<float> tile_multipliers(tile_multipliers_ptr, tile_multipliers_ptr + tile_count);
+
+    for (std::size_t tile = 0; tile < tile_count; ++tile) {
+      const int base = static_cast<int>(tile * 4);
+      const int x0 = tile_extents[base + 0];
+      const int y0 = tile_extents[base + 1];
+      const int x1 = tile_extents[base + 2];
+      const int y1 = tile_extents[base + 3];
+      if (x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0 ||
+          x1 > static_cast<int>(width_) || y1 > static_cast<int>(height_)) {
+        throw std::invalid_argument("tile_extents must be positive half-open rectangles inside the image");
+      }
+      const float multiplier = tile_multipliers[tile];
+      if (!std::isfinite(multiplier) || multiplier < 0.0f) {
+        throw std::invalid_argument("tile_multipliers must be finite non-negative values");
+      }
+    }
+    for (std::size_t left = 0; left < tile_count; ++left) {
+      const int left_base = static_cast<int>(left * 4);
+      const int left_x0 = tile_extents[left_base + 0];
+      const int left_y0 = tile_extents[left_base + 1];
+      const int left_x1 = tile_extents[left_base + 2];
+      const int left_y1 = tile_extents[left_base + 3];
+      for (std::size_t right = left + 1; right < tile_count; ++right) {
+        const int right_base = static_cast<int>(right * 4);
+        const int right_x0 = tile_extents[right_base + 0];
+        const int right_y0 = tile_extents[right_base + 1];
+        const int right_x1 = tile_extents[right_base + 2];
+        const int right_y1 = tile_extents[right_base + 3];
+        if (std::max(left_x0, right_x0) < std::min(left_x1, right_x1) &&
+            std::max(left_y0, right_y0) < std::min(left_y1, right_y1)) {
+          throw std::invalid_argument("tile_extents must not overlap for deterministic tile-local integration");
+        }
+      }
+    }
+
+    py::array_t<float> master({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    py::array_t<float> weight_map({static_cast<py::ssize_t>(height_), static_cast<py::ssize_t>(width_)});
+    const py::buffer_info master_info = master.request();
+    const py::buffer_info weight_map_info = weight_map.request();
+
+    float* d_weights = nullptr;
+    unsigned char* d_target_mask = nullptr;
+    int* d_tile_extents = nullptr;
+    float* d_tile_multipliers = nullptr;
+    float* d_master = nullptr;
+    float* d_weight_map = nullptr;
+    double device_alloc_s = 0.0;
+    double weights_upload_s = 0.0;
+    double policy_upload_s = 0.0;
+    double kernel_enqueue_s = 0.0;
+    double sync_s = 0.0;
+    double download_s = 0.0;
+    try {
+      const auto alloc_start = Clock::now();
+      check_cuda(cudaMalloc(&d_weights, frame_count_ * sizeof(float)), "cudaMalloc(resident tile-local weights)");
+      check_cuda(
+          cudaMalloc(&d_target_mask, frame_count_ * sizeof(unsigned char)),
+          "cudaMalloc(resident tile-local target mask)");
+      check_cuda(
+          cudaMalloc(&d_tile_extents, tile_count * 4 * sizeof(int)),
+          "cudaMalloc(resident tile-local extents)");
+      check_cuda(
+          cudaMalloc(&d_tile_multipliers, tile_count * sizeof(float)),
+          "cudaMalloc(resident tile-local multipliers)");
+      check_cuda(cudaMalloc(&d_master, pixels_per_frame_ * sizeof(float)), "cudaMalloc(resident tile-local master)");
+      check_cuda(
+          cudaMalloc(&d_weight_map, pixels_per_frame_ * sizeof(float)),
+          "cudaMalloc(resident tile-local weight map)");
+      device_alloc_s = seconds_since(alloc_start);
+
+      const auto weights_upload_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(d_weights, weights.data(), frame_count_ * sizeof(float), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident tile-local weights)");
+      weights_upload_s = seconds_since(weights_upload_start);
+
+      const auto policy_upload_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(d_target_mask, target_mask.data(), frame_count_ * sizeof(unsigned char), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident tile-local target mask)");
+      check_cuda(
+          cudaMemcpy(d_tile_extents, tile_extents.data(), tile_count * 4 * sizeof(int), cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident tile-local extents)");
+      check_cuda(
+          cudaMemcpy(
+              d_tile_multipliers,
+              tile_multipliers.data(),
+              tile_count * sizeof(float),
+              cudaMemcpyHostToDevice),
+          "cudaMemcpy(resident tile-local multipliers)");
+      policy_upload_s = seconds_since(policy_upload_start);
+
+      const auto kernel_start = Clock::now();
+      glass_integrate_resident_tile_local_weighted_mean_f32_launch(
+          d_stack_,
+          d_weights,
+          d_target_mask,
+          d_tile_extents,
+          d_tile_multipliers,
+          d_master,
+          d_weight_map,
+          frame_count_,
+          static_cast<int>(width_),
+          static_cast<int>(height_),
+          static_cast<int>(tile_count));
+      kernel_enqueue_s = seconds_since(kernel_start);
+      check_cuda(cudaGetLastError(), "ResidentCalibratedStack.integrate_tile_local_mean kernel launch");
+      const auto sync_start = Clock::now();
+      check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.integrate_tile_local_mean synchronize");
+      sync_s = seconds_since(sync_start);
+
+      const auto download_start = Clock::now();
+      check_cuda(
+          cudaMemcpy(master_info.ptr, d_master, pixels_per_frame_ * sizeof(float), cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident tile-local master)");
+      check_cuda(
+          cudaMemcpy(
+              weight_map_info.ptr,
+              d_weight_map,
+              pixels_per_frame_ * sizeof(float),
+              cudaMemcpyDeviceToHost),
+          "cudaMemcpy(resident tile-local weight map)");
+      download_s = seconds_since(download_start);
+    } catch (...) {
+      cudaFree(d_weights);
+      cudaFree(d_target_mask);
+      cudaFree(d_tile_extents);
+      cudaFree(d_tile_multipliers);
+      cudaFree(d_master);
+      cudaFree(d_weight_map);
+      throw;
+    }
+    cudaFree(d_weights);
+    cudaFree(d_target_mask);
+    cudaFree(d_tile_extents);
+    cudaFree(d_tile_multipliers);
+    cudaFree(d_master);
+    cudaFree(d_weight_map);
+
+    py::dict timing;
+    timing["schema_version"] = 1;
+    timing["timing_model"] = "native_resident_tile_local_weighted_mean_one_sync";
+    timing["rejection"] = "none";
+    timing["frame_count"] = static_cast<unsigned long long>(frame_count_);
+    timing["target_frame_count"] = static_cast<unsigned long long>(target_frame_count);
+    timing["tile_count"] = static_cast<unsigned long long>(tile_count);
+    timing["device_alloc_s"] = device_alloc_s;
+    timing["weights_upload_s"] = weights_upload_s;
+    timing["policy_upload_s"] = policy_upload_s;
+    timing["kernel_enqueue_s"] = kernel_enqueue_s;
+    timing["sync_s"] = sync_s;
+    timing["download_s"] = download_s;
+    timing["total_s"] = seconds_since(total_start);
+    timing["weights_bytes"] = static_cast<unsigned long long>(frame_count_ * sizeof(float));
+    timing["target_mask_bytes"] = static_cast<unsigned long long>(frame_count_ * sizeof(unsigned char));
+    timing["tile_extents_bytes"] = static_cast<unsigned long long>(tile_count * 4 * sizeof(int));
+    timing["tile_multipliers_bytes"] = static_cast<unsigned long long>(tile_count * sizeof(float));
+    timing["output_bytes"] = static_cast<unsigned long long>(pixels_per_frame_ * sizeof(float) * 2);
+    timing["modifies_resident_stack"] = false;
+    return py::make_tuple(master, weight_map, timing);
   }
 
   py::tuple integrate_sigma_clip(
@@ -10176,6 +10417,13 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("grid_cols") = 0,
           py::arg("grid_rows") = 0)
       .def("integrate_mean", &ResidentCalibratedStack::integrate_mean, py::arg("weights") = py::none())
+      .def(
+          "integrate_tile_local_mean",
+          &ResidentCalibratedStack::integrate_tile_local_mean,
+          py::arg("target_mask"),
+          py::arg("tile_extents"),
+          py::arg("tile_multipliers"),
+          py::arg("weights") = py::none())
       .def(
           "integrate_sigma_clip",
           &ResidentCalibratedStack::integrate_sigma_clip,

@@ -94,6 +94,59 @@ def test_resident_stack_calibrates_and_integrates_like_cpu():
     assert np.allclose(weight_map, np.full((4, 5), len(lights), dtype=np.float32))
 
 
+def test_resident_stack_tile_local_mean_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+
+    yy, xx = np.indices((5, 6), dtype=np.float32)
+    frames = [
+        (10.0 + xx).astype(np.float32),
+        (20.0 + yy * 2.0).astype(np.float32),
+        (30.0 + xx * 0.25 + yy * 0.5).astype(np.float32),
+    ]
+    frames[1][2, 3] = np.nan
+    weights = np.array([1.0, 1.0, 0.5], dtype=np.float32)
+    target_mask = np.array([0, 1, 0], dtype=np.uint8)
+    tile_extents = np.array([[1, 1, 5, 4]], dtype=np.int32)
+    tile_multipliers = np.array([2.0], dtype=np.float32)
+
+    stack = module.ResidentCalibratedStack(len(frames), 5, 6)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, timing = stack.integrate_tile_local_mean(
+        target_mask,
+        tile_extents,
+        tile_multipliers,
+        weights,
+    )
+
+    expected_sum = np.zeros((5, 6), dtype=np.float32)
+    expected_weight = np.zeros((5, 6), dtype=np.float32)
+    for frame_index, frame in enumerate(frames):
+        effective = np.full((5, 6), weights[frame_index], dtype=np.float32)
+        if target_mask[frame_index]:
+            effective[1:4, 1:5] *= tile_multipliers[0]
+        valid = np.isfinite(frame) & np.isfinite(effective) & (effective > 0.0)
+        expected_sum[valid] += frame[valid] * effective[valid]
+        expected_weight[valid] += effective[valid]
+    expected_master = np.zeros((5, 6), dtype=np.float32)
+    valid_weight = expected_weight > 0.0
+    expected_master[valid_weight] = expected_sum[valid_weight] / expected_weight[valid_weight]
+    unweighted_master, unweighted_weight = stack.integrate_mean(weights)
+
+    assert timing["timing_model"] == "native_resident_tile_local_weighted_mean_one_sync"
+    assert timing["rejection"] == "none"
+    assert timing["modifies_resident_stack"] is False
+    assert timing["target_frame_count"] == 1
+    assert timing["tile_count"] == 1
+    assert np.allclose(master, expected_master, rtol=1e-6, atol=1e-6)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-6, atol=1e-6)
+    assert not np.allclose(master[1:4, 1:5], unweighted_master[1:4, 1:5])
+    assert np.allclose(weight_map[0, 0], unweighted_weight[0, 0], rtol=1e-6, atol=1e-6)
+
+
 def _matrix_translation(dx: float, dy: float) -> np.ndarray:
     return np.array(
         [[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]],

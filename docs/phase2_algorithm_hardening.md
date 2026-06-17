@@ -2271,6 +2271,24 @@ integration where applicable.
 - Treat this as the interface lock for a future native tile-local integration
   implementation.
 
+### S2-Gate 135: Opt-In Resident Tile-Local Mean
+
+- Add a native `ResidentCalibratedStack.integrate_tile_local_mean` primitive
+  for resident stack dispatch only.
+- Apply tile-local multipliers to selected target frames inside explicit
+  half-open tile extents while preserving frame-global weights elsewhere.
+- Support `rejection=none` weighted mean only in this gate. Sigma and
+  winsorized rejection must remain on the record-only replay contract.
+- Add `--resident-tile-local-policy-mode record|apply_mean`; keep `record` as
+  the default so existing science output is unchanged.
+- Validate target-frame membership, image-bounded tile extents,
+  non-overlapping tiles, and finite non-negative multipliers before launching
+  the native primitive.
+- Record native timing, applied tile/frame counts, multiplier statistics, and
+  limitations in `resident_artifacts.json`.
+- Add direct CUDA CPU-reference tests for the primitive and a resident CLI smoke
+  test that proves the opt-in route changes only the target tile as expected.
+
 ## Gate Rules
 
 Each gate requires:

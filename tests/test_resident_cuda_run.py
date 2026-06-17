@@ -26,6 +26,7 @@ from glass.engine.resident_cuda import (
     _resident_similarity_frame_dispatch,
     _select_star_core_preselected_seed_indices,
     _select_star_guarded_seed,
+    _tile_local_policy_application_arrays,
 )
 from tests.conftest import cuda_module_or_skip
 
@@ -542,6 +543,42 @@ def test_tile_local_policy_replay_loader_validates_contract(tmp_path: Path):
     assert contract["tiles"][0]["multiplier"] == 2.0
 
 
+def test_tile_local_policy_application_arrays_build_apply_contract(tmp_path: Path):
+    replay_path = tmp_path / "tile_local_replay.json"
+    write_json(
+        replay_path,
+        {
+            "artifact_type": "tile_local_policy_replay",
+            "target_group": "focus",
+            "residual_stat": "signed_mean",
+            "target_frame_ids": ["F001", "F002"],
+            "tiles": [
+                {
+                    "tile_index": 0,
+                    "extent": {"x0": 1, "y0": 2, "x1": 6, "y1": 7},
+                    "multiplier": 1.75,
+                }
+            ],
+        },
+    )
+    contract = _load_tile_local_policy_replay(replay_path)
+
+    target_mask, tile_extents, tile_multipliers, summary = _tile_local_policy_application_arrays(
+        contract,
+        [{"id": "F001"}, {"id": "F003"}],
+        width=8,
+        height=8,
+    )
+
+    assert target_mask.tolist() == [1, 0]
+    assert tile_extents.tolist() == [[1, 2, 6, 7]]
+    assert tile_multipliers.tolist() == [1.75]
+    assert summary["native_method"] == "ResidentCalibratedStack.integrate_tile_local_mean"
+    assert summary["target_frame_count_applied"] == 1
+    assert summary["target_frame_ids_missing"] == ["F002"]
+    assert summary["tile_count_applied"] == 1
+
+
 def _two_dark_group_dataset(tmp_path: Path) -> Path:
     root = tmp_path / "two_dark_groups"
     shape = (24, 24)
@@ -566,6 +603,100 @@ def _two_light_weight_dataset(tmp_path: Path) -> Path:
     _write_test_frame(root / "light" / "light_low_noise.fits", "light", low_noise, 60.0)
     _write_test_frame(root / "light" / "light_high_noise.fits", "light", high_noise, 60.0)
     return root
+
+
+def test_cli_resident_cuda_tile_local_policy_apply_mean_changes_target_tile(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    replay = tmp_path / "tile_local_replay.json"
+    run = tmp_path / "resident_run_tile_local_apply"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    light_by_stem = {
+        Path(frame["path"]).stem: frame for frame in plan_payload["frames"] if frame["frame_type"] == "light"
+    }
+    high_id = str(light_by_stem["light_high_noise"]["id"])
+    write_json(
+        replay,
+        {
+            "artifact_type": "tile_local_policy_replay",
+            "target_group": "focus",
+            "residual_stat": "signed_mean",
+            "target_frame_ids": [high_id],
+            "summary": {
+                "recommendation": "tile_local_replay_promising",
+                "known_direction_tiles": 1,
+                "moves_toward_reference": 1,
+                "boost_tiles": 1,
+            },
+            "tiles": [
+                {
+                    "tile_index": 0,
+                    "extent": {"x0": 0, "y0": 0, "x1": 8, "y1": 8},
+                    "target_group": "focus",
+                    "action": "boost",
+                    "multiplier": 2.0,
+                    "selected_frame_row_count": 1,
+                    "canonical_delta_contribution_adu": 1.0,
+                    "signed_residual_reference_units_before": -0.2,
+                    "signed_residual_reference_units_after": -0.1,
+                    "moves_toward_reference": True,
+                }
+            ],
+        },
+    )
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-tile-local-policy-replay",
+            str(replay),
+            "--resident-tile-local-policy-mode",
+            "apply_mean",
+        ]
+    ) == 0
+
+    low = read_fits_data(dataset / "light" / "light_low_noise.fits", dtype=np.float32)
+    high = read_fits_data(dataset / "light" / "light_high_noise.fits", dtype=np.float32)
+    expected = ((low + high) / 2.0).astype(np.float32)
+    expected[:8, :8] = ((low[:8, :8] + 2.0 * high[:8, :8]) / 3.0).astype(np.float32)
+    master = read_fits_data(run / "integration" / "resident_master_H.fits", dtype=np.float32)
+    resident = read_json(run / "resident_artifacts.json")
+    integration = read_json(run / "integration_results.json")
+    tile_local = resident["artifacts"][0]["resident_integration_weighting"]["tile_local_policy_replay"]
+
+    assert tile_local["enabled"] is True
+    assert tile_local["requested_mode"] == "apply_mean"
+    assert tile_local["effective_mode"] == "apply_mean"
+    assert tile_local["applied"] is True
+    assert tile_local["application_status"] == "applied_mean_rejection_none"
+    assert tile_local["target_frame_count_applied"] == 1
+    assert tile_local["tile_count_applied"] == 1
+    assert tile_local["native_timing_s"]["timing_model"] == "native_resident_tile_local_weighted_mean_one_sync"
+    assert any("tile-local policy replay was applied" in warning for warning in integration["warnings"])
+    assert np.allclose(master, expected, rtol=2e-5, atol=2e-5)
 
 
 def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):

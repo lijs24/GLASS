@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import gc
 import hashlib
 import json
@@ -1593,6 +1594,74 @@ def _load_tile_local_policy_replay(path: str | Path | None) -> dict[str, Any]:
     }
 
 
+def _tile_rectangles_overlap(left: dict[str, int], right: dict[str, int]) -> bool:
+    return max(left["x0"], right["x0"]) < min(left["x1"], right["x1"]) and max(left["y0"], right["y0"]) < min(
+        left["y1"],
+        right["y1"],
+    )
+
+
+def _tile_local_policy_application_arrays(
+    contract: dict[str, Any],
+    light_frames: list[dict[str, Any]],
+    width: int,
+    height: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+    if not contract.get("enabled"):
+        raise ValueError("resident tile-local policy mode apply_mean requires a replay artifact")
+    frame_index_by_id = {str(frame["id"]): index for index, frame in enumerate(light_frames)}
+    target_frame_ids = [str(frame_id) for frame_id in contract.get("target_frame_ids", [])]
+    missing_ids = [frame_id for frame_id in target_frame_ids if frame_id not in frame_index_by_id]
+    present_target_ids = [frame_id for frame_id in target_frame_ids if frame_id in frame_index_by_id]
+    if not present_target_ids:
+        raise ValueError("resident tile-local policy has no target frame ids in this light group")
+    target_mask = np.zeros(len(light_frames), dtype=np.uint8)
+    for frame_id in present_target_ids:
+        target_mask[frame_index_by_id[frame_id]] = 1
+    if not np.any(target_mask):
+        raise ValueError("resident tile-local policy must select at least one target frame in this light group")
+
+    tile_rows: list[list[int]] = []
+    multipliers: list[float] = []
+    extents_seen: list[dict[str, int]] = []
+    for tile in contract.get("tiles", []):
+        extent = tile.get("extent") if isinstance(tile, dict) else None
+        if not isinstance(extent, dict):
+            raise ValueError("resident tile-local policy tiles must contain extent dictionaries")
+        checked = _validated_tile_extent(extent)
+        if checked["x1"] > width or checked["y1"] > height:
+            raise ValueError("resident tile-local policy tile extent exceeds the current light group shape")
+        for previous in extents_seen:
+            if _tile_rectangles_overlap(previous, checked):
+                raise ValueError("resident tile-local policy apply_mean requires non-overlapping tile extents")
+        extents_seen.append(checked)
+        multiplier = float(tile.get("multiplier", 1.0))
+        if not np.isfinite(multiplier) or multiplier < 0.0:
+            raise ValueError("resident tile-local policy multipliers must be finite non-negative values")
+        tile_rows.append([checked["x0"], checked["y0"], checked["x1"], checked["y1"]])
+        multipliers.append(multiplier)
+    if not tile_rows:
+        raise ValueError("resident tile-local policy apply_mean requires at least one tile")
+
+    multiplier_array = np.asarray(multipliers, dtype=np.float32)
+    return (
+        target_mask,
+        np.asarray(tile_rows, dtype=np.int32),
+        multiplier_array,
+        {
+            "native_method": "ResidentCalibratedStack.integrate_tile_local_mean",
+            "tile_extent_model": "half_open_xyxy",
+            "target_frame_count_applied": int(np.count_nonzero(target_mask)),
+            "target_frame_ids_missing": missing_ids,
+            "tile_count_applied": int(len(tile_rows)),
+            "multiplier_min": float(np.min(multiplier_array)),
+            "multiplier_mean": float(np.mean(multiplier_array)),
+            "multiplier_max": float(np.max(multiplier_array)),
+            "rejection_scope": "none_only",
+        },
+    )
+
+
 def _frame_weight_proposal_warning(row: dict[str, Any], multiplier: float) -> list[str]:
     warnings = [
         f"frame_weight_proposal_multiplier={float(multiplier):.6g}",
@@ -2176,6 +2245,7 @@ def run_resident_calibration_integration(
     resident_registration_motion_scale_floor_px: float = 1.0,
     resident_frame_weight_proposal: str | Path | None = None,
     resident_tile_local_policy_replay: str | Path | None = None,
+    resident_tile_local_policy_mode: str = "record",
     resident_registration_results: str | Path | None = None,
     resident_warp_interpolation: str = "bilinear",
     resident_warp_clamping_threshold: float = -1.0,
@@ -2295,6 +2365,10 @@ def run_resident_calibration_integration(
         raise ValueError("resident_registration_motion_scale_floor_px must be positive")
     frame_weight_proposal = _load_frame_weight_proposal(resident_frame_weight_proposal)
     tile_local_policy_replay = _load_tile_local_policy_replay(resident_tile_local_policy_replay)
+    if resident_tile_local_policy_mode not in {"record", "apply_mean"}:
+        raise ValueError("resident_tile_local_policy_mode must be record or apply_mean")
+    tile_local_policy_replay["requested_mode"] = resident_tile_local_policy_mode
+    tile_local_policy_replay["effective_mode"] = "disabled" if not tile_local_policy_replay.get("enabled") else "record"
     if resident_prefetch_frames < 0:
         raise ValueError("resident_prefetch_frames must be non-negative")
     if resident_prefetch_workers <= 0:
@@ -2370,6 +2444,13 @@ def run_resident_calibration_integration(
         else:
             resident_integration_dispatch = "fused_matrix"
             resident_integration_dispatch_reason = "auto_fused_bilinear_matrix_route"
+    if resident_tile_local_policy_mode == "apply_mean":
+        if not tile_local_policy_replay.get("enabled"):
+            raise ValueError("resident_tile_local_policy_mode=apply_mean requires --resident-tile-local-policy-replay")
+        if rejection_mode != "none":
+            raise ValueError("resident_tile_local_policy_mode=apply_mean currently requires --integration-rejection none")
+        if resident_integration_dispatch != "stack":
+            raise ValueError("resident_tile_local_policy_mode=apply_mean currently requires resident stack integration")
     low_sigma = float(integration_policy.get("low_sigma", 3.0))
     high_sigma = float(integration_policy.get("high_sigma", 3.0))
     external_registration_path: Path | None = None
@@ -2398,6 +2479,8 @@ def run_resident_calibration_integration(
     frame_weights: dict[str, float] = {}
     registration_results: list[RegistrationResult] = []
     local_norm_groups: list[dict[str, Any]] = []
+    tile_local_policy_any_enabled = False
+    tile_local_policy_any_applied = False
 
     try:
         all_lights = _frames_by_type(plan, "light")
@@ -2411,6 +2494,10 @@ def run_resident_calibration_integration(
             height = int(light_frames[0]["height"])
             width = int(light_frames[0]["width"])
             filt = _safe_filter_name(filter_name)
+            group_tile_local_policy_replay = copy.deepcopy(tile_local_policy_replay)
+            tile_local_policy_any_enabled = tile_local_policy_any_enabled or bool(
+                group_tile_local_policy_replay.get("enabled")
+            )
             master_elapsed = 0.0
             master_stats_sets: dict[str, Any] = {}
 
@@ -5436,10 +5523,15 @@ def run_resident_calibration_integration(
                 weighting_warnings.append(
                     f"resident frame-weight proposal downweighted {proposal_downweighted_frames} frame(s)"
                 )
-            if tile_local_policy_replay.get("enabled"):
-                weighting_warnings.append(
-                    "resident tile-local policy replay validated but not applied; native tile-local integration is pending"
-                )
+            if group_tile_local_policy_replay.get("enabled"):
+                if resident_tile_local_policy_mode == "apply_mean":
+                    weighting_warnings.append(
+                        "resident tile-local policy replay validated for opt-in native mean integration"
+                    )
+                else:
+                    weighting_warnings.append(
+                        "resident tile-local policy replay validated but not applied; mode=record"
+                    )
             weighting_elapsed = perf_counter() - weighting_start
 
             local_norm_start = perf_counter()
@@ -5596,6 +5688,43 @@ def run_resident_calibration_integration(
             weights_array = np.asarray(frame_weight_values, dtype=np.float32)
             weights_arg = None if np.all(weights_array == 1.0) else weights_array
             active_frame_count = int(np.count_nonzero(np.isfinite(weights_array) & (weights_array > 0.0)))
+            tile_local_apply_enabled = False
+            tile_local_target_mask = None
+            tile_local_extents = None
+            tile_local_multipliers = None
+            tile_local_application_summary: dict[str, Any] = {}
+            if (
+                resident_tile_local_policy_mode == "apply_mean"
+                and group_tile_local_policy_replay.get("enabled")
+            ):
+                group_frame_ids = {str(frame["id"]) for frame in light_frames}
+                target_ids = {
+                    str(frame_id)
+                    for frame_id in group_tile_local_policy_replay.get("target_frame_ids", [])
+                }
+                if group_frame_ids.isdisjoint(target_ids):
+                    group_tile_local_policy_replay.update(
+                        {
+                            "applied": False,
+                            "effective_mode": "record",
+                            "application_status": "skipped_no_target_frames_in_group",
+                        }
+                    )
+                else:
+                    if not hasattr(stack, "integrate_tile_local_mean"):
+                        raise RuntimeError("resident CUDA backend does not expose integrate_tile_local_mean")
+                    (
+                        tile_local_target_mask,
+                        tile_local_extents,
+                        tile_local_multipliers,
+                        tile_local_application_summary,
+                    ) = _tile_local_policy_application_arrays(
+                        group_tile_local_policy_replay,
+                        light_frames,
+                        width,
+                        height,
+                    )
+                    tile_local_apply_enabled = True
             geometric_warp_coverage_map = None
             geometric_warp_coverage_frame_count = 0
             fused_matrix_integration_used = resident_integration_dispatch == "fused_matrix"
@@ -5655,6 +5784,28 @@ def run_resident_calibration_integration(
                 geometric_warp_coverage_frame_count = (
                     active_frame_count if geometric_warp_coverage_map is not None else 0
                 )
+            elif tile_local_apply_enabled:
+                master, weight_map, tile_local_timing = stack.integrate_tile_local_mean(
+                    tile_local_target_mask,
+                    tile_local_extents,
+                    tile_local_multipliers,
+                    weights_arg,
+                )
+                group_tile_local_policy_replay.update(
+                    {
+                        **tile_local_application_summary,
+                        "applied": True,
+                        "effective_mode": "apply_mean",
+                        "application_status": "applied_mean_rejection_none",
+                        "native_timing_s": tile_local_timing,
+                        "native_requirement": "satisfied",
+                        "limitations": [
+                            "This opt-in path applies tile-local multipliers only for rejection=none weighted mean.",
+                            "Sigma and winsorized rejection still use the record-only contract path.",
+                        ],
+                    }
+                )
+                tile_local_policy_any_applied = True
             elif rejection_mode == "none":
                 master, weight_map = stack.integrate_mean(weights_arg)
             else:
@@ -6694,7 +6845,7 @@ def run_resident_calibration_integration(
                         "frame_results": weighting_frame_results,
                         "registration_motion_weighting": motion_weighting_summary,
                         "frame_weight_proposal": frame_weight_proposal_summary,
-                        "tile_local_policy_replay": tile_local_policy_replay,
+                        "tile_local_policy_replay": group_tile_local_policy_replay,
                         "timing_s": weighting_elapsed,
                         "warnings": weighting_warnings,
                     },
@@ -6913,10 +7064,15 @@ def run_resident_calibration_integration(
             integration_warnings.append("resident CUDA used two-pass mean/std sigma clipping")
         if weighting_mode == "simple_snr":
             integration_warnings.append("resident CUDA used frame-global mean/std simple_snr weights")
-        if tile_local_policy_replay.get("enabled"):
-            integration_warnings.append(
-                "resident tile-local policy replay was validated and recorded but not applied to integration output"
-            )
+        if tile_local_policy_any_enabled:
+            if tile_local_policy_any_applied:
+                integration_warnings.append(
+                    "resident tile-local policy replay was applied to rejection=none weighted mean integration"
+                )
+            else:
+                integration_warnings.append(
+                    "resident tile-local policy replay was validated and recorded but not applied to integration output"
+                )
         if any(group["enabled"] for group in local_norm_groups):
             mode = next((group["mode"] for group in local_norm_groups if group["enabled"]), "unknown")
             integration_warnings.append(f"resident CUDA used {mode} local normalization before integration")
