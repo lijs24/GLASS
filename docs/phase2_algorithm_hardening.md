@@ -2411,6 +2411,21 @@ integration where applicable.
 - The plan and measured candidate must remain opt-in and must not enable
   tile-local apply by default.
 
+### S2-Gate 143: Residual Tile Candidate Mining
+
+- Add `glass residual-tile-candidates` to merge one or more
+  `compare-outliers` artifacts into a larger residual tile candidate manifest.
+- Rank candidates by an explicit tail metric, greedily drop overlapping selected
+  candidates by default, and mark overlaps with known tile packs so new regions
+  are distinguishable from previously studied F000100-F000110 tiles.
+- Emit top-level `tiles` with extents so downstream resident tile contribution
+  tools can consume the manifest as a tile-pack-like input.
+- Run the command on the existing 200-light outlier audits and the Gate121
+  known tile pack to produce a broader candidate set for the next contribution
+  capture gate.
+- Keep this as an artifact-mining gate. It must not read image pixels, rerun
+  integration, mutate pipeline outputs, or enable tile-local apply by default.
+
 ## Gate Rules
 
 Each gate requires:

@@ -124,6 +124,7 @@ def test_cli_help_commands():
         "compare-tile-attribution",
         "compare-tile-replay",
         "compare-tile-integration",
+        "residual-tile-candidates",
         "frame-weight-proposal",
         "frame-weight-proposal-audit",
         "compare-frame-family",

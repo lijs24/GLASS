@@ -43,6 +43,7 @@ from glass.report.frame_weight_proposal_audit import (
 )
 from glass.report.html_report import write_html_report
 from glass.report.acceptance_audit import build_acceptance_audit, write_acceptance_audit
+from glass.report.residual_tile_candidates import build_residual_tile_candidates, write_residual_tile_candidates
 from glass.report.resident_determinism import (
     build_resident_determinism_audit,
     write_resident_determinism_audit,
@@ -937,6 +938,31 @@ def cmd_compare_tile_integration(args: argparse.Namespace) -> int:
             "selected_frame_count": payload.get("selected_frame_count"),
             "focus_frame_count": len(payload.get("focus_ids") or []),
             "focus_minus_control_contribution_mean": contribution.get("focus_minus_control"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_residual_tile_candidates(args: argparse.Namespace) -> int:
+    payload = build_residual_tile_candidates(
+        args.outlier_audit,
+        known_tile_packs=args.known_tile_pack,
+        max_tiles=args.max_tiles,
+        min_tail_pixels=args.min_tail_pixels,
+        min_tail_fraction=args.min_tail_fraction,
+        prefer=args.prefer,
+        drop_overlaps=not args.allow_overlaps,
+    )
+    write_residual_tile_candidates(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "selected_tiles": summary.get("selected_tile_count"),
+            "new_regions": summary.get("selected_new_region_count"),
+            "known_overlaps": summary.get("selected_known_overlap_count"),
+            "recommendation": summary.get("recommendation"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2526,6 +2552,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="number of positive-weight frames after the focus range used as controls",
     )
     tile_integration.set_defaults(func=cmd_compare_tile_integration)
+
+    residual_tiles = sub.add_parser(
+        "residual-tile-candidates",
+        help="merge compare-outlier audits into a non-overlapping residual tile candidate manifest",
+    )
+    residual_tiles.add_argument(
+        "--outlier-audit",
+        action="append",
+        required=True,
+        help="compare-outliers JSON artifact; may be repeated",
+    )
+    residual_tiles.add_argument(
+        "--known-tile-pack",
+        action="append",
+        default=[],
+        help="existing tile_pack_manifest.json used only to flag known-region overlaps",
+    )
+    residual_tiles.add_argument("--out", required=True, help="output residual tile candidate JSON")
+    residual_tiles.add_argument("--markdown", help="optional output Markdown summary")
+    residual_tiles.add_argument("--max-tiles", type=int, default=16, help="maximum selected candidate tiles")
+    residual_tiles.add_argument("--min-tail-pixels", type=int, default=1, help="minimum tail pixels per source tile")
+    residual_tiles.add_argument(
+        "--min-tail-fraction",
+        type=float,
+        default=0.0,
+        help="minimum tail fraction per source tile",
+    )
+    residual_tiles.add_argument(
+        "--prefer",
+        choices=["tail_pixels", "tail_fraction", "tail_abs_mean", "tail_abs_max"],
+        default="tail_pixels",
+        help="ranking metric for candidate selection",
+    )
+    residual_tiles.add_argument(
+        "--allow-overlaps",
+        action="store_true",
+        help="keep overlapping selected candidates instead of greedy non-overlap filtering",
+    )
+    residual_tiles.set_defaults(func=cmd_residual_tile_candidates)
 
     frame_weight_proposal = sub.add_parser(
         "frame-weight-proposal",
