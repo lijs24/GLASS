@@ -92,6 +92,10 @@ from glass.report.phase2_status import (
     write_phase2_status,
     write_phase2_status_compare,
 )
+from glass.report.default_promotion_manifest import (
+    build_default_promotion_manifest,
+    write_default_promotion_manifest,
+)
 from glass.report.windows_release_matrix import (
     build_windows_release_matrix,
     write_windows_release_matrix,
@@ -1768,6 +1772,37 @@ def cmd_release_promotion_decision(args: argparse.Namespace) -> int:
     if bool(args.fail_on_not_ready) and not payload.get("default_change_ready"):
         return 2
     return 0 if payload.get("release_candidate_ready") else 2
+
+
+def cmd_default_promotion_manifest(args: argparse.Namespace) -> int:
+    payload = build_default_promotion_manifest(
+        release_decision_json=args.release_decision,
+        phase2_status_json=args.phase2_status,
+        doctor_json=args.doctor_json,
+        default_memory_mode=args.default_memory_mode,
+        fallback_memory_mode=args.fallback_memory_mode,
+        default_runtime_preset=args.default_runtime_preset,
+        integration_engine=args.integration_engine,
+        min_runtime_runs=args.min_runtime_runs,
+        max_runtime_ratio=args.max_runtime_ratio,
+        min_resident_lights=args.min_resident_lights,
+        require_doctor=args.require_doctor,
+    )
+    write_default_promotion_manifest(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "recommendation": payload["recommendation"],
+            "passed": payload["passed"],
+            "default_memory_mode": payload["default_candidate"]["memory_mode"],
+            "runtime_ratio": payload["runtime_repeat"]["elapsed_ratio_vs_best"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_not_ready) and not payload.get("passed"):
+        return 2
+    return 0
 
 
 def cmd_windows_release_matrix(args: argparse.Namespace) -> int:
@@ -4356,6 +4391,76 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless default_change_ready is true",
     )
     release_promotion_decision.set_defaults(func=cmd_release_promotion_decision)
+
+    default_promotion_manifest = sub.add_parser(
+        "default-promotion-manifest",
+        help="audit whether resident CUDA evidence is ready to become the default path",
+    )
+    default_promotion_manifest.add_argument(
+        "--release-decision",
+        required=True,
+        help="release-promotion-decision JSON artifact with stable runtime repeat evidence",
+    )
+    default_promotion_manifest.add_argument(
+        "--phase2-status",
+        required=True,
+        help="Phase 2 status JSON artifact embedding the release decision and pipeline contract",
+    )
+    default_promotion_manifest.add_argument(
+        "--doctor-json",
+        help="optional glass doctor JSON artifact used to audit CUDA/package fallback evidence",
+    )
+    default_promotion_manifest.add_argument("--out", required=True, help="output manifest JSON")
+    default_promotion_manifest.add_argument("--markdown", help="optional output Markdown summary")
+    default_promotion_manifest.add_argument(
+        "--default-memory-mode",
+        default="resident",
+        help="memory mode proposed for the promoted default",
+    )
+    default_promotion_manifest.add_argument(
+        "--fallback-memory-mode",
+        default="tile",
+        help="fallback memory mode that must remain available after promotion",
+    )
+    default_promotion_manifest.add_argument(
+        "--default-runtime-preset",
+        default=DEFAULT_RESIDENT_RUNTIME_PRESET,
+        help="resident runtime preset proposed for the promoted default",
+    )
+    default_promotion_manifest.add_argument(
+        "--integration-engine",
+        default="cuda_resident_stack",
+        help="integration engine proposed for the promoted default",
+    )
+    default_promotion_manifest.add_argument(
+        "--min-runtime-runs",
+        type=int,
+        default=2,
+        help="minimum stable runtime observations required for promotion",
+    )
+    default_promotion_manifest.add_argument(
+        "--max-runtime-ratio",
+        type=float,
+        default=1.25,
+        help="maximum accepted slowest/best runtime repeat ratio",
+    )
+    default_promotion_manifest.add_argument(
+        "--min-resident-lights",
+        type=int,
+        default=200,
+        help="minimum resident calibrated light count required in the pipeline contract",
+    )
+    default_promotion_manifest.add_argument(
+        "--require-doctor",
+        action="store_true",
+        help="fail unless a doctor JSON artifact is supplied and passes CUDA/package checks",
+    )
+    default_promotion_manifest.add_argument(
+        "--fail-on-not-ready",
+        action="store_true",
+        help="return exit code 2 unless the default promotion manifest passes",
+    )
+    default_promotion_manifest.set_defaults(func=cmd_default_promotion_manifest)
 
     windows_release_matrix = sub.add_parser(
         "windows-release-matrix",

@@ -3676,6 +3676,21 @@ integration where applicable.
 - Keep this gate contract/reporting only: no processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 220: Default Promotion Manifest
+
+- Add `glass default-promotion-manifest` to convert default-change-ready
+  evidence into an explicit resident CUDA default-promotion contract.
+- Require the release-promotion decision to be `default_change_ready` with
+  `promote_default_candidate`, and require Phase 2 status to remain green with
+  the same embedded decision.
+- Verify stable runtime-repeat evidence, pipeline DQ/mask handoff, StackEngine
+  and resident result contracts, pixel verification, resident calibration
+  artifacts, and the 200-light resident calibrated frame count.
+- When a doctor artifact is supplied, surface CUDA availability, native
+  extension loading, Windows package primary selection, and CPU fallback order.
+- Keep this gate reporting/release-handoff only: no processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:
