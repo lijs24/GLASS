@@ -2745,6 +2745,21 @@ integration where applicable.
   GPU is externally busy, so the recommendation is
   `wait_for_controlled_window`.
 
+### S2-Gate 165: Preflight-Gated Resident Repeat Executor
+
+- Extend `glass resident-runtime-repeat-execute` with
+  `--require-preflight-ready`.
+- When enabled, run the repeat preflight before launching any repeat command.
+  If the preflight recommendation is not `execute_repeat_plan`, write an
+  execution audit with `status=preflight_blocked` and do not start image
+  processing.
+- Support writing the embedded preflight to a separate `--preflight-out` path
+  and reuse the same GPU readiness thresholds as `resident-runtime-repeat-preflight`.
+- Validate the Gate162 plan with guarded dry-run output under
+  `C:\glass_runs\phase2_s2_gate_165_guarded_repeat_executor`.
+- Current result: guarded execution correctly blocks before launching repeats
+  because the local GPU remains externally busy.
+
 ## Gate Rules
 
 Each gate requires:

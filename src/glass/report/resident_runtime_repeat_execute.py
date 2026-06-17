@@ -11,6 +11,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.resident_runtime_repeat_preflight import build_resident_runtime_repeat_preflight
 
 
 def _read_plan(path: str | Path) -> dict[str, Any]:
@@ -87,8 +88,49 @@ def build_resident_runtime_repeat_execution(
     run_compare: bool = True,
     glass_executable: str | Path | None = None,
     cwd: str | Path | None = None,
+    require_preflight_ready: bool = False,
+    min_free_mib: int = 8192,
+    max_busy_utilization: int = 95,
+    allow_existing_preflight: bool = False,
+    probe_gpu: bool = True,
+    gpu_query_text: str | None = None,
 ) -> dict[str, Any]:
     payload = _read_plan(plan)
+    preflight = None
+    if require_preflight_ready:
+        preflight = build_resident_runtime_repeat_preflight(
+            plan,
+            min_free_mib=min_free_mib,
+            max_busy_utilization=max_busy_utilization,
+            allow_existing=allow_existing_preflight,
+            probe_gpu=probe_gpu,
+            gpu_query_text=gpu_query_text,
+        )
+        if not preflight.get("ready_to_execute"):
+            return {
+                "schema_version": 1,
+                "artifact_type": "resident_runtime_repeat_execution",
+                "created_at": now_iso(),
+                "plan": str(plan),
+                "dry_run": bool(dry_run),
+                "skip_existing": bool(skip_existing),
+                "run_compare": bool(run_compare),
+                "preflight": preflight,
+                "summary": {
+                    "status": "preflight_blocked",
+                    "failed": False,
+                    "recorded_run_count": 0,
+                    "completed_run_count": 0,
+                    "skipped_existing_count": 0,
+                    "compare_status": None,
+                },
+                "runs": [],
+                "compare": None,
+                "limitations": [
+                    "Execution was blocked before launching subprocesses because preflight was not ready.",
+                    "Use the embedded preflight recommendation to decide whether to wait, clean outputs, or rerun.",
+                ],
+            }
     records: list[dict[str, Any]] = []
     failed = False
     for run in [row for row in payload.get("runs", []) if isinstance(row, dict)]:
@@ -149,6 +191,7 @@ def build_resident_runtime_repeat_execution(
         "dry_run": bool(dry_run),
         "skip_existing": bool(skip_existing),
         "run_compare": bool(run_compare),
+        "preflight": preflight,
         "summary": {
             "status": "planned" if dry_run else ("failed" if failed else "completed"),
             "failed": failed,

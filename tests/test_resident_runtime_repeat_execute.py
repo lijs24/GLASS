@@ -16,12 +16,12 @@ def _write_plan(path: Path, root: Path) -> None:
                 {
                     "run_id": "repeat01",
                     "run_dir": str(root / "repeat01"),
-                    "command": f"glass run --out {root / 'repeat01'}",
+                    "command": f"glass run --backend cuda --memory-mode resident --out {root / 'repeat01'}",
                 },
                 {
                     "run_id": "repeat02",
                     "run_dir": str(root / "repeat02"),
-                    "command": f"glass run --out {root / 'repeat02'}",
+                    "command": f"glass run --backend cuda --memory-mode resident --out {root / 'repeat02'}",
                 },
             ],
             "compare_command": (
@@ -81,3 +81,65 @@ def test_resident_runtime_repeat_execute_cli_writes_audit(tmp_path: Path) -> Non
     payload = read_json(out)
     assert payload["summary"]["status"] == "planned"
     assert payload["summary"]["compare_status"] == "planned"
+
+
+def test_resident_runtime_repeat_execute_preflight_blocks_busy_gpu(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.json"
+    _write_plan(plan, tmp_path / "runs")
+
+    payload = build_resident_runtime_repeat_execution(
+        plan,
+        dry_run=True,
+        require_preflight_ready=True,
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97887, 55000, 100, 596.21",
+    )
+
+    assert payload["summary"]["status"] == "preflight_blocked"
+    assert payload["runs"] == []
+    assert payload["preflight"]["recommendation"] == "wait_for_controlled_window"
+
+
+def test_resident_runtime_repeat_execute_preflight_allows_ready_gpu(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.json"
+    _write_plan(plan, tmp_path / "runs")
+
+    payload = build_resident_runtime_repeat_execution(
+        plan,
+        dry_run=True,
+        require_preflight_ready=True,
+        gpu_query_text="NVIDIA RTX PRO 6000 Blackwell Workstation Edition, 97887, 1024, 5, 596.21",
+    )
+
+    assert payload["summary"]["status"] == "planned"
+    assert payload["summary"]["recorded_run_count"] == 2
+    assert payload["preflight"]["recommendation"] == "execute_repeat_plan"
+
+
+def test_resident_runtime_repeat_execute_cli_writes_blocking_preflight(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.json"
+    out = tmp_path / "execution.json"
+    preflight_out = tmp_path / "preflight.json"
+    _write_plan(plan, tmp_path / "runs")
+
+    assert (
+        main(
+            [
+                "resident-runtime-repeat-execute",
+                "--plan",
+                str(plan),
+                "--out",
+                str(out),
+                "--dry-run",
+                "--require-preflight-ready",
+                "--skip-gpu-probe",
+                "--preflight-out",
+                str(preflight_out),
+            ]
+        )
+        == 0
+    )
+
+    payload = read_json(out)
+    preflight = read_json(preflight_out)
+    assert payload["summary"]["status"] == "preflight_blocked"
+    assert preflight["recommendation"] == "wait_for_controlled_window"

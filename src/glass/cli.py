@@ -1810,8 +1810,15 @@ def cmd_resident_runtime_repeat_execute(args: argparse.Namespace) -> int:
         run_compare=not args.no_run_compare,
         glass_executable=args.glass_executable,
         cwd=args.cwd,
+        require_preflight_ready=args.require_preflight_ready,
+        min_free_mib=args.min_free_mib,
+        max_busy_utilization=args.max_busy_utilization,
+        allow_existing_preflight=args.allow_existing_preflight,
+        probe_gpu=not args.skip_gpu_probe,
     )
     write_resident_runtime_repeat_execution(args.out, payload)
+    if args.preflight_out and isinstance(payload.get("preflight"), dict):
+        write_resident_runtime_repeat_preflight(args.preflight_out, payload["preflight"])
     console.print(
         {
             "artifact_type": payload.get("artifact_type"),
@@ -1819,10 +1826,17 @@ def cmd_resident_runtime_repeat_execute(args: argparse.Namespace) -> int:
             "recorded_run_count": payload.get("summary", {}).get("recorded_run_count"),
             "skipped_existing_count": payload.get("summary", {}).get("skipped_existing_count"),
             "compare_status": payload.get("summary", {}).get("compare_status"),
+            "preflight_recommendation": (
+                payload.get("preflight", {}).get("recommendation")
+                if isinstance(payload.get("preflight"), dict)
+                else None
+            ),
             "out": args.out,
         }
     )
-    if args.fail_on_failed and payload.get("summary", {}).get("failed"):
+    if args.fail_on_failed and (
+        payload.get("summary", {}).get("failed") or payload.get("summary", {}).get("status") == "preflight_blocked"
+    ):
         return 2
     return 0
 
@@ -3840,6 +3854,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="replace leading 'glass' token with this executable while executing",
     )
     resident_runtime_repeat_execute.add_argument("--cwd", help="working directory for executed commands")
+    resident_runtime_repeat_execute.add_argument(
+        "--require-preflight-ready",
+        action="store_true",
+        help="run preflight first and block execution unless it recommends execution",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--preflight-out",
+        help="optional output path for the preflight JSON embedded in the execution audit",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--min-free-mib",
+        type=int,
+        default=8192,
+        help="minimum free GPU memory required by preflight",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--max-busy-utilization",
+        type=int,
+        default=95,
+        help="GPU utilization threshold used by preflight",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--allow-existing-preflight",
+        action="store_true",
+        help="allow repeat output directories that exist without run_timing.json during preflight",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--skip-gpu-probe",
+        action="store_true",
+        help="skip nvidia-smi probing during preflight",
+    )
     resident_runtime_repeat_execute.add_argument(
         "--fail-on-failed",
         action="store_true",
