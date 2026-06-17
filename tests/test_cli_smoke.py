@@ -133,6 +133,7 @@ def test_cli_help_commands():
         "tile-local-policy-proposal",
         "tile-local-frame-family-search",
         "tile-local-residual-source-audit",
+        "tile-local-rejection-registration-audit",
         "tile-local-policy-replay",
         "tile-local-policy-subset",
         "tile-local-apply-experiment",

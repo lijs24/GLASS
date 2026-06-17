@@ -2501,6 +2501,21 @@ integration where applicable.
 - Keep this as an artifact/diagnostic gate only. It must not change resident
   integration defaults, image pixels, or promotion thresholds.
 
+### S2-Gate 149: Tile-Local Rejection/Registration Audit
+
+- Add `glass tile-local-rejection-registration-audit` to aggregate
+  frame-level rejection and registration agreement diagnostics across residual
+  candidate tiles.
+- Consume the S2-Gate 144 resident contribution artifact and optional
+  S2-Gate 147 frame-family search artifact.
+- Rank frames by high-rejection fraction and record focus/control/top-family
+  membership, triangle agreement score, agreement weight multiplier, NCC,
+  registration RMS, accepted fraction, and rejection fraction.
+- Emit group summaries and correlations so the next gate can decide whether to
+  test registration agreement, rejection behavior, or frame weighting.
+- Keep this as an artifact/diagnostic gate only. It must not change resident
+  integration defaults, image pixels, or promotion thresholds.
+
 ## Gate Rules
 
 Each gate requires:

@@ -75,6 +75,10 @@ from glass.report.tile_local_residual_source_audit import (
     build_tile_local_residual_source_audit,
     write_tile_local_residual_source_audit,
 )
+from glass.report.tile_local_rejection_registration_audit import (
+    build_tile_local_rejection_registration_audit,
+    write_tile_local_rejection_registration_audit,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -1212,6 +1216,30 @@ def cmd_tile_local_residual_source_audit(args: argparse.Namespace) -> int:
             "coverage_below_threshold_tiles": summary.get("coverage_below_threshold_tiles"),
             "focus_high_rejection_excess_tiles": summary.get("focus_high_rejection_excess_tiles"),
             "top_frame_family_explained_fraction": summary.get("top_frame_family_explained_fraction"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_tile_local_rejection_registration_audit(args: argparse.Namespace) -> int:
+    payload = build_tile_local_rejection_registration_audit(
+        args.contribution,
+        frame_family_search=args.frame_family_search,
+        high_rejection_threshold=args.high_rejection_threshold,
+        low_agreement_score_threshold=args.low_agreement_score_threshold,
+        top_n=args.top_n,
+    )
+    write_tile_local_rejection_registration_audit(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "recommendation": summary.get("recommendation"),
+            "focus_minus_control_high_rejection": summary.get("focus_minus_control_high_rejected_fraction_mean"),
+            "high_rejection_excess_frames": summary.get("high_rejection_excess_frame_count"),
+            "low_agreement_high_rejection_frames": summary.get("low_agreement_high_rejection_frame_count"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2918,6 +2946,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="minimum mean coverage fraction before coverage is flagged",
     )
     tile_local_residual_source.set_defaults(func=cmd_tile_local_residual_source_audit)
+
+    tile_local_rejection_registration = sub.add_parser(
+        "tile-local-rejection-registration-audit",
+        help="rank residual-tile frames by rejection and registration agreement diagnostics",
+    )
+    tile_local_rejection_registration.add_argument(
+        "--contribution",
+        required=True,
+        help="resident-tile-contribution JSON artifact",
+    )
+    tile_local_rejection_registration.add_argument(
+        "--frame-family-search",
+        help="optional tile-local-frame-family-search JSON artifact used to mark top-family frames",
+    )
+    tile_local_rejection_registration.add_argument("--out", required=True, help="output rejection/registration audit JSON")
+    tile_local_rejection_registration.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_rejection_registration.add_argument(
+        "--high-rejection-threshold",
+        type=float,
+        default=0.01,
+        help="mean high rejection fraction treated as frame-level excess",
+    )
+    tile_local_rejection_registration.add_argument(
+        "--low-agreement-score-threshold",
+        type=float,
+        default=0.5,
+        help="triangle agreement score treated as low agreement",
+    )
+    tile_local_rejection_registration.add_argument(
+        "--top-n",
+        type=int,
+        default=20,
+        help="number of high-rejection frames to summarize; 0 keeps all",
+    )
+    tile_local_rejection_registration.set_defaults(func=cmd_tile_local_rejection_registration_audit)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",
