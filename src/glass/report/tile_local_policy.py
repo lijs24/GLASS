@@ -7,7 +7,7 @@ import numpy as np
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
-from glass.report.compare_tile_attribution import _float_or_none
+from glass.report.compare_tile_attribution import _float_or_none, _stats
 
 
 def _summary_mean(summary: dict[str, Any], key: str) -> float | None:
@@ -76,6 +76,59 @@ def _reduction_fraction(before: float, after: float) -> float | None:
     if before_abs <= 0.0:
         return None
     return float((before_abs - abs(float(after))) / before_abs)
+
+
+def _finite_array(values: list[float | None]) -> np.ndarray:
+    return np.asarray([value for value in values if value is not None], dtype=np.float64)
+
+
+def _saturation_summary(rows: list[dict[str, Any]], known_count: int) -> dict[str, Any]:
+    unconstrained = _finite_array([_float_or_none(row.get("unconstrained_multiplier")) for row in rows])
+    multipliers = _finite_array([_float_or_none(row.get("multiplier")) for row in rows])
+    reductions = _finite_array([_float_or_none(row.get("residual_reduction_fraction")) for row in rows])
+    boost_required = _finite_array(
+        [
+            required
+            for row in rows
+            if (required := _float_or_none(row.get("unconstrained_multiplier"))) is not None and required > 1.0
+        ]
+    )
+    downweight_required = _finite_array(
+        [
+            required
+            for row in rows
+            if (required := _float_or_none(row.get("unconstrained_multiplier"))) is not None and required < 1.0
+        ]
+    )
+    boost_ratios: list[float] = []
+    downweight_depth_ratios: list[float] = []
+    for row in rows:
+        required = _float_or_none(row.get("unconstrained_multiplier"))
+        applied = _float_or_none(row.get("multiplier"))
+        if required is None or applied is None:
+            continue
+        if required > 1.0:
+            boost_ratios.append(float(applied) / float(required))
+        elif required < 1.0:
+            denominator = 1.0 - float(required)
+            if denominator > 0.0:
+                downweight_depth_ratios.append((1.0 - float(applied)) / denominator)
+    clamped_count = sum(1 for row in rows if row.get("clamped") is True)
+    clamped_boost_count = sum(1 for row in rows if row.get("clamped") is True and row.get("action") == "boost")
+    clamped_downweight_count = sum(1 for row in rows if row.get("clamped") is True and row.get("action") == "downweight")
+    return {
+        "unconstrained_multiplier_stats": _stats(unconstrained),
+        "applied_multiplier_stats": _stats(multipliers),
+        "boost_required_multiplier_stats": _stats(boost_required),
+        "downweight_required_multiplier_stats": _stats(downweight_required),
+        "applied_to_required_boost_ratio_stats": _stats(np.asarray(boost_ratios, dtype=np.float64)),
+        "applied_downweight_depth_ratio_stats": _stats(np.asarray(downweight_depth_ratios, dtype=np.float64)),
+        "mean_residual_reduction_fraction": None if reductions.size == 0 else float(np.mean(reductions)),
+        "clamped_fraction": None if known_count <= 0 else float(clamped_count / known_count),
+        "clamped_boost_tiles": clamped_boost_count,
+        "clamped_downweight_tiles": clamped_downweight_count,
+        "saturation_limited": bool(known_count > 0 and clamped_count == known_count),
+    }
 
 
 def build_tile_local_policy_proposal(
@@ -170,6 +223,7 @@ def build_tile_local_policy_proposal(
         if known and toward_count == len(known) and float(np.mean(after_abs)) < float(np.mean(before_abs))
         else "not_promotable"
     )
+    saturation = _saturation_summary(rows, len(known))
     return {
         "schema_version": 1,
         "artifact_type": "tile_local_policy_proposal",
@@ -192,6 +246,7 @@ def build_tile_local_policy_proposal(
             "clamped_tiles": sum(1 for row in rows if row.get("clamped") is True),
             "mean_abs_residual_before": None if before_abs.size == 0 else float(np.mean(before_abs)),
             "mean_abs_residual_after": None if after_abs.size == 0 else float(np.mean(after_abs)),
+            **saturation,
             "recommendation": recommendation,
         },
         "tiles": rows,
@@ -225,6 +280,8 @@ def write_tile_local_policy_proposal(
         f"- Recommendation: `{summary.get('recommendation')}`",
         f"- Toward / away: `{summary.get('moves_toward_reference')}` / `{summary.get('moves_away_from_reference')}`",
         f"- Mean abs residual before / after: `{summary.get('mean_abs_residual_before')}` / `{summary.get('mean_abs_residual_after')}`",
+        f"- Clamped fraction: `{summary.get('clamped_fraction')}`",
+        f"- Mean residual reduction fraction: `{summary.get('mean_residual_reduction_fraction')}`",
         "",
         "| tile | action | multiplier | residual before | predicted after | reduction | clamped |",
         "| ---: | --- | ---: | ---: | ---: | ---: | :---: |",

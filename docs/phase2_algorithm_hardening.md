@@ -2458,6 +2458,19 @@ integration where applicable.
 - Keep this as a proposal/replay gate only. It must not run a new integration,
   mutate image pixels, or promote tile-local apply by default.
 
+### S2-Gate 146: Tile-Local Multiplier Saturation Diagnostics
+
+- Extend `tile-local-policy-proposal` summary output with explicit multiplier
+  saturation diagnostics.
+- Record unconstrained multiplier stats, applied multiplier stats, required
+  boost/downweight stats, applied-to-required boost ratio, downweight depth
+  ratio, clamped fraction, and mean residual reduction fraction.
+- Re-run the S2-Gate 145 new-region proposal and replay to verify the
+  diagnostics explain the universal max-boost clamp without changing replay
+  compatibility.
+- Keep this as an artifact/diagnostic gate only. It must not change resident
+  integration defaults, image pixels, or promotion thresholds.
+
 ## Gate Rules
 
 Each gate requires:

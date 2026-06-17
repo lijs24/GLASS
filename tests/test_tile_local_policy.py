@@ -69,6 +69,8 @@ def test_tile_local_policy_proposal_downweights_same_signed_contribution(tmp_pat
     assert row["multiplier"] == pytest.approx(0.0)
     assert row["predicted_signed_residual_after"] == pytest.approx(0.0)
     assert row["moves_toward_reference"] is True
+    assert proposal["summary"]["downweight_required_multiplier_stats"]["min"] == pytest.approx(0.0)
+    assert proposal["summary"]["applied_downweight_depth_ratio_stats"]["mean"] == pytest.approx(1.0)
 
 
 def test_tile_local_policy_proposal_clamps_large_boost(tmp_path: Path):
@@ -82,6 +84,10 @@ def test_tile_local_policy_proposal_clamps_large_boost(tmp_path: Path):
     assert row["clamped"] is True
     assert row["predicted_signed_residual_after"] == pytest.approx(-0.2)
     assert proposal["summary"]["recommendation"] == "tile_local_policy_candidate"
+    assert proposal["summary"]["boost_required_multiplier_stats"]["max"] == pytest.approx(4.0)
+    assert proposal["summary"]["applied_to_required_boost_ratio_stats"]["mean"] == pytest.approx(0.5)
+    assert proposal["summary"]["clamped_fraction"] == pytest.approx(1.0)
+    assert proposal["summary"]["saturation_limited"] is True
 
 
 def test_cli_tile_local_policy_proposal_writes_json_and_markdown(tmp_path: Path):
