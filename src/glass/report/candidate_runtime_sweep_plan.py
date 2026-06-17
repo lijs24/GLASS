@@ -100,6 +100,50 @@ def _selected_variants(variant_ids: list[str] | None) -> list[dict[str, Any]]:
     return selected
 
 
+def _prefetch_matrix_variants(prefetch_frames: list[int], prefetch_workers: list[int]) -> list[dict[str, Any]]:
+    if not prefetch_frames or not prefetch_workers:
+        return []
+    variants: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for frames in prefetch_frames:
+        if frames <= 0:
+            raise ValueError("prefetch frame counts must be positive")
+        for workers in prefetch_workers:
+            if workers <= 0:
+                raise ValueError("prefetch worker counts must be positive")
+            variant_id = f"prefetch{frames}_workers{workers}"
+            if variant_id in seen:
+                continue
+            seen.add(variant_id)
+            variants.append(
+                {
+                    "variant_id": variant_id,
+                    "purpose": "runtime confirmation sweep over resident prefetch depth and worker count",
+                    "options": {
+                        "--resident-prefetch-frames": int(frames),
+                        "--resident-prefetch-workers": int(workers),
+                    },
+                }
+            )
+    return variants
+
+
+def _runtime_variants(
+    variant_ids: list[str] | None,
+    *,
+    prefetch_frames: list[int] | None,
+    prefetch_workers: list[int] | None,
+) -> list[dict[str, Any]]:
+    matrix_requested = bool(prefetch_frames or prefetch_workers)
+    if matrix_requested and not (prefetch_frames and prefetch_workers):
+        raise ValueError("prefetch matrix requires at least one frame count and one worker count")
+    selected = _selected_variants(variant_ids) if variant_ids else []
+    selected.extend(_prefetch_matrix_variants(prefetch_frames or [], prefetch_workers or []))
+    if selected:
+        return selected
+    return _selected_variants(None)
+
+
 def _read_object(path: str | Path) -> dict[str, Any]:
     payload = read_json(path)
     if not isinstance(payload, dict):
@@ -236,13 +280,15 @@ def build_candidate_runtime_sweep_plan(
     min_coverage: float | None = None,
     min_speedup_vs_reference: float | None = None,
     variants: list[str] | None = None,
+    prefetch_frames: list[int] | None = None,
+    prefetch_workers: list[int] | None = None,
 ) -> dict[str, Any]:
     comparison_payload = _read_object(comparison)
     if comparison_payload.get("artifact_type") != "candidate_comparison":
         raise ValueError("comparison must be a candidate_comparison artifact")
     root_path = Path(root)
     template = _read_command_template(base_run_command)
-    selected = _selected_variants(variants)
+    selected = _runtime_variants(variants, prefetch_frames=prefetch_frames, prefetch_workers=prefetch_workers)
     baseline_master, _baseline_coverage = _baseline_master_paths(baseline_run)
 
     planned: list[dict[str, Any]] = []

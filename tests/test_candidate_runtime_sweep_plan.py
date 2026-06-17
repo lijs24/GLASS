@@ -86,6 +86,39 @@ def test_candidate_runtime_sweep_plan_generates_runtime_only_variants(tmp_path: 
     assert "candidate-comparison-sweep" in payload["sweep_command"]
 
 
+def test_candidate_runtime_sweep_plan_generates_prefetch_matrix(tmp_path: Path) -> None:
+    comparison = tmp_path / "comparison.json"
+    command = tmp_path / "run_command.txt"
+    baseline = tmp_path / "baseline"
+    _write_source_comparison(comparison)
+    _write_command(command)
+    _write_baseline_run(baseline)
+
+    payload = build_candidate_runtime_sweep_plan(
+        comparison,
+        root=tmp_path / "matrix",
+        base_run_command=command,
+        baseline_run=baseline,
+        baseline_compare_json=tmp_path / "baseline_compare.json",
+        reference=tmp_path / "reference.xisf",
+        manifest=tmp_path / "manifest.json",
+        wbpp_result=tmp_path / "wbpp_result.json",
+        prefetch_frames=[10, 12],
+        prefetch_workers=[5, 6],
+    )
+
+    assert payload["variant_count"] == 4
+    assert [row["variant_id"] for row in payload["variants"]] == [
+        "prefetch10_workers5",
+        "prefetch10_workers6",
+        "prefetch12_workers5",
+        "prefetch12_workers6",
+    ]
+    last_command = payload["variants"][-1]["commands"]["run"]
+    assert "--resident-prefetch-frames 12" in last_command
+    assert "--resident-prefetch-workers 6" in last_command
+
+
 def test_cli_candidate_runtime_sweep_plan_writes_outputs(tmp_path: Path) -> None:
     comparison = tmp_path / "comparison.json"
     command = tmp_path / "run_command.txt"
@@ -122,11 +155,16 @@ def test_cli_candidate_runtime_sweep_plan_writes_outputs(tmp_path: Path) -> None
                 str(markdown),
                 "--variant",
                 "retry_settings_control",
+                "--prefetch-frame",
+                "10",
+                "--prefetch-worker",
+                "5",
             ]
         )
         == 0
     )
 
     payload = read_json(out)
-    assert payload["variant_count"] == 1
+    assert payload["variant_count"] == 2
+    assert payload["variants"][1]["variant_id"] == "prefetch10_workers5"
     assert "Candidate Runtime Sweep Plan" in markdown.read_text(encoding="utf-8")

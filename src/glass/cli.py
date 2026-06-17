@@ -1353,6 +1353,8 @@ def cmd_candidate_runtime_sweep_plan(args: argparse.Namespace) -> int:
         min_coverage=args.min_coverage,
         min_speedup_vs_reference=args.min_speedup_vs_reference,
         variants=args.variant,
+        prefetch_frames=args.prefetch_frame,
+        prefetch_workers=args.prefetch_worker,
     )
     write_candidate_runtime_sweep_plan(args.out, payload, markdown=args.markdown)
     console.print(
@@ -3206,6 +3208,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--variant",
         action="append",
         help="runtime variant id to include; may be repeated, defaults to all built-in variants",
+    )
+    candidate_runtime_sweep_plan.add_argument(
+        "--prefetch-frame",
+        action="append",
+        type=int,
+        help="resident prefetch frame count for a generated matrix variant; may be repeated",
+    )
+    candidate_runtime_sweep_plan.add_argument(
+        "--prefetch-worker",
+        action="append",
+        type=int,
+        help="resident prefetch worker count for a generated matrix variant; may be repeated",
     )
     candidate_runtime_sweep_plan.set_defaults(func=cmd_candidate_runtime_sweep_plan)
 

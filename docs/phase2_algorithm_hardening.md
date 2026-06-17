@@ -2604,6 +2604,23 @@ integration where applicable.
 - Keep this as a measured benchmark gate only. It must not alter resident
   defaults until a follow-up promotion gate explicitly accepts a variant.
 
+### S2-Gate 156: Prefetch/Worker Matrix Planning and Preflight
+
+- Extend `glass candidate-runtime-sweep-plan` with generated
+  prefetch-frame/prefetch-worker matrix variants.
+- Use the Gate155 best result to plan a narrow confirmation matrix around
+  prefetch frames 10/12/14 and workers 5/6/7 while inheriting the accepted
+  soft-downweight science settings.
+- Preserve explicit run, reference-compare, baseline-compare,
+  acceptance-audit, candidate-comparison, and final sweep-summary commands for
+  every matrix cell.
+- Run focused and full tests for the matrix planner.
+- If GPU memory is unavailable because another process is using the device,
+  record the failed preflight and stop before executing later gates. Do not
+  kill unrelated user processes.
+- Keep this as a planning/preflight gate when GPU is occupied. The measured
+  matrix execution remains the next gate after GPU memory is available.
+
 ## Gate Rules
 
 Each gate requires:
