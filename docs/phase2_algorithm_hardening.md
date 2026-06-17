@@ -2729,6 +2729,22 @@ integration where applicable.
 - Keep this as an orchestration gate. Heavy 200-light repeat execution remains
   blocked until the local GPU and disks are available for a controlled window.
 
+### S2-Gate 164: Resident Runtime Repeat Preflight
+
+- Add `glass resident-runtime-repeat-preflight` to check whether a
+  `resident-runtime-repeat-plan` is safe to execute before launching heavy
+  200-light repeats.
+- Validate run output directories, existing `run_timing.json` resume markers,
+  final compare output path, CUDA/resident command intent, and point-in-time
+  `nvidia-smi` GPU memory/utilization state.
+- Emit `ready_to_execute`, `recommendation`, GPU status, per-repeat run status,
+  and output conflict counts in a JSON artifact.
+- Run the preflight against the Gate162 plan under
+  `C:\glass_runs\phase2_s2_gate_164_repeat_preflight`.
+- Current result: not ready. Three repeat outputs are clean and ready, but the
+  GPU is externally busy, so the recommendation is
+  `wait_for_controlled_window`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -68,6 +68,10 @@ from glass.report.resident_runtime_repeat_execute import (
     build_resident_runtime_repeat_execution,
     write_resident_runtime_repeat_execution,
 )
+from glass.report.resident_runtime_repeat_preflight import (
+    build_resident_runtime_repeat_preflight,
+    write_resident_runtime_repeat_preflight,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1819,6 +1823,30 @@ def cmd_resident_runtime_repeat_execute(args: argparse.Namespace) -> int:
         }
     )
     if args.fail_on_failed and payload.get("summary", {}).get("failed"):
+        return 2
+    return 0
+
+
+def cmd_resident_runtime_repeat_preflight(args: argparse.Namespace) -> int:
+    payload = build_resident_runtime_repeat_preflight(
+        args.plan,
+        min_free_mib=args.min_free_mib,
+        max_busy_utilization=args.max_busy_utilization,
+        allow_existing=args.allow_existing,
+        probe_gpu=not args.skip_gpu_probe,
+    )
+    write_resident_runtime_repeat_preflight(args.out, payload)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "ready_to_execute": payload.get("ready_to_execute"),
+            "recommendation": payload.get("recommendation"),
+            "gpu_status": payload.get("gpu", {}).get("status"),
+            "repeat_count": payload.get("repeat_count"),
+            "out": args.out,
+        }
+    )
+    if args.fail_when_not_ready and not payload.get("ready_to_execute"):
         return 2
     return 0
 
@@ -3818,6 +3846,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when an executed step fails",
     )
     resident_runtime_repeat_execute.set_defaults(func=cmd_resident_runtime_repeat_execute)
+
+    resident_runtime_repeat_preflight = sub.add_parser(
+        "resident-runtime-repeat-preflight",
+        help="check whether a resident-runtime-repeat-plan is ready to execute",
+    )
+    resident_runtime_repeat_preflight.add_argument("--plan", required=True, help="resident runtime repeat plan JSON")
+    resident_runtime_repeat_preflight.add_argument("--out", required=True, help="output preflight JSON")
+    resident_runtime_repeat_preflight.add_argument(
+        "--min-free-mib",
+        type=int,
+        default=8192,
+        help="minimum free GPU memory required before recommending execution",
+    )
+    resident_runtime_repeat_preflight.add_argument(
+        "--max-busy-utilization",
+        type=int,
+        default=95,
+        help="utilization threshold at or above which a loaded GPU is considered busy",
+    )
+    resident_runtime_repeat_preflight.add_argument(
+        "--allow-existing",
+        action="store_true",
+        help="allow repeat output directories that already exist without run_timing.json",
+    )
+    resident_runtime_repeat_preflight.add_argument(
+        "--skip-gpu-probe",
+        action="store_true",
+        help="skip nvidia-smi probing and record GPU status as unknown",
+    )
+    resident_runtime_repeat_preflight.add_argument(
+        "--fail-when-not-ready",
+        action="store_true",
+        help="return exit code 2 unless the preflight recommends execution",
+    )
+    resident_runtime_repeat_preflight.set_defaults(func=cmd_resident_runtime_repeat_preflight)
 
     resident_reg_triage = sub.add_parser(
         "resident-registration-triage",

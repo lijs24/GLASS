@@ -226,6 +226,7 @@ def test_cli_help_commands():
         "resident-runtime-compare",
         "resident-runtime-repeat-execute",
         "resident-runtime-repeat-plan",
+        "resident-runtime-repeat-preflight",
         "stack-engine-contract",
         "pipeline-contract",
         "guardrails",
