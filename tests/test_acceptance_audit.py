@@ -684,6 +684,11 @@ def test_acceptance_audit_accepts_contract_bundle(tmp_path: Path):
     assert audit["contract_bundle"]["artifact_type"] == "glass_acceptance_contract_bundle"
     assert audit["contract_bundle"]["pipeline_contract_json"] == str(pipeline)
     assert audit["contract_bundle"]["stack_engine_contract_json"] == str(stack)
+    assert audit["contract_bundle_schema"]["status"] == "passed"
+    assert checks["contract_bundle_schema_version"]["passed"] is True
+    assert checks["contract_bundle_purpose"]["passed"] is True
+    assert checks["contract_bundle_required_artifacts"]["passed"] is True
+    assert checks["contract_bundle_argument_map"]["passed"] is True
     assert audit["pipeline_contract"]["path"] == str(pipeline)
     assert audit["stack_engine_contract"]["path"] == str(stack)
     assert checks["pipeline_contract_passed"]["passed"] is True
@@ -839,6 +844,58 @@ def test_acceptance_audit_explicit_contract_paths_override_bundle(tmp_path: Path
     assert audit["contract_bundle"]["stack_engine_contract_json"] == str(explicit_stack)
     assert audit["pipeline_contract"]["path"] == str(explicit_pipeline)
     assert audit["stack_engine_contract"]["path"] == str(explicit_stack)
+
+
+def test_acceptance_audit_fails_malformed_contract_bundle_schema_even_with_explicit_paths(
+    tmp_path: Path,
+):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    stack = tmp_path / "stack_engine_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+    _write_stack_engine_contract(stack, passed=True, ready=True)
+    write_json(
+        bundle,
+        {
+            "schema_version": 2,
+            "artifact_type": "glass_acceptance_contract_bundle",
+            "status": "passed",
+            "passed": True,
+            "purpose": "wrong_purpose",
+            "artifacts": {"pipeline_contract": str(pipeline)},
+            "acceptance_audit_argument_map": {"pipeline_contract_json": str(pipeline)},
+        },
+    )
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=bundle,
+        pipeline_contract_json=pipeline,
+        stack_engine_contract_json=stack,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["contract_bundle_schema"]["status"] == "failed"
+    assert checks["contract_bundle_schema_version"]["passed"] is False
+    assert checks["contract_bundle_purpose"]["passed"] is False
+    assert checks["contract_bundle_required_artifacts"]["passed"] is False
+    assert checks["contract_bundle_argument_map"]["passed"] is False
+    assert checks["pipeline_contract_passed"]["passed"] is True
+    assert checks["stack_engine_contract_passed"]["passed"] is True
 
 
 def test_acceptance_audit_fails_missing_contract_bundle(tmp_path: Path):

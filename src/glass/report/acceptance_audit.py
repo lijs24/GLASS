@@ -71,10 +71,16 @@ def _contract_bundle_paths(
     bundle = {
         "path": str(bundle_path),
         "exists": bundle_path.exists(),
+        "schema_version": bundle_payload.get("schema_version"),
         "artifact_type": bundle_payload.get("artifact_type"),
         "status": bundle_payload.get("status"),
         "passed": bundle_payload.get("passed"),
         "purpose": bundle_payload.get("purpose"),
+        "artifact_keys": sorted(str(key) for key in artifact_map),
+        "argument_map_keys": sorted(str(key) for key in argument_map),
+        "acceptance_audit_argument_count": len(bundle_payload.get("acceptance_audit_arguments") or [])
+        if isinstance(bundle_payload.get("acceptance_audit_arguments"), list)
+        else 0,
         "pipeline_contract_json": None if resolved_pipeline is None else str(resolved_pipeline),
         "stack_engine_contract_json": None if resolved_stack is None else str(resolved_stack),
         "resident_calibration_contract_json": None
@@ -88,6 +94,68 @@ def _contract_bundle_paths(
         "checks": bundle_payload.get("checks") if isinstance(bundle_payload.get("checks"), list) else [],
     }
     return resolved_pipeline, resolved_stack, bundle
+
+
+def _contract_bundle_schema_audit(
+    contract_bundle: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    if contract_bundle is None:
+        return None, []
+    artifact_keys = {str(key) for key in contract_bundle.get("artifact_keys") or []}
+    argument_map_keys = {str(key) for key in contract_bundle.get("argument_map_keys") or []}
+    required_artifacts = {"guardrails_summary", "pipeline_contract", "stack_engine_contract"}
+    required_argument_map = {"pipeline_contract_json", "stack_engine_contract_json"}
+    missing_artifacts = sorted(required_artifacts - artifact_keys)
+    missing_argument_map = sorted(required_argument_map - argument_map_keys)
+    record = {
+        "schema_version": contract_bundle.get("schema_version"),
+        "required_schema_version": 1,
+        "purpose": contract_bundle.get("purpose"),
+        "required_purpose": "acceptance_audit_contract_inputs",
+        "artifact_keys": sorted(artifact_keys),
+        "missing_required_artifacts": missing_artifacts,
+        "argument_map_keys": sorted(argument_map_keys),
+        "missing_required_argument_map_keys": missing_argument_map,
+    }
+    checks = [
+        _check(
+            "contract_bundle_schema_version",
+            contract_bundle.get("schema_version") == 1,
+            {
+                "actual": contract_bundle.get("schema_version"),
+                "required": 1,
+            },
+        ),
+        _check(
+            "contract_bundle_purpose",
+            contract_bundle.get("purpose") == "acceptance_audit_contract_inputs",
+            {
+                "actual": contract_bundle.get("purpose"),
+                "required": "acceptance_audit_contract_inputs",
+            },
+        ),
+        _check(
+            "contract_bundle_required_artifacts",
+            not missing_artifacts,
+            {
+                "required": sorted(required_artifacts),
+                "missing": missing_artifacts,
+                "actual": sorted(artifact_keys),
+            },
+        ),
+        _check(
+            "contract_bundle_argument_map",
+            not missing_argument_map,
+            {
+                "required": sorted(required_argument_map),
+                "missing": missing_argument_map,
+                "actual": sorted(argument_map_keys),
+            },
+        ),
+    ]
+    record["passed"] = all(item["passed"] for item in checks)
+    record["status"] = "passed" if record["passed"] else "failed"
+    return record, checks
 
 
 def _contract_attachment_audit(
@@ -358,6 +426,9 @@ def build_acceptance_audit(
             ]
         )
 
+    contract_bundle_schema, contract_bundle_schema_checks = _contract_bundle_schema_audit(contract_bundle)
+    checks.extend(contract_bundle_schema_checks)
+
     resident_calibration_contract, resident_calibration_checks = _contract_attachment_audit(
         contract_bundle=contract_bundle,
         label="resident_calibration_contract",
@@ -587,6 +658,7 @@ def build_acceptance_audit(
         "frame_accounting": frame_accounting_record,
         "resident_determinism": resident_determinism,
         "contract_bundle": contract_bundle,
+        "contract_bundle_schema": contract_bundle_schema,
         "resident_contracts": {
             "calibration": resident_calibration_contract,
             "result": resident_result_contract,
@@ -685,6 +757,23 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         for item in stack_release_evidence.get("checks") or []:
             marker = "PASS" if item.get("passed") else "FAIL"
             lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
+        lines.append("")
+    bundle_schema = audit.get("contract_bundle_schema") if isinstance(audit.get("contract_bundle_schema"), dict) else {}
+    if bundle_schema:
+        lines.extend(["## Contract Bundle Schema", ""])
+        lines.append(f"- Status: {bundle_schema.get('status')}")
+        lines.append(
+            f"- Schema version: {bundle_schema.get('schema_version')} "
+            f"(required {bundle_schema.get('required_schema_version')})"
+        )
+        lines.append(
+            f"- Purpose: {bundle_schema.get('purpose')} "
+            f"(required {bundle_schema.get('required_purpose')})"
+        )
+        lines.append(f"- Artifact keys: {bundle_schema.get('artifact_keys')}")
+        lines.append(f"- Missing artifacts: {bundle_schema.get('missing_required_artifacts')}")
+        lines.append(f"- Argument map keys: {bundle_schema.get('argument_map_keys')}")
+        lines.append(f"- Missing argument map keys: {bundle_schema.get('missing_required_argument_map_keys')}")
         lines.append("")
     resident_contracts = audit.get("resident_contracts") if isinstance(audit.get("resident_contracts"), dict) else {}
     resident_rows = [

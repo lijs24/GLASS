@@ -3418,6 +3418,18 @@ integration where applicable.
 - Validate with direct acceptance-audit tests and rerun the real Gate200
   200-light acceptance bundle as a read-only artifact audit.
 
+### S2-Gate 202: Acceptance Bundle Schema Audit
+
+- Add a formal schema/version audit for `glass_acceptance_contract_bundle`
+  artifacts consumed by `glass acceptance-audit --contract-bundle`.
+- Require schema version `1`, purpose `acceptance_audit_contract_inputs`,
+  required artifact keys, and required acceptance-audit argument-map keys.
+- Keep historical diagnostic bundles compatible by auditing schema shape
+  separately from the bundle's own `passed` status.
+- Record `contract_bundle_schema` in acceptance-audit JSON and Markdown.
+- Validate with passing and malformed bundle tests plus the real 200-light
+  Gate200 bundle artifact.
+
 ## Gate Rules
 
 Each gate requires:
