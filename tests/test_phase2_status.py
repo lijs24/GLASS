@@ -137,6 +137,41 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
     )
 
 
+def _write_release_decision(path: Path, *, ready: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "release_promotion_decision",
+            "status": "default_change_ready" if ready else "release_candidate_ready",
+            "passed": True,
+            "release_candidate_ready": True,
+            "default_change_ready": ready,
+            "recommendation": "promote_default_candidate"
+            if ready
+            else "repeat_benchmark_before_default_change",
+            "speedup": {"actual": 58.0, "required_min": 2.0},
+            "runtime_repeat": {
+                "present": True,
+                "run_count": 3,
+                "considered_run_count": 3,
+                "best_label": "repeat02",
+                "best_elapsed_s": 22.6,
+                "slowest_elapsed_s": 23.8,
+                "elapsed_ratio_vs_best": 1.053,
+                "max_elapsed_ratio_vs_best": 1.25,
+                "recommendation": "best_observed:repeat02",
+            },
+            "pipeline_handoff": {
+                "source": "explicit_pipeline_contract",
+                "status": "passed",
+                "passed": True,
+                "pixel_verification_enabled": True,
+            },
+        },
+    )
+
+
 def _doctor_payload() -> dict:
     return {
         "recommendation": "cuda",
@@ -171,6 +206,8 @@ def _status_payload(
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
+    default_change_ready: bool = True,
+    release_recommendation: str = "promote_default_candidate",
 ) -> dict:
     return {
         "schema_version": 1,
@@ -192,6 +229,11 @@ def _status_payload(
             "integration_dq_contract": pipeline_dq_contract,
             "pixel_verification_enabled": pixel_verification,
         },
+        "release_decision": {
+            "status": "default_change_ready" if default_change_ready else "release_candidate_ready",
+            "default_change_ready": default_change_ready,
+            "recommendation": release_recommendation,
+        },
         "checks": [],
     }
 
@@ -205,8 +247,10 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     release = tmp_path / "release_manifest.json"
     github_plan = tmp_path / "github_release_plan.json"
     pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
     _write_acceptance(acceptance)
     _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
     write_json(
         release,
         {
@@ -236,6 +280,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         release_manifest=release,
         github_release_plan=github_plan,
         pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
         doctor_payload=_doctor_payload(),
     )
 
@@ -260,6 +305,10 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
     assert payload["pipeline_contract"]["pixel_verification_enabled"] is True
     assert payload["pipeline_contract"]["integration_dq_map_pixels_match_summary"] is True
+    assert payload["release_decision"]["status"] == "default_change_ready"
+    assert payload["release_decision"]["default_change_ready"] is True
+    assert payload["release_decision"]["recommendation"] == "promote_default_candidate"
+    assert payload["release_decision"]["runtime_repeat_elapsed_ratio_vs_best"] == 1.053
 
 
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
@@ -270,8 +319,10 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     out = tmp_path / "phase2_status.json"
     markdown = tmp_path / "phase2_status.md"
     pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
     _write_acceptance(acceptance)
     _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
 
     result = main(
         [
@@ -282,6 +333,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(acceptance),
             "--pipeline-contract",
             str(pipeline_contract),
+            "--release-decision",
+            str(release_decision),
             "--out",
             str(out),
             "--markdown",
@@ -297,6 +350,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["acceptance_audit"]["contract_bundle_schema_status"] == "passed"
     assert payload["acceptance_audit"]["resident_result_contract_source"] == "run_default"
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
+    assert payload["release_decision"]["default_change_ready"] is True
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -307,6 +361,9 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Pipeline Contract" in text
     assert "Integration DQ contract: True" in text
     assert "DQ pixels match summary: True" in text
+    assert "Release Decision" in text
+    assert "Default change ready: True" in text
+    assert "Runtime repeat ratio vs best: 1.053" in text
 
 
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
@@ -329,6 +386,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
+    assert checks["release_decision_default_change_ready_preserved"] is True
+    assert checks["release_decision_promote_recommendation_preserved"] is True
 
 
 def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
@@ -349,6 +408,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
+            default_change_ready=False,
+            release_recommendation="repeat_benchmark_before_default_change",
         ),
     )
 
@@ -370,6 +431,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["pipeline_integration_dq_contract_preserved"] is False
     assert checks["pipeline_pixel_verification_preserved"] is False
+    assert checks["release_decision_default_change_ready_preserved"] is False
+    assert checks["release_decision_promote_recommendation_preserved"] is False
 
 
 def test_cli_phase2_status_compare_writes_outputs_and_returns_failure(tmp_path: Path):

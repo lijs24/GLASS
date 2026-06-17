@@ -441,6 +441,55 @@ def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None
     }
 
 
+def _release_decision_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {"path": str(path), "exists": False, "status": "missing", "passed": False}
+
+    runtime_repeat = (
+        payload.get("runtime_repeat")
+        if isinstance(payload.get("runtime_repeat"), dict)
+        else {}
+    )
+    pipeline_handoff = (
+        payload.get("pipeline_handoff")
+        if isinstance(payload.get("pipeline_handoff"), dict)
+        else {}
+    )
+    speedup = payload.get("speedup") if isinstance(payload.get("speedup"), dict) else {}
+    return {
+        "path": payload.get("_path"),
+        "exists": True,
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "release_candidate_ready": payload.get("release_candidate_ready"),
+        "default_change_ready": payload.get("default_change_ready"),
+        "recommendation": payload.get("recommendation"),
+        "speedup_actual": speedup.get("actual"),
+        "speedup_required_min": speedup.get("required_min"),
+        "runtime_repeat_present": runtime_repeat.get("present"),
+        "runtime_repeat_run_count": runtime_repeat.get("run_count"),
+        "runtime_repeat_considered_run_count": runtime_repeat.get("considered_run_count"),
+        "runtime_repeat_best_label": runtime_repeat.get("best_label"),
+        "runtime_repeat_best_elapsed_s": runtime_repeat.get("best_elapsed_s"),
+        "runtime_repeat_slowest_elapsed_s": runtime_repeat.get("slowest_elapsed_s"),
+        "runtime_repeat_elapsed_ratio_vs_best": runtime_repeat.get("elapsed_ratio_vs_best"),
+        "runtime_repeat_max_elapsed_ratio_vs_best": runtime_repeat.get(
+            "max_elapsed_ratio_vs_best"
+        ),
+        "runtime_repeat_recommendation": runtime_repeat.get("recommendation"),
+        "pipeline_handoff_source": pipeline_handoff.get("source"),
+        "pipeline_handoff_status": pipeline_handoff.get("status"),
+        "pipeline_handoff_passed": pipeline_handoff.get("passed"),
+        "pipeline_handoff_pixel_verification_enabled": pipeline_handoff.get(
+            "pixel_verification_enabled"
+        ),
+    }
+
+
 def build_phase2_status(
     *,
     checkpoint_dir: str | Path,
@@ -448,6 +497,7 @@ def build_phase2_status(
     release_manifest: str | Path | None = None,
     github_release_plan: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
+    release_decision: str | Path | None = None,
     doctor_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checkpoint = _latest_checkpoint(checkpoint_dir)
@@ -456,6 +506,7 @@ def build_phase2_status(
     release = _release_manifest_summary(release_manifest)
     github_plan = _github_release_plan_summary(github_release_plan)
     pipeline = _pipeline_contract_summary(pipeline_contract)
+    decision = _release_decision_summary(release_decision)
     checks = [
         {
             "name": "latest_checkpoint_green",
@@ -521,6 +572,23 @@ def build_phase2_status(
                 },
             }
         )
+    if decision is not None:
+        checks.append(
+            {
+                "name": "release_decision_default_change_ready",
+                "passed": decision.get("default_change_ready") is True
+                and decision.get("recommendation") == "promote_default_candidate",
+                "evidence": {
+                    "status": decision.get("status"),
+                    "release_candidate_ready": decision.get("release_candidate_ready"),
+                    "default_change_ready": decision.get("default_change_ready"),
+                    "recommendation": decision.get("recommendation"),
+                    "runtime_repeat_elapsed_ratio_vs_best": decision.get(
+                        "runtime_repeat_elapsed_ratio_vs_best"
+                    ),
+                },
+            }
+        )
     passed = all(item["passed"] for item in checks)
     return {
         "schema_version": 1,
@@ -534,6 +602,7 @@ def build_phase2_status(
         "release_manifest": release,
         "github_release_plan": github_plan,
         "pipeline_contract": pipeline,
+        "release_decision": decision,
         "checks": checks,
     }
 
@@ -545,6 +614,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     release = payload.get("release_manifest") or {}
     github_plan = payload.get("github_release_plan") or {}
     pipeline = payload.get("pipeline_contract") or {}
+    decision = payload.get("release_decision") or {}
     lines = [
         "# GLASS Phase 2 Status",
         "",
@@ -664,6 +734,34 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 (
                     "- Rejection pixels match DQ: "
                     f"{pipeline.get('integration_rejection_map_pixels_match_dq')}"
+                ),
+            ]
+        )
+    if decision:
+        lines.extend(
+            [
+                "",
+                "## Release Decision",
+                "",
+                f"- Status: {decision.get('status')}",
+                f"- Recommendation: {decision.get('recommendation')}",
+                f"- Release candidate ready: {decision.get('release_candidate_ready')}",
+                f"- Default change ready: {decision.get('default_change_ready')}",
+                f"- Speedup: {decision.get('speedup_actual')}",
+                f"- Runtime repeat runs: {decision.get('runtime_repeat_run_count')}",
+                (
+                    "- Runtime repeat ratio vs best: "
+                    f"{decision.get('runtime_repeat_elapsed_ratio_vs_best')}"
+                ),
+                (
+                    "- Runtime repeat best: "
+                    f"{decision.get('runtime_repeat_best_label')} "
+                    f"{decision.get('runtime_repeat_best_elapsed_s')} s"
+                ),
+                f"- Pipeline handoff source: {decision.get('pipeline_handoff_source')}",
+                (
+                    "- Pipeline handoff pixel verification: "
+                    f"{decision.get('pipeline_handoff_pixel_verification_enabled')}"
                 ),
             ]
         )
@@ -819,6 +917,22 @@ def build_phase2_status_compare(
             baseline=_status_value(baseline, "pipeline_contract", "pixel_verification_enabled"),
             candidate=_status_value(candidate, "pipeline_contract", "pixel_verification_enabled"),
         ),
+        _compare_check(
+            "release_decision_default_change_ready_preserved",
+            _status_value(baseline, "release_decision", "default_change_ready") is not True
+            or _status_value(candidate, "release_decision", "default_change_ready") is True,
+            baseline=_status_value(baseline, "release_decision", "default_change_ready"),
+            candidate=_status_value(candidate, "release_decision", "default_change_ready"),
+        ),
+        _compare_check(
+            "release_decision_promote_recommendation_preserved",
+            _status_value(baseline, "release_decision", "recommendation")
+            != "promote_default_candidate"
+            or _status_value(candidate, "release_decision", "recommendation")
+            == "promote_default_candidate",
+            baseline=_status_value(baseline, "release_decision", "recommendation"),
+            candidate=_status_value(candidate, "release_decision", "recommendation"),
+        ),
     ]
     passed = all(item["passed"] for item in checks)
     return {
@@ -838,6 +952,12 @@ def build_phase2_status_compare(
             "github_release_plan_status": _status_value(baseline, "github_release_plan", "status"),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
+            "release_decision_status": _status_value(baseline, "release_decision", "status"),
+            "default_change_ready": _status_value(
+                baseline,
+                "release_decision",
+                "default_change_ready",
+            ),
         },
         "candidate": {
             "status": candidate.get("status"),
@@ -848,6 +968,12 @@ def build_phase2_status_compare(
             "github_release_plan_status": _status_value(candidate, "github_release_plan", "status"),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
+            "release_decision_status": _status_value(candidate, "release_decision", "status"),
+            "default_change_ready": _status_value(
+                candidate,
+                "release_decision",
+                "default_change_ready",
+            ),
         },
         "checks": checks,
     }

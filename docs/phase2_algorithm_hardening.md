@@ -3661,6 +3661,21 @@ integration where applicable.
 - Keep this gate validation/evidence only: no processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 219: Default-Change Decision Release Handoff
+
+- Add `glass phase2-status --release-decision` so Phase 2 handoff artifacts
+  consume the release-promotion decision generated from controlled runtime
+  repeat evidence.
+- Require supplied release decisions to be `default_change_ready` with
+  `promote_default_candidate`; otherwise Phase 2 status is not green.
+- Preserve default-change readiness and promotion recommendation in Phase 2
+  status comparisons so later gates cannot silently drop the repeated runtime
+  proof.
+- Propagate release-decision and runtime-repeat evidence into Windows GitHub
+  release-plan JSON, Markdown, and generated release notes.
+- Keep this gate contract/reporting only: no processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

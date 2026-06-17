@@ -1,0 +1,473 @@
+{
+  "artifact_type": "windows_github_release_plan",
+  "assets": [
+    {
+      "exists": true,
+      "label": "cuda13",
+      "sha256": "bc5ebaf5247f7a7a513d1ff2ba3f4445d30c373c1e5e955cbfe7f01a9f0de273",
+      "size_bytes": 341358345,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+    },
+    {
+      "exists": true,
+      "label": "cuda12",
+      "sha256": "72f674ac5613d1618db5aebdbcab99711acefc887ff25b884db85c825e6ccf31",
+      "size_bytes": 341223006,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+    },
+    {
+      "exists": true,
+      "label": "cuda11",
+      "sha256": "2d0a68b53ffc92dadfc48e4404a81facbcb5d49f7bad1b89b79ce9337a42f681",
+      "size_bytes": 342200540,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+    },
+    {
+      "exists": true,
+      "label": "cpu",
+      "sha256": "32c7743c4ec2ed73ff1dd990c120ac7d8b0234a80db8b1e446627fd82ef5991d",
+      "size_bytes": 296231852,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+    }
+  ],
+  "checks": [
+    {
+      "evidence": {
+        "failed_checks": [],
+        "manifest_status": "release_manifest_ready"
+      },
+      "name": "manifest_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "asset_count": 4
+      },
+      "name": "assets_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+      },
+      "name": "asset_exists:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "bc5ebaf5247f7a7a513d1ff2ba3f4445d30c373c1e5e955cbfe7f01a9f0de273"
+      },
+      "name": "asset_has_sha256:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 341358345
+      },
+      "name": "asset_nonempty:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+      },
+      "name": "asset_exists:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "72f674ac5613d1618db5aebdbcab99711acefc887ff25b884db85c825e6ccf31"
+      },
+      "name": "asset_has_sha256:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 341223006
+      },
+      "name": "asset_nonempty:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+      },
+      "name": "asset_exists:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "2d0a68b53ffc92dadfc48e4404a81facbcb5d49f7bad1b89b79ce9337a42f681"
+      },
+      "name": "asset_has_sha256:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 342200540
+      },
+      "name": "asset_nonempty:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+      },
+      "name": "asset_exists:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "32c7743c4ec2ed73ff1dd990c120ac7d8b0234a80db8b1e446627fd82ef5991d"
+      },
+      "name": "asset_has_sha256:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 296231852
+      },
+      "name": "asset_nonempty:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "source_stamps": [
+          "aa63510"
+        ]
+      },
+      "name": "same_source_stamp",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_219_phase2_status.json"
+      },
+      "name": "phase2_status_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "glass_phase2_status",
+        "required": "glass_phase2_status"
+      },
+      "name": "phase2_status_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "latest_gate": 219,
+        "passed": true,
+        "status": "green"
+      },
+      "name": "phase2_status_green",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_219_phase2_status_compare.json"
+      },
+      "name": "phase2_status_compare_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "glass_phase2_status_compare",
+        "required": "glass_phase2_status_compare"
+      },
+      "name": "phase2_status_compare_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline_gate": 218,
+        "candidate_gate": 219,
+        "passed": true,
+        "status": "passed"
+      },
+      "name": "phase2_status_compare_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T20:49:50+00:00",
+  "failed_checks": [],
+  "gh": {
+    "auth_checked": false,
+    "auth_ok": false,
+    "auth_status": null,
+    "available": false,
+    "checked": false,
+    "path": null,
+    "version": null
+  },
+  "limitations": [
+    "This is a release handoff plan; it does not create a GitHub release or upload assets.",
+    "Install and authenticate GitHub CLI before running the generated command."
+  ],
+  "manifest_artifact": "runs\\checkpoints\\s2_gate_194_strict_windows_release_manifest.json",
+  "passed": true,
+  "phase2": {
+    "status": {
+      "acceptance_status": "passed",
+      "artifact_type": "glass_phase2_status",
+      "baseline_gate": null,
+      "candidate_gate": null,
+      "exists": true,
+      "expected_artifact_type": "glass_phase2_status",
+      "latest_gate": 219,
+      "native_guardrails_bundle": {
+        "bundle_path": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\acceptance_contract_bundle.json",
+        "bundle_status": "passed",
+        "expected_integration_engine": "cuda_resident_stack",
+        "guardrails_summary_json": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\guardrails_summary.json",
+        "resident_calibrated_light_count": 200,
+        "resident_calibration_contract_attached": false,
+        "resident_calibration_contract_json": null,
+        "resident_calibration_master_count": 3,
+        "resident_native_calibration_artifact": true,
+        "resident_result_contract_attached": true,
+        "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_result_contract.json",
+        "resident_result_contract_run_default": true,
+        "resident_result_contract_source": "run_default",
+        "run_dir": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view",
+        "schema_version": 1,
+        "stack_scope": "all",
+        "status": "present"
+      },
+      "native_guardrails_bundle_status": "present",
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_219_phase2_status.json",
+      "pipeline_contract": {
+        "audit_type": "pipeline_invariant_contract",
+        "calibrated_light_count": 200,
+        "calibration_master_count": 3,
+        "check_count": 15,
+        "exists": true,
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "integration_coverage_map_pixels_match_dq": true,
+        "integration_dq_contract": true,
+        "integration_dq_map_pixels_match_summary": true,
+        "integration_map_count": 6,
+        "integration_output_count": 1,
+        "integration_output_maps_available": true,
+        "integration_rejection_map_pixels_match_dq": true,
+        "integration_resident_result_contract": true,
+        "integration_stack_result_contract": true,
+        "passed": true,
+        "path": "runs\\checkpoints\\s2_gate_211_pipeline_contract.json",
+        "pixel_verification_enabled": true,
+        "pixel_verification_tile_size": 2048,
+        "pixel_verification_tolerance_pixels": 0,
+        "resident_calibrated_light_count": 200,
+        "resident_native_calibration_artifact": true,
+        "status": "passed"
+      },
+      "pipeline_contract_failed_check_count": 0,
+      "pipeline_contract_passed": true,
+      "pipeline_contract_status": "passed",
+      "pipeline_integration_coverage_map_pixels_match_dq": true,
+      "pipeline_integration_dq_contract": true,
+      "pipeline_integration_dq_map_pixels_match_summary": true,
+      "pipeline_integration_map_count": 6,
+      "pipeline_integration_output_count": 1,
+      "pipeline_integration_rejection_map_pixels_match_dq": true,
+      "pipeline_integration_resident_result_contract": true,
+      "pipeline_integration_stack_result_contract": true,
+      "pipeline_pixel_verification_enabled": true,
+      "release_decision": {
+        "artifact_type": "release_promotion_decision",
+        "default_change_ready": true,
+        "exists": true,
+        "passed": true,
+        "path": "runs\\checkpoints\\s2_gate_218_release_promotion_decision.json",
+        "pipeline_handoff_passed": true,
+        "pipeline_handoff_pixel_verification_enabled": true,
+        "pipeline_handoff_source": "explicit_pipeline_contract",
+        "pipeline_handoff_status": "passed",
+        "recommendation": "promote_default_candidate",
+        "release_candidate_ready": true,
+        "runtime_repeat_best_elapsed_s": 22.598500299995067,
+        "runtime_repeat_best_label": "gate218_default_repeat02",
+        "runtime_repeat_considered_run_count": 3,
+        "runtime_repeat_elapsed_ratio_vs_best": 1.053510511049479,
+        "runtime_repeat_max_elapsed_ratio_vs_best": 1.25,
+        "runtime_repeat_present": true,
+        "runtime_repeat_recommendation": "best_observed:gate218_default_repeat02",
+        "runtime_repeat_run_count": 3,
+        "runtime_repeat_slowest_elapsed_s": 23.807757599999604,
+        "speedup_actual": 58.099101701945926,
+        "speedup_required_min": 2.0,
+        "status": "default_change_ready"
+      },
+      "release_decision_default_change_ready": true,
+      "release_decision_recommendation": "promote_default_candidate",
+      "release_decision_release_candidate_ready": true,
+      "release_decision_speedup_actual": 58.099101701945926,
+      "release_decision_status": "default_change_ready",
+      "release_runtime_repeat_best_elapsed_s": 22.598500299995067,
+      "release_runtime_repeat_best_label": "gate218_default_repeat02",
+      "release_runtime_repeat_elapsed_ratio_vs_best": 1.053510511049479,
+      "release_runtime_repeat_max_elapsed_ratio_vs_best": 1.25,
+      "release_runtime_repeat_run_count": 3,
+      "resident_calibrated_light_count": 200,
+      "resident_calibration_master_count": 3,
+      "resident_native_calibration_artifact": true,
+      "resident_registration_fastpath": {
+        "artifact_count": 1,
+        "available": true,
+        "contract_check_count": 24,
+        "contract_failed_check_count": 0,
+        "contract_failed_checks": [],
+        "contract_status": "passed",
+        "exists": true,
+        "mode": "similarity_cuda_triangle",
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_artifacts.json",
+        "resident_io_pipeline_warp_copy_mode": "default_stream_async_device_to_device",
+        "resident_io_pipeline_warp_scratch_bytes": 493209636,
+        "resident_warp_copy_mode": "default_stream_async_device_to_device",
+        "resident_warp_scratch_bytes": 493209636,
+        "schema_version": 1,
+        "status": "present",
+        "triangle_descriptor_fit_batch": true,
+        "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "triangle_descriptor_fit_device_reuse": {
+          "moving": true,
+          "output": true,
+          "reference": true
+        },
+        "triangle_pixel_refine_batch": true,
+        "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+        "triangle_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "triangle_warp_batch": true,
+        "triangle_warp_batch_frame_count": 188,
+        "triangle_warp_batch_mode": "native_matrix_lanczos3_frames"
+      },
+      "resident_registration_fastpath_contract_check_count": 24,
+      "resident_registration_fastpath_contract_failed_check_count": 0,
+      "resident_registration_fastpath_contract_status": "passed",
+      "resident_registration_fastpath_mode": "similarity_cuda_triangle",
+      "resident_registration_fastpath_status": "present",
+      "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_result_contract.json",
+      "resident_result_contract_run_default": true,
+      "resident_result_contract_source": "run_default",
+      "resident_warp_copy_mode": "default_stream_async_device_to_device",
+      "resident_warp_scratch_bytes": 493209636,
+      "status": "green",
+      "triangle_descriptor_fit_batch": true,
+      "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+      "triangle_descriptor_fit_device_reuse": {
+        "moving": true,
+        "output": true,
+        "reference": true
+      },
+      "triangle_pixel_refine_batch": true,
+      "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+      "triangle_warp_batch": true,
+      "triangle_warp_batch_frame_count": 188,
+      "triangle_warp_batch_mode": "native_matrix_lanczos3_frames"
+    },
+    "status_compare": {
+      "acceptance_status": null,
+      "artifact_type": "glass_phase2_status_compare",
+      "baseline_gate": 218,
+      "candidate_gate": 219,
+      "exists": true,
+      "expected_artifact_type": "glass_phase2_status_compare",
+      "latest_gate": null,
+      "native_guardrails_bundle": null,
+      "native_guardrails_bundle_status": null,
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_219_phase2_status_compare.json",
+      "pipeline_contract": null,
+      "pipeline_contract_failed_check_count": null,
+      "pipeline_contract_passed": null,
+      "pipeline_contract_status": null,
+      "pipeline_integration_coverage_map_pixels_match_dq": null,
+      "pipeline_integration_dq_contract": null,
+      "pipeline_integration_dq_map_pixels_match_summary": null,
+      "pipeline_integration_map_count": null,
+      "pipeline_integration_output_count": null,
+      "pipeline_integration_rejection_map_pixels_match_dq": null,
+      "pipeline_integration_resident_result_contract": null,
+      "pipeline_integration_stack_result_contract": null,
+      "pipeline_pixel_verification_enabled": null,
+      "release_decision": null,
+      "release_decision_default_change_ready": null,
+      "release_decision_recommendation": null,
+      "release_decision_release_candidate_ready": null,
+      "release_decision_speedup_actual": null,
+      "release_decision_status": null,
+      "release_runtime_repeat_best_elapsed_s": null,
+      "release_runtime_repeat_best_label": null,
+      "release_runtime_repeat_elapsed_ratio_vs_best": null,
+      "release_runtime_repeat_max_elapsed_ratio_vs_best": null,
+      "release_runtime_repeat_run_count": null,
+      "resident_calibrated_light_count": null,
+      "resident_calibration_master_count": null,
+      "resident_native_calibration_artifact": null,
+      "resident_registration_fastpath": null,
+      "resident_registration_fastpath_contract_check_count": null,
+      "resident_registration_fastpath_contract_failed_check_count": null,
+      "resident_registration_fastpath_contract_status": null,
+      "resident_registration_fastpath_mode": null,
+      "resident_registration_fastpath_status": null,
+      "resident_result_contract_json": null,
+      "resident_result_contract_run_default": null,
+      "resident_result_contract_source": null,
+      "resident_warp_copy_mode": null,
+      "resident_warp_scratch_bytes": null,
+      "status": "passed",
+      "triangle_descriptor_fit_batch": null,
+      "triangle_descriptor_fit_batch_mode": null,
+      "triangle_descriptor_fit_device_reuse": null,
+      "triangle_pixel_refine_batch": null,
+      "triangle_pixel_refine_batch_metric_mode": null,
+      "triangle_warp_batch": null,
+      "triangle_warp_batch_frame_count": null,
+      "triangle_warp_batch_mode": null
+    }
+  },
+  "publication_ready": true,
+  "recommendation": "run_release_command",
+  "release": {
+    "command": "gh release create v0.1.0-phase2-gate219 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip' 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip' 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip' 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip' --title 'GLASS Phase 2 Gate 219 Windows packages' --notes-file 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_219_release_notes.md' --draft",
+    "draft": true,
+    "notes_file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_219_release_notes.md",
+    "prerelease": false,
+    "script_default_mode": "dry_run_requires_publish_switch",
+    "script_file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_219_publish_release.ps1",
+    "tag": "v0.1.0-phase2-gate219",
+    "title": "GLASS Phase 2 Gate 219 Windows packages"
+  },
+  "schema_version": 1,
+  "source_stamps": [
+    "aa63510"
+  ],
+  "status": "release_plan_ready"
+}

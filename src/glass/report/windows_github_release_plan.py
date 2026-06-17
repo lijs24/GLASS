@@ -83,6 +83,11 @@ def _phase2_artifact_summary(
         if isinstance(payload.get("pipeline_contract"), dict)
         else None
     )
+    release_decision = (
+        payload.get("release_decision")
+        if isinstance(payload.get("release_decision"), dict)
+        else None
+    )
     return {
         "path": str(target),
         "exists": target.exists(),
@@ -186,6 +191,31 @@ def _phase2_artifact_summary(
         "pipeline_integration_rejection_map_pixels_match_dq": (pipeline_contract or {}).get(
             "integration_rejection_map_pixels_match_dq"
         ),
+        "release_decision": release_decision,
+        "release_decision_status": (release_decision or {}).get("status"),
+        "release_decision_recommendation": (release_decision or {}).get("recommendation"),
+        "release_decision_release_candidate_ready": (release_decision or {}).get(
+            "release_candidate_ready"
+        ),
+        "release_decision_default_change_ready": (release_decision or {}).get(
+            "default_change_ready"
+        ),
+        "release_decision_speedup_actual": (release_decision or {}).get("speedup_actual"),
+        "release_runtime_repeat_run_count": (release_decision or {}).get(
+            "runtime_repeat_run_count"
+        ),
+        "release_runtime_repeat_best_label": (release_decision or {}).get(
+            "runtime_repeat_best_label"
+        ),
+        "release_runtime_repeat_best_elapsed_s": (release_decision or {}).get(
+            "runtime_repeat_best_elapsed_s"
+        ),
+        "release_runtime_repeat_elapsed_ratio_vs_best": (release_decision or {}).get(
+            "runtime_repeat_elapsed_ratio_vs_best"
+        ),
+        "release_runtime_repeat_max_elapsed_ratio_vs_best": (release_decision or {}).get(
+            "runtime_repeat_max_elapsed_ratio_vs_best"
+        ),
     }
 
 
@@ -266,6 +296,19 @@ def _has_pipeline_contract_phase2_provenance(phase2_status: dict[str, Any]) -> b
             "pipeline_integration_dq_map_pixels_match_summary",
             "pipeline_integration_coverage_map_pixels_match_dq",
             "pipeline_integration_rejection_map_pixels_match_dq",
+        )
+    )
+
+
+def _has_release_decision_phase2_provenance(phase2_status: dict[str, Any]) -> bool:
+    return any(
+        phase2_status.get(key) is not None
+        for key in (
+            "release_decision_status",
+            "release_decision_recommendation",
+            "release_decision_default_change_ready",
+            "release_runtime_repeat_run_count",
+            "release_runtime_repeat_elapsed_ratio_vs_best",
         )
     )
 
@@ -362,6 +405,25 @@ def _release_notes(payload: dict[str, Any]) -> str:
                         f"`{phase2_status.get('pipeline_integration_coverage_map_pixels_match_dq')}` "
                         "rejection "
                         f"`{phase2_status.get('pipeline_integration_rejection_map_pixels_match_dq')}`"
+                    ),
+                ]
+            )
+        if _has_release_decision_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    (
+                        "- Default-change decision: "
+                        f"`{phase2_status.get('release_decision_status')}` "
+                        f"ready `{phase2_status.get('release_decision_default_change_ready')}` "
+                        f"recommendation `{phase2_status.get('release_decision_recommendation')}`"
+                    ),
+                    (
+                        "- Runtime repeat evidence: runs "
+                        f"`{phase2_status.get('release_runtime_repeat_run_count')}`, "
+                        f"best `{phase2_status.get('release_runtime_repeat_best_label')}` "
+                        f"`{phase2_status.get('release_runtime_repeat_best_elapsed_s')}` s, "
+                        "ratio "
+                        f"`{phase2_status.get('release_runtime_repeat_elapsed_ratio_vs_best')}`"
                     ),
                 ]
             )
@@ -834,6 +896,33 @@ def _markdown(payload: dict[str, Any]) -> str:
                     (
                         "- Pipeline rejection pixels match DQ: "
                         f"`{phase2_status.get('pipeline_integration_rejection_map_pixels_match_dq')}`"
+                    ),
+                ]
+            )
+        if _has_release_decision_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    f"- Release decision: `{phase2_status.get('release_decision_status')}`",
+                    (
+                        "- Release recommendation: "
+                        f"`{phase2_status.get('release_decision_recommendation')}`"
+                    ),
+                    (
+                        "- Default change ready: "
+                        f"`{phase2_status.get('release_decision_default_change_ready')}`"
+                    ),
+                    (
+                        "- Runtime repeat runs: "
+                        f"`{phase2_status.get('release_runtime_repeat_run_count')}`"
+                    ),
+                    (
+                        "- Runtime repeat best: "
+                        f"`{phase2_status.get('release_runtime_repeat_best_label')}` "
+                        f"`{phase2_status.get('release_runtime_repeat_best_elapsed_s')}` s"
+                    ),
+                    (
+                        "- Runtime repeat ratio vs best: "
+                        f"`{phase2_status.get('release_runtime_repeat_elapsed_ratio_vs_best')}`"
                     ),
                 ]
             )

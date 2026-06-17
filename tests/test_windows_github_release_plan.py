@@ -113,6 +113,20 @@ def _phase2_status(path: Path, *, passed: bool = True, gate: int = 204) -> None:
                 "integration_coverage_map_pixels_match_dq": passed,
                 "integration_rejection_map_pixels_match_dq": passed,
             },
+            "release_decision": {
+                "status": "default_change_ready" if passed else "release_candidate_ready",
+                "recommendation": "promote_default_candidate"
+                if passed
+                else "repeat_benchmark_before_default_change",
+                "release_candidate_ready": passed,
+                "default_change_ready": passed,
+                "speedup_actual": 58.0,
+                "runtime_repeat_run_count": 3,
+                "runtime_repeat_best_label": "repeat02",
+                "runtime_repeat_best_elapsed_s": 22.6,
+                "runtime_repeat_elapsed_ratio_vs_best": 1.053,
+                "runtime_repeat_max_elapsed_ratio_vs_best": 1.25,
+            },
         },
     )
 
@@ -184,6 +198,9 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["phase2"]["status"]["pipeline_contract_status"] == "passed"
     assert payload["phase2"]["status"]["pipeline_integration_dq_contract"] is True
     assert payload["phase2"]["status"]["pipeline_pixel_verification_enabled"] is True
+    assert payload["phase2"]["status"]["release_decision_status"] == "default_change_ready"
+    assert payload["phase2"]["status"]["release_decision_default_change_ready"] is True
+    assert payload["phase2"]["status"]["release_runtime_repeat_elapsed_ratio_vs_best"] == 1.053
     assert payload["phase2"]["status_compare"]["candidate_gate"] == 204
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
@@ -301,6 +318,8 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Triangle warp batch: `True`" in markdown_text
     assert "Pipeline contract: `passed`" in markdown_text
     assert "Pipeline integration DQ contract: `True`" in markdown_text
+    assert "Release decision: `default_change_ready`" in markdown_text
+    assert "Runtime repeat ratio vs best: `1.053`" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
     notes_text = notes.read_text(encoding="utf-8")
     assert "Native resident contract source: `run_default`" in notes_text
@@ -309,6 +328,8 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "warp batch `True` frames `188`" in notes_text
     assert "Pipeline DQ contract: `passed` passed `True` DQ `True`" in notes_text
     assert "Pipeline pixel verification: `True`" in notes_text
+    assert "Default-change decision: `default_change_ready` ready `True`" in notes_text
+    assert "Runtime repeat evidence: runs `3`" in notes_text
     script_text = script.read_text(encoding="utf-8")
     assert "$ExpectedTag = 'v0.1.0-test'" in script_text
     assert "$Phase2StatusFile =" in script_text
