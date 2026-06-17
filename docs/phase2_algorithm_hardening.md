@@ -3316,6 +3316,19 @@ integration where applicable.
   strict manifest status `release_manifest_ready`, source stamps `aa63510`,
   package count `4`, and zero failed checks.
 
+### S2-Gate 195: GitHub Release Handoff Plan
+
+- Add `glass windows-github-release-plan`, which converts a strict Windows
+  release manifest into GitHub release notes, an asset table, and a `gh release
+  create` command.
+- Keep publishing explicit: the command does not create tags, push commits,
+  upload assets, or publish a release.
+- Record whether GitHub CLI is available when `--check-gh` is supplied.
+- Current real artifact result: status `release_plan_ready`, tag
+  `v0.1.0-windows-gpu.9`, package count `4`, source stamp `aa63510`, and
+  `publication_ready=false` because `gh` is not installed on the checkpoint
+  machine.
+
 ## Gate Rules
 
 Each gate requires:

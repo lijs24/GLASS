@@ -103,6 +103,10 @@ from glass.report.windows_release_manifest import (
     parse_labeled_zip_paths,
     write_windows_release_manifest,
 )
+from glass.report.windows_github_release_plan import (
+    build_windows_github_release_plan,
+    write_windows_github_release_plan,
+)
 from glass.report.windows_package_smoke import (
     build_windows_package_smoke,
     write_windows_package_smoke,
@@ -1883,6 +1887,41 @@ def cmd_windows_release_manifest(args: argparse.Namespace) -> int:
             "packages": len(payload["packages"]),
             "out": args.out,
             "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
+    payload = build_windows_github_release_plan(
+        manifest_artifact=args.manifest,
+        tag=args.tag,
+        title=args.title,
+        notes_file=args.notes,
+        draft=not args.no_draft,
+        prerelease=args.prerelease,
+        require_same_source_stamp=args.require_same_source_stamp,
+        check_gh=args.check_gh,
+    )
+    write_windows_github_release_plan(
+        args.out,
+        payload,
+        markdown=args.markdown,
+        notes=args.notes,
+    )
+    console.print(
+        {
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "publication_ready": payload["publication_ready"],
+            "recommendation": payload["recommendation"],
+            "tag": payload["release"]["tag"],
+            "assets": len(payload["assets"]),
+            "out": args.out,
+            "markdown": args.markdown,
+            "notes": args.notes,
         }
     )
     if bool(args.fail_on_failure) and not payload.get("passed"):
@@ -4236,6 +4275,47 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the release manifest checks pass",
     )
     windows_release_manifest.set_defaults(func=cmd_windows_release_manifest)
+
+    windows_github_release_plan = sub.add_parser(
+        "windows-github-release-plan",
+        help="prepare GitHub release notes and upload commands for Windows packages",
+    )
+    windows_github_release_plan.add_argument(
+        "--manifest",
+        required=True,
+        help="windows-release-manifest JSON artifact",
+    )
+    windows_github_release_plan.add_argument("--tag", required=True, help="GitHub release tag")
+    windows_github_release_plan.add_argument("--title", help="GitHub release title")
+    windows_github_release_plan.add_argument("--out", required=True, help="output release plan JSON")
+    windows_github_release_plan.add_argument("--markdown", help="optional output Markdown plan")
+    windows_github_release_plan.add_argument("--notes", help="optional output Markdown release notes")
+    windows_github_release_plan.add_argument(
+        "--no-draft",
+        action="store_true",
+        help="plan a non-draft GitHub release command",
+    )
+    windows_github_release_plan.add_argument(
+        "--prerelease",
+        action="store_true",
+        help="plan a prerelease GitHub release command",
+    )
+    windows_github_release_plan.add_argument(
+        "--require-same-source-stamp",
+        action="store_true",
+        help="fail unless every asset reports the same source stamp",
+    )
+    windows_github_release_plan.add_argument(
+        "--check-gh",
+        action="store_true",
+        help="record whether GitHub CLI is available on PATH",
+    )
+    windows_github_release_plan.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the release plan checks pass",
+    )
+    windows_github_release_plan.set_defaults(func=cmd_windows_github_release_plan)
 
     windows_package_smoke = sub.add_parser(
         "windows-package-smoke",
