@@ -1429,6 +1429,45 @@ def _pipeline_contract_pixel_delta_rows(contract: dict[str, Any] | None) -> list
     return rows
 
 
+def _pipeline_contract_rejection_sample_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    pixel = (contract or {}).get("pixel_verification") or {}
+    for item in pixel.get("integration_outputs") or []:
+        accounting = item.get("rejection_sample_accounting")
+        if not isinstance(accounting, dict):
+            continue
+        source_counts = accounting.get("source_counts") if isinstance(accounting.get("source_counts"), list) else []
+        source_matches = (
+            accounting.get("source_matches") if isinstance(accounting.get("source_matches"), list) else []
+        )
+        failed_matches = [
+            f"{match.get('source')} actual={match.get('actual')} summary={match.get('summary')} "
+            f"delta={match.get('delta')}"
+            for match in source_matches
+            if isinstance(match, dict) and not match.get("passed")
+        ]
+        rows.append(
+            {
+                "item": item.get("item"),
+                "status": accounting.get("status"),
+                "required": accounting.get("required"),
+                "verified": accounting.get("verified"),
+                "ok": accounting.get("ok"),
+                "rejection": accounting.get("rejection"),
+                "map_rejected_sample_sum": accounting.get("map_rejected_sample_sum"),
+                "source_counts": ", ".join(
+                    f"{source.get('name')}={source.get('count')}"
+                    for source in source_counts
+                    if isinstance(source, dict)
+                ),
+                "source_match_count": len([match for match in source_matches if isinstance(match, dict)]),
+                "failed_matches": "; ".join(failed_matches),
+                "semantics": accounting.get("semantics"),
+            }
+        )
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -1578,6 +1617,7 @@ def write_html_report(
     pipeline_contract_warp_rows = _pipeline_contract_warp_rows(pipeline_contract)
     pipeline_contract_pixel_rows = _pipeline_contract_pixel_rows(pipeline_contract)
     pipeline_contract_pixel_delta_rows = _pipeline_contract_pixel_delta_rows(pipeline_contract)
+    pipeline_contract_rejection_sample_rows = _pipeline_contract_rejection_sample_rows(pipeline_contract)
     dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
@@ -1716,6 +1756,9 @@ def write_html_report(
   {_limited_table(pipeline_contract_map_rows, label="pipeline contract map rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_pixel_rows, label="pipeline contract pixel rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_pixel_delta_rows, label="pipeline contract pixel delta rows", artifact="pipeline_contract JSON")}
+  <p>pipeline contract rejection sample accounting rows expose the sample-count
+  total from low/high rejection maps separately from DQ touched-pixel counts.</p>
+  {_limited_table(pipeline_contract_rejection_sample_rows, label="pipeline contract rejection sample accounting rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_local_norm_rows, label="pipeline contract local-normalization rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_warp_rows, label="pipeline contract warp rows", artifact="pipeline_contract JSON")}
   {_h2("dq-provenance-contract", "DQ provenance contract")}

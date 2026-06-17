@@ -1293,6 +1293,28 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
                     "evidence": {"map_count": 2, "failed": ["H:coverage"]},
                 },
                 {
+                    "name": "integration_rejection_sample_counts_match_maps",
+                    "passed": False,
+                    "note": "fixture sample-count drift",
+                    "evidence": {
+                        "verified_records": 1,
+                        "required_records": 1,
+                        "failed": [
+                            {
+                                "item": "H",
+                                "status": "verified",
+                                "map_rejected_sample_sum": 7,
+                                "source_counts": [
+                                    {
+                                        "name": "dq_coverage_provenance.rejected_sample_count",
+                                        "count": 6,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
+                {
                     "name": "integration_artifact_exists",
                     "passed": True,
                     "evidence": {"path": "integration_results.json"},
@@ -1344,6 +1366,38 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
                             },
                             "high_rejection": {"status": "not_required", "ok": True},
                         },
+                        "rejection_sample_accounting": {
+                            "status": "verified",
+                            "verified": True,
+                            "ok": False,
+                            "required": True,
+                            "rejection": "winsorized_sigma",
+                            "map_rejected_sample_sum": 7,
+                            "source_counts": [
+                                {"name": "dq_coverage_provenance.rejected_sample_count", "count": 6},
+                                {"name": "dq_provenance_summary.rejected_samples", "count": 6},
+                            ],
+                            "source_matches": [
+                                {
+                                    "source": "dq_coverage_provenance.rejected_sample_count",
+                                    "actual": 7,
+                                    "summary": 6,
+                                    "delta": 1,
+                                    "passed": False,
+                                },
+                                {
+                                    "source": "dq_provenance_summary.rejected_samples",
+                                    "actual": 7,
+                                    "summary": 6,
+                                    "delta": 1,
+                                    "passed": False,
+                                },
+                            ],
+                            "semantics": (
+                                "Low/high rejection count maps store rejected-sample counts; "
+                                "DQ low/high flags store pixels touched by rejection."
+                            ),
+                        },
                     }
                 ],
             },
@@ -1393,6 +1447,14 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
     assert "low_rejected" in html
     assert "<td>-1</td>" in html
     assert "<td>5</td><td>5</td><td>0</td><td>True</td>" in html
+    assert "integration_rejection_sample_counts_match_maps" in html
+    assert "fixture sample-count drift" in html
+    assert "pipeline contract rejection sample accounting rows" in html
+    assert "map_rejected_sample_sum" in html
+    assert "dq_coverage_provenance.rejected_sample_count=6" in html
+    assert "dq_provenance_summary.rejected_samples=6" in html
+    assert "actual=7 summary=6 delta=1" in html
+    assert "Low/high rejection count maps store rejected-sample counts" in html
     assert "local-normalization" in html
     assert "bilinear" in html
     assert "integration_artifact_exists" not in html
