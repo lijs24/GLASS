@@ -142,6 +142,7 @@ def build_residual_tile_candidates(
     min_tail_fraction: float = 0.0,
     prefer: str = "tail_pixels",
     drop_overlaps: bool = True,
+    known_overlap_mode: str = "include",
 ) -> dict[str, Any]:
     if not outlier_audits:
         raise ValueError("at least one compare outlier audit is required")
@@ -151,9 +152,12 @@ def build_residual_tile_candidates(
         raise ValueError("min_tail_pixels must be non-negative")
     if min_tail_fraction < 0.0:
         raise ValueError("min_tail_fraction must be non-negative")
+    if known_overlap_mode not in {"include", "exclude", "only"}:
+        raise ValueError(f"unsupported known overlap mode: {known_overlap_mode}")
     known = _known_extents(known_tile_packs)
     candidates: list[dict[str, Any]] = []
     source_summaries: list[dict[str, Any]] = []
+    filtered_known_overlap = 0
     for audit_path in outlier_audits:
         audit = read_json(audit_path)
         if not isinstance(audit, dict) or audit.get("audit_type") != "compare_outlier_audit":
@@ -171,16 +175,22 @@ def build_residual_tile_candidates(
                 continue
             if _float(row.get("tail_fraction_of_valid")) < float(min_tail_fraction):
                 continue
-            candidates.append(
-                _candidate_from_top_tile(
-                    audit_path=audit_path,
-                    audit=audit,
-                    row=row,
-                    source_index=index,
-                    prefer=prefer,
-                    known=known,
-                )
+            candidate = _candidate_from_top_tile(
+                audit_path=audit_path,
+                audit=audit,
+                row=row,
+                source_index=index,
+                prefer=prefer,
+                known=known,
             )
+            has_known_overlap = int(candidate.get("known_overlap_count") or 0) > 0
+            if known_overlap_mode == "exclude" and has_known_overlap:
+                filtered_known_overlap += 1
+                continue
+            if known_overlap_mode == "only" and not has_known_overlap:
+                filtered_known_overlap += 1
+                continue
+            candidates.append(candidate)
             kept += 1
         source_summaries.append(
             {
@@ -250,6 +260,7 @@ def build_residual_tile_candidates(
             "min_tail_fraction": float(min_tail_fraction),
             "prefer": prefer,
             "drop_overlaps": bool(drop_overlaps),
+            "known_overlap_mode": known_overlap_mode,
         },
         "summary": {
             "source_count": len(outlier_audits),
@@ -257,6 +268,7 @@ def build_residual_tile_candidates(
             "selected_tile_count": len(selected),
             "selected_known_overlap_count": known_selected,
             "selected_new_region_count": len(selected) - known_selected,
+            "filtered_known_overlap_count": filtered_known_overlap,
             "dropped_overlap_count": len(dropped_overlap),
             "dropped_limit_count": len(dropped_limit),
             "top_score": selected[0].get("score") if selected else None,

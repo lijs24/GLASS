@@ -954,6 +954,7 @@ def cmd_residual_tile_candidates(args: argparse.Namespace) -> int:
         min_tail_fraction=args.min_tail_fraction,
         prefer=args.prefer,
         drop_overlaps=not args.allow_overlaps,
+        known_overlap_mode=args.known_overlap_mode,
     )
     write_residual_tile_candidates(args.out, payload, markdown=args.markdown)
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
@@ -2584,6 +2585,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["tail_pixels", "tail_fraction", "tail_abs_mean", "tail_abs_max"],
         default="tail_pixels",
         help="ranking metric for candidate selection",
+    )
+    residual_tiles.add_argument(
+        "--known-overlap-mode",
+        choices=["include", "exclude", "only"],
+        default="include",
+        help="whether to include, exclude, or keep only candidates overlapping known tile packs",
     )
     residual_tiles.add_argument(
         "--allow-overlaps",

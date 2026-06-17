@@ -81,6 +81,17 @@ def test_residual_tile_candidates_selects_non_overlapping_tiles(tmp_path: Path) 
     assert payload["tiles"][0]["known_overlap_count"] == 1
     assert [tile["extent"]["x0"] for tile in payload["tiles"]] == [0, 40, 20]
 
+    new_only = build_residual_tile_candidates(
+        [audit_a, audit_b],
+        known_tile_packs=[known_pack],
+        max_tiles=3,
+        min_tail_pixels=10,
+        known_overlap_mode="exclude",
+    )
+    assert new_only["summary"]["selected_known_overlap_count"] == 0
+    assert new_only["summary"]["filtered_known_overlap_count"] == 2
+    assert [tile["extent"]["x0"] for tile in new_only["tiles"]] == [40, 20]
+
 
 def test_residual_tile_candidates_cli_writes_outputs(tmp_path: Path) -> None:
     audit = tmp_path / "audit.json"

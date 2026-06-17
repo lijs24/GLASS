@@ -2426,6 +2426,24 @@ integration where applicable.
 - Keep this as an artifact-mining gate. It must not read image pixels, rerun
   integration, mutate pipeline outputs, or enable tile-local apply by default.
 
+### S2-Gate 144: New-Region Resident Contribution Capture
+
+- Extend residual tile candidate mining with `known-overlap-mode` so a sweep can
+  include, exclude, or isolate regions overlapping previously studied tile
+  packs.
+- Generate a new-region-only tile candidate manifest from the S2-Gate 143
+  outlier sources and the S2-Gate 121 known tile pack.
+- Run `resident-tile-contribution` on the new-region manifest using the
+  200-light resident CUDA benchmark run, all positive-weight frames, the
+  F000100-F000110 focus range, neighboring control frames, and winsorized sigma
+  rejection.
+- Emit focus/control contribution summaries for the newly mined residual
+  regions so the next proposal gate can decide whether the same frame family
+  explains more than the original three tiles.
+- Keep this as a diagnostic gate. It must not change weighting, rejection,
+  registration, local normalization, integration defaults, or tile-local apply
+  defaults.
+
 ## Gate Rules
 
 Each gate requires:
