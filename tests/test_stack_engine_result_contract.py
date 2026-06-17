@@ -77,6 +77,9 @@ def test_stack_engine_result_contract_is_embedded_and_passes() -> None:
     assert checks["requested_maps_present"]["passed"] is True
     assert checks["coverage_zero_matches_dq_no_data"]["passed"] is True
     assert checks["coverage_sum_matches_metrics"]["passed"] is True
+    assert checks["input_valid_invalid_samples_match_total"]["passed"] is True
+    assert checks["input_valid_samples_close_after_rejection"]["passed"] is True
+    assert checks["input_valid_invalid_metrics_match_provenance"]["passed"] is True
     assert checks["input_samples_match_request_shape"]["evidence"]["expected_input_samples"] == 24
 
 
@@ -206,3 +209,26 @@ def test_stack_engine_result_contract_detects_rejection_sample_metric_drift() ->
         "map_rejected_sample_sum": 2,
         "metrics_rejected_samples": 1,
     }
+
+
+def test_stack_engine_result_contract_detects_invalid_rejection_sample_drift() -> None:
+    frames = [
+        np.ones((2, 2), dtype=np.float32),
+        np.ones((2, 2), dtype=np.float32),
+        np.ones((2, 2), dtype=np.float32) * 100.0,
+    ]
+    request = _request(
+        len(frames),
+        rejection=RejectionPolicy(method="sigma", high_sigma=1.0, max_reject_fraction=0.5),
+        maps=OutputMapPolicy(coverage=True, low_rejection=True, high_rejection=True, dq=True),
+    )
+    result = CPUStackEngine(tile_size=1).stack(request, _sources(frames))
+    result.dq_provenance["input_valid_samples_before_rejection"] -= 1
+
+    contract = build_stack_engine_result_contract(result, request=request)
+    checks = {item["name"]: item for item in contract["checks"]}
+
+    assert contract["passed"] is False
+    assert checks["input_valid_invalid_samples_match_total"]["passed"] is False
+    assert checks["input_valid_samples_close_after_rejection"]["passed"] is False
+    assert checks["input_valid_invalid_metrics_match_provenance"]["passed"] is False

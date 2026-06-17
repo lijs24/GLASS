@@ -259,9 +259,65 @@ def build_stack_engine_result_contract(
             )
         )
 
+    input_samples = int(provenance.get("input_samples") or 0)
+    input_valid_before_rejection = int(
+        provenance.get("input_valid_samples_before_rejection") or 0
+    )
+    input_invalid_before_rejection = int(
+        provenance.get("input_invalid_samples_before_rejection") or 0
+    )
+    checks.append(
+        _check(
+            "input_valid_invalid_samples_match_total",
+            input_valid_before_rejection + input_invalid_before_rejection == input_samples,
+            {
+                "input_valid_samples_before_rejection": input_valid_before_rejection,
+                "input_invalid_samples_before_rejection": input_invalid_before_rejection,
+                "input_samples": input_samples,
+            },
+            "Initial input sample accounting is before rejection; DQ/non-finite invalid samples are not rejected samples.",
+        )
+    )
+    metric_valid_samples = int(result.metrics.get("valid_samples") or 0)
+    metric_low_rejected = int(result.metrics.get("low_rejected") or 0)
+    metric_high_rejected = int(result.metrics.get("high_rejected") or 0)
+    checks.append(
+        _check(
+            "input_valid_samples_close_after_rejection",
+            input_valid_before_rejection
+            == metric_valid_samples + metric_low_rejected + metric_high_rejected,
+            {
+                "input_valid_samples_before_rejection": input_valid_before_rejection,
+                "metrics_valid_samples": metric_valid_samples,
+                "metrics_low_rejected_samples": metric_low_rejected,
+                "metrics_high_rejected_samples": metric_high_rejected,
+                "metrics_accounted_samples": (
+                    metric_valid_samples + metric_low_rejected + metric_high_rejected
+                ),
+            },
+            "Rejected sample counts plus final valid samples must close over initially valid input samples.",
+        )
+    )
+    metric_input_valid = int(result.metrics.get("input_valid_samples") or 0)
+    metric_input_invalid = int(result.metrics.get("input_invalid_samples") or 0)
+    checks.append(
+        _check(
+            "input_valid_invalid_metrics_match_provenance",
+            metric_input_valid == input_valid_before_rejection
+            and metric_input_invalid == input_invalid_before_rejection,
+            {
+                "metrics_input_valid_samples": metric_input_valid,
+                "provenance_input_valid_samples_before_rejection": input_valid_before_rejection,
+                "metrics_input_invalid_samples": metric_input_invalid,
+                "provenance_input_invalid_samples_before_rejection": (
+                    input_invalid_before_rejection
+                ),
+            },
+        )
+    )
+
     if request is not None:
         expected_samples = len(request.frame_ids) * pixel_count
-        input_samples = int(provenance.get("input_samples") or 0)
         checks.append(
             _check(
                 "input_samples_match_request_shape",

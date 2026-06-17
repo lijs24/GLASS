@@ -124,6 +124,8 @@ def test_cpu_stack_engine_records_dq_provenance():
     provenance = result.dq_provenance
     assert provenance["schema_version"] == 1
     assert provenance["input_samples"] == 8
+    assert provenance["input_valid_samples_before_rejection"] == 4
+    assert provenance["input_invalid_samples_before_rejection"] == 4
     assert provenance["input_flagged_samples"] == 3
     assert provenance["input_nonfinite_samples"] == 1
     assert provenance["input_dq_flag_counts"]["hot_pixel"] == 1
@@ -134,6 +136,9 @@ def test_cpu_stack_engine_records_dq_provenance():
     assert result.coverage_map[0, 0] == pytest.approx(0.0)
     assert result.coverage_map[0, 1] == pytest.approx(1.0)
     assert result.coverage_map[1, 0] == pytest.approx(1.0)
+    assert result.metrics["input_valid_samples"] == 4
+    assert result.metrics["input_invalid_samples"] == 4
+    assert result.metrics["rejected_samples"] == 0
 
 
 def test_cpu_stack_engine_weighted_variance_map():
@@ -185,6 +190,34 @@ def test_cpu_stack_engine_rejects_high_outlier(method):
     assert np.sum(result.high_rejection_map) == 30
     assert result.dq_mask is not None
     assert result.dq_mask.count(DQFlag.HIGH_REJECTED) == 30
+
+
+def test_cpu_stack_engine_invalid_input_samples_are_not_rejections():
+    frames = [np.ones((2, 2), dtype=np.float32) for _ in range(5)]
+    frames[-1] = np.ones((2, 2), dtype=np.float32) * 100.0
+    frames[2][0, 0] = np.nan
+    dq = [np.zeros((2, 2), dtype=np.uint32) for _ in frames]
+    dq[1][1, 1] = int(DQFlag.HOT_PIXEL)
+    request = _request(
+        len(frames),
+        rejection=RejectionPolicy(method="sigma", high_sigma=1.0, max_reject_fraction=0.5),
+        maps=OutputMapPolicy(coverage=True, low_rejection=True, high_rejection=True, dq=True),
+    )
+
+    result = CPUStackEngine(tile_size=1).stack(request, _sources(frames, dq))
+    contract = result.dq_provenance["result_contract"]
+    checks = {item["name"]: item for item in contract["checks"]}
+
+    assert contract["passed"] is True
+    assert result.dq_provenance["input_samples"] == 20
+    assert result.dq_provenance["input_valid_samples_before_rejection"] == 18
+    assert result.dq_provenance["input_invalid_samples_before_rejection"] == 2
+    assert result.metrics["valid_samples"] == 14
+    assert result.metrics["high_rejected"] == 4
+    assert result.metrics["low_rejected"] == 0
+    assert result.metrics["valid_samples"] + result.metrics["high_rejected"] == 18
+    assert checks["input_valid_samples_close_after_rejection"]["passed"] is True
+    assert checks["input_valid_invalid_samples_match_total"]["passed"] is True
 
 
 def test_cpu_stack_engine_minmax_rejection_keeps_middle_samples():

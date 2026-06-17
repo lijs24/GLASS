@@ -60,6 +60,8 @@ class CPUStackEngine:
         rejected_high_total = 0
         valid_total = 0
         input_sample_total = 0
+        input_valid_sample_total = 0
+        input_invalid_sample_total = 0
         input_flagged_sample_total = 0
         input_nonfinite_sample_total = 0
         coverage_zero_pixel_total = 0
@@ -69,8 +71,8 @@ class CPUStackEngine:
 
         for tile in iter_tiles(width, height, self.tile_size):
             window = TileWindow(tile.y0, tile.y1, tile.x0, tile.x1)
-            stack, valid, dq_stack = self._read_stack_tile(ordered_sources, window)
-            valid, low, high = _apply_rejection(stack, valid, request.rejection)
+            stack, input_valid, dq_stack = self._read_stack_tile(ordered_sources, window)
+            valid, low, high = _apply_rejection(stack, input_valid, request.rejection)
             tile_master, tile_weight, tile_coverage, tile_variance = _combine_tile(
                 stack,
                 valid,
@@ -98,6 +100,8 @@ class CPUStackEngine:
                 dq_mask.data[y_slice, x_slice] = dq_tile.data
 
             input_sample_total += int(dq_stack.size)
+            input_valid_sample_total += int(np.count_nonzero(input_valid))
+            input_invalid_sample_total += int(np.count_nonzero(~input_valid))
             input_flagged_sample_total += int(np.count_nonzero(dq_stack != 0))
             input_nonfinite_sample_total += int(np.count_nonzero(~np.isfinite(stack)))
             coverage_zero_pixel_total += int(np.count_nonzero(tile_coverage <= 0))
@@ -120,12 +124,17 @@ class CPUStackEngine:
             "combine": request.combine.method,
             "rejection": request.rejection.method,
             "valid_samples": valid_total,
+            "input_valid_samples": input_valid_sample_total,
+            "input_invalid_samples": input_invalid_sample_total,
             "low_rejected": rejected_low_total,
             "high_rejected": rejected_high_total,
+            "rejected_samples": rejected_low_total + rejected_high_total,
         }
         dq_provenance: dict[str, Any] = {
             "schema_version": 1,
             "input_samples": input_sample_total,
+            "input_valid_samples_before_rejection": input_valid_sample_total,
+            "input_invalid_samples_before_rejection": input_invalid_sample_total,
             "input_flagged_samples": input_flagged_sample_total,
             "input_nonfinite_samples": input_nonfinite_sample_total,
             "input_dq_flag_counts": input_dq_flag_counts,
@@ -134,10 +143,11 @@ class CPUStackEngine:
             "output_high_rejected_pixels": high_rejected_pixel_total,
             "output_dq_summary": dq_mask.summary() if dq_mask is not None else None,
             "semantics": (
-                "Source DQ flags and non-finite samples are consumed as invalid stack "
-                "samples. The output DQ map marks pixels with no valid samples and "
-                "pixels touched by low/high rejection; source DQ flag counts are "
-                "preserved here for audit."
+                "Source DQ flags and non-finite samples are consumed as invalid "
+                "input stack samples before rejection. The output DQ map marks pixels "
+                "with no valid samples and pixels touched by low/high rejection; "
+                "source DQ flag counts are preserved here for audit. Input invalid "
+                "samples are not rejected samples."
             ),
         }
         if variance_map is not None:

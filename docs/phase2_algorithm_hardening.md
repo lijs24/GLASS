@@ -4061,6 +4061,25 @@ integration where applicable.
 - Keep this gate status/compare scoped: no image math, CUDA kernel, runtime
   default change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 242: StackEngine Invalid Sample Accounting Contract
+
+- Extend StackEngine DQ provenance with explicit
+  `input_valid_samples_before_rejection` and
+  `input_invalid_samples_before_rejection` counters.
+- Record matching StackEngine metrics for input valid/invalid samples and total
+  rejected samples so downstream artifacts can distinguish invalid source
+  samples from rejected source samples.
+- Add result-contract checks that prove:
+  - initial valid plus initial invalid samples equals total input samples;
+  - final valid samples plus low/high rejected samples equals initially valid
+    samples;
+  - StackEngine metrics match DQ provenance for input valid/invalid samples.
+- Add tests proving DQ-flagged and non-finite input samples are not counted as
+  rejection samples, plus a contract drift test for broken input/rejection
+  sample closure.
+- Keep this gate StackEngine/DQ-contract scoped: no CUDA kernel, runtime default
+  change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
