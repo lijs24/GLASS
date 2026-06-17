@@ -2639,6 +2639,21 @@ integration where applicable.
   proves the executor contract; measured matrix execution remains the next gate
   when the GPU is reserved for GLASS.
 
+### S2-Gate 158: Prefetch/Worker Matrix Execution
+
+- Execute the S2-Gate 156 3x3 prefetch-frame/prefetch-worker matrix with the
+  S2-Gate 157 resumable executor on the 200-light benchmark dataset.
+- For every variant, run GLASS resident CUDA integration, reference compare,
+  baseline compare, acceptance audit, and candidate comparison with fixed
+  science settings.
+- Run the generated `candidate-comparison-sweep` summary and record the ranked
+  matrix.
+- Treat this as benchmark evidence only. A later promotion gate must explicitly
+  update defaults or recommended command templates.
+- Current measured winner: `prefetch12_workers7`, `17.101234800000043 s`,
+  `63.88667325940681x` versus the black-box reference, and `0.9549992718308159`
+  runtime ratio versus the historical GLASS baseline.
+
 ## Gate Rules
 
 Each gate requires:
