@@ -1917,16 +1917,23 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
         expected_integration_engine=args.expected_integration_engine,
     )
     write_stack_engine_contract_audit(args.out, audit, markdown=args.markdown)
+    default_promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
     console.print(
         {
             "status": audit["status"],
             "scope": audit["scope"],
             "expected_integration_engine": audit["expected_integration_engine"],
+            "default_promotion_ready": default_promotion.get("ready"),
+            "default_promotion_status": default_promotion.get("status"),
             "out": args.out,
             "markdown": args.markdown,
         }
     )
-    return 0 if audit["passed"] else 2
+    if not audit["passed"]:
+        return 2
+    if bool(getattr(args, "require_default_ready", False)) and not default_promotion.get("ready"):
+        return 3
+    return 0
 
 
 def cmd_pipeline_contract(args: argparse.Namespace) -> int:
@@ -1980,7 +1987,13 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         stack_engine_contract=stack_path,
         pipeline_contract=pipeline_path,
     )
-    passed = bool(stack_audit.get("passed")) and bool(pipeline_audit.get("passed"))
+    stack_default_promotion = (
+        stack_audit.get("default_promotion") if isinstance(stack_audit.get("default_promotion"), dict) else {}
+    )
+    stack_default_ready = bool(stack_default_promotion.get("ready"))
+    stack_default_required = bool(getattr(args, "require_stack_default_ready", False))
+    stack_default_condition = (not stack_default_required) or stack_default_ready
+    passed = bool(stack_audit.get("passed")) and bool(pipeline_audit.get("passed")) and stack_default_condition
     summary = {
         "schema_version": 1,
         "created_at": now_iso(),
@@ -1992,6 +2005,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "pixel_verify": bool(args.pixel_verify),
         "stack_scope": args.stack_scope,
         "expected_integration_engine": args.expected_integration_engine,
+        "require_stack_default_ready": stack_default_required,
+        "stack_default_promotion": stack_default_promotion,
         "artifacts": {
             "stack_engine_contract": str(stack_path),
             "stack_engine_contract_markdown": str(stack_markdown),
@@ -2020,6 +2035,14 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
                     if not check.get("passed")
                 ],
             },
+            {
+                "name": "stack_default_promotion",
+                "passed": stack_default_condition,
+                "required": stack_default_required,
+                "ready": stack_default_ready,
+                "status": stack_default_promotion.get("status"),
+                "blockers": stack_default_promotion.get("blockers") or [],
+            },
         ],
     }
     write_json(summary_path, summary)
@@ -2029,6 +2052,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "summary": str(summary_path),
             "report": str(report_path),
             "pixel_verify": args.pixel_verify,
+            "stack_default_promotion_ready": stack_default_ready,
+            "require_stack_default_ready": stack_default_required,
         }
     )
     return 0 if passed else 2
@@ -4027,6 +4052,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="stack_engine_cpu",
         help="expected integration engine for the selected run type",
     )
+    stack_contract.add_argument(
+        "--require-default-ready",
+        action="store_true",
+        help="return a nonzero status unless the audit is ready for full StackEngine default promotion",
+    )
     stack_contract.set_defaults(func=cmd_stack_engine_contract)
 
     pipeline_contract = sub.add_parser(
@@ -4073,6 +4103,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["stack_engine_cpu", "cuda_resident_stack", "any"],
         default="any",
         help="expected integration engine for the StackEngine contract",
+    )
+    guardrails.add_argument(
+        "--require-stack-default-ready",
+        action="store_true",
+        help="fail guardrails unless the StackEngine contract is ready for full default promotion",
     )
     guardrails.add_argument(
         "--pixel-verify",

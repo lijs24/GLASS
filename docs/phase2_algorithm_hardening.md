@@ -2906,6 +2906,31 @@ integration where applicable.
   integration, with `1` resident CUDA surface, `0` StackEngine CPU surfaces,
   `1` Phase 2 default gap, and recommendation `resident_cuda_surfaces_remain`.
 
+### S2-Gate 175: StackEngine Default Promotion Guard
+
+- Add a `default_promotion` block to `glass stack-engine-contract` output.
+- Require all of the following before a run is considered ready for full
+  StackEngine default promotion: `scope=all`, at least one calibration master
+  surface, at least one integration surface, passing StackEngine contract checks,
+  zero Phase 2 StackEngine default gaps, and adoption recommendation
+  `stack_engine_default_ready`.
+- Add `glass stack-engine-contract --require-default-ready`, returning exit code
+  `3` when the contract itself passes but the default-promotion guard is blocked.
+- Add `glass guardrails --require-stack-default-ready`, so release/CI guardrails
+  can fail on nonzero StackEngine default gaps instead of only reporting them.
+- Surface default-promotion readiness, status, blocker count, and blocker rows in
+  HTML reports.
+- Add tests for ready CPU StackEngine promotion, resident CUDA integration
+  blocked promotion, guardrails success with the requirement enabled, and HTML
+  rendering of promotion blockers.
+- Run a small synthetic CPU ready artifact and a Gate160 resident CUDA blocked
+  artifact under `C:\glass_runs\phase2_s2_gate_175_default_promotion_guard`.
+- Current artifact result: CPU StackEngine run passed with default promotion
+  `ready=true`; Gate160 resident CUDA integration contract still passed, but
+  `--require-default-ready` returned `3` with blockers `scope_not_all`,
+  `missing_calibration_surface`, `phase2_stack_engine_default_gaps`, and
+  `adoption_recommendation_not_ready`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -257,6 +257,7 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
                 str(out_dir),
                 "--expected-integration-engine",
                 "stack_engine_cpu",
+                "--require-stack-default-ready",
                 "--pixel-verify",
                 "--pixel-verify-tile-size",
                 "8",
@@ -270,7 +271,12 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     pipeline_contract = read_json(out_dir / "pipeline_contract.json")
     assert summary["passed"] is True
     assert summary["pixel_verify"] is True
+    assert summary["require_stack_default_ready"] is True
+    assert summary["stack_default_promotion"]["ready"] is True
+    assert summary["checks"][2]["name"] == "stack_default_promotion"
+    assert summary["checks"][2]["ready"] is True
     assert stack_contract["passed"] is True
+    assert stack_contract["default_promotion"]["ready"] is True
     assert pipeline_contract["passed"] is True
     assert (out_dir / "stack_engine_contract.md").exists()
     assert (out_dir / "pipeline_contract.md").exists()
@@ -792,6 +798,31 @@ def test_cli_report_summarizes_stack_engine_contract(tmp_path: Path):
                     },
                 ],
             },
+            "default_promotion": {
+                "schema_version": 1,
+                "target_engine": "stack_engine_cpu",
+                "ready": False,
+                "status": "blocked",
+                "required_scope": "all",
+                "actual_scope": "all",
+                "surface_count": 2,
+                "calibration_surface_count": 1,
+                "integration_surface_count": 1,
+                "phase2_stack_engine_default_gap_count": 1,
+                "recommendation": "stack_engine_contract_gaps_remain",
+                "blocker_count": 2,
+                "blockers": [
+                    {
+                        "name": "phase2_stack_engine_default_gaps",
+                        "gap_count": 1,
+                    },
+                    {
+                        "name": "adoption_recommendation_not_ready",
+                        "actual": "stack_engine_contract_gaps_remain",
+                        "required": "stack_engine_default_ready",
+                    },
+                ],
+            },
         },
     )
 
@@ -806,6 +837,9 @@ def test_cli_report_summarizes_stack_engine_contract(tmp_path: Path):
     assert "phase2_stack_engine_default_gaps" in html
     assert "stack_engine_contract_gaps_remain" in html
     assert "stack_engine_fallback" in html
+    assert "default_promotion_ready" in html
+    assert "default_promotion_blockers" in html
+    assert "adoption_recommendation_not_ready" in html
     assert "bias_bad" in html
     assert "legacy_streaming_accumulator" in html
     assert "integration_outputs_use:stack_engine_cpu" not in html

@@ -952,6 +952,7 @@ def _stack_engine_contract_summary_rows(contract: dict[str, Any] | None) -> list
     if not contract:
         return []
     adoption = contract.get("adoption") if isinstance(contract.get("adoption"), dict) else {}
+    promotion = contract.get("default_promotion") if isinstance(contract.get("default_promotion"), dict) else {}
     return [
         {
             "status": contract.get("status"),
@@ -966,6 +967,9 @@ def _stack_engine_contract_summary_rows(contract: dict[str, Any] | None) -> list
             "resident_cuda_surfaces": adoption.get("cuda_resident_surface_count"),
             "phase2_stack_engine_default_gaps": adoption.get("phase2_stack_engine_default_gap_count"),
             "adoption_recommendation": adoption.get("recommendation"),
+            "default_promotion_ready": promotion.get("ready"),
+            "default_promotion_status": promotion.get("status"),
+            "default_promotion_blockers": promotion.get("blocker_count"),
         }
     ]
 
@@ -1037,6 +1041,24 @@ def _stack_engine_adoption_surface_rows(contract: dict[str, Any] | None) -> list
             "fallback_reason": row.get("fallback_reason"),
         }
         for row in adoption.get("surfaces") or []
+        if isinstance(row, dict)
+    ]
+
+
+def _stack_engine_default_promotion_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    promotion = (contract or {}).get("default_promotion")
+    if not isinstance(promotion, dict):
+        return []
+    return [
+        {
+            "blocker": row.get("name"),
+            "actual": row.get("actual"),
+            "required": row.get("required"),
+            "required_min": row.get("required_min"),
+            "gap_count": row.get("gap_count"),
+            "failed_checks": row.get("failed_checks"),
+        }
+        for row in promotion.get("blockers") or []
         if isinstance(row, dict)
     ]
 
@@ -1354,6 +1376,7 @@ def write_html_report(
     stack_engine_contract_failure_rows = _stack_engine_contract_failure_rows(stack_engine_contract)
     stack_engine_contract_surface_rows = _stack_engine_contract_surface_rows(stack_engine_contract)
     stack_engine_adoption_surface_rows = _stack_engine_adoption_surface_rows(stack_engine_contract)
+    stack_engine_default_promotion_rows = _stack_engine_default_promotion_rows(stack_engine_contract)
     pipeline_contract_summary_rows = _pipeline_contract_summary_rows(pipeline_contract)
     pipeline_contract_failure_rows = _pipeline_contract_failure_rows(pipeline_contract)
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
@@ -1479,6 +1502,7 @@ def write_html_report(
   audit remains authoritative.</p>
   {_table(stack_engine_contract_summary_rows)}
   {_table(stack_engine_contract_failure_rows)}
+  {_limited_table(stack_engine_default_promotion_rows, label="StackEngine default promotion blockers", artifact="stack_engine_contract JSON")}
   {_limited_table(stack_engine_adoption_surface_rows, label="StackEngine adoption surface rows", artifact="stack_engine_contract JSON")}
   {_limited_table(stack_engine_contract_surface_rows, label="StackEngine contract surface rows", artifact="stack_engine_contract JSON")}
   {_h2("pipeline-contract-audit", "Pipeline contract audit")}

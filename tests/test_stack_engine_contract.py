@@ -47,9 +47,15 @@ def test_stack_engine_contract_passes_for_cpu_audit_run(tmp_path: Path):
     assert adoption["cuda_resident_surface_count"] == 0
     assert adoption["phase2_stack_engine_default_gap_count"] == 0
     assert adoption["recommendation"] == "stack_engine_default_ready"
+    promotion = audit["default_promotion"]
+    assert promotion["ready"] is True
+    assert promotion["status"] == "ready"
+    assert promotion["actual_scope"] == "all"
+    assert promotion["blocker_count"] == 0
     markdown_text = markdown.read_text(encoding="utf-8")
     assert "GLASS StackEngine Default Contract Audit" in markdown_text
     assert "StackEngine Adoption" in markdown_text
+    assert "Default Promotion Guard" in markdown_text
 
 
 def test_stack_engine_contract_fails_legacy_or_missing_provenance(tmp_path: Path):
@@ -89,6 +95,11 @@ def test_stack_engine_contract_fails_legacy_or_missing_provenance(tmp_path: Path
     assert checks["integration_outputs_use:stack_engine_cpu"]["passed"] is False
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 2
     assert audit["adoption"]["recommendation"] == "stack_engine_contract_gaps_remain"
+    blockers = {item["name"] for item in audit["default_promotion"]["blockers"]}
+    assert audit["default_promotion"]["ready"] is False
+    assert "stack_engine_contract_failed" in blockers
+    assert "phase2_stack_engine_default_gaps" in blockers
+    assert "adoption_recommendation_not_ready" in blockers
 
 
 def test_stack_engine_contract_requires_embedded_result_contract(tmp_path: Path):
@@ -128,6 +139,10 @@ def test_stack_engine_contract_requires_embedded_result_contract(tmp_path: Path)
     assert checks["integration_outputs_use:stack_engine_cpu"]["passed"] is False
     assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 1
     assert audit["adoption"]["gap_surfaces"][0]["gap_reason"] == "missing_or_failed_result_contract"
+    blockers = {item["name"] for item in audit["default_promotion"]["blockers"]}
+    assert "scope_not_all" in blockers
+    assert "missing_calibration_surface" in blockers
+    assert "phase2_stack_engine_default_gaps" in blockers
 
 
 def test_stack_engine_contract_tracks_resident_cuda_adoption_gap(tmp_path: Path):
@@ -167,3 +182,56 @@ def test_stack_engine_contract_tracks_resident_cuda_adoption_gap(tmp_path: Path)
     assert adoption["phase2_stack_engine_default_gap_count"] == 1
     assert adoption["gap_surfaces"][0]["gap_reason"] == "resident_cuda_surface"
     assert adoption["recommendation"] == "resident_cuda_surfaces_remain"
+    promotion = audit["default_promotion"]
+    blockers = {item["name"] for item in promotion["blockers"]}
+    assert promotion["ready"] is False
+    assert promotion["status"] == "blocked"
+    assert "scope_not_all" in blockers
+    assert "missing_calibration_surface" in blockers
+    assert "phase2_stack_engine_default_gaps" in blockers
+
+
+def test_stack_engine_contract_require_default_ready_rejects_resident_only_gap(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    out = tmp_path / "stack_engine_contract.json"
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                        "active_frame_count": 193,
+                    },
+                }
+            ]
+        },
+    )
+
+    assert (
+        main(
+            [
+                "stack-engine-contract",
+                "--run",
+                str(run),
+                "--scope",
+                "integration",
+                "--expected-integration-engine",
+                "cuda_resident_stack",
+                "--require-default-ready",
+                "--out",
+                str(out),
+            ]
+        )
+        == 3
+    )
+
+    audit = read_json(out)
+    assert audit["passed"] is True
+    assert audit["default_promotion"]["ready"] is False
+    assert audit["default_promotion"]["status"] == "blocked"

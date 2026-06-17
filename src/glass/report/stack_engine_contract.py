@@ -219,6 +219,83 @@ def _build_adoption_summary(
     }
 
 
+def _build_default_promotion_summary(
+    *,
+    scope: str,
+    checks: list[dict[str, Any]],
+    masters: list[dict[str, Any]],
+    integration_records: list[dict[str, Any]],
+    adoption: dict[str, Any],
+) -> dict[str, Any]:
+    failed_checks = [item.get("name") for item in checks if not item.get("passed")]
+    blockers: list[dict[str, Any]] = []
+    if failed_checks:
+        blockers.append(
+            {
+                "name": "stack_engine_contract_failed",
+                "failed_checks": failed_checks,
+            }
+        )
+    if scope != "all":
+        blockers.append(
+            {
+                "name": "scope_not_all",
+                "actual": scope,
+                "required": "all",
+            }
+        )
+    if not masters:
+        blockers.append(
+            {
+                "name": "missing_calibration_surface",
+                "actual": len(masters),
+                "required_min": 1,
+            }
+        )
+    if not integration_records:
+        blockers.append(
+            {
+                "name": "missing_integration_surface",
+                "actual": len(integration_records),
+                "required_min": 1,
+            }
+        )
+    gap_count = int(adoption.get("phase2_stack_engine_default_gap_count") or 0)
+    if gap_count:
+        blockers.append(
+            {
+                "name": "phase2_stack_engine_default_gaps",
+                "gap_count": gap_count,
+                "gap_surfaces": adoption.get("gap_surfaces") or [],
+            }
+        )
+    recommendation = str(adoption.get("recommendation") or "")
+    if recommendation != "stack_engine_default_ready":
+        blockers.append(
+            {
+                "name": "adoption_recommendation_not_ready",
+                "actual": recommendation,
+                "required": "stack_engine_default_ready",
+            }
+        )
+    ready = not blockers
+    return {
+        "schema_version": 1,
+        "target_engine": adoption.get("target_engine", "stack_engine_cpu"),
+        "ready": ready,
+        "status": "ready" if ready else "blocked",
+        "required_scope": "all",
+        "actual_scope": scope,
+        "surface_count": adoption.get("surface_count", 0),
+        "calibration_surface_count": len(masters),
+        "integration_surface_count": len(integration_records),
+        "phase2_stack_engine_default_gap_count": gap_count,
+        "recommendation": recommendation,
+        "blocker_count": len(blockers),
+        "blockers": blockers,
+    }
+
+
 def build_stack_engine_contract_audit(
     run_dir: str | Path,
     *,
@@ -297,6 +374,13 @@ def build_stack_engine_contract_audit(
 
     adoption = _build_adoption_summary(masters, integration_records)
     passed = all(item["passed"] for item in checks)
+    default_promotion = _build_default_promotion_summary(
+        scope=scope,
+        checks=checks,
+        masters=masters,
+        integration_records=integration_records,
+        adoption=adoption,
+    )
     return {
         "schema_version": 1,
         "audit_type": "stack_engine_default_contract",
@@ -318,6 +402,7 @@ def build_stack_engine_contract_audit(
             "outputs": integration_records,
         },
         "adoption": adoption,
+        "default_promotion": default_promotion,
     }
 
 
@@ -331,6 +416,7 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         f"- Expected integration engine: `{audit['expected_integration_engine']}`",
         f"- StackEngine adoption recommendation: `{(audit.get('adoption') or {}).get('recommendation')}`",
         f"- Phase 2 StackEngine default gaps: `{(audit.get('adoption') or {}).get('phase2_stack_engine_default_gap_count')}`",
+        f"- Default promotion ready: `{(audit.get('default_promotion') or {}).get('ready')}`",
         "",
         "## Checks",
         "",
@@ -357,6 +443,16 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
                 f"gap={surface.get('phase2_stack_engine_default_gap')} "
                 f"reason={surface.get('gap_reason')}"
             )
+    promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
+    if promotion:
+        lines.extend(["", "## Default Promotion Guard", ""])
+        lines.append(f"- Status: `{promotion.get('status')}`")
+        lines.append(f"- Ready: `{promotion.get('ready')}`")
+        lines.append(f"- Required scope: `{promotion.get('required_scope')}`")
+        lines.append(f"- Actual scope: `{promotion.get('actual_scope')}`")
+        lines.append(f"- Blocker count: `{promotion.get('blocker_count')}`")
+        for blocker in promotion.get("blockers") or []:
+            lines.append(f"- Blocker `{blocker.get('name')}`: {blocker}")
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
