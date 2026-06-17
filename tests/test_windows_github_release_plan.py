@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 from glass.cli import main
 from glass.io.json_io import read_json, write_json
@@ -114,3 +115,24 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert read_json(out)["status"] == "release_plan_ready"
     assert "GLASS Windows GitHub Release Plan" in markdown.read_text(encoding="utf-8")
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
+
+
+def test_windows_github_release_plan_auth_check_blocks_publication(tmp_path: Path):
+    zip_file = tmp_path / "GLASS-Portable-win64-cpu.zip"
+    zip_file.write_bytes(b"cpu")
+    manifest = tmp_path / "manifest.json"
+    _manifest(manifest, zip_paths={"cpu": zip_file})
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        gh_path=sys.executable,
+        check_gh=True,
+        check_gh_auth=True,
+    )
+
+    assert payload["passed"] is True
+    assert payload["publication_ready"] is False
+    assert payload["gh"]["available"] is True
+    assert payload["gh"]["auth_ok"] is False
+    assert payload["recommendation"] == "authenticate_github_cli_then_run_release_command"

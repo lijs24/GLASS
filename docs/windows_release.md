@@ -185,7 +185,7 @@ glass windows-release-manifest --suite windows_package_suite.json --out windows_
 - Before uploading, generate release notes and the exact GitHub upload command:
 
 ```powershell
-glass windows-github-release-plan --manifest windows_release_manifest.json --tag v0.1.0-windows-gpu.N --title "GLASS v0.1.0-windows-gpu.N Windows CUDA packages" --out github_release_plan.json --markdown github_release_plan.md --notes github_release_notes.md --require-same-source-stamp --check-gh --fail-on-failure
+glass windows-github-release-plan --manifest windows_release_manifest.json --tag v0.1.0-windows-gpu.N --title "GLASS v0.1.0-windows-gpu.N Windows CUDA packages" --out github_release_plan.json --markdown github_release_plan.md --notes github_release_notes.md --require-same-source-stamp --check-gh --check-gh-auth --fail-on-failure
 ```
 
 - Release-grade 200-light acceptance uses the benchmark contract plus

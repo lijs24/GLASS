@@ -1904,6 +1904,8 @@ def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
         prerelease=args.prerelease,
         require_same_source_stamp=args.require_same_source_stamp,
         check_gh=args.check_gh,
+        check_gh_auth=args.check_gh_auth,
+        gh_path=args.gh_path,
     )
     write_windows_github_release_plan(
         args.out,
@@ -4309,6 +4311,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--check-gh",
         action="store_true",
         help="record whether GitHub CLI is available on PATH",
+    )
+    windows_github_release_plan.add_argument(
+        "--check-gh-auth",
+        action="store_true",
+        help="run gh auth status and require authenticated CLI for publication readiness",
+    )
+    windows_github_release_plan.add_argument(
+        "--gh-path",
+        help="explicit path to gh executable for CLI/auth checks",
     )
     windows_github_release_plan.add_argument(
         "--fail-on-failure",

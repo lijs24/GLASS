@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import shlex
 import shutil
+import subprocess
 from typing import Any
 
 from glass.io.json_io import read_json, write_json
@@ -42,6 +43,32 @@ def _asset_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _run_gh(command: list[str], *, timeout_s: int = 30) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_s,
+        )
+    except Exception as exc:  # pragma: no cover - environment-specific diagnostics
+        return {
+            "command": command,
+            "returncode": None,
+            "stdout_tail": "",
+            "stderr_tail": str(exc),
+            "exception": type(exc).__name__,
+        }
+    return {
+        "command": command,
+        "returncode": completed.returncode,
+        "stdout_tail": completed.stdout[-4000:],
+        "stderr_tail": completed.stderr[-4000:],
+        "exception": None,
+    }
 
 
 def _release_notes(payload: dict[str, Any]) -> str:
@@ -84,6 +111,8 @@ def build_windows_github_release_plan(
     prerelease: bool = False,
     require_same_source_stamp: bool = False,
     check_gh: bool = False,
+    check_gh_auth: bool = False,
+    gh_path: str | Path | None = None,
 ) -> dict[str, Any]:
     manifest_path = Path(manifest_artifact)
     manifest = _read_json_object(manifest_path)
@@ -91,7 +120,12 @@ def build_windows_github_release_plan(
     source_stamps = sorted({str(row["source_stamp"]) for row in assets if row.get("source_stamp")})
     release_title = title or f"GLASS {tag} Windows packages"
     notes_path = str(Path(notes_file).resolve()) if notes_file is not None else None
-    gh_path = shutil.which("gh") if check_gh else None
+    gh_exe = str(gh_path) if gh_path is not None else shutil.which("gh")
+    if gh_exe is not None and not Path(gh_exe).exists() and Path(gh_exe).is_absolute():
+        gh_exe = None
+    gh_version = _run_gh([gh_exe, "--version"]) if check_gh and gh_exe else None
+    gh_auth = _run_gh([gh_exe, "auth", "status"]) if check_gh_auth and gh_exe else None
+    gh_auth_ok = gh_auth is not None and gh_auth.get("returncode") == 0
 
     checks: list[dict[str, Any]] = [
         _check(
@@ -148,12 +182,16 @@ def build_windows_github_release_plan(
     if prerelease:
         command_parts.append("--prerelease")
     release_command = " ".join(str(part) for part in command_parts if str(part).strip())
-    publication_ready = not failed and (not check_gh or gh_path is not None)
+    gh_cli_ready = not check_gh or gh_exe is not None
+    gh_auth_ready = not check_gh_auth or gh_auth_ok
+    publication_ready = not failed and gh_cli_ready and gh_auth_ready
     recommendation = "run_release_command"
     if failed:
         recommendation = "fix_release_plan_blockers"
-    elif check_gh and gh_path is None:
+    elif check_gh and gh_exe is None:
         recommendation = "install_github_cli_then_run_release_command"
+    elif check_gh_auth and not gh_auth_ok:
+        recommendation = "authenticate_github_cli_then_run_release_command"
 
     return {
         "schema_version": 1,
@@ -174,8 +212,12 @@ def build_windows_github_release_plan(
         },
         "gh": {
             "checked": bool(check_gh),
-            "available": gh_path is not None,
-            "path": gh_path,
+            "auth_checked": bool(check_gh_auth),
+            "available": gh_exe is not None,
+            "path": gh_exe,
+            "version": gh_version,
+            "auth_status": gh_auth,
+            "auth_ok": gh_auth_ok,
         },
         "source_stamps": source_stamps,
         "assets": assets,
@@ -190,6 +232,7 @@ def build_windows_github_release_plan(
 
 def _markdown(payload: dict[str, Any]) -> str:
     release = payload.get("release") if isinstance(payload.get("release"), dict) else {}
+    gh = payload.get("gh") if isinstance(payload.get("gh"), dict) else {}
     lines = [
         "# GLASS Windows GitHub Release Plan",
         "",
@@ -200,6 +243,8 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Tag: `{release.get('tag')}`",
         f"- Title: `{release.get('title')}`",
         f"- Source stamps: `{', '.join(payload.get('source_stamps') or [])}`",
+        f"- GitHub CLI available: `{gh.get('available')}`",
+        f"- GitHub CLI auth OK: `{gh.get('auth_ok')}`",
         "",
         "## Assets",
         "",

@@ -3329,6 +3329,19 @@ integration where applicable.
   `publication_ready=false` because `gh` is not installed on the checkpoint
   machine.
 
+### S2-Gate 196: GitHub CLI Auth Preflight
+
+- Extend `glass windows-github-release-plan` with `--gh-path` and
+  `--check-gh-auth` so release readiness can distinguish an installed GitHub
+  CLI from an authenticated GitHub CLI.
+- Install GitHub CLI 2.94.0 locally with winget and rerun the release handoff
+  plan against the strict same-source manifest.
+- Keep asset checks green while marking `publication_ready=false` when
+  `gh auth status` fails.
+- Current real artifact result: status `release_plan_ready`, package count `4`,
+  `gh.available=true`, `gh.auth_ok=false`, and recommendation
+  `authenticate_github_cli_then_run_release_command`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,213 @@
+{
+  "artifact_type": "windows_github_release_plan",
+  "assets": [
+    {
+      "exists": true,
+      "label": "cuda13",
+      "sha256": "bc5ebaf5247f7a7a513d1ff2ba3f4445d30c373c1e5e955cbfe7f01a9f0de273",
+      "size_bytes": 341358345,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+    },
+    {
+      "exists": true,
+      "label": "cuda12",
+      "sha256": "72f674ac5613d1618db5aebdbcab99711acefc887ff25b884db85c825e6ccf31",
+      "size_bytes": 341223006,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+    },
+    {
+      "exists": true,
+      "label": "cuda11",
+      "sha256": "2d0a68b53ffc92dadfc48e4404a81facbcb5d49f7bad1b89b79ce9337a42f681",
+      "size_bytes": 342200540,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+    },
+    {
+      "exists": true,
+      "label": "cpu",
+      "sha256": "32c7743c4ec2ed73ff1dd990c120ac7d8b0234a80db8b1e446627fd82ef5991d",
+      "size_bytes": 296231852,
+      "source_stamp": "aa63510",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+    }
+  ],
+  "checks": [
+    {
+      "evidence": {
+        "failed_checks": [],
+        "manifest_status": "release_manifest_ready"
+      },
+      "name": "manifest_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "asset_count": 4
+      },
+      "name": "assets_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+      },
+      "name": "asset_exists:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "bc5ebaf5247f7a7a513d1ff2ba3f4445d30c373c1e5e955cbfe7f01a9f0de273"
+      },
+      "name": "asset_has_sha256:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 341358345
+      },
+      "name": "asset_nonempty:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+      },
+      "name": "asset_exists:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "72f674ac5613d1618db5aebdbcab99711acefc887ff25b884db85c825e6ccf31"
+      },
+      "name": "asset_has_sha256:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 341223006
+      },
+      "name": "asset_nonempty:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+      },
+      "name": "asset_exists:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "2d0a68b53ffc92dadfc48e4404a81facbcb5d49f7bad1b89b79ce9337a42f681"
+      },
+      "name": "asset_has_sha256:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 342200540
+      },
+      "name": "asset_nonempty:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+      },
+      "name": "asset_exists:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "32c7743c4ec2ed73ff1dd990c120ac7d8b0234a80db8b1e446627fd82ef5991d"
+      },
+      "name": "asset_has_sha256:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 296231852
+      },
+      "name": "asset_nonempty:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "source_stamps": [
+          "aa63510"
+        ]
+      },
+      "name": "same_source_stamp",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T17:41:44+00:00",
+  "failed_checks": [],
+  "gh": {
+    "auth_checked": true,
+    "auth_ok": false,
+    "auth_status": {
+      "command": [
+        "C:\\Program Files\\GitHub CLI\\gh.exe",
+        "auth",
+        "status"
+      ],
+      "exception": null,
+      "returncode": 1,
+      "stderr_tail": "You are not logged into any GitHub hosts. To log in, run: gh auth login\n",
+      "stdout_tail": ""
+    },
+    "available": true,
+    "checked": true,
+    "path": "C:\\Program Files\\GitHub CLI\\gh.exe",
+    "version": {
+      "command": [
+        "C:\\Program Files\\GitHub CLI\\gh.exe",
+        "--version"
+      ],
+      "exception": null,
+      "returncode": 0,
+      "stderr_tail": "",
+      "stdout_tail": "gh version 2.94.0 (2026-06-10)\nhttps://github.com/cli/cli/releases/tag/v2.94.0\n"
+    }
+  },
+  "limitations": [
+    "This is a release handoff plan; it does not create a GitHub release or upload assets.",
+    "Install and authenticate GitHub CLI before running the generated command."
+  ],
+  "manifest_artifact": "runs\\checkpoints\\s2_gate_194_strict_windows_release_manifest.json",
+  "passed": true,
+  "publication_ready": false,
+  "recommendation": "authenticate_github_cli_then_run_release_command",
+  "release": {
+    "command": "gh release create v0.1.0-windows-gpu.9 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip' 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip' 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip' 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip' --title 'GLASS v0.1.0-windows-gpu.9 Windows CUDA packages' --notes-file 'C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_196_github_release_notes.md' --draft",
+    "draft": true,
+    "notes_file": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_196_github_release_notes.md",
+    "prerelease": false,
+    "tag": "v0.1.0-windows-gpu.9",
+    "title": "GLASS v0.1.0-windows-gpu.9 Windows CUDA packages"
+  },
+  "schema_version": 1,
+  "source_stamps": [
+    "aa63510"
+  ],
+  "status": "release_plan_ready"
+}
