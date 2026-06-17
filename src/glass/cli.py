@@ -79,6 +79,10 @@ from glass.report.tile_local_rejection_registration_audit import (
     build_tile_local_rejection_registration_audit,
     write_tile_local_rejection_registration_audit,
 )
+from glass.report.tile_local_rejection_registration_plan import (
+    build_tile_local_rejection_registration_plan,
+    write_tile_local_rejection_registration_plan,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -1240,6 +1244,35 @@ def cmd_tile_local_rejection_registration_audit(args: argparse.Namespace) -> int
             "focus_minus_control_high_rejection": summary.get("focus_minus_control_high_rejected_fraction_mean"),
             "high_rejection_excess_frames": summary.get("high_rejection_excess_frame_count"),
             "low_agreement_high_rejection_frames": summary.get("low_agreement_high_rejection_frame_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_tile_local_rejection_registration_plan(args: argparse.Namespace) -> int:
+    payload = build_tile_local_rejection_registration_plan(
+        args.audit,
+        root=args.root,
+        base_run_command=args.base_run_command,
+        reference=args.reference,
+        manifest=args.manifest,
+        wbpp_result=args.wbpp_result,
+        benchmark_contract=args.benchmark_contract,
+        glass_scale=args.glass_scale,
+        glass_offset=args.glass_offset,
+        min_coverage=args.min_coverage,
+        soft_agreement_score=args.soft_agreement_score,
+        strict_agreement_score=args.strict_agreement_score,
+        exclude_top_count=args.exclude_top_count,
+    )
+    write_tile_local_rejection_registration_plan(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "candidate_count": payload.get("candidate_count"),
+            "hotspot_frames": payload.get("hotspot_frames"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2981,6 +3014,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="number of high-rejection frames to summarize; 0 keeps all",
     )
     tile_local_rejection_registration.set_defaults(func=cmd_tile_local_rejection_registration_audit)
+
+    tile_local_rejection_registration_plan = sub.add_parser(
+        "tile-local-rejection-registration-plan",
+        help="plan measured experiments for tile-local rejection/registration findings",
+    )
+    tile_local_rejection_registration_plan.add_argument(
+        "--audit",
+        required=True,
+        help="tile-local-rejection-registration-audit JSON artifact",
+    )
+    tile_local_rejection_registration_plan.add_argument("--root", required=True, help="root directory for planned artifacts")
+    tile_local_rejection_registration_plan.add_argument(
+        "--base-run-command",
+        required=True,
+        help="run_command.txt from the baseline resident run",
+    )
+    tile_local_rejection_registration_plan.add_argument("--out", required=True, help="output experiment plan JSON")
+    tile_local_rejection_registration_plan.add_argument("--markdown", help="optional output Markdown plan")
+    tile_local_rejection_registration_plan.add_argument("--reference", help="optional reference master for compare commands")
+    tile_local_rejection_registration_plan.add_argument("--manifest", help="optional manifest for acceptance-audit commands")
+    tile_local_rejection_registration_plan.add_argument("--wbpp-result", help="optional WBPP result bundle for acceptance-audit")
+    tile_local_rejection_registration_plan.add_argument(
+        "--benchmark-contract",
+        help="optional benchmark contract passed to acceptance-audit",
+    )
+    tile_local_rejection_registration_plan.add_argument("--glass-scale", type=float)
+    tile_local_rejection_registration_plan.add_argument("--glass-offset", type=float)
+    tile_local_rejection_registration_plan.add_argument("--min-coverage", type=float)
+    tile_local_rejection_registration_plan.add_argument("--soft-agreement-score", type=float, default=0.6)
+    tile_local_rejection_registration_plan.add_argument("--strict-agreement-score", type=float, default=0.9)
+    tile_local_rejection_registration_plan.add_argument("--exclude-top-count", type=int, default=6)
+    tile_local_rejection_registration_plan.set_defaults(func=cmd_tile_local_rejection_registration_plan)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",

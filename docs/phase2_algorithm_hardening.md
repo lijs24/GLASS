@@ -2516,6 +2516,21 @@ integration where applicable.
 - Keep this as an artifact/diagnostic gate only. It must not change resident
   integration defaults, image pixels, or promotion thresholds.
 
+### S2-Gate 150: Tile-Local Rejection/Registration Experiment Plan
+
+- Add `glass tile-local-rejection-registration-plan` to turn Gate149 audit
+  evidence into explicit measured-experiment commands.
+- Generate candidate run directories and command queues from a baseline
+  resident `run_command.txt`.
+- Include at least these opt-in candidates: agreement flag-only, softer
+  agreement downweight, stricter agreement downweight, and exclusion of the
+  highest-rejection focus/top-family hotspot frames.
+- Emit optional compare and acceptance-audit commands when reference,
+  manifest, WBPP result, and benchmark contract inputs are provided.
+- Keep this as a planning gate only. It must not execute heavy integration,
+  change resident integration defaults, mutate image pixels, or promote any
+  candidate.
+
 ## Gate Rules
 
 Each gate requires:
