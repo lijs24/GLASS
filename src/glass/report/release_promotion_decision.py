@@ -84,6 +84,7 @@ def _runtime_compare_ready(
     *,
     min_runtime_runs: int,
     max_elapsed_ratio_vs_best: float,
+    ignore_warmup_runs: int,
 ) -> tuple[bool, dict[str, Any]]:
     if not runtime_compare:
         return False, {"present": False}
@@ -92,10 +93,26 @@ def _runtime_compare_ready(
     ranked = runtime_compare.get("ranked_runs") if isinstance(runtime_compare.get("ranked_runs"), list) else []
     recommendation = str(summary.get("recommendation") or "")
     run_count = int(summary.get("run_count") or len(runs))
-    best_elapsed = _number(summary.get("best_elapsed_s"))
+    warmup_count = max(0, int(ignore_warmup_runs))
+    ignored_runs = [row for row in runs[:warmup_count] if isinstance(row, dict)]
+    considered_runs = [row for row in runs[warmup_count:] if isinstance(row, dict)]
+    if considered_runs:
+        considered_ranked = sorted(
+            considered_runs,
+            key=lambda row: (
+                float("inf") if _number(row.get("total_elapsed_s")) is None else float(row["total_elapsed_s"]),
+                str(row.get("label")),
+            ),
+        )
+        best_elapsed = _number(considered_ranked[0].get("total_elapsed_s"))
+        best_label = considered_ranked[0].get("label")
+    else:
+        considered_ranked = []
+        best_elapsed = None
+        best_label = None
     elapsed_values = [
         value
-        for value in (_number(row.get("total_elapsed_s")) for row in runs if isinstance(row, dict))
+        for value in (_number(row.get("total_elapsed_s")) for row in considered_runs if isinstance(row, dict))
         if value is not None
     ]
     slowest_elapsed = max(elapsed_values) if elapsed_values else None
@@ -110,8 +127,8 @@ def _runtime_compare_ready(
         "repeat_with_warm_cache_or_dedicated_io_window",
     }
     ready = (
-        run_count >= int(min_runtime_runs)
-        and bool(ranked)
+        len(considered_runs) >= int(min_runtime_runs)
+        and bool(considered_ranked or ranked)
         and recommendation not in unstable_recommendations
         and ratio_vs_best is not None
         and ratio_vs_best <= float(max_elapsed_ratio_vs_best)
@@ -119,9 +136,12 @@ def _runtime_compare_ready(
     return ready, {
         "present": True,
         "run_count": run_count,
+        "considered_run_count": len(considered_runs),
+        "ignored_warmup_run_count": len(ignored_runs),
+        "ignored_warmup_labels": [row.get("label") for row in ignored_runs],
         "required_min_runtime_runs": int(min_runtime_runs),
         "recommendation": recommendation,
-        "best_label": summary.get("best_label"),
+        "best_label": best_label or summary.get("best_label"),
         "best_elapsed_s": best_elapsed,
         "slowest_elapsed_s": slowest_elapsed,
         "elapsed_ratio_vs_best": ratio_vs_best,
@@ -154,6 +174,7 @@ def build_release_promotion_decision(
     min_speedup: float | None = None,
     min_runtime_runs: int = 2,
     max_elapsed_ratio_vs_best: float = 1.25,
+    ignore_warmup_runs: int = 0,
 ) -> dict[str, Any]:
     acceptance = _read_json_object(acceptance_audit)
     stack_contract = _read_json_object(stack_engine_contract)
@@ -169,6 +190,7 @@ def build_release_promotion_decision(
         runtime,
         min_runtime_runs=min_runtime_runs,
         max_elapsed_ratio_vs_best=max_elapsed_ratio_vs_best,
+        ignore_warmup_runs=ignore_warmup_runs,
     )
     preflight_evidence = _preflight_evidence(preflight)
 

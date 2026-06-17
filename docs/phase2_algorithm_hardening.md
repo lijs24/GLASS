@@ -3037,6 +3037,29 @@ integration where applicable.
   `repeat_with_warm_cache_or_dedicated_io_window`, slowest/best elapsed ratio
   `1.364279174741225`, and preflight GPU status `busy`.
 
+### S2-Gate 180: Controlled Repeat Benchmark Promotion Evidence
+
+- Execute the Gate162 three-run resident repeat plan after a fresh
+  `resident-runtime-repeat-preflight` reports `execute_repeat_plan`.
+- Preserve repeat execution evidence under
+  `C:\glass_runs\phase2_s2_gate_180_controlled_repeat` and the measured
+  `resident-runtime-compare` artifact under
+  `C:\glass_runs\phase2_s2_gate_162_repeat_plan\runtime_compare.json`.
+- Extend `glass release-promotion-decision` with explicit
+  `--ignore-warmup-runs`, recording ignored labels and using only the remaining
+  observations for repeat stability. This keeps warm-up handling auditable
+  instead of silently dropping outliers.
+- Run release promotion decision twice:
+  - without warm-up trimming, the first cold-cache repeat keeps
+    `default_change_ready=false`;
+  - with `--ignore-warmup-runs 1`, the second and third repeats satisfy runtime
+    stability and strict `--fail-on-not-ready` passes.
+- Current real artifact result: repeat execution completed 3/3 runs, best run
+  `throughput_v1_repeat02` at `18.54452279999896 s`, third run
+  `18.585318899999038 s`, first warm-up run `29.639423599999645 s`, post-warm-up
+  slowest/best ratio `1.0021999002314625`, and final decision
+  `default_change_ready=true` with recommendation `promote_default_candidate`.
+
 ## Gate Rules
 
 Each gate requires:

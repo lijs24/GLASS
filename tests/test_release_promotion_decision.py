@@ -88,6 +88,31 @@ def _write_runtime_compare(path: Path) -> None:
     )
 
 
+def _write_runtime_compare_with_slow_warmup(path: Path) -> None:
+    write_json(
+        path,
+        {
+            "artifact_type": "resident_runtime_compare",
+            "summary": {
+                "run_count": 3,
+                "best_label": "repeat_2",
+                "best_elapsed_s": 18.0,
+                "recommendation": "best_observed:repeat_2",
+            },
+            "ranked_runs": [
+                {"label": "repeat_2", "total_elapsed_s": 18.0},
+                {"label": "repeat_3", "total_elapsed_s": 18.1},
+                {"label": "repeat_1", "total_elapsed_s": 29.0},
+            ],
+            "runs": [
+                {"label": "repeat_1", "total_elapsed_s": 29.0},
+                {"label": "repeat_2", "total_elapsed_s": 18.0},
+                {"label": "repeat_3", "total_elapsed_s": 18.1},
+            ],
+        },
+    )
+
+
 def test_release_promotion_decision_requires_repeat_for_default_change(tmp_path: Path) -> None:
     acceptance = tmp_path / "acceptance.json"
     stack = tmp_path / "stack.json"
@@ -126,6 +151,32 @@ def test_release_promotion_decision_accepts_stable_runtime_compare(tmp_path: Pat
     assert payload["default_change_ready"] is True
     assert payload["recommendation"] == "promote_default_candidate"
     assert payload["runtime_repeat"]["elapsed_ratio_vs_best"] == 19.0 / 18.0
+
+
+def test_release_promotion_decision_can_ignore_explicit_warmup_run(tmp_path: Path) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare_with_slow_warmup(runtime)
+
+    blocked = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        min_runtime_runs=2,
+    )
+    ready = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        min_runtime_runs=2,
+        ignore_warmup_runs=1,
+    )
+
+    assert blocked["default_change_ready"] is False
+    assert blocked["runtime_repeat"]["elapsed_ratio_vs_best"] == 29.0 / 18.0
+    assert ready["default_change_ready"] is True
+    assert ready["runtime_repeat"]["ignored_warmup_labels"] == ["repeat_1"]
+    assert ready["runtime_repeat"]["considered_run_count"] == 2
+    assert ready["runtime_repeat"]["elapsed_ratio_vs_best"] == 18.1 / 18.0
 
 
 def test_release_promotion_decision_blocks_failed_acceptance(tmp_path: Path) -> None:

@@ -1715,6 +1715,7 @@ def cmd_release_promotion_decision(args: argparse.Namespace) -> int:
         min_speedup=args.min_speedup,
         min_runtime_runs=args.min_runtime_runs,
         max_elapsed_ratio_vs_best=args.max_elapsed_ratio_vs_best,
+        ignore_warmup_runs=args.ignore_warmup_runs,
     )
     write_release_promotion_decision(args.out, payload, markdown=args.markdown)
     console.print(
@@ -3897,6 +3898,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.25,
         help="maximum slowest/best elapsed ratio accepted as stable repeat evidence",
+    )
+    release_promotion_decision.add_argument(
+        "--ignore-warmup-runs",
+        type=int,
+        default=0,
+        help="ignore this many leading runtime observations when evaluating repeat stability",
     )
     release_promotion_decision.add_argument(
         "--fail-on-not-ready",
