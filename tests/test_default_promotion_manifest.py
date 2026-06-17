@@ -45,8 +45,14 @@ def _write_phase2_status(
     include_default_route: bool = True,
     default_route_ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
+    sample_accounting_closure_ready: bool = True,
 ) -> None:
-    pipeline_ready = ready and rejection_sample_accounting_ready
+    pipeline_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
+    failed_pipeline_checks = []
+    if not rejection_sample_accounting_ready:
+        failed_pipeline_checks.append("integration_rejection_sample_counts_match_maps")
+    if not sample_accounting_closure_ready:
+        failed_pipeline_checks.append("integration_sample_accounting_closure")
     payload = {
         "schema_version": 1,
         "artifact_type": "glass_phase2_status",
@@ -73,13 +79,11 @@ def _write_phase2_status(
         },
         "pipeline_contract": {
             "audit_type": "pipeline_invariant_contract",
-            "status": "passed" if rejection_sample_accounting_ready else "failed",
-            "passed": rejection_sample_accounting_ready,
+            "status": "passed" if pipeline_ready else "failed",
+            "passed": pipeline_ready,
             "check_count": 15,
-            "failed_check_count": 0 if rejection_sample_accounting_ready else 1,
-            "failed_checks": []
-            if rejection_sample_accounting_ready
-            else ["integration_rejection_sample_counts_match_maps"],
+            "failed_check_count": len(failed_pipeline_checks),
+            "failed_checks": failed_pipeline_checks,
             "integration_output_count": 1,
             "integration_map_count": 6,
             "integration_dq_contract": True,
@@ -89,6 +93,7 @@ def _write_phase2_status(
             "integration_coverage_map_pixels_match_dq": True,
             "integration_rejection_map_pixels_match_dq": True,
             "integration_rejection_sample_counts_match_maps": rejection_sample_accounting_ready,
+            "integration_sample_accounting_closure": sample_accounting_closure_ready,
             "rejection_sample_accounting": {
                 "status": "passed" if rejection_sample_accounting_ready else "failed",
                 "check_present": True,
@@ -114,6 +119,30 @@ def _write_phase2_status(
             else "failed",
             "rejection_sample_accounting_failed_count": 0
             if rejection_sample_accounting_ready
+            else 1,
+            "sample_accounting_closure": {
+                "status": "passed" if sample_accounting_closure_ready else "failed",
+                "check_present": True,
+                "check_passed": sample_accounting_closure_ready,
+                "present_count": 1,
+                "failed_count": 0 if sample_accounting_closure_ready else 1,
+                "failed_items": []
+                if sample_accounting_closure_ready
+                else [
+                    {
+                        "item": "H",
+                        "input_valid_samples_before_rejection": 9,
+                        "valid_samples_after_rejection": 6,
+                        "rejected_samples": 2,
+                    }
+                ],
+            },
+            "sample_accounting_closure_status": "passed"
+            if sample_accounting_closure_ready
+            else "failed",
+            "sample_accounting_closure_present_count": 1,
+            "sample_accounting_closure_failed_count": 0
+            if sample_accounting_closure_ready
             else 1,
             "pixel_verification_enabled": True,
             "pixel_verification_tile_size": 2048,
@@ -196,6 +225,7 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["default_route_acceptance_route_check_count"] is True
     assert checks["pipeline_pixel_maps_match_dq"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
+    assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
 
 
@@ -274,6 +304,41 @@ def test_default_promotion_manifest_blocks_rejection_sample_accounting_drift(
     assert "pipeline_rejection_sample_accounting_passed" in payload["failed_checks"]
 
 
+def test_default_promotion_manifest_blocks_sample_accounting_closure_drift(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(phase2, decision, sample_accounting_closure_ready=False)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "pipeline_contract_passed" in payload["failed_checks"]
+    assert "pipeline_sample_accounting_closure_passed" in payload["failed_checks"]
+    assert checks["pipeline_sample_accounting_closure_passed"]["evidence"] == {
+        "check": False,
+        "status": "failed",
+        "present_count": 1,
+        "failed_count": 1,
+        "failed_items": [
+            {
+                "item": "H",
+                "input_valid_samples_before_rejection": 9,
+                "valid_samples_after_rejection": 6,
+                "rejected_samples": 2,
+            }
+        ],
+    }
+
+
 def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path) -> None:
     decision = tmp_path / "decision.json"
     phase2 = tmp_path / "phase2.json"
@@ -311,4 +376,5 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "Default Promotion Manifest" in markdown_text
     assert "Default Route Evidence" in markdown_text
     assert "Rejection sample accounting: `passed`" in markdown_text
+    assert "Sample accounting closure: `passed`" in markdown_text
     assert "Route contract passed: `True`" in markdown_text

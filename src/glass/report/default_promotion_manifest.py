@@ -153,12 +153,25 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         "integration_rejection_sample_counts_match_maps": pipeline.get(
             "integration_rejection_sample_counts_match_maps"
         ),
+        "integration_sample_accounting_closure": pipeline.get(
+            "integration_sample_accounting_closure"
+        ),
         "rejection_sample_accounting": pipeline.get("rejection_sample_accounting")
         if isinstance(pipeline.get("rejection_sample_accounting"), dict)
         else {},
         "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
         "rejection_sample_accounting_failed_count": pipeline.get(
             "rejection_sample_accounting_failed_count"
+        ),
+        "sample_accounting_closure": pipeline.get("sample_accounting_closure")
+        if isinstance(pipeline.get("sample_accounting_closure"), dict)
+        else {},
+        "sample_accounting_closure_status": pipeline.get("sample_accounting_closure_status"),
+        "sample_accounting_closure_present_count": pipeline.get(
+            "sample_accounting_closure_present_count"
+        ),
+        "sample_accounting_closure_failed_count": pipeline.get(
+            "sample_accounting_closure_failed_count"
         ),
         "pixel_verification_enabled": pipeline.get("pixel_verification_enabled"),
         "pixel_verification_tile_size": pipeline.get("pixel_verification_tile_size"),
@@ -375,6 +388,20 @@ def build_default_promotion_manifest(
             },
         ),
         _check(
+            "pipeline_sample_accounting_closure_passed",
+            pipeline.get("integration_sample_accounting_closure") is True
+            and pipeline.get("sample_accounting_closure_status") == "passed",
+            {
+                "check": pipeline.get("integration_sample_accounting_closure"),
+                "status": pipeline.get("sample_accounting_closure_status"),
+                "present_count": pipeline.get("sample_accounting_closure_present_count"),
+                "failed_count": pipeline.get("sample_accounting_closure_failed_count"),
+                "failed_items": (pipeline.get("sample_accounting_closure") or {}).get(
+                    "failed_items"
+                ),
+            },
+        ),
+        _check(
             "resident_calibration_artifact_present",
             pipeline.get("resident_native_calibration_artifact") is True,
             {"actual": pipeline.get("resident_native_calibration_artifact")},
@@ -526,6 +553,7 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Route failed checks: `{default_route.get('route_failed_checks')}`",
         f"- Speedup vs reference: `{default_route.get('speedup_vs_reference')}`",
         f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
+        f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
         "",
         "## Release Machine",
         "",

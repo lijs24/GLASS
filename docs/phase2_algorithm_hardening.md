@@ -4127,6 +4127,21 @@ integration where applicable.
 - Keep this gate acceptance/status scoped: no image math, CUDA kernel, runtime
   default change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 246: Promotion Sample Closure Blocker
+
+- Carry Phase 2 sample-closure evidence into release/default-promotion
+  readiness checks, mirroring the existing rejection-sample accounting blocker.
+- Extend release-promotion decisions with
+  `pipeline_sample_accounting_closure_passed` so release candidates cannot pass
+  when valid/invalid/rejected sample closure fails.
+- Extend default-promotion manifests with
+  `pipeline_sample_accounting_closure_passed` so default promotion cannot be
+  declared ready when Phase 2 status lost or failed sample-closure evidence.
+- Extend Markdown summaries with compact sample-closure status lines.
+- Keep this gate promotion-readiness scoped: no image math, CUDA kernel,
+  runtime default change, package build, upload, Windows release matrix change,
+  or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

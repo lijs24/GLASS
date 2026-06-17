@@ -9,6 +9,7 @@ from glass.report.release_promotion_decision import build_release_promotion_deci
 
 def _write_acceptance(path: Path, *, passed: bool = True) -> None:
     accounting_status = "passed" if passed else "failed"
+    sample_closure_status = "passed" if passed else "failed"
     write_json(
         path,
         {
@@ -27,6 +28,13 @@ def _write_acceptance(path: Path, *, passed: bool = True) -> None:
                         "status": accounting_status,
                         "check_present": True,
                         "check_passed": passed,
+                        "failed_count": 0 if passed else 1,
+                    },
+                    "sample_accounting_closure": {
+                        "status": sample_closure_status,
+                        "check_present": True,
+                        "check_passed": passed,
+                        "present_count": 1,
                         "failed_count": 0 if passed else 1,
                     },
                 },
@@ -51,6 +59,7 @@ def _write_acceptance(path: Path, *, passed: bool = True) -> None:
                     "integration_coverage_map_pixels_match_dq",
                     "integration_rejection_map_pixels_match_dq",
                     "integration_rejection_sample_counts_match_maps",
+                    "integration_sample_accounting_closure",
                 ],
                 "failed_checks": []
                 if passed
@@ -58,6 +67,7 @@ def _write_acceptance(path: Path, *, passed: bool = True) -> None:
                     "integration_dq_contract",
                     "integration_dq_map_pixels_match_summary",
                     "integration_rejection_sample_counts_match_maps",
+                    "integration_sample_accounting_closure",
                 ],
                 "rejection_sample_accounting": {
                     "status": accounting_status,
@@ -81,8 +91,40 @@ def _write_acceptance(path: Path, *, passed: bool = True) -> None:
                         }
                     ],
                 },
+                "sample_accounting_closure": {
+                    "status": sample_closure_status,
+                    "check_name": "integration_sample_accounting_closure",
+                    "check_present": True,
+                    "check_passed": passed,
+                    "present_count": 1,
+                    "failed_count": 0 if passed else 1,
+                    "failed_items": []
+                    if passed
+                    else [
+                        {
+                            "item": "H",
+                            "input_valid_samples_before_rejection": 9,
+                            "valid_samples_after_rejection": 6,
+                            "rejected_samples": 2,
+                        }
+                    ],
+                },
                 "integration": {
-                    "outputs": [{"item": "H"}],
+                    "outputs": [
+                        {
+                            "item": "H",
+                            "sample_accounting_closure": {
+                                "present": True,
+                                "required": True,
+                                "status": sample_closure_status,
+                                "passed": passed,
+                                "input_valid_samples_before_rejection": 9,
+                                "valid_samples_after_rejection": 6,
+                                "rejected_samples": 3 if passed else 2,
+                                "valid_rejection_match": passed,
+                            },
+                        }
+                    ],
                     "maps": [
                         {"item": "H", "map": "master"},
                         {"item": "H", "map": "coverage"},
@@ -133,13 +175,19 @@ def _write_stack_contract(path: Path) -> None:
     )
 
 
-def _write_pipeline_contract(path: Path, *, rejection_sample_accounting_passed: bool = True) -> None:
+def _write_pipeline_contract(
+    path: Path,
+    *,
+    rejection_sample_accounting_passed: bool = True,
+    sample_accounting_closure_passed: bool = True,
+) -> None:
+    pipeline_passed = rejection_sample_accounting_passed and sample_accounting_closure_passed
     write_json(
         path,
         {
             "audit_type": "pipeline_invariant_contract",
-            "status": "passed" if rejection_sample_accounting_passed else "failed",
-            "passed": rejection_sample_accounting_passed,
+            "status": "passed" if pipeline_passed else "failed",
+            "passed": pipeline_passed,
             "checks": [
                 {"name": "integration_dq_contract", "passed": True},
                 {"name": "integration_stack_result_contract", "passed": True},
@@ -150,6 +198,10 @@ def _write_pipeline_contract(path: Path, *, rejection_sample_accounting_passed: 
                 {
                     "name": "integration_rejection_sample_counts_match_maps",
                     "passed": rejection_sample_accounting_passed,
+                },
+                {
+                    "name": "integration_sample_accounting_closure",
+                    "passed": sample_accounting_closure_passed,
                 },
             ],
             "rejection_sample_accounting": {
@@ -174,8 +226,44 @@ def _write_pipeline_contract(path: Path, *, rejection_sample_accounting_passed: 
                     }
                 ],
             },
+            "sample_accounting_closure": {
+                "status": "passed" if sample_accounting_closure_passed else "failed",
+                "check_name": "integration_sample_accounting_closure",
+                "check_present": True,
+                "check_passed": sample_accounting_closure_passed,
+                "present_count": 1,
+                "failed_count": 0 if sample_accounting_closure_passed else 1,
+                "failed_items": []
+                if sample_accounting_closure_passed
+                else [
+                    {
+                        "item": "H",
+                        "input_valid_samples_before_rejection": 9,
+                        "valid_samples_after_rejection": 6,
+                        "rejected_samples": 2,
+                    }
+                ],
+            },
             "integration": {
-                "outputs": [{"item": "H"}],
+                "outputs": [
+                    {
+                        "item": "H",
+                        "sample_accounting_closure": {
+                            "present": True,
+                            "required": True,
+                            "status": "passed"
+                            if sample_accounting_closure_passed
+                            else "failed",
+                            "passed": sample_accounting_closure_passed,
+                            "input_valid_samples_before_rejection": 9,
+                            "valid_samples_after_rejection": 6,
+                            "rejected_samples": 3
+                            if sample_accounting_closure_passed
+                            else 2,
+                            "valid_rejection_match": sample_accounting_closure_passed,
+                        },
+                    }
+                ],
                 "maps": [
                     {"item": "H", "map": "master"},
                     {"item": "H", "map": "coverage"},
@@ -395,6 +483,49 @@ def test_release_promotion_decision_blocks_rejection_sample_accounting_drift(
     assert payload["pipeline_handoff"]["rejection_sample_accounting_status"] == "failed"
     assert checks["pipeline_rejection_sample_accounting_passed"]["passed"] is False
     assert checks["pipeline_rejection_sample_accounting_passed"]["evidence"]["failed_count"] == 1
+
+
+def test_release_promotion_decision_blocks_sample_accounting_closure_drift(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    stack = tmp_path / "stack.json"
+    pipeline = tmp_path / "pipeline.json"
+    runtime = tmp_path / "runtime_compare.json"
+    _write_acceptance(acceptance)
+    _write_stack_contract(stack)
+    _write_pipeline_contract(pipeline, sample_accounting_closure_passed=False)
+    _write_runtime_compare(runtime)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        stack_engine_contract=stack,
+        pipeline_contract=pipeline,
+        runtime_compare=runtime,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["release_candidate_ready"] is False
+    assert payload["default_change_ready"] is False
+    assert payload["recommendation"] == "fix_release_blockers"
+    assert payload["pipeline_handoff"]["sample_accounting_closure_status"] == "failed"
+    assert checks["pipeline_sample_accounting_closure_passed"]["passed"] is False
+    assert checks["pipeline_sample_accounting_closure_passed"]["evidence"] == {
+        "check": False,
+        "status": "failed",
+        "present_count": 1,
+        "failed_count": 1,
+        "failed_items": [
+            {
+                "item": "H",
+                "input_valid_samples_before_rejection": 9,
+                "valid_samples_after_rejection": 6,
+                "rejected_samples": 2,
+            }
+        ],
+    }
 
 
 def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_path: Path) -> None:
