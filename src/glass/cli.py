@@ -93,6 +93,11 @@ from glass.report.windows_package_build_plan import (
     parse_toolkit_root_specs,
     write_windows_package_build_plan,
 )
+from glass.report.windows_package_suite import (
+    build_windows_package_suite,
+    parse_labeled_paths,
+    write_windows_package_suite,
+)
 from glass.report.windows_package_smoke import (
     build_windows_package_smoke,
     write_windows_package_smoke,
@@ -1828,6 +1833,31 @@ def cmd_windows_package_build_plan(args: argparse.Namespace) -> int:
     )
     if bool(args.fail_on_missing) and payload.get("missing_cuda_variants"):
         return 2
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_windows_package_suite(args: argparse.Namespace) -> int:
+    required_labels = tuple(
+        item.strip() for item in str(args.required_labels).split(",") if item.strip()
+    )
+    payload = build_windows_package_suite(
+        smoke_artifacts=parse_labeled_paths(args.smoke),
+        required_labels=required_labels,
+        require_same_source_stamp=args.require_same_source_stamp,
+    )
+    write_windows_package_suite(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "recommendation": payload["recommendation"],
+            "source_stamps": payload["source_stamps"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
     if bool(args.fail_on_failure) and not payload.get("passed"):
         return 2
     return 0
@@ -4120,6 +4150,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the build-plan checks pass",
     )
     windows_package_build_plan.set_defaults(func=cmd_windows_package_build_plan)
+
+    windows_package_suite = sub.add_parser(
+        "windows-package-suite",
+        help="aggregate Windows portable package smoke artifacts into a release-suite readiness report",
+    )
+    windows_package_suite.add_argument(
+        "--smoke",
+        action="append",
+        default=[],
+        required=True,
+        help="package smoke artifact in LABEL=PATH form; repeat for every package",
+    )
+    windows_package_suite.add_argument("--out", required=True, help="output package suite JSON")
+    windows_package_suite.add_argument("--markdown", help="optional output Markdown summary")
+    windows_package_suite.add_argument(
+        "--required-labels",
+        default="cuda13,cuda12,cuda11,cpu",
+        help="comma-separated labels required in the package suite",
+    )
+    windows_package_suite.add_argument(
+        "--require-same-source-stamp",
+        action="store_true",
+        help="fail unless every package smoke artifact reports the same source stamp",
+    )
+    windows_package_suite.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the package suite passes",
+    )
+    windows_package_suite.set_defaults(func=cmd_windows_package_suite)
 
     windows_package_smoke = sub.add_parser(
         "windows-package-smoke",
