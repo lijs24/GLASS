@@ -4142,6 +4142,20 @@ integration where applicable.
   runtime default change, package build, upload, Windows release matrix change,
   or real-data benchmark rerun.
 
+### S2-Gate 247: Windows Release Matrix Sample Closure Handoff
+
+- Carry default-promotion `sample_accounting_closure` evidence into
+  `glass windows-release-matrix` summaries.
+- Add `default_promotion_sample_accounting_closure_passed` so Windows release
+  matrices cannot pass when default-promotion manifests lost or failed
+  valid/invalid/rejected sample closure evidence.
+- Extend Windows release matrix Markdown with compact sample-closure status,
+  present-row count, and failed-row count.
+- Add focused tests for passing sample closure and blocked closure drift.
+- Keep this gate Windows-release-matrix scoped: no image math, CUDA kernel,
+  runtime default change, package build, upload, publish-preflight change, or
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -91,8 +91,9 @@ def _default_promotion(
     *,
     ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
+    sample_accounting_closure_ready: bool = True,
 ) -> None:
-    manifest_ready = ready and rejection_sample_accounting_ready
+    manifest_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
     write_json(
         path,
         {
@@ -119,9 +120,10 @@ def _default_promotion(
                 "speedup_vs_reference": 28.75,
             },
             "pipeline_contract": {
-                "status": "passed" if rejection_sample_accounting_ready else "failed",
-                "passed": rejection_sample_accounting_ready,
+                "status": "passed" if manifest_ready else "failed",
+                "passed": manifest_ready,
                 "integration_rejection_sample_counts_match_maps": rejection_sample_accounting_ready,
+                "integration_sample_accounting_closure": sample_accounting_closure_ready,
                 "rejection_sample_accounting": {
                     "status": "passed" if rejection_sample_accounting_ready else "failed",
                     "check_present": True,
@@ -147,6 +149,30 @@ def _default_promotion(
                 else "failed",
                 "rejection_sample_accounting_failed_count": 0
                 if rejection_sample_accounting_ready
+                else 1,
+                "sample_accounting_closure": {
+                    "status": "passed" if sample_accounting_closure_ready else "failed",
+                    "check_present": True,
+                    "check_passed": sample_accounting_closure_ready,
+                    "present_count": 1,
+                    "failed_count": 0 if sample_accounting_closure_ready else 1,
+                    "failed_items": []
+                    if sample_accounting_closure_ready
+                    else [
+                        {
+                            "item": "H",
+                            "input_valid_samples_before_rejection": 9,
+                            "valid_samples_after_rejection": 6,
+                            "rejected_samples": 2,
+                        }
+                    ],
+                },
+                "sample_accounting_closure_status": "passed"
+                if sample_accounting_closure_ready
+                else "failed",
+                "sample_accounting_closure_present_count": 1,
+                "sample_accounting_closure_failed_count": 0
+                if sample_accounting_closure_ready
                 else 1,
             },
         },
@@ -181,6 +207,7 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["default_promotion_manifest_ready"] is True
     assert checks["default_promotion_default_route_passed"] is True
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
+    assert checks["default_promotion_sample_accounting_closure_passed"] is True
     assert checks["required_cuda_package_compatible:cuda13"] is True
     assert checks["required_cuda_package_compatible:cuda12"] is True
     assert checks["required_cuda_package_compatible:cuda11"] is True
@@ -245,6 +272,7 @@ def test_windows_release_matrix_blocks_failed_default_promotion_manifest(tmp_pat
     assert checks["default_promotion_manifest_ready"] is False
     assert checks["default_promotion_default_route_passed"] is False
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
+    assert checks["default_promotion_sample_accounting_closure_passed"] is True
 
 
 def test_windows_release_matrix_blocks_rejection_sample_accounting_drift(tmp_path: Path):
@@ -289,6 +317,45 @@ def test_windows_release_matrix_blocks_rejection_sample_accounting_drift(tmp_pat
     }
 
 
+def test_windows_release_matrix_blocks_sample_accounting_closure_drift(tmp_path: Path):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, sample_accounting_closure_ready=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_present"]["passed"] is True
+    assert checks["default_promotion_manifest_ready"]["passed"] is False
+    assert checks["default_promotion_sample_accounting_closure_passed"]["passed"] is False
+    assert checks["default_promotion_sample_accounting_closure_passed"]["evidence"] == {
+        "pipeline_contract_status": "failed",
+        "pipeline_contract_passed": False,
+        "check": False,
+        "status": "failed",
+        "present_count": 1,
+        "failed_count": 1,
+        "failed_items": [
+            {
+                "item": "H",
+                "input_valid_samples_before_rejection": 9,
+                "valid_samples_after_rejection": 6,
+                "rejected_samples": 2,
+            }
+        ],
+    }
+
+
 def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     doctor = tmp_path / "doctor.json"
     decision = tmp_path / "decision.json"
@@ -326,3 +393,4 @@ def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     assert "Default Promotion Manifest" in markdown_text
     assert "Default route contract/checks: `True`/`4`" in markdown_text
     assert "Rejection sample accounting: `passed` failed=`0`" in markdown_text
+    assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text

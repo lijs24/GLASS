@@ -51,6 +51,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(pipeline.get("rejection_sample_accounting"), dict)
         else {}
     )
+    sample_accounting_closure = (
+        pipeline.get("sample_accounting_closure")
+        if isinstance(pipeline.get("sample_accounting_closure"), dict)
+        else {}
+    )
     return {
         "present": True,
         "artifact_type": payload.get("artifact_type"),
@@ -72,10 +77,21 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "integration_rejection_sample_counts_match_maps": pipeline.get(
             "integration_rejection_sample_counts_match_maps"
         ),
+        "integration_sample_accounting_closure": pipeline.get(
+            "integration_sample_accounting_closure"
+        ),
         "rejection_sample_accounting": rejection_sample_accounting,
         "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
         "rejection_sample_accounting_failed_count": pipeline.get(
             "rejection_sample_accounting_failed_count"
+        ),
+        "sample_accounting_closure": sample_accounting_closure,
+        "sample_accounting_closure_status": pipeline.get("sample_accounting_closure_status"),
+        "sample_accounting_closure_present_count": pipeline.get(
+            "sample_accounting_closure_present_count"
+        ),
+        "sample_accounting_closure_failed_count": pipeline.get(
+            "sample_accounting_closure_failed_count"
         ),
     }
 
@@ -274,6 +290,28 @@ def build_windows_release_matrix(
             },
         ),
         _check(
+            "default_promotion_sample_accounting_closure_passed",
+            (
+                default_promotion.get("integration_sample_accounting_closure") is True
+                and default_promotion.get("sample_accounting_closure_status") == "passed"
+                and int(default_promotion.get("sample_accounting_closure_failed_count") or 0)
+                == 0
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "pipeline_contract_status": default_promotion.get("pipeline_contract_status"),
+                "pipeline_contract_passed": default_promotion.get("pipeline_contract_passed"),
+                "check": default_promotion.get("integration_sample_accounting_closure"),
+                "status": default_promotion.get("sample_accounting_closure_status"),
+                "present_count": default_promotion.get("sample_accounting_closure_present_count"),
+                "failed_count": default_promotion.get("sample_accounting_closure_failed_count"),
+                "failed_items": (
+                    default_promotion.get("sample_accounting_closure") or {}
+                ).get("failed_items"),
+            },
+        ),
+        _check(
             "default_runtime_preset",
             default_runtime_preset == "throughput-v1",
             {"actual": default_runtime_preset, "required": "throughput-v1"},
@@ -399,6 +437,12 @@ def _markdown(payload: dict[str, Any]) -> str:
                 "- Rejection sample accounting: "
                 f"`{default_promotion.get('rejection_sample_accounting_status')}` "
                 f"failed=`{default_promotion.get('rejection_sample_accounting_failed_count')}`"
+            ),
+            (
+                "- Sample accounting closure: "
+                f"`{default_promotion.get('sample_accounting_closure_status')}` "
+                f"present=`{default_promotion.get('sample_accounting_closure_present_count')}` "
+                f"failed=`{default_promotion.get('sample_accounting_closure_failed_count')}`"
             ),
             "",
             "## Packages",
