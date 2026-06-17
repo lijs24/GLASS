@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from glass.cli import main
-from glass.io.json_io import read_json
+from glass.io.json_io import read_json, write_json
 from glass.report.windows_package_smoke import build_windows_package_smoke
 
 
@@ -17,6 +17,16 @@ def _write_fake_package(root: Path, *, with_zip: bool = True) -> Path:
     (root / "README.md").write_text("# GLASS\n", encoding="utf-8")
     (root / "LICENSE").write_text("license\n", encoding="utf-8")
     (root / "source").write_text("abc1234\n", encoding="ascii")
+    write_json(
+        root / "package_manifest.json",
+        {
+            "schema_version": 1,
+            "product": "GLASS",
+            "package_label": "cpu",
+            "build_cuda": False,
+            "source_stamp": "abc1234",
+        },
+    )
     docs = root / "docs"
     docs.mkdir()
     (docs / "windows_release.md").write_text("# Windows\n", encoding="utf-8")
@@ -34,6 +44,7 @@ def test_windows_package_smoke_structure_only_passes(tmp_path: Path):
         package_root=root,
         zip_path=zip_path,
         expected_source="abc1234",
+        expected_package_label="cpu",
         execute=False,
     )
 
@@ -42,6 +53,7 @@ def test_windows_package_smoke_structure_only_passes(tmp_path: Path):
     assert payload["status"] == "package_smoke_passed"
     assert checks["portable_zip_nonempty"] is True
     assert checks["source_stamp_matches_expected"] is True
+    assert checks["package_label_matches_expected"] is True
     assert payload["package"]["zip_size_bytes"] == 3
 
 
@@ -76,6 +88,8 @@ def test_windows_package_smoke_cli_writes_outputs(tmp_path: Path):
             str(zip_path),
             "--expected-source",
             "abc1234",
+            "--expected-package-label",
+            "cpu",
             "--skip-exec",
             "--out",
             str(out),

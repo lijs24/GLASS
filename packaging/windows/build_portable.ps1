@@ -3,6 +3,7 @@ param(
     [string]$Configuration = "Release",
     [string]$CudaArchitectures = "native",
     [string]$CudaToolkitRoot = "",
+    [string]$PackageLabel = "",
     [switch]$BuildCuda,
     [switch]$StaticCudaRuntime
 )
@@ -35,6 +36,18 @@ function Invoke-Robocopy {
     if ($LASTEXITCODE -gt 7) {
         throw "robocopy failed with exit code $LASTEXITCODE"
     }
+}
+
+function Write-Utf8NoBomFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [string]$Content
+    )
+
+    $Encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $Encoding)
 }
 
 function Resolve-PythonHome {
@@ -73,11 +86,49 @@ function Resolve-CudaRoot {
     throw "CUDA Toolkit was not found. Pass -CudaToolkitRoot or set CUDA_PATH."
 }
 
+function Import-VisualStudioBuildEnvironment {
+    if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $VsWhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path $VsWhere)) {
+        throw "cl.exe was not found on PATH and vswhere.exe was not found. Install Visual Studio Build Tools with the C++ workload."
+    }
+    $InstallPath = & $VsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($InstallPath) -or -not (Test-Path $InstallPath)) {
+        throw "Visual Studio C++ Build Tools were not found by vswhere.exe."
+    }
+    $VcVars = Join-Path $InstallPath "VC\Auxiliary\Build\vcvars64.bat"
+    if (-not (Test-Path $VcVars)) {
+        throw "vcvars64.bat was not found at $VcVars"
+    }
+
+    $EnvLines = & cmd.exe /d /s /c "`"$VcVars`" >nul && set"
+    if ($LASTEXITCODE -ne 0 -or -not $EnvLines) {
+        throw "Failed to import Visual Studio build environment from $VcVars"
+    }
+    foreach ($Line in $EnvLines) {
+        if ($Line -match "^(.*?)=(.*)$") {
+            Set-Item -Path ("Env:\" + $Matches[1]) -Value $Matches[2]
+        }
+    }
+    if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+        throw "Visual Studio build environment was imported, but cl.exe is still unavailable."
+    }
+}
+
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).ProviderPath
 $ReleaseRoot = Join-Path $Root ".release\windows"
 $AppRoot = Join-Path $ReleaseRoot "GLASS"
 $Runtime = Join-Path $AppRoot "runtime"
 $SourceStamp = Join-Path $AppRoot "source"
+$PackageLabelValue = $PackageLabel.Trim()
+$ZipName = if ([string]::IsNullOrWhiteSpace($PackageLabelValue)) {
+    "GLASS-Portable-win64.zip"
+} else {
+    "GLASS-Portable-win64-$PackageLabelValue.zip"
+}
 
 Remove-Item -Recurse -Force $AppRoot -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $AppRoot | Out-Null
@@ -99,6 +150,7 @@ $Py = Join-Path $Runtime "python.exe"
 if (-not (Test-Path $Py)) {
     throw "Portable Python executable was not copied to $Py"
 }
+$env:PYTHONNOUSERSITE = "1"
 Invoke-Native -FilePath $Py -Arguments @("-m", "pip", "install", "--upgrade", "pip", "wheel")
 $ProjectSpec = "$Root[report,align,zarr]"
 Invoke-Native -FilePath $Py -Arguments @("-m", "pip", "install", $ProjectSpec)
@@ -109,6 +161,7 @@ if ($BuildCuda) {
     if (-not (Test-Path $Nvcc)) {
         throw "nvcc was not found at $Nvcc"
     }
+    Import-VisualStudioBuildEnvironment
     $env:CUDA_PATH = $ResolvedCudaRoot
     $env:PATH = (Join-Path $ResolvedCudaRoot "bin") + ";" + $env:PATH
 
@@ -176,12 +229,14 @@ if ($BuildCuda) {
 @"
 @echo off
 setlocal
+set PYTHONNOUSERSITE=1
 "%~dp0runtime\python.exe" -m glass.cli %*
 "@ | Set-Content -Encoding ASCII (Join-Path $AppRoot "glass.cmd")
 
 @"
 @echo off
 setlocal
+set PYTHONNOUSERSITE=1
 "%~dp0runtime\python.exe" -m glass.cli doctor --allow-cpu-only %*
 "@ | Set-Content -Encoding ASCII (Join-Path $AppRoot "glass-doctor.cmd")
 
@@ -194,8 +249,20 @@ Copy-Item (Join-Path $Root "docs\project_overview.md") $PublicDocs -Force
 Copy-Item (Join-Path $Root "docs\windows_release.md") $PublicDocs -Force
 
 git -C $Root rev-parse --short HEAD | Set-Content -Encoding ASCII $SourceStamp
+$PackageManifest = [ordered]@{
+    schema_version = 1
+    product = "GLASS"
+    package_label = if ([string]::IsNullOrWhiteSpace($PackageLabelValue)) { $null } else { $PackageLabelValue }
+    build_cuda = [bool]$BuildCuda
+    cuda_architectures = $CudaArchitectures
+    cuda_toolkit_root = if ($BuildCuda) { $ResolvedCudaRoot } else { $null }
+    cuda_runtime_library = if ($BuildCuda) { $RuntimeLinkage } else { $null }
+    python_home = $PythonHome
+    source_stamp = (Get-Content -Raw $SourceStamp).Trim()
+}
+Write-Utf8NoBomFile -Path (Join-Path $AppRoot "package_manifest.json") -Content ($PackageManifest | ConvertTo-Json -Depth 4)
 
-$Zip = Join-Path $ReleaseRoot "GLASS-Portable-win64.zip"
+$Zip = Join-Path $ReleaseRoot $ZipName
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $AppRoot -DestinationPath $Zip -Force
 

@@ -1774,6 +1774,7 @@ def cmd_windows_package_smoke(args: argparse.Namespace) -> int:
         package_root=args.package_root,
         zip_path=args.zip,
         expected_source=args.expected_source,
+        expected_package_label=args.expected_package_label,
         require_cuda=args.require_cuda,
         execute=not args.skip_exec,
         timeout_s=args.timeout,
@@ -4032,6 +4033,7 @@ def build_parser() -> argparse.ArgumentParser:
     windows_package_smoke.add_argument("--out", required=True, help="output package smoke JSON")
     windows_package_smoke.add_argument("--markdown", help="optional output Markdown summary")
     windows_package_smoke.add_argument("--expected-source", help="expected source stamp value")
+    windows_package_smoke.add_argument("--expected-package-label", help="expected package_manifest.json package_label")
     windows_package_smoke.add_argument(
         "--require-cuda",
         action="store_true",

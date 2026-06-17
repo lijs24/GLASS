@@ -59,6 +59,7 @@ def build_windows_package_smoke(
     package_root: str | Path,
     zip_path: str | Path | None = None,
     expected_source: str | None = None,
+    expected_package_label: str | None = None,
     require_cuda: bool = False,
     execute: bool = True,
     timeout_s: int = 120,
@@ -69,8 +70,10 @@ def build_windows_package_smoke(
     glass_cmd = root / "glass.cmd"
     doctor_cmd = root / "glass-doctor.cmd"
     source_stamp = root / "source"
+    package_manifest_path = root / "package_manifest.json"
     docs_dir = root / "docs"
     zip_file = Path(zip_path).resolve() if zip_path is not None else root.parent / "GLASS-Portable-win64.zip"
+    package_manifest = _json_if_exists(package_manifest_path)
 
     structure_checks = [
         _check("package_root_exists", root.exists() and root.is_dir(), {"path": str(root)}),
@@ -81,6 +84,7 @@ def build_windows_package_smoke(
         _check("license_exists", (root / "LICENSE").exists(), {"path": str(root / "LICENSE")}),
         _check("docs_windows_release_exists", (docs_dir / "windows_release.md").exists(), {"path": str(docs_dir / "windows_release.md")}),
         _check("source_stamp_exists", source_stamp.exists(), {"path": str(source_stamp)}),
+        _check("package_manifest_exists", package_manifest_path.exists(), {"path": str(package_manifest_path)}),
         _check("portable_zip_exists", zip_file.exists(), {"path": str(zip_file)}),
     ]
     if zip_file.exists():
@@ -89,6 +93,25 @@ def build_windows_package_smoke(
                 "portable_zip_nonempty",
                 zip_file.stat().st_size > 0,
                 {"path": str(zip_file), "size_bytes": zip_file.stat().st_size},
+            )
+        )
+    if expected_package_label is not None:
+        structure_checks.append(
+            _check(
+                "package_label_matches_expected",
+                package_manifest is not None and package_manifest.get("package_label") == expected_package_label,
+                {
+                    "actual": None if package_manifest is None else package_manifest.get("package_label"),
+                    "required": expected_package_label,
+                },
+            )
+        )
+    if require_cuda:
+        structure_checks.append(
+            _check(
+                "package_manifest_cuda_build",
+                package_manifest is not None and package_manifest.get("build_cuda") is True,
+                {"actual": None if package_manifest is None else package_manifest.get("build_cuda"), "required": True},
             )
         )
     source_text = _safe_read_text(source_stamp)
@@ -180,11 +203,14 @@ def build_windows_package_smoke(
             "zip_path": str(zip_file),
             "zip_size_bytes": zip_file.stat().st_size if zip_file.exists() else None,
             "source_stamp": source_text,
+            "manifest_path": str(package_manifest_path),
+            "manifest": package_manifest,
         },
         "requirements": {
             "execute": bool(execute),
             "require_cuda": bool(require_cuda),
             "expected_source": expected_source,
+            "expected_package_label": expected_package_label,
             "timeout_s": int(timeout_s),
         },
         "execution": execution,

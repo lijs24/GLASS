@@ -94,6 +94,17 @@ Portable folder with CUDA native module:
 .\packaging\windows\build_portable.ps1 -BuildCuda -StaticCudaRuntime
 ```
 
+Portable folder with an explicit release label:
+
+```powershell
+.\packaging\windows\build_portable.ps1 -BuildCuda -StaticCudaRuntime -PackageLabel cuda13
+```
+
+The label changes the zip name, for example
+`GLASS-Portable-win64-cuda13.zip`, and is recorded in
+`package_manifest.json` alongside the CUDA build flag, CUDA architecture
+setting, selected Toolkit root, runtime linkage, Python home, and source stamp.
+
 Installer:
 
 1. Build the portable folder.
@@ -115,6 +126,13 @@ Installer:
 - `glass windows-package-smoke --package-root .release\windows\GLASS --zip
   .release\windows\GLASS-Portable-win64.zip --out windows_package_smoke.json
   --fail-on-failure` passes for every portable package variant before upload.
+- CUDA package variants use the labeled zip and require CUDA in the package
+  smoke:
+
+```powershell
+glass windows-package-smoke --package-root .release\windows\GLASS --zip .release\windows\GLASS-Portable-win64-cuda13.zip --expected-package-label cuda13 --require-cuda --out windows_package_smoke_cuda13.json --fail-on-failure
+```
+
 - Release-grade 200-light acceptance uses the benchmark contract plus
   `--pipeline-contract-json`, and all `contract_pipeline_contract_*` checks pass.
 - Acceptance Markdown and HTML report show the release pipeline-contract
