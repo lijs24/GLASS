@@ -4156,6 +4156,22 @@ integration where applicable.
   runtime default change, package build, upload, publish-preflight change, or
   real-data benchmark rerun.
 
+### S2-Gate 248: GitHub Release Plan Sample Closure Handoff
+
+- Carry Phase 2 and Windows release-matrix sample-closure evidence into
+  `glass windows-github-release-plan`.
+- Add publication-plan checks for
+  `phase2_pipeline_sample_accounting_closure_passed` and
+  `windows_release_matrix_sample_accounting_closure_passed`, mirroring the
+  existing rejection-sample blockers.
+- Extend release notes, Markdown handoff, and generated PowerShell dry-run
+  validation with compact sample-closure status/present/failed evidence.
+- Add focused tests for passing sample closure, Phase 2 closure drift, release
+  matrix closure drift, CLI output text, and generated script guards.
+- Keep this gate GitHub-release-plan scoped: no image math, CUDA kernel,
+  runtime default change, package build, upload, publish-preflight change, or
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
