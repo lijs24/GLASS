@@ -2775,6 +2775,21 @@ integration where applicable.
 - Keep this as a core contract gate. It strengthens DQ/mask invariants at the
   engine boundary and does not require the externally busy GPU.
 
+### S2-Gate 167: StackEngine Contract Requires Result Contract
+
+- Extend `glass stack-engine-contract` so CPU StackEngine calibration and
+  integration records must include an embedded `result_contract` with
+  `passed=true`.
+- Surface `result_contract_passed` for every master and integration output in
+  the StackEngine contract audit.
+- Preserve resident CUDA acceptance behavior: `expected_integration_engine=
+  cuda_resident_stack` still uses the resident provenance path until resident
+  result-contract parity is implemented.
+- Add regression coverage for legacy StackEngine-looking records that have DQ
+  provenance but no embedded result contract.
+- Generate a small synthetic CPU audit and StackEngine contract artifact under
+  `C:\glass_runs\phase2_s2_gate_167_stack_contract_result_gate`.
+
 ## Gate Rules
 
 Each gate requires:

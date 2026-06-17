@@ -42,6 +42,13 @@ def _positive_int(value: Any) -> bool:
         return False
 
 
+def _result_contract_passed(provenance: Any) -> bool:
+    if not isinstance(provenance, dict):
+        return False
+    contract = provenance.get("result_contract")
+    return isinstance(contract, dict) and bool(contract.get("passed"))
+
+
 def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[str, Any]:
     path_value = payload.get("path")
     path = Path(str(path_value)) if path_value else None
@@ -60,6 +67,7 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
         "fallback_reason": payload.get("stack_engine_fallback_reason"),
         "has_dq_provenance": isinstance(provenance, dict),
         "input_samples": provenance.get("input_samples") if isinstance(provenance, dict) else None,
+        "result_contract_passed": _result_contract_passed(provenance),
         "summary_source_schema": summary.get("source_schema") if isinstance(summary, dict) else None,
         "summary_engine": summary.get("engine") if isinstance(summary, dict) else None,
         "summary_stage": summary.get("stage") if isinstance(summary, dict) else None,
@@ -69,6 +77,7 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
             and not payload.get("stack_engine_fallback_reason")
             and isinstance(provenance, dict)
             and _positive_int(provenance.get("input_samples"))
+            and _result_contract_passed(provenance)
             and _summary_is_stack_engine(summary, stage="master_calibration")
         ),
     }
@@ -82,6 +91,7 @@ def _integration_record(index: int, payload: dict[str, Any], expected_engine: st
         and payload.get("tile_stack_mode") == "stack_engine_cpu"
         and isinstance(provenance, dict)
         and _positive_int(provenance.get("input_samples"))
+        and _result_contract_passed(provenance)
         and _summary_is_stack_engine(summary, stage="integration")
     )
     resident_summary_ok = isinstance(summary, dict) and summary.get("engine") == "cuda_resident_stack"
@@ -100,6 +110,7 @@ def _integration_record(index: int, payload: dict[str, Any], expected_engine: st
         "stack_engine_enabled": bool(payload.get("stack_engine_enabled")),
         "has_stack_engine_dq_provenance": isinstance(provenance, dict),
         "input_samples": provenance.get("input_samples") if isinstance(provenance, dict) else None,
+        "result_contract_passed": _result_contract_passed(provenance),
         "summary_source_schema": summary.get("source_schema") if isinstance(summary, dict) else None,
         "summary_engine": summary.get("engine") if isinstance(summary, dict) else None,
         "summary_stage": summary.get("stage") if isinstance(summary, dict) else None,

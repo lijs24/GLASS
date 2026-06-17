@@ -76,3 +76,40 @@ def test_stack_engine_contract_fails_legacy_or_missing_provenance(tmp_path: Path
     assert audit["passed"] is False
     assert checks["calibration_masters_use_stack_engine"]["passed"] is False
     assert checks["integration_outputs_use:stack_engine_cpu"]["passed"] is False
+
+
+def test_stack_engine_contract_requires_embedded_result_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    legacy_provenance = {
+        "input_samples": 16,
+        "output_dq_summary": {"valid": 4},
+        "output_coverage_zero_pixels": 0,
+    }
+    summary = {
+        "source_schema": "stack_engine_dq_provenance",
+        "engine": "stack_engine_cpu",
+        "stage": "integration",
+        "input_samples": 16,
+    }
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "tile_stack_mode": "stack_engine_cpu",
+                    "stack_engine_enabled": True,
+                    "stack_engine_dq_provenance": legacy_provenance,
+                    "dq_provenance_summary": summary,
+                }
+            ]
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(run, scope="integration")
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is False
+    assert audit["integration"]["outputs"][0]["result_contract_passed"] is False
+    assert checks["integration_outputs_use:stack_engine_cpu"]["passed"] is False
