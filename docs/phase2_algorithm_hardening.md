@@ -2385,6 +2385,17 @@ integration where applicable.
 - Keep this as a promotion-control artifact only. It must not mutate pipeline
   outputs and must not enable tile-local apply by default.
 
+### S2-Gate 141: Measured Tile-Local Policy Sweep Summary
+
+- Add `glass tile-local-policy-sweep` to rank multiple
+  `tile-local-policy-decision` artifacts from measured candidates.
+- Emit accepted/rejected counts, top decision, top score, top tile count, and
+  per-decision measured residual summary fields.
+- Run the sweep over the measured single-tile and two-tile candidates from
+  S2-Gates 137-140.
+- Keep this as a summary artifact. It must not run new image processing, mutate
+  pipeline outputs, or enable tile-local apply by default.
+
 ## Gate Rules
 
 Each gate requires:

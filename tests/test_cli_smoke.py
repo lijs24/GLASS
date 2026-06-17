@@ -135,6 +135,7 @@ def test_cli_help_commands():
         "tile-local-apply-experiment",
         "tile-local-apply-verify",
         "tile-local-policy-decision",
+        "tile-local-policy-sweep",
         "speedup-summary",
         "acceptance-audit",
         "resident-determinism",

@@ -80,6 +80,7 @@ from glass.report.tile_local_policy_decision import (
     build_tile_local_policy_decision,
     write_tile_local_policy_decision,
 )
+from glass.report.tile_local_policy_sweep import build_tile_local_policy_sweep, write_tile_local_policy_sweep
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -1241,6 +1242,23 @@ def cmd_tile_local_policy_decision(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_rejected and not summary.get("accepted") else 0
+
+
+def cmd_tile_local_policy_sweep(args: argparse.Namespace) -> int:
+    payload = build_tile_local_policy_sweep(args.decision)
+    write_tile_local_policy_sweep(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "status": summary.get("status"),
+            "recommendation": summary.get("recommendation"),
+            "accepted_decisions": summary.get("accepted_decision_count"),
+            "top_score": summary.get("top_score"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_no_accepted and not summary.get("accepted_decision_count") else 0
 
 
 def cmd_speedup_summary(args: argparse.Namespace) -> int:
@@ -2774,6 +2792,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when the top measured candidate is rejected",
     )
     tile_local_decision.set_defaults(func=cmd_tile_local_policy_decision)
+
+    tile_local_sweep = sub.add_parser(
+        "tile-local-policy-sweep",
+        help="rank multiple measured tile-local policy decision artifacts",
+    )
+    tile_local_sweep.add_argument(
+        "--decision",
+        action="append",
+        required=True,
+        help="tile-local-policy-decision JSON artifact; may be repeated",
+    )
+    tile_local_sweep.add_argument("--out", required=True, help="output sweep summary JSON")
+    tile_local_sweep.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_sweep.add_argument(
+        "--fail-on-no-accepted",
+        action="store_true",
+        help="return exit code 2 if no accepted decision is present",
+    )
+    tile_local_sweep.set_defaults(func=cmd_tile_local_policy_sweep)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")
