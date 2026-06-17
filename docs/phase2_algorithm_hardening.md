@@ -3010,6 +3010,33 @@ integration where applicable.
   measured `46.82815250883293x` speedup and zero StackEngine default-promotion
   blockers.
 
+### S2-Gate 179: Release Promotion Decision Audit
+
+- Add `glass release-promotion-decision`, a machine-readable decision artifact
+  for the point after release acceptance passes but before runtime/default
+  settings are promoted.
+- The decision separates `release_candidate_ready` from
+  `default_change_ready`. Release-candidate readiness requires passing
+  acceptance, speedup threshold, pipeline release evidence, StackEngine release
+  evidence, StackEngine default readiness, and `scope=all`.
+- Default-change readiness additionally requires stable repeat/runtime evidence:
+  at least the configured minimum completed runtime observations, a non-repeat
+  recommendation from `resident-runtime-compare`, and a bounded slowest/best
+  elapsed-time ratio.
+- Optional `resident-runtime-repeat-preflight` evidence is recorded so a busy
+  GPU or low free VRAM can explain why repeat benchmarking should wait instead
+  of silently promoting defaults.
+- Add CLI strict mode with `--fail-on-not-ready` for CI/release guard usage.
+- Run the decision audit against the Gate178 passed release artifact,
+  Gate178 StackEngine contract, Gate170 pipeline contract, Gate161 runtime
+  comparison, and Gate164 repeat preflight under
+  `C:\glass_runs\phase2_s2_gate_179_release_promotion_decision`.
+- Current real artifact result: `release_candidate_ready=true`,
+  `default_change_ready=false`, recommendation `wait_for_controlled_window`,
+  measured speedup `46.82815250883293x`, runtime comparison recommendation
+  `repeat_with_warm_cache_or_dedicated_io_window`, slowest/best elapsed ratio
+  `1.364279174741225`, and preflight GPU status `busy`.
+
 ## Gate Rules
 
 Each gate requires:

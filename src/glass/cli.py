@@ -80,6 +80,10 @@ from glass.report.resident_calibration_contract import (
     build_resident_calibration_contract,
     write_resident_calibration_contract,
 )
+from glass.report.release_promotion_decision import (
+    build_release_promotion_decision,
+    write_release_promotion_decision,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1699,6 +1703,33 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         }
     )
     return 0 if audit["passed"] else 2
+
+
+def cmd_release_promotion_decision(args: argparse.Namespace) -> int:
+    payload = build_release_promotion_decision(
+        acceptance_audit=args.acceptance_audit,
+        stack_engine_contract=args.stack_engine_contract,
+        pipeline_contract=args.pipeline_contract,
+        runtime_compare=args.runtime_compare,
+        repeat_preflight=args.repeat_preflight,
+        min_speedup=args.min_speedup,
+        min_runtime_runs=args.min_runtime_runs,
+        max_elapsed_ratio_vs_best=args.max_elapsed_ratio_vs_best,
+    )
+    write_release_promotion_decision(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "recommendation": payload["recommendation"],
+            "release_candidate_ready": payload["release_candidate_ready"],
+            "default_change_ready": payload["default_change_ready"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_not_ready) and not payload.get("default_change_ready"):
+        return 2
+    return 0 if payload.get("release_candidate_ready") else 2
 
 
 def cmd_resident_determinism(args: argparse.Namespace) -> int:
@@ -3826,6 +3857,53 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional StackEngine contract JSON; benchmark contracts may require default-promotion readiness",
     )
     acceptance.set_defaults(func=cmd_acceptance_audit)
+
+    release_promotion_decision = sub.add_parser(
+        "release-promotion-decision",
+        help="decide whether release/default promotion evidence is ready or needs controlled repeat benchmarking",
+    )
+    release_promotion_decision.add_argument(
+        "--acceptance-audit",
+        required=True,
+        help="acceptance-audit JSON artifact",
+    )
+    release_promotion_decision.add_argument(
+        "--stack-engine-contract",
+        help="optional StackEngine contract JSON; supplements acceptance release evidence",
+    )
+    release_promotion_decision.add_argument(
+        "--pipeline-contract",
+        help="optional pipeline-contract JSON; supplements acceptance release evidence",
+    )
+    release_promotion_decision.add_argument(
+        "--runtime-compare",
+        help="optional resident-runtime-compare JSON used to prove stable repeated timing",
+    )
+    release_promotion_decision.add_argument(
+        "--repeat-preflight",
+        help="optional resident-runtime-repeat-preflight JSON used to explain why repeat benchmarking should wait",
+    )
+    release_promotion_decision.add_argument("--out", required=True, help="output release promotion decision JSON")
+    release_promotion_decision.add_argument("--markdown", help="optional output Markdown summary")
+    release_promotion_decision.add_argument("--min-speedup", type=float, help="override required speedup threshold")
+    release_promotion_decision.add_argument(
+        "--min-runtime-runs",
+        type=int,
+        default=2,
+        help="minimum completed runtime observations before default changes are considered ready",
+    )
+    release_promotion_decision.add_argument(
+        "--max-elapsed-ratio-vs-best",
+        type=float,
+        default=1.25,
+        help="maximum slowest/best elapsed ratio accepted as stable repeat evidence",
+    )
+    release_promotion_decision.add_argument(
+        "--fail-on-not-ready",
+        action="store_true",
+        help="return exit code 2 unless default_change_ready is true",
+    )
+    release_promotion_decision.set_defaults(func=cmd_release_promotion_decision)
 
     resident_det = sub.add_parser(
         "resident-determinism",
