@@ -2396,6 +2396,21 @@ integration where applicable.
 - Keep this as a summary artifact. It must not run new image processing, mutate
   pipeline outputs, or enable tile-local apply by default.
 
+### S2-Gate 142: Tile-Local Sweep Plan And Three-Tile Candidate
+
+- Add `glass tile-local-sweep-plan` to generate a reproducible command queue for
+  measured tile-local policy sweeps.
+- The plan must derive candidate subset paths, run directories, compare,
+  apply-experiment, acceptance-audit, verification, decision, and final sweep
+  commands from explicit inputs.
+- Run the plan over the measured F000100-F000110 replay and include the
+  single-tile, two-tile, and three-tile candidate ladder.
+- Execute the three-tile candidate through the same real-data compare,
+  acceptance, local verification, decision, and sweep checks used for the
+  previous measured candidates.
+- The plan and measured candidate must remain opt-in and must not enable
+  tile-local apply by default.
+
 ## Gate Rules
 
 Each gate requires:

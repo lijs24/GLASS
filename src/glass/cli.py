@@ -81,6 +81,7 @@ from glass.report.tile_local_policy_decision import (
     write_tile_local_policy_decision,
 )
 from glass.report.tile_local_policy_sweep import build_tile_local_policy_sweep, write_tile_local_policy_sweep
+from glass.report.tile_local_sweep_plan import build_tile_local_sweep_plan, write_tile_local_sweep_plan
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -1259,6 +1260,39 @@ def cmd_tile_local_policy_sweep(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_no_accepted and not summary.get("accepted_decision_count") else 0
+
+
+def cmd_tile_local_sweep_plan(args: argparse.Namespace) -> int:
+    payload = build_tile_local_sweep_plan(
+        args.replay,
+        root=args.root,
+        max_tiles=args.max_tiles,
+        strategy=args.strategy,
+        candidate_prefix=args.candidate_prefix,
+        base_run_command=args.base_run_command,
+        reference=args.reference,
+        baseline_run=args.baseline_run,
+        baseline_master=args.baseline_master,
+        baseline_compare_json=args.baseline_compare_json,
+        wbpp_result=args.wbpp_result,
+        benchmark_contract=args.benchmark_contract,
+        manifest=args.manifest,
+        glass_scale=args.glass_scale,
+        glass_offset=args.glass_offset,
+        min_coverage=args.min_coverage,
+        existing_decisions=args.existing_decision,
+    )
+    write_tile_local_sweep_plan(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "candidate_count": payload.get("candidate_count"),
+            "source_tile_count": payload.get("source_tile_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
 
 
 def cmd_speedup_summary(args: argparse.Namespace) -> int:
@@ -2811,6 +2845,47 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if no accepted decision is present",
     )
     tile_local_sweep.set_defaults(func=cmd_tile_local_policy_sweep)
+
+    tile_local_sweep_plan = sub.add_parser(
+        "tile-local-sweep-plan",
+        help="plan a measured tile-local policy sweep command queue",
+    )
+    tile_local_sweep_plan.add_argument("--replay", required=True, help="source tile-local-policy-replay JSON")
+    tile_local_sweep_plan.add_argument("--root", required=True, help="root directory for planned artifacts")
+    tile_local_sweep_plan.add_argument("--out", required=True, help="output sweep plan JSON")
+    tile_local_sweep_plan.add_argument("--markdown", help="optional output Markdown plan")
+    tile_local_sweep_plan.add_argument(
+        "--max-tiles",
+        action="append",
+        type=int,
+        required=True,
+        help="planned non-overlapping subset size; may be repeated",
+    )
+    tile_local_sweep_plan.add_argument(
+        "--strategy",
+        default="canonical_delta_abs",
+        choices=["canonical_delta_abs", "residual_reduction", "tile_index"],
+        help="subset selection strategy",
+    )
+    tile_local_sweep_plan.add_argument("--candidate-prefix", default="tile_local", help="candidate id prefix")
+    tile_local_sweep_plan.add_argument("--base-run-command", help="run_command.txt used as a GLASS run template")
+    tile_local_sweep_plan.add_argument("--reference", help="black-box reference master image for compare/verify")
+    tile_local_sweep_plan.add_argument("--baseline-run", help="baseline GLASS run directory")
+    tile_local_sweep_plan.add_argument("--baseline-master", help="baseline GLASS master image for verify/baseline compare")
+    tile_local_sweep_plan.add_argument("--baseline-compare-json", help="baseline-vs-reference compare JSON")
+    tile_local_sweep_plan.add_argument("--wbpp-result", help="user-generated black-box timing/result JSON")
+    tile_local_sweep_plan.add_argument("--benchmark-contract", help="benchmark contract JSON")
+    tile_local_sweep_plan.add_argument("--manifest", help="manifest JSON used by acceptance-audit")
+    tile_local_sweep_plan.add_argument("--glass-scale", type=float, help="scale GLASS pixels before reference compare")
+    tile_local_sweep_plan.add_argument("--glass-offset", type=float, help="offset GLASS pixels before reference compare")
+    tile_local_sweep_plan.add_argument("--min-coverage", type=float, help="minimum coverage for compare/verify")
+    tile_local_sweep_plan.add_argument(
+        "--existing-decision",
+        action="append",
+        default=[],
+        help="existing decision JSON to include in the final sweep command; may be repeated",
+    )
+    tile_local_sweep_plan.set_defaults(func=cmd_tile_local_sweep_plan)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")
