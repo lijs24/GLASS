@@ -2958,6 +2958,30 @@ integration where applicable.
   the current resident run is fast and pipeline-valid, but not yet eligible to
   be advertised as full StackEngine default.
 
+### S2-Gate 177: Resident Result-Contract Parity In StackEngine Audit
+
+- Extend `glass stack-engine-contract` with optional
+  `--resident-result-contract-json`.
+- When a resident CUDA integration output has a matching passing resident
+  result-contract entry, mark its `resident_result_contract_passed` and
+  `result_contract_passed` fields true.
+- Treat resident CUDA integration surfaces with passing resident result-contract
+  parity as StackEngine-contract-ready for adoption purposes, while preserving
+  default-promotion blockers for non-`all` scope and missing calibration
+  surfaces.
+- Surface resident result-contract parity in StackEngine JSON, Markdown, and
+  HTML reports.
+- Update candidate runtime sweep plans to generate `resident-result-contract`
+  artifacts before `stack-engine-contract` and pass them through with
+  `--resident-result-contract-json`; keep older plans compatible.
+- Run the updated StackEngine audit against the Gate160 resident CUDA run with
+  Gate169 resident result-contract evidence under
+  `C:\glass_runs\phase2_s2_gate_177_resident_stack_parity`.
+- Current real artifact result: resident integration StackEngine contract passed
+  with resident result-contract parity, adoption gap count fell from `1` to `0`,
+  and release acceptance failed on only the remaining scope/calibration
+  promotion blockers instead of the previous resident CUDA surface gap.
+
 ## Gate Rules
 
 Each gate requires:

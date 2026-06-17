@@ -49,6 +49,48 @@ def _result_contract_passed(provenance: Any) -> bool:
     return isinstance(contract, dict) and bool(contract.get("passed"))
 
 
+def _resident_contract_lookup(payload: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    if payload.get("artifact_type") != "resident_cuda_result_contract":
+        return {}
+    top_level_passed = payload.get("passed") is True
+    outputs = payload.get("outputs") if isinstance(payload.get("outputs"), list) else []
+    lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        index_key = str(output.get("index"))
+        filter_key = str(output.get("filter") or "")
+        checks = output.get("checks") if isinstance(output.get("checks"), list) else []
+        record = {
+            "artifact_type": payload.get("artifact_type"),
+            "top_level_passed": top_level_passed,
+            "passed": top_level_passed and output.get("passed") is True,
+            "status": output.get("status"),
+            "check_count": len([item for item in checks if isinstance(item, dict)]),
+            "active_frame_count": output.get("active_frame_count"),
+            "frame_count": output.get("frame_count"),
+            "contract_type": output.get("contract_type"),
+        }
+        lookup[("index", index_key)] = record
+        if filter_key:
+            lookup[("filter", filter_key)] = record
+    return lookup
+
+
+def _resident_contract_for_output(
+    index: int,
+    payload: dict[str, Any],
+    lookup: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any] | None:
+    by_index = lookup.get(("index", str(index)))
+    if by_index is not None:
+        return by_index
+    filter_value = payload.get("filter")
+    if filter_value is None:
+        return None
+    return lookup.get(("filter", str(filter_value)))
+
+
 def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[str, Any]:
     path_value = payload.get("path")
     path = Path(str(path_value)) if path_value else None
@@ -83,15 +125,23 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
     }
 
 
-def _integration_record(index: int, payload: dict[str, Any], expected_engine: str) -> dict[str, Any]:
+def _integration_record(
+    index: int,
+    payload: dict[str, Any],
+    expected_engine: str,
+    resident_contracts: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
     provenance = payload.get("stack_engine_dq_provenance")
     summary = payload.get("dq_provenance_summary")
+    resident_contract = _resident_contract_for_output(index, payload, resident_contracts)
+    stack_result_contract_passed = _result_contract_passed(provenance)
+    resident_result_contract_passed = bool((resident_contract or {}).get("passed"))
     stack_engine_ok = (
         bool(payload.get("stack_engine_enabled"))
         and payload.get("tile_stack_mode") == "stack_engine_cpu"
         and isinstance(provenance, dict)
         and _positive_int(provenance.get("input_samples"))
-        and _result_contract_passed(provenance)
+        and stack_result_contract_passed
         and _summary_is_stack_engine(summary, stage="integration")
     )
     resident_summary_ok = isinstance(summary, dict) and summary.get("engine") == "cuda_resident_stack"
@@ -110,7 +160,12 @@ def _integration_record(index: int, payload: dict[str, Any], expected_engine: st
         "stack_engine_enabled": bool(payload.get("stack_engine_enabled")),
         "has_stack_engine_dq_provenance": isinstance(provenance, dict),
         "input_samples": provenance.get("input_samples") if isinstance(provenance, dict) else None,
-        "result_contract_passed": _result_contract_passed(provenance),
+        "result_contract_passed": stack_result_contract_passed or resident_result_contract_passed,
+        "stack_result_contract_passed": stack_result_contract_passed,
+        "resident_result_contract_passed": resident_result_contract_passed,
+        "resident_result_contract_status": (resident_contract or {}).get("status"),
+        "resident_result_contract_check_count": (resident_contract or {}).get("check_count"),
+        "resident_result_contract_active_frame_count": (resident_contract or {}).get("active_frame_count"),
         "summary_source_schema": summary.get("source_schema") if isinstance(summary, dict) else None,
         "summary_engine": summary.get("engine") if isinstance(summary, dict) else None,
         "summary_stage": summary.get("stage") if isinstance(summary, dict) else None,
@@ -137,7 +192,7 @@ def _adoption_surface_record(surface: str, record: dict[str, Any]) -> dict[str, 
     fallback = record.get("fallback_reason")
     result_contract_passed = bool(record.get("result_contract_passed"))
     stack_engine_contract_ready = (
-        family == "stack_engine_cpu"
+        family in {"stack_engine_cpu", "cuda_resident_stack"}
         and bool(record.get("contract_ok"))
         and result_contract_passed
         and not fallback
@@ -161,6 +216,8 @@ def _adoption_surface_record(surface: str, record: dict[str, Any]) -> dict[str, 
         "summary_engine": record.get("summary_engine"),
         "stack_engine_enabled": record.get("stack_engine_enabled"),
         "result_contract_passed": record.get("result_contract_passed"),
+        "stack_result_contract_passed": record.get("stack_result_contract_passed"),
+        "resident_result_contract_passed": record.get("resident_result_contract_passed"),
         "contract_ok": record.get("contract_ok"),
         "fallback_reason": fallback,
         "stack_engine_contract_ready": stack_engine_contract_ready,
@@ -301,12 +358,14 @@ def build_stack_engine_contract_audit(
     *,
     scope: str = "all",
     expected_integration_engine: str = "stack_engine_cpu",
+    resident_result_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
     calibration_path = run_root / "calibration_artifacts.json"
     integration_path = run_root / "integration_results.json"
     calibration = _load_json_object(calibration_path)
     integration = _load_json_object(integration_path)
+    resident_contracts = _resident_contract_lookup(resident_result_contract or {})
     checks: list[dict[str, Any]] = []
 
     include_calibration = scope in {"all", "calibration"}
@@ -344,7 +403,7 @@ def build_stack_engine_contract_audit(
     if include_integration:
         outputs = integration.get("outputs") if isinstance(integration.get("outputs"), list) else []
         integration_records = [
-            _integration_record(index, payload, expected_integration_engine)
+            _integration_record(index, payload, expected_integration_engine, resident_contracts)
             for index, payload in enumerate(outputs)
             if isinstance(payload, dict)
         ]
@@ -388,6 +447,7 @@ def build_stack_engine_contract_audit(
         "run_dir": str(run_root),
         "scope": scope,
         "expected_integration_engine": expected_integration_engine,
+        "resident_result_contract_attached": bool(resident_contracts),
         "status": "passed" if passed else "failed",
         "passed": passed,
         "checks": checks,
@@ -414,6 +474,7 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         f"- Run: `{audit['run_dir']}`",
         f"- Scope: `{audit['scope']}`",
         f"- Expected integration engine: `{audit['expected_integration_engine']}`",
+        f"- Resident result contract attached: `{audit.get('resident_result_contract_attached')}`",
         f"- StackEngine adoption recommendation: `{(audit.get('adoption') or {}).get('recommendation')}`",
         f"- Phase 2 StackEngine default gaps: `{(audit.get('adoption') or {}).get('phase2_stack_engine_default_gap_count')}`",
         f"- Default promotion ready: `{(audit.get('default_promotion') or {}).get('ready')}`",

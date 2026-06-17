@@ -13,6 +13,7 @@ def _commands(
     *,
     pipeline_contract: bool = False,
     stack_engine_contract: bool = False,
+    resident_result_contract: bool = False,
 ) -> dict[str, str]:
     commands = {
         "run": f"glass run --out runs/{name}",
@@ -26,10 +27,18 @@ def _commands(
             f"glass pipeline-contract --run runs/{name} --out pipeline_contract/{name}.json"
         )
         commands["acceptance_audit"] += f" --pipeline-contract-json pipeline_contract/{name}.json"
+    if resident_result_contract:
+        commands["resident_result_contract"] = (
+            f"glass resident-result-contract --run runs/{name} --out resident_result_contract/{name}.json"
+        )
     if stack_engine_contract:
         commands["stack_engine_contract"] = (
             f"glass stack-engine-contract --run runs/{name} --out stack_engine_contract/{name}.json"
         )
+        if resident_result_contract:
+            commands["stack_engine_contract"] += (
+                f" --resident-result-contract-json resident_result_contract/{name}.json"
+            )
         commands["acceptance_audit"] += f" --stack-engine-contract-json stack_engine_contract/{name}.json"
     return commands
 
@@ -84,7 +93,12 @@ def test_candidate_runtime_sweep_execute_records_contract_steps(tmp_path: Path) 
                 {
                     "variant_id": "prefetch10_workers5",
                     "artifacts": {"candidate_comparison_json": str(tmp_path / "missing_a.json")},
-                    "commands": _commands("a", pipeline_contract=True, stack_engine_contract=True),
+                    "commands": _commands(
+                        "a",
+                        pipeline_contract=True,
+                        resident_result_contract=True,
+                        stack_engine_contract=True,
+                    ),
                 }
             ],
         },
@@ -96,6 +110,7 @@ def test_candidate_runtime_sweep_execute_records_contract_steps(tmp_path: Path) 
         "run",
         "compare_reference",
         "compare_baseline",
+        "resident_result_contract",
         "stack_engine_contract",
         "pipeline_contract",
         "acceptance_audit",

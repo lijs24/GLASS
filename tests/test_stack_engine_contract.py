@@ -191,6 +191,72 @@ def test_stack_engine_contract_tracks_resident_cuda_adoption_gap(tmp_path: Path)
     assert "phase2_stack_engine_default_gaps" in blockers
 
 
+def test_stack_engine_contract_accepts_resident_result_contract_parity(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_contract = {
+        "artifact_type": "resident_cuda_result_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "contract_type": "resident_cuda_result_contract",
+                "active_frame_count": 193,
+                "frame_count": 200,
+                "checks": [
+                    {"name": "resident_identity", "passed": True},
+                    {"name": "required_maps_exist", "passed": True},
+                ],
+            }
+        ],
+    }
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                        "active_frame_count": 193,
+                    },
+                }
+            ]
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(
+        run,
+        scope="integration",
+        expected_integration_engine="cuda_resident_stack",
+        resident_result_contract=resident_contract,
+    )
+
+    output = audit["integration"]["outputs"][0]
+    surface = audit["adoption"]["surfaces"][0]
+    promotion_blockers = {item["name"] for item in audit["default_promotion"]["blockers"]}
+    assert audit["passed"] is True
+    assert audit["resident_result_contract_attached"] is True
+    assert output["resident_result_contract_passed"] is True
+    assert output["result_contract_passed"] is True
+    assert output["resident_result_contract_check_count"] == 2
+    assert surface["engine_family"] == "cuda_resident_stack"
+    assert surface["stack_engine_contract_ready"] is True
+    assert surface["phase2_stack_engine_default_gap"] is False
+    assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
+    assert audit["adoption"]["recommendation"] == "stack_engine_default_ready"
+    assert "phase2_stack_engine_default_gaps" not in promotion_blockers
+    assert "adoption_recommendation_not_ready" not in promotion_blockers
+    assert "scope_not_all" in promotion_blockers
+    assert "missing_calibration_surface" in promotion_blockers
+
+
 def test_stack_engine_contract_require_default_ready_rejects_resident_only_gap(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
@@ -235,3 +301,66 @@ def test_stack_engine_contract_require_default_ready_rejects_resident_only_gap(t
     assert audit["passed"] is True
     assert audit["default_promotion"]["ready"] is False
     assert audit["default_promotion"]["status"] == "blocked"
+
+
+def test_stack_engine_contract_cli_uses_resident_result_contract_json(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    resident_contract = tmp_path / "resident_result_contract.json"
+    out = tmp_path / "stack_engine_contract.json"
+    write_json(
+        resident_contract,
+        {
+            "artifact_type": "resident_cuda_result_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "checks": [{"name": "resident_identity", "passed": True}],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                }
+            ]
+        },
+    )
+
+    assert (
+        main(
+            [
+                "stack-engine-contract",
+                "--run",
+                str(run),
+                "--scope",
+                "integration",
+                "--expected-integration-engine",
+                "cuda_resident_stack",
+                "--resident-result-contract-json",
+                str(resident_contract),
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+
+    audit = read_json(out)
+    assert audit["resident_result_contract_attached"] is True
+    assert audit["integration"]["outputs"][0]["resident_result_contract_passed"] is True
+    assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0

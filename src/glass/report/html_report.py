@@ -988,6 +988,7 @@ def _stack_engine_contract_summary_rows(contract: dict[str, Any] | None) -> list
             "passed": contract.get("passed"),
             "scope": contract.get("scope"),
             "expected_integration_engine": contract.get("expected_integration_engine"),
+            "resident_result_contract_attached": contract.get("resident_result_contract_attached"),
             "source": contract.get("_report_source_path"),
             "master_count": ((contract.get("calibration") or {}).get("master_count")),
             "integration_output_count": ((contract.get("integration") or {}).get("output_count")),
@@ -1048,6 +1049,9 @@ def _stack_engine_contract_surface_rows(contract: dict[str, Any] | None) -> list
                 "dq_provenance": bool(item.get("has_stack_engine_dq_provenance") or item.get("summary_source_schema")),
                 "summary_schema": item.get("summary_source_schema"),
                 "expected_engine": item.get("expected_engine"),
+                "result_contract_passed": item.get("result_contract_passed"),
+                "resident_result_contract_passed": item.get("resident_result_contract_passed"),
+                "resident_result_contract_checks": item.get("resident_result_contract_check_count"),
             }
         )
     return rows
@@ -1067,6 +1071,7 @@ def _stack_engine_adoption_surface_rows(contract: dict[str, Any] | None) -> list
             "default_gap": row.get("phase2_stack_engine_default_gap"),
             "gap_reason": row.get("gap_reason"),
             "result_contract_passed": row.get("result_contract_passed"),
+            "resident_result_contract_passed": row.get("resident_result_contract_passed"),
             "fallback_reason": row.get("fallback_reason"),
         }
         for row in adoption.get("surfaces") or []

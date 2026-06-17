@@ -1912,10 +1912,16 @@ def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
 
 
 def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
+    resident_result_contract = (
+        read_json(args.resident_result_contract_json)
+        if getattr(args, "resident_result_contract_json", None)
+        else None
+    )
     audit = build_stack_engine_contract_audit(
         args.run,
         scope=args.scope,
         expected_integration_engine=args.expected_integration_engine,
+        resident_result_contract=resident_result_contract if isinstance(resident_result_contract, dict) else None,
     )
     write_stack_engine_contract_audit(args.out, audit, markdown=args.markdown)
     default_promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
@@ -1924,6 +1930,7 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
             "status": audit["status"],
             "scope": audit["scope"],
             "expected_integration_engine": audit["expected_integration_engine"],
+            "resident_result_contract_attached": audit.get("resident_result_contract_attached"),
             "default_promotion_ready": default_promotion.get("ready"),
             "default_promotion_status": default_promotion.get("status"),
             "out": args.out,
@@ -4056,6 +4063,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["stack_engine_cpu", "cuda_resident_stack", "any"],
         default="stack_engine_cpu",
         help="expected integration engine for the selected run type",
+    )
+    stack_contract.add_argument(
+        "--resident-result-contract-json",
+        help="optional resident-result-contract JSON used to prove resident CUDA result-contract parity",
     )
     stack_contract.add_argument(
         "--require-default-ready",
