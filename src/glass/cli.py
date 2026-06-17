@@ -2739,6 +2739,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
     payload = build_phase2_status(
         checkpoint_dir=args.checkpoint_dir,
         acceptance_audit=args.acceptance_audit,
+        default_route_acceptance_audit=args.default_route_acceptance_audit,
         release_manifest=args.release_manifest,
         github_release_plan=args.github_release_plan,
         pipeline_contract=args.pipeline_contract,
@@ -2748,6 +2749,11 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
     write_phase2_status(args.out, payload, markdown=args.markdown)
     latest = payload.get("latest_checkpoint") if isinstance(payload.get("latest_checkpoint"), dict) else {}
     acceptance = payload.get("acceptance_audit") if isinstance(payload.get("acceptance_audit"), dict) else {}
+    default_route = (
+        payload.get("default_route_acceptance")
+        if isinstance(payload.get("default_route_acceptance"), dict)
+        else {}
+    )
     pipeline = payload.get("pipeline_contract") if isinstance(payload.get("pipeline_contract"), dict) else {}
     decision = payload.get("release_decision") if isinstance(payload.get("release_decision"), dict) else {}
     console.print(
@@ -2757,6 +2763,8 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             "latest_checkpoint_status": latest.get("status"),
             "acceptance_status": acceptance.get("status"),
             "speedup_vs_reference": acceptance.get("speedup_vs_reference"),
+            "default_route_acceptance_status": default_route.get("status"),
+            "default_route_acceptance_passed": default_route.get("passed"),
             "pipeline_contract_status": pipeline.get("status"),
             "release_decision_status": decision.get("status"),
             "default_change_ready": decision.get("default_change_ready"),
@@ -2806,6 +2814,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     phase2_status.add_argument("--checkpoint-dir", default="runs/checkpoints")
     phase2_status.add_argument("--acceptance-audit", help="optional acceptance-audit JSON artifact")
+    phase2_status.add_argument(
+        "--default-route-acceptance-audit",
+        help="optional acceptance-audit JSON artifact proving the guarded default route",
+    )
     phase2_status.add_argument("--release-manifest", help="optional Windows release-manifest JSON artifact")
     phase2_status.add_argument("--github-release-plan", help="optional Windows GitHub release-plan JSON artifact")
     phase2_status.add_argument("--pipeline-contract", help="optional pipeline-contract JSON artifact")

@@ -9,6 +9,14 @@ from glass.models import now_iso
 
 
 _CHECKPOINT_RE = re.compile(r"s2_gate_(\d+)_status\.md$")
+_DEFAULT_ROUTE_CHECKS = {
+    "memory_mode": "contract_required_command_token:--memory-mode resident",
+    "backend": "contract_required_command_token:--backend cuda",
+    "resident_registration": (
+        "contract_required_command_token:--resident-registration similarity_cuda_triangle"
+    ),
+    "runtime_preset": "contract_required_command_token_group:resident_h2d_or_runtime_preset",
+}
 
 
 def _read_json_optional(path: str | Path | None) -> dict[str, Any] | None:
@@ -257,6 +265,62 @@ def _resident_registration_fastpath_summary(payload: dict[str, Any]) -> dict[str
         "resident_io_pipeline_warp_copy_mode": io_pipeline.get("warp_copy_mode"),
         "resident_warp_scratch_bytes": artifact.get("resident_warp_scratch_bytes"),
         "resident_io_pipeline_warp_scratch_bytes": io_pipeline.get("warp_scratch_bytes"),
+    }
+
+
+def _check_by_name(payload: dict[str, Any], name: str) -> dict[str, Any] | None:
+    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return item
+    return None
+
+
+def _default_route_acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+            "route_contract_passed": False,
+        }
+    speedup = payload.get("speedup_summary") if isinstance(payload.get("speedup_summary"), dict) else {}
+    comparison = speedup.get("comparison") if isinstance(speedup.get("comparison"), dict) else {}
+    route_checks: dict[str, dict[str, Any]] = {}
+    for key, check_name in _DEFAULT_ROUTE_CHECKS.items():
+        check = _check_by_name(payload, check_name)
+        route_checks[key] = {
+            "name": check_name,
+            "present": check is not None,
+            "passed": check.get("passed") is True if isinstance(check, dict) else False,
+            "evidence": check.get("evidence") if isinstance(check, dict) else None,
+        }
+    route_contract_passed = all(item["passed"] for item in route_checks.values())
+    return {
+        "schema_version": 1,
+        "path": payload.get("_path"),
+        "exists": True,
+        "status": payload.get("status"),
+        "passed": payload.get("passed") is True and route_contract_passed,
+        "acceptance_passed": payload.get("passed"),
+        "benchmark_contract": payload.get("benchmark_contract"),
+        "speedup_vs_reference": speedup.get("speedup_vs_wbpp"),
+        "active_frames": speedup.get("glass", {}).get("weighted_frame_count")
+        if isinstance(speedup.get("glass"), dict)
+        else None,
+        "rms_diff": comparison.get("rms_diff"),
+        "abs_diff_p99": comparison.get("abs_diff_p99"),
+        "coverage_fraction": comparison.get("coverage_fraction"),
+        "route_contract_passed": route_contract_passed,
+        "route_checks": route_checks,
+        "route_check_count": len(route_checks),
+        "route_failed_checks": [
+            item["name"] for item in route_checks.values() if item["passed"] is not True
+        ],
     }
 
 
@@ -512,6 +576,7 @@ def build_phase2_status(
     *,
     checkpoint_dir: str | Path,
     acceptance_audit: str | Path | None = None,
+    default_route_acceptance_audit: str | Path | None = None,
     release_manifest: str | Path | None = None,
     github_release_plan: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
@@ -520,6 +585,7 @@ def build_phase2_status(
 ) -> dict[str, Any]:
     checkpoint = _latest_checkpoint(checkpoint_dir)
     acceptance = _acceptance_summary(acceptance_audit)
+    default_route_acceptance = _default_route_acceptance_summary(default_route_acceptance_audit)
     doctor = _doctor_summary(doctor_payload)
     release = _release_manifest_summary(release_manifest)
     github_plan = _github_release_plan_summary(github_release_plan)
@@ -540,6 +606,28 @@ def build_phase2_status(
                 "evidence": {
                     "status": acceptance.get("status"),
                     "speedup_vs_reference": acceptance.get("speedup_vs_reference"),
+                },
+            }
+        )
+    if default_route_acceptance is not None:
+        checks.append(
+            {
+                "name": "default_route_acceptance_passed",
+                "passed": default_route_acceptance.get("passed") is True,
+                "evidence": {
+                    "status": default_route_acceptance.get("status"),
+                    "acceptance_passed": default_route_acceptance.get("acceptance_passed"),
+                    "speedup_vs_reference": default_route_acceptance.get("speedup_vs_reference"),
+                },
+            }
+        )
+        checks.append(
+            {
+                "name": "default_route_acceptance_route_contract_passed",
+                "passed": default_route_acceptance.get("route_contract_passed") is True,
+                "evidence": {
+                    "route_check_count": default_route_acceptance.get("route_check_count"),
+                    "route_failed_checks": default_route_acceptance.get("route_failed_checks"),
                 },
             }
         )
@@ -637,6 +725,7 @@ def build_phase2_status(
         "passed": passed,
         "latest_checkpoint": checkpoint,
         "acceptance_audit": acceptance,
+        "default_route_acceptance": default_route_acceptance,
         "doctor": doctor,
         "release_manifest": release,
         "github_release_plan": github_plan,
@@ -649,6 +738,7 @@ def build_phase2_status(
 def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> None:
     checkpoint = payload.get("latest_checkpoint") or {}
     acceptance = payload.get("acceptance_audit") or {}
+    default_route_acceptance = payload.get("default_route_acceptance") or {}
     doctor = payload.get("doctor") or {}
     release = payload.get("release_manifest") or {}
     github_plan = payload.get("github_release_plan") or {}
@@ -700,6 +790,23 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Triangle warp batch frames: {acceptance.get('triangle_warp_batch_frame_count')}",
                 f"- Resident warp copy mode: {acceptance.get('resident_warp_copy_mode')}",
                 f"- Resident warp scratch bytes: {acceptance.get('resident_warp_scratch_bytes')}",
+            ]
+        )
+    if default_route_acceptance:
+        contract = default_route_acceptance.get("benchmark_contract") or {}
+        lines.extend(
+            [
+                "",
+                "## Default Route Acceptance",
+                "",
+                f"- Status: {default_route_acceptance.get('status')}",
+                f"- Passed: {default_route_acceptance.get('passed')}",
+                f"- Route contract passed: {default_route_acceptance.get('route_contract_passed')}",
+                f"- Contract: {contract.get('name')}",
+                f"- Speedup vs reference: {default_route_acceptance.get('speedup_vs_reference')}",
+                f"- Active frames: {default_route_acceptance.get('active_frames')}",
+                f"- Route check count: {default_route_acceptance.get('route_check_count')}",
+                f"- Route failed checks: {default_route_acceptance.get('route_failed_checks')}",
             ]
         )
     if doctor:
@@ -915,6 +1022,30 @@ def build_phase2_status_compare(
             candidate=_status_value(candidate, "acceptance_audit", "status"),
         ),
         _compare_check(
+            "default_route_acceptance_passed_preserved",
+            _status_value(baseline, "default_route_acceptance", "passed") is not True
+            or _status_value(candidate, "default_route_acceptance", "passed") is True,
+            baseline=_status_value(baseline, "default_route_acceptance", "passed"),
+            candidate=_status_value(candidate, "default_route_acceptance", "passed"),
+        ),
+        _compare_check(
+            "default_route_acceptance_route_contract_preserved",
+            _status_value(baseline, "default_route_acceptance", "route_contract_passed")
+            is not True
+            or _status_value(candidate, "default_route_acceptance", "route_contract_passed")
+            is True,
+            baseline=_status_value(
+                baseline,
+                "default_route_acceptance",
+                "route_contract_passed",
+            ),
+            candidate=_status_value(
+                candidate,
+                "default_route_acceptance",
+                "route_contract_passed",
+            ),
+        ),
+        _compare_check(
             "resident_registration_fastpath_contract_passed_preserved",
             _status_value(
                 baseline,
@@ -1049,6 +1180,16 @@ def build_phase2_status_compare(
             "status": baseline.get("status"),
             "latest_gate": baseline_gate,
             "acceptance_status": _status_value(baseline, "acceptance_audit", "status"),
+            "default_route_acceptance_status": _status_value(
+                baseline,
+                "default_route_acceptance",
+                "status",
+            ),
+            "default_route_acceptance_passed": _status_value(
+                baseline,
+                "default_route_acceptance",
+                "passed",
+            ),
             "cuda_available": _status_value(baseline, "doctor", "cuda_available"),
             "release_manifest_status": _status_value(baseline, "release_manifest", "status"),
             "github_release_plan_status": _status_value(baseline, "github_release_plan", "status"),
@@ -1065,6 +1206,16 @@ def build_phase2_status_compare(
             "status": candidate.get("status"),
             "latest_gate": candidate_gate,
             "acceptance_status": _status_value(candidate, "acceptance_audit", "status"),
+            "default_route_acceptance_status": _status_value(
+                candidate,
+                "default_route_acceptance",
+                "status",
+            ),
+            "default_route_acceptance_passed": _status_value(
+                candidate,
+                "default_route_acceptance",
+                "passed",
+            ),
             "cuda_available": _status_value(candidate, "doctor", "cuda_available"),
             "release_manifest_status": _status_value(candidate, "release_manifest", "status"),
             "github_release_plan_status": _status_value(candidate, "github_release_plan", "status"),

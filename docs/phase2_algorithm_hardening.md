@@ -3740,6 +3740,22 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 224: Default Route Supplemental Handoff Evidence
+
+- Extend `glass phase2-status` with an optional
+  `--default-route-acceptance-audit` input so release handoff can carry both the
+  primary 200-light science/fast-path acceptance audit and the smaller guarded
+  default-route acceptance audit.
+- Summarize the default-route artifact separately as `default_route_acceptance`
+  instead of weakening or replacing the primary `acceptance_audit`.
+- Require the default-route artifact, when supplied, to pass the route contract
+  checks for resident memory mode, CUDA backend, resident registration mode, and
+  the resident runtime preset/group evidence.
+- Extend `glass phase2-status-compare` so a candidate cannot drop or regress
+  default-route acceptance evidence once a baseline status contains it.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:
