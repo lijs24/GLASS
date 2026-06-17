@@ -531,7 +531,47 @@ def _write_stack_engine_contract(path: Path, *, passed: bool = True, ready: bool
     )
 
 
-def _write_contract_bundle(path: Path, *, pipeline: Path, stack: Path, passed: bool = True) -> None:
+def _write_resident_contract(path: Path, *, artifact_type: str, passed: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": artifact_type,
+            "audit_type": artifact_type,
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "output_count": 1,
+            "checks": [
+                {
+                    "name": "fixture_resident_contract_check",
+                    "passed": passed,
+                    "evidence": {"fixture": True},
+                    "note": "",
+                }
+            ],
+            "outputs": [{"index": 0, "filter": "H", "status": "passed" if passed else "failed"}],
+        },
+    )
+
+
+def _write_contract_bundle(
+    path: Path,
+    *,
+    pipeline: Path,
+    stack: Path,
+    passed: bool = True,
+    resident_calibration: Path | None = None,
+    resident_result: Path | None = None,
+) -> None:
+    artifacts = {
+        "pipeline_contract": str(pipeline),
+        "stack_engine_contract": str(stack),
+        "guardrails_summary": str(path.with_name("guardrails_summary.json")),
+    }
+    if resident_calibration is not None:
+        artifacts["resident_calibration_contract"] = str(resident_calibration)
+    if resident_result is not None:
+        artifacts["resident_result_contract"] = str(resident_result)
     write_json(
         path,
         {
@@ -540,11 +580,13 @@ def _write_contract_bundle(path: Path, *, pipeline: Path, stack: Path, passed: b
             "status": "passed" if passed else "failed",
             "passed": passed,
             "purpose": "acceptance_audit_contract_inputs",
-            "artifacts": {
-                "pipeline_contract": str(pipeline),
-                "stack_engine_contract": str(stack),
-                "guardrails_summary": str(path.with_name("guardrails_summary.json")),
-            },
+            "artifacts": artifacts,
+            "resident_calibration_contract_json": None
+            if resident_calibration is None
+            else str(resident_calibration),
+            "resident_result_contract_json": None if resident_result is None else str(resident_result),
+            "resident_calibration_contract_attached": resident_calibration is not None,
+            "resident_result_contract_attached": resident_result is not None,
             "acceptance_audit_argument_map": {
                 "pipeline_contract_json": str(pipeline),
                 "stack_engine_contract_json": str(stack),
@@ -646,6 +688,116 @@ def test_acceptance_audit_accepts_contract_bundle(tmp_path: Path):
     assert audit["stack_engine_contract"]["path"] == str(stack)
     assert checks["pipeline_contract_passed"]["passed"] is True
     assert checks["stack_engine_contract_passed"]["passed"] is True
+
+
+def test_acceptance_audit_enforces_resident_contract_bundle_attachments(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    stack = tmp_path / "stack_engine_contract.json"
+    resident_calibration = tmp_path / "resident_calibration_contract.json"
+    resident_result = tmp_path / "resident_result_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+    _write_stack_engine_contract(stack, passed=True, ready=True)
+    _write_resident_contract(
+        resident_calibration,
+        artifact_type="resident_cuda_calibration_contract",
+        passed=True,
+    )
+    _write_resident_contract(
+        resident_result,
+        artifact_type="resident_cuda_result_contract",
+        passed=True,
+    )
+    _write_contract_bundle(
+        bundle,
+        pipeline=pipeline,
+        stack=stack,
+        resident_calibration=resident_calibration,
+        resident_result=resident_result,
+    )
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=bundle,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert audit["contract_bundle"]["resident_calibration_contract_json"] == str(resident_calibration)
+    assert audit["contract_bundle"]["resident_result_contract_json"] == str(resident_result)
+    assert audit["resident_contracts"]["calibration"]["path"] == str(resident_calibration)
+    assert audit["resident_contracts"]["result"]["path"] == str(resident_result)
+    assert checks["resident_calibration_contract_present"]["passed"] is True
+    assert checks["resident_calibration_contract_type"]["passed"] is True
+    assert checks["resident_calibration_contract_passed"]["passed"] is True
+    assert checks["resident_result_contract_present"]["passed"] is True
+    assert checks["resident_result_contract_type"]["passed"] is True
+    assert checks["resident_result_contract_passed"]["passed"] is True
+
+
+def test_acceptance_audit_fails_failed_resident_contract_bundle_attachment(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    stack = tmp_path / "stack_engine_contract.json"
+    resident_calibration = tmp_path / "resident_calibration_contract.json"
+    resident_result = tmp_path / "resident_result_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+    _write_stack_engine_contract(stack, passed=True, ready=True)
+    _write_resident_contract(
+        resident_calibration,
+        artifact_type="resident_cuda_calibration_contract",
+        passed=True,
+    )
+    _write_resident_contract(
+        resident_result,
+        artifact_type="resident_cuda_result_contract",
+        passed=False,
+    )
+    _write_contract_bundle(
+        bundle,
+        pipeline=pipeline,
+        stack=stack,
+        resident_calibration=resident_calibration,
+        resident_result=resident_result,
+    )
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=bundle,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["resident_contracts"]["result"]["passed"] is False
+    assert checks["resident_result_contract_present"]["passed"] is True
+    assert checks["resident_result_contract_type"]["passed"] is True
+    assert checks["resident_result_contract_passed"]["passed"] is False
 
 
 def test_acceptance_audit_explicit_contract_paths_override_bundle(tmp_path: Path):

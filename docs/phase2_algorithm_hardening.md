@@ -3405,6 +3405,19 @@ integration where applicable.
   coverage fraction `0.9577924192878646`, StackEngine default promotion
   `ready=true`, and both contract-bundle checks passed.
 
+### S2-Gate 201: Resident Bundle Contract Enforcement
+
+- Make `glass acceptance-audit --contract-bundle` validate resident CUDA
+  calibration and resident CUDA result contracts when a guardrails bundle
+  declares them.
+- Record resident contract path, existence, artifact type, status, pass/fail,
+  output count, check count, and failed checks in the acceptance audit JSON.
+- Add blocking checks for resident contract presence, expected artifact type,
+  and `passed=true`.
+- Surface resident bundle contracts in the acceptance-audit Markdown summary.
+- Validate with direct acceptance-audit tests and rerun the real Gate200
+  200-light acceptance bundle as a read-only artifact audit.
+
 ## Gate Rules
 
 Each gate requires:

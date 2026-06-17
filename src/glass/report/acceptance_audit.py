@@ -58,6 +58,14 @@ def _contract_bundle_paths(
     )
     bundle_pipeline = artifact_map.get("pipeline_contract") or argument_map.get("pipeline_contract_json")
     bundle_stack = artifact_map.get("stack_engine_contract") or argument_map.get("stack_engine_contract_json")
+    bundle_resident_calibration = (
+        artifact_map.get("resident_calibration_contract")
+        or bundle_payload.get("resident_calibration_contract_json")
+    )
+    bundle_resident_result = (
+        artifact_map.get("resident_result_contract")
+        or bundle_payload.get("resident_result_contract_json")
+    )
     resolved_pipeline = pipeline_contract_json if pipeline_contract_json is not None else bundle_pipeline
     resolved_stack = stack_engine_contract_json if stack_engine_contract_json is not None else bundle_stack
     bundle = {
@@ -69,11 +77,78 @@ def _contract_bundle_paths(
         "purpose": bundle_payload.get("purpose"),
         "pipeline_contract_json": None if resolved_pipeline is None else str(resolved_pipeline),
         "stack_engine_contract_json": None if resolved_stack is None else str(resolved_stack),
+        "resident_calibration_contract_json": None
+        if bundle_resident_calibration is None
+        else str(bundle_resident_calibration),
+        "resident_result_contract_json": None if bundle_resident_result is None else str(bundle_resident_result),
+        "resident_calibration_contract_attached": bundle_payload.get("resident_calibration_contract_attached"),
+        "resident_result_contract_attached": bundle_payload.get("resident_result_contract_attached"),
         "explicit_pipeline_contract_overrode_bundle": pipeline_contract_json is not None,
         "explicit_stack_engine_contract_overrode_bundle": stack_engine_contract_json is not None,
         "checks": bundle_payload.get("checks") if isinstance(bundle_payload.get("checks"), list) else [],
     }
     return resolved_pipeline, resolved_stack, bundle
+
+
+def _contract_attachment_audit(
+    *,
+    contract_bundle: dict[str, Any] | None,
+    label: str,
+    path_key: str,
+    attached_key: str,
+    expected_artifact_type: str,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    if contract_bundle is None:
+        return None, []
+    path_value = contract_bundle.get(path_key)
+    declared_attached = bool(contract_bundle.get(attached_key)) or path_value is not None
+    if not declared_attached:
+        return None, []
+
+    path = Path(str(path_value)) if path_value else None
+    exists = bool(path and path.exists())
+    payload = _read_json_lenient(path) if path is not None and exists else {}
+    contract_checks = [item for item in payload.get("checks") or [] if isinstance(item, dict)]
+    failed_checks = [item.get("name") for item in contract_checks if not item.get("passed")]
+    output_count = payload.get("output_count")
+    if output_count is None and isinstance(payload.get("outputs"), list):
+        output_count = len(payload["outputs"])
+    record = {
+        "path": None if path is None else str(path),
+        "exists": exists,
+        "artifact_type": payload.get("artifact_type"),
+        "audit_type": payload.get("audit_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "output_count": output_count,
+        "check_count": len(contract_checks),
+        "failed_checks": failed_checks,
+    }
+    checks = [
+        _check(
+            f"{label}_present",
+            exists,
+            {"path": record["path"], "exists": exists},
+        ),
+        _check(
+            f"{label}_type",
+            payload.get("artifact_type") == expected_artifact_type,
+            {
+                "path": record["path"],
+                "artifact_type": payload.get("artifact_type"),
+                "required": expected_artifact_type,
+            },
+        ),
+        _check(
+            f"{label}_passed",
+            payload.get("passed") is True,
+            {
+                "status": payload.get("status"),
+                "failed_checks": failed_checks,
+            },
+        ),
+    ]
+    return record, checks
 
 
 def _pipeline_contract_release_evidence(
@@ -282,6 +357,23 @@ def build_acceptance_audit(
                 ),
             ]
         )
+
+    resident_calibration_contract, resident_calibration_checks = _contract_attachment_audit(
+        contract_bundle=contract_bundle,
+        label="resident_calibration_contract",
+        path_key="resident_calibration_contract_json",
+        attached_key="resident_calibration_contract_attached",
+        expected_artifact_type="resident_cuda_calibration_contract",
+    )
+    resident_result_contract, resident_result_checks = _contract_attachment_audit(
+        contract_bundle=contract_bundle,
+        label="resident_result_contract",
+        path_key="resident_result_contract_json",
+        attached_key="resident_result_contract_attached",
+        expected_artifact_type="resident_cuda_result_contract",
+    )
+    checks.extend(resident_calibration_checks)
+    checks.extend(resident_result_checks)
 
     pipeline_contract_path = Path(pipeline_contract_json) if pipeline_contract_json is not None else None
     pipeline_contract_payload = (
@@ -495,6 +587,10 @@ def build_acceptance_audit(
         "frame_accounting": frame_accounting_record,
         "resident_determinism": resident_determinism,
         "contract_bundle": contract_bundle,
+        "resident_contracts": {
+            "calibration": resident_calibration_contract,
+            "result": resident_result_contract,
+        },
         "pipeline_contract": pipeline_contract,
         "stack_engine_contract": stack_engine_contract,
         "release_contract_evidence": release_contract_evidence,
@@ -589,6 +685,25 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         for item in stack_release_evidence.get("checks") or []:
             marker = "PASS" if item.get("passed") else "FAIL"
             lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
+        lines.append("")
+    resident_contracts = audit.get("resident_contracts") if isinstance(audit.get("resident_contracts"), dict) else {}
+    resident_rows = [
+        (name, payload)
+        for name, payload in resident_contracts.items()
+        if isinstance(payload, dict)
+    ]
+    if resident_rows:
+        lines.extend(["## Resident Bundle Contracts", ""])
+        for name, payload in resident_rows:
+            lines.append(
+                "- "
+                f"{name}: status={payload.get('status')} passed={payload.get('passed')} "
+                f"type={payload.get('artifact_type')} checks={payload.get('check_count')} "
+                f"path={payload.get('path')}"
+            )
+            failed = payload.get("failed_checks")
+            if failed:
+                lines.append(f"  failed_checks={failed}")
         lines.append("")
     for item in audit["checks"]:
         marker = "PASS" if item["passed"] else "FAIL"
