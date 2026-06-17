@@ -1,0 +1,61 @@
+{
+  "allow_existing": false,
+  "artifact_type": "resident_runtime_repeat_preflight",
+  "created_at": "2026-06-17T20:40:16+00:00",
+  "gpu": {
+    "driver": "596.21",
+    "free_mib": 55590,
+    "max_busy_utilization": 95,
+    "min_free_mib": 12000,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "reason": "GPU has enough free memory and is below the busy utilization threshold",
+    "status": "ready",
+    "total_mib": 97887,
+    "used_mib": 42297,
+    "utilization_percent": 100
+  },
+  "limitations": [
+    "This preflight checks plan/output/GPU readiness only; it does not execute image processing.",
+    "GPU readiness is based on a point-in-time nvidia-smi sample.",
+    "Disk/cache state labels in the repeat plan are operator intent, not enforceable guarantees."
+  ],
+  "plan": "runs\\checkpoints\\s2_gate_218_runtime_repeat_plan.json",
+  "ready_to_execute": true,
+  "recommendation": "execute_repeat_plan",
+  "repeat_count": 3,
+  "runs": [
+    {
+      "resident_artifacts_exists": false,
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat01",
+      "run_dir_exists": false,
+      "run_id": "gate218_default_repeat01",
+      "run_timing_exists": false,
+      "status": "ready"
+    },
+    {
+      "resident_artifacts_exists": false,
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat02",
+      "run_dir_exists": false,
+      "run_id": "gate218_default_repeat02",
+      "run_timing_exists": false,
+      "status": "ready"
+    },
+    {
+      "resident_artifacts_exists": false,
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat03",
+      "run_dir_exists": false,
+      "run_id": "gate218_default_repeat03",
+      "run_timing_exists": false,
+      "status": "ready"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "compare_exists": false,
+    "compare_out": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runtime_compare.json",
+    "complete_run_count": 0,
+    "conflict_run_count": 0,
+    "ready_run_count": 3
+  },
+  "uses_cuda": true
+}

@@ -1,0 +1,128 @@
+{
+  "artifact_type": "resident_runtime_repeat_execution",
+  "compare": {
+    "command": "glass resident-runtime-compare --run gate218_default_repeat01=C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat01 --run gate218_default_repeat02=C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat02 --run gate218_default_repeat03=C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat03 --baseline-label gate218_default_repeat02 --out C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runtime_compare.json --markdown C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runtime_compare.md",
+    "elapsed_s": 0.3386270999981207,
+    "returncode": 0,
+    "status": "completed",
+    "step": "resident_runtime_compare"
+  },
+  "created_at": "2026-06-17T20:41:37+00:00",
+  "dry_run": false,
+  "limitations": [
+    "Dry-run mode records commands without launching subprocesses.",
+    "Skip-existing checks for run_timing.json in each planned run directory.",
+    "This executor preserves the commands recorded in the repeat plan."
+  ],
+  "plan": "runs\\checkpoints\\s2_gate_218_runtime_repeat_plan.json",
+  "preflight": {
+    "allow_existing": false,
+    "artifact_type": "resident_runtime_repeat_preflight",
+    "created_at": "2026-06-17T20:40:27+00:00",
+    "gpu": {
+      "driver": "596.21",
+      "free_mib": 57200,
+      "max_busy_utilization": 95,
+      "min_free_mib": 12000,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "reason": "GPU has enough free memory and is below the busy utilization threshold",
+      "status": "ready",
+      "total_mib": 97887,
+      "used_mib": 40687,
+      "utilization_percent": 100
+    },
+    "limitations": [
+      "This preflight checks plan/output/GPU readiness only; it does not execute image processing.",
+      "GPU readiness is based on a point-in-time nvidia-smi sample.",
+      "Disk/cache state labels in the repeat plan are operator intent, not enforceable guarantees."
+    ],
+    "plan": "runs\\checkpoints\\s2_gate_218_runtime_repeat_plan.json",
+    "ready_to_execute": true,
+    "recommendation": "execute_repeat_plan",
+    "repeat_count": 3,
+    "runs": [
+      {
+        "resident_artifacts_exists": false,
+        "run_dir": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat01",
+        "run_dir_exists": false,
+        "run_id": "gate218_default_repeat01",
+        "run_timing_exists": false,
+        "status": "ready"
+      },
+      {
+        "resident_artifacts_exists": false,
+        "run_dir": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat02",
+        "run_dir_exists": false,
+        "run_id": "gate218_default_repeat02",
+        "run_timing_exists": false,
+        "status": "ready"
+      },
+      {
+        "resident_artifacts_exists": false,
+        "run_dir": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat03",
+        "run_dir_exists": false,
+        "run_id": "gate218_default_repeat03",
+        "run_timing_exists": false,
+        "status": "ready"
+      }
+    ],
+    "schema_version": 1,
+    "summary": {
+      "compare_exists": false,
+      "compare_out": "C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runtime_compare.json",
+      "complete_run_count": 0,
+      "conflict_run_count": 0,
+      "ready_run_count": 3
+    },
+    "uses_cuda": true
+  },
+  "run_compare": true,
+  "runs": [
+    {
+      "run_id": "gate218_default_repeat01",
+      "run_timing_exists": true,
+      "status": "completed",
+      "step": {
+        "command": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat01 --backend cuda --until-stage integration --memory-mode resident --resident-master-cache-dir C:\\glass_runs\\phase2_s2_gate_15_200\\resident_master_cache --resident-registration similarity_cuda_triangle --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.3 --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 28 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --reference-frame-id F000196 --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --resident-output-maps audit --flat-floor 0.05 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-triangle-grid-top-per-cell 2 --resident-triangle-nms-min-separation-px 96.0 --resident-triangle-agreement-action downweight --resident-star-catalog-deterministic --resident-triangle-min-agreement-score 0.6 --resident-triangle-agreement-rms-scale 200.0",
+        "elapsed_s": 24.197231099999044,
+        "returncode": 0,
+        "status": "completed",
+        "step": "run"
+      }
+    },
+    {
+      "run_id": "gate218_default_repeat02",
+      "run_timing_exists": true,
+      "status": "completed",
+      "step": {
+        "command": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat02 --backend cuda --until-stage integration --memory-mode resident --resident-master-cache-dir C:\\glass_runs\\phase2_s2_gate_15_200\\resident_master_cache --resident-registration similarity_cuda_triangle --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.3 --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 28 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --reference-frame-id F000196 --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --resident-output-maps audit --flat-floor 0.05 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-triangle-grid-top-per-cell 2 --resident-triangle-nms-min-separation-px 96.0 --resident-triangle-agreement-action downweight --resident-star-catalog-deterministic --resident-triangle-min-agreement-score 0.6 --resident-triangle-agreement-rms-scale 200.0",
+        "elapsed_s": 22.98190600000089,
+        "returncode": 0,
+        "status": "completed",
+        "step": "run"
+      }
+    },
+    {
+      "run_id": "gate218_default_repeat03",
+      "run_timing_exists": true,
+      "status": "completed",
+      "step": {
+        "command": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate_218_runtime_repeat\\runs\\gate218_default_repeat03 --backend cuda --until-stage integration --memory-mode resident --resident-master-cache-dir C:\\glass_runs\\phase2_s2_gate_15_200\\resident_master_cache --resident-registration similarity_cuda_triangle --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.3 --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 28 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --reference-frame-id F000196 --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --resident-output-maps audit --flat-floor 0.05 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-triangle-grid-top-per-cell 2 --resident-triangle-nms-min-separation-px 96.0 --resident-triangle-agreement-action downweight --resident-star-catalog-deterministic --resident-triangle-min-agreement-score 0.6 --resident-triangle-agreement-rms-scale 200.0",
+        "elapsed_s": 23.132197500002803,
+        "returncode": 0,
+        "status": "completed",
+        "step": "run"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "skip_existing": false,
+  "summary": {
+    "compare_status": "completed",
+    "completed_run_count": 3,
+    "failed": false,
+    "recorded_run_count": 3,
+    "skipped_existing_count": 0,
+    "status": "completed"
+  }
+}

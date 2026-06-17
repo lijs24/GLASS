@@ -3645,6 +3645,22 @@ integration where applicable.
 - Keep this gate contract/reporting only: no processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 218: Controlled Runtime Repeat Default-Promotion Evidence
+
+- Execute a real repeated 200-light resident CUDA benchmark from the accepted
+  default resident configuration instead of relying on a dry-run runtime plan.
+- Use `glass resident-runtime-repeat-plan`, `resident-runtime-repeat-preflight`,
+  `resident-runtime-repeat-execute`, and `resident-runtime-compare` to produce
+  auditable repeated timing evidence under a controlled GPU-ready preflight.
+- Feed the resulting runtime-compare artifact into
+  `glass release-promotion-decision` together with the real acceptance,
+  StackEngine, and pipeline DQ contract artifacts.
+- Promote the decision state from release-candidate-ready to
+  default-change-ready only when repeated timing is stable, speedup remains
+  above threshold, and pipeline DQ handoff checks still pass.
+- Keep this gate validation/evidence only: no processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,196 @@
+{
+  "artifact_type": "release_promotion_decision",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_214_acceptance_real_fastpath_contract.json",
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 58.099101701945926,
+        "required_min": 2.0
+      },
+      "name": "speedup_threshold",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "pipeline_contract_passed": true,
+        "pipeline_contract_status": "passed",
+        "release_evidence_status": "passed"
+      },
+      "name": "pipeline_release_evidence_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "pipeline_invariant_contract",
+        "source": "explicit_pipeline_contract",
+        "status": "passed"
+      },
+      "name": "pipeline_handoff_evidence_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "integration_map_count": 6,
+        "integration_output_count": 1,
+        "source": "explicit_pipeline_contract"
+      },
+      "name": "pipeline_integration_dq_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "resident_result_contract": true,
+        "stack_result_contract": true
+      },
+      "name": "pipeline_result_contracts_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": true,
+        "tile_size": 2048
+      },
+      "name": "pipeline_pixel_verification_enabled",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "coverage_pixels": true,
+        "dq_pixels": true,
+        "rejection_pixels": true
+      },
+      "name": "pipeline_pixel_verification_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "release_evidence_status": "passed",
+        "stack_engine_contract_passed": true,
+        "stack_engine_contract_status": "passed"
+      },
+      "name": "stack_engine_release_evidence_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_release_status": "passed",
+        "contract_default_ready": true
+      },
+      "name": "stack_engine_default_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "all",
+        "required": "all"
+      },
+      "name": "stack_engine_scope_all",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "best_elapsed_s": 22.598500299995067,
+        "best_label": "gate218_default_repeat02",
+        "considered_run_count": 3,
+        "elapsed_ratio_vs_best": 1.053510511049479,
+        "ignored_warmup_labels": [],
+        "ignored_warmup_run_count": 0,
+        "max_elapsed_ratio_vs_best": 1.25,
+        "present": true,
+        "recommendation": "best_observed:gate218_default_repeat02",
+        "required_min_runtime_runs": 3,
+        "run_count": 3,
+        "slowest_elapsed_s": 23.807757599999604
+      },
+      "name": "runtime_repeat_evidence_ready",
+      "note": "Default changes require at least two stable runtime observations; release-candidate status can pass without this.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T20:42:05+00:00",
+  "default_change_ready": true,
+  "inputs": {
+    "acceptance_audit": "runs\\checkpoints\\s2_gate_214_acceptance_real_fastpath_contract.json",
+    "pipeline_contract": "runs\\checkpoints\\s2_gate_211_pipeline_contract.json",
+    "repeat_preflight": "runs\\checkpoints\\s2_gate_218_runtime_repeat_preflight.json",
+    "runtime_compare": "runs\\checkpoints\\s2_gate_218_runtime_compare.json",
+    "stack_engine_contract": "runs\\checkpoints\\s2_gate_211_stack_engine_contract.json"
+  },
+  "limitations": [
+    "This decision artifact does not change GLASS defaults.",
+    "Release-candidate readiness is based on supplied acceptance and contract artifacts.",
+    "Default-change readiness additionally requires stable repeat/runtime evidence."
+  ],
+  "passed": true,
+  "pipeline_handoff": {
+    "audit_type": "pipeline_invariant_contract",
+    "check_count": 15,
+    "checks": {
+      "integration_coverage_map_pixels_match_dq": true,
+      "integration_dq_contract": true,
+      "integration_dq_map_pixels_match_summary": true,
+      "integration_rejection_map_pixels_match_dq": true,
+      "integration_resident_result_contract": true,
+      "integration_stack_result_contract": true
+    },
+    "failed_checks": [],
+    "integration_map_count": 6,
+    "integration_output_count": 1,
+    "passed": true,
+    "pixel_verification_enabled": true,
+    "pixel_verification_tile_size": 2048,
+    "present": true,
+    "source": "explicit_pipeline_contract",
+    "status": "passed"
+  },
+  "recommendation": "promote_default_candidate",
+  "release_candidate_ready": true,
+  "repeat_preflight": {
+    "gpu_free_mib": 55590,
+    "gpu_reason": "GPU has enough free memory and is below the busy utilization threshold",
+    "gpu_status": "ready",
+    "gpu_utilization_percent": 100,
+    "present": true,
+    "ready_to_execute": true,
+    "recommendation": "execute_repeat_plan"
+  },
+  "runtime_repeat": {
+    "best_elapsed_s": 22.598500299995067,
+    "best_label": "gate218_default_repeat02",
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.053510511049479,
+    "ignored_warmup_labels": [],
+    "ignored_warmup_run_count": 0,
+    "max_elapsed_ratio_vs_best": 1.25,
+    "present": true,
+    "recommendation": "best_observed:gate218_default_repeat02",
+    "required_min_runtime_runs": 3,
+    "run_count": 3,
+    "slowest_elapsed_s": 23.807757599999604
+  },
+  "schema_version": 1,
+  "speedup": {
+    "actual": 58.099101701945926,
+    "required_min": 2.0
+  },
+  "status": "default_change_ready"
+}
