@@ -45,6 +45,12 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
     default_candidate = (
         payload.get("default_candidate") if isinstance(payload.get("default_candidate"), dict) else {}
     )
+    pipeline = payload.get("pipeline_contract") if isinstance(payload.get("pipeline_contract"), dict) else {}
+    rejection_sample_accounting = (
+        pipeline.get("rejection_sample_accounting")
+        if isinstance(pipeline.get("rejection_sample_accounting"), dict)
+        else {}
+    )
     return {
         "present": True,
         "artifact_type": payload.get("artifact_type"),
@@ -61,6 +67,16 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "default_route_route_contract_passed": default_route.get("route_contract_passed"),
         "default_route_route_check_count": default_route.get("route_check_count"),
         "default_route_speedup_vs_reference": default_route.get("speedup_vs_reference"),
+        "pipeline_contract_status": pipeline.get("status"),
+        "pipeline_contract_passed": pipeline.get("passed"),
+        "integration_rejection_sample_counts_match_maps": pipeline.get(
+            "integration_rejection_sample_counts_match_maps"
+        ),
+        "rejection_sample_accounting": rejection_sample_accounting,
+        "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
+        "rejection_sample_accounting_failed_count": pipeline.get(
+            "rejection_sample_accounting_failed_count"
+        ),
     }
 
 
@@ -238,6 +254,26 @@ def build_windows_release_matrix(
             },
         ),
         _check(
+            "default_promotion_rejection_sample_accounting_passed",
+            (
+                default_promotion.get("integration_rejection_sample_counts_match_maps") is True
+                and default_promotion.get("rejection_sample_accounting_status") == "passed"
+                and int(default_promotion.get("rejection_sample_accounting_failed_count") or 0) == 0
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "pipeline_contract_status": default_promotion.get("pipeline_contract_status"),
+                "pipeline_contract_passed": default_promotion.get("pipeline_contract_passed"),
+                "check": default_promotion.get("integration_rejection_sample_counts_match_maps"),
+                "status": default_promotion.get("rejection_sample_accounting_status"),
+                "failed_count": default_promotion.get("rejection_sample_accounting_failed_count"),
+                "failed_items": (
+                    default_promotion.get("rejection_sample_accounting") or {}
+                ).get("failed_items"),
+            },
+        ),
+        _check(
             "default_runtime_preset",
             default_runtime_preset == "throughput-v1",
             {"actual": default_runtime_preset, "required": "throughput-v1"},
@@ -358,6 +394,11 @@ def _markdown(payload: dict[str, Any]) -> str:
                 "- Default route contract/checks: "
                 f"`{default_promotion.get('default_route_route_contract_passed')}`/"
                 f"`{default_promotion.get('default_route_route_check_count')}`"
+            ),
+            (
+                "- Rejection sample accounting: "
+                f"`{default_promotion.get('rejection_sample_accounting_status')}` "
+                f"failed=`{default_promotion.get('rejection_sample_accounting_failed_count')}`"
             ),
             "",
             "## Packages",

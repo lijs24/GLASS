@@ -3983,6 +3983,24 @@ integration where applicable.
 - Keep this gate promotion-control scoped: no image math, CUDA kernel, runtime
   default change, release packaging, or real-data benchmark rerun.
 
+### S2-Gate 238: Windows Release Matrix Rejection Sample Handoff
+
+- Extend `glass windows-release-matrix` so default-promotion rejection sample
+  accounting is visible in the Windows publication matrix.
+- Carry the default-promotion pipeline-contract fields
+  `integration_rejection_sample_counts_match_maps`,
+  `rejection_sample_accounting_status`, failed count, and failed items into the
+  matrix summary.
+- Add `default_promotion_rejection_sample_accounting_passed` to release-matrix
+  checks so a Windows release matrix cannot pass when default promotion was
+  blocked by rejected-sample map/provenance drift.
+- Surface the accounting status in release-matrix Markdown output for release
+  reviewers.
+- Add release-matrix tests for passing accounting and sample-count drift
+  blockers.
+- Keep this gate release-matrix scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
