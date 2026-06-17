@@ -3756,6 +3756,20 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 225: Default Route Promotion Manifest Provenance
+
+- Extend `glass default-promotion-manifest` so the manifest consumes
+  `phase2_status.default_route_acceptance` from S2-Gate 224.
+- Require default-route acceptance to be present, passed, route-contract passed,
+  and backed by at least the four route checks for resident memory, CUDA backend,
+  resident registration mode, and resident runtime preset/group evidence.
+- Surface the default-route acceptance summary in default-promotion JSON and
+  Markdown so default promotion cannot be approved from runtime/pipeline evidence
+  alone.
+- Add pass, missing-evidence, failed-evidence, and CLI Markdown tests.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

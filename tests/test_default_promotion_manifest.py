@@ -37,10 +37,15 @@ def _write_release_decision(path: Path, *, ready: bool = True) -> None:
     )
 
 
-def _write_phase2_status(path: Path, decision: Path, *, ready: bool = True) -> None:
-    write_json(
-        path,
-        {
+def _write_phase2_status(
+    path: Path,
+    decision: Path,
+    *,
+    ready: bool = True,
+    include_default_route: bool = True,
+    default_route_ready: bool = True,
+) -> None:
+    payload = {
             "schema_version": 1,
             "artifact_type": "glass_phase2_status",
             "status": "green" if ready else "attention_required",
@@ -84,8 +89,23 @@ def _write_phase2_status(path: Path, decision: Path, *, ready: bool = True) -> N
                 "resident_native_calibration_artifact": True,
                 "resident_calibrated_light_count": 200,
             },
-        },
-    )
+        }
+    if include_default_route:
+        payload["default_route_acceptance"] = {
+            "path": "C:/glass_runs/run/default_route_acceptance.json",
+            "status": "passed" if default_route_ready else "failed",
+            "passed": default_route_ready,
+            "acceptance_passed": default_route_ready,
+            "benchmark_contract": {"name": "default_route_fixture_contract"},
+            "speedup_vs_reference": 28.75,
+            "active_frames": 193,
+            "route_contract_passed": default_route_ready,
+            "route_check_count": 4 if default_route_ready else 2,
+            "route_failed_checks": []
+            if default_route_ready
+            else ["contract_required_command_token:--backend cuda"],
+        }
+    write_json(path, payload)
 
 
 def _write_doctor(path: Path) -> None:
@@ -137,7 +157,12 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert payload["recommendation"] == "promote_resident_cuda_default"
     assert payload["default_candidate"]["memory_mode"] == "resident"
     assert payload["default_candidate"]["fallback_memory_mode"] == "tile"
+    assert payload["default_route_acceptance"]["route_contract_passed"] is True
     assert checks["runtime_repeat_ratio_within_bound"] is True
+    assert checks["default_route_acceptance_present"] is True
+    assert checks["default_route_acceptance_passed"] is True
+    assert checks["default_route_acceptance_route_contract_passed"] is True
+    assert checks["default_route_acceptance_route_check_count"] is True
     assert checks["pipeline_pixel_maps_match_dq"] is True
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
 
@@ -157,6 +182,44 @@ def test_default_promotion_manifest_blocks_unready_release_decision(tmp_path: Pa
     assert payload["status"] == "blocked"
     assert "release_decision_default_change_ready" in payload["failed_checks"]
     assert "phase2_status_green" in payload["failed_checks"]
+
+
+def test_default_promotion_manifest_blocks_missing_default_route_evidence(tmp_path: Path) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(phase2, decision, include_default_route=False)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "default_route_acceptance_present" in payload["failed_checks"]
+    assert "default_route_acceptance_passed" in payload["failed_checks"]
+    assert "default_route_acceptance_route_contract_passed" in payload["failed_checks"]
+    assert "default_route_acceptance_route_check_count" in payload["failed_checks"]
+
+
+def test_default_promotion_manifest_blocks_failed_default_route_evidence(tmp_path: Path) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(phase2, decision, default_route_ready=False)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "default_route_acceptance_present" not in payload["failed_checks"]
+    assert "default_route_acceptance_passed" in payload["failed_checks"]
+    assert "default_route_acceptance_route_contract_passed" in payload["failed_checks"]
+    assert "default_route_acceptance_route_check_count" in payload["failed_checks"]
 
 
 def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path) -> None:
@@ -192,4 +255,7 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert result == 0
     payload = read_json(out)
     assert payload["passed"] is True
-    assert "Default Promotion Manifest" in markdown.read_text(encoding="utf-8")
+    markdown_text = markdown.read_text(encoding="utf-8")
+    assert "Default Promotion Manifest" in markdown_text
+    assert "Default Route Evidence" in markdown_text
+    assert "Route contract passed: `True`" in markdown_text

@@ -158,6 +158,27 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _default_route_acceptance_summary(phase2: dict[str, Any]) -> dict[str, Any]:
+    default_route = (
+        phase2.get("default_route_acceptance")
+        if isinstance(phase2.get("default_route_acceptance"), dict)
+        else {}
+    )
+    return {
+        "present": bool(default_route),
+        "path": default_route.get("path"),
+        "status": default_route.get("status"),
+        "passed": default_route.get("passed"),
+        "acceptance_passed": default_route.get("acceptance_passed"),
+        "benchmark_contract": default_route.get("benchmark_contract"),
+        "speedup_vs_reference": _number(default_route.get("speedup_vs_reference")),
+        "active_frames": _int_value(default_route.get("active_frames")),
+        "route_contract_passed": default_route.get("route_contract_passed"),
+        "route_check_count": _int_value(default_route.get("route_check_count")),
+        "route_failed_checks": default_route.get("route_failed_checks") or [],
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -177,6 +198,7 @@ def build_default_promotion_manifest(
     doctor = _read_json_object_optional(doctor_json)
     runtime = _runtime_repeat_summary(decision)
     pipeline = _pipeline_summary(phase2)
+    default_route = _default_route_acceptance_summary(phase2)
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
         phase2.get("release_decision") if isinstance(phase2.get("release_decision"), dict) else {}
@@ -248,6 +270,33 @@ def build_default_promotion_manifest(
                 "actual": phase2_decision.get("recommendation"),
                 "required": "promote_default_candidate",
             },
+        ),
+        _check(
+            "default_route_acceptance_present",
+            default_route.get("present") is True,
+            {"path": default_route.get("path"), "status": default_route.get("status")},
+        ),
+        _check(
+            "default_route_acceptance_passed",
+            default_route.get("passed") is True,
+            {
+                "status": default_route.get("status"),
+                "passed": default_route.get("passed"),
+                "acceptance_passed": default_route.get("acceptance_passed"),
+            },
+        ),
+        _check(
+            "default_route_acceptance_route_contract_passed",
+            default_route.get("route_contract_passed") is True,
+            {
+                "route_contract_passed": default_route.get("route_contract_passed"),
+                "route_failed_checks": default_route.get("route_failed_checks"),
+            },
+        ),
+        _check(
+            "default_route_acceptance_route_check_count",
+            (default_route.get("route_check_count") or 0) >= 4,
+            {"actual": default_route.get("route_check_count"), "required_min": 4},
         ),
         _check(
             "runtime_repeat_present",
@@ -406,6 +455,7 @@ def build_default_promotion_manifest(
             "release_decision": phase2_decision,
         },
         "runtime_repeat": runtime,
+        "default_route_acceptance": default_route,
         "pipeline_contract": pipeline,
         "doctor": doctor_info,
         "checks": checks,
@@ -421,6 +471,7 @@ def build_default_promotion_manifest(
 def _markdown(payload: dict[str, Any]) -> str:
     default_candidate = payload.get("default_candidate") or {}
     runtime = payload.get("runtime_repeat") or {}
+    default_route = payload.get("default_route_acceptance") or {}
     doctor = payload.get("doctor") or {}
     device = doctor.get("device") if isinstance(doctor, dict) else {}
     lines = [
@@ -440,6 +491,16 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Best: `{runtime.get('best_label')}` `{runtime.get('best_elapsed_s')}` s",
         f"- Slowest: `{runtime.get('slowest_elapsed_s')}` s",
         f"- Slowest/best ratio: `{runtime.get('elapsed_ratio_vs_best')}`",
+        "",
+        "## Default Route Evidence",
+        "",
+        f"- Present: `{default_route.get('present')}`",
+        f"- Status: `{default_route.get('status')}`",
+        f"- Passed: `{default_route.get('passed')}`",
+        f"- Route contract passed: `{default_route.get('route_contract_passed')}`",
+        f"- Route check count: `{default_route.get('route_check_count')}`",
+        f"- Route failed checks: `{default_route.get('route_failed_checks')}`",
+        f"- Speedup vs reference: `{default_route.get('speedup_vs_reference')}`",
         "",
         "## Release Machine",
         "",
