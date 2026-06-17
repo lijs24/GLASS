@@ -3630,6 +3630,21 @@ integration where applicable.
 - Keep this gate reporting/release-handoff only: no processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 217: Release Promotion Requires Pipeline DQ Handoff
+
+- Tighten `glass release-promotion-decision` so a top-level passed pipeline
+  contract is not enough for release-candidate readiness.
+- Require concrete pipeline DQ handoff evidence: pipeline invariant contract
+  presence, integration DQ contract pass, StackEngine/resident result-contract
+  pass, pixel verification enabled, and DQ/coverage/rejection pixel-match
+  checks passing.
+- Accept this evidence either from an explicit `--pipeline-contract` artifact
+  or the pipeline-contract block embedded in the acceptance audit.
+- Surface the normalized pipeline handoff evidence in release-promotion JSON
+  and Markdown for later release matrix and default-promotion decisions.
+- Keep this gate contract/reporting only: no processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

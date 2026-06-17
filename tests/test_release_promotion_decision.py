@@ -31,6 +31,35 @@ def _write_acceptance(path: Path, *, passed: bool = True) -> None:
                     "failed_checks": [] if passed else ["contract_stack_engine_default_promotion_ready"],
                 },
             },
+            "pipeline_contract": {
+                "audit_type": "pipeline_invariant_contract",
+                "status": "passed" if passed else "failed",
+                "passed": passed,
+                "check_count": 6,
+                "check_names": [
+                    "integration_dq_contract",
+                    "integration_stack_result_contract",
+                    "integration_resident_result_contract",
+                    "integration_dq_map_pixels_match_summary",
+                    "integration_coverage_map_pixels_match_dq",
+                    "integration_rejection_map_pixels_match_dq",
+                ],
+                "failed_checks": []
+                if passed
+                else [
+                    "integration_dq_contract",
+                    "integration_dq_map_pixels_match_summary",
+                ],
+                "integration": {
+                    "outputs": [{"item": "H"}],
+                    "maps": [
+                        {"item": "H", "map": "master"},
+                        {"item": "H", "map": "coverage"},
+                        {"item": "H", "map": "dq"},
+                    ],
+                },
+                "pixel_verification": {"enabled": passed, "tile_size": 2048},
+            },
         },
     )
 
@@ -59,6 +88,23 @@ def _write_pipeline_contract(path: Path) -> None:
             "audit_type": "pipeline_invariant_contract",
             "status": "passed",
             "passed": True,
+            "checks": [
+                {"name": "integration_dq_contract", "passed": True},
+                {"name": "integration_stack_result_contract", "passed": True},
+                {"name": "integration_resident_result_contract", "passed": True},
+                {"name": "integration_dq_map_pixels_match_summary", "passed": True},
+                {"name": "integration_coverage_map_pixels_match_dq", "passed": True},
+                {"name": "integration_rejection_map_pixels_match_dq", "passed": True},
+            ],
+            "integration": {
+                "outputs": [{"item": "H"}],
+                "maps": [
+                    {"item": "H", "map": "master"},
+                    {"item": "H", "map": "coverage"},
+                    {"item": "H", "map": "dq"},
+                ],
+            },
+            "pixel_verification": {"enabled": True, "tile_size": 2048},
         },
     )
 
@@ -131,6 +177,8 @@ def test_release_promotion_decision_requires_repeat_for_default_change(tmp_path:
     assert payload["release_candidate_ready"] is True
     assert payload["default_change_ready"] is False
     assert payload["recommendation"] == "repeat_benchmark_before_default_change"
+    assert payload["pipeline_handoff"]["source"] == "explicit_pipeline_contract"
+    assert payload["pipeline_handoff"]["pixel_verification_enabled"] is True
     failed = {item["name"] for item in payload["checks"] if not item["passed"]}
     assert failed == {"runtime_repeat_evidence_ready"}
 
@@ -150,6 +198,7 @@ def test_release_promotion_decision_accepts_stable_runtime_compare(tmp_path: Pat
     assert payload["release_candidate_ready"] is True
     assert payload["default_change_ready"] is True
     assert payload["recommendation"] == "promote_default_candidate"
+    assert payload["pipeline_handoff"]["source"] == "acceptance_pipeline_contract"
     assert payload["runtime_repeat"]["elapsed_ratio_vs_best"] == 19.0 / 18.0
 
 
@@ -191,6 +240,32 @@ def test_release_promotion_decision_blocks_failed_acceptance(tmp_path: Path) -> 
     assert payload["recommendation"] == "fix_release_blockers"
 
 
+def test_release_promotion_decision_blocks_missing_pipeline_dq_handoff(tmp_path: Path) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    pipeline = tmp_path / "pipeline.json"
+    _write_acceptance(acceptance)
+    write_json(
+        pipeline,
+        {
+            "audit_type": "pipeline_invariant_contract",
+            "status": "passed",
+            "passed": True,
+        },
+    )
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        pipeline_contract=pipeline,
+    )
+
+    checks = {item["name"]: item["passed"] for item in payload["checks"]}
+    assert payload["release_candidate_ready"] is False
+    assert checks["pipeline_handoff_evidence_present"] is True
+    assert checks["pipeline_integration_dq_contract_passed"] is False
+    assert checks["pipeline_pixel_verification_enabled"] is False
+    assert checks["pipeline_pixel_verification_passed"] is False
+
+
 def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_path: Path) -> None:
     acceptance = tmp_path / "acceptance.json"
     out = tmp_path / "decision.json"
@@ -212,7 +287,9 @@ def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_pat
         == 0
     )
     assert read_json(out)["recommendation"] == "repeat_benchmark_before_default_change"
-    assert "Release Promotion Decision" in markdown.read_text(encoding="utf-8")
+    markdown_text = markdown.read_text(encoding="utf-8")
+    assert "Release Promotion Decision" in markdown_text
+    assert "Pipeline DQ Handoff" in markdown_text
 
     strict = tmp_path / "strict.json"
     assert (

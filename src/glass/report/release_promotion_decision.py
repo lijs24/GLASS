@@ -79,6 +79,66 @@ def _stack_default_scope(acceptance: dict[str, Any], stack_contract: dict[str, A
     return None if scope is None else str(scope)
 
 
+def _pipeline_contract_source(acceptance: dict[str, Any], pipeline_contract: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    if pipeline_contract:
+        return "explicit_pipeline_contract", pipeline_contract
+    embedded = acceptance.get("pipeline_contract")
+    if isinstance(embedded, dict) and embedded:
+        return "acceptance_pipeline_contract", embedded
+    return "missing", {}
+
+
+def _pipeline_contract_check_state(pipeline: dict[str, Any], name: str) -> bool | None:
+    checks = pipeline.get("checks") if isinstance(pipeline.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return bool(item.get("passed"))
+
+    check_names = {str(item) for item in pipeline.get("check_names") or []}
+    failed_checks = {str(item) for item in pipeline.get("failed_checks") or []}
+    if name in check_names:
+        return name not in failed_checks
+    return None
+
+
+def _pipeline_handoff_evidence(
+    acceptance: dict[str, Any],
+    pipeline_contract: dict[str, Any],
+) -> dict[str, Any]:
+    source, pipeline = _pipeline_contract_source(acceptance, pipeline_contract)
+    integration = pipeline.get("integration") if isinstance(pipeline.get("integration"), dict) else {}
+    pixel_verification = (
+        pipeline.get("pixel_verification")
+        if isinstance(pipeline.get("pixel_verification"), dict)
+        else {}
+    )
+    checks = {
+        name: _pipeline_contract_check_state(pipeline, name)
+        for name in (
+            "integration_dq_contract",
+            "integration_stack_result_contract",
+            "integration_resident_result_contract",
+            "integration_dq_map_pixels_match_summary",
+            "integration_coverage_map_pixels_match_dq",
+            "integration_rejection_map_pixels_match_dq",
+        )
+    }
+    return {
+        "source": source,
+        "present": bool(pipeline),
+        "audit_type": pipeline.get("audit_type"),
+        "status": pipeline.get("status"),
+        "passed": pipeline.get("passed"),
+        "check_count": len(pipeline.get("checks") or []) or _int_value(pipeline.get("check_count")),
+        "failed_checks": list(pipeline.get("failed_checks") or []),
+        "integration_output_count": len(integration.get("outputs") or []),
+        "integration_map_count": len(integration.get("maps") or []),
+        "pixel_verification_enabled": pixel_verification.get("enabled"),
+        "pixel_verification_tile_size": pixel_verification.get("tile_size"),
+        "checks": checks,
+    }
+
+
 def _runtime_compare_ready(
     runtime_compare: dict[str, Any],
     *,
@@ -186,6 +246,7 @@ def build_release_promotion_decision(
     required_speedup = float(min_speedup if min_speedup is not None else speedup_summary.get("min_speedup") or 2.0)
     pipeline_release_status = _release_evidence_status(acceptance, "pipeline_contract")
     stack_release_status = _release_evidence_status(acceptance, "stack_engine_default_promotion")
+    pipeline_handoff = _pipeline_handoff_evidence(acceptance, pipeline)
     runtime_ready, runtime_evidence = _runtime_compare_ready(
         runtime,
         min_runtime_runs=min_runtime_runs,
@@ -212,6 +273,64 @@ def build_release_promotion_decision(
                 "release_evidence_status": pipeline_release_status,
                 "pipeline_contract_passed": pipeline.get("passed"),
                 "pipeline_contract_status": pipeline.get("status"),
+            },
+        ),
+        _check(
+            "pipeline_handoff_evidence_present",
+            pipeline_handoff["present"]
+            and pipeline_handoff.get("audit_type") == "pipeline_invariant_contract",
+            {
+                "source": pipeline_handoff.get("source"),
+                "audit_type": pipeline_handoff.get("audit_type"),
+                "status": pipeline_handoff.get("status"),
+            },
+        ),
+        _check(
+            "pipeline_integration_dq_contract_passed",
+            pipeline_handoff["checks"].get("integration_dq_contract") is True,
+            {
+                "source": pipeline_handoff.get("source"),
+                "check": pipeline_handoff["checks"].get("integration_dq_contract"),
+                "integration_output_count": pipeline_handoff.get("integration_output_count"),
+                "integration_map_count": pipeline_handoff.get("integration_map_count"),
+            },
+        ),
+        _check(
+            "pipeline_result_contracts_passed",
+            pipeline_handoff["checks"].get("integration_stack_result_contract") is True
+            and pipeline_handoff["checks"].get("integration_resident_result_contract") is True,
+            {
+                "stack_result_contract": pipeline_handoff["checks"].get(
+                    "integration_stack_result_contract"
+                ),
+                "resident_result_contract": pipeline_handoff["checks"].get(
+                    "integration_resident_result_contract"
+                ),
+            },
+        ),
+        _check(
+            "pipeline_pixel_verification_enabled",
+            pipeline_handoff.get("pixel_verification_enabled") is True,
+            {
+                "enabled": pipeline_handoff.get("pixel_verification_enabled"),
+                "tile_size": pipeline_handoff.get("pixel_verification_tile_size"),
+            },
+        ),
+        _check(
+            "pipeline_pixel_verification_passed",
+            pipeline_handoff["checks"].get("integration_dq_map_pixels_match_summary") is True
+            and pipeline_handoff["checks"].get("integration_coverage_map_pixels_match_dq") is True
+            and pipeline_handoff["checks"].get("integration_rejection_map_pixels_match_dq") is True,
+            {
+                "dq_pixels": pipeline_handoff["checks"].get(
+                    "integration_dq_map_pixels_match_summary"
+                ),
+                "coverage_pixels": pipeline_handoff["checks"].get(
+                    "integration_coverage_map_pixels_match_dq"
+                ),
+                "rejection_pixels": pipeline_handoff["checks"].get(
+                    "integration_rejection_map_pixels_match_dq"
+                ),
             },
         ),
         _check(
@@ -249,6 +368,11 @@ def build_release_promotion_decision(
         "acceptance_audit_passed",
         "speedup_threshold",
         "pipeline_release_evidence_passed",
+        "pipeline_handoff_evidence_present",
+        "pipeline_integration_dq_contract_passed",
+        "pipeline_result_contracts_passed",
+        "pipeline_pixel_verification_enabled",
+        "pipeline_pixel_verification_passed",
         "stack_engine_release_evidence_passed",
         "stack_engine_default_ready",
         "stack_engine_scope_all",
@@ -290,6 +414,7 @@ def build_release_promotion_decision(
             "repeat_preflight": None if repeat_preflight is None else str(repeat_preflight),
         },
         "speedup": {"actual": speedup, "required_min": required_speedup},
+        "pipeline_handoff": pipeline_handoff,
         "runtime_repeat": runtime_evidence,
         "repeat_preflight": preflight_evidence,
         "checks": checks,
@@ -318,6 +443,21 @@ def _markdown(payload: dict[str, Any]) -> str:
         marker = "PASS" if item.get("passed") else "FAIL"
         lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
     runtime = payload.get("runtime_repeat") if isinstance(payload.get("runtime_repeat"), dict) else {}
+    pipeline = payload.get("pipeline_handoff") if isinstance(payload.get("pipeline_handoff"), dict) else {}
+    lines.extend(
+        [
+            "",
+            "## Pipeline DQ Handoff",
+            "",
+            f"- Source: `{pipeline.get('source')}`",
+            f"- Status: `{pipeline.get('status')}`",
+            f"- Passed: `{pipeline.get('passed')}`",
+            f"- Integration outputs: `{pipeline.get('integration_output_count')}`",
+            f"- Integration maps: `{pipeline.get('integration_map_count')}`",
+            f"- Pixel verification enabled: `{pipeline.get('pixel_verification_enabled')}`",
+            "",
+        ]
+    )
     lines.extend(
         [
             "",
