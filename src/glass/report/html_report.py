@@ -961,8 +961,12 @@ def _stack_engine_dq_rows(
                 "type": master.get("type"),
                 "stack": master.get("tile_stack_mode"),
                 "input_samples": provenance.get("input_samples"),
+                "input_valid_samples": provenance.get("input_valid_samples_before_rejection"),
+                "input_invalid_samples": provenance.get("input_invalid_samples_before_rejection"),
                 "flagged_samples": provenance.get("input_flagged_samples"),
                 "nonfinite_samples": provenance.get("input_nonfinite_samples"),
+                "valid_samples_after_rejection": provenance.get("valid_samples_after_rejection"),
+                "rejected_samples": provenance.get("rejected_samples"),
                 "zero_coverage_pixels": provenance.get("output_coverage_zero_pixels"),
                 "low_rejected_pixels": provenance.get("output_low_rejected_pixels"),
                 "high_rejected_pixels": provenance.get("output_high_rejected_pixels"),
@@ -984,8 +988,12 @@ def _stack_engine_dq_rows(
                 "type": "light",
                 "stack": item.get("tile_stack_mode"),
                 "input_samples": provenance.get("input_samples"),
+                "input_valid_samples": provenance.get("input_valid_samples_before_rejection"),
+                "input_invalid_samples": provenance.get("input_invalid_samples_before_rejection"),
                 "flagged_samples": provenance.get("input_flagged_samples"),
                 "nonfinite_samples": provenance.get("input_nonfinite_samples"),
+                "valid_samples_after_rejection": provenance.get("valid_samples_after_rejection"),
+                "rejected_samples": provenance.get("rejected_samples"),
                 "zero_coverage_pixels": provenance.get("output_coverage_zero_pixels"),
                 "low_rejected_pixels": provenance.get("output_low_rejected_pixels"),
                 "high_rejected_pixels": provenance.get("output_high_rejected_pixels"),
@@ -1009,6 +1017,7 @@ def _dq_provenance_contract_rows(
         summary = master.get("dq_provenance_summary") or {}
         if not summary:
             continue
+        closure = summary.get("sample_accounting_closure") if isinstance(summary.get("sample_accounting_closure"), dict) else {}
         rows.append(
             {
                 "source": "calibration",
@@ -1017,8 +1026,15 @@ def _dq_provenance_contract_rows(
                 "engine": summary.get("engine"),
                 "schema": summary.get("source_schema"),
                 "input_samples": summary.get("input_samples"),
+                "input_valid_samples": summary.get("input_valid_samples_before_rejection"),
+                "input_invalid_samples": summary.get("input_invalid_samples_before_rejection"),
                 "flagged_samples": summary.get("input_flagged_samples"),
                 "nonfinite_samples": summary.get("input_nonfinite_samples"),
+                "valid_samples_after_rejection": summary.get("valid_samples_after_rejection"),
+                "rejected_samples": summary.get("rejected_samples"),
+                "closure_status": closure.get("status"),
+                "closure_input_total_match": closure.get("input_total_match"),
+                "closure_valid_rejection_match": closure.get("valid_rejection_match"),
                 "zero_coverage": summary.get("zero_coverage_pixels"),
                 "partial_coverage": summary.get("partial_coverage_pixels"),
                 "low_rejected": summary.get("low_rejected_pixels"),
@@ -1033,6 +1049,7 @@ def _dq_provenance_contract_rows(
         summary = item.get("dq_provenance_summary") or {}
         if not summary:
             continue
+        closure = summary.get("sample_accounting_closure") if isinstance(summary.get("sample_accounting_closure"), dict) else {}
         rows.append(
             {
                 "source": "integration",
@@ -1041,8 +1058,15 @@ def _dq_provenance_contract_rows(
                 "engine": summary.get("engine"),
                 "schema": summary.get("source_schema"),
                 "input_samples": summary.get("input_samples"),
+                "input_valid_samples": summary.get("input_valid_samples_before_rejection"),
+                "input_invalid_samples": summary.get("input_invalid_samples_before_rejection"),
                 "flagged_samples": summary.get("input_flagged_samples"),
                 "nonfinite_samples": summary.get("input_nonfinite_samples"),
+                "valid_samples_after_rejection": summary.get("valid_samples_after_rejection"),
+                "rejected_samples": summary.get("rejected_samples"),
+                "closure_status": closure.get("status"),
+                "closure_input_total_match": closure.get("input_total_match"),
+                "closure_valid_rejection_match": closure.get("valid_rejection_match"),
                 "zero_coverage": summary.get("zero_coverage_pixels"),
                 "partial_coverage": summary.get("partial_coverage_pixels"),
                 "low_rejected": summary.get("low_rejected_pixels"),
@@ -1057,6 +1081,7 @@ def _dq_provenance_contract_rows(
         summary = item.get("dq_provenance_summary") or {}
         if not summary:
             continue
+        closure = summary.get("sample_accounting_closure") if isinstance(summary.get("sample_accounting_closure"), dict) else {}
         rows.append(
             {
                 "source": "resident",
@@ -1065,6 +1090,11 @@ def _dq_provenance_contract_rows(
                 "engine": summary.get("engine"),
                 "schema": summary.get("source_schema"),
                 "active_frames": summary.get("active_frame_count"),
+                "input_valid_samples": summary.get("input_valid_samples_before_rejection"),
+                "valid_samples_after_rejection": summary.get("valid_samples_after_rejection"),
+                "rejected_samples": summary.get("rejected_samples"),
+                "closure_status": closure.get("status"),
+                "closure_valid_rejection_match": closure.get("valid_rejection_match"),
                 "zero_coverage": summary.get("zero_coverage_pixels"),
                 "partial_coverage": summary.get("partial_coverage_pixels"),
                 "low_rejected": summary.get("low_rejected_pixels"),
@@ -1468,6 +1498,34 @@ def _pipeline_contract_rejection_sample_rows(contract: dict[str, Any] | None) ->
     return rows
 
 
+def _pipeline_contract_sample_closure_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    integration = (contract or {}).get("integration") or {}
+    for row in integration.get("outputs") or []:
+        closure = row.get("sample_accounting_closure")
+        if not isinstance(closure, dict):
+            continue
+        rows.append(
+            {
+                "item": row.get("item"),
+                "backend": row.get("backend"),
+                "engine": row.get("dq_provenance_engine"),
+                "status": closure.get("status"),
+                "present": closure.get("present"),
+                "passed": closure.get("passed"),
+                "input_total_match": closure.get("input_total_match"),
+                "valid_rejection_match": closure.get("valid_rejection_match"),
+                "input_samples": closure.get("input_samples"),
+                "input_valid_samples": closure.get("input_valid_samples_before_rejection"),
+                "input_invalid_samples": closure.get("input_invalid_samples_before_rejection"),
+                "valid_samples_after_rejection": closure.get("valid_samples_after_rejection"),
+                "rejected_samples": closure.get("rejected_samples"),
+                "semantics": closure.get("semantics"),
+            }
+        )
+    return rows
+
+
 def write_html_report(
     out_path: str | Path,
     manifest: dict[str, Any] | None = None,
@@ -1618,6 +1676,7 @@ def write_html_report(
     pipeline_contract_pixel_rows = _pipeline_contract_pixel_rows(pipeline_contract)
     pipeline_contract_pixel_delta_rows = _pipeline_contract_pixel_delta_rows(pipeline_contract)
     pipeline_contract_rejection_sample_rows = _pipeline_contract_rejection_sample_rows(pipeline_contract)
+    pipeline_contract_sample_closure_rows = _pipeline_contract_sample_closure_rows(pipeline_contract)
     dq_provenance_contract_rows = _dq_provenance_contract_rows(calibration, integration, resident)
     warning_rows = _warning_rows(manifest, plan, calibration, registration, local_norm, integration, timing)
     html = f"""<!doctype html>
@@ -1759,6 +1818,10 @@ def write_html_report(
   <p>pipeline contract rejection sample accounting rows expose the sample-count
   total from low/high rejection maps separately from DQ touched-pixel counts.</p>
   {_limited_table(pipeline_contract_rejection_sample_rows, label="pipeline contract rejection sample accounting rows", artifact="pipeline_contract JSON")}
+  <p>pipeline contract sample-closure rows show whether initially valid samples
+  close over final valid plus rejected samples; missing is allowed for old
+  artifacts, failed is blocking.</p>
+  {_limited_table(pipeline_contract_sample_closure_rows, label="pipeline contract sample closure rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_local_norm_rows, label="pipeline contract local-normalization rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_warp_rows, label="pipeline contract warp rows", artifact="pipeline_contract JSON")}
   {_h2("dq-provenance-contract", "DQ provenance contract")}

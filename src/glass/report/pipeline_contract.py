@@ -531,6 +531,35 @@ def _rejection_sample_sources(output: dict[str, Any]) -> list[dict[str, Any]]:
     return sources
 
 
+def _sample_accounting_closure_state(output: dict[str, Any]) -> dict[str, Any]:
+    summary = output.get("dq_provenance_summary")
+    closure = (
+        summary.get("sample_accounting_closure")
+        if isinstance(summary, dict) and isinstance(summary.get("sample_accounting_closure"), dict)
+        else {}
+    )
+    status = closure.get("status")
+    present = status in {"passed", "failed"}
+    return {
+        "present": present,
+        "required": present,
+        "status": status or "missing",
+        "passed": (not present) or status == "passed",
+        "input_total_match": closure.get("input_total_match"),
+        "valid_rejection_match": closure.get("valid_rejection_match"),
+        "input_samples": closure.get("input_samples"),
+        "input_valid_samples_before_rejection": closure.get(
+            "input_valid_samples_before_rejection"
+        ),
+        "input_invalid_samples_before_rejection": closure.get(
+            "input_invalid_samples_before_rejection"
+        ),
+        "valid_samples_after_rejection": closure.get("valid_samples_after_rejection"),
+        "rejected_samples": closure.get("rejected_samples"),
+        "semantics": closure.get("semantics"),
+    }
+
+
 def _verify_integration_rejection_sample_accounting(
     output: dict[str, Any],
     *,
@@ -730,6 +759,7 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
             run_root=run_root,
             index=index,
         )
+        sample_closure = _sample_accounting_closure_state(output)
         rows.append(
             {
                 "item": item,
@@ -744,6 +774,7 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
                 "dq_summary_has_valid": isinstance(dq_summary, dict) and "valid" in dq_summary,
                 "dq_provenance_summary_present": isinstance(summary, dict),
                 "dq_provenance_engine": summary.get("engine") if isinstance(summary, dict) else None,
+                "sample_accounting_closure": sample_closure,
                 "stack_result_contract": result_contract,
                 "resident_result_contract": resident_contract,
                 "dq_contract_ok": (
@@ -944,6 +975,35 @@ def build_pipeline_contract_audit(
                 ],
             },
             "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
+        ),
+        _check(
+            "integration_sample_accounting_closure",
+            bool(integration_rows)
+            and all(bool(row["sample_accounting_closure"]["passed"]) for row in integration_rows),
+            {
+                "output_count": len(integration_rows),
+                "present_count": sum(
+                    1 for row in integration_rows if row["sample_accounting_closure"]["present"]
+                ),
+                "failed": [
+                    {
+                        "item": row["item"],
+                        "status": row["sample_accounting_closure"]["status"],
+                        "input_valid_samples_before_rejection": row[
+                            "sample_accounting_closure"
+                        ].get("input_valid_samples_before_rejection"),
+                        "valid_samples_after_rejection": row[
+                            "sample_accounting_closure"
+                        ].get("valid_samples_after_rejection"),
+                        "rejected_samples": row["sample_accounting_closure"].get(
+                            "rejected_samples"
+                        ),
+                    }
+                    for row in integration_rows
+                    if not row["sample_accounting_closure"]["passed"]
+                ],
+            },
+            "Sample-closure evidence is optional for old artifacts, but explicit failed closure blocks the pipeline contract.",
         ),
     ]
     if calibration_path.exists() or resident_calibration_rows:
@@ -1224,6 +1284,19 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
     for item in audit.get("checks") or []:
         marker = "PASS" if item.get("passed") else "FAIL"
         lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
+    lines.extend(["", "## Integration Sample Accounting Closure", ""])
+    for row in ((audit.get("integration") or {}).get("outputs") or []):
+        closure = row.get("sample_accounting_closure") if isinstance(row, dict) else {}
+        if not isinstance(closure, dict):
+            continue
+        lines.append(
+            "- "
+            f"{row.get('item')}: status `{closure.get('status')}`, "
+            f"input-valid `{closure.get('input_valid_samples_before_rejection')}`, "
+            f"final-valid `{closure.get('valid_samples_after_rejection')}`, "
+            f"rejected `{closure.get('rejected_samples')}`, "
+            f"passed `{closure.get('passed')}`"
+        )
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")

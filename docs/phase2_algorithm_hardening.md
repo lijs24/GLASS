@@ -4097,6 +4097,23 @@ integration where applicable.
 - Keep this gate DQ/report-contract scoped: no image math, CUDA kernel,
   runtime default change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 244: Pipeline Sample Closure Report Surface
+
+- Surface `sample_accounting_closure` in pipeline-contract integration rows so
+  auditors can see valid/invalid/rejected sample closure without opening raw DQ
+  provenance JSON.
+- Add `integration_sample_accounting_closure` to pipeline-contract checks. Old
+  artifacts with missing closure remain compatible, but explicitly failed
+  closure blocks the pipeline contract.
+- Extend pipeline-contract Markdown with an Integration Sample Accounting
+  Closure section.
+- Extend the main HTML report with pipeline sample-closure rows and add
+  valid/invalid/rejected sample columns to DQ provenance tables.
+- Add tests for passing closure, failed closure, Markdown output, and HTML
+  report visibility.
+- Keep this gate report/contract scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

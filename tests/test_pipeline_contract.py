@@ -9,11 +9,17 @@ from glass.engine.contracts import DQFlag
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
+from glass.report.html_report import write_html_report
 from glass.report.pipeline_contract import build_pipeline_contract_audit
 from glass.synthetic.generator import generate_synthetic_dataset
 
 
-def _write_resident_pipeline_run(path: Path, *, missing_source_terms: bool = False) -> None:
+def _write_resident_pipeline_run(
+    path: Path,
+    *,
+    missing_source_terms: bool = False,
+    sample_closure_status: str | None = None,
+) -> None:
     integration_dir = path / "integration"
     integration_dir.mkdir(parents=True)
     master = np.ones((2, 2), dtype=np.float32)
@@ -44,6 +50,23 @@ def _write_resident_pipeline_run(path: Path, *, missing_source_terms: bool = Fal
         "geometric_warp_coverage",
     ]
     dq_summary = {"valid": 1, "no_data": 1, "low_rejected": 1, "high_rejected": 1}
+    provenance_summary = {
+        "source_schema": "resident_dq_coverage_provenance",
+        "stage": "integration",
+        "engine": "cuda_resident_stack",
+        "active_frame_count": 3,
+        "source_terms": source_terms,
+        "rejected_samples": 3,
+        "output_dq_summary": dq_summary,
+    }
+    if sample_closure_status is not None:
+        provenance_summary["sample_accounting_closure"] = {
+            "status": sample_closure_status,
+            "input_valid_samples_before_rejection": 9,
+            "valid_samples_after_rejection": 6,
+            "rejected_samples": 3,
+            "valid_rejection_match": sample_closure_status == "passed",
+        }
     write_json(
         path / "integration_results.json",
         {
@@ -69,15 +92,7 @@ def _write_resident_pipeline_run(path: Path, *, missing_source_terms: bool = Fal
                         "rejected_sample_count_source": "low_high_rejection_maps",
                         "source_terms": source_terms,
                     },
-                    "dq_provenance_summary": {
-                        "source_schema": "resident_dq_coverage_provenance",
-                        "stage": "integration",
-                        "engine": "cuda_resident_stack",
-                        "active_frame_count": 3,
-                        "source_terms": source_terms,
-                        "rejected_samples": 3,
-                        "output_dq_summary": dq_summary,
-                    },
+                    "dq_provenance_summary": provenance_summary,
                     "geometric_warp_coverage": {
                         "available": True,
                         "frame_count": 3,
@@ -217,6 +232,92 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+
+
+def test_pipeline_contract_surfaces_sample_accounting_closure(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, sample_closure_status="passed")
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    closure = audit["integration"]["outputs"][0]["sample_accounting_closure"]
+
+    assert audit["passed"] is True
+    assert checks["integration_sample_accounting_closure"]["passed"] is True
+    assert checks["integration_sample_accounting_closure"]["evidence"]["present_count"] == 1
+    assert closure["status"] == "passed"
+    assert closure["input_valid_samples_before_rejection"] == 9
+    assert closure["valid_samples_after_rejection"] == 6
+    assert closure["rejected_samples"] == 3
+
+
+def test_pipeline_contract_blocks_failed_sample_accounting_closure(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, sample_closure_status="failed")
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    closure = audit["integration"]["outputs"][0]["sample_accounting_closure"]
+
+    assert audit["passed"] is False
+    assert checks["integration_sample_accounting_closure"]["passed"] is False
+    assert checks["integration_sample_accounting_closure"]["evidence"]["failed"] == [
+        {
+            "item": "H",
+            "status": "failed",
+            "input_valid_samples_before_rejection": 9,
+            "valid_samples_after_rejection": 6,
+            "rejected_samples": 3,
+        }
+    ]
+    assert closure["status"] == "failed"
+
+
+def test_pipeline_contract_markdown_reports_sample_accounting_closure(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, sample_closure_status="passed")
+    out = tmp_path / "pipeline_contract.json"
+    markdown = tmp_path / "pipeline_contract.md"
+
+    assert (
+        main(
+            [
+                "pipeline-contract",
+                "--run",
+                str(run),
+                "--out",
+                str(out),
+                "--markdown",
+                str(markdown),
+            ]
+        )
+        == 0
+    )
+
+    text = markdown.read_text(encoding="utf-8")
+    assert "Integration Sample Accounting Closure" in text
+    assert "input-valid `9`" in text
+    assert "rejected `3`" in text
+
+
+def test_html_report_surfaces_pipeline_sample_accounting_closure(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, sample_closure_status="passed")
+    audit = build_pipeline_contract_audit(run)
+    integration = read_json(run / "integration_results.json")
+    report = tmp_path / "report.html"
+
+    write_html_report(
+        report,
+        integration=integration,
+        pipeline_contract=audit,
+        run_root=run,
+    )
+
+    text = report.read_text(encoding="utf-8")
+    assert "pipeline contract sample-closure rows" in text
+    assert "valid_rejection_match" in text
+    assert "<td>passed</td>" in text
 
 
 def test_pipeline_contract_pixel_verification_reports_resident_rejection_sample_accounting(tmp_path: Path):
