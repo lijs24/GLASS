@@ -56,6 +56,10 @@ from glass.report.resident_registration_compare import (
     build_resident_registration_compare,
     write_resident_registration_compare,
 )
+from glass.report.resident_runtime_compare import (
+    build_resident_runtime_compare,
+    write_resident_runtime_compare,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1728,6 +1732,39 @@ def cmd_resident_registration_compare(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_missing_audits and payload["missing_audit_count"] else 0
+
+
+def _label_path_pairs(values: list[str]) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for value in values:
+        if "=" not in value:
+            raise ValueError(f"run entries must use label=path format: {value}")
+        label, path = value.split("=", 1)
+        if not label:
+            raise ValueError(f"run label is empty: {value}")
+        if not path:
+            raise ValueError(f"run path is empty: {value}")
+        pairs.append((label, path))
+    return pairs
+
+
+def cmd_resident_runtime_compare(args: argparse.Namespace) -> int:
+    payload = build_resident_runtime_compare(
+        _label_path_pairs(args.run),
+        baseline_label=args.baseline_label,
+    )
+    write_resident_runtime_compare(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "best_label": payload.get("summary", {}).get("best_label"),
+            "best_elapsed_s": payload.get("summary", {}).get("best_elapsed_s"),
+            "recommendation": payload.get("summary", {}).get("recommendation"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
 
 
 def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
@@ -3646,6 +3683,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if any sweep variant is missing a candidate audit",
     )
     resident_reg_compare.set_defaults(func=cmd_resident_registration_compare)
+
+    resident_runtime_compare = sub.add_parser(
+        "resident-runtime-compare",
+        help="compare resident CUDA timing and I/O pipeline artifacts from GLASS runs",
+    )
+    resident_runtime_compare.add_argument(
+        "--run",
+        action="append",
+        required=True,
+        help="run entry in label=path format; can be repeated",
+    )
+    resident_runtime_compare.add_argument(
+        "--baseline-label",
+        help="label to use as the timing baseline; defaults to the first --run entry",
+    )
+    resident_runtime_compare.add_argument("--out", required=True, help="output runtime comparison JSON")
+    resident_runtime_compare.add_argument("--markdown", help="optional output Markdown summary")
+    resident_runtime_compare.set_defaults(func=cmd_resident_runtime_compare)
 
     resident_reg_triage = sub.add_parser(
         "resident-registration-triage",

@@ -223,6 +223,7 @@ def test_cli_help_commands():
         "resident-determinism",
         "resident-registration-audit",
         "resident-registration-compare",
+        "resident-runtime-compare",
         "stack-engine-contract",
         "pipeline-contract",
         "guardrails",

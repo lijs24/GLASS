@@ -2683,6 +2683,23 @@ integration where applicable.
   slower than the Gate158 winner because read/decode wait time increased.
   Therefore the preset remains opt-in and is not promoted to default.
 
+### S2-Gate 161: Resident Runtime Variance Compare
+
+- Add `glass resident-runtime-compare` to compare resident CUDA timing artifacts
+  from multiple GLASS runs without rerunning image processing.
+- Read `run_timing.json` and `resident_artifacts.json`, rank runs by elapsed
+  time, and report resident I/O settings plus stage timings for read/decode,
+  H2D+calibration, registration/warp, integration, output, and GC.
+- Compare Gate158 `prefetch12_workers7` against Gate160
+  `--resident-runtime-preset throughput-v1` to prove both used the same
+  effective resident scheduling settings.
+- Current diagnosis: Gate160 is `1.364279174741225x` slower overall, but
+  H2D+calibration and registration/warp are essentially unchanged. The
+  regression is dominated by read/decode variance: read-wait ratio
+  `2.451504514719359`, worker-read cumulative ratio `2.0380521300990586`.
+- Recommendation: repeat the preset measurement with warm cache or in a
+  dedicated I/O window before changing defaults. Keep `throughput-v1` opt-in.
+
 ## Gate Rules
 
 Each gate requires:
