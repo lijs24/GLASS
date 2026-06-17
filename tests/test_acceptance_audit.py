@@ -371,7 +371,11 @@ def _add_pipeline_contract_requirement(path: Path) -> None:
         "required_audit_type": "pipeline_invariant_contract",
         "require_passed": True,
         "min_check_count": 1,
-        "required_check_names": ["integration_resident_result_contract"],
+        "required_check_names": [
+            "calibration_master_surface_contract",
+            "resident_calibration_surface_contract",
+            "integration_resident_result_contract",
+        ],
         "allow_failed_checks": False,
     }
     write_json(path, payload)
@@ -432,6 +436,18 @@ def _write_resident_determinism(
 
 def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
     checks = [
+        {
+            "name": "calibration_master_surface_contract",
+            "passed": passed,
+            "evidence": {"master_count": 1, "failed": [] if passed else ["resident_calibration_H"]},
+            "note": "",
+        },
+        {
+            "name": "resident_calibration_surface_contract",
+            "passed": passed,
+            "evidence": {"resident_surface_count": 1, "failed": [] if passed else ["resident_calibration_H"]},
+            "note": "",
+        },
         {
             "name": "integration_resident_result_contract",
             "passed": passed,
@@ -650,7 +666,7 @@ def test_acceptance_audit_accepts_passing_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_present"]["passed"] is True
     assert checks["pipeline_contract_passed"]["passed"] is True
     assert audit["pipeline_contract"]["passed"] is True
-    assert audit["pipeline_contract"]["check_count"] == 1
+    assert audit["pipeline_contract"]["check_count"] == 3
 
 
 def test_acceptance_audit_accepts_contract_bundle(tmp_path: Path):
@@ -953,7 +969,9 @@ def test_acceptance_audit_fails_failed_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_present"]["passed"] is True
     assert checks["pipeline_contract_passed"]["passed"] is False
     assert audit["pipeline_contract"]["failed_checks"] == [
-        "integration_resident_result_contract"
+        "calibration_master_surface_contract",
+        "resident_calibration_surface_contract",
+        "integration_resident_result_contract",
     ]
 
 
@@ -1025,20 +1043,24 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
     assert checks["contract_pipeline_contract_audit_type"] is True
     assert checks["contract_pipeline_contract_passed"] is True
     assert checks["contract_pipeline_contract_min_check_count"] is True
+    assert checks["contract_pipeline_contract_check:calibration_master_surface_contract"] is True
+    assert checks["contract_pipeline_contract_check:resident_calibration_surface_contract"] is True
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is True
     assert checks["contract_pipeline_contract_no_failed_checks"] is True
     pipeline_evidence = audit["release_contract_evidence"]["pipeline_contract"]
     assert pipeline_evidence["status"] == "passed"
     assert pipeline_evidence["required_by_benchmark_contract"] is True
     assert pipeline_evidence["pipeline_contract_passed"] is True
-    assert pipeline_evidence["pipeline_contract_check_count"] == 1
-    assert pipeline_evidence["benchmark_check_count"] == 6
+    assert pipeline_evidence["pipeline_contract_check_count"] == 3
+    assert pipeline_evidence["benchmark_check_count"] == 8
     assert pipeline_evidence["failed_check_count"] == 0
     assert {item["name"] for item in pipeline_evidence["checks"]} >= {
         "pipeline_contract_present",
         "pipeline_contract_passed",
         "contract_pipeline_contract_present",
         "contract_pipeline_contract_passed",
+        "contract_pipeline_contract_check:calibration_master_surface_contract",
+        "contract_pipeline_contract_check:resident_calibration_surface_contract",
         "contract_pipeline_contract_check:integration_resident_result_contract",
     }
 

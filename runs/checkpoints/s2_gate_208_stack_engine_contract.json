@@ -1,0 +1,216 @@
+{
+  "adoption": {
+    "contract_ready_count": 2,
+    "cuda_resident_surface_count": 2,
+    "engine_counts": {
+      "cuda_resident_stack": 2
+    },
+    "fallback_count": 0,
+    "gap_surfaces": [],
+    "other_surface_count": 0,
+    "phase2_stack_engine_default_gap_count": 0,
+    "recommendation": "stack_engine_default_ready",
+    "result_contract_passed_count": 2,
+    "schema_version": 1,
+    "stack_engine_surface_count": 0,
+    "surface_count": 2,
+    "surfaces": [
+      {
+        "contract_ok": true,
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "resident_calibration_H",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": true,
+        "resident_result_contract_passed": null,
+        "result_contract_passed": true,
+        "science_contract_ok": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": null,
+        "summary_engine": "cuda_resident_stack",
+        "surface": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "resident_calibration"
+      },
+      {
+        "contract_ok": true,
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "H",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": null,
+        "resident_result_contract_passed": true,
+        "result_contract_passed": true,
+        "science_contract_ok": null,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": false,
+        "stack_result_contract_passed": false,
+        "summary_engine": "cuda_resident_stack",
+        "surface": "integration",
+        "tile_stack_mode": null,
+        "type": "light"
+      }
+    ],
+    "target_engine": "stack_engine_cpu"
+  },
+  "audit_type": "stack_engine_default_contract",
+  "calibration": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\calibration_artifacts.json",
+    "master_count": 1,
+    "masters": [
+      {
+        "backend": "cuda_resident_stack",
+        "contract_ok": true,
+        "fallback_reason": null,
+        "has_dq_provenance": true,
+        "input_samples": 200,
+        "name": "resident_calibration_H",
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+        "path_exists": true,
+        "resident_calibration_bias_count": 6,
+        "resident_calibration_contract_check_count": 7,
+        "resident_calibration_contract_passed": true,
+        "resident_calibration_contract_status": "passed",
+        "resident_calibration_dark_count": 11,
+        "resident_calibration_flat_count": 4,
+        "resident_calibration_frame_count": 200,
+        "resident_calibration_set_count": 1,
+        "result_contract_passed": true,
+        "science_contract": {
+          "contract_type": "resident_calibration_surface_contract",
+          "note": "Resident calibration surfaces are audited by the attached resident CUDA calibration contract; per-master CPU stats are not required here.",
+          "passed": true,
+          "schema_version": 1,
+          "source": "resident_cuda_calibration_contract",
+          "status": "passed"
+        },
+        "science_contract_ok": true,
+        "stack_engine_enabled": true,
+        "summary_engine": "cuda_resident_stack",
+        "summary_source_schema": "resident_cuda_calibration_contract",
+        "summary_stage": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "resident_calibration"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "evidence": {
+        "exists": false,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\calibration_artifacts.json",
+        "resident_calibration_contract_attached": true
+      },
+      "name": "calibration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "calibration_master_records_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 1
+      },
+      "name": "calibration_masters_use_stack_engine",
+      "note": "All master bias/dark/flat records must use StackEngine without fallback.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 1
+      },
+      "name": "calibration_masters_science_auditable",
+      "note": "Master calibration records must include output stats and calibration semantics.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_output_records_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_outputs_use:cuda_resident_stack",
+      "note": "Tile/CPU light integration must use StackEngine by default; resident CUDA is explicit.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T19:04:46+00:00",
+  "default_promotion": {
+    "actual_scope": "all",
+    "blocker_count": 0,
+    "blockers": [],
+    "calibration_surface_count": 1,
+    "integration_surface_count": 1,
+    "phase2_stack_engine_default_gap_count": 0,
+    "ready": true,
+    "recommendation": "stack_engine_default_ready",
+    "required_scope": "all",
+    "schema_version": 1,
+    "status": "ready",
+    "surface_count": 2,
+    "target_engine": "stack_engine_cpu"
+  },
+  "expected_integration_engine": "cuda_resident_stack",
+  "integration": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration_results.json",
+    "output_count": 1,
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "contract_ok": true,
+        "expected_engine": "cuda_resident_stack",
+        "filter": "H",
+        "has_stack_engine_dq_provenance": false,
+        "index": 0,
+        "input_samples": null,
+        "resident_result_contract_active_frame_count": 193,
+        "resident_result_contract_check_count": 9,
+        "resident_result_contract_passed": true,
+        "resident_result_contract_status": "passed",
+        "result_contract_passed": true,
+        "source_stage": null,
+        "stack_engine_enabled": false,
+        "stack_result_contract_passed": false,
+        "summary_engine": "cuda_resident_stack",
+        "summary_source_schema": "resident_dq_coverage_provenance",
+        "summary_stage": "integration",
+        "tile_stack_mode": null
+      }
+    ]
+  },
+  "passed": true,
+  "resident_calibration_contract_attached": true,
+  "resident_result_contract_attached": true,
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident",
+  "schema_version": 1,
+  "scope": "all",
+  "status": "passed"
+}

@@ -3496,6 +3496,22 @@ integration where applicable.
 - Surface calibration master and calibrated-light rows in the HTML report's
   Pipeline contract audit section.
 
+### S2-Gate 208: Resident Calibration Release Contract Bridge
+
+- Extend `glass pipeline-contract` with
+  `--resident-calibration-contract-json` so resident CUDA runs without
+  `calibration_artifacts.json` can still expose calibration surface evidence
+  in the unified pipeline invariant audit.
+- Have `glass guardrails` pass the attached resident calibration contract into
+  both StackEngine and pipeline contract audits.
+- Add `resident_calibration_surface_contract` rows and checks to the pipeline
+  contract while preserving local CPU calibration checks from Gate207.
+- Harden `benchmarks/phase2_m38_h_200_contract.json` so the 200-light
+  acceptance contract requires calibration master surface evidence and resident
+  calibration surface evidence in addition to resident integration evidence.
+- Keep this gate contract-only: no image processing algorithm changes and no
+  new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

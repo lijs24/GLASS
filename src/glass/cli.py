@@ -2214,11 +2214,19 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
 
 
 def cmd_pipeline_contract(args: argparse.Namespace) -> int:
+    resident_calibration_contract = (
+        read_json(args.resident_calibration_contract_json)
+        if getattr(args, "resident_calibration_contract_json", None)
+        else None
+    )
     audit = build_pipeline_contract_audit(
         args.run,
         pixel_verify=args.pixel_verify,
         pixel_verify_tile_size=args.pixel_verify_tile_size,
         pixel_tolerance=args.pixel_tolerance,
+        resident_calibration_contract=resident_calibration_contract
+        if isinstance(resident_calibration_contract, dict)
+        else None,
     )
     write_pipeline_contract_audit(args.out, audit, markdown=args.markdown)
     console.print(
@@ -2269,6 +2277,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         pixel_verify=args.pixel_verify,
         pixel_verify_tile_size=args.pixel_verify_tile_size,
         pixel_tolerance=args.pixel_tolerance,
+        resident_calibration_contract=resident_calibration_contract
+        if isinstance(resident_calibration_contract, dict)
+        else None,
     )
     write_pipeline_contract_audit(pipeline_path, pipeline_audit, markdown=pipeline_markdown)
     _write_run_report(
@@ -4862,6 +4873,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="allowed pixel-count delta for optional pipeline-contract FITS pixel verification",
+    )
+    pipeline_contract.add_argument(
+        "--resident-calibration-contract-json",
+        help="optional resident CUDA calibration contract JSON used to prove resident calibration surface invariants",
     )
     pipeline_contract.set_defaults(func=cmd_pipeline_contract)
 

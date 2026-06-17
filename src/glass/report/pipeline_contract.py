@@ -226,6 +226,66 @@ def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[
     return rows
 
 
+def _resident_calibration_rows(payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict) or payload.get("artifact_type") != "resident_cuda_calibration_contract":
+        return []
+    top_level_passed = payload.get("passed") is True
+    rows: list[dict[str, Any]] = []
+    outputs = payload.get("outputs") if isinstance(payload.get("outputs"), list) else []
+    for index, output in enumerate(outputs):
+        if not isinstance(output, dict):
+            continue
+        checks = [item for item in output.get("checks") or [] if isinstance(item, dict)]
+        failed_checks = [str(item.get("name")) for item in checks if not item.get("passed")]
+        passed = top_level_passed and output.get("passed") is True and not failed_checks
+        rows.append(
+            {
+                "name": f"resident_calibration_{output.get('filter') or output.get('index', index)}",
+                "type": "resident_calibration",
+                "path": output.get("master_path"),
+                "path_exists": output.get("master_path_exists"),
+                "tile_stack_mode": "cuda_resident_stack",
+                "stack_engine_enabled": True,
+                "stats_present": True,
+                "dq_provenance_summary_present": True,
+                "dq_provenance_engine": "cuda_resident_stack",
+                "stack_result_contract": {
+                    "required": False,
+                    "present": False,
+                    "passed": False,
+                    "status": "not_required",
+                    "check_count": 0,
+                    "contract_type": None,
+                },
+                "science_contract": {
+                    "schema_version": 1,
+                    "contract_type": "resident_calibration_surface_contract",
+                    "status": "passed" if passed else "failed",
+                    "passed": passed,
+                    "source": "resident_cuda_calibration_contract",
+                    "resident_contract_status": output.get("status"),
+                    "resident_contract_check_count": len(checks),
+                    "failed_checks": failed_checks,
+                    "frame_count": output.get("frame_count"),
+                    "set_count": output.get("set_count"),
+                    "bias_count": output.get("bias_count"),
+                    "dark_count": output.get("dark_count"),
+                    "flat_count": output.get("flat_count"),
+                },
+                "resident_calibration_contract": {
+                    "required": True,
+                    "present": True,
+                    "passed": passed,
+                    "status": output.get("status"),
+                    "check_count": len(checks),
+                    "failed_checks": failed_checks,
+                },
+                "contract_ok": passed,
+            }
+        )
+    return rows
+
+
 def _integration_rejection_mode(integration: dict[str, Any], output: dict[str, Any]) -> str:
     if isinstance(output.get("integration_rejection"), dict):
         return str((output.get("integration_rejection") or {}).get("mode") or "none")
@@ -629,6 +689,7 @@ def build_pipeline_contract_audit(
     pixel_verify: bool = False,
     pixel_verify_tile_size: int = 2048,
     pixel_tolerance: int = 0,
+    resident_calibration_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
     calibration_path = run_root / "calibration_artifacts.json"
@@ -640,7 +701,9 @@ def build_pipeline_contract_audit(
     local_norm = _load_json_object(local_norm_path)
     integration = _load_json_object(integration_path)
 
-    calibration_master_rows = _calibration_master_rows(calibration, run_root)
+    local_calibration_master_rows = _calibration_master_rows(calibration, run_root)
+    resident_calibration_rows = _resident_calibration_rows(resident_calibration_contract)
+    calibration_master_rows = [*local_calibration_master_rows, *resident_calibration_rows]
     calibrated_light_rows = _calibrated_light_rows(calibration, run_root)
     warp_rows = _warp_rows(warp, run_root)
     skipped_warp_rows = _skipped_warp_rows(warp)
@@ -722,7 +785,7 @@ def build_pipeline_contract_audit(
             "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
         ),
     ]
-    if calibration_path.exists():
+    if calibration_path.exists() or resident_calibration_rows:
         checks.extend(
             [
                 _check(
@@ -744,6 +807,26 @@ def build_pipeline_contract_audit(
                     },
                     "Master calibration surfaces must expose stats, semantics, and StackEngine result contracts.",
                 ),
+                _check(
+                    "resident_calibration_surface_contract",
+                    not resident_calibration_rows
+                    or all(bool(row["contract_ok"]) for row in resident_calibration_rows),
+                    {
+                        "required": bool(resident_calibration_rows),
+                        "resident_surface_count": len(resident_calibration_rows),
+                        "failed": [
+                            row["name"]
+                            for row in resident_calibration_rows
+                            if not row["contract_ok"]
+                        ],
+                    },
+                    "Resident CUDA calibration surfaces must pass their resident calibration contract.",
+                ),
+            ]
+        )
+    if calibration_path.exists():
+        checks.extend(
+            [
                 _check(
                     "calibrated_lights_present",
                     bool(calibrated_light_rows),
@@ -872,6 +955,15 @@ def build_pipeline_contract_audit(
         "checks": checks,
         "artifacts": {
             "calibration": {"path": str(calibration_path), "exists": calibration_path.exists()},
+            "resident_calibration_contract": {
+                "attached": bool(resident_calibration_rows),
+                "artifact_type": resident_calibration_contract.get("artifact_type")
+                if isinstance(resident_calibration_contract, dict)
+                else None,
+                "passed": resident_calibration_contract.get("passed")
+                if isinstance(resident_calibration_contract, dict)
+                else None,
+            },
             "warp": {"path": str(warp_path), "exists": warp_path.exists()},
             "local_norm": {"path": str(local_norm_path), "exists": local_norm_path.exists()},
             "integration": {"path": str(integration_path), "exists": integration_path.exists()},
@@ -879,9 +971,13 @@ def build_pipeline_contract_audit(
         "calibration": {
             "artifact_path": str(calibration_path),
             "exists": calibration_path.exists(),
+            "resident_calibration_contract_attached": bool(resident_calibration_rows),
             "master_count": len(calibration_master_rows),
+            "local_master_count": len(local_calibration_master_rows),
+            "resident_master_count": len(resident_calibration_rows),
             "calibrated_light_count": len(calibrated_light_rows),
             "masters": calibration_master_rows,
+            "resident_masters": resident_calibration_rows,
             "calibrated_lights": calibrated_light_rows,
         },
         "warp": {"outputs": warp_rows, "skipped_frames": skipped_warp_rows},

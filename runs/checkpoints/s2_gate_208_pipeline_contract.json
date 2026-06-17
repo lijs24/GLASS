@@ -1,0 +1,736 @@
+{
+  "artifacts": {
+    "calibration": {
+      "exists": false,
+      "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\calibration_artifacts.json"
+    },
+    "integration": {
+      "exists": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration_results.json"
+    },
+    "local_norm": {
+      "exists": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\local_norm_results.json"
+    },
+    "resident_calibration_contract": {
+      "artifact_type": "resident_cuda_calibration_contract",
+      "attached": true,
+      "passed": true
+    },
+    "warp": {
+      "exists": false,
+      "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\warp_results.json"
+    }
+  },
+  "audit_type": "pipeline_invariant_contract",
+  "calibration": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\calibration_artifacts.json",
+    "calibrated_light_count": 0,
+    "calibrated_lights": [],
+    "exists": false,
+    "local_master_count": 0,
+    "master_count": 1,
+    "masters": [
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "cuda_resident_stack",
+        "dq_provenance_summary_present": true,
+        "name": "resident_calibration_H",
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+        "path_exists": true,
+        "resident_calibration_contract": {
+          "check_count": 7,
+          "failed_checks": [],
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "science_contract": {
+          "bias_count": 6,
+          "contract_type": "resident_calibration_surface_contract",
+          "dark_count": 11,
+          "failed_checks": [],
+          "flat_count": 4,
+          "frame_count": 200,
+          "passed": true,
+          "resident_contract_check_count": 7,
+          "resident_contract_status": "passed",
+          "schema_version": 1,
+          "set_count": 1,
+          "source": "resident_cuda_calibration_contract",
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "resident_calibration"
+      }
+    ],
+    "resident_calibration_contract_attached": true,
+    "resident_master_count": 1,
+    "resident_masters": [
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "cuda_resident_stack",
+        "dq_provenance_summary_present": true,
+        "name": "resident_calibration_H",
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+        "path_exists": true,
+        "resident_calibration_contract": {
+          "check_count": 7,
+          "failed_checks": [],
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "science_contract": {
+          "bias_count": 6,
+          "contract_type": "resident_calibration_surface_contract",
+          "dark_count": 11,
+          "failed_checks": [],
+          "flat_count": 4,
+          "frame_count": 200,
+          "passed": true,
+          "resident_contract_check_count": 7,
+          "resident_contract_status": "passed",
+          "schema_version": 1,
+          "set_count": 1,
+          "source": "resident_cuda_calibration_contract",
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "resident_calibration"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "map_count": 6
+      },
+      "name": "integration_output_maps_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_dq_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 0
+      },
+      "name": "integration_stack_result_contract",
+      "note": "CPU StackEngine integration outputs must carry an embedded passing result contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 1
+      },
+      "name": "integration_resident_result_contract",
+      "note": "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "calibration_master_surfaces_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 1
+      },
+      "name": "calibration_master_surface_contract",
+      "note": "Master calibration surfaces must expose stats, semantics, and StackEngine result contracts.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "required": true,
+        "resident_surface_count": 1
+      },
+      "name": "resident_calibration_surface_contract",
+      "note": "Resident CUDA calibration surfaces must pass their resident calibration contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_dq_map_pixels_match_summary",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_coverage_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 2
+      },
+      "name": "integration_rejection_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": false,
+        "failed": [],
+        "row_count": 0,
+        "top_level_crop_box_recorded": true
+      },
+      "name": "local_normalization_contract",
+      "note": "LN rows must record crop_box and DQ state; enabled LN rows must record coefficient grids.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T19:04:47+00:00",
+  "integration": {
+    "maps": [
+      {
+        "exists": true,
+        "item": "H",
+        "map": "master",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+        "path_key": "master_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "weight",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_weight_map_H.fits",
+        "path_key": "weight_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "coverage",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+        "path_key": "coverage_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "dq",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+        "path_key": "dq_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "low_rejection",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+        "path_key": "low_rejection_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "high_rejection",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+        "path_key": "high_rejection_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "dq_contract_ok": true,
+        "dq_map_exists": true,
+        "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+        "dq_provenance_engine": "cuda_resident_stack",
+        "dq_provenance_summary_present": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_count": 200,
+        "item": "H",
+        "rejection": "winsorized_sigma",
+        "resident_result_contract": {
+          "check_count": 9,
+          "contract": {
+            "active_frame_count": 193,
+            "backend": "cuda_resident_stack",
+            "checks": [
+              {
+                "evidence": {
+                  "backend": "cuda_resident_stack",
+                  "memory_mode": "resident"
+                },
+                "name": "resident_identity",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "failed": [],
+                  "map_count": 6
+                },
+                "name": "required_maps_exist",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "keys": [
+                    "high_rejected",
+                    "low_rejected",
+                    "valid",
+                    "warp_edge"
+                  ]
+                },
+                "name": "dq_summary_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "engine": "cuda_resident_stack",
+                  "source_schema": "resident_dq_coverage_provenance",
+                  "stage": "integration"
+                },
+                "name": "resident_provenance_summary",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "dq_summary": {
+                    "high_rejected": 32370393,
+                    "low_rejected": 13114786,
+                    "valid": 20892861,
+                    "warp_edge": 5394370
+                  },
+                  "mismatches": {},
+                  "provenance_output_dq_summary": {
+                    "high_rejected": 32370393,
+                    "low_rejected": 13114786,
+                    "valid": 20892861,
+                    "warp_edge": 5394370
+                  }
+                },
+                "name": "dq_summary_matches_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "active_frame_count": 193,
+                  "frame_count": 200
+                },
+                "name": "active_frame_count_valid",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "keys": [
+                    "active_frame_count",
+                    "available",
+                    "finite_pre_rejection_coverage",
+                    "geometric_frame_count_matches_active",
+                    "geometric_full_pixels",
+                    "geometric_partial_pixels",
+                    "geometric_warp_coverage",
+                    "geometric_warp_coverage_frame_count",
+                    "geometric_zero_pixels",
+                    "note",
+                    "partial_edge_inference",
+                    "partial_pre_rejection_pixels",
+                    "post_rejection_coverage",
+                    "post_rejection_zero_pixels",
+                    "rejected_sample_count",
+                    "rejected_sample_count_source",
+                    "rejection_reduced_pixels",
+                    "source_terms",
+                    "zero_pre_rejection_pixels"
+                  ]
+                },
+                "name": "coverage_provenance_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "source_terms": [
+                    "geometric_warp_coverage",
+                    "high_rejection",
+                    "low_rejection",
+                    "post_rejection_coverage"
+                  ]
+                },
+                "name": "source_terms_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "coverage_provenance": true,
+                  "output": true
+                },
+                "name": "geometric_frame_count_matches_active",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "contract_type": "resident_cuda_result_contract",
+            "filter": "H",
+            "frame_count": 200,
+            "index": 0,
+            "maps": [
+              {
+                "exists": true,
+                "map": "master",
+                "ok": true,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+                "path_key": "master_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "weight",
+                "ok": true,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_weight_map_H.fits",
+                "path_key": "weight_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "coverage",
+                "ok": true,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+                "path_key": "coverage_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "dq",
+                "ok": true,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+                "path_key": "dq_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "low_rejection",
+                "ok": true,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+                "path_key": "low_rejection_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "high_rejection",
+                "ok": true,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+                "path_key": "high_rejection_map_path",
+                "policy_skipped": false,
+                "required": true
+              }
+            ],
+            "memory_mode": "resident",
+            "passed": true,
+            "pixel_verification": {
+              "enabled": false,
+              "tile_size": 2048,
+              "tolerance_pixels": 0
+            },
+            "rejection": "winsorized_sigma",
+            "schema_version": 1,
+            "status": "passed"
+          },
+          "contract_type": "resident_cuda_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "stack_engine_enabled": false,
+        "stack_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "tile_stack_mode": null
+      }
+    ]
+  },
+  "local_normalization": {
+    "crop_box": null,
+    "enabled": false,
+    "outputs": [],
+    "reference_frame_id": null
+  },
+  "passed": true,
+  "pixel_verification": {
+    "enabled": true,
+    "integration_outputs": [
+      {
+        "count_maps": {
+          "coverage": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 193.0,
+              "min": 1.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+              "positive_pixels": 61651200,
+              "positive_threshold": 0.0,
+              "rounded_sum": 11735503879,
+              "schema_version": 1,
+              "sum": 11735503879.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 0
+            },
+            "status": "verified",
+            "summary_match": {
+              "no_data": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "high_rejection": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 10.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+              "positive_pixels": 32370393,
+              "positive_threshold": 0.0,
+              "rounded_sum": 43618886,
+              "schema_version": 1,
+              "sum": 43618886.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 29280807
+            },
+            "status": "verified",
+            "summary_match": {
+              "high_rejected": {
+                "actual": 32370393,
+                "delta": 0,
+                "passed": true,
+                "summary": 32370393
+              }
+            },
+            "verified": true
+          },
+          "low_rejection": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 12.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+              "positive_pixels": 13114786,
+              "positive_threshold": 0.0,
+              "rounded_sum": 18869537,
+              "schema_version": 1,
+              "sum": 18869537.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 48536414
+            },
+            "status": "verified",
+            "summary_match": {
+              "low_rejected": {
+                "actual": 13114786,
+                "delta": 0,
+                "passed": true,
+                "summary": 13114786
+              }
+            },
+            "verified": true
+          }
+        },
+        "dq": {
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+          "required": true,
+          "result": {
+            "counts": {
+              "high_rejected": 32370393,
+              "low_rejected": 13114786,
+              "no_data": 0,
+              "valid": 20892861,
+              "warp_edge": 5394370
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "no_data": 1,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 6422,
+            "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 2048,
+            "total_pixels": 61651200,
+            "unknown_flags": [],
+            "width": 9600
+          },
+          "status": "verified",
+          "summary_matches": {
+            "high_rejected": {
+              "actual": 32370393,
+              "delta": 0,
+              "passed": true,
+              "summary": 32370393
+            },
+            "low_rejected": {
+              "actual": 13114786,
+              "delta": 0,
+              "passed": true,
+              "summary": 13114786
+            },
+            "no_data": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "valid": {
+              "actual": 20892861,
+              "delta": 0,
+              "passed": true,
+              "summary": 20892861
+            },
+            "warp_edge": {
+              "actual": 5394370,
+              "delta": 0,
+              "passed": true,
+              "summary": 5394370
+            }
+          },
+          "verified": true
+        },
+        "item": "H"
+      }
+    ],
+    "tile_size": 2048,
+    "tolerance_pixels": 0
+  },
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident",
+  "schema_version": 1,
+  "status": "passed",
+  "warp": {
+    "outputs": [],
+    "skipped_frames": []
+  }
+}

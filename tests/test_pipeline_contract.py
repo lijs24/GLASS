@@ -214,6 +214,97 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
 
 
+def test_pipeline_contract_accepts_resident_calibration_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    resident_calibration_contract = {
+        "artifact_type": "resident_cuda_calibration_contract",
+        "passed": True,
+        "outputs": [
+            {
+                "index": 0,
+                "filter": "H",
+                "passed": True,
+                "status": "passed",
+                "master_path": str(run / "integration" / "master_H.fits"),
+                "master_path_exists": True,
+                "frame_count": 3,
+                "set_count": 1,
+                "bias_count": 2,
+                "dark_count": 2,
+                "flat_count": 2,
+                "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+            }
+        ],
+    }
+
+    audit = build_pipeline_contract_audit(
+        run,
+        resident_calibration_contract=resident_calibration_contract,
+    )
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is True
+    assert audit["calibration"]["resident_calibration_contract_attached"] is True
+    assert audit["calibration"]["resident_master_count"] == 1
+    assert audit["calibration"]["master_count"] == 1
+    assert checks["calibration_master_surface_contract"]["passed"] is True
+    assert checks["resident_calibration_surface_contract"]["passed"] is True
+    resident_row = audit["calibration"]["resident_masters"][0]
+    assert resident_row["contract_ok"] is True
+    assert resident_row["science_contract"]["contract_type"] == "resident_calibration_surface_contract"
+
+
+def test_pipeline_contract_cli_uses_resident_calibration_contract_json(tmp_path: Path):
+    run = tmp_path / "run"
+    out = tmp_path / "pipeline_contract.json"
+    resident_contract = tmp_path / "resident_calibration_contract.json"
+    _write_resident_pipeline_run(run)
+    write_json(
+        resident_contract,
+        {
+            "artifact_type": "resident_cuda_calibration_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "master_path_exists": True,
+                    "frame_count": 3,
+                    "set_count": 1,
+                    "bias_count": 2,
+                    "dark_count": 2,
+                    "flat_count": 2,
+                    "checks": [{"name": "resident_output_contracts_passed", "passed": True}],
+                }
+            ],
+        },
+    )
+
+    assert (
+        main(
+            [
+                "pipeline-contract",
+                "--run",
+                str(run),
+                "--out",
+                str(out),
+                "--resident-calibration-contract-json",
+                str(resident_contract),
+            ]
+        )
+        == 0
+    )
+
+    audit = read_json(out)
+    assert audit["calibration"]["resident_calibration_contract_attached"] is True
+    assert {item["name"]: item["passed"] for item in audit["checks"]}[
+        "resident_calibration_surface_contract"
+    ] is True
+
+
 def test_pipeline_contract_fails_resident_result_contract(tmp_path: Path):
     run = tmp_path / "run"
     _write_resident_pipeline_run(run, missing_source_terms=True)
