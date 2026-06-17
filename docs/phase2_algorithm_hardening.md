@@ -3304,6 +3304,18 @@ integration where applicable.
 - Current real artifact result: status `release_manifest_ready`,
   recommendation `ready_for_upload`, package count `4`, and zero failed checks.
 
+### S2-Gate 194: Strict Same-Source Windows Packages
+
+- Rebuild `cuda13`, `cuda12`, `cuda11`, and `cpu` Windows portable packages
+  from current source stamp `aa63510`.
+- Smoke-test every freshly rebuilt package immediately after its build, because
+  the shared portable package root is overwritten by the next variant.
+- Generate strict package-suite and release-manifest artifacts with
+  `--require-same-source-stamp`.
+- Current real artifact result: strict suite status `package_suite_ready`,
+  strict manifest status `release_manifest_ready`, source stamps `aa63510`,
+  package count `4`, and zero failed checks.
+
 ## Gate Rules
 
 Each gate requires:

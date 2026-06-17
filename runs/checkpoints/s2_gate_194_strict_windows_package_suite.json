@@ -1,0 +1,240 @@
+{
+  "artifact_type": "windows_package_suite",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_194_cuda13_portable_smoke.json"
+      },
+      "name": "smoke_present:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "package_smoke_passed"
+      },
+      "name": "smoke_passed:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda13",
+        "required": "cuda13"
+      },
+      "name": "package_label_matches:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip",
+        "zip_size_bytes": 341358345
+      },
+      "name": "zip_nonempty:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_194_cuda12_portable_smoke.json"
+      },
+      "name": "smoke_present:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "package_smoke_passed"
+      },
+      "name": "smoke_passed:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda12",
+        "required": "cuda12"
+      },
+      "name": "package_label_matches:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip",
+        "zip_size_bytes": 341223006
+      },
+      "name": "zip_nonempty:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_194_cuda11_portable_smoke.json"
+      },
+      "name": "smoke_present:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "package_smoke_passed"
+      },
+      "name": "smoke_passed:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda11",
+        "required": "cuda11"
+      },
+      "name": "package_label_matches:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip",
+        "zip_size_bytes": 342200540
+      },
+      "name": "zip_nonempty:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_194_cpu_portable_smoke.json"
+      },
+      "name": "smoke_present:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "package_smoke_passed"
+      },
+      "name": "smoke_passed:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cpu",
+        "required": "cpu"
+      },
+      "name": "package_label_matches:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip",
+        "zip_size_bytes": 296231852
+      },
+      "name": "zip_nonempty:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "source_stamps": [
+          "aa63510"
+        ]
+      },
+      "name": "same_source_stamp",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T17:25:03+00:00",
+  "failed_checks": [],
+  "limitations": [
+    "This suite aggregates package smoke artifacts; it does not rebuild, sign, or upload packages.",
+    "Mixed source stamps are allowed unless require_same_source_stamp is enabled.",
+    "Formal release artifacts should normally be rebuilt from one final tag or commit."
+  ],
+  "passed": true,
+  "recommendation": "publish_package_suite",
+  "requirements": {
+    "require_same_source_stamp": true,
+    "required_labels": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ]
+  },
+  "rows": [
+    {
+      "cuda_available": true,
+      "failed_checks": [],
+      "label": "cuda13",
+      "native_extension_loaded": true,
+      "package_label": "cuda13",
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_194_cuda13_portable_smoke.json",
+      "present": true,
+      "require_cuda": true,
+      "source_stamp": "aa63510",
+      "status": "package_smoke_passed",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip",
+      "zip_size_bytes": 341358345
+    },
+    {
+      "cuda_available": true,
+      "failed_checks": [],
+      "label": "cuda12",
+      "native_extension_loaded": true,
+      "package_label": "cuda12",
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_194_cuda12_portable_smoke.json",
+      "present": true,
+      "require_cuda": true,
+      "source_stamp": "aa63510",
+      "status": "package_smoke_passed",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip",
+      "zip_size_bytes": 341223006
+    },
+    {
+      "cuda_available": true,
+      "failed_checks": [],
+      "label": "cuda11",
+      "native_extension_loaded": true,
+      "package_label": "cuda11",
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_194_cuda11_portable_smoke.json",
+      "present": true,
+      "require_cuda": true,
+      "source_stamp": "aa63510",
+      "status": "package_smoke_passed",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip",
+      "zip_size_bytes": 342200540
+    },
+    {
+      "cuda_available": false,
+      "failed_checks": [],
+      "label": "cpu",
+      "native_extension_loaded": false,
+      "package_label": "cpu",
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_194_cpu_portable_smoke.json",
+      "present": true,
+      "require_cuda": false,
+      "source_stamp": "aa63510",
+      "status": "package_smoke_passed",
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip",
+      "zip_size_bytes": 296231852
+    }
+  ],
+  "schema_version": 1,
+  "source_stamps": [
+    "aa63510"
+  ],
+  "status": "package_suite_ready"
+}
