@@ -3,8 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from glass.cli import _apply_resident_runtime_preset
+from glass.cli import _resolve_execution_defaults
 from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
@@ -106,6 +108,103 @@ def test_resident_runtime_preset_respects_explicit_overrides() -> None:
     explicit = args._resident_runtime_preset_effective["explicit_overrides"]
     assert explicit["resident_prefetch_frames"] == 4
     assert explicit["resident_calibration_streams"] == 2
+
+
+def test_run_defaults_promote_resident_cuda_when_available() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
+
+    resolution = _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+
+    assert args.backend == "cuda"
+    assert args.memory_mode == "resident"
+    assert args.until_stage == "integration"
+    assert resolution["reason"] == "resident_cuda_default"
+    assert resolution["requested_backend"] == "auto"
+    assert resolution["requested_memory_mode"] == "resident"
+    assert resolution["effective_backend"] == "cuda"
+
+
+def test_run_defaults_fallback_to_tile_when_cuda_unavailable() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run"])
+
+    resolution = _resolve_execution_defaults(args, {"cuda_available": False}, command="run")
+
+    assert args.backend == "auto"
+    assert args.memory_mode == "tile"
+    assert resolution["reason"] == "resident_default_fallback_cuda_unavailable"
+    assert resolution["effective_memory_mode"] == "tile"
+
+
+def test_run_defaults_fallback_to_tile_for_partial_stage() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--backend",
+            "auto",
+            "--until-stage",
+            "quality",
+        ]
+    )
+
+    resolution = _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+
+    assert args.backend == "auto"
+    assert args.memory_mode == "tile"
+    assert resolution["reason"] == "resident_default_fallback_unsupported_options"
+    assert resolution["resident_default_blocker"] == "until_stage:quality"
+
+
+def test_run_explicit_resident_requires_cuda() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--memory-mode",
+            "resident",
+        ]
+    )
+
+    with pytest.raises(SystemExit, match="Resident memory mode requested"):
+        _resolve_execution_defaults(args, {"cuda_available": False}, command="run")
+
+
+def test_audit_backend_cpu_keeps_tile_fallback() -> None:
+    args = _parse_cli(["audit", "--root", "data", "--out", "run", "--backend", "cpu"])
+
+    resolution = _resolve_execution_defaults(args, {"cuda_available": True}, command="audit")
+
+    assert args.backend == "cpu"
+    assert args.memory_mode == "tile"
+    assert resolution["reason"] == "resident_default_fallback_non_cuda_backend"
+    assert resolution["requested_memory_mode"] == "resident"
+
+
+def test_audit_defaults_fallback_to_tile_for_unsupported_weighting() -> None:
+    args = _parse_cli(
+        [
+            "audit",
+            "--root",
+            "data",
+            "--out",
+            "run",
+            "--integration-weighting",
+            "combined",
+        ]
+    )
+
+    resolution = _resolve_execution_defaults(args, {"cuda_available": True}, command="audit")
+
+    assert args.backend == "auto"
+    assert args.memory_mode == "tile"
+    assert resolution["reason"] == "resident_default_fallback_unsupported_options"
+    assert resolution["resident_default_blocker"] == "integration_weighting:combined"
 
 
 def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
@@ -263,6 +362,7 @@ def test_cli_help_commands():
         "speedup-summary",
         "acceptance-audit",
         "release-promotion-decision",
+        "default-promotion-manifest",
         "windows-release-matrix",
         "windows-package-smoke",
         "resident-determinism",

@@ -1,0 +1,33 @@
+{
+  "backend": "cuda",
+  "backend_requested": "auto",
+  "command": "run",
+  "completed_stages": [
+    "master_calibration",
+    "resident_light_calibration",
+    "resident_integration"
+  ],
+  "current_stage": "integration",
+  "memory_mode": "resident",
+  "memory_mode_requested": "resident",
+  "resolution": {
+    "command": "run",
+    "cuda_available": true,
+    "default_runtime_preset": "throughput-v1",
+    "effective_backend": "cuda",
+    "effective_memory_mode": "resident",
+    "explicit_backend": false,
+    "explicit_memory_mode": false,
+    "fallback_memory_mode": "tile",
+    "reason": "resident_cuda_default",
+    "requested_backend": "auto",
+    "requested_memory_mode": "resident",
+    "resident_default_blocker": null,
+    "resident_default_candidate": "resident",
+    "schema_version": 1
+  },
+  "stage_names": [
+    "resident_calibration_integration"
+  ],
+  "status": "passed"
+}

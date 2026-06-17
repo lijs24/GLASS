@@ -204,6 +204,9 @@ RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
     },
 }
 DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v1"
+DEFAULT_MEMORY_MODE = "resident"
+FALLBACK_MEMORY_MODE = "tile"
+DEFAULT_UNTIL_STAGE = "integration"
 
 RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_prefetch_frames": "--resident-prefetch-frames",
@@ -293,6 +296,109 @@ def _apply_resident_runtime_preset(args: argparse.Namespace) -> None:
         "applied": applied,
         "explicit_overrides": explicit,
     }
+
+
+def _explicit_option(args: argparse.Namespace, flag: str) -> bool:
+    return _argv_has_option(args, flag)
+
+
+def _resident_default_blocker(args: argparse.Namespace) -> str | None:
+    until_stage = getattr(args, "until_stage", DEFAULT_UNTIL_STAGE)
+    if until_stage != "integration":
+        return f"until_stage:{until_stage}"
+    if getattr(args, "integration_rejection", "auto") not in {
+        "auto",
+        "none",
+        "sigma_clip",
+        "winsorized_sigma",
+    }:
+        return f"integration_rejection:{getattr(args, 'integration_rejection', None)}"
+    if getattr(args, "integration_weighting", "auto") not in {"auto", "none", "simple_snr"}:
+        return f"integration_weighting:{getattr(args, 'integration_weighting', None)}"
+    if _explicit_option(args, "--registration-method") and getattr(args, "registration_method", "auto") != "auto":
+        return f"tile_registration_method:{getattr(args, 'registration_method', None)}"
+    return None
+
+
+def _resolve_execution_defaults(
+    args: argparse.Namespace,
+    capabilities: dict[str, object],
+    *,
+    command: str,
+) -> dict[str, object]:
+    requested_backend = str(getattr(args, "backend", "auto"))
+    requested_memory_mode = str(getattr(args, "memory_mode", FALLBACK_MEMORY_MODE))
+    explicit_memory_mode = _explicit_option(args, "--memory-mode")
+    explicit_backend = _explicit_option(args, "--backend")
+    cuda_available = bool(capabilities.get("cuda_available"))
+    blocker = _resident_default_blocker(args)
+
+    reason = "explicit_configuration"
+    if requested_memory_mode == "resident" and blocker is not None:
+        if explicit_memory_mode:
+            reason = "explicit_resident_unsupported_options"
+        else:
+            setattr(args, "memory_mode", FALLBACK_MEMORY_MODE)
+            reason = "resident_default_fallback_unsupported_options"
+    if getattr(args, "memory_mode", requested_memory_mode) == "resident":
+        if requested_backend == "cuda":
+            if not cuda_available:
+                raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
+            reason = "resident_cuda_requested" if explicit_memory_mode or explicit_backend else "resident_cuda_default"
+        elif requested_backend == "auto":
+            if cuda_available:
+                setattr(args, "backend", "cuda")
+                reason = (
+                    "resident_cuda_auto_backend"
+                    if explicit_memory_mode
+                    else "resident_cuda_default"
+                )
+            elif explicit_memory_mode:
+                raise SystemExit(
+                    "Resident memory mode requested but native CUDA backend is unavailable; "
+                    "use --memory-mode tile or --backend cpu."
+                )
+            else:
+                setattr(args, "memory_mode", FALLBACK_MEMORY_MODE)
+                reason = "resident_default_fallback_cuda_unavailable"
+        elif explicit_memory_mode:
+            raise SystemExit("Resident memory mode currently requires --backend cuda or --backend auto.")
+        else:
+            setattr(args, "memory_mode", FALLBACK_MEMORY_MODE)
+            reason = "resident_default_fallback_non_cuda_backend"
+
+    resolution = {
+        "schema_version": 1,
+        "command": command,
+        "requested_backend": requested_backend,
+        "requested_memory_mode": requested_memory_mode,
+        "effective_backend": getattr(args, "backend", requested_backend),
+        "effective_memory_mode": getattr(args, "memory_mode", requested_memory_mode),
+        "explicit_backend": explicit_backend,
+        "explicit_memory_mode": explicit_memory_mode,
+        "cuda_available": cuda_available,
+        "resident_default_candidate": DEFAULT_MEMORY_MODE,
+        "fallback_memory_mode": FALLBACK_MEMORY_MODE,
+        "default_runtime_preset": DEFAULT_RESIDENT_RUNTIME_PRESET,
+        "resident_default_blocker": blocker,
+        "reason": reason,
+    }
+    args._execution_default_resolution = resolution
+    return resolution
+
+
+def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) -> None:
+    resolution = getattr(args, "_execution_default_resolution", None)
+    if isinstance(resolution, dict):
+        timing["execution_default_resolution"] = resolution
+        timing["backend_requested"] = resolution.get("requested_backend")
+        timing["memory_mode_requested"] = resolution.get("requested_memory_mode")
+    timing["backend"] = getattr(args, "backend", timing.get("backend"))
+    timing["memory_mode"] = getattr(args, "memory_mode", timing.get("memory_mode"))
+    timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
+    preset = getattr(args, "_resident_runtime_preset_effective", None)
+    if isinstance(preset, dict):
+        timing["resident_runtime_preset_effective"] = preset
 
 
 def _safe_platform_label() -> str:
@@ -603,9 +709,11 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_audit(args: argparse.Namespace) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    capabilities = capability_report()
+    _resolve_execution_defaults(args, capabilities, command="audit")
     _apply_resident_runtime_preset(args)
     _write_run_command(out, args)
-    if args.backend == "cuda" and not capability_report()["cuda_available"]:
+    if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
     if args.memory_mode == "resident" and args.backend != "cuda":
         raise SystemExit("Resident audit currently requires --backend cuda.")
@@ -613,7 +721,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     plan_path = out / "processing_plan.json"
     report_path = out / "report.html"
     timing = _new_timing("audit", args.backend, args.tile_size)
-    timing["memory_mode"] = args.memory_mode
+    _annotate_timing_execution_defaults(timing, args)
     manifest = _timed_stage(out, timing, "scan", lambda: scan_tree(args.root))
     write_json(manifest_path, manifest)
     plan = _timed_stage(out, timing, "plan", lambda: build_processing_plan(manifest, manifest_path))
@@ -712,6 +820,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     capabilities = capability_report()
+    _resolve_execution_defaults(args, capabilities, command="run")
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
     _apply_resident_runtime_preset(args)
@@ -731,7 +840,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             raise SystemExit("Resident memory mode currently supports --integration-weighting none or simple_snr.")
         out = Path(args.out)
         timing = _new_timing("run", args.backend, None)
-        timing["memory_mode"] = "resident"
+        _annotate_timing_execution_defaults(timing, args)
         state = _timed_stage(
             out,
             timing,
@@ -822,6 +931,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.until_stage in implemented_stages:
         out = Path(args.out)
         timing = _new_timing("run", args.backend, args.tile_size)
+        _annotate_timing_execution_defaults(timing, args)
         state = _timed_stage(
             out,
             timing,
@@ -2763,7 +2873,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--backend", choices=["cpu", "cuda", "auto"], default="auto")
     run.add_argument("--vram-budget-gb", type=float)
     run.add_argument("--ram-budget-gb", type=float)
-    run.add_argument("--until-stage")
+    run.add_argument("--until-stage", default=DEFAULT_UNTIL_STAGE)
     run.add_argument("--tile-size", type=int, default=512)
     run.add_argument(
         "--registration-method",
@@ -2789,8 +2899,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--memory-mode",
         choices=["tile", "resident"],
-        default="tile",
-        help="execution memory strategy; resident currently covers CUDA calibration plus integration",
+        default=DEFAULT_MEMORY_MODE,
+        help=(
+            "execution memory strategy; default resident promotes CUDA full-frame StackEngine when "
+            "backend auto can use CUDA, with tile fallback for CPU or unsupported partial stages"
+        ),
     )
     run.add_argument(
         "--resident-runtime-preset",
@@ -3156,8 +3269,11 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--memory-mode",
         choices=["tile", "resident"],
-        default="tile",
-        help="execution memory strategy for the run portion of audit",
+        default=DEFAULT_MEMORY_MODE,
+        help=(
+            "execution memory strategy for the run portion of audit; default resident uses CUDA when "
+            "available and falls back to tile for CPU"
+        ),
     )
     audit.add_argument(
         "--resident-runtime-preset",

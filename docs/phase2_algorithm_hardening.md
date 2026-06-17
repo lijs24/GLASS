@@ -3691,6 +3691,21 @@ integration where applicable.
 - Keep this gate reporting/release-handoff only: no processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 221: Guarded Resident CUDA Default Route
+
+- Promote `glass run` and the run portion of `glass audit` to the resident CUDA
+  default route when `--backend auto` can use the native CUDA backend.
+- Preserve CPU-only and partial-stage safety by falling back to tile mode when
+  CUDA is unavailable, `--backend cpu` is explicit, a partial `--until-stage`
+  is requested, or user-selected options are only supported by tile mode.
+- Keep explicit user intent strict: `--memory-mode resident` still fails with a
+  clear error if CUDA is unavailable or a non-CUDA backend is selected.
+- Record the requested/effective backend and memory-mode resolution in
+  `run_timing.json` so benchmark and release artifacts can prove whether the
+  default path actually used resident CUDA or a documented fallback.
+- Keep this gate execution-routing only: no processing algorithm changes and no
+  new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:
