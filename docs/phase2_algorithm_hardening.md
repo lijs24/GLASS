@@ -4023,6 +4023,26 @@ integration where applicable.
 - Keep this gate release-handoff scoped: no image math, CUDA kernel, runtime
   default change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 240: Windows Publish Preflight Rejection Sample Handoff
+
+- Extend `glass windows-publish-preflight` so final publication preflight
+  consumes rejection sample accounting from the GitHub release plan, the Windows
+  release matrix, and the default-promotion manifest.
+- Require the release plan Phase 2 accounting check, the release plan matrix
+  accounting check, the direct matrix accounting summary, and the direct
+  default-promotion accounting summary to pass before a publish-preflight
+  artifact can become ready.
+- Cross-check the release plan matrix accounting summary against the supplied
+  Windows release matrix so a stale handoff cannot mask rejected-sample
+  map/provenance drift.
+- Surface the accounting chain in preflight JSON and Markdown beside the
+  release tag, package count, source stamps, default-promotion status, and
+  route evidence.
+- Add publish-preflight tests for passing accounting, Phase 2 sample-count
+  drift, release-matrix sample-count drift, and CLI Markdown output.
+- Keep this gate publication-preflight scoped: no image math, CUDA kernel,
+  runtime default change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
