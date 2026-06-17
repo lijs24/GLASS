@@ -2654,6 +2654,20 @@ integration where applicable.
   `63.88667325940681x` versus the black-box reference, and `0.9549992718308159`
   runtime ratio versus the historical GLASS baseline.
 
+### S2-Gate 159: Explicit Throughput Runtime Preset
+
+- Add an opt-in `--resident-runtime-preset throughput-v1` for `glass run` and
+  `glass audit`.
+- The preset applies only resident runtime scheduling knobs measured in
+  S2-Gate 158: prefetch frames/workers, queued refill, pinned-ring H2D, and
+  batched multistream calibration with callback-queue release.
+- Preserve the conservative `manual` default. Do not silently change scientific
+  defaults or force the preset on users.
+- Respect explicit user overrides for any individual runtime knob so the preset
+  can be used as a starting point for later tuning.
+- Record the effective values in existing resident artifacts through the
+  `resident_io_pipeline` contract.
+
 ## Gate Rules
 
 Each gate requires:

@@ -123,6 +123,31 @@ from glass.models import now_iso
 
 console = Console()
 
+RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
+    "manual": {},
+    "throughput-v1": {
+        "resident_prefetch_frames": 12,
+        "resident_prefetch_workers": 7,
+        "resident_prefetch_refill_mode": "queued",
+        "resident_h2d_mode": "pinned_ring",
+        "resident_calibration_batch_frames": 8,
+        "resident_calibration_streams": 4,
+        "resident_calibration_wave_frames": 2,
+        "resident_calibration_release_mode": "callback_queue",
+    },
+}
+
+RESIDENT_RUNTIME_PRESET_FLAGS = {
+    "resident_prefetch_frames": "--resident-prefetch-frames",
+    "resident_prefetch_workers": "--resident-prefetch-workers",
+    "resident_prefetch_refill_mode": "--resident-prefetch-refill-mode",
+    "resident_h2d_mode": "--resident-h2d-mode",
+    "resident_calibration_batch_frames": "--resident-calibration-batch-frames",
+    "resident_calibration_streams": "--resident-calibration-streams",
+    "resident_calibration_wave_frames": "--resident-calibration-wave-frames",
+    "resident_calibration_release_mode": "--resident-calibration-release-mode",
+}
+
 
 def _read_json_if_exists(path: Path):
     return read_json(path) if path.exists() else None
@@ -176,6 +201,30 @@ def _local_norm_override_from_arg(value: str) -> bool | None:
     if value == "off":
         return False
     return None
+
+
+def _argv_has_option(args: argparse.Namespace, flag: str) -> bool:
+    argv = list(getattr(args, "_glass_argv", []) or [])
+    return any(token == flag or token.startswith(f"{flag}=") for token in argv)
+
+
+def _apply_resident_runtime_preset(args: argparse.Namespace) -> None:
+    preset = getattr(args, "resident_runtime_preset", "manual")
+    values = RESIDENT_RUNTIME_PRESETS[preset]
+    applied: dict[str, object] = {}
+    explicit: dict[str, object] = {}
+    for attr, value in values.items():
+        flag = RESIDENT_RUNTIME_PRESET_FLAGS[attr]
+        if _argv_has_option(args, flag):
+            explicit[attr] = getattr(args, attr)
+            continue
+        setattr(args, attr, value)
+        applied[attr] = value
+    args._resident_runtime_preset_effective = {
+        "preset": preset,
+        "applied": applied,
+        "explicit_overrides": explicit,
+    }
 
 
 def _safe_platform_label() -> str:
@@ -486,6 +535,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_audit(args: argparse.Namespace) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    _apply_resident_runtime_preset(args)
     _write_run_command(out, args)
     if args.backend == "cuda" and not capability_report()["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
@@ -596,6 +646,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     capabilities = capability_report()
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
+    _apply_resident_runtime_preset(args)
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
@@ -2017,6 +2068,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="execution memory strategy; resident currently covers CUDA calibration plus integration",
     )
     run.add_argument(
+        "--resident-runtime-preset",
+        choices=sorted(RESIDENT_RUNTIME_PRESETS),
+        default="manual",
+        help=(
+            "resident runtime scheduling preset; throughput-v1 applies the Gate158 "
+            "prefetch/H2D/calibration settings unless an individual option is explicitly provided"
+        ),
+    )
+    run.add_argument(
         "--resident-prefetch-frames",
         type=int,
         default=0,
@@ -2372,6 +2432,15 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["tile", "resident"],
         default="tile",
         help="execution memory strategy for the run portion of audit",
+    )
+    audit.add_argument(
+        "--resident-runtime-preset",
+        choices=sorted(RESIDENT_RUNTIME_PRESETS),
+        default="manual",
+        help=(
+            "resident runtime scheduling preset for the audit run; throughput-v1 applies the Gate158 "
+            "prefetch/H2D/calibration settings unless an individual option is explicitly provided"
+        ),
     )
     audit.add_argument(
         "--resident-prefetch-frames",

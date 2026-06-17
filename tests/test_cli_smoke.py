@@ -2,9 +2,70 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from glass.cli import _apply_resident_runtime_preset
+from glass.cli import build_parser
 from glass.cli import main
 from glass.io.json_io import read_json, write_json
 from tests.conftest import cuda_module_or_skip
+
+
+def _parse_cli(argv: list[str]):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    args._glass_argv = list(argv)
+    return args
+
+
+def test_resident_runtime_preset_applies_gate158_values() -> None:
+    args = _parse_cli(
+        [
+            "run",
+            "--plan",
+            "plan.json",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v1",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_prefetch_frames == 12
+    assert args.resident_prefetch_workers == 7
+    assert args.resident_prefetch_refill_mode == "queued"
+    assert args.resident_h2d_mode == "pinned_ring"
+    assert args.resident_calibration_batch_frames == 8
+    assert args.resident_calibration_streams == 4
+    assert args.resident_calibration_wave_frames == 2
+    assert args.resident_calibration_release_mode == "callback_queue"
+    assert args._resident_runtime_preset_effective["preset"] == "throughput-v1"
+
+
+def test_resident_runtime_preset_respects_explicit_overrides() -> None:
+    args = _parse_cli(
+        [
+            "audit",
+            "--root",
+            "data",
+            "--out",
+            "run",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--resident-prefetch-frames",
+            "4",
+            "--resident-calibration-streams=2",
+        ]
+    )
+
+    _apply_resident_runtime_preset(args)
+
+    assert args.resident_prefetch_frames == 4
+    assert args.resident_prefetch_workers == 7
+    assert args.resident_calibration_streams == 2
+    explicit = args._resident_runtime_preset_effective["explicit_overrides"]
+    assert explicit["resident_prefetch_frames"] == 4
+    assert explicit["resident_calibration_streams"] == 2
 
 
 def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
@@ -42,6 +103,8 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
             "cuda",
             "--memory-mode",
             "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
             "--local-normalization",
             "off",
             "--integration-weighting",
@@ -85,6 +148,7 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
     integration = read_json(audit / "integration_results.json")
     resident = read_json(audit / "resident_artifacts.json")
     resident_registration = resident["artifacts"][0]["resident_registration"]
+    io_pipeline = resident["artifacts"][0]["resident_io_pipeline"]
     assert (audit / "manifest.json").exists()
     assert (audit / "processing_plan.json").exists()
     assert (audit / "resident_artifacts.json").exists()
@@ -107,6 +171,14 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
     assert resident_registration["star_prior"] == "ncc"
     assert resident_registration["star_prior_radius_px"] == 2.5
     assert resident_registration["star_core_preselect_top_k"] == 4
+    assert io_pipeline["prefetch_frames"] == 12
+    assert io_pipeline["prefetch_workers"] == 7
+    assert io_pipeline["h2d_mode"] == "pinned_ring"
+    assert io_pipeline["calibration_batch_requested_frames"] == 8
+    assert io_pipeline["calibration_batch_requested_streams"] == 4
+    assert io_pipeline["calibration_wave_requested_frames"] == 2
+    assert io_pipeline["calibration_release_mode_requested"] == "callback_queue"
+    assert io_pipeline["calibration_release_mode_effective"] == "callback_queue"
 
 
 def test_cli_help_commands():
