@@ -220,6 +220,7 @@ def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
 def test_cli_help_commands():
     for command in [
         "doctor",
+        "phase2-status",
         "scan",
         "plan",
         "subset",

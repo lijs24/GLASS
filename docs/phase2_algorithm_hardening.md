@@ -3430,6 +3430,17 @@ integration where applicable.
 - Validate with passing and malformed bundle tests plus the real 200-light
   Gate200 bundle artifact.
 
+### S2-Gate 203: Phase 2 Handoff Status Index
+
+- Add `glass phase2-status`, a compact handoff artifact that summarizes the
+  latest Phase 2 checkpoint, optional 200-light acceptance audit, CUDA doctor
+  state, Windows release manifest, and GitHub release plan.
+- Emit machine-readable JSON and optional Markdown.
+- Keep the command read-only and artifact-driven; it must not rerun image
+  processing or modify input data.
+- Validate command help, direct report tests, and a real handoff summary from
+  the latest checkpoints and release artifacts.
+
 ## Gate Rules
 
 Each gate requires:

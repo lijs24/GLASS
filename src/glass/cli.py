@@ -84,6 +84,7 @@ from glass.report.release_promotion_decision import (
     build_release_promotion_decision,
     write_release_promotion_decision,
 )
+from glass.report.phase2_status import build_phase2_status, write_phase2_status
 from glass.report.windows_release_matrix import (
     build_windows_release_matrix,
     write_windows_release_matrix,
@@ -2510,6 +2511,31 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0 if cuda["cuda_available"] or args.allow_cpu_only else 2
 
 
+def cmd_phase2_status(args: argparse.Namespace) -> int:
+    payload = build_phase2_status(
+        checkpoint_dir=args.checkpoint_dir,
+        acceptance_audit=args.acceptance_audit,
+        release_manifest=args.release_manifest,
+        github_release_plan=args.github_release_plan,
+        doctor_payload=_doctor_payload(skip_cuda_probe=args.skip_cuda_probe),
+    )
+    write_phase2_status(args.out, payload, markdown=args.markdown)
+    latest = payload.get("latest_checkpoint") if isinstance(payload.get("latest_checkpoint"), dict) else {}
+    acceptance = payload.get("acceptance_audit") if isinstance(payload.get("acceptance_audit"), dict) else {}
+    console.print(
+        {
+            "status": payload.get("status"),
+            "latest_gate": latest.get("gate"),
+            "latest_checkpoint_status": latest.get("status"),
+            "acceptance_status": acceptance.get("status"),
+            "speedup_vs_reference": acceptance.get("speedup_vs_reference"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if payload.get("passed") or not args.fail_on_not_green else 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="glass")
     parser.add_argument("--version", action="version", version="glass 0.1.0")
@@ -2524,6 +2550,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="avoid importing/probing the CUDA backend; useful for CPU-only diagnostics when the GPU is busy",
     )
     doctor.set_defaults(func=cmd_doctor)
+
+    phase2_status = sub.add_parser(
+        "phase2-status",
+        help="summarize the latest Phase 2 checkpoint, acceptance audit, CUDA state, and release handoff artifacts",
+    )
+    phase2_status.add_argument("--checkpoint-dir", default="runs/checkpoints")
+    phase2_status.add_argument("--acceptance-audit", help="optional acceptance-audit JSON artifact")
+    phase2_status.add_argument("--release-manifest", help="optional Windows release-manifest JSON artifact")
+    phase2_status.add_argument("--github-release-plan", help="optional Windows GitHub release-plan JSON artifact")
+    phase2_status.add_argument("--out", required=True, help="output Phase 2 status JSON")
+    phase2_status.add_argument("--markdown", help="optional output Markdown summary")
+    phase2_status.add_argument(
+        "--skip-cuda-probe",
+        action="store_true",
+        help="avoid importing/probing CUDA while still summarizing available artifacts",
+    )
+    phase2_status.add_argument(
+        "--fail-on-not-green",
+        action="store_true",
+        help="return exit code 2 unless all supplied status checks pass",
+    )
+    phase2_status.set_defaults(func=cmd_phase2_status)
 
     scan = sub.add_parser("scan", help="scan FITS/FIT/XISF metadata")
     scan.add_argument("--root", required=True)
