@@ -4172,6 +4172,26 @@ integration where applicable.
   runtime default change, package build, upload, publish-preflight change, or
   real-data benchmark rerun.
 
+### S2-Gate 249: Windows Publish Preflight Sample Closure Handoff
+
+- Carry GitHub release-plan, Windows release-matrix, and default-promotion
+  sample-closure evidence into `glass windows-publish-preflight`.
+- Add hard publish-preflight checks for:
+  - GitHub plan Phase 2 sample-closure evidence;
+  - GitHub plan release-matrix sample-closure evidence;
+  - direct Windows release-matrix sample-closure evidence;
+  - direct default-promotion sample-closure evidence;
+  - GitHub plan release-matrix sample-closure agreement with the direct matrix
+    artifact.
+- Extend publish-preflight summaries and Markdown with compact sample-closure
+  status across Phase 2, plan-matrix, direct matrix, and default-promotion
+  sources.
+- Add focused tests for passing closure, Phase 2 drift, matrix drift,
+  default-promotion drift, and GitHub-plan/matrix mismatch.
+- Keep this gate publish-preflight scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, package release, or real-data benchmark
+  rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -91,6 +91,19 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "rejection_sample_accounting_failed_count": promotion.get(
             "rejection_sample_accounting_failed_count"
         ),
+        "integration_sample_accounting_closure": promotion.get(
+            "integration_sample_accounting_closure"
+        ),
+        "sample_accounting_closure": promotion.get("sample_accounting_closure"),
+        "sample_accounting_closure_status": promotion.get(
+            "sample_accounting_closure_status"
+        ),
+        "sample_accounting_closure_present_count": promotion.get(
+            "sample_accounting_closure_present_count"
+        ),
+        "sample_accounting_closure_failed_count": promotion.get(
+            "sample_accounting_closure_failed_count"
+        ),
     }
 
 
@@ -106,6 +119,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
     rejection_sample_accounting = (
         pipeline.get("rejection_sample_accounting")
         if isinstance(pipeline.get("rejection_sample_accounting"), dict)
+        else {}
+    )
+    sample_accounting_closure = (
+        pipeline.get("sample_accounting_closure")
+        if isinstance(pipeline.get("sample_accounting_closure"), dict)
         else {}
     )
     return {
@@ -130,6 +148,19 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "rejection_sample_accounting_failed_count": pipeline.get(
             "rejection_sample_accounting_failed_count"
+        ),
+        "integration_sample_accounting_closure": pipeline.get(
+            "integration_sample_accounting_closure"
+        ),
+        "sample_accounting_closure": sample_accounting_closure,
+        "sample_accounting_closure_status": pipeline.get(
+            "sample_accounting_closure_status"
+        ),
+        "sample_accounting_closure_present_count": pipeline.get(
+            "sample_accounting_closure_present_count"
+        ),
+        "sample_accounting_closure_failed_count": pipeline.get(
+            "sample_accounting_closure_failed_count"
         ),
     }
 
@@ -171,6 +202,49 @@ def _plan_rejection_sample_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _plan_sample_closure_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
+    phase2_status = (
+        phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
+    )
+    matrix = (
+        payload.get("release_matrix") if isinstance(payload.get("release_matrix"), dict) else {}
+    )
+    checks = _checks_by_name(payload.get("checks") or [])
+    phase2_check = checks.get("phase2_pipeline_sample_accounting_closure_passed") or {}
+    matrix_check = checks.get("windows_release_matrix_sample_accounting_closure_passed") or {}
+    return {
+        "phase2_check_passed": phase2_check.get("passed"),
+        "phase2_check_evidence": phase2_check.get("evidence"),
+        "phase2_integration_sample_accounting_closure": phase2_status.get(
+            "pipeline_integration_sample_accounting_closure"
+        ),
+        "phase2_sample_accounting_closure_status": phase2_status.get(
+            "pipeline_sample_accounting_closure_status"
+        ),
+        "phase2_sample_accounting_closure_present_count": phase2_status.get(
+            "pipeline_sample_accounting_closure_present_count"
+        ),
+        "phase2_sample_accounting_closure_failed_count": phase2_status.get(
+            "pipeline_sample_accounting_closure_failed_count"
+        ),
+        "release_matrix_check_passed": matrix_check.get("passed"),
+        "release_matrix_check_evidence": matrix_check.get("evidence"),
+        "release_matrix_integration_sample_accounting_closure": matrix.get(
+            "integration_sample_accounting_closure"
+        ),
+        "release_matrix_sample_accounting_closure_status": matrix.get(
+            "sample_accounting_closure_status"
+        ),
+        "release_matrix_sample_accounting_closure_present_count": matrix.get(
+            "sample_accounting_closure_present_count"
+        ),
+        "release_matrix_sample_accounting_closure_failed_count": matrix.get(
+            "sample_accounting_closure_failed_count"
+        ),
+    }
+
+
 def build_windows_publish_preflight(
     *,
     release_manifest: str | Path,
@@ -194,6 +268,7 @@ def build_windows_publish_preflight(
     matrix_info = _matrix_summary(matrix)
     promotion_info = _default_promotion_summary(promotion)
     plan_rejection_sample = _plan_rejection_sample_summary(plan)
+    plan_sample_closure = _plan_sample_closure_summary(plan)
     manifest_matrix = (
         manifest.get("windows_release_matrix")
         if isinstance(manifest.get("windows_release_matrix"), dict)
@@ -436,6 +511,140 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "github_plan_phase2_sample_accounting_closure_passed",
+            plan_sample_closure.get("phase2_check_passed") is True
+            and plan_sample_closure.get("phase2_integration_sample_accounting_closure")
+            is True
+            and plan_sample_closure.get("phase2_sample_accounting_closure_status")
+            == "passed"
+            and int(
+                plan_sample_closure.get("phase2_sample_accounting_closure_failed_count")
+                or 0
+            )
+            == 0,
+            {
+                "check_passed": plan_sample_closure.get("phase2_check_passed"),
+                "check": plan_sample_closure.get(
+                    "phase2_integration_sample_accounting_closure"
+                ),
+                "status": plan_sample_closure.get(
+                    "phase2_sample_accounting_closure_status"
+                ),
+                "present_count": plan_sample_closure.get(
+                    "phase2_sample_accounting_closure_present_count"
+                ),
+                "failed_count": plan_sample_closure.get(
+                    "phase2_sample_accounting_closure_failed_count"
+                ),
+                "plan_check_evidence": plan_sample_closure.get("phase2_check_evidence"),
+            },
+        ),
+        _check(
+            "github_plan_matrix_sample_accounting_closure_passed",
+            plan_sample_closure.get("release_matrix_check_passed") is True
+            and plan_sample_closure.get(
+                "release_matrix_integration_sample_accounting_closure"
+            )
+            is True
+            and plan_sample_closure.get("release_matrix_sample_accounting_closure_status")
+            == "passed"
+            and int(
+                plan_sample_closure.get(
+                    "release_matrix_sample_accounting_closure_failed_count"
+                )
+                or 0
+            )
+            == 0,
+            {
+                "check_passed": plan_sample_closure.get("release_matrix_check_passed"),
+                "check": plan_sample_closure.get(
+                    "release_matrix_integration_sample_accounting_closure"
+                ),
+                "status": plan_sample_closure.get(
+                    "release_matrix_sample_accounting_closure_status"
+                ),
+                "present_count": plan_sample_closure.get(
+                    "release_matrix_sample_accounting_closure_present_count"
+                ),
+                "failed_count": plan_sample_closure.get(
+                    "release_matrix_sample_accounting_closure_failed_count"
+                ),
+                "plan_check_evidence": plan_sample_closure.get(
+                    "release_matrix_check_evidence"
+                ),
+            },
+        ),
+        _check(
+            "matrix_sample_accounting_closure_passed",
+            matrix_info.get("integration_sample_accounting_closure") is True
+            and matrix_info.get("sample_accounting_closure_status") == "passed"
+            and int(matrix_info.get("sample_accounting_closure_failed_count") or 0) == 0,
+            {
+                "check": matrix_info.get("integration_sample_accounting_closure"),
+                "status": matrix_info.get("sample_accounting_closure_status"),
+                "present_count": matrix_info.get("sample_accounting_closure_present_count"),
+                "failed_count": matrix_info.get("sample_accounting_closure_failed_count"),
+                "failed_items": (matrix_info.get("sample_accounting_closure") or {}).get(
+                    "failed_items"
+                ),
+            },
+        ),
+        _check(
+            "default_promotion_sample_accounting_closure_passed",
+            promotion_info.get("integration_sample_accounting_closure") is True
+            and promotion_info.get("sample_accounting_closure_status") == "passed"
+            and int(promotion_info.get("sample_accounting_closure_failed_count") or 0)
+            == 0,
+            {
+                "pipeline_contract_status": promotion_info.get("pipeline_contract_status"),
+                "pipeline_contract_passed": promotion_info.get("pipeline_contract_passed"),
+                "check": promotion_info.get("integration_sample_accounting_closure"),
+                "status": promotion_info.get("sample_accounting_closure_status"),
+                "present_count": promotion_info.get(
+                    "sample_accounting_closure_present_count"
+                ),
+                "failed_count": promotion_info.get(
+                    "sample_accounting_closure_failed_count"
+                ),
+                "failed_items": (
+                    promotion_info.get("sample_accounting_closure") or {}
+                ).get("failed_items"),
+            },
+        ),
+        _check(
+            "github_plan_matrix_sample_closure_matches_matrix",
+            plan_sample_closure.get(
+                "release_matrix_integration_sample_accounting_closure"
+            )
+            == matrix_info.get("integration_sample_accounting_closure")
+            and plan_sample_closure.get("release_matrix_sample_accounting_closure_status")
+            == matrix_info.get("sample_accounting_closure_status")
+            and plan_sample_closure.get(
+                "release_matrix_sample_accounting_closure_failed_count"
+            )
+            == matrix_info.get("sample_accounting_closure_failed_count"),
+            {
+                "github_release_plan": {
+                    "check": plan_sample_closure.get(
+                        "release_matrix_integration_sample_accounting_closure"
+                    ),
+                    "status": plan_sample_closure.get(
+                        "release_matrix_sample_accounting_closure_status"
+                    ),
+                    "failed_count": plan_sample_closure.get(
+                        "release_matrix_sample_accounting_closure_failed_count"
+                    ),
+                },
+                "windows_release_matrix": {
+                    "check": matrix_info.get("integration_sample_accounting_closure"),
+                    "status": matrix_info.get("sample_accounting_closure_status"),
+                    "failed_count": matrix_info.get(
+                        "sample_accounting_closure_failed_count"
+                    ),
+                },
+            },
+        ),
+        _check(
             "manifest_assets_match_github_plan",
             not missing_assets and not mismatched_assets,
             {
@@ -509,6 +718,18 @@ def build_windows_publish_preflight(
             "default_promotion_rejection_sample_accounting_status": promotion_info.get(
                 "rejection_sample_accounting_status"
             ),
+            "github_plan_phase2_sample_accounting_closure_status": (
+                plan_sample_closure.get("phase2_sample_accounting_closure_status")
+            ),
+            "github_plan_matrix_sample_accounting_closure_status": (
+                plan_sample_closure.get("release_matrix_sample_accounting_closure_status")
+            ),
+            "matrix_sample_accounting_closure_status": matrix_info.get(
+                "sample_accounting_closure_status"
+            ),
+            "default_promotion_sample_accounting_closure_status": promotion_info.get(
+                "sample_accounting_closure_status"
+            ),
         },
         "release_manifest": {
             "status": manifest.get("status"),
@@ -521,6 +742,7 @@ def build_windows_publish_preflight(
             "publication_ready": plan.get("publication_ready"),
             "asset_labels": asset_labels,
             "rejection_sample_accounting": plan_rejection_sample,
+            "sample_accounting_closure": plan_sample_closure,
         },
         "windows_release_matrix": matrix_info,
         "default_promotion_manifest": promotion_info,
@@ -558,6 +780,13 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"plan-matrix `{summary.get('github_plan_matrix_rejection_sample_accounting_status')}`, "
             f"matrix `{summary.get('matrix_rejection_sample_accounting_status')}`, "
             f"default-promotion `{summary.get('default_promotion_rejection_sample_accounting_status')}`"
+        ),
+        (
+            "- Sample accounting closure: "
+            f"phase2 `{summary.get('github_plan_phase2_sample_accounting_closure_status')}`, "
+            f"plan-matrix `{summary.get('github_plan_matrix_sample_accounting_closure_status')}`, "
+            f"matrix `{summary.get('matrix_sample_accounting_closure_status')}`, "
+            f"default-promotion `{summary.get('default_promotion_sample_accounting_closure_status')}`"
         ),
         "",
         "## Inputs",

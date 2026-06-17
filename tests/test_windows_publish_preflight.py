@@ -13,8 +13,9 @@ def _matrix(
     labels: list[str],
     ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
+    sample_accounting_closure_ready: bool = True,
 ) -> None:
-    matrix_ready = ready and rejection_sample_accounting_ready
+    matrix_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
     write_json(
         path,
         {
@@ -43,6 +44,23 @@ def _matrix(
                 "rejection_sample_accounting_failed_count": 0
                 if rejection_sample_accounting_ready
                 else 1,
+                "integration_sample_accounting_closure": sample_accounting_closure_ready,
+                "sample_accounting_closure": {
+                    "status": "passed" if sample_accounting_closure_ready else "failed",
+                    "check_present": True,
+                    "present_count": 1,
+                    "failed_count": 0 if sample_accounting_closure_ready else 1,
+                    "failed_items": []
+                    if sample_accounting_closure_ready
+                    else [{"item": "H", "reason": "sample_closure_drift"}],
+                },
+                "sample_accounting_closure_status": "passed"
+                if sample_accounting_closure_ready
+                else "failed",
+                "sample_accounting_closure_present_count": 1,
+                "sample_accounting_closure_failed_count": 0
+                if sample_accounting_closure_ready
+                else 1,
             },
             "packages": [{"label": label} for label in labels],
         },
@@ -54,8 +72,9 @@ def _default_promotion(
     *,
     ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
+    sample_accounting_closure_ready: bool = True,
 ) -> None:
-    manifest_ready = ready and rejection_sample_accounting_ready
+    manifest_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
     write_json(
         path,
         {
@@ -75,8 +94,10 @@ def _default_promotion(
                 "speedup_vs_reference": 28.75,
             },
             "pipeline_contract": {
-                "status": "passed" if rejection_sample_accounting_ready else "failed",
-                "passed": rejection_sample_accounting_ready,
+                "status": "passed"
+                if rejection_sample_accounting_ready and sample_accounting_closure_ready
+                else "failed",
+                "passed": rejection_sample_accounting_ready and sample_accounting_closure_ready,
                 "integration_rejection_sample_counts_match_maps": (
                     rejection_sample_accounting_ready
                 ),
@@ -94,6 +115,23 @@ def _default_promotion(
                 else "failed",
                 "rejection_sample_accounting_failed_count": 0
                 if rejection_sample_accounting_ready
+                else 1,
+                "integration_sample_accounting_closure": sample_accounting_closure_ready,
+                "sample_accounting_closure": {
+                    "status": "passed" if sample_accounting_closure_ready else "failed",
+                    "check_present": True,
+                    "present_count": 1,
+                    "failed_count": 0 if sample_accounting_closure_ready else 1,
+                    "failed_items": []
+                    if sample_accounting_closure_ready
+                    else [{"item": "H", "reason": "sample_closure_drift"}],
+                },
+                "sample_accounting_closure_status": "passed"
+                if sample_accounting_closure_ready
+                else "failed",
+                "sample_accounting_closure_present_count": 1,
+                "sample_accounting_closure_failed_count": 0
+                if sample_accounting_closure_ready
                 else 1,
             },
         },
@@ -137,24 +175,23 @@ def _github_plan(
     asset_sha_override: dict[str, str] | None = None,
     phase2_rejection_sample_accounting_ready: bool = True,
     matrix_rejection_sample_accounting_ready: bool = True,
+    phase2_sample_accounting_closure_ready: bool = True,
+    matrix_sample_accounting_closure_ready: bool = True,
 ) -> None:
+    plan_ready = (
+        phase2_rejection_sample_accounting_ready
+        and matrix_rejection_sample_accounting_ready
+        and phase2_sample_accounting_closure_ready
+        and matrix_sample_accounting_closure_ready
+    )
     write_json(
         path,
         {
             "schema_version": 1,
             "artifact_type": "windows_github_release_plan",
-            "status": "release_plan_ready"
-            if phase2_rejection_sample_accounting_ready
-            and matrix_rejection_sample_accounting_ready
-            else "blocked",
-            "passed": (
-                phase2_rejection_sample_accounting_ready
-                and matrix_rejection_sample_accounting_ready
-            ),
-            "publication_ready": (
-                phase2_rejection_sample_accounting_ready
-                and matrix_rejection_sample_accounting_ready
-            ),
+            "status": "release_plan_ready" if plan_ready else "blocked",
+            "passed": plan_ready,
+            "publication_ready": plan_ready,
             "manifest_artifact": str(manifest),
             "release": {"tag": "v0.1.0-test"},
             "phase2": {
@@ -173,6 +210,16 @@ def _github_plan(
                     "pipeline_rejection_sample_accounting_failed_count": 0
                     if phase2_rejection_sample_accounting_ready
                     else 1,
+                    "pipeline_integration_sample_accounting_closure": (
+                        phase2_sample_accounting_closure_ready
+                    ),
+                    "pipeline_sample_accounting_closure_status": "passed"
+                    if phase2_sample_accounting_closure_ready
+                    else "failed",
+                    "pipeline_sample_accounting_closure_present_count": 1,
+                    "pipeline_sample_accounting_closure_failed_count": 0
+                    if phase2_sample_accounting_closure_ready
+                    else 1,
                 }
             },
             "release_matrix": {
@@ -189,6 +236,16 @@ def _github_plan(
                 else "failed",
                 "rejection_sample_accounting_failed_count": 0
                 if matrix_rejection_sample_accounting_ready
+                else 1,
+                "integration_sample_accounting_closure": (
+                    matrix_sample_accounting_closure_ready
+                ),
+                "sample_accounting_closure_status": "passed"
+                if matrix_sample_accounting_closure_ready
+                else "failed",
+                "sample_accounting_closure_present_count": 1,
+                "sample_accounting_closure_failed_count": 0
+                if matrix_sample_accounting_closure_ready
                 else 1,
             },
             "assets": [
@@ -222,6 +279,30 @@ def _github_plan(
                         if matrix_rejection_sample_accounting_ready
                         else "failed",
                         "failed_count": 0 if matrix_rejection_sample_accounting_ready else 1,
+                    },
+                },
+                {
+                    "name": "phase2_pipeline_sample_accounting_closure_passed",
+                    "passed": phase2_sample_accounting_closure_ready,
+                    "evidence": {
+                        "check": phase2_sample_accounting_closure_ready,
+                        "status": "passed"
+                        if phase2_sample_accounting_closure_ready
+                        else "failed",
+                        "present_count": 1,
+                        "failed_count": 0 if phase2_sample_accounting_closure_ready else 1,
+                    },
+                },
+                {
+                    "name": "windows_release_matrix_sample_accounting_closure_passed",
+                    "passed": matrix_sample_accounting_closure_ready,
+                    "evidence": {
+                        "check": matrix_sample_accounting_closure_ready,
+                        "status": "passed"
+                        if matrix_sample_accounting_closure_ready
+                        else "failed",
+                        "present_count": 1,
+                        "failed_count": 0 if matrix_sample_accounting_closure_ready else 1,
                     },
                 },
             ],
@@ -259,11 +340,20 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert payload["summary"]["github_plan_matrix_rejection_sample_accounting_status"] == "passed"
     assert payload["summary"]["matrix_rejection_sample_accounting_status"] == "passed"
     assert payload["summary"]["default_promotion_rejection_sample_accounting_status"] == "passed"
+    assert payload["summary"]["github_plan_phase2_sample_accounting_closure_status"] == "passed"
+    assert payload["summary"]["github_plan_matrix_sample_accounting_closure_status"] == "passed"
+    assert payload["summary"]["matrix_sample_accounting_closure_status"] == "passed"
+    assert payload["summary"]["default_promotion_sample_accounting_closure_status"] == "passed"
     assert checks["github_plan_phase2_rejection_sample_accounting_passed"] is True
     assert checks["github_plan_matrix_rejection_sample_accounting_passed"] is True
     assert checks["matrix_rejection_sample_accounting_passed"] is True
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
     assert checks["github_plan_matrix_rejection_accounting_matches_matrix"] is True
+    assert checks["github_plan_phase2_sample_accounting_closure_passed"] is True
+    assert checks["github_plan_matrix_sample_accounting_closure_passed"] is True
+    assert checks["matrix_sample_accounting_closure_passed"] is True
+    assert checks["default_promotion_sample_accounting_closure_passed"] is True
+    assert checks["github_plan_matrix_sample_closure_matches_matrix"] is True
     assert checks["manifest_assets_match_github_plan"] is True
     assert checks["matrix_packages_match_manifest"] is True
     assert checks["cpu_fallback_preserved"] is True
@@ -390,6 +480,145 @@ def test_windows_publish_preflight_blocks_matrix_rejection_sample_accounting_dri
     assert checks["github_plan_matrix_rejection_accounting_matches_matrix"]["passed"] is True
 
 
+def test_windows_publish_preflight_blocks_phase2_sample_closure_drift(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(
+        plan,
+        manifest=manifest,
+        matrix=matrix,
+        labels=labels,
+        phase2_sample_accounting_closure_ready=False,
+    )
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["github_release_plan"]["sample_accounting_closure"][
+        "phase2_sample_accounting_closure_status"
+    ] == "failed"
+    assert checks["github_plan_phase2_sample_accounting_closure_passed"][
+        "passed"
+    ] is False
+    assert checks["github_plan_phase2_sample_accounting_closure_passed"][
+        "evidence"
+    ]["failed_count"] == 1
+
+
+def test_windows_publish_preflight_blocks_matrix_sample_closure_drift(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, sample_accounting_closure_ready=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(
+        plan,
+        manifest=manifest,
+        matrix=matrix,
+        labels=labels,
+        matrix_sample_accounting_closure_ready=False,
+    )
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["summary"]["matrix_sample_accounting_closure_status"] == "failed"
+    assert checks["github_plan_matrix_sample_accounting_closure_passed"][
+        "passed"
+    ] is False
+    assert checks["matrix_sample_accounting_closure_passed"]["passed"] is False
+    assert checks["github_plan_matrix_sample_closure_matches_matrix"]["passed"] is True
+
+
+def test_windows_publish_preflight_blocks_default_promotion_sample_closure_drift(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion, sample_accounting_closure_ready=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["summary"]["default_promotion_sample_accounting_closure_status"] == "failed"
+    assert checks["default_promotion_sample_accounting_closure_passed"]["passed"] is False
+    assert checks["default_promotion_sample_accounting_closure_passed"]["evidence"][
+        "failed_items"
+    ] == [{"item": "H", "reason": "sample_closure_drift"}]
+
+
+def test_windows_publish_preflight_blocks_plan_matrix_sample_closure_mismatch(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(
+        plan,
+        manifest=manifest,
+        matrix=matrix,
+        labels=labels,
+        matrix_sample_accounting_closure_ready=False,
+    )
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["github_plan_matrix_sample_accounting_closure_passed"][
+        "passed"
+    ] is False
+    assert checks["matrix_sample_accounting_closure_passed"]["passed"] is True
+    assert checks["github_plan_matrix_sample_closure_matches_matrix"]["passed"] is False
+
+
 def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     manifest, plan, matrix, promotion = _bundle(tmp_path)
     out = tmp_path / "publish_preflight.json"
@@ -421,4 +650,5 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     assert "GLASS Windows Publish Preflight" in markdown_text
     assert "Default route checks/speedup: `4`/`28.75`" in markdown_text
     assert "Rejection sample accounting: phase2 `passed`" in markdown_text
+    assert "Sample accounting closure: phase2 `passed`" in markdown_text
     assert "manifest_assets_match_github_plan" in markdown_text
