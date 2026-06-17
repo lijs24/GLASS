@@ -78,6 +78,11 @@ def _phase2_artifact_summary(
     )
     baseline = payload.get("baseline") if isinstance(payload.get("baseline"), dict) else {}
     candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    pipeline_contract = (
+        payload.get("pipeline_contract")
+        if isinstance(payload.get("pipeline_contract"), dict)
+        else None
+    )
     return {
         "path": str(target),
         "exists": target.exists(),
@@ -156,6 +161,31 @@ def _phase2_artifact_summary(
         )
         if acceptance.get("resident_registration_fastpath_contract_failed_check_count") is not None
         else (registration_fastpath or {}).get("contract_failed_check_count"),
+        "pipeline_contract": pipeline_contract,
+        "pipeline_contract_status": (pipeline_contract or {}).get("status"),
+        "pipeline_contract_passed": (pipeline_contract or {}).get("passed"),
+        "pipeline_contract_failed_check_count": (pipeline_contract or {}).get("failed_check_count"),
+        "pipeline_integration_output_count": (pipeline_contract or {}).get("integration_output_count"),
+        "pipeline_integration_map_count": (pipeline_contract or {}).get("integration_map_count"),
+        "pipeline_integration_dq_contract": (pipeline_contract or {}).get("integration_dq_contract"),
+        "pipeline_integration_stack_result_contract": (pipeline_contract or {}).get(
+            "integration_stack_result_contract"
+        ),
+        "pipeline_integration_resident_result_contract": (pipeline_contract or {}).get(
+            "integration_resident_result_contract"
+        ),
+        "pipeline_pixel_verification_enabled": (pipeline_contract or {}).get(
+            "pixel_verification_enabled"
+        ),
+        "pipeline_integration_dq_map_pixels_match_summary": (pipeline_contract or {}).get(
+            "integration_dq_map_pixels_match_summary"
+        ),
+        "pipeline_integration_coverage_map_pixels_match_dq": (pipeline_contract or {}).get(
+            "integration_coverage_map_pixels_match_dq"
+        ),
+        "pipeline_integration_rejection_map_pixels_match_dq": (pipeline_contract or {}).get(
+            "integration_rejection_map_pixels_match_dq"
+        ),
     }
 
 
@@ -219,6 +249,23 @@ def _has_registration_fastpath_phase2_provenance(phase2_status: dict[str, Any]) 
             "resident_warp_scratch_bytes",
             "resident_registration_fastpath_contract_check_count",
             "resident_registration_fastpath_contract_failed_check_count",
+        )
+    )
+
+
+def _has_pipeline_contract_phase2_provenance(phase2_status: dict[str, Any]) -> bool:
+    return any(
+        phase2_status.get(key) is not None
+        for key in (
+            "pipeline_contract_status",
+            "pipeline_contract_passed",
+            "pipeline_integration_dq_contract",
+            "pipeline_integration_stack_result_contract",
+            "pipeline_integration_resident_result_contract",
+            "pipeline_pixel_verification_enabled",
+            "pipeline_integration_dq_map_pixels_match_summary",
+            "pipeline_integration_coverage_map_pixels_match_dq",
+            "pipeline_integration_rejection_map_pixels_match_dq",
         )
     )
 
@@ -294,6 +341,27 @@ def _release_notes(payload: dict[str, Any]) -> str:
                         f"warp batch `{phase2_status.get('triangle_warp_batch')}` "
                         f"frames `{phase2_status.get('triangle_warp_batch_frame_count')}`, "
                         f"copy `{phase2_status.get('resident_warp_copy_mode')}`"
+                    ),
+                ]
+            )
+        if _has_pipeline_contract_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    (
+                        "- Pipeline DQ contract: "
+                        f"`{phase2_status.get('pipeline_contract_status')}` "
+                        f"passed `{phase2_status.get('pipeline_contract_passed')}` "
+                        f"DQ `{phase2_status.get('pipeline_integration_dq_contract')}`"
+                    ),
+                    (
+                        "- Pipeline pixel verification: "
+                        f"`{phase2_status.get('pipeline_pixel_verification_enabled')}` "
+                        "DQ pixels "
+                        f"`{phase2_status.get('pipeline_integration_dq_map_pixels_match_summary')}` "
+                        "coverage "
+                        f"`{phase2_status.get('pipeline_integration_coverage_map_pixels_match_dq')}` "
+                        "rejection "
+                        f"`{phase2_status.get('pipeline_integration_rejection_map_pixels_match_dq')}`"
                     ),
                 ]
             )
@@ -723,6 +791,50 @@ def _markdown(payload: dict[str, Any]) -> str:
                     ),
                     f"- Resident warp copy mode: `{phase2_status.get('resident_warp_copy_mode')}`",
                     f"- Resident warp scratch bytes: `{phase2_status.get('resident_warp_scratch_bytes')}`",
+                ]
+            )
+        if _has_pipeline_contract_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    f"- Pipeline contract: `{phase2_status.get('pipeline_contract_status')}`",
+                    f"- Pipeline contract passed: `{phase2_status.get('pipeline_contract_passed')}`",
+                    (
+                        "- Pipeline contract failed checks: "
+                        f"`{phase2_status.get('pipeline_contract_failed_check_count')}`"
+                    ),
+                    (
+                        "- Pipeline integration outputs/maps: "
+                        f"`{phase2_status.get('pipeline_integration_output_count')}`/"
+                        f"`{phase2_status.get('pipeline_integration_map_count')}`"
+                    ),
+                    (
+                        "- Pipeline integration DQ contract: "
+                        f"`{phase2_status.get('pipeline_integration_dq_contract')}`"
+                    ),
+                    (
+                        "- Pipeline StackEngine result contract: "
+                        f"`{phase2_status.get('pipeline_integration_stack_result_contract')}`"
+                    ),
+                    (
+                        "- Pipeline resident result contract: "
+                        f"`{phase2_status.get('pipeline_integration_resident_result_contract')}`"
+                    ),
+                    (
+                        "- Pipeline pixel verification: "
+                        f"`{phase2_status.get('pipeline_pixel_verification_enabled')}`"
+                    ),
+                    (
+                        "- Pipeline DQ pixels match summary: "
+                        f"`{phase2_status.get('pipeline_integration_dq_map_pixels_match_summary')}`"
+                    ),
+                    (
+                        "- Pipeline coverage pixels match DQ: "
+                        f"`{phase2_status.get('pipeline_integration_coverage_map_pixels_match_dq')}`"
+                    ),
+                    (
+                        "- Pipeline rejection pixels match DQ: "
+                        f"`{phase2_status.get('pipeline_integration_rejection_map_pixels_match_dq')}`"
+                    ),
                 ]
             )
         lines.extend(

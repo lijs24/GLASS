@@ -3615,6 +3615,21 @@ integration where applicable.
 - Keep this gate reporting/release-handoff only: no processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 216: Pipeline DQ Contract Handoff Provenance
+
+- Add `glass phase2-status --pipeline-contract` so a green Phase 2 handoff can
+  include the pipeline invariant contract as a first-class artifact.
+- Summarize DQ/mask contract state in Phase 2 status JSON and Markdown,
+  including integration output/map counts, DQ contract status, StackEngine and
+  resident result-contract status, pixel-verification state, and DQ/coverage/
+  rejection pixel-match checks.
+- Preserve the pipeline contract in Phase 2 status comparisons so later gates
+  cannot silently drop a previously passing DQ contract or pixel verification.
+- Propagate this evidence into Windows GitHub release-plan JSON, Markdown, and
+  generated release notes when a Phase 2 status artifact supplies it.
+- Keep this gate reporting/release-handoff only: no processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

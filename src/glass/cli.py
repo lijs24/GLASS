@@ -2596,11 +2596,13 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         acceptance_audit=args.acceptance_audit,
         release_manifest=args.release_manifest,
         github_release_plan=args.github_release_plan,
+        pipeline_contract=args.pipeline_contract,
         doctor_payload=_doctor_payload(skip_cuda_probe=args.skip_cuda_probe),
     )
     write_phase2_status(args.out, payload, markdown=args.markdown)
     latest = payload.get("latest_checkpoint") if isinstance(payload.get("latest_checkpoint"), dict) else {}
     acceptance = payload.get("acceptance_audit") if isinstance(payload.get("acceptance_audit"), dict) else {}
+    pipeline = payload.get("pipeline_contract") if isinstance(payload.get("pipeline_contract"), dict) else {}
     console.print(
         {
             "status": payload.get("status"),
@@ -2608,6 +2610,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             "latest_checkpoint_status": latest.get("status"),
             "acceptance_status": acceptance.get("status"),
             "speedup_vs_reference": acceptance.get("speedup_vs_reference"),
+            "pipeline_contract_status": pipeline.get("status"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2656,6 +2659,7 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_status.add_argument("--acceptance-audit", help="optional acceptance-audit JSON artifact")
     phase2_status.add_argument("--release-manifest", help="optional Windows release-manifest JSON artifact")
     phase2_status.add_argument("--github-release-plan", help="optional Windows GitHub release-plan JSON artifact")
+    phase2_status.add_argument("--pipeline-contract", help="optional pipeline-contract JSON artifact")
     phase2_status.add_argument("--out", required=True, help="output Phase 2 status JSON")
     phase2_status.add_argument("--markdown", help="optional output Markdown summary")
     phase2_status.add_argument(

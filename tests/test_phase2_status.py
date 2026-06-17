@@ -96,6 +96,47 @@ def _write_acceptance(path: Path) -> None:
     )
 
 
+def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "audit_type": "pipeline_invariant_contract",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "checks": [
+                {"name": "integration_output_maps_available", "passed": passed},
+                {"name": "integration_dq_contract", "passed": passed},
+                {"name": "integration_stack_result_contract", "passed": passed},
+                {"name": "integration_resident_result_contract", "passed": passed},
+                {"name": "integration_dq_map_pixels_match_summary", "passed": passed},
+                {"name": "integration_coverage_map_pixels_match_dq", "passed": passed},
+                {"name": "integration_rejection_map_pixels_match_dq", "passed": passed},
+            ],
+            "calibration": {
+                "master_count": 3,
+                "calibrated_light_count": 200,
+                "resident_native_calibration_artifact": True,
+                "resident_calibrated_light_count": 200,
+            },
+            "integration": {
+                "outputs": [{"item": "H"}],
+                "maps": [
+                    {"item": "H", "map": "master"},
+                    {"item": "H", "map": "coverage"},
+                    {"item": "H", "map": "dq"},
+                ],
+            },
+            "pixel_verification": {
+                "enabled": True,
+                "tile_size": 256,
+                "tolerance_pixels": 0,
+                "integration_outputs": [],
+            },
+        },
+    )
+
+
 def _doctor_payload() -> dict:
     return {
         "recommendation": "cuda",
@@ -127,6 +168,9 @@ def _status_payload(
     cuda_available: bool = True,
     release_status: str = "release_manifest_ready",
     github_status: str = "release_plan_ready",
+    pipeline_passed: bool = True,
+    pipeline_dq_contract: bool = True,
+    pixel_verification: bool = True,
 ) -> dict:
     return {
         "schema_version": 1,
@@ -142,6 +186,12 @@ def _status_payload(
         "doctor": {"cuda_available": cuda_available},
         "release_manifest": {"status": release_status},
         "github_release_plan": {"status": github_status},
+        "pipeline_contract": {
+            "status": "passed" if pipeline_passed else "failed",
+            "passed": pipeline_passed,
+            "integration_dq_contract": pipeline_dq_contract,
+            "pixel_verification_enabled": pixel_verification,
+        },
         "checks": [],
     }
 
@@ -154,7 +204,9 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     acceptance = tmp_path / "acceptance.json"
     release = tmp_path / "release_manifest.json"
     github_plan = tmp_path / "github_release_plan.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
     _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
     write_json(
         release,
         {
@@ -183,6 +235,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         acceptance_audit=acceptance,
         release_manifest=release,
         github_release_plan=github_plan,
+        pipeline_contract=pipeline_contract,
         doctor_payload=_doctor_payload(),
     )
 
@@ -202,6 +255,11 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["doctor"]["primary_gpu"] == "Fixture GPU"
     assert payload["release_manifest"]["package_count"] == 4
     assert payload["github_release_plan"]["status"] == "release_plan_ready"
+    assert payload["pipeline_contract"]["status"] == "passed"
+    assert payload["pipeline_contract"]["integration_dq_contract"] is True
+    assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
+    assert payload["pipeline_contract"]["pixel_verification_enabled"] is True
+    assert payload["pipeline_contract"]["integration_dq_map_pixels_match_summary"] is True
 
 
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
@@ -211,7 +269,9 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     acceptance = tmp_path / "acceptance.json"
     out = tmp_path / "phase2_status.json"
     markdown = tmp_path / "phase2_status.md"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
     _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
 
     result = main(
         [
@@ -220,6 +280,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(checkpoints),
             "--acceptance-audit",
             str(acceptance),
+            "--pipeline-contract",
+            str(pipeline_contract),
             "--out",
             str(out),
             "--markdown",
@@ -234,6 +296,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["latest_checkpoint"]["gate"] == 202
     assert payload["acceptance_audit"]["contract_bundle_schema_status"] == "passed"
     assert payload["acceptance_audit"]["resident_result_contract_source"] == "run_default"
+    assert payload["pipeline_contract"]["integration_dq_contract"] is True
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -241,6 +304,9 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Native calibrated lights: 200" in text
     assert "Registration fast path: present" in text
     assert "Triangle warp batch frames: 188" in text
+    assert "Pipeline Contract" in text
+    assert "Integration DQ contract: True" in text
+    assert "DQ pixels match summary: True" in text
 
 
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
@@ -260,6 +326,9 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["acceptance_audit_passed_preserved"] is True
     assert checks["cuda_available_preserved"] is True
     assert checks["release_manifest_ready_preserved"] is True
+    assert checks["pipeline_contract_passed_preserved"] is True
+    assert checks["pipeline_integration_dq_contract_preserved"] is True
+    assert checks["pipeline_pixel_verification_preserved"] is True
 
 
 def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
@@ -277,6 +346,9 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             cuda_available=False,
             release_status="failed",
             github_status="failed",
+            pipeline_passed=False,
+            pipeline_dq_contract=False,
+            pixel_verification=False,
         ),
     )
 
@@ -295,6 +367,9 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["cuda_available_preserved"] is False
     assert checks["release_manifest_ready_preserved"] is False
     assert checks["github_release_plan_ready_preserved"] is False
+    assert checks["pipeline_contract_passed_preserved"] is False
+    assert checks["pipeline_integration_dq_contract_preserved"] is False
+    assert checks["pipeline_pixel_verification_preserved"] is False
 
 
 def test_cli_phase2_status_compare_writes_outputs_and_returns_failure(tmp_path: Path):

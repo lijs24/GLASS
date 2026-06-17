@@ -369,12 +369,85 @@ def _github_release_plan_summary(path: str | Path | None) -> dict[str, Any] | No
     }
 
 
+def _check_passed(payload: dict[str, Any], name: str) -> bool | None:
+    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return bool(item.get("passed"))
+    return None
+
+
+def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {"path": str(path), "exists": False, "status": "missing", "passed": False}
+
+    checks = [item for item in payload.get("checks") or [] if isinstance(item, dict)]
+    failed_checks = [str(item.get("name")) for item in checks if not item.get("passed")]
+    integration = payload.get("integration") if isinstance(payload.get("integration"), dict) else {}
+    calibration = payload.get("calibration") if isinstance(payload.get("calibration"), dict) else {}
+    pixel_verification = (
+        payload.get("pixel_verification")
+        if isinstance(payload.get("pixel_verification"), dict)
+        else {}
+    )
+    return {
+        "path": payload.get("_path"),
+        "exists": True,
+        "audit_type": payload.get("audit_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "check_count": len(checks),
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "integration_output_count": len(integration.get("outputs") or []),
+        "integration_map_count": len(integration.get("maps") or []),
+        "integration_output_maps_available": _check_passed(
+            payload,
+            "integration_output_maps_available",
+        ),
+        "integration_dq_contract": _check_passed(payload, "integration_dq_contract"),
+        "integration_stack_result_contract": _check_passed(
+            payload,
+            "integration_stack_result_contract",
+        ),
+        "integration_resident_result_contract": _check_passed(
+            payload,
+            "integration_resident_result_contract",
+        ),
+        "integration_dq_map_pixels_match_summary": _check_passed(
+            payload,
+            "integration_dq_map_pixels_match_summary",
+        ),
+        "integration_coverage_map_pixels_match_dq": _check_passed(
+            payload,
+            "integration_coverage_map_pixels_match_dq",
+        ),
+        "integration_rejection_map_pixels_match_dq": _check_passed(
+            payload,
+            "integration_rejection_map_pixels_match_dq",
+        ),
+        "pixel_verification_enabled": pixel_verification.get("enabled"),
+        "pixel_verification_tile_size": pixel_verification.get("tile_size"),
+        "pixel_verification_tolerance_pixels": pixel_verification.get("tolerance_pixels"),
+        "calibration_master_count": calibration.get("master_count"),
+        "calibrated_light_count": calibration.get("calibrated_light_count"),
+        "resident_native_calibration_artifact": calibration.get(
+            "resident_native_calibration_artifact"
+        ),
+        "resident_calibrated_light_count": calibration.get("resident_calibrated_light_count"),
+    }
+
+
 def build_phase2_status(
     *,
     checkpoint_dir: str | Path,
     acceptance_audit: str | Path | None = None,
     release_manifest: str | Path | None = None,
     github_release_plan: str | Path | None = None,
+    pipeline_contract: str | Path | None = None,
     doctor_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checkpoint = _latest_checkpoint(checkpoint_dir)
@@ -382,6 +455,7 @@ def build_phase2_status(
     doctor = _doctor_summary(doctor_payload)
     release = _release_manifest_summary(release_manifest)
     github_plan = _github_release_plan_summary(github_release_plan)
+    pipeline = _pipeline_contract_summary(pipeline_contract)
     checks = [
         {
             "name": "latest_checkpoint_green",
@@ -434,6 +508,19 @@ def build_phase2_status(
                 },
             }
         )
+    if pipeline is not None:
+        checks.append(
+            {
+                "name": "pipeline_contract_passed",
+                "passed": pipeline.get("passed") is True,
+                "evidence": {
+                    "status": pipeline.get("status"),
+                    "failed_check_count": pipeline.get("failed_check_count"),
+                    "integration_dq_contract": pipeline.get("integration_dq_contract"),
+                    "pixel_verification_enabled": pipeline.get("pixel_verification_enabled"),
+                },
+            }
+        )
     passed = all(item["passed"] for item in checks)
     return {
         "schema_version": 1,
@@ -446,6 +533,7 @@ def build_phase2_status(
         "doctor": doctor,
         "release_manifest": release,
         "github_release_plan": github_plan,
+        "pipeline_contract": pipeline,
         "checks": checks,
     }
 
@@ -456,6 +544,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     doctor = payload.get("doctor") or {}
     release = payload.get("release_manifest") or {}
     github_plan = payload.get("github_release_plan") or {}
+    pipeline = payload.get("pipeline_contract") or {}
     lines = [
         "# GLASS Phase 2 Status",
         "",
@@ -540,6 +629,42 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Publication ready: {github_plan.get('publication_ready')}",
                 f"- GitHub auth OK: {github_plan.get('gh_auth_ok')}",
                 f"- Script path: {github_plan.get('script_path')}",
+            ]
+        )
+    if pipeline:
+        lines.extend(
+            [
+                "",
+                "## Pipeline Contract",
+                "",
+                f"- Status: {pipeline.get('status')}",
+                f"- Passed: {pipeline.get('passed')}",
+                f"- Check count: {pipeline.get('check_count')}",
+                f"- Failed checks: {pipeline.get('failed_check_count')}",
+                f"- Integration outputs: {pipeline.get('integration_output_count')}",
+                f"- Integration maps: {pipeline.get('integration_map_count')}",
+                f"- Integration DQ contract: {pipeline.get('integration_dq_contract')}",
+                (
+                    "- Integration StackEngine result contract: "
+                    f"{pipeline.get('integration_stack_result_contract')}"
+                ),
+                (
+                    "- Integration resident result contract: "
+                    f"{pipeline.get('integration_resident_result_contract')}"
+                ),
+                f"- Pixel verification enabled: {pipeline.get('pixel_verification_enabled')}",
+                (
+                    "- DQ pixels match summary: "
+                    f"{pipeline.get('integration_dq_map_pixels_match_summary')}"
+                ),
+                (
+                    "- Coverage pixels match DQ: "
+                    f"{pipeline.get('integration_coverage_map_pixels_match_dq')}"
+                ),
+                (
+                    "- Rejection pixels match DQ: "
+                    f"{pipeline.get('integration_rejection_map_pixels_match_dq')}"
+                ),
             ]
         )
     lines.extend(["", "## Checks", ""])
@@ -673,6 +798,27 @@ def build_phase2_status_compare(
             baseline=_status_value(baseline, "github_release_plan", "status"),
             candidate=_status_value(candidate, "github_release_plan", "status"),
         ),
+        _compare_check(
+            "pipeline_contract_passed_preserved",
+            _status_value(baseline, "pipeline_contract", "passed") is not True
+            or _status_value(candidate, "pipeline_contract", "passed") is True,
+            baseline=_status_value(baseline, "pipeline_contract", "passed"),
+            candidate=_status_value(candidate, "pipeline_contract", "passed"),
+        ),
+        _compare_check(
+            "pipeline_integration_dq_contract_preserved",
+            _status_value(baseline, "pipeline_contract", "integration_dq_contract") is not True
+            or _status_value(candidate, "pipeline_contract", "integration_dq_contract") is True,
+            baseline=_status_value(baseline, "pipeline_contract", "integration_dq_contract"),
+            candidate=_status_value(candidate, "pipeline_contract", "integration_dq_contract"),
+        ),
+        _compare_check(
+            "pipeline_pixel_verification_preserved",
+            _status_value(baseline, "pipeline_contract", "pixel_verification_enabled") is not True
+            or _status_value(candidate, "pipeline_contract", "pixel_verification_enabled") is True,
+            baseline=_status_value(baseline, "pipeline_contract", "pixel_verification_enabled"),
+            candidate=_status_value(candidate, "pipeline_contract", "pixel_verification_enabled"),
+        ),
     ]
     passed = all(item["passed"] for item in checks)
     return {
@@ -690,6 +836,8 @@ def build_phase2_status_compare(
             "cuda_available": _status_value(baseline, "doctor", "cuda_available"),
             "release_manifest_status": _status_value(baseline, "release_manifest", "status"),
             "github_release_plan_status": _status_value(baseline, "github_release_plan", "status"),
+            "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
+            "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
         },
         "candidate": {
             "status": candidate.get("status"),
@@ -698,6 +846,8 @@ def build_phase2_status_compare(
             "cuda_available": _status_value(candidate, "doctor", "cuda_available"),
             "release_manifest_status": _status_value(candidate, "release_manifest", "status"),
             "github_release_plan_status": _status_value(candidate, "github_release_plan", "status"),
+            "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
+            "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
         },
         "checks": checks,
     }

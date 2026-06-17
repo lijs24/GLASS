@@ -99,6 +99,20 @@ def _phase2_status(path: Path, *, passed: bool = True, gate: int = 204) -> None:
                     "resident_calibrated_light_count": 200,
                 },
             },
+            "pipeline_contract": {
+                "status": "passed" if passed else "failed",
+                "passed": passed,
+                "failed_check_count": 0 if passed else 1,
+                "integration_output_count": 1,
+                "integration_map_count": 6,
+                "integration_dq_contract": passed,
+                "integration_stack_result_contract": passed,
+                "integration_resident_result_contract": passed,
+                "pixel_verification_enabled": True,
+                "integration_dq_map_pixels_match_summary": passed,
+                "integration_coverage_map_pixels_match_dq": passed,
+                "integration_rejection_map_pixels_match_dq": passed,
+            },
         },
     )
 
@@ -167,6 +181,9 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["phase2"]["status"]["resident_registration_fastpath_mode"] == "similarity_cuda_triangle"
     assert payload["phase2"]["status"]["triangle_descriptor_fit_batch"] is True
     assert payload["phase2"]["status"]["triangle_warp_batch_frame_count"] == 188
+    assert payload["phase2"]["status"]["pipeline_contract_status"] == "passed"
+    assert payload["phase2"]["status"]["pipeline_integration_dq_contract"] is True
+    assert payload["phase2"]["status"]["pipeline_pixel_verification_enabled"] is True
     assert payload["phase2"]["status_compare"]["candidate_gate"] == 204
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
@@ -282,12 +299,16 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Native calibrated lights: `200`" in markdown_text
     assert "Resident registration fast path: `present`" in markdown_text
     assert "Triangle warp batch: `True`" in markdown_text
+    assert "Pipeline contract: `passed`" in markdown_text
+    assert "Pipeline integration DQ contract: `True`" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
     notes_text = notes.read_text(encoding="utf-8")
     assert "Native resident contract source: `run_default`" in notes_text
     assert "calibrated lights `200`" in notes_text
     assert "Resident registration fast path: `present`" in notes_text
     assert "warp batch `True` frames `188`" in notes_text
+    assert "Pipeline DQ contract: `passed` passed `True` DQ `True`" in notes_text
+    assert "Pipeline pixel verification: `True`" in notes_text
     script_text = script.read_text(encoding="utf-8")
     assert "$ExpectedTag = 'v0.1.0-test'" in script_text
     assert "$Phase2StatusFile =" in script_text
