@@ -3213,6 +3213,23 @@ integration where applicable.
   variants `cuda13,cuda12,cpu`, missing variant `cuda11`, and CUDA12 Toolkit
   match `exact`.
 
+### S2-Gate 188: CUDA12 Portable Package Smoke
+
+- Build `GLASS-Portable-win64-cuda12.zip` using CUDA Toolkit 12.4 and the
+  Gate187 build-plan command.
+- Build settings: `-PackageLabel cuda12`, `-BuildCuda`,
+  `-StaticCudaRuntime`, `-CudaArchitectures "75;80;86;89;90"`, and
+  `-CudaToolkitRoot "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4"`.
+- Package manifest records package label `cuda12`, CUDA Toolkit root `v12.4`,
+  architecture string `75;80;86;89;90`, runtime linkage `Static`, and source
+  stamp `fbf454a`.
+- Run `glass windows-package-smoke` with `--expected-package-label cuda12`,
+  `--expected-source fbf454a`, and `--require-cuda`.
+- Current real artifact result: status `package_smoke_passed`, recommendation
+  `portable_package_ready_for_next_release_step`, zip size `341206870` bytes,
+  native extension loaded, CUDA available on RTX PRO 6000 Blackwell cc 12.0,
+  driver `596.21`, and zero failed checks.
+
 ## Gate Rules
 
 Each gate requires:

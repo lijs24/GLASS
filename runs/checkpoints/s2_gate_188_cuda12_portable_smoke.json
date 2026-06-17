@@ -1,0 +1,371 @@
+{
+  "artifact_type": "windows_package_smoke",
+  "checks": [
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS"
+      },
+      "name": "package_root_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\runtime\\python.exe"
+      },
+      "name": "runtime_python_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\glass.cmd"
+      },
+      "name": "glass_cmd_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\glass-doctor.cmd"
+      },
+      "name": "glass_doctor_cmd_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\README.md"
+      },
+      "name": "readme_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\LICENSE"
+      },
+      "name": "license_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\docs\\windows_release.md"
+      },
+      "name": "docs_windows_release_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\source"
+      },
+      "name": "source_stamp_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\package_manifest.json"
+      },
+      "name": "package_manifest_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+      },
+      "name": "portable_zip_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip",
+        "size_bytes": 341206870
+      },
+      "name": "portable_zip_nonempty",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda12",
+        "required": "cuda12"
+      },
+      "name": "package_label_matches_expected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "required": true
+      },
+      "name": "package_manifest_cuda_build",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "fbf454a",
+        "required": "fbf454a"
+      },
+      "name": "source_stamp_matches_expected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "returncode": 0
+      },
+      "name": "portable_doctor_exit_zero",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "returncode": 0
+      },
+      "name": "portable_help_exit_zero",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\portable_doctor.json"
+      },
+      "name": "portable_doctor_json_written",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "GLASS",
+        "required": "GLASS"
+      },
+      "name": "portable_doctor_product",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "required": true
+      },
+      "name": "portable_cuda_requirement",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T16:12:06+00:00",
+  "execution": {
+    "doctor_command": {
+      "command": [
+        "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\glass-doctor.cmd",
+        "--json",
+        "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\portable_doctor.json"
+      ],
+      "cwd": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS",
+      "exception": null,
+      "returncode": 0,
+      "stderr_tail": "",
+      "stdout_tail": "Wrote GLASS doctor report: \nC:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\portable_doctor.json\nGLASS Doctor\nPython: 3.12.10 (Windows-10.0.26200)\nCUDA wrapper importable: True\nCUDA native extension loaded: True\nCUDA available: True\nGPU 0: NVIDIA RTX PRO 6000 Blackwell Workstation Edition, cc=12.0, VRAM=97886 \nMiB, driver=596.21\nWindows package try order: cuda13, cuda12, cuda11, cpu\nPackage guidance: Try cuda13 first for native performance; if it fails to load,\ntry cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX \nJIT.\nRecommendation: cuda\n"
+    },
+    "doctor_json": {
+      "capabilities": {
+        "cpu_baseline": true,
+        "cuda_available": true,
+        "cuda_extension_importable": true,
+        "cuda_features": {
+          "calibrate_tile_f32": true,
+          "local_norm_apply_grid_f32": true,
+          "resident_grid_local_norm_apply": true,
+          "resident_grid_local_norm_stats": true,
+          "resident_lanczos3_warp": true,
+          "resident_sigma_rejection": true,
+          "resident_simple_snr_weighting": true,
+          "resident_stack": true,
+          "smoke_add_f32": true,
+          "warp_matrix_bilinear_f32": true,
+          "warp_matrix_lanczos3_f32": true
+        },
+        "html_report": true,
+        "local_normalization": {
+          "cpu": "tile median/std baseline with coefficient artifacts",
+          "cuda": "tile mean/std primitive, resident global/grid mean/std, resident grid apply",
+          "status": "partial; full interpolated/windowed LN is not complete"
+        },
+        "metadata_scan": true,
+        "out_of_core_design": true,
+        "planning": true,
+        "registration": {
+          "cpu": "star catalog translation/similarity helpers",
+          "cuda": "resident translation, catalog similarity, triangle descriptors, bilinear/Lanczos3 matrix warp",
+          "status": "partial WBPP-like registration; not PixInsight-equivalent"
+        },
+        "synthetic_data": true,
+        "weighted_integration": {
+          "cpu": "mean, simple_snr, sigma/winsorized rejection maps",
+          "cuda": "resident weighted mean, simple_snr weights, and sigma/winsorized rejection maps",
+          "status": "partial WBPP-like integration"
+        }
+      },
+      "cuda": {
+        "cuda_available": true,
+        "devices": [
+          {
+            "available_to_glass": true,
+            "compute_capability": "12.0",
+            "device_id": 0,
+            "driver_version": "596.21",
+            "memory_total_mib": 97886,
+            "multi_processor_count": 188,
+            "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+            "native_backend": true
+          }
+        ],
+        "error": null,
+        "native_extension_loaded": true,
+        "probe_skipped": false,
+        "wrapper_importable": true
+      },
+      "full_name": "GPU-Accelerated Lightframe Alignment and Stacking System",
+      "product": "GLASS",
+      "python": {
+        "executable": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\runtime\\python.exe",
+        "platform": "Windows-10.0.26200",
+        "version": "3.12.10"
+      },
+      "recommendation": "cuda",
+      "schema_version": 1,
+      "windows_cuda_packages": {
+        "fallbacks": [
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ],
+        "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ],
+        "packages": [
+          {
+            "architectures": [
+              "5.0",
+              "5.2",
+              "6.0",
+              "6.1",
+              "7.0",
+              "7.5",
+              "8.0",
+              "8.6"
+            ],
+            "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+            "compatible": true,
+            "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+            "label": "cuda11",
+            "match": "ptx_jit_forward",
+            "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+            "toolkit": "11.8"
+          },
+          {
+            "architectures": [
+              "7.5",
+              "8.0",
+              "8.6",
+              "8.9",
+              "9.0"
+            ],
+            "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+            "compatible": true,
+            "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+            "label": "cuda12",
+            "match": "ptx_jit_forward",
+            "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+            "toolkit": "12.4"
+          },
+          {
+            "architectures": [
+              "8.6",
+              "8.9",
+              "9.0",
+              "10.0",
+              "12.0"
+            ],
+            "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+            "compatible": true,
+            "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+            "label": "cuda13",
+            "match": "native_cubin",
+            "note": "This package contains native GPU code for this compute capability.",
+            "toolkit": "13.0"
+          }
+        ],
+        "primary": "cuda13",
+        "ptx_forward_compatibility": true,
+        "selected_device": {
+          "compute_capability": "12.0",
+          "compute_capability_code": 120,
+          "device_id": 0,
+          "driver_version": "596.21",
+          "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+        }
+      }
+    },
+    "doctor_json_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\portable_doctor.json",
+    "execute": true,
+    "help_command": {
+      "command": [
+        "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\glass.cmd",
+        "--help"
+      ],
+      "cwd": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS",
+      "exception": null,
+      "returncode": 0,
+      "stderr_tail": "",
+      "stdout_tail": "ile-local-policy-subset\n                        select a non-overlapping subset from a tile-local\n                        policy replay\n    tile-local-apply-experiment\n                        audit a bounded resident CUDA tile-local apply\n                        experiment\n    tile-local-apply-verify\n                        measure selected tile-local apply residuals against a\n                        reference image\n    tile-local-policy-decision\n                        rank and accept/reject measured tile-local policy\n                        candidates\n    tile-local-policy-sweep\n                        rank multiple measured tile-local policy decision\n                        artifacts\n    tile-local-sweep-plan\n                        plan a measured tile-local policy sweep command queue\n    speedup-summary     summarize GLASS timing against WBPP black-box timing\n    acceptance-audit    verify a real GLASS/WBPP acceptance benchmark from\n                        existing artifacts\n    release-promotion-decision\n                        decide whether release/default promotion evidence is\n                        ready or needs controlled repeat benchmarking\n    windows-release-matrix\n                        audit Windows CPU/CUDA package matrix readiness from\n                        doctor and release decision artifacts\n    windows-package-build-plan\n                        plan Windows CPU/CUDA portable package builds from\n                        local Toolkit availability\n    windows-package-smoke\n                        smoke-test a Windows portable package folder and\n                        optional zip artifact\n    resident-determinism\n                        compare resident CUDA registration signatures from two\n                        GLASS runs\n    resident-registration-audit\n                        summarize resident CUDA triangle registration\n                        candidate and pixel-refine diagnostics\n    resident-registration-compare\n                        join resident sweep compare results with resident\n                        registration candidate audits\n    resident-runtime-compare\n                        compare resident CUDA timing and I/O pipeline\n                        artifacts from GLASS runs\n    resident-runtime-repeat-plan\n                        plan repeated resident CUDA runs for cache and I/O\n                        variance checks\n    resident-runtime-repeat-execute\n                        execute or dry-run a resident-runtime-repeat-plan\n    resident-runtime-repeat-preflight\n                        check whether a resident-runtime-repeat-plan is ready\n                        to execute\n    resident-calibration-contract\n                        audit resident CUDA master-calibration evidence from\n                        resident_artifacts.json\n    resident-result-contract\n                        audit resident CUDA integration outputs for result-\n                        contract invariants\n    resident-registration-triage\n                        triage resident registration failures and determinism\n                        drift between candidate audits\n    stack-engine-contract\n                        audit StackEngine default routing and DQ provenance\n                        from a GLASS run\n    pipeline-contract   audit DQ, LN, rejection, crop, and output-map\n                        invariants from a GLASS run\n    guardrails          generate StackEngine, pipeline, optional pixel, and\n                        HTML guardrail artifacts for a run\n    blackbox-package    write a PixInsight/WBPP black-box handoff package\n    blackbox-finalize   finalize a PixInsight/WBPP black-box timing package\n    blackbox-history    extract user-generated WBPP FastIntegration\n                        ProcessingHistory from a XISF master\n    synthetic           generate synthetic FITS data\n\noptions:\n  -h, --help            show this help message and exit\n  --version             show program's version number and exit\n"
+    }
+  },
+  "failed_checks": [],
+  "limitations": [
+    "This smoke test validates package structure and CLI startup; it does not sign or publish artifacts.",
+    "CPU-only package smoke does not prove CUDA native module loading.",
+    "A CUDA release package must be smoked with require_cuda=true on the target release machine."
+  ],
+  "package": {
+    "manifest": {
+      "build_cuda": true,
+      "cuda_architectures": "75;80;86;89;90",
+      "cuda_runtime_library": "Static",
+      "cuda_toolkit_root": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.4",
+      "package_label": "cuda12",
+      "product": "GLASS",
+      "python_home": "C:\\Users\\ljs\\AppData\\Local\\Programs\\Python\\Python312",
+      "schema_version": 1,
+      "source_stamp": "fbf454a"
+    },
+    "manifest_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS\\package_manifest.json",
+    "root": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS",
+    "source_stamp": "fbf454a",
+    "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip",
+    "zip_size_bytes": 341206870
+  },
+  "passed": true,
+  "recommendation": "portable_package_ready_for_next_release_step",
+  "requirements": {
+    "execute": true,
+    "expected_package_label": "cuda12",
+    "expected_source": "fbf454a",
+    "require_cuda": true,
+    "timeout_s": 120
+  },
+  "schema_version": 1,
+  "status": "package_smoke_passed"
+}
