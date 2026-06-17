@@ -3157,6 +3157,26 @@ integration where applicable.
   `NVIDIA RTX PRO 6000 Blackwell Workstation Edition` with compute capability
   `12.0` and `97886 MiB` VRAM, and zero failed checks.
 
+### S2-Gate 185: Windows Package Build Plan
+
+- Add `glass windows-package-build-plan`, a non-mutating preflight that plans
+  Windows CPU/CUDA portable package variants from local CUDA Toolkit
+  availability.
+- The plan records requested labels, detected Toolkit roots, nvcc presence,
+  package zip paths, package-root reuse, CMake CUDA architecture strings,
+  ready/missing variants, and copy-pasteable `build_portable.ps1` commands.
+- Support `--toolkit-root LABEL=PATH` overrides, `--packages`, release-root and
+  Python overrides, static/shared CUDA runtime planning, and strict
+  `--fail-on-missing` / `--require-all-toolkits` modes.
+- Run the preflight on the local release machine and write artifacts under
+  `C:\glass_runs\phase2_s2_gate_185_windows_package_build_plan` and
+  `runs\checkpoints`.
+- Current real artifact result: status `partial_toolkits`, passed `true`,
+  ready variants `cuda13,cpu`, missing CUDA variants `cuda12,cuda11`, detected
+  Toolkit `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2`, cuda13
+  match `major_compatible`, and recommendation
+  `build_ready_variants_and_install_missing_toolkits`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -88,6 +88,11 @@ from glass.report.windows_release_matrix import (
     build_windows_release_matrix,
     write_windows_release_matrix,
 )
+from glass.report.windows_package_build_plan import (
+    build_windows_package_build_plan,
+    parse_toolkit_root_specs,
+    write_windows_package_build_plan,
+)
 from glass.report.windows_package_smoke import (
     build_windows_package_smoke,
     write_windows_package_smoke,
@@ -1790,6 +1795,39 @@ def cmd_windows_package_smoke(args: argparse.Namespace) -> int:
             "markdown": args.markdown,
         }
     )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_windows_package_build_plan(args: argparse.Namespace) -> int:
+    package_labels = tuple(
+        item.strip() for item in str(args.packages).split(",") if item.strip()
+    )
+    payload = build_windows_package_build_plan(
+        release_root=args.release_root,
+        cuda_base=args.cuda_base,
+        package_labels=package_labels,
+        toolkit_roots=parse_toolkit_root_specs(args.toolkit_root),
+        python=args.python,
+        configuration=args.configuration,
+        static_cuda_runtime=not args.shared_cuda_runtime,
+        require_all_toolkits=args.require_all_toolkits,
+    )
+    write_windows_package_build_plan(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "recommendation": payload["recommendation"],
+            "ready_variants": payload["ready_variants"],
+            "missing_cuda_variants": payload["missing_cuda_variants"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_missing) and payload.get("missing_cuda_variants"):
+        return 2
     if bool(args.fail_on_failure) and not payload.get("passed"):
         return 2
     return 0
@@ -4023,6 +4061,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the Windows release matrix passes",
     )
     windows_release_matrix.set_defaults(func=cmd_windows_release_matrix)
+
+    windows_package_build_plan = sub.add_parser(
+        "windows-package-build-plan",
+        help="plan Windows CPU/CUDA portable package builds from local Toolkit availability",
+    )
+    windows_package_build_plan.add_argument("--out", required=True, help="output package build plan JSON")
+    windows_package_build_plan.add_argument("--markdown", help="optional output Markdown summary")
+    windows_package_build_plan.add_argument(
+        "--release-root",
+        default=".release/windows",
+        help="portable package release root used by build_portable.ps1",
+    )
+    windows_package_build_plan.add_argument(
+        "--cuda-base",
+        default="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA",
+        help="directory containing CUDA Toolkit version folders",
+    )
+    windows_package_build_plan.add_argument(
+        "--packages",
+        default="cuda13,cuda12,cuda11,cpu",
+        help="comma-separated package labels to plan",
+    )
+    windows_package_build_plan.add_argument(
+        "--toolkit-root",
+        action="append",
+        default=[],
+        help="override Toolkit root in LABEL=PATH form; may be repeated",
+    )
+    windows_package_build_plan.add_argument(
+        "--python",
+        default=r".\.venv\Scripts\python.exe",
+        help="Python executable passed to build_portable.ps1",
+    )
+    windows_package_build_plan.add_argument(
+        "--configuration",
+        default="Release",
+        help="CMake configuration passed to build_portable.ps1",
+    )
+    windows_package_build_plan.add_argument(
+        "--shared-cuda-runtime",
+        action="store_true",
+        help="plan CUDA builds without -StaticCudaRuntime",
+    )
+    windows_package_build_plan.add_argument(
+        "--require-all-toolkits",
+        action="store_true",
+        help="make the plan fail unless every requested CUDA package has a matching Toolkit",
+    )
+    windows_package_build_plan.add_argument(
+        "--fail-on-missing",
+        action="store_true",
+        help="return exit code 2 when any requested CUDA package is missing a matching Toolkit",
+    )
+    windows_package_build_plan.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the build-plan checks pass",
+    )
+    windows_package_build_plan.set_defaults(func=cmd_windows_package_build_plan)
 
     windows_package_smoke = sub.add_parser(
         "windows-package-smoke",

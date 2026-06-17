@@ -105,6 +105,18 @@ The label changes the zip name, for example
 `package_manifest.json` alongside the CUDA build flag, CUDA architecture
 setting, selected Toolkit root, runtime linkage, Python home, and source stamp.
 
+Before building multiple variants, generate a local build plan:
+
+```powershell
+glass windows-package-build-plan --out windows_package_build_plan.json --markdown windows_package_build_plan.md
+```
+
+The plan is read-only. It reports which package labels are build-ready on the
+current machine, which CUDA Toolkit roots are missing, and the exact
+`build_portable.ps1` command for each ready variant. Use `--fail-on-missing` or
+`--require-all-toolkits` in CI/release automation when all CUDA variants must be
+present.
+
 Installer:
 
 1. Build the portable folder.
@@ -118,6 +130,10 @@ Installer:
 - `glass doctor --allow-cpu-only` succeeds.
 - CUDA machine: `glass doctor` reports native CUDA available.
 - CUDA smoke tests pass on the release machine.
+- `glass windows-package-build-plan --out windows_package_build_plan.json
+  --markdown windows_package_build_plan.md` is archived before building package
+  variants; strict releases add `--fail-on-missing` after all target CUDA
+  Toolkits are installed.
 - `glass windows-release-matrix --doctor-json DOCTOR.json --release-decision
   RELEASE_DECISION.json --acceptance-audit ACCEPTANCE.json
   --expected-primary-package cuda13 --out windows_release_matrix.json
