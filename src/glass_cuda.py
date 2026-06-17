@@ -3355,6 +3355,46 @@ class ResidentCalibratedStack:
             np.asarray(high_reject, dtype=np.float32),
         )
 
+    def integrate_tile_local_sigma_clip(
+        self,
+        target_mask: Any,
+        tile_extents: Any,
+        tile_multipliers: Any,
+        weights: Any | None = None,
+        low_sigma: float = 3.0,
+        high_sigma: float = 3.0,
+        winsorize: bool = True,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+        if not hasattr(self._impl, "integrate_tile_local_sigma_clip"):
+            raise RuntimeError("native ResidentCalibratedStack.integrate_tile_local_sigma_clip is not available")
+        target = np.ascontiguousarray(np.asarray(target_mask, dtype=np.uint8).reshape((self.frame_count,)))
+        extents = np.asarray(tile_extents, dtype=np.int32)
+        if extents.ndim != 2 or extents.shape[1] != 4:
+            raise ValueError("tile_extents must have shape (tile_count, 4)")
+        extents = np.ascontiguousarray(extents)
+        multipliers = np.ascontiguousarray(np.asarray(tile_multipliers, dtype=np.float32))
+        if multipliers.ndim != 1 or multipliers.shape[0] != extents.shape[0]:
+            raise ValueError("tile_multipliers must have shape (tile_count,)")
+        master, weight_map, coverage, low_reject, high_reject, timing = (
+            self._impl.integrate_tile_local_sigma_clip(
+                target,
+                extents,
+                multipliers,
+                None if weights is None else _as_f32_c(weights).reshape((self.frame_count,)),
+                float(low_sigma),
+                float(high_sigma),
+                bool(winsorize),
+            )
+        )
+        return (
+            np.asarray(master, dtype=np.float32),
+            np.asarray(weight_map, dtype=np.float32),
+            np.asarray(coverage, dtype=np.float32),
+            np.asarray(low_reject, dtype=np.float32),
+            np.asarray(high_reject, dtype=np.float32),
+            dict(timing),
+        )
+
     def integrate_matrix_warped_mean(
         self,
         matrices: Any,

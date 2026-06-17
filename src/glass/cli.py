@@ -1877,11 +1877,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-tile-local-policy-mode",
-        choices=["record", "apply_mean"],
+        choices=["record", "apply_mean", "apply"],
         default="record",
         help=(
             "how to consume --resident-tile-local-policy-replay; record preserves current output, "
-            "apply_mean enables the opt-in resident stack weighted-mean path for rejection=none"
+            "apply_mean enables the opt-in resident stack weighted-mean path for rejection=none, "
+            "apply enables the matching stack path for none/sigma/winsorized rejection"
         ),
     )
     run.add_argument(
@@ -2163,11 +2164,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-tile-local-policy-mode",
-        choices=["record", "apply_mean"],
+        choices=["record", "apply_mean", "apply"],
         default="record",
         help=(
             "how to consume --resident-tile-local-policy-replay in resident audit; record preserves current "
-            "output, apply_mean enables the opt-in stack weighted-mean path for rejection=none"
+            "output, apply_mean enables the opt-in stack weighted-mean path for rejection=none, "
+            "apply enables the matching stack path for none/sigma/winsorized rejection"
         ),
     )
     audit.add_argument(

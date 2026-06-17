@@ -454,6 +454,224 @@ void glass_integrate_resident_sigma_clip_f32_launch(
       winsorize);
 }
 
+__global__ void glass_integrate_resident_tile_local_sigma_clip_f32_kernel(
+    const float* stack,
+    const float* weights,
+    const unsigned char* target_mask,
+    const int* tile_extents,
+    const float* tile_multipliers,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int tile_count,
+    float low_sigma,
+    float high_sigma,
+    bool winsorize) {
+  const std::size_t pixels_per_frame =
+      static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+  const std::size_t pixel = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (pixel >= pixels_per_frame) {
+    return;
+  }
+
+  const int x = static_cast<int>(pixel % static_cast<std::size_t>(width));
+  const int y = static_cast<int>(pixel / static_cast<std::size_t>(width));
+  float tile_multiplier = 1.0f;
+  for (int tile = 0; tile < tile_count; ++tile) {
+    const int base = tile * 4;
+    const int x0 = tile_extents[base + 0];
+    const int y0 = tile_extents[base + 1];
+    const int x1 = tile_extents[base + 2];
+    const int y1 = tile_extents[base + 3];
+    if (x >= x0 && x < x1 && y >= y0 && y < y1) {
+      tile_multiplier = tile_multipliers[tile];
+      break;
+    }
+  }
+
+  float mean = 0.0f;
+  float count = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    float weight = weights[frame];
+    if (target_mask[frame] != 0) {
+      weight *= tile_multiplier;
+    }
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    const float value = stack[frame * pixels_per_frame + pixel];
+    if (isfinite(value)) {
+      mean += value;
+      count += 1.0f;
+    }
+  }
+  if (count <= 0.0f) {
+    master[pixel] = 0.0f;
+    weight_map[pixel] = 0.0f;
+    coverage_map[pixel] = 0.0f;
+    low_rejection_map[pixel] = 0.0f;
+    high_rejection_map[pixel] = 0.0f;
+    return;
+  }
+  mean /= count;
+
+  float variance = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    float weight = weights[frame];
+    if (target_mask[frame] != 0) {
+      weight *= tile_multiplier;
+    }
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    const float value = stack[frame * pixels_per_frame + pixel];
+    if (isfinite(value)) {
+      const float delta = value - mean;
+      variance += delta * delta;
+    }
+  }
+  const float stddev = sqrtf(variance / count);
+  float center = mean;
+  float scale = stddev;
+  float low_threshold = center - low_sigma * scale;
+  float high_threshold = center + high_sigma * scale;
+  if (winsorize) {
+    float winsor_mean = 0.0f;
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      float weight = weights[frame];
+      if (target_mask[frame] != 0) {
+        weight *= tile_multiplier;
+      }
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        value = low_threshold;
+      } else if (value > high_threshold) {
+        value = high_threshold;
+      }
+      winsor_mean += value;
+    }
+    winsor_mean /= count;
+
+    float winsor_variance = 0.0f;
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      float weight = weights[frame];
+      if (target_mask[frame] != 0) {
+        weight *= tile_multiplier;
+      }
+      if (weight <= 0.0f || !isfinite(weight)) {
+        continue;
+      }
+      float value = stack[frame * pixels_per_frame + pixel];
+      if (!isfinite(value)) {
+        continue;
+      }
+      if (value < low_threshold) {
+        value = low_threshold;
+      } else if (value > high_threshold) {
+        value = high_threshold;
+      }
+      const float delta = value - winsor_mean;
+      winsor_variance += delta * delta;
+    }
+    center = winsor_mean;
+    scale = sqrtf(winsor_variance / count);
+    low_threshold = center - low_sigma * scale;
+    high_threshold = center + high_sigma * scale;
+  }
+
+  float sum = 0.0f;
+  float weight_sum = 0.0f;
+  float coverage = 0.0f;
+  float low_reject = 0.0f;
+  float high_reject = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    float weight = weights[frame];
+    if (target_mask[frame] != 0) {
+      weight *= tile_multiplier;
+    }
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    float value = stack[frame * pixels_per_frame + pixel];
+    if (!isfinite(value)) {
+      continue;
+    }
+    bool rejected = false;
+    if (value < low_threshold) {
+      low_reject += 1.0f;
+      rejected = true;
+    } else if (value > high_threshold) {
+      high_reject += 1.0f;
+      rejected = true;
+    }
+    if (rejected) {
+      continue;
+    }
+    sum += value * weight;
+    weight_sum += weight;
+    coverage += 1.0f;
+  }
+
+  master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
+  weight_map[pixel] = weight_sum;
+  coverage_map[pixel] = coverage;
+  low_rejection_map[pixel] = low_reject;
+  high_rejection_map[pixel] = high_reject;
+}
+
+void glass_integrate_resident_tile_local_sigma_clip_f32_launch(
+    const float* stack,
+    const float* weights,
+    const unsigned char* target_mask,
+    const int* tile_extents,
+    const float* tile_multipliers,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    std::size_t frame_count,
+    int width,
+    int height,
+    int tile_count,
+    float low_sigma,
+    float high_sigma,
+    bool winsorize) {
+  const std::size_t pixels_per_frame =
+      static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_integrate_resident_tile_local_sigma_clip_f32_kernel<<<blocks, threads>>>(
+      stack,
+      weights,
+      target_mask,
+      tile_extents,
+      tile_multipliers,
+      master,
+      weight_map,
+      coverage_map,
+      low_rejection_map,
+      high_rejection_map,
+      frame_count,
+      width,
+      height,
+      tile_count,
+      low_sigma,
+      high_sigma,
+      winsorize);
+}
+
 __global__ void glass_integrate_matrix_warped_mean_f32_kernel(
     const float* stack,
     const float* weights,

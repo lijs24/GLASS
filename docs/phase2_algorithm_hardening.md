@@ -2289,6 +2289,26 @@ integration where applicable.
 - Add direct CUDA CPU-reference tests for the primitive and a resident CLI smoke
   test that proves the opt-in route changes only the target tile as expected.
 
+### S2-Gate 136: Opt-In Resident Tile-Local Rejection
+
+- Add a native `ResidentCalibratedStack.integrate_tile_local_sigma_clip`
+  primitive for resident stack dispatch.
+- Add `--resident-tile-local-policy-mode apply` as the forward path for
+  tile-local policies across `none`, `sigma_clip`, and `winsorized_sigma`
+  rejection modes.
+- Preserve `apply_mean` as a compatibility alias limited to `rejection=none`.
+- Reuse the same replay contract validation as S2-Gate 135: target-frame
+  membership, image-bounded non-overlapping tile extents, and finite
+  non-negative multipliers.
+- Apply tile-local multipliers before resident rejection accumulation so
+  weight, coverage, low-rejection, and high-rejection maps remain produced by
+  the native path.
+- Record native timing, rejection mode, applied tile/frame counts, multiplier
+  statistics, and limitations in `resident_artifacts.json`.
+- Add direct CUDA CPU-reference tests for winsorized tile-local rejection and a
+  resident CLI smoke test proving `apply` routes through the rejection-aware
+  primitive and writes rejection maps.
+
 ## Gate Rules
 
 Each gate requires:

@@ -699,6 +699,89 @@ def test_cli_resident_cuda_tile_local_policy_apply_mean_changes_target_tile(tmp_
     assert np.allclose(master, expected, rtol=2e-5, atol=2e-5)
 
 
+def test_cli_resident_cuda_tile_local_policy_apply_winsorized_sigma_records_rejection_maps(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    replay = tmp_path / "tile_local_replay.json"
+    run = tmp_path / "resident_run_tile_local_apply_sigma"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    light_by_stem = {
+        Path(frame["path"]).stem: frame for frame in plan_payload["frames"] if frame["frame_type"] == "light"
+    }
+    high_id = str(light_by_stem["light_high_noise"]["id"])
+    write_json(
+        replay,
+        {
+            "artifact_type": "tile_local_policy_replay",
+            "target_group": "focus",
+            "residual_stat": "signed_mean",
+            "target_frame_ids": [high_id],
+            "tiles": [
+                {
+                    "tile_index": 0,
+                    "extent": {"x0": 0, "y0": 0, "x1": 8, "y1": 8},
+                    "target_group": "focus",
+                    "action": "boost",
+                    "multiplier": 2.0,
+                }
+            ],
+        },
+    )
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "winsorized_sigma",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-tile-local-policy-replay",
+            str(replay),
+            "--resident-tile-local-policy-mode",
+            "apply",
+        ]
+    ) == 0
+
+    resident = read_json(run / "resident_artifacts.json")
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    tile_local = resident["artifacts"][0]["resident_integration_weighting"]["tile_local_policy_replay"]
+
+    assert tile_local["enabled"] is True
+    assert tile_local["requested_mode"] == "apply"
+    assert tile_local["effective_mode"] == "apply"
+    assert tile_local["applied"] is True
+    assert tile_local["application_status"] == "applied_winsorized_sigma"
+    assert tile_local["native_timing_s"]["timing_model"] == "native_resident_tile_local_sigma_clip_one_sync"
+    assert tile_local["native_timing_s"]["rejection"] == "winsorized_sigma"
+    assert output["coverage_map_path"] is not None
+    assert output["low_rejection_map_path"] is not None
+    assert output["high_rejection_map_path"] is not None
+    assert Path(output["coverage_map_path"]).exists()
+    assert Path(output["low_rejection_map_path"]).exists()
+    assert Path(output["high_rejection_map_path"]).exists()
+    assert any("tile-local policy replay was applied to winsorized_sigma" in warning for warning in integration["warnings"])
+
+
 def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     cuda_module_or_skip()
     manifest = tmp_path / "manifest.json"

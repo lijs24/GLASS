@@ -147,6 +147,124 @@ def test_resident_stack_tile_local_mean_matches_cpu_reference():
     assert np.allclose(weight_map[0, 0], unweighted_weight[0, 0], rtol=1e-6, atol=1e-6)
 
 
+def _expected_tile_local_sigma(
+    frames: list[np.ndarray],
+    weights: np.ndarray,
+    target_mask: np.ndarray,
+    tile_extents: np.ndarray,
+    tile_multipliers: np.ndarray,
+    low_sigma: float,
+    high_sigma: float,
+    winsorize: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    height, width = frames[0].shape
+    master = np.zeros((height, width), dtype=np.float32)
+    weight_map = np.zeros((height, width), dtype=np.float32)
+    coverage = np.zeros((height, width), dtype=np.float32)
+    low_reject = np.zeros((height, width), dtype=np.float32)
+    high_reject = np.zeros((height, width), dtype=np.float32)
+    stack = np.stack(frames, axis=0).astype(np.float32)
+    for y in range(height):
+        for x in range(width):
+            tile_multiplier = 1.0
+            for tile, extent in enumerate(tile_extents):
+                x0, y0, x1, y1 = [int(value) for value in extent]
+                if x0 <= x < x1 and y0 <= y < y1:
+                    tile_multiplier = float(tile_multipliers[tile])
+                    break
+            effective_weights = weights.astype(np.float32).copy()
+            effective_weights[target_mask.astype(bool)] *= np.float32(tile_multiplier)
+            values = stack[:, y, x]
+            valid = np.isfinite(values) & np.isfinite(effective_weights) & (effective_weights > 0.0)
+            if not np.any(valid):
+                continue
+            valid_values = values[valid]
+            mean = np.float32(np.mean(valid_values, dtype=np.float32))
+            std = np.float32(np.sqrt(np.mean((valid_values - mean) ** 2, dtype=np.float32)))
+            low_threshold = np.float32(mean - low_sigma * std)
+            high_threshold = np.float32(mean + high_sigma * std)
+            if winsorize:
+                clipped = np.clip(valid_values, low_threshold, high_threshold).astype(np.float32)
+                center = np.float32(np.mean(clipped, dtype=np.float32))
+                scale = np.float32(np.sqrt(np.mean((clipped - center) ** 2, dtype=np.float32)))
+                low_threshold = np.float32(center - low_sigma * scale)
+                high_threshold = np.float32(center + high_sigma * scale)
+            accepted_sum = np.float32(0.0)
+            accepted_weight = np.float32(0.0)
+            for value, weight in zip(values, effective_weights, strict=True):
+                if not np.isfinite(value) or not np.isfinite(weight) or weight <= 0.0:
+                    continue
+                if value < low_threshold:
+                    low_reject[y, x] += 1.0
+                    continue
+                if value > high_threshold:
+                    high_reject[y, x] += 1.0
+                    continue
+                accepted_sum += np.float32(value * weight)
+                accepted_weight += np.float32(weight)
+                coverage[y, x] += 1.0
+            weight_map[y, x] = accepted_weight
+            if accepted_weight > 0.0:
+                master[y, x] = np.float32(accepted_sum / accepted_weight)
+    return master, weight_map, coverage, low_reject, high_reject
+
+
+def test_resident_stack_tile_local_sigma_clip_matches_cpu_reference():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack"):
+        raise AssertionError("ResidentCalibratedStack is missing from glass_cuda")
+
+    yy, xx = np.indices((5, 6), dtype=np.float32)
+    frames = [
+        (10.0 + xx * 0.1).astype(np.float32),
+        (12.0 + yy * 0.2).astype(np.float32),
+        (50.0 + xx * 0.05).astype(np.float32),
+    ]
+    frames[2][0, 0] = 11.0
+    frames[1][2, 3] = np.nan
+    weights = np.array([1.0, 1.0, 0.5], dtype=np.float32)
+    target_mask = np.array([0, 1, 0], dtype=np.uint8)
+    tile_extents = np.array([[1, 1, 5, 4]], dtype=np.int32)
+    tile_multipliers = np.array([2.0], dtype=np.float32)
+
+    stack = module.ResidentCalibratedStack(len(frames), 5, 6)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+
+    result = stack.integrate_tile_local_sigma_clip(
+        target_mask,
+        tile_extents,
+        tile_multipliers,
+        weights,
+        low_sigma=3.0,
+        high_sigma=1.0,
+        winsorize=True,
+    )
+    master, weight_map, coverage, low_reject, high_reject, timing = result
+    expected = _expected_tile_local_sigma(
+        frames,
+        weights,
+        target_mask,
+        tile_extents,
+        tile_multipliers,
+        low_sigma=3.0,
+        high_sigma=1.0,
+        winsorize=True,
+    )
+
+    assert timing["timing_model"] == "native_resident_tile_local_sigma_clip_one_sync"
+    assert timing["rejection"] == "winsorized_sigma"
+    assert timing["target_frame_count"] == 1
+    assert timing["tile_count"] == 1
+    assert timing["modifies_resident_stack"] is False
+    for actual, expected_map in zip(
+        (master, weight_map, coverage, low_reject, high_reject),
+        expected,
+        strict=True,
+    ):
+        assert np.allclose(actual, expected_map, rtol=2e-5, atol=2e-5)
+
+
 def _matrix_translation(dx: float, dy: float) -> np.ndarray:
     return np.array(
         [[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]],
