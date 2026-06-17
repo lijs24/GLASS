@@ -60,6 +60,10 @@ from glass.report.resident_runtime_compare import (
     build_resident_runtime_compare,
     write_resident_runtime_compare,
 )
+from glass.report.resident_runtime_repeat_plan import (
+    build_resident_runtime_repeat_plan,
+    write_resident_runtime_repeat_plan,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1760,6 +1764,29 @@ def cmd_resident_runtime_compare(args: argparse.Namespace) -> int:
             "best_label": payload.get("summary", {}).get("best_label"),
             "best_elapsed_s": payload.get("summary", {}).get("best_elapsed_s"),
             "recommendation": payload.get("summary", {}).get("recommendation"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_resident_runtime_repeat_plan(args: argparse.Namespace) -> int:
+    payload = build_resident_runtime_repeat_plan(
+        base_run_command=args.base_run_command,
+        root=args.root,
+        label=args.label,
+        repeats=args.repeats,
+        cache_state=args.cache_state,
+        baseline_repeat=args.baseline_repeat,
+    )
+    write_resident_runtime_repeat_plan(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "label": payload.get("label"),
+            "repeat_count": payload.get("repeat_count"),
+            "cache_state": payload.get("cache_state"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -3701,6 +3728,34 @@ def build_parser() -> argparse.ArgumentParser:
     resident_runtime_compare.add_argument("--out", required=True, help="output runtime comparison JSON")
     resident_runtime_compare.add_argument("--markdown", help="optional output Markdown summary")
     resident_runtime_compare.set_defaults(func=cmd_resident_runtime_compare)
+
+    resident_runtime_repeat_plan = sub.add_parser(
+        "resident-runtime-repeat-plan",
+        help="plan repeated resident CUDA runs for cache and I/O variance checks",
+    )
+    resident_runtime_repeat_plan.add_argument(
+        "--base-run-command",
+        required=True,
+        help="run_command.txt from the resident configuration to repeat",
+    )
+    resident_runtime_repeat_plan.add_argument("--root", required=True, help="root directory for planned repeat artifacts")
+    resident_runtime_repeat_plan.add_argument("--label", required=True, help="short label for repeat run ids")
+    resident_runtime_repeat_plan.add_argument("--repeats", type=int, default=3, help="number of repeated runs to plan")
+    resident_runtime_repeat_plan.add_argument(
+        "--cache-state",
+        default="warm",
+        choices=["warm", "cold", "unknown", "dedicated_io_window"],
+        help="operator label for the intended cache/I/O state",
+    )
+    resident_runtime_repeat_plan.add_argument(
+        "--baseline-repeat",
+        type=int,
+        default=1,
+        help="repeat index to use as resident-runtime-compare baseline",
+    )
+    resident_runtime_repeat_plan.add_argument("--out", required=True, help="output repeat plan JSON")
+    resident_runtime_repeat_plan.add_argument("--markdown", help="optional output Markdown plan")
+    resident_runtime_repeat_plan.set_defaults(func=cmd_resident_runtime_repeat_plan)
 
     resident_reg_triage = sub.add_parser(
         "resident-registration-triage",

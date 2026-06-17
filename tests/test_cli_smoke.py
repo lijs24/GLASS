@@ -224,6 +224,7 @@ def test_cli_help_commands():
         "resident-registration-audit",
         "resident-registration-compare",
         "resident-runtime-compare",
+        "resident-runtime-repeat-plan",
         "stack-engine-contract",
         "pipeline-contract",
         "guardrails",

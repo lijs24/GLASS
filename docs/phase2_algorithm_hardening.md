@@ -2700,6 +2700,21 @@ integration where applicable.
 - Recommendation: repeat the preset measurement with warm cache or in a
   dedicated I/O window before changing defaults. Keep `throughput-v1` opt-in.
 
+### S2-Gate 162: Resident Runtime Repeat Plan
+
+- Add `glass resident-runtime-repeat-plan` to convert a known-good
+  `run_command.txt` into repeated resident benchmark commands.
+- Preserve the original scientific and runtime settings, replacing only the
+  `--out` directory for each repeat.
+- Record the intended cache/I/O state label, repeat count, baseline repeat, run
+  directories, commands, and a final `resident-runtime-compare` command.
+- Generate a dedicated-I/O-window repeat plan for the Gate160
+  `throughput-v1` command under
+  `C:\glass_runs\phase2_s2_gate_162_repeat_plan`.
+- Keep this as a planning gate while the local GPU is externally loaded. The
+  next measured gate can execute the generated commands when the machine is in
+  a controlled I/O/GPU window.
+
 ## Gate Rules
 
 Each gate requires:
