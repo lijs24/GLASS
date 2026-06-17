@@ -258,6 +258,7 @@ def test_cli_help_commands():
         "acceptance-audit",
         "release-promotion-decision",
         "windows-release-matrix",
+        "windows-package-smoke",
         "resident-determinism",
         "resident-registration-audit",
         "resident-registration-compare",

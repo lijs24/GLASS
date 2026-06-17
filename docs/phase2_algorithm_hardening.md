@@ -3109,6 +3109,29 @@ integration where applicable.
   PTX forward-JIT fallback matches, CPU fallback present, and zero failed
   checks.
 
+### S2-Gate 183: Windows Portable Package Smoke
+
+- Add `glass windows-package-smoke`, a package-level audit for Windows portable
+  folders and their zip artifacts.
+- Validate package structure: runtime `python.exe`, `glass.cmd`,
+  `glass-doctor.cmd`, README, LICENSE, docs, source stamp, portable zip, and
+  non-empty zip size.
+- Execute package startup checks by default: `glass-doctor.cmd --json ...` and
+  `glass.cmd --help`, recording return codes, output tails, generated doctor
+  JSON, CUDA status, and package recommendation.
+- Keep `--skip-exec` available for structure-only CI fixtures, while real
+  release use should execute the package commands.
+- Build a fresh CPU portable package with
+  `packaging\windows\build_portable.ps1 -Python .\.venv\Scripts\python.exe`.
+- Run package smoke against `.release\windows\GLASS` and
+  `.release\windows\GLASS-Portable-win64.zip` under
+  `C:\glass_runs\phase2_s2_gate_183_windows_package_smoke`.
+- Current real artifact result: status `package_smoke_passed`, recommendation
+  `portable_package_ready_for_next_release_step`, zip size `290938309` bytes,
+  source stamp `4b54e77`, `glass-doctor.cmd` return code `0`, `glass.cmd --help`
+  return code `0`, CPU portable CUDA availability `false`, and zero failed
+  checks.
+
 ## Gate Rules
 
 Each gate requires:

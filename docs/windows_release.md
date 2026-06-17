@@ -112,6 +112,9 @@ Installer:
   --expected-primary-package cuda13 --out windows_release_matrix.json
   --fail-on-not-ready` passes on the release GPU machine before publishing CUDA
   packages.
+- `glass windows-package-smoke --package-root .release\windows\GLASS --zip
+  .release\windows\GLASS-Portable-win64.zip --out windows_package_smoke.json
+  --fail-on-failure` passes for every portable package variant before upload.
 - Release-grade 200-light acceptance uses the benchmark contract plus
   `--pipeline-contract-json`, and all `contract_pipeline_contract_*` checks pass.
 - Acceptance Markdown and HTML report show the release pipeline-contract

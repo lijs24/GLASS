@@ -88,6 +88,10 @@ from glass.report.windows_release_matrix import (
     build_windows_release_matrix,
     write_windows_release_matrix,
 )
+from glass.report.windows_package_smoke import (
+    build_windows_package_smoke,
+    write_windows_package_smoke,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1761,6 +1765,31 @@ def cmd_windows_release_matrix(args: argparse.Namespace) -> int:
         }
     )
     if bool(args.fail_on_not_ready) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_windows_package_smoke(args: argparse.Namespace) -> int:
+    payload = build_windows_package_smoke(
+        package_root=args.package_root,
+        zip_path=args.zip,
+        expected_source=args.expected_source,
+        require_cuda=args.require_cuda,
+        execute=not args.skip_exec,
+        timeout_s=args.timeout,
+    )
+    write_windows_package_smoke(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "recommendation": payload["recommendation"],
+            "zip_size_bytes": payload["package"]["zip_size_bytes"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
         return 2
     return 0
 
@@ -3993,6 +4022,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the Windows release matrix passes",
     )
     windows_release_matrix.set_defaults(func=cmd_windows_release_matrix)
+
+    windows_package_smoke = sub.add_parser(
+        "windows-package-smoke",
+        help="smoke-test a Windows portable package folder and optional zip artifact",
+    )
+    windows_package_smoke.add_argument("--package-root", required=True, help="portable GLASS package root")
+    windows_package_smoke.add_argument("--zip", help="optional portable zip path; defaults beside package root")
+    windows_package_smoke.add_argument("--out", required=True, help="output package smoke JSON")
+    windows_package_smoke.add_argument("--markdown", help="optional output Markdown summary")
+    windows_package_smoke.add_argument("--expected-source", help="expected source stamp value")
+    windows_package_smoke.add_argument(
+        "--require-cuda",
+        action="store_true",
+        help="require portable doctor to report CUDA available",
+    )
+    windows_package_smoke.add_argument(
+        "--skip-exec",
+        action="store_true",
+        help="only validate package files; do not execute glass-doctor.cmd or glass.cmd",
+    )
+    windows_package_smoke.add_argument(
+        "--timeout",
+        type=int,
+        default=120,
+        help="per-command timeout in seconds for package execution smoke",
+    )
+    windows_package_smoke.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless package smoke passes",
+    )
+    windows_package_smoke.set_defaults(func=cmd_windows_package_smoke)
 
     resident_det = sub.add_parser(
         "resident-determinism",
