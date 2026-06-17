@@ -6,6 +6,7 @@ from typing import Any
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 from glass.report.dq_map_verify import summarize_count_map_pixels, summarize_dq_map_pixels
+from glass.report.resident_result_contract import build_resident_output_contract
 
 
 _CORE_INTEGRATION_MAPS = {
@@ -369,6 +370,41 @@ def _stack_result_contract_state(output: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resident_result_contract_state(
+    output: dict[str, Any],
+    *,
+    integration: dict[str, Any],
+    run_root: Path,
+    index: int,
+) -> dict[str, Any]:
+    required = output.get("backend") == "cuda_resident_stack" or output.get("memory_mode") == "resident"
+    if not required:
+        return {
+            "required": False,
+            "present": False,
+            "passed": False,
+            "status": "not_required",
+            "check_count": 0,
+            "contract_type": None,
+        }
+    contract = build_resident_output_contract(
+        output,
+        run_root=run_root,
+        index=index,
+        parent_rejection=str(integration.get("rejection") or "none"),
+        pixel_verify=False,
+    )
+    return {
+        "required": True,
+        "present": True,
+        "passed": bool(contract.get("passed")),
+        "status": contract.get("status"),
+        "check_count": len(contract.get("checks") or []),
+        "contract_type": contract.get("contract_type"),
+        "contract": contract,
+    }
+
+
 def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, output in enumerate(integration.get("outputs") or []):
@@ -379,6 +415,12 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
         item = str(output.get("filter") or index)
         dq_required = not _map_skipped(output, "dq")
         result_contract = _stack_result_contract_state(output)
+        resident_contract = _resident_result_contract_state(
+            output,
+            integration=integration,
+            run_root=run_root,
+            index=index,
+        )
         rows.append(
             {
                 "item": item,
@@ -394,6 +436,7 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
                 "dq_provenance_summary_present": isinstance(summary, dict),
                 "dq_provenance_engine": summary.get("engine") if isinstance(summary, dict) else None,
                 "stack_result_contract": result_contract,
+                "resident_result_contract": resident_contract,
                 "dq_contract_ok": (
                     (not dq_required)
                     or (
@@ -561,6 +604,24 @@ def build_pipeline_contract_audit(
                 ],
             },
             "CPU StackEngine integration outputs must carry an embedded passing result contract.",
+        ),
+        _check(
+            "integration_resident_result_contract",
+            bool(integration_rows)
+            and all(
+                (not row["resident_result_contract"]["required"]) or row["resident_result_contract"]["passed"]
+                for row in integration_rows
+            ),
+            {
+                "output_count": len(integration_rows),
+                "required_count": sum(1 for row in integration_rows if row["resident_result_contract"]["required"]),
+                "failed": [
+                    row["item"]
+                    for row in integration_rows
+                    if row["resident_result_contract"]["required"] and not row["resident_result_contract"]["passed"]
+                ],
+            },
+            "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
         ),
     ]
     if pixel_verify:

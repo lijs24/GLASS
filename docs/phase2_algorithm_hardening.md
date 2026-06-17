@@ -2819,6 +2819,20 @@ integration where applicable.
 - Current real artifact result: passed, with one H output, active frame count
   `193`, input frame count `200`, and nine resident output checks.
 
+### S2-Gate 170: Pipeline Contract Exposes Resident Result Contract
+
+- Extend `glass pipeline-contract` so resident CUDA integration rows expose a
+  `resident_result_contract` summary.
+- Add `integration_resident_result_contract`: resident CUDA outputs must satisfy
+  the resident result-contract audit.
+- Reuse the S2-Gate169 contract logic in JSON-only mode inside pipeline-contract
+  so normal pipeline audits do not perform extra large FITS reads unless pixel
+  verification is explicitly requested elsewhere.
+- Add tests for passing resident outputs and resident outputs with missing
+  source-term provenance.
+- Run the updated pipeline-contract against the Gate160 `throughput-v1` resident
+  run under `C:\glass_runs\phase2_s2_gate_170_pipeline_resident_contract`.
+
 ## Gate Rules
 
 Each gate requires:

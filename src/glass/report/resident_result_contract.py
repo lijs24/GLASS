@@ -321,6 +321,27 @@ def _resident_output_contract(
     }
 
 
+def build_resident_output_contract(
+    output: dict[str, Any],
+    *,
+    run_root: str | Path,
+    index: int = 0,
+    parent_rejection: str = "none",
+    pixel_verify: bool = False,
+    pixel_verify_tile_size: int = 2048,
+    pixel_tolerance: int = 0,
+) -> dict[str, Any]:
+    return _resident_output_contract(
+        output,
+        run_root=Path(run_root),
+        index=index,
+        parent_rejection=parent_rejection,
+        pixel_verify=pixel_verify,
+        pixel_verify_tile_size=pixel_verify_tile_size,
+        pixel_tolerance=pixel_tolerance,
+    )
+
+
 def build_resident_result_contract(
     run_dir: str | Path,
     *,
