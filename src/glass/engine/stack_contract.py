@@ -46,6 +46,20 @@ def _summary_matches(actual: dict[str, Any], expected: dict[str, Any]) -> dict[s
     }
 
 
+def _count_map_summary(value: np.ndarray) -> dict[str, int]:
+    data = np.asarray(value, dtype=np.float32)
+    finite = np.isfinite(data)
+    finite_data = np.where(finite, data, 0.0)
+    rounded = np.rint(finite_data)
+    return {
+        "positive_pixels": int(np.count_nonzero(finite_data > 0)),
+        "rounded_sample_sum": int(round(float(np.sum(finite_data, dtype=np.float64)))),
+        "nonfinite_pixels": int(np.count_nonzero(~finite)),
+        "negative_pixels": int(np.count_nonzero(finite & (data < 0))),
+        "fractional_pixels": int(np.count_nonzero(finite & (np.abs(data - rounded) > 1.0e-3))),
+    }
+
+
 def build_stack_engine_result_contract(
     result: Any,
     *,
@@ -167,6 +181,43 @@ def build_stack_engine_result_contract(
                     "high_rejection_pixels": high_pixels,
                     "dq_high_rejected_pixels": dq_high,
                 },
+            )
+        )
+    for label, rejection_map in (("low", low), ("high", high)):
+        if rejection_map is None:
+            continue
+        summary = _count_map_summary(rejection_map)
+        checks.append(
+            _check(
+                f"{label}_rejection_map_counts_are_valid",
+                summary["nonfinite_pixels"] == 0
+                and summary["negative_pixels"] == 0
+                and summary["fractional_pixels"] == 0,
+                summary,
+                "Rejection maps are per-pixel rejected-sample counts.",
+            )
+        )
+        metric_samples = _summary_count(result.metrics, f"{label}_rejected")
+        checks.append(
+            _check(
+                f"{label}_rejection_sample_sum_matches_metrics",
+                summary["rounded_sample_sum"] == metric_samples,
+                {
+                    "map_rejected_sample_sum": summary["rounded_sample_sum"],
+                    "metrics_rejected_samples": metric_samples,
+                },
+            )
+        )
+        provenance_pixels = int(provenance.get(f"output_{label}_rejected_pixels") or 0)
+        checks.append(
+            _check(
+                f"{label}_rejection_pixels_match_provenance",
+                summary["positive_pixels"] == provenance_pixels,
+                {
+                    "map_positive_pixels": summary["positive_pixels"],
+                    "provenance_rejected_pixels": provenance_pixels,
+                },
+                "Provenance records pixels touched by rejection, not rejected-sample totals.",
             )
         )
 

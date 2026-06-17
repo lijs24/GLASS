@@ -3857,6 +3857,22 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 231: StackEngine Rejection Sample Accounting Contract
+
+- Extend the StackEngine result contract so low/high rejection count maps are
+  validated as per-pixel rejected-sample counts, not just binary masks.
+- Require each rejection map to contain finite, non-negative, near-integer
+  counts, and require the rounded map sum to match the corresponding
+  `metrics.low_rejected` or `metrics.high_rejected` sample total.
+- Require rejection-map positive pixel counts to match DQ provenance
+  `output_low_rejected_pixels` and `output_high_rejected_pixels`, while DQ
+  flags continue to mark pixels touched by rejection rather than sample totals.
+- Add focused tests for the important case where two rejected samples land in
+  the same pixel: the high-rejection map sum is larger than the DQ pixel count,
+  and both meanings must be preserved.
+- Keep this gate algorithm-contract scoped: no CUDA kernel, runtime default,
+  release packaging, or external-reference behavior changes.
+
 ## Gate Rules
 
 Each gate requires:

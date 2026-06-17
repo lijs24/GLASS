@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from glass.engine.contracts import CombinePolicy, DQFlag, DQMask, OutputMapPolicy, StackRequest, TileWindow
+from glass.engine.contracts import CombinePolicy, DQFlag, DQMask, OutputMapPolicy, RejectionPolicy, StackRequest, TileWindow
 from glass.engine.stack_contract import build_stack_engine_result_contract
 from glass.engine.stack_engine import CPUStackEngine, StackEngineResult
 
@@ -44,11 +44,13 @@ def _request(
     *,
     combine: CombinePolicy | None = None,
     maps: OutputMapPolicy | None = None,
+    rejection: RejectionPolicy | None = None,
 ) -> StackRequest:
     return StackRequest(
         frame_ids=tuple(f"f{i}" for i in range(frame_count)),
         source_kind="light",
         combine=combine or CombinePolicy(),
+        rejection=rejection or RejectionPolicy(),
         output_maps=maps or OutputMapPolicy(variance=True, dq=True),
     )
 
@@ -142,3 +144,65 @@ def test_stack_engine_result_contract_detects_rejection_dq_mismatch() -> None:
     assert contract["passed"] is False
     checks = {item["name"]: item for item in contract["checks"]}
     assert checks["low_rejection_map_matches_dq"]["passed"] is False
+
+
+def test_stack_engine_result_contract_distinguishes_rejected_samples_from_pixels() -> None:
+    frames = [
+        np.ones((3, 3), dtype=np.float32),
+        np.ones((3, 3), dtype=np.float32),
+        np.ones((3, 3), dtype=np.float32),
+        np.ones((3, 3), dtype=np.float32) * 100.0,
+        np.ones((3, 3), dtype=np.float32) * 101.0,
+    ]
+    request = _request(
+        len(frames),
+        rejection=RejectionPolicy(method="sigma", high_sigma=1.0, min_samples=3, max_reject_fraction=0.5),
+        maps=OutputMapPolicy(coverage=True, weight=True, low_rejection=True, high_rejection=True, dq=True),
+    )
+
+    result = CPUStackEngine(tile_size=2).stack(request, _sources(frames))
+    contract = result.dq_provenance["result_contract"]
+    checks = {item["name"]: item for item in contract["checks"]}
+
+    assert contract["passed"] is True
+    assert np.all(result.high_rejection_map == 2)
+    assert checks["high_rejection_map_matches_dq"]["evidence"]["high_rejection_pixels"] == 9
+    assert checks["high_rejection_sample_sum_matches_metrics"]["evidence"]["map_rejected_sample_sum"] == 18
+    assert checks["high_rejection_sample_sum_matches_metrics"]["passed"] is True
+    assert checks["high_rejection_pixels_match_provenance"]["passed"] is True
+
+
+def test_stack_engine_result_contract_detects_rejection_sample_metric_drift() -> None:
+    dq = DQMask.empty((2, 2)).mark(DQFlag.HIGH_REJECTED, np.array([[True, False], [False, False]]))
+    result = StackEngineResult(
+        master=np.zeros((2, 2), dtype=np.float32),
+        coverage_map=np.ones((2, 2), dtype=np.float32) * 2,
+        low_rejection_map=np.zeros((2, 2), dtype=np.float32),
+        high_rejection_map=np.array([[2, 0], [0, 0]], dtype=np.float32),
+        dq_mask=dq,
+        dq_provenance={
+            "input_samples": 8,
+            "output_coverage_zero_pixels": 0,
+            "output_high_rejected_pixels": 1,
+            "output_low_rejected_pixels": 0,
+            "output_dq_summary": {"valid": 3, "high_rejected": 1},
+        },
+        metrics={"valid_samples": 8, "low_rejected": 0, "high_rejected": 1},
+    )
+    request = StackRequest(
+        frame_ids=("a", "b"),
+        source_kind="light",
+        output_maps=OutputMapPolicy(coverage=True, low_rejection=True, high_rejection=True, dq=True),
+    )
+
+    contract = build_stack_engine_result_contract(result, request=request)
+    checks = {item["name"]: item for item in contract["checks"]}
+
+    assert contract["passed"] is False
+    assert checks["high_rejection_map_matches_dq"]["passed"] is True
+    assert checks["high_rejection_pixels_match_provenance"]["passed"] is True
+    assert checks["high_rejection_sample_sum_matches_metrics"]["passed"] is False
+    assert checks["high_rejection_sample_sum_matches_metrics"]["evidence"] == {
+        "map_rejected_sample_sum": 2,
+        "metrics_rejected_samples": 1,
+    }
