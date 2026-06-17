@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from glass.cli import main
+from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.stack_engine_contract import build_stack_engine_contract_audit
 from glass.synthetic.generator import generate_synthetic_dataset
@@ -36,8 +37,12 @@ def test_stack_engine_contract_passes_for_cpu_audit_run(tmp_path: Path):
     assert audit["status"] == "passed"
     assert audit["calibration"]["master_count"] >= 3
     assert all(item["contract_ok"] for item in audit["calibration"]["masters"])
+    assert all(item["science_contract_ok"] for item in audit["calibration"]["masters"])
+    assert all(item["science_contract"]["passed"] for item in audit["calibration"]["masters"])
     assert audit["integration"]["output_count"] >= 1
     assert all(item["contract_ok"] for item in audit["integration"]["outputs"])
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert checks["calibration_masters_science_auditable"]["passed"] is True
     adoption = audit["adoption"]
     assert adoption["target_engine"] == "stack_engine_cpu"
     assert adoption["surface_count"] == (
@@ -529,3 +534,58 @@ def test_stack_engine_contract_cli_uses_resident_calibration_contract_json(tmp_p
     audit = read_json(out)
     assert audit["resident_calibration_contract_attached"] is True
     assert audit["default_promotion"]["ready"] is True
+
+
+def test_stack_engine_contract_requires_master_stats_and_semantics(tmp_path: Path):
+    run = tmp_path / "run"
+    master_dir = run / "calib_cache" / "masters"
+    master_dir.mkdir(parents=True)
+    master_path = master_dir / "master_bias_bad.fits"
+    write_fits_data(master_path, [[1.0, 2.0], [3.0, 4.0]])
+    provenance = {
+        "schema_version": 1,
+        "input_samples": 8,
+        "output_dq_summary": None,
+        "output_coverage_zero_pixels": 0,
+        "result_contract": {
+            "schema_version": 1,
+            "contract_type": "stack_engine_result_contract",
+            "passed": True,
+            "status": "passed",
+            "checks": [{"name": "fixture", "passed": True}],
+        },
+    }
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "masters": {
+                "bias_bad": {
+                    "type": "bias",
+                    "path": str(master_path),
+                    "tile_stack_mode": "stack_engine_cpu",
+                    "stack_engine_enabled": True,
+                    "stack_engine_fallback_reason": None,
+                    "stack_engine_dq_provenance": provenance,
+                    "dq_provenance_summary": {
+                        "source_schema": "stack_engine_dq_provenance",
+                        "engine": "stack_engine_cpu",
+                        "stage": "master_calibration",
+                        "item": "bias_bad",
+                        "input_samples": 8,
+                    },
+                }
+            }
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(run, scope="calibration")
+    checks = {item["name"]: item for item in audit["checks"]}
+    master = audit["calibration"]["masters"][0]
+
+    assert audit["passed"] is False
+    assert master["result_contract_passed"] is True
+    assert master["science_contract_ok"] is False
+    assert master["science_contract"]["stats"]["missing_keys"] == ["min", "max", "mean", "median", "std"]
+    assert checks["calibration_masters_science_auditable"]["passed"] is False
+    assert checks["calibration_masters_use_stack_engine"]["passed"] is False
+    assert audit["adoption"]["gap_surfaces"][0]["gap_reason"] == "master_calibration_science_contract_failed"

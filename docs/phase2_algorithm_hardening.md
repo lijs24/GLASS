@@ -3466,6 +3466,21 @@ integration where applicable.
 - Validate with passing/failing preflight tests and a real release-plan
   artifact using the latest Gate204 handoff status and regression comparison.
 
+### S2-Gate 206: Master Calibration Surface Contract
+
+- Harden the StackEngine default contract for master bias/dark/flat surfaces
+  so a master frame is not accepted merely because it used the expected engine.
+- Require local master calibration records to expose an existing output path,
+  finite `min/max/mean/median/std` statistics, tile size, master rejection
+  policy, and type-specific calibration semantics such as dark bias semantics
+  and flat per-frame normalization metadata.
+- Keep resident CUDA master calibration compatible through the attached
+  `resident_cuda_calibration_contract`, which remains the authoritative
+  resident surface audit.
+- Surface failures as `calibration_masters_science_auditable` and
+  `master_calibration_science_contract_failed` so release guardrails can point
+  at missing stats/semantics instead of reporting a generic StackEngine gap.
+
 ## Gate Rules
 
 Each gate requires:

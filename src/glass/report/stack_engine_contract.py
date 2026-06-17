@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,15 @@ def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") ->
     }
 
 
+def _artifact_path_exists(path_value: Any, run_root: Path) -> bool:
+    if not path_value:
+        return False
+    path = Path(str(path_value))
+    if path.is_absolute():
+        return path.exists()
+    return path.exists() or (run_root / path).exists()
+
+
 def _summary_is_stack_engine(summary: Any, *, stage: str | None = None) -> bool:
     if not isinstance(summary, dict):
         return False
@@ -40,6 +50,132 @@ def _positive_int(value: Any) -> bool:
         return int(value) > 0
     except (TypeError, ValueError):
         return False
+
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return numeric
+
+
+def _master_stats_contract(payload: dict[str, Any]) -> dict[str, Any]:
+    stats = payload.get("stats") if isinstance(payload.get("stats"), dict) else {}
+    required = ("min", "max", "mean", "median", "std")
+    values = {key: _finite_float(stats.get(key)) for key in required}
+    missing = [key for key in required if key not in stats]
+    nonfinite = [key for key, value in values.items() if value is None and key in stats]
+    bounds_ok = False
+    if all(values[key] is not None for key in ("min", "max", "mean", "median")):
+        minimum = float(values["min"])
+        maximum = float(values["max"])
+        mean = float(values["mean"])
+        median = float(values["median"])
+        bounds_ok = minimum <= mean <= maximum and minimum <= median <= maximum
+    std_ok = values["std"] is not None and float(values["std"]) >= 0.0
+    passed = not missing and not nonfinite and bounds_ok and std_ok
+    return {
+        "passed": passed,
+        "required_keys": list(required),
+        "missing_keys": missing,
+        "nonfinite_keys": nonfinite,
+        "bounds_ok": bounds_ok,
+        "std_nonnegative": std_ok,
+        "stats": {key: stats.get(key) for key in required if key in stats},
+    }
+
+
+def _master_semantics_contract(payload: dict[str, Any]) -> dict[str, Any]:
+    master_type = str(payload.get("type") or "")
+    checks: list[dict[str, Any]] = [
+        _check(
+            "type_recorded",
+            master_type in {"bias", "dark", "flat"},
+            {"type": payload.get("type"), "allowed": ["bias", "dark", "flat"]},
+        ),
+        _check(
+            "tile_size_recorded",
+            _positive_int(payload.get("tile_size")),
+            {"tile_size": payload.get("tile_size")},
+        ),
+        _check(
+            "master_rejection_recorded",
+            bool(payload.get("master_rejection")),
+            {"master_rejection": payload.get("master_rejection")},
+        ),
+    ]
+    if master_type == "dark":
+        checks.extend(
+            [
+                _check(
+                    "dark_bias_semantics_recorded",
+                    isinstance(payload.get("master_dark_includes_bias"), bool),
+                    {"master_dark_includes_bias": payload.get("master_dark_includes_bias")},
+                ),
+                _check(
+                    "dark_source_bias_subtraction_recorded",
+                    isinstance(payload.get("bias_subtracted_from_source"), bool),
+                    {"bias_subtracted_from_source": payload.get("bias_subtracted_from_source")},
+                ),
+            ]
+        )
+    elif master_type == "flat":
+        per_flat = payload.get("per_flat_normalization")
+        checks.extend(
+            [
+                _check(
+                    "flat_normalization_recorded",
+                    payload.get("normalization") in {"mean", "median"},
+                    {"normalization": payload.get("normalization")},
+                ),
+                _check(
+                    "flat_normalization_stage_recorded",
+                    payload.get("normalization_stage") == "per_flat",
+                    {"normalization_stage": payload.get("normalization_stage")},
+                ),
+                _check(
+                    "flat_floor_recorded",
+                    _finite_float(payload.get("flat_floor")) is not None,
+                    {"flat_floor": payload.get("flat_floor")},
+                ),
+                _check(
+                    "per_flat_normalization_recorded",
+                    isinstance(per_flat, list) and bool(per_flat),
+                    {
+                        "count": len(per_flat) if isinstance(per_flat, list) else None,
+                    },
+                ),
+            ]
+        )
+    passed = all(item["passed"] for item in checks)
+    return {
+        "passed": passed,
+        "master_type": master_type or None,
+        "failed_checks": [item["name"] for item in checks if not item["passed"]],
+        "checks": checks,
+    }
+
+
+def _master_science_contract(payload: dict[str, Any], *, path_exists: bool) -> dict[str, Any]:
+    stats_contract = _master_stats_contract(payload)
+    semantics_contract = _master_semantics_contract(payload)
+    checks = [
+        _check("master_path_exists", path_exists, {"path": payload.get("path")}),
+        _check("master_stats_contract", bool(stats_contract.get("passed")), stats_contract),
+        _check("master_semantics_contract", bool(semantics_contract.get("passed")), semantics_contract),
+    ]
+    return {
+        "schema_version": 1,
+        "contract_type": "master_calibration_surface_contract",
+        "passed": all(item["passed"] for item in checks),
+        "status": "passed" if all(item["passed"] for item in checks) else "failed",
+        "checks": checks,
+        "stats": stats_contract,
+        "semantics": semantics_contract,
+    }
 
 
 def _result_contract_passed(provenance: Any) -> bool:
@@ -133,6 +269,17 @@ def _resident_calibration_records(
         if not isinstance(output, dict):
             continue
         passed = payload.get("passed") is True and output.get("passed") is True
+        science_contract = {
+            "schema_version": 1,
+            "contract_type": "resident_calibration_surface_contract",
+            "passed": passed,
+            "status": "passed" if passed else "failed",
+            "source": "resident_cuda_calibration_contract",
+            "note": (
+                "Resident calibration surfaces are audited by the attached resident CUDA "
+                "calibration contract; per-master CPU stats are not required here."
+            ),
+        }
         records.append(
             {
                 "name": f"resident_calibration_{output.get('filter') or output.get('index')}",
@@ -159,6 +306,8 @@ def _resident_calibration_records(
                 "summary_source_schema": "resident_cuda_calibration_contract",
                 "summary_engine": "cuda_resident_stack",
                 "summary_stage": "master_calibration",
+                "science_contract_ok": passed,
+                "science_contract": science_contract,
                 "contract_ok": passed,
             }
         )
@@ -167,17 +316,19 @@ def _resident_calibration_records(
 
 def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[str, Any]:
     path_value = payload.get("path")
-    path = Path(str(path_value)) if path_value else None
-    exists = False
-    if path is not None:
-        exists = path.exists() if path.is_absolute() else (run_root / path).exists()
+    exists = _artifact_path_exists(path_value, run_root)
     provenance = payload.get("stack_engine_dq_provenance")
     summary = payload.get("dq_provenance_summary")
+    science_contract = _master_science_contract(payload, path_exists=exists)
+    science_ok = bool(science_contract.get("passed"))
     return {
         "name": name,
         "type": payload.get("type"),
         "path": path_value,
         "path_exists": exists,
+        "stats_present": isinstance(payload.get("stats"), dict),
+        "science_contract_ok": science_ok,
+        "science_contract": science_contract,
         "tile_stack_mode": payload.get("tile_stack_mode"),
         "stack_engine_enabled": bool(payload.get("stack_engine_enabled")),
         "fallback_reason": payload.get("stack_engine_fallback_reason"),
@@ -195,6 +346,7 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
             and _positive_int(provenance.get("input_samples"))
             and _result_contract_passed(provenance)
             and _summary_is_stack_engine(summary, stage="master_calibration")
+            and science_ok
         ),
     }
 
@@ -275,6 +427,8 @@ def _adoption_surface_record(surface: str, record: dict[str, Any]) -> dict[str, 
         gap_reason = ""
     elif family == "cuda_resident_stack":
         gap_reason = "resident_cuda_surface"
+    elif not record.get("science_contract_ok") and surface == "master_calibration":
+        gap_reason = "master_calibration_science_contract_failed"
     elif family == "stack_engine_cpu" and not result_contract_passed:
         gap_reason = "missing_or_failed_result_contract"
     elif fallback:
@@ -293,6 +447,7 @@ def _adoption_surface_record(surface: str, record: dict[str, Any]) -> dict[str, 
         "stack_result_contract_passed": record.get("stack_result_contract_passed"),
         "resident_result_contract_passed": record.get("resident_result_contract_passed"),
         "resident_calibration_contract_passed": record.get("resident_calibration_contract_passed"),
+        "science_contract_ok": record.get("science_contract_ok"),
         "contract_ok": record.get("contract_ok"),
         "fallback_reason": fallback,
         "stack_engine_contract_ready": stack_engine_contract_ready,
@@ -479,6 +634,23 @@ def build_stack_engine_contract_audit(
                         "failed": [item["name"] for item in masters if not item["contract_ok"]],
                     },
                     "All master bias/dark/flat records must use StackEngine without fallback.",
+                ),
+                _check(
+                    "calibration_masters_science_auditable",
+                    bool(masters) and all(item.get("science_contract_ok") for item in masters),
+                    {
+                        "master_count": len(masters),
+                        "failed": [
+                            {
+                                "name": item["name"],
+                                "type": item.get("type"),
+                                "science_contract": item.get("science_contract"),
+                            }
+                            for item in masters
+                            if not item.get("science_contract_ok")
+                        ],
+                    },
+                    "Master calibration records must include output stats and calibration semantics.",
                 ),
             ]
         )
