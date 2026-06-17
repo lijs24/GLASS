@@ -2577,6 +2577,20 @@ integration where applicable.
 - Keep this as an artifact/decision gate only. It must not execute integration,
   run image compares, mutate image pixels, or alter resident defaults.
 
+### S2-Gate 154: Runtime-Focused Candidate Sweep Plan
+
+- Add `glass candidate-runtime-sweep-plan` to derive runtime-only experiment
+  variants from the accepted `agreement_soft_downweight` candidate command.
+- Keep science parameters fixed and vary only resident orchestration knobs such
+  as prefetch depth/workers and calibration batch/stream/wave settings.
+- Generate explicit run, reference-compare, baseline-compare,
+  acceptance-audit, candidate-comparison, and final sweep-summary commands for
+  each planned variant.
+- Preserve failed variants as candidate-comparison artifacts by not using
+  per-candidate fail-fast behavior in generated comparison commands.
+- Keep this as a planning gate only. It must not execute integration, run image
+  compares, mutate image pixels, or alter resident defaults.
+
 ## Gate Rules
 
 Each gate requires:

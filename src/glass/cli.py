@@ -88,6 +88,10 @@ from glass.report.candidate_comparison_sweep import (
     build_candidate_comparison_sweep,
     write_candidate_comparison_sweep,
 )
+from glass.report.candidate_runtime_sweep_plan import (
+    build_candidate_runtime_sweep_plan,
+    write_candidate_runtime_sweep_plan,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -1331,6 +1335,37 @@ def cmd_candidate_comparison_sweep(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_no_passed and not summary.get("passed") else 0
+
+
+def cmd_candidate_runtime_sweep_plan(args: argparse.Namespace) -> int:
+    payload = build_candidate_runtime_sweep_plan(
+        args.comparison,
+        root=args.root,
+        base_run_command=args.base_run_command,
+        baseline_run=args.baseline_run,
+        baseline_compare_json=args.baseline_compare_json,
+        reference=args.reference,
+        manifest=args.manifest,
+        wbpp_result=args.wbpp_result,
+        benchmark_contract=args.benchmark_contract,
+        glass_scale=args.glass_scale,
+        glass_offset=args.glass_offset,
+        min_coverage=args.min_coverage,
+        min_speedup_vs_reference=args.min_speedup_vs_reference,
+        variants=args.variant,
+    )
+    write_candidate_runtime_sweep_plan(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "variant_count": payload.get("variant_count"),
+            "source_candidate_id": payload.get("source_candidate_id"),
+            "recommendation": payload.get("recommendation"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
 
 
 def cmd_tile_local_policy_replay(args: argparse.Namespace) -> int:
@@ -3143,6 +3178,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when no candidate comparison passed",
     )
     candidate_comparison_sweep.set_defaults(func=cmd_candidate_comparison_sweep)
+
+    candidate_runtime_sweep_plan = sub.add_parser(
+        "candidate-runtime-sweep-plan",
+        help="plan runtime-only sweep variants for an accepted candidate comparison",
+    )
+    candidate_runtime_sweep_plan.add_argument("--comparison", required=True, help="source candidate-comparison JSON")
+    candidate_runtime_sweep_plan.add_argument("--root", required=True, help="root directory for planned artifacts")
+    candidate_runtime_sweep_plan.add_argument(
+        "--base-run-command",
+        required=True,
+        help="run_command.txt from the accepted candidate run",
+    )
+    candidate_runtime_sweep_plan.add_argument("--baseline-run", required=True, help="baseline GLASS run directory")
+    candidate_runtime_sweep_plan.add_argument("--baseline-compare-json", required=True)
+    candidate_runtime_sweep_plan.add_argument("--reference", required=True, help="reference master for compare commands")
+    candidate_runtime_sweep_plan.add_argument("--manifest", required=True, help="manifest for acceptance-audit commands")
+    candidate_runtime_sweep_plan.add_argument("--wbpp-result", required=True, help="black-box result bundle")
+    candidate_runtime_sweep_plan.add_argument("--out", required=True, help="output runtime sweep plan JSON")
+    candidate_runtime_sweep_plan.add_argument("--markdown", help="optional output Markdown plan")
+    candidate_runtime_sweep_plan.add_argument("--benchmark-contract", help="optional benchmark contract")
+    candidate_runtime_sweep_plan.add_argument("--glass-scale", type=float)
+    candidate_runtime_sweep_plan.add_argument("--glass-offset", type=float)
+    candidate_runtime_sweep_plan.add_argument("--min-coverage", type=float)
+    candidate_runtime_sweep_plan.add_argument("--min-speedup-vs-reference", type=float)
+    candidate_runtime_sweep_plan.add_argument(
+        "--variant",
+        action="append",
+        help="runtime variant id to include; may be repeated, defaults to all built-in variants",
+    )
+    candidate_runtime_sweep_plan.set_defaults(func=cmd_candidate_runtime_sweep_plan)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",

@@ -137,6 +137,7 @@ def test_cli_help_commands():
         "tile-local-rejection-registration-plan",
         "candidate-comparison",
         "candidate-comparison-sweep",
+        "candidate-runtime-sweep-plan",
         "tile-local-policy-replay",
         "tile-local-policy-subset",
         "tile-local-apply-experiment",
