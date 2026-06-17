@@ -1,0 +1,101 @@
+{
+  "artifact_type": "candidate_runtime_sweep_plan",
+  "base_run_command": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\run_command.txt",
+  "baseline_compare_json": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_vs_reference.json",
+  "baseline_run": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident",
+  "created_at": "2026-06-17T19:53:47+00:00",
+  "limitations": [
+    "This plan only changes runtime orchestration options; science options are inherited from the accepted candidate command.",
+    "The plan writes commands but does not execute integration or image comparison.",
+    "Generated commands are specific to the supplied benchmark paths and should be regenerated if artifacts move."
+  ],
+  "recommendation": "execute_variants_sequentially_then_run_sweep_summary",
+  "root": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan",
+  "schema_version": 1,
+  "source_candidate_id": "throughput_v1_preset_confirmation",
+  "source_comparison": "C:\\glass_runs\\phase2_s2_gate_160_preset_confirmation\\comparison\\throughput_v1_candidate_comparison.json",
+  "source_recommendation": "eligible_but_needs_runtime_sweep",
+  "sweep_command": "glass candidate-comparison-sweep --comparison C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\retry_settings_control_candidate_comparison.json --comparison C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\prefetch12_workers7_candidate_comparison.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\candidate_runtime_sweep.json --markdown C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\candidate_runtime_sweep.md --fail-on-no-passed",
+  "variant_count": 2,
+  "variants": [
+    {
+      "artifacts": {
+        "acceptance_contract_bundle_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control\\acceptance_contract_bundle.json",
+        "acceptance_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\retry_settings_control_acceptance.json",
+        "candidate_comparison_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\retry_settings_control_candidate_comparison.json",
+        "compare_baseline_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_baseline.json",
+        "compare_reference_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_reference.json",
+        "guardrails_report_html": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control\\report.html",
+        "guardrails_summary_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control\\guardrails_summary.json",
+        "pipeline_contract_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control\\pipeline_contract.json",
+        "resident_calibration_artifacts_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control\\calibration_artifacts.json",
+        "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control\\resident_result_contract.json",
+        "resident_result_contract_source": "run_default",
+        "stack_engine_contract_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control\\stack_engine_contract.json"
+      },
+      "changed_options": {},
+      "commands": {
+        "acceptance_audit": "glass acceptance-audit --manifest C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_reference.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\retry_settings_control_acceptance.json --benchmark-contract benchmarks\\phase2_m38_h_200_contract.json --contract-bundle C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control\\acceptance_contract_bundle.json",
+        "candidate_comparison": "glass candidate-comparison --baseline-run C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident --candidate-run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --candidate-id retry_settings_control --baseline-compare-json C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_vs_reference.json --candidate-compare-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_reference.json --candidate-vs-baseline-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_baseline.json --candidate-acceptance-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\retry_settings_control_acceptance.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\retry_settings_control_candidate_comparison.json --markdown C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\retry_settings_control_candidate_comparison.md --min-speedup-vs-reference 20.0",
+        "compare_baseline": "glass compare --glass C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control\\integration\\resident_master_H.fits --reference C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_baseline.html",
+        "compare_reference": "glass compare --glass C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_reference.html",
+        "guardrails": "glass guardrails --run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --out-dir C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control --expected-integration-engine cuda_resident_stack --require-stack-default-ready",
+        "run": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --backend cuda --until-stage integration --memory-mode resident --resident-master-cache-dir C:\\glass_runs\\phase2_s2_gate_15_200\\resident_master_cache --resident-registration similarity_cuda_triangle --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.3 --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 28 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --reference-frame-id F000196 --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --resident-output-maps audit --flat-floor 0.05 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-triangle-grid-top-per-cell 2 --resident-triangle-nms-min-separation-px 96.0 --resident-triangle-agreement-action downweight --resident-star-catalog-deterministic --resident-triangle-min-agreement-score 0.6 --resident-triangle-agreement-rms-scale 200.0"
+      },
+      "effective_runtime_options": {
+        "--resident-calibration-batch-frames": null,
+        "--resident-calibration-release-mode": null,
+        "--resident-calibration-streams": null,
+        "--resident-calibration-wave-frames": null,
+        "--resident-h2d-mode": null,
+        "--resident-prefetch-frames": null,
+        "--resident-prefetch-refill-mode": null,
+        "--resident-prefetch-workers": null
+      },
+      "purpose": "rerun the accepted candidate settings as a warm control",
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control",
+      "variant_id": "retry_settings_control"
+    },
+    {
+      "artifacts": {
+        "acceptance_contract_bundle_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\prefetch12_workers7\\acceptance_contract_bundle.json",
+        "acceptance_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\prefetch12_workers7_acceptance.json",
+        "candidate_comparison_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\prefetch12_workers7_candidate_comparison.json",
+        "compare_baseline_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\prefetch12_workers7_vs_baseline.json",
+        "compare_reference_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\prefetch12_workers7_vs_reference.json",
+        "guardrails_report_html": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\prefetch12_workers7\\report.html",
+        "guardrails_summary_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\prefetch12_workers7\\guardrails_summary.json",
+        "pipeline_contract_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\prefetch12_workers7\\pipeline_contract.json",
+        "resident_calibration_artifacts_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7\\calibration_artifacts.json",
+        "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7\\resident_result_contract.json",
+        "resident_result_contract_source": "run_default",
+        "stack_engine_contract_json": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\prefetch12_workers7\\stack_engine_contract.json"
+      },
+      "changed_options": {
+        "--resident-prefetch-frames": 12,
+        "--resident-prefetch-workers": 7
+      },
+      "commands": {
+        "acceptance_audit": "glass acceptance-audit --manifest C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7 --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\prefetch12_workers7_vs_reference.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\prefetch12_workers7_acceptance.json --benchmark-contract benchmarks\\phase2_m38_h_200_contract.json --contract-bundle C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\prefetch12_workers7\\acceptance_contract_bundle.json",
+        "candidate_comparison": "glass candidate-comparison --baseline-run C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident --candidate-run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7 --candidate-id prefetch12_workers7 --baseline-compare-json C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_vs_reference.json --candidate-compare-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\prefetch12_workers7_vs_reference.json --candidate-vs-baseline-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\prefetch12_workers7_vs_baseline.json --candidate-acceptance-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\prefetch12_workers7_acceptance.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\prefetch12_workers7_candidate_comparison.json --markdown C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\prefetch12_workers7_candidate_comparison.md --min-speedup-vs-reference 20.0",
+        "compare_baseline": "glass compare --glass C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7\\integration\\resident_master_H.fits --reference C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\prefetch12_workers7_vs_baseline.html",
+        "compare_reference": "glass compare --glass C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\prefetch12_workers7_vs_reference.html",
+        "guardrails": "glass guardrails --run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7 --out-dir C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\prefetch12_workers7 --expected-integration-engine cuda_resident_stack --require-stack-default-ready",
+        "run": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7 --backend cuda --until-stage integration --memory-mode resident --resident-master-cache-dir C:\\glass_runs\\phase2_s2_gate_15_200\\resident_master_cache --resident-registration similarity_cuda_triangle --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.3 --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 28 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --reference-frame-id F000196 --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --resident-output-maps audit --flat-floor 0.05 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-triangle-grid-top-per-cell 2 --resident-triangle-nms-min-separation-px 96.0 --resident-triangle-agreement-action downweight --resident-star-catalog-deterministic --resident-triangle-min-agreement-score 0.6 --resident-triangle-agreement-rms-scale 200.0 --resident-prefetch-frames 12 --resident-prefetch-workers 7"
+      },
+      "effective_runtime_options": {
+        "--resident-calibration-batch-frames": null,
+        "--resident-calibration-release-mode": null,
+        "--resident-calibration-streams": null,
+        "--resident-calibration-wave-frames": null,
+        "--resident-h2d-mode": null,
+        "--resident-prefetch-frames": "12",
+        "--resident-prefetch-refill-mode": null,
+        "--resident-prefetch-workers": "7"
+      },
+      "purpose": "runtime confirmation sweep over resident prefetch depth and worker count",
+      "run_dir": "C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\prefetch12_workers7",
+      "variant_id": "prefetch12_workers7"
+    }
+  ]
+}

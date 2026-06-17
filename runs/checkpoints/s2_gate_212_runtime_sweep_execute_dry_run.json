@@ -1,0 +1,80 @@
+{
+  "artifact_type": "candidate_runtime_sweep_execution",
+  "created_at": "2026-06-17T19:54:07+00:00",
+  "dry_run": true,
+  "limitations": [
+    "This executor runs commands already recorded in a candidate runtime sweep plan.",
+    "Dry-run mode does not execute subprocesses and is intended for audit/review.",
+    "When GPU memory is occupied by unrelated processes, the run step may fail before comparison artifacts exist."
+  ],
+  "plan": "runs\\checkpoints\\s2_gate_212_runtime_sweep_plan.json",
+  "schema_version": 1,
+  "selected_variant_count": 1,
+  "skip_existing": false,
+  "summary": {
+    "completed_variant_count": 0,
+    "failed": false,
+    "recorded_variant_count": 1,
+    "skipped_existing_count": 0,
+    "status": "planned",
+    "sweep_summary_status": "planned"
+  },
+  "sweep_summary": {
+    "command": "glass candidate-comparison-sweep --comparison C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\retry_settings_control_candidate_comparison.json --comparison C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\prefetch12_workers7_candidate_comparison.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\candidate_runtime_sweep.json --markdown C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\candidate_runtime_sweep.md --fail-on-no-passed",
+    "elapsed_s": null,
+    "returncode": null,
+    "status": "planned",
+    "step": "candidate_comparison_sweep"
+  },
+  "variants": [
+    {
+      "candidate_comparison_exists": false,
+      "status": "planned",
+      "steps": [
+        {
+          "command": "glass run --plan C:\\gpwbpp_runs\\final_m38_h_200\\processing_plan.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --backend cuda --until-stage integration --memory-mode resident --resident-master-cache-dir C:\\glass_runs\\phase2_s2_gate_15_200\\resident_master_cache --resident-registration similarity_cuda_triangle --resident-warp-interpolation lanczos3 --resident-warp-clamping-threshold 0.3 --resident-star-threshold 350 --resident-star-max-candidates 48 --resident-star-grid-cols 28 --resident-star-grid-rows 16 --resident-triangle-pixel-refine-coarse-stride 4 --resident-triangle-pixel-refine-final-stride 8 --reference-frame-id F000196 --local-normalization off --integration-weighting none --integration-rejection winsorized_sigma --resident-output-maps audit --flat-floor 0.05 --exclude-frame-id LIGHT_H_0100 --exclude-frame-id LIGHT_H_0153 --exclude-frame-id LIGHT_H_0154 --exclude-frame-id LIGHT_H_0155 --exclude-frame-id LIGHT_H_0156 --exclude-frame-id LIGHT_H_0157 --exclude-frame-id LIGHT_H_0158 --resident-triangle-grid-top-per-cell 2 --resident-triangle-nms-min-separation-px 96.0 --resident-triangle-agreement-action downweight --resident-star-catalog-deterministic --resident-triangle-min-agreement-score 0.6 --resident-triangle-agreement-rms-scale 200.0",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "run"
+        },
+        {
+          "command": "glass compare --glass C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control\\integration\\resident_master_H.fits --reference C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_reference.html",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "compare_reference"
+        },
+        {
+          "command": "glass compare --glass C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control\\integration\\resident_master_H.fits --reference C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_baseline.html",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "compare_baseline"
+        },
+        {
+          "command": "glass guardrails --run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --out-dir C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control --expected-integration-engine cuda_resident_stack --require-stack-default-ready",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "guardrails"
+        },
+        {
+          "command": "glass acceptance-audit --manifest C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\manifest.json --glass-run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --wbpp-result C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json --compare-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_reference.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\retry_settings_control_acceptance.json --benchmark-contract benchmarks\\phase2_m38_h_200_contract.json --contract-bundle C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\guardrails\\retry_settings_control\\acceptance_contract_bundle.json",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "acceptance_audit"
+        },
+        {
+          "command": "glass candidate-comparison --baseline-run C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident --candidate-run C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\runs\\retry_settings_control --candidate-id retry_settings_control --baseline-compare-json C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_vs_reference.json --candidate-compare-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_reference.json --candidate-vs-baseline-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\compare\\retry_settings_control_vs_baseline.json --candidate-acceptance-json C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\acceptance\\retry_settings_control_acceptance.json --out C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\retry_settings_control_candidate_comparison.json --markdown C:\\glass_runs\\phase2_s2_gate_212_native_guardrails_sweep_plan\\comparison\\retry_settings_control_candidate_comparison.md --min-speedup-vs-reference 20.0",
+          "elapsed_s": null,
+          "returncode": null,
+          "status": "planned",
+          "step": "candidate_comparison"
+        }
+      ],
+      "variant_id": "retry_settings_control"
+    }
+  ]
+}

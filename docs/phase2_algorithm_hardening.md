@@ -3556,6 +3556,22 @@ integration where applicable.
 - Keep this gate artifact/contract only: no image processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 212: Runtime Sweep Uses Native Guardrails Bundle
+
+- Update generated candidate runtime sweep plans so new resident CUDA variants
+  use one `glass guardrails` command instead of separate resident
+  calibration/result bridge-contract commands.
+- Make generated acceptance-audit commands consume the guardrails
+  `acceptance_contract_bundle.json`, allowing the bundle to carry the
+  run-default native `resident_result_contract.json`.
+- Record run-local `resident_result_contract.json` and
+  `calibration_artifacts.json` as native variant artifacts in the plan.
+- Preserve execution compatibility with older plans that still contain
+  separate resident calibration/result, StackEngine, and pipeline contract
+  commands.
+- Keep this gate planning/orchestration only: no image processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

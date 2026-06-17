@@ -17,6 +17,7 @@ STEP_ORDER = [
     "run",
     "compare_reference",
     "compare_baseline",
+    "guardrails",
     "resident_calibration_contract",
     "resident_result_contract",
     "stack_engine_contract",
@@ -25,6 +26,7 @@ STEP_ORDER = [
     "candidate_comparison",
 ]
 OPTIONAL_LEGACY_STEPS = {
+    "guardrails",
     "pipeline_contract",
     "resident_calibration_contract",
     "resident_result_contract",

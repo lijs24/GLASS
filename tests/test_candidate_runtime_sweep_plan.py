@@ -82,25 +82,31 @@ def test_candidate_runtime_sweep_plan_generates_runtime_only_variants(tmp_path: 
     assert payload["variants"][1]["changed_options"]["--resident-prefetch-frames"] == 12
     assert "--resident-triangle-min-agreement-score 0.6" in payload["variants"][1]["commands"]["run"]
     assert "--resident-prefetch-frames 12" in payload["variants"][1]["commands"]["run"]
-    assert "resident-calibration-contract" in payload["variants"][1]["commands"]["resident_calibration_contract"]
-    assert "resident-result-contract" in payload["variants"][1]["commands"]["resident_result_contract"]
-    assert "pipeline-contract" in payload["variants"][1]["commands"]["pipeline_contract"]
-    assert "stack-engine-contract" in payload["variants"][1]["commands"]["stack_engine_contract"]
-    assert "--resident-calibration-contract-json" in payload["variants"][1]["commands"]["stack_engine_contract"]
-    assert "--resident-result-contract-json" in payload["variants"][1]["commands"]["stack_engine_contract"]
-    assert "--pipeline-contract-json" in payload["variants"][1]["commands"]["acceptance_audit"]
-    assert "--stack-engine-contract-json" in payload["variants"][1]["commands"]["acceptance_audit"]
-    assert payload["variants"][1]["artifacts"]["resident_calibration_contract_json"].endswith(
-        "prefetch12_workers6_resident_calibration_contract.json"
+    assert "guardrails" in payload["variants"][1]["commands"]
+    assert "resident_calibration_contract" not in payload["variants"][1]["commands"]
+    assert "resident_result_contract" not in payload["variants"][1]["commands"]
+    assert "pipeline_contract" not in payload["variants"][1]["commands"]
+    assert "stack_engine_contract" not in payload["variants"][1]["commands"]
+    assert "guardrails" in payload["variants"][1]["commands"]["guardrails"]
+    assert "--resident-result-contract-json" not in payload["variants"][1]["commands"]["guardrails"]
+    assert "--contract-bundle" in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert "--pipeline-contract-json" not in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert "--stack-engine-contract-json" not in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert payload["variants"][1]["artifacts"]["resident_calibration_artifacts_json"].endswith(
+        str(Path("runs") / "prefetch12_workers6" / "calibration_artifacts.json")
     )
     assert payload["variants"][1]["artifacts"]["resident_result_contract_json"].endswith(
-        "prefetch12_workers6_resident_result_contract.json"
+        str(Path("runs") / "prefetch12_workers6" / "resident_result_contract.json")
+    )
+    assert payload["variants"][1]["artifacts"]["resident_result_contract_source"] == "run_default"
+    assert payload["variants"][1]["artifacts"]["acceptance_contract_bundle_json"].endswith(
+        str(Path("guardrails") / "prefetch12_workers6" / "acceptance_contract_bundle.json")
     )
     assert payload["variants"][1]["artifacts"]["pipeline_contract_json"].endswith(
-        "prefetch12_workers6_pipeline_contract.json"
+        str(Path("guardrails") / "prefetch12_workers6" / "pipeline_contract.json")
     )
     assert payload["variants"][1]["artifacts"]["stack_engine_contract_json"].endswith(
-        "prefetch12_workers6_stack_engine_contract.json"
+        str(Path("guardrails") / "prefetch12_workers6" / "stack_engine_contract.json")
     )
     assert "--fail-on-failed" not in payload["variants"][1]["commands"]["candidate_comparison"]
     assert "candidate-comparison-sweep" in payload["sweep_command"]
