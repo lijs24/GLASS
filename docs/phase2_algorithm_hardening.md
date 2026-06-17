@@ -3263,6 +3263,17 @@ integration where applicable.
   native extension loaded, CUDA available on RTX PRO 6000 Blackwell cc 12.0,
   driver `596.21`, and zero failed checks.
 
+### S2-Gate 191: Labeled CPU Portable Package Smoke
+
+- Build `GLASS-Portable-win64-cpu.zip` with `-PackageLabel cpu`.
+- Package manifest records package label `cpu`, `build_cuda=false`, and source
+  stamp `a1604b0`.
+- Run `glass windows-package-smoke` with `--expected-package-label cpu` and
+  `--expected-source a1604b0`.
+- Current real artifact result: status `package_smoke_passed`, recommendation
+  `portable_package_ready_for_next_release_step`, zip size `296215418` bytes,
+  CPU package startup passed, and zero failed checks.
+
 ## Gate Rules
 
 Each gate requires:
