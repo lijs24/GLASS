@@ -2531,6 +2531,21 @@ integration where applicable.
   change resident integration defaults, mutate image pixels, or promote any
   candidate.
 
+### S2-Gate 151: Soft Agreement-Downweight Candidate Execution
+
+- Execute the `agreement_soft_downweight` candidate from the S2-Gate 150 plan.
+- Use the same 200-light benchmark inputs, WBPP black-box reference, compare
+  scale/offset, minimum coverage, frame-accounting contract, DQ contract, and
+  runtime contract as the Phase 1/2 baseline.
+- If the first run fails for runtime or compare-contract reasons, preserve the
+  failed artifact and rerun only after identifying whether the failure is a
+  candidate regression or an anomalous run/contract-parameter issue.
+- Record candidate runtime, compare metrics, acceptance status, speedup, and
+  dominant timing stages.
+- Keep this as an opt-in measured candidate gate. Passing this gate does not
+  promote the candidate to default behavior; it only makes it eligible for
+  broader candidate comparison.
+
 ## Gate Rules
 
 Each gate requires:
