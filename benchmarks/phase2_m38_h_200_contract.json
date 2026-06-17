@@ -128,7 +128,7 @@
     "min_check_count": 3,
     "required_check_names": [
       "calibration_master_surface_contract",
-      "resident_calibration_surface_contract",
+      "resident_calibrated_light_contract",
       "integration_resident_result_contract"
     ],
     "allow_failed_checks": false

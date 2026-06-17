@@ -17,6 +17,7 @@ from glass.cpu.registration import estimate_translation_phase_correlation, trans
 from glass.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
 from glass.engine.contracts import DQFlag, DQMask
 from glass.engine.dq import dq_provenance_summary_from_resident
+from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
@@ -7041,16 +7042,18 @@ def run_resident_calibration_integration(
             raise ValueError("resident mode found no executable light plans")
 
         resident_path = run / "resident_artifacts.json"
+        resident_payload = {
+            "schema_version": 1,
+            "backend": "cuda_resident_stack",
+            "policy": asdict(policy),
+            "artifacts": resident_artifacts,
+            "device": cuda_module.get_device_info(0),
+        }
         write_json(
             resident_path,
-            {
-                "schema_version": 1,
-                "backend": "cuda_resident_stack",
-                "policy": asdict(policy),
-                "artifacts": resident_artifacts,
-                "device": cuda_module.get_device_info(0),
-            },
+            resident_payload,
         )
+        calibration_artifacts = write_resident_calibration_artifacts(run, resident_payload)
         if registration_results:
             matrix_warp_description = f"CUDA matrix {resident_warp_interpolation} warp"
             write_json(
@@ -7152,6 +7155,15 @@ def run_resident_calibration_integration(
         from glass.engine.frame_accounting import build_frame_accounting
 
         build_frame_accounting(run)
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_calibration",
+                path=str(run / "calibration_artifacts.json"),
+                format="json",
+                created_at=now_iso(),
+                source_frames=[item.get("frame_id") for item in calibration_artifacts.get("calibrated_lights", [])],
+            )
+        )
         state.artifacts.append(
             PipelineArtifact(
                 stage="resident_calibration_integration",

@@ -6,6 +6,7 @@ import numpy as np
 
 from glass.cli import main
 from glass.engine.contracts import DQFlag
+from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.pipeline_contract import build_pipeline_contract_audit
@@ -253,6 +254,77 @@ def test_pipeline_contract_accepts_resident_calibration_contract(tmp_path: Path)
     resident_row = audit["calibration"]["resident_masters"][0]
     assert resident_row["contract_ok"] is True
     assert resident_row["science_contract"]["contract_type"] == "resident_calibration_surface_contract"
+
+
+def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    cache_dir = run / "calib_cache" / "resident_masters"
+    cache_dir.mkdir(parents=True)
+    cache_key = "H_2x2_bias-B_dark-D_flat-F_abc123"
+    for suffix in ["master_bias.npy", "master_dark.npy", "master_flat.npy", "master_stats.json"]:
+        (cache_dir / f"{cache_key}_{suffix}").write_bytes(b"fixture")
+    stats = {"min": 1.0, "max": 2.0, "mean": 1.5, "median": 1.5, "std": 0.1}
+    write_json(
+        run / "resident_artifacts.json",
+        {
+            "schema_version": 1,
+            "backend": "cuda_resident_stack",
+            "policy": {
+                "flat_floor": 0.05,
+                "flat_normalization": "median",
+                "master_dark_includes_bias": True,
+                "master_rejection": "winsorized_sigma",
+            },
+            "artifacts": [
+                {
+                    "filter": "H",
+                    "frame_ids": ["light_001", "light_002", "light_003"],
+                    "master_path": str(run / "integration" / "master_H.fits"),
+                    "master_stats": {
+                        "bias_count": 2,
+                        "dark_count": 2,
+                        "flat_count": 2,
+                        "set_count": 1,
+                        "calibration_group_policy": "planner_matching_groups_per_light",
+                        "sets": {
+                            "set-H": {
+                                "filter": "H",
+                                "bias_group": "B",
+                                "dark_group": "D",
+                                "flat_group": "F",
+                                "flat_bias_group": "B",
+                                "bias_count": 2,
+                                "dark_count": 2,
+                                "flat_count": 2,
+                                "dark_exposure_s": 60.0,
+                                "master_dark_includes_bias": True,
+                                "bias": stats,
+                                "dark": stats,
+                                "flat": stats,
+                                "shape": {"height": 2, "width": 2},
+                                "cache_dir": str(cache_dir),
+                                "cache_key": cache_key,
+                            }
+                        },
+                    },
+                }
+            ],
+        },
+    )
+    write_resident_calibration_artifacts(run)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is True
+    assert audit["calibration"]["resident_native_calibration_artifact"] is True
+    assert audit["calibration"]["local_master_count"] == 3
+    assert audit["calibration"]["resident_calibrated_light_count"] == 3
+    assert checks["calibration_master_surface_contract"]["passed"] is True
+    assert checks["resident_calibrated_lights_present"]["passed"] is True
+    assert checks["resident_calibrated_light_contract"]["passed"] is True
+    assert "calibrated_light_dq_contract" not in checks
 
 
 def test_pipeline_contract_cli_uses_resident_calibration_contract_json(tmp_path: Path):

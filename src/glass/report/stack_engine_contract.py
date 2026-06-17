@@ -329,8 +329,35 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
     exists = _artifact_path_exists(path_value, run_root)
     provenance = payload.get("stack_engine_dq_provenance")
     summary = payload.get("dq_provenance_summary")
+    resident_contract = payload.get("resident_calibration_contract")
     science_contract = _master_science_contract(payload, path_exists=exists)
     science_ok = bool(science_contract.get("passed"))
+    stack_result_contract_passed = _result_contract_passed(provenance)
+    resident_contract_passed = (
+        isinstance(resident_contract, dict)
+        and resident_contract.get("artifact_type") == "resident_cuda_calibration_master_contract"
+        and bool(resident_contract.get("passed"))
+    )
+    stack_engine_ok = (
+        bool(payload.get("stack_engine_enabled"))
+        and str(payload.get("tile_stack_mode") or "").startswith("stack_engine_cpu")
+        and not payload.get("stack_engine_fallback_reason")
+        and isinstance(provenance, dict)
+        and _positive_int(provenance.get("input_samples"))
+        and stack_result_contract_passed
+        and _summary_is_stack_engine(summary, stage="master_calibration")
+        and science_ok
+    )
+    resident_engine_ok = (
+        bool(payload.get("stack_engine_enabled"))
+        and payload.get("tile_stack_mode") == "cuda_resident_stack"
+        and not payload.get("stack_engine_fallback_reason")
+        and isinstance(summary, dict)
+        and summary.get("engine") == "cuda_resident_stack"
+        and summary.get("stage") == "master_calibration"
+        and resident_contract_passed
+        and science_ok
+    )
     return {
         "name": name,
         "type": payload.get("type"),
@@ -340,24 +367,24 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
         "science_contract_ok": science_ok,
         "science_contract": science_contract,
         "tile_stack_mode": payload.get("tile_stack_mode"),
+        "backend": payload.get("backend"),
         "stack_engine_enabled": bool(payload.get("stack_engine_enabled")),
         "fallback_reason": payload.get("stack_engine_fallback_reason"),
         "has_dq_provenance": isinstance(provenance, dict),
         "input_samples": provenance.get("input_samples") if isinstance(provenance, dict) else None,
-        "result_contract_passed": _result_contract_passed(provenance),
+        "result_contract_passed": stack_result_contract_passed or resident_contract_passed,
+        "stack_result_contract_passed": stack_result_contract_passed,
+        "resident_calibration_contract_passed": resident_contract_passed,
+        "resident_calibration_contract_status": resident_contract.get("status")
+        if isinstance(resident_contract, dict)
+        else None,
+        "resident_calibration_contract_check_count": len(resident_contract.get("checks") or [])
+        if isinstance(resident_contract, dict)
+        else None,
         "summary_source_schema": summary.get("source_schema") if isinstance(summary, dict) else None,
         "summary_engine": summary.get("engine") if isinstance(summary, dict) else None,
         "summary_stage": summary.get("stage") if isinstance(summary, dict) else None,
-        "contract_ok": (
-            bool(payload.get("stack_engine_enabled"))
-            and str(payload.get("tile_stack_mode") or "").startswith("stack_engine_cpu")
-            and not payload.get("stack_engine_fallback_reason")
-            and isinstance(provenance, dict)
-            and _positive_int(provenance.get("input_samples"))
-            and _result_contract_passed(provenance)
-            and _summary_is_stack_engine(summary, stage="master_calibration")
-            and science_ok
-        ),
+        "contract_ok": stack_engine_ok or resident_engine_ok,
     }
 
 

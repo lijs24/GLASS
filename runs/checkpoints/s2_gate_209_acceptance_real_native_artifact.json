@@ -1,0 +1,3517 @@
+{
+  "benchmark_contract": {
+    "name": "phase2_m38_h_200_resident_cuda",
+    "path": "benchmarks\\phase2_m38_h_200_contract.json",
+    "schema_version": 1
+  },
+  "checks": [
+    {
+      "evidence": {
+        "actual": 200,
+        "required": 200
+      },
+      "name": "minimum_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "minimum_bias_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "minimum_dark_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "minimum_flat_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "required": 190
+      },
+      "name": "minimum_active_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 58.099101701945926,
+        "required": 2.0
+      },
+      "name": "minimum_speedup",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "required": true
+      },
+      "name": "shape_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.9577924192878646,
+        "required": 0.95
+      },
+      "name": "minimum_coverage_fraction",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0014945534429799121,
+        "required_max": 0.01
+      },
+      "name": "maximum_rms_diff",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.00043544556712731865,
+        "required_max": 0.01
+      },
+      "name": "maximum_abs_diff_p99",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\acceptance_contract_bundle.json"
+      },
+      "name": "contract_bundle_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "glass_acceptance_contract_bundle",
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\acceptance_contract_bundle.json",
+        "required": "glass_acceptance_contract_bundle"
+      },
+      "name": "contract_bundle_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 1
+      },
+      "name": "contract_bundle_schema_version",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "acceptance_audit_contract_inputs",
+        "required": "acceptance_audit_contract_inputs"
+      },
+      "name": "contract_bundle_purpose",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": [
+          "guardrails_summary",
+          "pipeline_contract",
+          "pipeline_contract_markdown",
+          "report",
+          "resident_calibration_contract",
+          "resident_result_contract",
+          "stack_engine_contract",
+          "stack_engine_contract_markdown"
+        ],
+        "missing": [],
+        "required": [
+          "guardrails_summary",
+          "pipeline_contract",
+          "stack_engine_contract"
+        ]
+      },
+      "name": "contract_bundle_required_artifacts",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": [
+          "pipeline_contract_json",
+          "stack_engine_contract_json"
+        ],
+        "missing": [],
+        "required": [
+          "pipeline_contract_json",
+          "stack_engine_contract_json"
+        ]
+      },
+      "name": "contract_bundle_argument_map",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\resident_result_contract.json"
+      },
+      "name": "resident_result_contract_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "resident_cuda_result_contract",
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\resident_result_contract.json",
+        "required": "resident_cuda_result_contract"
+      },
+      "name": "resident_result_contract_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "passed"
+      },
+      "name": "resident_result_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "pipeline_invariant_contract",
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\pipeline_contract.json"
+      },
+      "name": "pipeline_contract_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "passed"
+      },
+      "name": "pipeline_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "stack_engine_default_contract",
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\stack_engine_contract.json"
+      },
+      "name": "stack_engine_contract_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "passed"
+      },
+      "name": "stack_engine_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 200,
+        "required": 200
+      },
+      "name": "contract_minimum_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "contract_minimum_bias_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "contract_minimum_dark_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "contract_minimum_flat_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "required": 190
+      },
+      "name": "contract_minimum_active_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 18.80478299999959,
+        "max_regression_factor": 1.3,
+        "release_baseline_s": 30.361440100008622,
+        "required_max_s": 39.46987213001121
+      },
+      "name": "contract_max_runtime_vs_release_baseline",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 58.099101701945926,
+        "required": 20.0
+      },
+      "name": "contract_minimum_speedup_vs_reference",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--backend cuda"
+      },
+      "name": "contract_required_command_token:--backend cuda",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--until-stage integration"
+      },
+      "name": "contract_required_command_token:--until-stage integration",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--memory-mode resident"
+      },
+      "name": "contract_required_command_token:--memory-mode resident",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-registration similarity_cuda_triangle"
+      },
+      "name": "contract_required_command_token:--resident-registration similarity_cuda_triangle",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-warp-interpolation lanczos3"
+      },
+      "name": "contract_required_command_token:--resident-warp-interpolation lanczos3",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-warp-clamping-threshold 0.3"
+      },
+      "name": "contract_required_command_token:--resident-warp-clamping-threshold 0.3",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-star-threshold 350"
+      },
+      "name": "contract_required_command_token:--resident-star-threshold 350",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-star-max-candidates 48"
+      },
+      "name": "contract_required_command_token:--resident-star-max-candidates 48",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-star-grid-rows 16"
+      },
+      "name": "contract_required_command_token:--resident-star-grid-rows 16",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-triangle-pixel-refine-coarse-stride 4"
+      },
+      "name": "contract_required_command_token:--resident-triangle-pixel-refine-coarse-stride 4",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--resident-triangle-pixel-refine-final-stride 8"
+      },
+      "name": "contract_required_command_token:--resident-triangle-pixel-refine-final-stride 8",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--reference-frame-id F000196"
+      },
+      "name": "contract_required_command_token:--reference-frame-id F000196",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--local-normalization off"
+      },
+      "name": "contract_required_command_token:--local-normalization off",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--integration-weighting none"
+      },
+      "name": "contract_required_command_token:--integration-weighting none",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--integration-rejection winsorized_sigma"
+      },
+      "name": "contract_required_command_token:--integration-rejection winsorized_sigma",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--flat-floor 0.05"
+      },
+      "name": "contract_required_command_token:--flat-floor 0.05",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--exclude-frame-id LIGHT_H_0100"
+      },
+      "name": "contract_required_command_token:--exclude-frame-id LIGHT_H_0100",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--exclude-frame-id LIGHT_H_0153"
+      },
+      "name": "contract_required_command_token:--exclude-frame-id LIGHT_H_0153",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--exclude-frame-id LIGHT_H_0154"
+      },
+      "name": "contract_required_command_token:--exclude-frame-id LIGHT_H_0154",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--exclude-frame-id LIGHT_H_0155"
+      },
+      "name": "contract_required_command_token:--exclude-frame-id LIGHT_H_0155",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--exclude-frame-id LIGHT_H_0156"
+      },
+      "name": "contract_required_command_token:--exclude-frame-id LIGHT_H_0156",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--exclude-frame-id LIGHT_H_0157"
+      },
+      "name": "contract_required_command_token:--exclude-frame-id LIGHT_H_0157",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_command_present": true,
+        "token": "--exclude-frame-id LIGHT_H_0158"
+      },
+      "name": "contract_required_command_token:--exclude-frame-id LIGHT_H_0158",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "any_of": [
+          "--resident-h2d-mode pinned_ring",
+          "--resident-runtime-preset throughput-v1"
+        ],
+        "artifact_matches": [
+          {
+            "artifact": "resident_artifacts.json",
+            "artifact_index": 0,
+            "resident_io_pipeline": {
+              "h2d_mode": "pinned_ring"
+            },
+            "token": "--resident-h2d-mode pinned_ring"
+          },
+          {
+            "artifact": "resident_artifacts.json",
+            "artifact_index": 0,
+            "preset": "throughput-v1",
+            "resident_io_pipeline": {
+              "calibration_batch_requested_frames": 8,
+              "calibration_batch_requested_streams": 4,
+              "calibration_release_mode_effective": "callback_queue",
+              "calibration_release_mode_requested": "callback_queue",
+              "calibration_wave_requested_frames": 2,
+              "h2d_mode": "pinned_ring",
+              "prefetch_frames": 12,
+              "prefetch_workers": 7
+            },
+            "token": "--resident-runtime-preset throughput-v1"
+          }
+        ],
+        "matched": [],
+        "resident_io_pipeline_records": 1,
+        "run_command_present": true
+      },
+      "name": "contract_required_command_token_group:resident_h2d_or_runtime_preset",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "any_of": [
+          "--resident-star-grid-cols 24",
+          "--resident-star-grid-cols 28"
+        ],
+        "artifact_matches": [],
+        "matched": [
+          "--resident-star-grid-cols 28"
+        ],
+        "resident_io_pipeline_records": 1,
+        "run_command_present": true
+      },
+      "name": "contract_required_command_token_group:resident_star_grid_cols",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "abs_tol": 1e-12,
+        "actual": 8.764434957115609e-06,
+        "rel_tol": 1e-09,
+        "required": 8.764434957115609e-06
+      },
+      "name": "contract_compare_scale",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "abs_tol": 1e-12,
+        "actual": 0.0006274500691899127,
+        "rel_tol": 1e-09,
+        "required": 0.0006274500691899127
+      },
+      "name": "contract_compare_offset",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 190.0,
+        "required": 190.0
+      },
+      "name": "contract_compare_min_coverage",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0014945534429799121,
+        "required_max": 0.01
+      },
+      "name": "contract_max_rms_diff",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.00043544556712731865,
+        "required_max": 0.01
+      },
+      "name": "contract_max_abs_diff_p99",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.9577924192878646,
+        "required": 0.95
+      },
+      "name": "contract_min_coverage_fraction",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 2,
+        "required_min": 1
+      },
+      "name": "contract_dq_provenance_records",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "resident_dq_coverage_provenance"
+        ],
+        "required": "resident_dq_coverage_provenance"
+      },
+      "name": "contract_dq_source_schema:resident_dq_coverage_provenance",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "cuda_resident_stack"
+        ],
+        "required": "cuda_resident_stack"
+      },
+      "name": "contract_dq_engine:cuda_resident_stack",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_max": 193.0,
+        "required_min": 190.0
+      },
+      "name": "contract_dq_min_active_frame_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "records_with_dq_map_path": 2
+      },
+      "name": "contract_dq_map_path_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "records_with_existing_dq_map": 2
+      },
+      "name": "contract_dq_map_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "records_with_coverage_map_path": 2
+      },
+      "name": "contract_dq_coverage_map_path_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "required": "zero_coverage_pixels"
+      },
+      "name": "contract_dq_summary_field:zero_coverage_pixels",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "required": "partial_coverage_pixels"
+      },
+      "name": "contract_dq_summary_field:partial_coverage_pixels",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available_values": [
+          20892861.0,
+          20892861.0
+        ],
+        "required": "valid"
+      },
+      "name": "contract_dq_output_flag:valid",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available_values": [
+          5394370.0,
+          5394370.0
+        ],
+        "required": "warp_edge"
+      },
+      "name": "contract_dq_output_flag:warp_edge",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available_values": [
+          13114786.0,
+          13114786.0
+        ],
+        "required": "low_rejected"
+      },
+      "name": "contract_dq_output_flag:low_rejected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available_values": [
+          32370393.0,
+          32370393.0
+        ],
+        "required": "high_rejected"
+      },
+      "name": "contract_dq_output_flag:high_rejected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available_values": [
+          20892861.0,
+          20892861.0
+        ],
+        "required": "valid"
+      },
+      "name": "contract_dq_positive_output_flag:valid",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available_values": [
+          5394370.0,
+          5394370.0
+        ],
+        "required": "warp_edge"
+      },
+      "name": "contract_dq_positive_output_flag:warp_edge",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "error_records": 0,
+        "errors": [],
+        "verified_records": 2
+      },
+      "name": "contract_dq_map_pixel_verification",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 20892861,
+            "delta": 0,
+            "passed": true,
+            "summary": 20892861
+          },
+          {
+            "actual": 20892861,
+            "delta": 0,
+            "passed": true,
+            "summary": 20892861
+          }
+        ]
+      },
+      "name": "contract_dq_map_summary_match:valid",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 5394370,
+            "delta": 0,
+            "passed": true,
+            "summary": 5394370
+          },
+          {
+            "actual": 5394370,
+            "delta": 0,
+            "passed": true,
+            "summary": 5394370
+          }
+        ]
+      },
+      "name": "contract_dq_map_summary_match:warp_edge",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 13114786,
+            "delta": 0,
+            "passed": true,
+            "summary": 13114786
+          },
+          {
+            "actual": 13114786,
+            "delta": 0,
+            "passed": true,
+            "summary": 13114786
+          }
+        ]
+      },
+      "name": "contract_dq_map_summary_match:low_rejected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 32370393,
+            "delta": 0,
+            "passed": true,
+            "summary": 32370393
+          },
+          {
+            "actual": 32370393,
+            "delta": 0,
+            "passed": true,
+            "summary": 32370393
+          }
+        ]
+      },
+      "name": "contract_dq_map_summary_match:high_rejected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "error_records": 0,
+        "errors": [],
+        "verified_records": 2
+      },
+      "name": "contract_coverage_map_pixel_verification",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 61651200,
+            "delta": 0,
+            "passed": true,
+            "provenance": 61651200
+          },
+          {
+            "actual": 61651200,
+            "delta": 0,
+            "passed": true,
+            "provenance": 61651200
+          }
+        ]
+      },
+      "name": "contract_coverage_map_finite_pixels_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 0,
+            "delta": 0,
+            "passed": true,
+            "summary": 0
+          },
+          {
+            "actual": 0,
+            "delta": 0,
+            "passed": true,
+            "summary": 0
+          }
+        ]
+      },
+      "name": "contract_coverage_zero_pixels_match_no_data",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "allow_skipped_by_policy": true,
+        "missing_or_skipped_records": 0,
+        "verified_records": 2
+      },
+      "name": "contract_low_rejection_map_available_or_skipped",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 13114786,
+            "delta": 0,
+            "passed": true,
+            "summary": 13114786
+          },
+          {
+            "actual": 13114786,
+            "delta": 0,
+            "passed": true,
+            "summary": 13114786
+          }
+        ]
+      },
+      "name": "contract_low_rejection_map_positive_pixels_match:low_rejected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "allow_skipped_by_policy": true,
+        "missing_or_skipped_records": 0,
+        "verified_records": 2
+      },
+      "name": "contract_high_rejection_map_available_or_skipped",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 32370393,
+            "delta": 0,
+            "passed": true,
+            "summary": 32370393
+          },
+          {
+            "actual": 32370393,
+            "delta": 0,
+            "passed": true,
+            "summary": 32370393
+          }
+        ]
+      },
+      "name": "contract_high_rejection_map_positive_pixels_match:high_rejected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "actual": 62488423,
+            "delta": 0,
+            "passed": true,
+            "provenance": 62488423
+          },
+          {
+            "actual": 62488423,
+            "delta": 0,
+            "passed": true,
+            "provenance": 62488423
+          }
+        ],
+        "tolerance_samples": 0
+      },
+      "name": "contract_rejection_map_sum_matches_provenance",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "required": "geometric_warp_coverage"
+      },
+      "name": "contract_dq_source_term:geometric_warp_coverage",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\frame_accounting.json"
+      },
+      "name": "contract_frame_accounting_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 200,
+        "required": 200
+      },
+      "name": "contract_frame_accounting_input_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "required": 193
+      },
+      "name": "contract_frame_accounting_integrated_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 7,
+        "required": 7
+      },
+      "name": "contract_frame_accounting_zero_weight_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "required": 193
+      },
+      "name": "contract_frame_accounting_registration_accepted_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "required_min": 190
+      },
+      "name": "contract_frame_accounting_min_integrated_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "resident_calibrated_stack",
+        "required": "resident_calibrated_stack"
+      },
+      "name": "contract_frame_accounting_integration_source_stage",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "calculated_from_rows": 193,
+        "required": 193
+      },
+      "name": "contract_frame_accounting_final_status:integrated",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 7,
+        "calculated_from_rows": 7,
+        "required": 7
+      },
+      "name": "contract_frame_accounting_final_status:zero_weight",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "invalid_weights": 0,
+        "matches": [
+          {
+            "accounting": 200,
+            "field": "input_light_frames",
+            "weights": 200
+          },
+          {
+            "accounting": 193,
+            "field": "integrated_frames",
+            "weights": 193
+          },
+          {
+            "accounting": 7,
+            "field": "zero_weight_frames",
+            "weights": 7
+          }
+        ]
+      },
+      "name": "contract_frame_accounting_matches_integration_weights",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matches": [
+          {
+            "accounting": 193,
+            "field": "integrated_frames",
+            "speedup_summary": 193
+          },
+          {
+            "accounting": 7,
+            "field": "zero_weight_frames",
+            "speedup_summary": 7
+          }
+        ]
+      },
+      "name": "contract_frame_accounting_matches_speedup_summary",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "accounting_integrated_frames": 193,
+        "dq_active_frame_counts": [
+          193.0,
+          193.0
+        ]
+      },
+      "name": "contract_frame_accounting_matches_dq_active_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "accounting_registration_accepted_frames": 193,
+        "registration_accepted_frames": 193,
+        "registration_status_counts": {
+          "excluded": 7,
+          "ok": 192,
+          "reference": 1
+        }
+      },
+      "name": "contract_frame_accounting_matches_registration",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\pipeline_contract.json",
+        "present": true,
+        "required": true
+      },
+      "name": "contract_pipeline_contract_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "pipeline_invariant_contract",
+        "required": "pipeline_invariant_contract"
+      },
+      "name": "contract_pipeline_contract_audit_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "failed_checks": [],
+        "status": "passed"
+      },
+      "name": "contract_pipeline_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 15,
+        "required_min": 3
+      },
+      "name": "contract_pipeline_contract_min_check_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "integration_artifact_exists",
+          "integration_outputs_present",
+          "integration_output_maps_available",
+          "integration_dq_contract",
+          "integration_stack_result_contract",
+          "integration_resident_result_contract",
+          "calibration_master_surfaces_present",
+          "calibration_master_surface_contract",
+          "resident_calibration_surface_contract",
+          "resident_calibrated_lights_present",
+          "resident_calibrated_light_contract",
+          "integration_dq_map_pixels_match_summary",
+          "integration_coverage_map_pixels_match_dq",
+          "integration_rejection_map_pixels_match_dq",
+          "local_normalization_contract"
+        ],
+        "required": "calibration_master_surface_contract"
+      },
+      "name": "contract_pipeline_contract_check:calibration_master_surface_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "integration_artifact_exists",
+          "integration_outputs_present",
+          "integration_output_maps_available",
+          "integration_dq_contract",
+          "integration_stack_result_contract",
+          "integration_resident_result_contract",
+          "calibration_master_surfaces_present",
+          "calibration_master_surface_contract",
+          "resident_calibration_surface_contract",
+          "resident_calibrated_lights_present",
+          "resident_calibrated_light_contract",
+          "integration_dq_map_pixels_match_summary",
+          "integration_coverage_map_pixels_match_dq",
+          "integration_rejection_map_pixels_match_dq",
+          "local_normalization_contract"
+        ],
+        "required": "resident_calibrated_light_contract"
+      },
+      "name": "contract_pipeline_contract_check:resident_calibrated_light_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "integration_artifact_exists",
+          "integration_outputs_present",
+          "integration_output_maps_available",
+          "integration_dq_contract",
+          "integration_stack_result_contract",
+          "integration_resident_result_contract",
+          "calibration_master_surfaces_present",
+          "calibration_master_surface_contract",
+          "resident_calibration_surface_contract",
+          "resident_calibrated_lights_present",
+          "resident_calibrated_light_contract",
+          "integration_dq_map_pixels_match_summary",
+          "integration_coverage_map_pixels_match_dq",
+          "integration_rejection_map_pixels_match_dq",
+          "local_normalization_contract"
+        ],
+        "required": "integration_resident_result_contract"
+      },
+      "name": "contract_pipeline_contract_check:integration_resident_result_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": []
+      },
+      "name": "contract_pipeline_contract_no_failed_checks",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\stack_engine_contract.json",
+        "present": true,
+        "required": true
+      },
+      "name": "contract_stack_engine_default_promotion_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "stack_engine_default_contract",
+        "required": "stack_engine_default_contract"
+      },
+      "name": "contract_stack_engine_default_promotion_audit_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "failed_checks": [],
+        "status": "passed"
+      },
+      "name": "contract_stack_engine_default_promotion_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "blockers": [],
+        "status": "ready"
+      },
+      "name": "contract_stack_engine_default_promotion_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "all",
+        "required": "all"
+      },
+      "name": "contract_stack_engine_default_promotion_scope",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "stack_engine_default_ready",
+        "required": "stack_engine_default_ready"
+      },
+      "name": "contract_stack_engine_default_promotion_recommendation",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0,
+        "required_max": 0
+      },
+      "name": "contract_stack_engine_default_promotion_gap_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0,
+        "required_max": 0
+      },
+      "name": "contract_stack_engine_default_promotion_blocker_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": []
+      },
+      "name": "contract_stack_engine_default_promotion_no_failed_checks",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "clean_room": {
+    "note": "Acceptance audit consumes GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only.",
+    "status": "compliant"
+  },
+  "compare_json": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_vs_reference.json",
+  "contract_bundle": {
+    "acceptance_audit_argument_count": 4,
+    "argument_map_keys": [
+      "pipeline_contract_json",
+      "stack_engine_contract_json"
+    ],
+    "artifact_keys": [
+      "guardrails_summary",
+      "pipeline_contract",
+      "pipeline_contract_markdown",
+      "report",
+      "resident_calibration_contract",
+      "resident_result_contract",
+      "stack_engine_contract",
+      "stack_engine_contract_markdown"
+    ],
+    "artifact_type": "glass_acceptance_contract_bundle",
+    "checks": [
+      {
+        "failed": [],
+        "name": "stack_engine_contract",
+        "passed": true,
+        "status": "passed"
+      },
+      {
+        "failed": [],
+        "name": "pipeline_contract",
+        "passed": true,
+        "status": "passed"
+      },
+      {
+        "blockers": [],
+        "name": "stack_default_promotion",
+        "passed": true,
+        "ready": true,
+        "required": true,
+        "status": "ready"
+      }
+    ],
+    "exists": true,
+    "explicit_pipeline_contract_overrode_bundle": false,
+    "explicit_stack_engine_contract_overrode_bundle": false,
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\acceptance_contract_bundle.json",
+    "pipeline_contract_json": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\pipeline_contract.json",
+    "purpose": "acceptance_audit_contract_inputs",
+    "resident_calibration_contract_attached": false,
+    "resident_calibration_contract_json": null,
+    "resident_result_contract_attached": true,
+    "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\resident_result_contract.json",
+    "schema_version": 1,
+    "stack_engine_contract_json": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\stack_engine_contract.json",
+    "status": "passed"
+  },
+  "contract_bundle_schema": {
+    "argument_map_keys": [
+      "pipeline_contract_json",
+      "stack_engine_contract_json"
+    ],
+    "artifact_keys": [
+      "guardrails_summary",
+      "pipeline_contract",
+      "pipeline_contract_markdown",
+      "report",
+      "resident_calibration_contract",
+      "resident_result_contract",
+      "stack_engine_contract",
+      "stack_engine_contract_markdown"
+    ],
+    "missing_required_argument_map_keys": [],
+    "missing_required_artifacts": [],
+    "passed": true,
+    "purpose": "acceptance_audit_contract_inputs",
+    "required_purpose": "acceptance_audit_contract_inputs",
+    "required_schema_version": 1,
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "dq_provenance": {
+    "contract": {
+      "allow_missing_rejection_maps_if_skipped": true,
+      "count_map_positive_threshold": 0.0,
+      "count_map_verify_tile_size": 2048,
+      "coverage_map_finite_pixels_match_provenance": true,
+      "coverage_zero_pixels_match_no_data": true,
+      "dq_map_summary_match_flags": [
+        "valid",
+        "warp_edge",
+        "low_rejected",
+        "high_rejected"
+      ],
+      "dq_map_summary_tolerance_pixels": 0,
+      "dq_map_verify_tile_size": 2048,
+      "min_active_frame_count": 190,
+      "min_records": 1,
+      "positive_output_dq_flags": [
+        "valid",
+        "warp_edge"
+      ],
+      "rejection_map_sum_matches_provenance": true,
+      "require_coverage_map_path": true,
+      "require_dq_map_path": true,
+      "require_existing_dq_map": true,
+      "required": true,
+      "required_engines": [
+        "cuda_resident_stack"
+      ],
+      "required_output_dq_flags": [
+        "valid",
+        "warp_edge",
+        "low_rejected",
+        "high_rejected"
+      ],
+      "required_source_schemas": [
+        "resident_dq_coverage_provenance"
+      ],
+      "required_source_terms": [
+        "geometric_warp_coverage"
+      ],
+      "required_summary_fields": [
+        "zero_coverage_pixels",
+        "partial_coverage_pixels"
+      ],
+      "verify_dq_map_pixels": true,
+      "verify_output_count_maps": true
+    },
+    "record_count": 2,
+    "records": [
+      {
+        "coverage_map_exists": true,
+        "coverage_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+        "dq_flag_bits": {},
+        "dq_map_exists": true,
+        "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+        "dq_map_pixel_verification": {
+          "result": {
+            "counts": {
+              "high_rejected": 32370393,
+              "low_rejected": 13114786,
+              "valid": 20892861,
+              "warp_edge": 5394370
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 6422,
+            "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 2048,
+            "total_pixels": 61651200,
+            "unknown_flags": [],
+            "width": 9600
+          },
+          "status": "verified",
+          "summary_matches": {
+            "high_rejected": {
+              "actual": 32370393,
+              "delta": 0,
+              "passed": true,
+              "summary": 32370393
+            },
+            "low_rejected": {
+              "actual": 13114786,
+              "delta": 0,
+              "passed": true,
+              "summary": 13114786
+            },
+            "valid": {
+              "actual": 20892861,
+              "delta": 0,
+              "passed": true,
+              "summary": 20892861
+            },
+            "warp_edge": {
+              "actual": 5394370,
+              "delta": 0,
+              "passed": true,
+              "summary": 5394370
+            }
+          },
+          "summary_tolerance_pixels": 0,
+          "verified": true
+        },
+        "high_rejection_map_exists": true,
+        "high_rejection_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+        "index": 0,
+        "low_rejection_map_exists": true,
+        "low_rejection_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+        "master_exists": true,
+        "master_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+        "normalized_from_legacy": false,
+        "output_count_map_verification": {
+          "coverage": {
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 193.0,
+              "min": 1.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+              "positive_pixels": 61651200,
+              "positive_threshold": 0.0,
+              "rounded_sum": 11735503879,
+              "schema_version": 1,
+              "sum": 11735503879.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 0
+            },
+            "status": "verified",
+            "verified": true
+          },
+          "high_rejection": {
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 10.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+              "positive_pixels": 32370393,
+              "positive_threshold": 0.0,
+              "rounded_sum": 43618886,
+              "schema_version": 1,
+              "sum": 43618886.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 29280807
+            },
+            "status": "verified",
+            "verified": true
+          },
+          "low_rejection": {
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 12.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+              "positive_pixels": 13114786,
+              "positive_threshold": 0.0,
+              "rounded_sum": 18869537,
+              "schema_version": 1,
+              "sum": 18869537.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 48536414
+            },
+            "status": "verified",
+            "verified": true
+          }
+        },
+        "output_map_policy": {
+          "available": [
+            "master",
+            "weight",
+            "dq",
+            "coverage",
+            "low_rejection",
+            "high_rejection"
+          ],
+          "mode": "audit",
+          "skipped": [],
+          "written": [
+            "master",
+            "weight",
+            "dq",
+            "coverage",
+            "low_rejection",
+            "high_rejection"
+          ]
+        },
+        "source_file": "integration_results.json",
+        "source_kind": "integration_output",
+        "source_provenance": {
+          "active_frame_count": 193,
+          "available": true,
+          "finite_pre_rejection_coverage": {
+            "finite_pixels": 61651200,
+            "max": 193.0,
+            "mean": 191.36679077148438,
+            "min": 1.0
+          },
+          "geometric_frame_count_matches_active": true,
+          "geometric_full_pixels": 56256830,
+          "geometric_partial_pixels": 5394370,
+          "geometric_warp_coverage": {
+            "finite_pixels": 61651200,
+            "max": 193.0,
+            "mean": 191.36679077148438,
+            "min": 1.0
+          },
+          "geometric_warp_coverage_frame_count": 193,
+          "geometric_zero_pixels": 0,
+          "note": "geometric_warp_coverage is accumulated by the resident CUDA warp path before sigma rejection. finite_pre_rejection_coverage remains coverage + low/high rejection counts for rejection accounting.",
+          "partial_edge_inference": "available_from_geometric_warp_coverage",
+          "partial_pre_rejection_pixels": 5394370,
+          "post_rejection_coverage": {
+            "finite_pixels": 61651200,
+            "max": 193.0,
+            "mean": 190.3531951904297,
+            "min": 1.0
+          },
+          "post_rejection_zero_pixels": 0,
+          "rejected_sample_count": 62488423.0,
+          "rejected_sample_count_source": "low_high_rejection_maps",
+          "rejection_reduced_pixels": 39152238,
+          "source_terms": [
+            "post_rejection_coverage",
+            "low_rejection",
+            "high_rejection",
+            "geometric_warp_coverage"
+          ],
+          "zero_pre_rejection_pixels": 0
+        },
+        "summary": {
+          "active_frame_count": 193,
+          "engine": "cuda_resident_stack",
+          "finite_pre_rejection_pixels": 61651200,
+          "high_rejected_pixels": 32370393,
+          "input_flagged_samples": null,
+          "input_nonfinite_samples": null,
+          "input_samples": null,
+          "item": "H",
+          "low_rejected_pixels": 13114786,
+          "no_data_pixels": null,
+          "output_dq_summary": {
+            "high_rejected": 32370393,
+            "low_rejected": 13114786,
+            "valid": 20892861,
+            "warp_edge": 5394370
+          },
+          "partial_coverage_pixels": 5394370,
+          "post_rejection_pixels": 61651200,
+          "rejected_samples": 62488423,
+          "schema_version": 1,
+          "semantics": "Resident CUDA provenance summarizes post-rejection coverage, rejection counts, and optional geometric warp coverage from resident output maps.",
+          "source_dq_flag_counts": {},
+          "source_schema": "resident_dq_coverage_provenance",
+          "source_terms": [
+            "post_rejection_coverage",
+            "low_rejection",
+            "high_rejection",
+            "geometric_warp_coverage"
+          ],
+          "stage": "integration",
+          "valid_pixels": 20892861,
+          "warp_edge_pixels": 5394370,
+          "zero_coverage_pixels": 0
+        },
+        "weight_map_exists": true,
+        "weight_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_weight_map_H.fits"
+      },
+      {
+        "coverage_map_exists": true,
+        "coverage_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+        "dq_flag_bits": {
+          "high_rejected": 512,
+          "low_rejected": 256,
+          "no_data": 1,
+          "warp_edge": 64
+        },
+        "dq_map_exists": true,
+        "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+        "dq_map_pixel_verification": {
+          "result": {
+            "counts": {
+              "high_rejected": 32370393,
+              "low_rejected": 13114786,
+              "valid": 20892861,
+              "warp_edge": 5394370
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 6422,
+            "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 2048,
+            "total_pixels": 61651200,
+            "unknown_flags": [],
+            "width": 9600
+          },
+          "status": "verified",
+          "summary_matches": {
+            "high_rejected": {
+              "actual": 32370393,
+              "delta": 0,
+              "passed": true,
+              "summary": 32370393
+            },
+            "low_rejected": {
+              "actual": 13114786,
+              "delta": 0,
+              "passed": true,
+              "summary": 13114786
+            },
+            "valid": {
+              "actual": 20892861,
+              "delta": 0,
+              "passed": true,
+              "summary": 20892861
+            },
+            "warp_edge": {
+              "actual": 5394370,
+              "delta": 0,
+              "passed": true,
+              "summary": 5394370
+            }
+          },
+          "summary_tolerance_pixels": 0,
+          "verified": true
+        },
+        "high_rejection_map_exists": true,
+        "high_rejection_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+        "index": 0,
+        "low_rejection_map_exists": true,
+        "low_rejection_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+        "master_exists": true,
+        "master_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+        "normalized_from_legacy": false,
+        "output_count_map_verification": {
+          "coverage": {
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 193.0,
+              "min": 1.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+              "positive_pixels": 61651200,
+              "positive_threshold": 0.0,
+              "rounded_sum": 11735503879,
+              "schema_version": 1,
+              "sum": 11735503879.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 0
+            },
+            "status": "verified",
+            "verified": true
+          },
+          "high_rejection": {
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 10.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+              "positive_pixels": 32370393,
+              "positive_threshold": 0.0,
+              "rounded_sum": 43618886,
+              "schema_version": 1,
+              "sum": 43618886.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 29280807
+            },
+            "status": "verified",
+            "verified": true
+          },
+          "low_rejection": {
+            "result": {
+              "finite_pixels": 61651200,
+              "height": 6422,
+              "max": 12.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+              "positive_pixels": 13114786,
+              "positive_threshold": 0.0,
+              "rounded_sum": 18869537,
+              "schema_version": 1,
+              "sum": 18869537.0,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "width": 9600,
+              "zero_or_less_pixels": 48536414
+            },
+            "status": "verified",
+            "verified": true
+          }
+        },
+        "output_map_policy": {
+          "available": [
+            "master",
+            "weight",
+            "dq",
+            "coverage",
+            "low_rejection",
+            "high_rejection"
+          ],
+          "description": "audit writes all available diagnostic maps; science writes master, weight, coverage, and DQ maps; minimal writes only master.",
+          "mode": "audit",
+          "skipped": [],
+          "written": [
+            "master",
+            "weight",
+            "dq",
+            "coverage",
+            "low_rejection",
+            "high_rejection"
+          ]
+        },
+        "source_file": "resident_artifacts.json",
+        "source_kind": "resident_artifact",
+        "source_provenance": {
+          "active_frame_count": 193,
+          "available": true,
+          "finite_pre_rejection_coverage": {
+            "finite_pixels": 61651200,
+            "max": 193.0,
+            "mean": 191.36679077148438,
+            "min": 1.0
+          },
+          "geometric_frame_count_matches_active": true,
+          "geometric_full_pixels": 56256830,
+          "geometric_partial_pixels": 5394370,
+          "geometric_warp_coverage": {
+            "finite_pixels": 61651200,
+            "max": 193.0,
+            "mean": 191.36679077148438,
+            "min": 1.0
+          },
+          "geometric_warp_coverage_frame_count": 193,
+          "geometric_zero_pixels": 0,
+          "note": "geometric_warp_coverage is accumulated by the resident CUDA warp path before sigma rejection. finite_pre_rejection_coverage remains coverage + low/high rejection counts for rejection accounting.",
+          "partial_edge_inference": "available_from_geometric_warp_coverage",
+          "partial_pre_rejection_pixels": 5394370,
+          "post_rejection_coverage": {
+            "finite_pixels": 61651200,
+            "max": 193.0,
+            "mean": 190.3531951904297,
+            "min": 1.0
+          },
+          "post_rejection_zero_pixels": 0,
+          "rejected_sample_count": 62488423.0,
+          "rejected_sample_count_source": "low_high_rejection_maps",
+          "rejection_reduced_pixels": 39152238,
+          "source_terms": [
+            "post_rejection_coverage",
+            "low_rejection",
+            "high_rejection",
+            "geometric_warp_coverage"
+          ],
+          "zero_pre_rejection_pixels": 0
+        },
+        "summary": {
+          "active_frame_count": 193,
+          "engine": "cuda_resident_stack",
+          "finite_pre_rejection_pixels": 61651200,
+          "high_rejected_pixels": 32370393,
+          "input_flagged_samples": null,
+          "input_nonfinite_samples": null,
+          "input_samples": null,
+          "item": "H",
+          "low_rejected_pixels": 13114786,
+          "no_data_pixels": null,
+          "output_dq_summary": {
+            "high_rejected": 32370393,
+            "low_rejected": 13114786,
+            "valid": 20892861,
+            "warp_edge": 5394370
+          },
+          "partial_coverage_pixels": 5394370,
+          "post_rejection_pixels": 61651200,
+          "rejected_samples": 62488423,
+          "schema_version": 1,
+          "semantics": "Resident CUDA provenance summarizes post-rejection coverage, rejection counts, and optional geometric warp coverage from resident output maps.",
+          "source_dq_flag_counts": {},
+          "source_schema": "resident_dq_coverage_provenance",
+          "source_terms": [
+            "post_rejection_coverage",
+            "low_rejection",
+            "high_rejection",
+            "geometric_warp_coverage"
+          ],
+          "stage": "integration",
+          "valid_pixels": 20892861,
+          "warp_edge_pixels": 5394370,
+          "zero_coverage_pixels": 0
+        },
+        "weight_map_exists": true,
+        "weight_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_weight_map_H.fits"
+      }
+    ],
+    "schema_version": 1
+  },
+  "frame_accounting": {
+    "calculated_final_status_counts": {
+      "integrated": 193,
+      "zero_weight": 7
+    },
+    "exception_frames": [
+      {
+        "filter": "H",
+        "final_status": "zero_weight",
+        "frame_id": "F000160",
+        "input_path": "C:\\gpwbpp_runs\\final_m38_h_200\\input\\Light\\LIGHT_H_0100.fits",
+        "integration_status": "zero_weight",
+        "integration_weight": 0.0,
+        "local_norm_status": "disabled",
+        "primary_reason": "integration weight is zero",
+        "primary_stage": "integration",
+        "quality_gate_status": "not_run",
+        "reason_count": 1,
+        "registration_status": "excluded",
+        "warning_count": 5,
+        "warp_status": "resident_in_vram"
+      },
+      {
+        "filter": "H",
+        "final_status": "zero_weight",
+        "frame_id": "F000213",
+        "input_path": "C:\\gpwbpp_runs\\final_m38_h_200\\input\\Light\\LIGHT_H_0153.fits",
+        "integration_status": "zero_weight",
+        "integration_weight": 0.0,
+        "local_norm_status": "disabled",
+        "primary_reason": "integration weight is zero",
+        "primary_stage": "integration",
+        "quality_gate_status": "not_run",
+        "reason_count": 1,
+        "registration_status": "excluded",
+        "warning_count": 5,
+        "warp_status": "resident_in_vram"
+      },
+      {
+        "filter": "H",
+        "final_status": "zero_weight",
+        "frame_id": "F000214",
+        "input_path": "C:\\gpwbpp_runs\\final_m38_h_200\\input\\Light\\LIGHT_H_0154.fits",
+        "integration_status": "zero_weight",
+        "integration_weight": 0.0,
+        "local_norm_status": "disabled",
+        "primary_reason": "integration weight is zero",
+        "primary_stage": "integration",
+        "quality_gate_status": "not_run",
+        "reason_count": 1,
+        "registration_status": "excluded",
+        "warning_count": 5,
+        "warp_status": "resident_in_vram"
+      },
+      {
+        "filter": "H",
+        "final_status": "zero_weight",
+        "frame_id": "F000215",
+        "input_path": "C:\\gpwbpp_runs\\final_m38_h_200\\input\\Light\\LIGHT_H_0155.fits",
+        "integration_status": "zero_weight",
+        "integration_weight": 0.0,
+        "local_norm_status": "disabled",
+        "primary_reason": "integration weight is zero",
+        "primary_stage": "integration",
+        "quality_gate_status": "not_run",
+        "reason_count": 1,
+        "registration_status": "excluded",
+        "warning_count": 5,
+        "warp_status": "resident_in_vram"
+      },
+      {
+        "filter": "H",
+        "final_status": "zero_weight",
+        "frame_id": "F000216",
+        "input_path": "C:\\gpwbpp_runs\\final_m38_h_200\\input\\Light\\LIGHT_H_0156.fits",
+        "integration_status": "zero_weight",
+        "integration_weight": 0.0,
+        "local_norm_status": "disabled",
+        "primary_reason": "integration weight is zero",
+        "primary_stage": "integration",
+        "quality_gate_status": "not_run",
+        "reason_count": 1,
+        "registration_status": "excluded",
+        "warning_count": 5,
+        "warp_status": "resident_in_vram"
+      },
+      {
+        "filter": "H",
+        "final_status": "zero_weight",
+        "frame_id": "F000217",
+        "input_path": "C:\\gpwbpp_runs\\final_m38_h_200\\input\\Light\\LIGHT_H_0157.fits",
+        "integration_status": "zero_weight",
+        "integration_weight": 0.0,
+        "local_norm_status": "disabled",
+        "primary_reason": "integration weight is zero",
+        "primary_stage": "integration",
+        "quality_gate_status": "not_run",
+        "reason_count": 1,
+        "registration_status": "excluded",
+        "warning_count": 5,
+        "warp_status": "resident_in_vram"
+      },
+      {
+        "filter": "H",
+        "final_status": "zero_weight",
+        "frame_id": "F000218",
+        "input_path": "C:\\gpwbpp_runs\\final_m38_h_200\\input\\Light\\LIGHT_H_0158.fits",
+        "integration_status": "zero_weight",
+        "integration_weight": 0.0,
+        "local_norm_status": "disabled",
+        "primary_reason": "integration weight is zero",
+        "primary_stage": "integration",
+        "quality_gate_status": "not_run",
+        "reason_count": 1,
+        "registration_status": "excluded",
+        "warning_count": 5,
+        "warp_status": "resident_in_vram"
+      }
+    ],
+    "exception_summary": {
+      "count": 7,
+      "final_status_counts": {
+        "zero_weight": 7
+      },
+      "primary_stage_counts": {
+        "integration": 7
+      }
+    },
+    "exists": true,
+    "frame_count": 200,
+    "integration_source_stage": "resident_calibrated_stack",
+    "integration_weight_counts": {
+      "invalid": 0,
+      "positive": 193,
+      "total": 200,
+      "zero": 7
+    },
+    "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\frame_accounting.json",
+    "registration_counts": {
+      "accepted": 193,
+      "status_counts": {
+        "excluded": 7,
+        "ok": 192,
+        "reference": 1
+      },
+      "total": 200,
+      "zero_weight_statuses": 7
+    },
+    "schema_version": 1,
+    "sources": {
+      "calibration": false,
+      "integration": true,
+      "local_norm": true,
+      "plan": true,
+      "quality": false,
+      "registration": true,
+      "resident": true,
+      "warp": false
+    },
+    "summary": {
+      "calibrated_frames": 0,
+      "exception_frames": 7,
+      "final_status_counts": {
+        "integrated": 193,
+        "zero_weight": 7
+      },
+      "input_light_frames": 200,
+      "integrated_frames": 193,
+      "not_integrated_frames": 0,
+      "quality_accepted_frames": 0,
+      "quality_rejected_frames": 0,
+      "registration_accepted_frames": 193,
+      "resident_calibrated_frames": 200,
+      "warp_accepted_frames": 0,
+      "warp_skipped_frames": 0,
+      "zero_weight_frames": 7
+    }
+  },
+  "frame_type_counts": {
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "light": 200
+  },
+  "glass_run": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view",
+  "manifest_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\manifest.json",
+  "optimization_guidance": {
+    "exception_context": {
+      "count": 7,
+      "dominant_stage": "integration",
+      "final_status_counts": {
+        "zero_weight": 7
+      },
+      "note": "Exception frames explain active-frame count drift; timing priorities remain based on wall-clock stages.",
+      "primary_stage_counts": {
+        "integration": 7
+      },
+      "sample_frame_ids": [
+        "F000160",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ]
+    },
+    "primary_target": "io_upload_calibration_pipeline",
+    "schema_version": 1,
+    "stage_timing_rows": [
+      {
+        "actual_key": "light_read_upload_calibrate",
+        "actual_s": 7.153982399999222,
+        "baseline_s": 15.546634200029075,
+        "delta_s": -8.392651800029853,
+        "factor": 0.46016277915549353,
+        "note": "",
+        "stage": "light_read_upload_calibrate",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "resident_registration_component_accounted",
+        "actual_s": 3.9273199000216255,
+        "baseline_s": 15.875620800070465,
+        "delta_s": -11.948300900048839,
+        "factor": 0.2473805559782704,
+        "note": "",
+        "stage": "resident_registration_component_accounted",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "light_h2d_calibrate_store",
+        "actual_s": 2.3060552000006282,
+        "baseline_s": 2.7688988983863965,
+        "delta_s": -0.4628436983857682,
+        "factor": 0.832841965210252,
+        "note": "",
+        "stage": "light_h2d_calibrate_store",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "output_write",
+        "actual_s": 2.2748387999999977,
+        "baseline_s": 0.9690760000376031,
+        "delta_s": 1.3057627999623946,
+        "factor": 2.347430748374459,
+        "note": "",
+        "stage": "output_write",
+        "status": "regressed",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "resident_registration_warp",
+        "actual_s": 2.0032748999929026,
+        "baseline_s": 10.903585300431587,
+        "delta_s": -8.900310400438684,
+        "factor": 0.18372625561186823,
+        "note": "",
+        "stage": "resident_registration_warp",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "master_build_or_load",
+        "actual_s": 0.46706669999912265,
+        "baseline_s": 9.85976749996189,
+        "delta_s": -9.392700799962768,
+        "factor": 0.047370964883393846,
+        "note": "",
+        "stage": "master_build_or_load",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "resident_integration",
+        "actual_s": 0.3265083999995113,
+        "baseline_s": 0.2955454000039026,
+        "delta_s": 0.030962999995608698,
+        "factor": 1.1047656299005155,
+        "note": "",
+        "stage": "resident_integration",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "gc",
+        "actual_s": 0.0071706000017002225,
+        "baseline_s": 0.2969544001389295,
+        "delta_s": -0.28978380013722926,
+        "factor": 0.02414714177781327,
+        "note": "",
+        "stage": "gc",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "light_read_worker_cumulative",
+        "actual_s": 41.274104000009174,
+        "baseline_s": 45.18920989986509,
+        "delta_s": -3.9151058998559165,
+        "factor": 0.9133619306792172,
+        "note": "Cumulative worker-thread read/decode time. Use light_read_upload_calibrate and light_read_wait_wall for wall-clock performance gating.",
+        "stage": "light_read_decode_worker",
+        "status": "informational_cumulative",
+        "timing_kind": "worker_cumulative"
+      },
+      {
+        "actual_key": "light_fits_materialize_decode_worker_cumulative",
+        "actual_s": 36.670810600009645,
+        "baseline_s": 40.36132279911544,
+        "delta_s": -3.6905121991057968,
+        "factor": 0.9085631504826032,
+        "note": "Cumulative worker-thread FITS materialize/decode time. It may exceed wall-clock stage time when prefetch overlaps with GPU work, so it is informational.",
+        "stage": "light_fits_materialize_decode",
+        "status": "informational_cumulative",
+        "timing_kind": "worker_cumulative"
+      },
+      {
+        "actual_key": "light_fits_open_worker_cumulative",
+        "actual_s": 0.3095644000204629,
+        "baseline_s": 0.25601840019226074,
+        "delta_s": 0.053545999828202184,
+        "factor": 1.2091490290853746,
+        "note": "Cumulative worker-thread FITS open time. It may exceed wall-clock stage time when prefetch overlaps with GPU work, so it is informational.",
+        "stage": "light_fits_open",
+        "status": "informational_cumulative",
+        "timing_kind": "worker_cumulative"
+      }
+    ],
+    "targets": [
+      {
+        "baseline_s": 15.546634200029075,
+        "current_s": 7.153982399999222,
+        "delta_s": -8.392651800029853,
+        "factor": 0.46016277915549353,
+        "label": "I/O + upload + calibration overlap",
+        "next_action": "Use deeper double/multi buffering, pinned host rings, async H2D, and larger batches so GPU calibration overlaps CPU FITS decode and disk reads.",
+        "primary_stage": "light_read_upload_calibrate",
+        "priority_score": 7.153982399999222,
+        "rank": 1,
+        "related_stages": [
+          {
+            "actual_s": 41.274104000009174,
+            "stage": "light_read_worker_cumulative"
+          },
+          {
+            "actual_s": 2.3060552000006282,
+            "stage": "light_h2d_calibrate_store"
+          },
+          {
+            "actual_s": 41.274104000009174,
+            "stage": "light_read_decode_worker"
+          }
+        ],
+        "share_of_selected_wall": 0.601217289001583,
+        "status": "ok",
+        "target_id": "io_upload_calibration_pipeline",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "baseline_s": 0.9690760000376031,
+        "current_s": 2.2748387999999977,
+        "delta_s": 1.3057627999623946,
+        "factor": 2.347430748374459,
+        "label": "Output-map write policy",
+        "next_action": "Use science/minimal map policies for speed runs and keep full audit maps for validation runs.",
+        "primary_stage": "output_write",
+        "priority_score": 2.843548499999997,
+        "rank": 2,
+        "related_stages": [],
+        "share_of_selected_wall": 0.1911763741900961,
+        "status": "regressed",
+        "target_id": "output_write_policy",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "baseline_s": 10.903585300431587,
+        "current_s": 2.0032748999929026,
+        "delta_s": -8.900310400438684,
+        "factor": 0.18372625561186823,
+        "label": "Resident registration/warp batching",
+        "next_action": "Keep star tables, descriptors, candidate scoring, pixel refinement, and warp scheduling resident on the GPU; reduce per-frame Python orchestration and host/device synchronization.",
+        "primary_stage": "resident_registration_warp",
+        "priority_score": 2.0032748999929026,
+        "rank": 3,
+        "related_stages": [
+          {
+            "actual_s": 3.9273199000216255,
+            "stage": "resident_registration_component_accounted"
+          }
+        ],
+        "share_of_selected_wall": 0.16835427278920637,
+        "status": "ok",
+        "target_id": "resident_registration_warp",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "baseline_s": 9.85976749996189,
+        "current_s": 0.46706669999912265,
+        "delta_s": -9.392700799962768,
+        "factor": 0.047370964883393846,
+        "label": "Resident master-frame cache",
+        "next_action": "Reuse the shared resident master cache when calibration inputs and policies are unchanged.",
+        "primary_stage": "master_build_or_load",
+        "priority_score": 0.46706669999912265,
+        "rank": 4,
+        "related_stages": [],
+        "share_of_selected_wall": 0.039252064019114546,
+        "status": "ok",
+        "target_id": "resident_master_cache",
+        "timing_kind": "wall_or_stage"
+      }
+    ]
+  },
+  "output_numerical_drifts": [],
+  "passed": true,
+  "performance_regression": {
+    "items": [
+      {
+        "actual_key": "output_write",
+        "actual_s": 2.2748387999999977,
+        "baseline_s": 0.9690760000376031,
+        "delta_s": 1.3057627999623946,
+        "factor": 2.347430748374459,
+        "note": "",
+        "stage": "output_write",
+        "status": "regressed",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "light_fits_open_worker_cumulative",
+        "actual_s": 0.3095644000204629,
+        "baseline_s": 0.25601840019226074,
+        "delta_s": 0.053545999828202184,
+        "factor": 1.2091490290853746,
+        "note": "Cumulative worker-thread FITS open time. It may exceed wall-clock stage time when prefetch overlaps with GPU work, so it is informational.",
+        "stage": "light_fits_open",
+        "status": "informational_cumulative",
+        "timing_kind": "worker_cumulative"
+      },
+      {
+        "actual_key": "resident_integration",
+        "actual_s": 0.3265083999995113,
+        "baseline_s": 0.2955454000039026,
+        "delta_s": 0.030962999995608698,
+        "factor": 1.1047656299005155,
+        "note": "",
+        "stage": "resident_integration",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "light_read_worker_cumulative",
+        "actual_s": 41.274104000009174,
+        "baseline_s": 45.18920989986509,
+        "delta_s": -3.9151058998559165,
+        "factor": 0.9133619306792172,
+        "note": "Cumulative worker-thread read/decode time. Use light_read_upload_calibrate and light_read_wait_wall for wall-clock performance gating.",
+        "stage": "light_read_decode_worker",
+        "status": "informational_cumulative",
+        "timing_kind": "worker_cumulative"
+      },
+      {
+        "actual_key": "light_fits_materialize_decode_worker_cumulative",
+        "actual_s": 36.670810600009645,
+        "baseline_s": 40.36132279911544,
+        "delta_s": -3.6905121991057968,
+        "factor": 0.9085631504826032,
+        "note": "Cumulative worker-thread FITS materialize/decode time. It may exceed wall-clock stage time when prefetch overlaps with GPU work, so it is informational.",
+        "stage": "light_fits_materialize_decode",
+        "status": "informational_cumulative",
+        "timing_kind": "worker_cumulative"
+      },
+      {
+        "actual_key": "light_h2d_calibrate_store",
+        "actual_s": 2.3060552000006282,
+        "baseline_s": 2.7688988983863965,
+        "delta_s": -0.4628436983857682,
+        "factor": 0.832841965210252,
+        "note": "",
+        "stage": "light_h2d_calibrate_store",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "light_read_upload_calibrate",
+        "actual_s": 7.153982399999222,
+        "baseline_s": 15.546634200029075,
+        "delta_s": -8.392651800029853,
+        "factor": 0.46016277915549353,
+        "note": "",
+        "stage": "light_read_upload_calibrate",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "resident_registration_component_accounted",
+        "actual_s": 3.9273199000216255,
+        "baseline_s": 15.875620800070465,
+        "delta_s": -11.948300900048839,
+        "factor": 0.2473805559782704,
+        "note": "",
+        "stage": "resident_registration_component_accounted",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "resident_registration_warp",
+        "actual_s": 2.0032748999929026,
+        "baseline_s": 10.903585300431587,
+        "delta_s": -8.900310400438684,
+        "factor": 0.18372625561186823,
+        "note": "",
+        "stage": "resident_registration_warp",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "master_build_or_load",
+        "actual_s": 0.46706669999912265,
+        "baseline_s": 9.85976749996189,
+        "delta_s": -9.392700799962768,
+        "factor": 0.047370964883393846,
+        "note": "",
+        "stage": "master_build_or_load",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      },
+      {
+        "actual_key": "gc",
+        "actual_s": 0.0071706000017002225,
+        "baseline_s": 0.2969544001389295,
+        "delta_s": -0.28978380013722926,
+        "factor": 0.02414714177781327,
+        "note": "",
+        "stage": "gc",
+        "status": "ok",
+        "timing_kind": "wall_or_stage"
+      }
+    ],
+    "missing_count": 0,
+    "regressed_count": 1,
+    "schema_version": 1,
+    "status": "regressed",
+    "warning_regression_factor": 1.15,
+    "worst_regression": {
+      "actual_key": "output_write",
+      "actual_s": 2.2748387999999977,
+      "baseline_s": 0.9690760000376031,
+      "delta_s": 1.3057627999623946,
+      "factor": 2.347430748374459,
+      "note": "",
+      "stage": "output_write",
+      "status": "regressed",
+      "timing_kind": "wall_or_stage"
+    }
+  },
+  "pipeline_contract": {
+    "audit_type": "pipeline_invariant_contract",
+    "check_count": 15,
+    "check_names": [
+      "integration_artifact_exists",
+      "integration_outputs_present",
+      "integration_output_maps_available",
+      "integration_dq_contract",
+      "integration_stack_result_contract",
+      "integration_resident_result_contract",
+      "calibration_master_surfaces_present",
+      "calibration_master_surface_contract",
+      "resident_calibration_surface_contract",
+      "resident_calibrated_lights_present",
+      "resident_calibrated_light_contract",
+      "integration_dq_map_pixels_match_summary",
+      "integration_coverage_map_pixels_match_dq",
+      "integration_rejection_map_pixels_match_dq",
+      "local_normalization_contract"
+    ],
+    "failed_checks": [],
+    "integration": {
+      "maps": [
+        {
+          "exists": true,
+          "item": "H",
+          "map": "master",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+          "path_key": "master_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "weight",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_weight_map_H.fits",
+          "path_key": "weight_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "coverage",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+          "path_key": "coverage_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "dq",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+          "path_key": "dq_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "low_rejection",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+          "path_key": "low_rejection_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "high_rejection",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+          "path_key": "high_rejection_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        }
+      ],
+      "outputs": [
+        {
+          "backend": "cuda_resident_stack",
+          "dq_contract_ok": true,
+          "dq_map_exists": true,
+          "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+          "dq_provenance_engine": "cuda_resident_stack",
+          "dq_provenance_summary_present": true,
+          "dq_summary_has_valid": true,
+          "dq_summary_present": true,
+          "frame_count": 200,
+          "item": "H",
+          "rejection": "winsorized_sigma",
+          "resident_result_contract": {
+            "check_count": 9,
+            "contract": {
+              "active_frame_count": 193,
+              "backend": "cuda_resident_stack",
+              "checks": [
+                {
+                  "evidence": {
+                    "backend": "cuda_resident_stack",
+                    "memory_mode": "resident"
+                  },
+                  "name": "resident_identity",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "failed": [],
+                    "map_count": 6
+                  },
+                  "name": "required_maps_exist",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "keys": [
+                      "high_rejected",
+                      "low_rejected",
+                      "valid",
+                      "warp_edge"
+                    ]
+                  },
+                  "name": "dq_summary_present",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "engine": "cuda_resident_stack",
+                    "source_schema": "resident_dq_coverage_provenance",
+                    "stage": "integration"
+                  },
+                  "name": "resident_provenance_summary",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "dq_summary": {
+                      "high_rejected": 32370393,
+                      "low_rejected": 13114786,
+                      "valid": 20892861,
+                      "warp_edge": 5394370
+                    },
+                    "mismatches": {},
+                    "provenance_output_dq_summary": {
+                      "high_rejected": 32370393,
+                      "low_rejected": 13114786,
+                      "valid": 20892861,
+                      "warp_edge": 5394370
+                    }
+                  },
+                  "name": "dq_summary_matches_provenance",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "active_frame_count": 193,
+                    "frame_count": 200
+                  },
+                  "name": "active_frame_count_valid",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "keys": [
+                      "active_frame_count",
+                      "available",
+                      "finite_pre_rejection_coverage",
+                      "geometric_frame_count_matches_active",
+                      "geometric_full_pixels",
+                      "geometric_partial_pixels",
+                      "geometric_warp_coverage",
+                      "geometric_warp_coverage_frame_count",
+                      "geometric_zero_pixels",
+                      "note",
+                      "partial_edge_inference",
+                      "partial_pre_rejection_pixels",
+                      "post_rejection_coverage",
+                      "post_rejection_zero_pixels",
+                      "rejected_sample_count",
+                      "rejected_sample_count_source",
+                      "rejection_reduced_pixels",
+                      "source_terms",
+                      "zero_pre_rejection_pixels"
+                    ]
+                  },
+                  "name": "coverage_provenance_present",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "source_terms": [
+                      "geometric_warp_coverage",
+                      "high_rejection",
+                      "low_rejection",
+                      "post_rejection_coverage"
+                    ]
+                  },
+                  "name": "source_terms_present",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "coverage_provenance": true,
+                    "output": true
+                  },
+                  "name": "geometric_frame_count_matches_active",
+                  "note": "",
+                  "passed": true
+                }
+              ],
+              "contract_type": "resident_cuda_result_contract",
+              "filter": "H",
+              "frame_count": 200,
+              "index": 0,
+              "maps": [
+                {
+                  "exists": true,
+                  "map": "master",
+                  "ok": true,
+                  "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+                  "path_key": "master_path",
+                  "policy_skipped": false,
+                  "required": true
+                },
+                {
+                  "exists": true,
+                  "map": "weight",
+                  "ok": true,
+                  "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_weight_map_H.fits",
+                  "path_key": "weight_map_path",
+                  "policy_skipped": false,
+                  "required": true
+                },
+                {
+                  "exists": true,
+                  "map": "coverage",
+                  "ok": true,
+                  "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+                  "path_key": "coverage_map_path",
+                  "policy_skipped": false,
+                  "required": true
+                },
+                {
+                  "exists": true,
+                  "map": "dq",
+                  "ok": true,
+                  "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+                  "path_key": "dq_map_path",
+                  "policy_skipped": false,
+                  "required": true
+                },
+                {
+                  "exists": true,
+                  "map": "low_rejection",
+                  "ok": true,
+                  "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+                  "path_key": "low_rejection_map_path",
+                  "policy_skipped": false,
+                  "required": true
+                },
+                {
+                  "exists": true,
+                  "map": "high_rejection",
+                  "ok": true,
+                  "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+                  "path_key": "high_rejection_map_path",
+                  "policy_skipped": false,
+                  "required": true
+                }
+              ],
+              "memory_mode": "resident",
+              "passed": true,
+              "pixel_verification": {
+                "enabled": false,
+                "tile_size": 2048,
+                "tolerance_pixels": 0
+              },
+              "rejection": "winsorized_sigma",
+              "schema_version": 1,
+              "status": "passed"
+            },
+            "contract_type": "resident_cuda_result_contract",
+            "passed": true,
+            "present": true,
+            "required": true,
+            "status": "passed"
+          },
+          "stack_engine_enabled": false,
+          "stack_result_contract": {
+            "check_count": 0,
+            "contract_type": null,
+            "passed": false,
+            "present": false,
+            "required": false,
+            "status": "not_required"
+          },
+          "tile_stack_mode": null
+        }
+      ]
+    },
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\pipeline_contract.json",
+    "pixel_verification": {
+      "enabled": true,
+      "integration_outputs": [
+        {
+          "count_maps": {
+            "coverage": {
+              "ok": true,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+              "required": true,
+              "result": {
+                "finite_pixels": 61651200,
+                "height": 6422,
+                "max": 193.0,
+                "min": 1.0,
+                "nonfinite_pixels": 0,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_coverage_map_H.fits",
+                "positive_pixels": 61651200,
+                "positive_threshold": 0.0,
+                "rounded_sum": 11735503879,
+                "schema_version": 1,
+                "sum": 11735503879.0,
+                "tile_size": 2048,
+                "total_pixels": 61651200,
+                "width": 9600,
+                "zero_or_less_pixels": 0
+              },
+              "status": "verified",
+              "summary_match": {
+                "no_data": {
+                  "actual": 0,
+                  "delta": 0,
+                  "passed": true,
+                  "summary": 0
+                }
+              },
+              "verified": true
+            },
+            "high_rejection": {
+              "ok": true,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+              "required": true,
+              "result": {
+                "finite_pixels": 61651200,
+                "height": 6422,
+                "max": 10.0,
+                "min": 0.0,
+                "nonfinite_pixels": 0,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_high_rejection_map_H.fits",
+                "positive_pixels": 32370393,
+                "positive_threshold": 0.0,
+                "rounded_sum": 43618886,
+                "schema_version": 1,
+                "sum": 43618886.0,
+                "tile_size": 2048,
+                "total_pixels": 61651200,
+                "width": 9600,
+                "zero_or_less_pixels": 29280807
+              },
+              "status": "verified",
+              "summary_match": {
+                "high_rejected": {
+                  "actual": 32370393,
+                  "delta": 0,
+                  "passed": true,
+                  "summary": 32370393
+                }
+              },
+              "verified": true
+            },
+            "low_rejection": {
+              "ok": true,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+              "required": true,
+              "result": {
+                "finite_pixels": 61651200,
+                "height": 6422,
+                "max": 12.0,
+                "min": 0.0,
+                "nonfinite_pixels": 0,
+                "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_low_rejection_map_H.fits",
+                "positive_pixels": 13114786,
+                "positive_threshold": 0.0,
+                "rounded_sum": 18869537,
+                "schema_version": 1,
+                "sum": 18869537.0,
+                "tile_size": 2048,
+                "total_pixels": 61651200,
+                "width": 9600,
+                "zero_or_less_pixels": 48536414
+              },
+              "status": "verified",
+              "summary_match": {
+                "low_rejected": {
+                  "actual": 13114786,
+                  "delta": 0,
+                  "passed": true,
+                  "summary": 13114786
+                }
+              },
+              "verified": true
+            }
+          },
+          "dq": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+            "required": true,
+            "result": {
+              "counts": {
+                "high_rejected": 32370393,
+                "low_rejected": 13114786,
+                "no_data": 0,
+                "valid": 20892861,
+                "warp_edge": 5394370
+              },
+              "flag_bits": {
+                "high_rejected": 512,
+                "low_rejected": 256,
+                "no_data": 1,
+                "valid": 0,
+                "warp_edge": 64
+              },
+              "height": 6422,
+              "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_dq_map_H.fits",
+              "schema_version": 1,
+              "tile_size": 2048,
+              "total_pixels": 61651200,
+              "unknown_flags": [],
+              "width": 9600
+            },
+            "status": "verified",
+            "summary_matches": {
+              "high_rejected": {
+                "actual": 32370393,
+                "delta": 0,
+                "passed": true,
+                "summary": 32370393
+              },
+              "low_rejected": {
+                "actual": 13114786,
+                "delta": 0,
+                "passed": true,
+                "summary": 13114786
+              },
+              "no_data": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              },
+              "valid": {
+                "actual": 20892861,
+                "delta": 0,
+                "passed": true,
+                "summary": 20892861
+              },
+              "warp_edge": {
+                "actual": 5394370,
+                "delta": 0,
+                "passed": true,
+                "summary": 5394370
+              }
+            },
+            "verified": true
+          },
+          "item": "H"
+        }
+      ],
+      "tile_size": 2048,
+      "tolerance_pixels": 0
+    },
+    "status": "passed"
+  },
+  "release_contract_evidence": {
+    "pipeline_contract": {
+      "benchmark_check_count": 8,
+      "checks": [
+        {
+          "evidence": {
+            "audit_type": "pipeline_invariant_contract",
+            "exists": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\pipeline_contract.json"
+          },
+          "name": "pipeline_contract_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed_checks": [],
+            "status": "passed"
+          },
+          "name": "pipeline_contract_passed",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\pipeline_contract.json",
+            "present": true,
+            "required": true
+          },
+          "name": "contract_pipeline_contract_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "pipeline_invariant_contract",
+            "required": "pipeline_invariant_contract"
+          },
+          "name": "contract_pipeline_contract_audit_type",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "failed_checks": [],
+            "status": "passed"
+          },
+          "name": "contract_pipeline_contract_passed",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 15,
+            "required_min": 3
+          },
+          "name": "contract_pipeline_contract_min_check_count",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "available": [
+              "integration_artifact_exists",
+              "integration_outputs_present",
+              "integration_output_maps_available",
+              "integration_dq_contract",
+              "integration_stack_result_contract",
+              "integration_resident_result_contract",
+              "calibration_master_surfaces_present",
+              "calibration_master_surface_contract",
+              "resident_calibration_surface_contract",
+              "resident_calibrated_lights_present",
+              "resident_calibrated_light_contract",
+              "integration_dq_map_pixels_match_summary",
+              "integration_coverage_map_pixels_match_dq",
+              "integration_rejection_map_pixels_match_dq",
+              "local_normalization_contract"
+            ],
+            "required": "calibration_master_surface_contract"
+          },
+          "name": "contract_pipeline_contract_check:calibration_master_surface_contract",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "available": [
+              "integration_artifact_exists",
+              "integration_outputs_present",
+              "integration_output_maps_available",
+              "integration_dq_contract",
+              "integration_stack_result_contract",
+              "integration_resident_result_contract",
+              "calibration_master_surfaces_present",
+              "calibration_master_surface_contract",
+              "resident_calibration_surface_contract",
+              "resident_calibrated_lights_present",
+              "resident_calibrated_light_contract",
+              "integration_dq_map_pixels_match_summary",
+              "integration_coverage_map_pixels_match_dq",
+              "integration_rejection_map_pixels_match_dq",
+              "local_normalization_contract"
+            ],
+            "required": "resident_calibrated_light_contract"
+          },
+          "name": "contract_pipeline_contract_check:resident_calibrated_light_contract",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "available": [
+              "integration_artifact_exists",
+              "integration_outputs_present",
+              "integration_output_maps_available",
+              "integration_dq_contract",
+              "integration_stack_result_contract",
+              "integration_resident_result_contract",
+              "calibration_master_surfaces_present",
+              "calibration_master_surface_contract",
+              "resident_calibration_surface_contract",
+              "resident_calibrated_lights_present",
+              "resident_calibrated_light_contract",
+              "integration_dq_map_pixels_match_summary",
+              "integration_coverage_map_pixels_match_dq",
+              "integration_rejection_map_pixels_match_dq",
+              "local_normalization_contract"
+            ],
+            "required": "integration_resident_result_contract"
+          },
+          "name": "contract_pipeline_contract_check:integration_resident_result_contract",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed_checks": []
+          },
+          "name": "contract_pipeline_contract_no_failed_checks",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "direct_check_count": 2,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "passed_check_count": 10,
+      "pipeline_contract_audit_type": "pipeline_invariant_contract",
+      "pipeline_contract_check_count": 15,
+      "pipeline_contract_passed": true,
+      "pipeline_contract_path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\pipeline_contract.json",
+      "pipeline_contract_status": "passed",
+      "required_by_benchmark_contract": true,
+      "status": "passed"
+    },
+    "stack_engine_default_promotion": {
+      "adoption_recommendation": "stack_engine_default_ready",
+      "benchmark_check_count": 9,
+      "checks": [
+        {
+          "evidence": {
+            "audit_type": "stack_engine_default_contract",
+            "exists": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\stack_engine_contract.json"
+          },
+          "name": "stack_engine_contract_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed_checks": [],
+            "status": "passed"
+          },
+          "name": "stack_engine_contract_passed",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\stack_engine_contract.json",
+            "present": true,
+            "required": true
+          },
+          "name": "contract_stack_engine_default_promotion_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "stack_engine_default_contract",
+            "required": "stack_engine_default_contract"
+          },
+          "name": "contract_stack_engine_default_promotion_audit_type",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "failed_checks": [],
+            "status": "passed"
+          },
+          "name": "contract_stack_engine_default_promotion_contract_passed",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "blockers": [],
+            "status": "ready"
+          },
+          "name": "contract_stack_engine_default_promotion_ready",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "all",
+            "required": "all"
+          },
+          "name": "contract_stack_engine_default_promotion_scope",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "stack_engine_default_ready",
+            "required": "stack_engine_default_ready"
+          },
+          "name": "contract_stack_engine_default_promotion_recommendation",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 0,
+            "required_max": 0
+          },
+          "name": "contract_stack_engine_default_promotion_gap_count",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 0,
+            "required_max": 0
+          },
+          "name": "contract_stack_engine_default_promotion_blocker_count",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed_checks": []
+          },
+          "name": "contract_stack_engine_default_promotion_no_failed_checks",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "default_promotion_blocker_count": 0,
+      "default_promotion_gap_count": 0,
+      "default_promotion_ready": true,
+      "default_promotion_status": "ready",
+      "direct_check_count": 2,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "passed_check_count": 11,
+      "required_by_benchmark_contract": true,
+      "stack_engine_contract_audit_type": "stack_engine_default_contract",
+      "stack_engine_contract_passed": true,
+      "stack_engine_contract_path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\stack_engine_contract.json",
+      "stack_engine_contract_scope": "all",
+      "stack_engine_contract_status": "passed",
+      "status": "passed"
+    }
+  },
+  "resident_contracts": {
+    "calibration": null,
+    "result": {
+      "artifact_type": "resident_cuda_result_contract",
+      "audit_type": null,
+      "check_count": 3,
+      "exists": true,
+      "failed_checks": [],
+      "output_count": 1,
+      "passed": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\resident_result_contract.json",
+      "status": "passed"
+    }
+  },
+  "resident_determinism": null,
+  "schema_version": 1,
+  "speedup_summary": {
+    "clean_room": {
+      "note": "This summary uses GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only. It does not use PixInsight/WBPP implementation source.",
+      "status": "compliant"
+    },
+    "comparison": {
+      "abs_diff_p50": 6.217684131115675e-05,
+      "abs_diff_p90": 0.0001238255063071847,
+      "abs_diff_p99": 0.00043544556712731865,
+      "abs_diff_p999": 0.003971506122501051,
+      "compare_speedup_vs_reference": 86.09511739646426,
+      "compared_pixels": 59049052,
+      "coverage_fraction": 0.9577924192878646,
+      "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_vs_reference.json",
+      "relative_rms_diff": 0.39387848661696695,
+      "rms_diff": 0.0014945534429799121,
+      "shape_match": true
+    },
+    "glass": {
+      "backend": "cuda_resident_stack",
+      "command": "run",
+      "elapsed_s": 18.80478299999959,
+      "frame_count": 200,
+      "master_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\integration\\resident_master_H.fits",
+      "memory_mode": "resident",
+      "rejection": "winsorized_sigma",
+      "resident_device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "resident_estimated_peak_gib": 47.3117358982563,
+      "run": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view",
+      "weighted_frame_count": 193,
+      "weighting": "none",
+      "zero_weight_frame_count": 7
+    },
+    "glass_faster": true,
+    "meets_min_speedup": true,
+    "min_speedup": 2.0,
+    "schema_version": 1,
+    "speedup_vs_wbpp": 58.099101701945926,
+    "wbpp_blackbox": {
+      "clean_room_note": "Black-box execution only; official WBPP.js source content was not read.",
+      "dataset": "M38_H_200light_20bias_20dark_20flat",
+      "elapsed_s": 1092.541,
+      "final_master_files": [
+        "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterBias_BIN-1_9600x6422.xisf",
+        "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterDark_BIN-1_9600x6422_EXPOSURE-600.00s.xisf",
+        "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterFlat_BIN-1_9600x6422_FILTER-H_mono.xisf",
+        "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration.xisf",
+        "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\master\\masterLight_BIN-1_9600x6422_EXPOSURE-600.00s_FILTER-H_mono_fastIntegration_autocrop.xisf"
+      ],
+      "output_dir": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox",
+      "reported_wbpp_time": "[2026-05-12 13:25:19] * WeightedBatchPreprocessing: 18:03.17",
+      "result_path": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json"
+    }
+  },
+  "stack_engine_contract": {
+    "adoption": {
+      "contract_ready_count": 4,
+      "cuda_resident_surface_count": 4,
+      "engine_counts": {
+        "cuda_resident_stack": 4
+      },
+      "fallback_count": 0,
+      "gap_surfaces": [],
+      "other_surface_count": 0,
+      "phase2_stack_engine_default_gap_count": 0,
+      "recommendation": "stack_engine_default_ready",
+      "result_contract_passed_count": 4,
+      "schema_version": 1,
+      "stack_engine_surface_count": 0,
+      "surface_count": 4,
+      "surfaces": [
+        {
+          "contract_ok": true,
+          "engine_family": "cuda_resident_stack",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "resident_bias_H_H_9600x6422_bias-G4ed2155578_dark-G59e41ba802_flat-G4f1de65e6a",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": true,
+          "resident_result_contract_passed": null,
+          "result_contract_passed": true,
+          "science_contract_ok": true,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": true,
+          "stack_result_contract_passed": true,
+          "summary_engine": "cuda_resident_stack",
+          "surface": "master_calibration",
+          "tile_stack_mode": "cuda_resident_stack",
+          "type": "bias"
+        },
+        {
+          "contract_ok": true,
+          "engine_family": "cuda_resident_stack",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "resident_dark_H_H_9600x6422_bias-G4ed2155578_dark-G59e41ba802_flat-G4f1de65e6a",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": true,
+          "resident_result_contract_passed": null,
+          "result_contract_passed": true,
+          "science_contract_ok": true,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": true,
+          "stack_result_contract_passed": true,
+          "summary_engine": "cuda_resident_stack",
+          "surface": "master_calibration",
+          "tile_stack_mode": "cuda_resident_stack",
+          "type": "dark"
+        },
+        {
+          "contract_ok": true,
+          "engine_family": "cuda_resident_stack",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "resident_flat_H_H_9600x6422_bias-G4ed2155578_dark-G59e41ba802_flat-G4f1de65e6a",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": true,
+          "resident_result_contract_passed": null,
+          "result_contract_passed": true,
+          "science_contract_ok": true,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": true,
+          "stack_result_contract_passed": true,
+          "summary_engine": "cuda_resident_stack",
+          "surface": "master_calibration",
+          "tile_stack_mode": "cuda_resident_stack",
+          "type": "flat"
+        },
+        {
+          "contract_ok": true,
+          "engine_family": "cuda_resident_stack",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "H",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": null,
+          "resident_result_contract_passed": true,
+          "result_contract_passed": true,
+          "science_contract_ok": null,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": false,
+          "stack_result_contract_passed": false,
+          "summary_engine": "cuda_resident_stack",
+          "surface": "integration",
+          "tile_stack_mode": null,
+          "type": "light"
+        }
+      ],
+      "target_engine": "stack_engine_cpu"
+    },
+    "audit_type": "stack_engine_default_contract",
+    "check_count": 7,
+    "check_names": [
+      "calibration_artifact_exists",
+      "calibration_master_records_present",
+      "calibration_masters_use_stack_engine",
+      "calibration_masters_science_auditable",
+      "integration_artifact_exists",
+      "integration_output_records_present",
+      "integration_outputs_use:cuda_resident_stack"
+    ],
+    "default_promotion": {
+      "actual_scope": "all",
+      "blocker_count": 0,
+      "blockers": [],
+      "calibration_surface_count": 3,
+      "integration_surface_count": 1,
+      "phase2_stack_engine_default_gap_count": 0,
+      "ready": true,
+      "recommendation": "stack_engine_default_ready",
+      "required_scope": "all",
+      "schema_version": 1,
+      "status": "ready",
+      "surface_count": 4,
+      "target_engine": "stack_engine_cpu"
+    },
+    "expected_integration_engine": "cuda_resident_stack",
+    "failed_checks": [],
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\guardrails\\stack_engine_contract.json",
+    "scope": "all",
+    "status": "passed"
+  },
+  "status": "passed",
+  "wbpp_result": "C:\\gpwbpp_runs\\final_m38_h_200\\pixinsight_wbpp_blackbox\\wbpp_blackbox_result.json"
+}

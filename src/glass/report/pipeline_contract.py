@@ -69,6 +69,13 @@ def _positive_int(value: Any) -> bool:
         return False
 
 
+def _nonnegative_int(value: Any) -> bool:
+    try:
+        return int(value) >= 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _stack_result_contract_state_from_provenance(
     provenance: Any,
     *,
@@ -197,14 +204,40 @@ def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[
     for index, payload in enumerate(lights):
         if not isinstance(payload, dict):
             continue
+        is_resident = (
+            payload.get("backend") == "cuda_resident_stack"
+            or payload.get("status") == "resident_in_vram"
+            or payload.get("source_stage") == "resident_calibrated_stack"
+        )
         dq_summary = payload.get("dq_summary") if isinstance(payload.get("dq_summary"), dict) else {}
         path_exists = _path_exists(payload.get("path"), run_root)
         dq_path_exists = _path_exists(payload.get("dq_mask_path"), run_root)
+        resident_contract_ok = (
+            is_resident
+            and bool(payload.get("frame_id"))
+            and payload.get("status") == "resident_in_vram"
+            and payload.get("backend") == "cuda_resident_stack"
+            and payload.get("source_stage") == "resident_calibrated_stack"
+            and _nonnegative_int(payload.get("resident_stack_index"))
+        )
+        dq_contract_ok = (
+            path_exists
+            and dq_path_exists
+            and isinstance(payload.get("dq_summary"), dict)
+            and "valid" in dq_summary
+            and _positive_int(payload.get("tile_count"))
+            and _positive_int(payload.get("tile_size"))
+        )
         rows.append(
             {
                 "index": index,
                 "frame_id": payload.get("frame_id"),
                 "backend": payload.get("backend"),
+                "status": payload.get("status"),
+                "source_stage": payload.get("source_stage"),
+                "resident": is_resident,
+                "resident_stack_index": payload.get("resident_stack_index"),
+                "resident_output_index": payload.get("resident_output_index"),
                 "path": payload.get("path"),
                 "path_exists": path_exists,
                 "dq_mask_path": payload.get("dq_mask_path"),
@@ -213,14 +246,9 @@ def _calibrated_light_rows(calibration: dict[str, Any], run_root: Path) -> list[
                 "dq_summary_has_valid": "valid" in dq_summary,
                 "tile_count": payload.get("tile_count"),
                 "tile_size": payload.get("tile_size"),
-                "contract_ok": (
-                    path_exists
-                    and dq_path_exists
-                    and isinstance(payload.get("dq_summary"), dict)
-                    and "valid" in dq_summary
-                    and _positive_int(payload.get("tile_count"))
-                    and _positive_int(payload.get("tile_size"))
-                ),
+                "resident_contract_ok": bool(resident_contract_ok),
+                "dq_contract_ok": bool(dq_contract_ok),
+                "contract_ok": bool(resident_contract_ok) or bool(dq_contract_ok),
             }
         )
     return rows
@@ -705,6 +733,12 @@ def build_pipeline_contract_audit(
     resident_calibration_rows = _resident_calibration_rows(resident_calibration_contract)
     calibration_master_rows = [*local_calibration_master_rows, *resident_calibration_rows]
     calibrated_light_rows = _calibrated_light_rows(calibration, run_root)
+    local_calibrated_light_rows = [row for row in calibrated_light_rows if not row.get("resident")]
+    resident_calibrated_light_rows = [row for row in calibrated_light_rows if row.get("resident")]
+    resident_native_calibration = (
+        calibration.get("artifact_type") == "resident_cuda_calibration_artifacts"
+        or calibration.get("source_stage") == "resident_calibrated_stack"
+    )
     warp_rows = _warp_rows(warp, run_root)
     skipped_warp_rows = _skipped_warp_rows(warp)
     local_norm_rows = _local_norm_rows(local_norm, run_root)
@@ -824,27 +858,51 @@ def build_pipeline_contract_audit(
                 ),
             ]
         )
-    if calibration_path.exists():
+    if calibration_path.exists() and not resident_native_calibration:
         checks.extend(
             [
                 _check(
                     "calibrated_lights_present",
-                    bool(calibrated_light_rows),
-                    {"actual": len(calibrated_light_rows), "required_min": 1},
+                    bool(local_calibrated_light_rows),
+                    {"actual": len(local_calibrated_light_rows), "required_min": 1},
                 ),
                 _check(
                     "calibrated_light_dq_contract",
-                    bool(calibrated_light_rows)
-                    and all(bool(row["contract_ok"]) for row in calibrated_light_rows),
+                    bool(local_calibrated_light_rows)
+                    and all(bool(row["dq_contract_ok"]) for row in local_calibrated_light_rows),
                     {
-                        "light_count": len(calibrated_light_rows),
+                        "light_count": len(local_calibrated_light_rows),
                         "failed": [
                             row["frame_id"] or row["index"]
-                            for row in calibrated_light_rows
-                            if not row["contract_ok"]
+                            for row in local_calibrated_light_rows
+                            if not row["dq_contract_ok"]
                         ],
                     },
                     "Calibrated light records must carry a calibrated image path, DQ map path, DQ summary, and tile metadata.",
+                ),
+            ]
+        )
+    if calibration_path.exists() and resident_native_calibration:
+        checks.extend(
+            [
+                _check(
+                    "resident_calibrated_lights_present",
+                    bool(resident_calibrated_light_rows),
+                    {"actual": len(resident_calibrated_light_rows), "required_min": 1},
+                ),
+                _check(
+                    "resident_calibrated_light_contract",
+                    bool(resident_calibrated_light_rows)
+                    and all(bool(row["resident_contract_ok"]) for row in resident_calibrated_light_rows),
+                    {
+                        "light_count": len(resident_calibrated_light_rows),
+                        "failed": [
+                            row["frame_id"] or row["index"]
+                            for row in resident_calibrated_light_rows
+                            if not row["resident_contract_ok"]
+                        ],
+                    },
+                    "Resident calibrated light records must carry frame id, stack index, backend, source stage, and in-VRAM status.",
                 ),
             ]
         )
@@ -972,13 +1030,17 @@ def build_pipeline_contract_audit(
             "artifact_path": str(calibration_path),
             "exists": calibration_path.exists(),
             "resident_calibration_contract_attached": bool(resident_calibration_rows),
+            "resident_native_calibration_artifact": bool(resident_native_calibration),
             "master_count": len(calibration_master_rows),
             "local_master_count": len(local_calibration_master_rows),
             "resident_master_count": len(resident_calibration_rows),
             "calibrated_light_count": len(calibrated_light_rows),
+            "local_calibrated_light_count": len(local_calibrated_light_rows),
+            "resident_calibrated_light_count": len(resident_calibrated_light_rows),
             "masters": calibration_master_rows,
             "resident_masters": resident_calibration_rows,
             "calibrated_lights": calibrated_light_rows,
+            "resident_calibrated_lights": resident_calibrated_light_rows,
         },
         "warp": {"outputs": warp_rows, "skipped_frames": skipped_warp_rows},
         "local_normalization": {

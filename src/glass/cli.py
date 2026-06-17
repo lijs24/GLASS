@@ -17,6 +17,7 @@ from glass.engine.local_norm import local_normalize_registered_frames
 from glass.engine.pipeline import initialize_run, run_calibration_stages
 from glass.engine.quality import measure_calibrated_quality
 from glass.engine.registration import register_calibrated_frames
+from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
 from glass.engine.resident_cuda import run_resident_calibration_integration
 from glass.engine.warp import warp_registered_frames
 from glass.engine.resume import resume_summary
@@ -2150,6 +2151,21 @@ def cmd_resident_calibration_contract(args: argparse.Namespace) -> int:
         }
     )
     return 0 if payload.get("passed") or not args.fail_on_failed else 2
+
+
+def cmd_resident_calibration_artifacts(args: argparse.Namespace) -> int:
+    payload = build_resident_calibration_artifacts(args.run)
+    out = Path(args.out) if args.out else Path(args.run) / "calibration_artifacts.json"
+    write_json(out, payload)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "master_count": len(payload.get("masters") or {}),
+            "calibrated_light_count": len(payload.get("calibrated_lights") or []),
+            "out": str(out),
+        }
+    )
+    return 0
 
 
 def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
@@ -4764,6 +4780,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if the contract fails",
     )
     resident_calibration_contract.set_defaults(func=cmd_resident_calibration_contract)
+
+    resident_calibration_artifacts = sub.add_parser(
+        "resident-calibration-artifacts",
+        help="write resident CUDA calibration_artifacts.json from resident_artifacts.json",
+    )
+    resident_calibration_artifacts.add_argument(
+        "--run",
+        required=True,
+        help="GLASS run directory with resident_artifacts.json",
+    )
+    resident_calibration_artifacts.add_argument(
+        "--out",
+        help="output calibration_artifacts JSON; defaults to RUN/calibration_artifacts.json",
+    )
+    resident_calibration_artifacts.set_defaults(func=cmd_resident_calibration_artifacts)
 
     resident_result_contract = sub.add_parser(
         "resident-result-contract",

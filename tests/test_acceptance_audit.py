@@ -373,7 +373,7 @@ def _add_pipeline_contract_requirement(path: Path) -> None:
         "min_check_count": 1,
         "required_check_names": [
             "calibration_master_surface_contract",
-            "resident_calibration_surface_contract",
+            "resident_calibrated_light_contract",
             "integration_resident_result_contract",
         ],
         "allow_failed_checks": False,
@@ -443,9 +443,9 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
             "note": "",
         },
         {
-            "name": "resident_calibration_surface_contract",
+            "name": "resident_calibrated_light_contract",
             "passed": passed,
-            "evidence": {"resident_surface_count": 1, "failed": [] if passed else ["resident_calibration_H"]},
+            "evidence": {"light_count": 3, "failed": [] if passed else ["light_001"]},
             "note": "",
         },
         {
@@ -970,7 +970,7 @@ def test_acceptance_audit_fails_failed_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_passed"]["passed"] is False
     assert audit["pipeline_contract"]["failed_checks"] == [
         "calibration_master_surface_contract",
-        "resident_calibration_surface_contract",
+        "resident_calibrated_light_contract",
         "integration_resident_result_contract",
     ]
 
@@ -1044,7 +1044,7 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
     assert checks["contract_pipeline_contract_passed"] is True
     assert checks["contract_pipeline_contract_min_check_count"] is True
     assert checks["contract_pipeline_contract_check:calibration_master_surface_contract"] is True
-    assert checks["contract_pipeline_contract_check:resident_calibration_surface_contract"] is True
+    assert checks["contract_pipeline_contract_check:resident_calibrated_light_contract"] is True
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is True
     assert checks["contract_pipeline_contract_no_failed_checks"] is True
     pipeline_evidence = audit["release_contract_evidence"]["pipeline_contract"]
@@ -1060,7 +1060,7 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
         "contract_pipeline_contract_present",
         "contract_pipeline_contract_passed",
         "contract_pipeline_contract_check:calibration_master_surface_contract",
-        "contract_pipeline_contract_check:resident_calibration_surface_contract",
+        "contract_pipeline_contract_check:resident_calibrated_light_contract",
         "contract_pipeline_contract_check:integration_resident_result_contract",
     }
 

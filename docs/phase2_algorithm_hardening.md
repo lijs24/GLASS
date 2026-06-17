@@ -3512,6 +3512,26 @@ integration where applicable.
 - Keep this gate contract-only: no image processing algorithm changes and no
   new algorithm-source entry required.
 
+### S2-Gate 209: Native Resident Calibration Artifact
+
+- Make resident CUDA runs write a first-class `calibration_artifacts.json`
+  alongside `resident_artifacts.json`.
+- Represent resident master bias/dark/flat surfaces with explicit
+  `cuda_resident_stack` backend, cache path, stats, dark/bias semantics,
+  flat normalization semantics, full-frame resident tile scope, and embedded
+  resident master-surface contracts.
+- Represent resident light calibration as per-frame `resident_in_vram` ledger
+  rows instead of pretending calibrated FITS/DQ-mask files exist on disk.
+- Extend `glass pipeline-contract` so resident-native calibration artifacts use
+  `resident_calibrated_lights_present` and
+  `resident_calibrated_light_contract`, while CPU/out-of-core calibrated FITS
+  rows still use `calibrated_light_dq_contract`.
+- Extend StackEngine contract handling so native resident calibration master
+  rows count as CUDA resident StackEngine-family surfaces when their embedded
+  resident master contracts and science metadata pass.
+- Keep this gate artifact-only: no image processing algorithm changes and no
+  new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:
