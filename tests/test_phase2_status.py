@@ -137,14 +137,20 @@ def _write_default_route_acceptance(path: Path, *, route_passed: bool = True) ->
     )
 
 
-def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
+def _write_pipeline_contract(
+    path: Path,
+    *,
+    passed: bool = True,
+    rejection_sample_accounting_passed: bool = True,
+) -> None:
+    pipeline_passed = passed and rejection_sample_accounting_passed
     write_json(
         path,
         {
             "schema_version": 1,
             "audit_type": "pipeline_invariant_contract",
-            "status": "passed" if passed else "failed",
-            "passed": passed,
+            "status": "passed" if pipeline_passed else "failed",
+            "passed": pipeline_passed,
             "checks": [
                 {"name": "integration_output_maps_available", "passed": passed},
                 {"name": "integration_dq_contract", "passed": passed},
@@ -153,6 +159,29 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
                 {"name": "integration_dq_map_pixels_match_summary", "passed": passed},
                 {"name": "integration_coverage_map_pixels_match_dq", "passed": passed},
                 {"name": "integration_rejection_map_pixels_match_dq", "passed": passed},
+                {
+                    "name": "integration_rejection_sample_counts_match_maps",
+                    "passed": rejection_sample_accounting_passed,
+                    "evidence": {
+                        "verified_records": 1,
+                        "required_records": 1,
+                        "failed": []
+                        if rejection_sample_accounting_passed
+                        else [
+                            {
+                                "item": "H",
+                                "status": "verified",
+                                "map_rejected_sample_sum": 7,
+                                "source_counts": [
+                                    {
+                                        "name": "dq_coverage_provenance.rejected_sample_count",
+                                        "count": 6,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
             ],
             "calibration": {
                 "master_count": 3,
@@ -172,7 +201,48 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
                 "enabled": True,
                 "tile_size": 256,
                 "tolerance_pixels": 0,
-                "integration_outputs": [],
+                "integration_outputs": [
+                    {
+                        "item": "H",
+                        "status": "verified",
+                        "rejection_sample_accounting": {
+                            "status": "verified",
+                            "verified": True,
+                            "ok": rejection_sample_accounting_passed,
+                            "required": True,
+                            "rejection": "winsorized_sigma",
+                            "map_rejected_sample_sum": 6
+                            if rejection_sample_accounting_passed
+                            else 7,
+                            "source_counts": [
+                                {
+                                    "name": "dq_coverage_provenance.rejected_sample_count",
+                                    "count": 6,
+                                },
+                                {
+                                    "name": "dq_provenance_summary.rejected_samples",
+                                    "count": 6,
+                                },
+                            ],
+                            "source_matches": [
+                                {
+                                    "source": "dq_coverage_provenance.rejected_sample_count",
+                                    "actual": 6 if rejection_sample_accounting_passed else 7,
+                                    "summary": 6,
+                                    "delta": 0 if rejection_sample_accounting_passed else 1,
+                                    "passed": rejection_sample_accounting_passed,
+                                },
+                                {
+                                    "source": "dq_provenance_summary.rejected_samples",
+                                    "actual": 6 if rejection_sample_accounting_passed else 7,
+                                    "summary": 6,
+                                    "delta": 0 if rejection_sample_accounting_passed else 1,
+                                    "passed": rejection_sample_accounting_passed,
+                                },
+                            ],
+                        },
+                    }
+                ],
             },
         },
     )
@@ -277,6 +347,8 @@ def _status_payload(
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
+    pipeline_rejection_sample_check_present: bool = True,
+    pipeline_rejection_sample_status: str = "passed",
     default_change_ready: bool = True,
     release_recommendation: str = "promote_default_candidate",
 ) -> dict:
@@ -310,6 +382,19 @@ def _status_payload(
             "passed": pipeline_passed,
             "integration_dq_contract": pipeline_dq_contract,
             "pixel_verification_enabled": pixel_verification,
+            "integration_rejection_sample_counts_match_maps": (
+                pipeline_rejection_sample_status == "passed"
+            )
+            if pipeline_rejection_sample_check_present
+            else None,
+            "rejection_sample_accounting": {
+                "status": pipeline_rejection_sample_status,
+                "check_present": pipeline_rejection_sample_check_present,
+                "check_passed": (pipeline_rejection_sample_status == "passed")
+                if pipeline_rejection_sample_check_present
+                else None,
+                "failed_count": 0 if pipeline_rejection_sample_status == "passed" else 1,
+            },
         },
         "release_decision": {
             "status": "default_change_ready" if default_change_ready else "release_candidate_ready",
@@ -400,6 +485,9 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
     assert payload["pipeline_contract"]["pixel_verification_enabled"] is True
     assert payload["pipeline_contract"]["integration_dq_map_pixels_match_summary"] is True
+    assert payload["pipeline_contract"]["integration_rejection_sample_counts_match_maps"] is True
+    assert payload["pipeline_contract"]["rejection_sample_accounting_status"] == "passed"
+    assert payload["pipeline_contract"]["rejection_sample_accounting_failed_count"] == 0
     assert payload["release_decision"]["status"] == "default_change_ready"
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["release_decision"]["recommendation"] == "promote_default_candidate"
@@ -408,6 +496,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["resident_registration_fastpath_contract_passed_for_default"] is True
     assert checks["default_route_acceptance_passed"] is True
     assert checks["default_route_acceptance_route_contract_passed"] is True
+    assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["windows_publish_preflight_ready"] is True
 
 
@@ -474,6 +563,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Pipeline Contract" in text
     assert "Integration DQ contract: True" in text
     assert "DQ pixels match summary: True" in text
+    assert "Rejection sample counts match maps: True" in text
+    assert "Rejection sample accounting: passed failed=0" in text
     assert "Release Decision" in text
     assert "Default change ready: True" in text
     assert "Runtime repeat ratio vs best: 1.053" in text
@@ -581,6 +672,43 @@ def test_phase2_status_blocks_failed_publish_preflight_when_supplied(tmp_path: P
     ]
 
 
+def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=236)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract, rejection_sample_accounting_passed=False)
+    _write_release_decision(release_decision)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    accounting = status["pipeline_contract"]["rejection_sample_accounting"]
+    assert status["status"] == "attention_required"
+    assert checks["pipeline_contract_passed"]["passed"] is False
+    assert checks["pipeline_rejection_sample_accounting_passed"]["passed"] is False
+    assert accounting["status"] == "failed"
+    assert accounting["check_present"] is True
+    assert accounting["check_passed"] is False
+    assert accounting["failed_count"] == 1
+    assert accounting["failed_items"][0]["map_rejected_sample_sum"] == 7
+    assert accounting["failed_items"][0]["failed_matches"][0] == {
+        "source": "dq_coverage_provenance.rejected_sample_count",
+        "actual": 7,
+        "summary": 6,
+        "delta": 1,
+    }
+
+
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     baseline = tmp_path / "baseline.json"
     candidate = tmp_path / "candidate.json"
@@ -607,6 +735,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
+    assert checks["pipeline_rejection_sample_accounting_check_preserved"] is True
+    assert checks["pipeline_rejection_sample_accounting_passed_preserved"] is True
     assert checks["release_decision_default_change_ready_preserved"] is True
     assert checks["release_decision_promote_recommendation_preserved"] is True
 
@@ -630,6 +760,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
+            pipeline_rejection_sample_status="failed",
             default_change_ready=False,
             release_recommendation="repeat_benchmark_before_default_change",
         ),
@@ -658,6 +789,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["pipeline_integration_dq_contract_preserved"] is False
     assert checks["pipeline_pixel_verification_preserved"] is False
+    assert checks["pipeline_rejection_sample_accounting_check_preserved"] is True
+    assert checks["pipeline_rejection_sample_accounting_passed_preserved"] is False
     assert checks["release_decision_default_change_ready_preserved"] is False
     assert checks["release_decision_promote_recommendation_preserved"] is False
 
@@ -723,6 +856,38 @@ def test_phase2_status_compare_flags_default_route_acceptance_regression(tmp_pat
     assert checks["default_route_acceptance_route_contract_preserved"]["evidence"] == {
         "baseline": True,
         "candidate": False,
+    }
+
+
+def test_phase2_status_compare_flags_rejection_sample_accounting_regression(tmp_path: Path):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=235))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=236,
+            pipeline_rejection_sample_check_present=False,
+            pipeline_rejection_sample_status="not_available",
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["pipeline_rejection_sample_accounting_check_preserved"]["passed"] is False
+    assert checks["pipeline_rejection_sample_accounting_check_preserved"]["evidence"] == {
+        "baseline": True,
+        "candidate": False,
+    }
+    assert checks["pipeline_rejection_sample_accounting_passed_preserved"]["passed"] is False
+    assert checks["pipeline_rejection_sample_accounting_passed_preserved"]["evidence"] == {
+        "baseline": "passed",
+        "candidate": "not_available",
     }
 
 

@@ -3947,6 +3947,26 @@ integration where applicable.
 - Keep this gate acceptance/report scoped: no image math, CUDA kernel, runtime
   default, release packaging, or real-data benchmark rerun.
 
+### S2-Gate 236: Phase 2 Rejection Sample Status Handoff
+
+- Extend `glass phase2-status` so pipeline-contract rejection sample accounting
+  is summarized in the Phase 2 status artifact.
+- Surface the pipeline check
+  `integration_rejection_sample_counts_match_maps`, compact
+  `rejection_sample_accounting` status, check presence, accounted/required/
+  verified/failed row counts, failed output items, low/high rejection-map
+  sample totals, and failed source deltas.
+- Add `pipeline_rejection_sample_accounting_passed` to Phase 2 status checks so
+  supplied pixel-verified pipeline contracts cannot be green when rejected
+  sample maps disagree with provenance or the accounting row is missing.
+- Extend `glass phase2-status-compare` so a baseline with passing rejection
+  sample accounting requires the candidate to preserve both the accounting
+  check presence and passing status.
+- Add Phase 2 status and status-compare tests for passing accounting,
+  sample-count drift, and schema/check disappearance.
+- Keep this gate status/compare scoped: no image math, CUDA kernel, runtime
+  default, release packaging, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
