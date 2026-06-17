@@ -150,6 +150,16 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         "integration_rejection_map_pixels_match_dq": pipeline.get(
             "integration_rejection_map_pixels_match_dq"
         ),
+        "integration_rejection_sample_counts_match_maps": pipeline.get(
+            "integration_rejection_sample_counts_match_maps"
+        ),
+        "rejection_sample_accounting": pipeline.get("rejection_sample_accounting")
+        if isinstance(pipeline.get("rejection_sample_accounting"), dict)
+        else {},
+        "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
+        "rejection_sample_accounting_failed_count": pipeline.get(
+            "rejection_sample_accounting_failed_count"
+        ),
         "pixel_verification_enabled": pipeline.get("pixel_verification_enabled"),
         "pixel_verification_tile_size": pipeline.get("pixel_verification_tile_size"),
         "resident_native_calibration_artifact": pipeline.get("resident_native_calibration_artifact"),
@@ -352,6 +362,19 @@ def build_default_promotion_manifest(
             },
         ),
         _check(
+            "pipeline_rejection_sample_accounting_passed",
+            pipeline.get("integration_rejection_sample_counts_match_maps") is True
+            and pipeline.get("rejection_sample_accounting_status") == "passed",
+            {
+                "check": pipeline.get("integration_rejection_sample_counts_match_maps"),
+                "status": pipeline.get("rejection_sample_accounting_status"),
+                "failed_count": pipeline.get("rejection_sample_accounting_failed_count"),
+                "failed_items": (pipeline.get("rejection_sample_accounting") or {}).get(
+                    "failed_items"
+                ),
+            },
+        ),
+        _check(
             "resident_calibration_artifact_present",
             pipeline.get("resident_native_calibration_artifact") is True,
             {"actual": pipeline.get("resident_native_calibration_artifact")},
@@ -472,6 +495,7 @@ def _markdown(payload: dict[str, Any]) -> str:
     default_candidate = payload.get("default_candidate") or {}
     runtime = payload.get("runtime_repeat") or {}
     default_route = payload.get("default_route_acceptance") or {}
+    pipeline = payload.get("pipeline_contract") or {}
     doctor = payload.get("doctor") or {}
     device = doctor.get("device") if isinstance(doctor, dict) else {}
     lines = [
@@ -501,6 +525,7 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Route check count: `{default_route.get('route_check_count')}`",
         f"- Route failed checks: `{default_route.get('route_failed_checks')}`",
         f"- Speedup vs reference: `{default_route.get('speedup_vs_reference')}`",
+        f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
         "",
         "## Release Machine",
         "",

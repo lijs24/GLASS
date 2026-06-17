@@ -3967,6 +3967,22 @@ integration where applicable.
 - Keep this gate status/compare scoped: no image math, CUDA kernel, runtime
   default, release packaging, or real-data benchmark rerun.
 
+### S2-Gate 237: Promotion Rejection Sample Blocker
+
+- Extend `glass release-promotion-decision` so release-candidate and default
+  change readiness require pipeline rejection sample accounting to pass.
+- Preserve the `integration_rejection_sample_counts_match_maps` check and
+  compact `rejection_sample_accounting` evidence in `pipeline_handoff`.
+- Add `pipeline_rejection_sample_accounting_passed` to release-blocking checks
+  so sample-count drift blocks promotion even if DQ touched-pixel checks pass.
+- Extend `glass default-promotion-manifest` so Phase 2 status rejection sample
+  accounting also blocks final default-promotion readiness.
+- Surface the accounting status in release/default promotion Markdown output.
+- Add release-promotion and default-promotion tests for passing accounting and
+  sample-count drift blockers.
+- Keep this gate promotion-control scoped: no image math, CUDA kernel, runtime
+  default change, release packaging, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

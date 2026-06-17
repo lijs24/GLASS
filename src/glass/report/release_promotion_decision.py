@@ -101,6 +101,75 @@ def _pipeline_contract_check_state(pipeline: dict[str, Any], name: str) -> bool 
     return None
 
 
+def _pipeline_rejection_sample_accounting(pipeline: dict[str, Any]) -> dict[str, Any]:
+    embedded = pipeline.get("rejection_sample_accounting")
+    if isinstance(embedded, dict) and embedded:
+        return dict(embedded)
+
+    check_name = "integration_rejection_sample_counts_match_maps"
+    check_passed = _pipeline_contract_check_state(pipeline, check_name)
+    pixel_verification = (
+        pipeline.get("pixel_verification")
+        if isinstance(pipeline.get("pixel_verification"), dict)
+        else {}
+    )
+    integration_outputs = pixel_verification.get("integration_outputs")
+    if not isinstance(integration_outputs, list):
+        integration_outputs = []
+
+    rows: list[dict[str, Any]] = []
+    for output in integration_outputs:
+        if not isinstance(output, dict):
+            continue
+        accounting = output.get("rejection_sample_accounting")
+        if not isinstance(accounting, dict):
+            continue
+        failed_matches = [
+            {
+                "source": match.get("source"),
+                "actual": match.get("actual"),
+                "summary": match.get("summary"),
+                "delta": match.get("delta"),
+            }
+            for match in accounting.get("source_matches") or []
+            if isinstance(match, dict) and not match.get("passed")
+        ]
+        rows.append(
+            {
+                "item": output.get("item"),
+                "status": accounting.get("status"),
+                "required": bool(accounting.get("required")),
+                "verified": bool(accounting.get("verified")),
+                "ok": bool(accounting.get("ok")),
+                "map_rejected_sample_sum": accounting.get("map_rejected_sample_sum"),
+                "source_counts": accounting.get("source_counts") or [],
+                "failed_matches": failed_matches,
+            }
+        )
+
+    failed_items = [row for row in rows if not row.get("ok")]
+    check_present = check_passed is not None
+    if check_present:
+        status = "passed" if check_passed else "failed"
+    elif rows:
+        status = "passed" if not failed_items else "failed"
+    else:
+        status = "not_available"
+    return {
+        "schema_version": 1,
+        "status": status,
+        "check_name": check_name,
+        "check_present": check_present,
+        "check_passed": check_passed,
+        "pixel_verification_enabled": bool(pixel_verification.get("enabled")),
+        "accounted_output_count": len(rows),
+        "required_count": sum(1 for row in rows if row.get("required")),
+        "verified_count": sum(1 for row in rows if row.get("verified")),
+        "failed_count": len(failed_items),
+        "failed_items": failed_items,
+    }
+
+
 def _pipeline_handoff_evidence(
     acceptance: dict[str, Any],
     pipeline_contract: dict[str, Any],
@@ -121,8 +190,10 @@ def _pipeline_handoff_evidence(
             "integration_dq_map_pixels_match_summary",
             "integration_coverage_map_pixels_match_dq",
             "integration_rejection_map_pixels_match_dq",
+            "integration_rejection_sample_counts_match_maps",
         )
     }
+    rejection_sample_accounting = _pipeline_rejection_sample_accounting(pipeline)
     return {
         "source": source,
         "present": bool(pipeline),
@@ -135,6 +206,11 @@ def _pipeline_handoff_evidence(
         "integration_map_count": len(integration.get("maps") or []),
         "pixel_verification_enabled": pixel_verification.get("enabled"),
         "pixel_verification_tile_size": pixel_verification.get("tile_size"),
+        "rejection_sample_accounting": rejection_sample_accounting,
+        "rejection_sample_accounting_status": rejection_sample_accounting.get("status"),
+        "rejection_sample_accounting_failed_count": rejection_sample_accounting.get(
+            "failed_count"
+        ),
         "checks": checks,
     }
 
@@ -334,6 +410,21 @@ def build_release_promotion_decision(
             },
         ),
         _check(
+            "pipeline_rejection_sample_accounting_passed",
+            pipeline_handoff["checks"].get("integration_rejection_sample_counts_match_maps") is True
+            and pipeline_handoff.get("rejection_sample_accounting_status") == "passed",
+            {
+                "check": pipeline_handoff["checks"].get(
+                    "integration_rejection_sample_counts_match_maps"
+                ),
+                "status": pipeline_handoff.get("rejection_sample_accounting_status"),
+                "failed_count": pipeline_handoff.get("rejection_sample_accounting_failed_count"),
+                "failed_items": (
+                    pipeline_handoff.get("rejection_sample_accounting") or {}
+                ).get("failed_items"),
+            },
+        ),
+        _check(
             "stack_engine_release_evidence_passed",
             stack_release_status == "passed" or stack_contract.get("passed") is True,
             {
@@ -373,6 +464,7 @@ def build_release_promotion_decision(
         "pipeline_result_contracts_passed",
         "pipeline_pixel_verification_enabled",
         "pipeline_pixel_verification_passed",
+        "pipeline_rejection_sample_accounting_passed",
         "stack_engine_release_evidence_passed",
         "stack_engine_default_ready",
         "stack_engine_scope_all",
@@ -455,6 +547,7 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Integration outputs: `{pipeline.get('integration_output_count')}`",
             f"- Integration maps: `{pipeline.get('integration_map_count')}`",
             f"- Pixel verification enabled: `{pipeline.get('pixel_verification_enabled')}`",
+            f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
             "",
         ]
     )
