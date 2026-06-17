@@ -2444,6 +2444,20 @@ integration where applicable.
   registration, local normalization, integration defaults, or tile-local apply
   defaults.
 
+### S2-Gate 145: New-Region Tile-Local Proposal Replay
+
+- Run `tile-local-policy-proposal` on the S2-Gate 144 new-region resident
+  contribution artifact using the F000100-F000110 focus group and
+  tail-signed-mean residuals.
+- Run `tile-local-policy-replay` on the proposal to measure summary-level
+  before/after residual movement across all new-region tiles.
+- Record whether the new-region proposal moves every tile toward the reference,
+  whether it requires clamped boost/downweight multipliers, and whether the
+  aggregate residual reduction is material enough to justify a future native
+  apply experiment.
+- Keep this as a proposal/replay gate only. It must not run a new integration,
+  mutate image pixels, or promote tile-local apply by default.
+
 ## Gate Rules
 
 Each gate requires:
