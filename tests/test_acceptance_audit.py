@@ -531,6 +531,32 @@ def _write_stack_engine_contract(path: Path, *, passed: bool = True, ready: bool
     )
 
 
+def _write_contract_bundle(path: Path, *, pipeline: Path, stack: Path, passed: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "glass_acceptance_contract_bundle",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "purpose": "acceptance_audit_contract_inputs",
+            "artifacts": {
+                "pipeline_contract": str(pipeline),
+                "stack_engine_contract": str(stack),
+                "guardrails_summary": str(path.with_name("guardrails_summary.json")),
+            },
+            "acceptance_audit_argument_map": {
+                "pipeline_contract_json": str(pipeline),
+                "stack_engine_contract_json": str(stack),
+            },
+            "checks": [
+                {"name": "pipeline_contract", "passed": passed, "status": "passed" if passed else "failed"},
+                {"name": "stack_engine_contract", "passed": passed, "status": "passed" if passed else "failed"},
+            ],
+        },
+    )
+
+
 def test_acceptance_audit_passes_real_benchmark_thresholds(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     gp_run = tmp_path / "gp"
@@ -583,6 +609,112 @@ def test_acceptance_audit_accepts_passing_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_passed"]["passed"] is True
     assert audit["pipeline_contract"]["passed"] is True
     assert audit["pipeline_contract"]["check_count"] == 1
+
+
+def test_acceptance_audit_accepts_contract_bundle(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    stack = tmp_path / "stack_engine_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+    _write_stack_engine_contract(stack, passed=True, ready=True)
+    _write_contract_bundle(bundle, pipeline=pipeline, stack=stack)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=bundle,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert audit["contract_bundle"]["artifact_type"] == "glass_acceptance_contract_bundle"
+    assert audit["contract_bundle"]["pipeline_contract_json"] == str(pipeline)
+    assert audit["contract_bundle"]["stack_engine_contract_json"] == str(stack)
+    assert audit["pipeline_contract"]["path"] == str(pipeline)
+    assert audit["stack_engine_contract"]["path"] == str(stack)
+    assert checks["pipeline_contract_passed"]["passed"] is True
+    assert checks["stack_engine_contract_passed"]["passed"] is True
+
+
+def test_acceptance_audit_explicit_contract_paths_override_bundle(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    bundle_pipeline = tmp_path / "bundle_pipeline_contract.json"
+    bundle_stack = tmp_path / "bundle_stack_engine_contract.json"
+    explicit_pipeline = tmp_path / "explicit_pipeline_contract.json"
+    explicit_stack = tmp_path / "explicit_stack_engine_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(bundle_pipeline, passed=False)
+    _write_stack_engine_contract(bundle_stack, passed=False, ready=False)
+    _write_pipeline_contract(explicit_pipeline, passed=True)
+    _write_stack_engine_contract(explicit_stack, passed=True, ready=True)
+    _write_contract_bundle(bundle, pipeline=bundle_pipeline, stack=bundle_stack, passed=False)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=bundle,
+        pipeline_contract_json=explicit_pipeline,
+        stack_engine_contract_json=explicit_stack,
+    )
+
+    assert audit["passed"] is True
+    assert audit["contract_bundle"]["explicit_pipeline_contract_overrode_bundle"] is True
+    assert audit["contract_bundle"]["explicit_stack_engine_contract_overrode_bundle"] is True
+    assert audit["contract_bundle"]["pipeline_contract_json"] == str(explicit_pipeline)
+    assert audit["contract_bundle"]["stack_engine_contract_json"] == str(explicit_stack)
+    assert audit["pipeline_contract"]["path"] == str(explicit_pipeline)
+    assert audit["stack_engine_contract"]["path"] == str(explicit_stack)
+
+
+def test_acceptance_audit_fails_missing_contract_bundle(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    missing_bundle = tmp_path / "missing_acceptance_contract_bundle.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=missing_bundle,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["contract_bundle"]["exists"] is False
+    assert checks["contract_bundle_present"]["passed"] is False
+    assert checks["contract_bundle_type"]["passed"] is False
 
 
 def test_acceptance_audit_fails_failed_pipeline_contract(tmp_path: Path):
@@ -1002,6 +1134,73 @@ def test_acceptance_audit_cli_writes_pipeline_contract_evidence(tmp_path: Path):
     assert "Required by benchmark contract: True" in markdown
     assert "PASS: contract_pipeline_contract_passed" in markdown
     assert "integration_resident_result_contract" in markdown
+
+
+def test_acceptance_audit_cli_accepts_contract_bundle(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    stack = tmp_path / "stack_engine_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    out_json = tmp_path / "audit.json"
+    out_md = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_pipeline_contract_requirement(contract)
+    _add_stack_engine_default_promotion_requirement(contract)
+    _write_pipeline_contract(pipeline, passed=True)
+    _write_stack_engine_contract(stack, passed=True, ready=True)
+    _write_contract_bundle(bundle, pipeline=pipeline, stack=stack)
+
+    result = main(
+        [
+            "acceptance-audit",
+            "--manifest",
+            str(manifest),
+            "--glass-run",
+            str(gp_run),
+            "--wbpp-result",
+            str(wbpp),
+            "--compare-json",
+            str(compare),
+            "--benchmark-contract",
+            str(contract),
+            "--contract-bundle",
+            str(bundle),
+            "--out",
+            str(out_json),
+            "--markdown",
+            str(out_md),
+            "--min-active-frames",
+            "190",
+        ]
+    )
+
+    assert result == 0
+    payload = read_json(out_json)
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["contract_bundle"]["path"] == str(bundle)
+    assert payload["pipeline_contract"]["path"] == str(pipeline)
+    assert payload["stack_engine_contract"]["path"] == str(stack)
+    assert checks["contract_pipeline_contract_passed"]["passed"] is True
+    assert checks["contract_stack_engine_default_promotion_ready"]["passed"] is True
+    markdown = out_md.read_text(encoding="utf-8")
+    assert "Contract bundle: passed" in markdown
+    assert "PASS: contract_pipeline_contract_passed" in markdown
+    assert "PASS: contract_stack_engine_default_promotion_ready" in markdown
 
 
 def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):

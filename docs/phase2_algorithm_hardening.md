@@ -3372,6 +3372,20 @@ integration where applicable.
   StackEngine and pipeline contracts, `stack_default_promotion.ready=true`, and
   a passing `glass_acceptance_contract_bundle` under the Gate198 checkpoint.
 
+### S2-Gate 199: Acceptance Audit Contract Bundle Ingestion
+
+- Add `glass acceptance-audit --contract-bundle` support so a guardrails
+  `acceptance_contract_bundle.json` can supply the generated pipeline and
+  StackEngine contract paths.
+- Keep explicit `--pipeline-contract-json` and `--stack-engine-contract-json`
+  as higher priority overrides.
+- Record contract-bundle evidence in the acceptance audit JSON and Markdown.
+- Fail clearly when a requested bundle path is missing or is not a
+  `glass_acceptance_contract_bundle` artifact.
+- Current real artifact result: a Gate198 synthetic guardrails bundle was
+  consumed by `glass acceptance-audit --contract-bundle`, producing a passing
+  acceptance audit with both pipeline and StackEngine contract checks active.
+
 ## Gate Rules
 
 Each gate requires:

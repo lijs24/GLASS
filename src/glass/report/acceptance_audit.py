@@ -36,6 +36,46 @@ def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") ->
     return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
 
 
+def _contract_bundle_paths(
+    contract_bundle_json: str | Path | None,
+    *,
+    pipeline_contract_json: str | Path | None,
+    stack_engine_contract_json: str | Path | None,
+) -> tuple[str | Path | None, str | Path | None, dict[str, Any] | None]:
+    if contract_bundle_json is None:
+        return pipeline_contract_json, stack_engine_contract_json, None
+    bundle_path = Path(contract_bundle_json)
+    bundle_payload = _read_json_lenient(bundle_path) if bundle_path.exists() else {}
+    artifact_map = (
+        bundle_payload.get("artifacts")
+        if isinstance(bundle_payload.get("artifacts"), dict)
+        else {}
+    )
+    argument_map = (
+        bundle_payload.get("acceptance_audit_argument_map")
+        if isinstance(bundle_payload.get("acceptance_audit_argument_map"), dict)
+        else {}
+    )
+    bundle_pipeline = artifact_map.get("pipeline_contract") or argument_map.get("pipeline_contract_json")
+    bundle_stack = artifact_map.get("stack_engine_contract") or argument_map.get("stack_engine_contract_json")
+    resolved_pipeline = pipeline_contract_json if pipeline_contract_json is not None else bundle_pipeline
+    resolved_stack = stack_engine_contract_json if stack_engine_contract_json is not None else bundle_stack
+    bundle = {
+        "path": str(bundle_path),
+        "exists": bundle_path.exists(),
+        "artifact_type": bundle_payload.get("artifact_type"),
+        "status": bundle_payload.get("status"),
+        "passed": bundle_payload.get("passed"),
+        "purpose": bundle_payload.get("purpose"),
+        "pipeline_contract_json": None if resolved_pipeline is None else str(resolved_pipeline),
+        "stack_engine_contract_json": None if resolved_stack is None else str(resolved_stack),
+        "explicit_pipeline_contract_overrode_bundle": pipeline_contract_json is not None,
+        "explicit_stack_engine_contract_overrode_bundle": stack_engine_contract_json is not None,
+        "checks": bundle_payload.get("checks") if isinstance(bundle_payload.get("checks"), list) else [],
+    }
+    return resolved_pipeline, resolved_stack, bundle
+
+
 def _pipeline_contract_release_evidence(
     *,
     checks: list[dict[str, Any]],
@@ -137,9 +177,15 @@ def build_acceptance_audit(
     max_abs_diff_p99: float | None = 0.01,
     benchmark_contract: str | Path | None = None,
     resident_determinism_json: str | Path | None = None,
+    contract_bundle_json: str | Path | None = None,
     pipeline_contract_json: str | Path | None = None,
     stack_engine_contract_json: str | Path | None = None,
 ) -> dict[str, Any]:
+    pipeline_contract_json, stack_engine_contract_json, contract_bundle = _contract_bundle_paths(
+        contract_bundle_json,
+        pipeline_contract_json=pipeline_contract_json,
+        stack_engine_contract_json=stack_engine_contract_json,
+    )
     manifest = _read_json_lenient(manifest_path)
     speedup = summarize_wbpp_speedup(
         glass_run,
@@ -215,6 +261,26 @@ def build_acceptance_audit(
                 p99 is not None and p99 <= float(max_abs_diff_p99),
                 {"actual": p99, "required_max": float(max_abs_diff_p99)},
             )
+        )
+
+    if contract_bundle is not None:
+        checks.extend(
+            [
+                _check(
+                    "contract_bundle_present",
+                    bool(contract_bundle.get("exists")),
+                    {"path": contract_bundle.get("path"), "exists": contract_bundle.get("exists")},
+                ),
+                _check(
+                    "contract_bundle_type",
+                    contract_bundle.get("artifact_type") == "glass_acceptance_contract_bundle",
+                    {
+                        "path": contract_bundle.get("path"),
+                        "artifact_type": contract_bundle.get("artifact_type"),
+                        "required": "glass_acceptance_contract_bundle",
+                    },
+                ),
+            ]
         )
 
     pipeline_contract_path = Path(pipeline_contract_json) if pipeline_contract_json is not None else None
@@ -428,6 +494,7 @@ def build_acceptance_audit(
         },
         "frame_accounting": frame_accounting_record,
         "resident_determinism": resident_determinism,
+        "contract_bundle": contract_bundle,
         "pipeline_contract": pipeline_contract,
         "stack_engine_contract": stack_engine_contract,
         "release_contract_evidence": release_contract_evidence,
@@ -451,6 +518,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         "",
         f"- Status: {audit['status']}",
         f"- Benchmark contract: {(audit.get('benchmark_contract') or {}).get('name')}",
+        f"- Contract bundle: {(audit.get('contract_bundle') or {}).get('status')}",
         f"- Pipeline contract: {(audit.get('pipeline_contract') or {}).get('status')}",
         f"- StackEngine contract: {(audit.get('stack_engine_contract') or {}).get('status')}",
         f"- DQ provenance records: {(audit.get('dq_provenance') or {}).get('record_count')}",

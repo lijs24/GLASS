@@ -1,0 +1,930 @@
+{
+  "benchmark_contract": null,
+  "checks": [
+    {
+      "evidence": {
+        "actual": 4,
+        "required": 1
+      },
+      "name": "minimum_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required": 1
+      },
+      "name": "minimum_bias_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required": 1
+      },
+      "name": "minimum_dark_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required": 1
+      },
+      "name": "minimum_flat_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 2,
+        "required": 2
+      },
+      "name": "minimum_active_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 25.484992143062193,
+        "required": 2.0
+      },
+      "name": "minimum_speedup",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "required": true
+      },
+      "name": "shape_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.0,
+        "required": 0.95
+      },
+      "name": "minimum_coverage_fraction",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.001,
+        "required_max": 0.01
+      },
+      "name": "maximum_rms_diff",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.002,
+        "required_max": 0.01
+      },
+      "name": "maximum_abs_diff_p99",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\acceptance_contract_bundle.json"
+      },
+      "name": "contract_bundle_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "glass_acceptance_contract_bundle",
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\acceptance_contract_bundle.json",
+        "required": "glass_acceptance_contract_bundle"
+      },
+      "name": "contract_bundle_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "pipeline_invariant_contract",
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\pipeline_contract.json"
+      },
+      "name": "pipeline_contract_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "passed"
+      },
+      "name": "pipeline_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "stack_engine_default_contract",
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\stack_engine_contract.json"
+      },
+      "name": "stack_engine_contract_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "status": "passed"
+      },
+      "name": "stack_engine_contract_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "clean_room": {
+    "note": "Acceptance audit consumes GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only.",
+    "status": "compliant"
+  },
+  "compare_json": "C:\\glass_runs\\phase2_s2_gate_199_acceptance_bundle_ingestion\\compare.json",
+  "contract_bundle": {
+    "artifact_type": "glass_acceptance_contract_bundle",
+    "checks": [
+      {
+        "failed": [],
+        "name": "stack_engine_contract",
+        "passed": true,
+        "status": "passed"
+      },
+      {
+        "failed": [],
+        "name": "pipeline_contract",
+        "passed": true,
+        "status": "passed"
+      },
+      {
+        "blockers": [],
+        "name": "stack_default_promotion",
+        "passed": true,
+        "ready": true,
+        "required": true,
+        "status": "ready"
+      }
+    ],
+    "exists": true,
+    "explicit_pipeline_contract_overrode_bundle": false,
+    "explicit_stack_engine_contract_overrode_bundle": false,
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\acceptance_contract_bundle.json",
+    "pipeline_contract_json": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\pipeline_contract.json",
+    "purpose": "acceptance_audit_contract_inputs",
+    "stack_engine_contract_json": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\stack_engine_contract.json",
+    "status": "passed"
+  },
+  "dq_provenance": {
+    "contract": null,
+    "record_count": 1,
+    "records": [
+      {
+        "coverage_map_exists": true,
+        "coverage_map_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\coverage_map_H.fits",
+        "dq_flag_bits": {},
+        "dq_map_exists": true,
+        "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+        "high_rejection_map_exists": true,
+        "high_rejection_map_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\high_rejection_H.fits",
+        "index": 0,
+        "low_rejection_map_exists": true,
+        "low_rejection_map_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\low_rejection_H.fits",
+        "master_exists": true,
+        "master_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\master_H.fits",
+        "normalized_from_legacy": false,
+        "output_map_policy": {},
+        "source_file": "integration_results.json",
+        "source_kind": "integration_output",
+        "source_provenance": {},
+        "summary": {
+          "engine": "stack_engine_cpu",
+          "high_rejected_pixels": 0,
+          "input_flagged_samples": 94,
+          "input_nonfinite_samples": 0,
+          "input_samples": 2048,
+          "item": "H",
+          "low_rejected_pixels": 0,
+          "no_data_pixels": null,
+          "output_dq_summary": {
+            "valid": 1024
+          },
+          "partial_coverage_pixels": null,
+          "schema_version": 1,
+          "semantics": "StackEngine consumes source DQ flags and non-finite samples as invalid samples; output DQ records zero-coverage and rejection-touched pixels.",
+          "source_dq_flag_counts": {
+            "cold_pixel": 0,
+            "cosmetic_corrected": 0,
+            "dead_pixel": 0,
+            "high_rejected": 0,
+            "hot_pixel": 0,
+            "local_normalization_excluded": 0,
+            "low_rejected": 0,
+            "no_data": 94,
+            "saturated": 0,
+            "warp_edge": 0
+          },
+          "source_schema": "stack_engine_dq_provenance",
+          "stage": "integration",
+          "valid_pixels": 1024,
+          "warp_edge_pixels": null,
+          "zero_coverage_pixels": 0
+        },
+        "weight_map_exists": true,
+        "weight_map_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\weight_map_H.fits"
+      }
+    ],
+    "schema_version": 1
+  },
+  "frame_accounting": {
+    "calculated_final_status_counts": {
+      "integrated": 2,
+      "quality_rejected": 2
+    },
+    "exception_frames": [
+      {
+        "filter": "H",
+        "final_status": "quality_rejected",
+        "frame_id": "F000010",
+        "input_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\synthetic\\light\\light_000.fits",
+        "integration_status": "not_integrated",
+        "integration_weight": null,
+        "local_norm_status": "missing",
+        "primary_reason": "star_count 7 below min_stars=8",
+        "primary_stage": "quality",
+        "quality_gate_status": "rejected",
+        "reason_count": 2,
+        "registration_status": "quality_rejected",
+        "warning_count": 2,
+        "warp_status": "skipped"
+      },
+      {
+        "filter": "H",
+        "final_status": "quality_rejected",
+        "frame_id": "F000013",
+        "input_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\synthetic\\light\\light_003.fits",
+        "integration_status": "not_integrated",
+        "integration_weight": null,
+        "local_norm_status": "missing",
+        "primary_reason": "star_count 7 below min_stars=8",
+        "primary_stage": "quality",
+        "quality_gate_status": "rejected",
+        "reason_count": 2,
+        "registration_status": "quality_rejected",
+        "warning_count": 2,
+        "warp_status": "skipped"
+      }
+    ],
+    "exception_summary": {
+      "count": 2,
+      "final_status_counts": {
+        "quality_rejected": 2
+      },
+      "primary_stage_counts": {
+        "quality": 2
+      }
+    },
+    "exists": true,
+    "frame_count": 4,
+    "integration_source_stage": "local_normalization",
+    "integration_weight_counts": {
+      "invalid": 0,
+      "positive": 2,
+      "total": 2,
+      "zero": 0
+    },
+    "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\frame_accounting.json",
+    "registration_counts": {
+      "accepted": 2,
+      "status_counts": {
+        "ok": 1,
+        "quality_rejected": 2,
+        "reference": 1
+      },
+      "total": 4,
+      "zero_weight_statuses": 2
+    },
+    "schema_version": 1,
+    "sources": {
+      "calibration": true,
+      "integration": true,
+      "local_norm": true,
+      "plan": true,
+      "quality": true,
+      "registration": true,
+      "resident": false,
+      "warp": true
+    },
+    "summary": {
+      "calibrated_frames": 4,
+      "exception_frames": 2,
+      "final_status_counts": {
+        "integrated": 2,
+        "quality_rejected": 2
+      },
+      "input_light_frames": 4,
+      "integrated_frames": 2,
+      "not_integrated_frames": 0,
+      "quality_accepted_frames": 2,
+      "quality_rejected_frames": 2,
+      "registration_accepted_frames": 2,
+      "resident_calibrated_frames": 0,
+      "warp_accepted_frames": 2,
+      "warp_skipped_frames": 2,
+      "zero_weight_frames": 0
+    }
+  },
+  "frame_type_counts": {
+    "bias": 3,
+    "dark": 3,
+    "flat": 3,
+    "light": 4
+  },
+  "glass_run": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run",
+  "manifest_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\manifest.json",
+  "optimization_guidance": {
+    "exception_context": {
+      "count": 2,
+      "dominant_stage": "quality",
+      "final_status_counts": {
+        "quality_rejected": 2
+      },
+      "note": "Exception frames explain active-frame count drift; timing priorities remain based on wall-clock stages.",
+      "primary_stage_counts": {
+        "quality": 2
+      },
+      "sample_frame_ids": [
+        "F000010",
+        "F000013"
+      ]
+    },
+    "primary_target": null,
+    "schema_version": 1,
+    "stage_timing_rows": [],
+    "targets": []
+  },
+  "output_numerical_drifts": [],
+  "passed": true,
+  "performance_regression": null,
+  "pipeline_contract": {
+    "audit_type": "pipeline_invariant_contract",
+    "check_count": 12,
+    "check_names": [
+      "integration_artifact_exists",
+      "integration_outputs_present",
+      "integration_output_maps_available",
+      "integration_dq_contract",
+      "integration_stack_result_contract",
+      "integration_resident_result_contract",
+      "integration_dq_map_pixels_match_summary",
+      "integration_coverage_map_pixels_match_dq",
+      "integration_rejection_map_pixels_match_dq",
+      "warp_outputs_have_dq_and_coverage",
+      "warp_skipped_frames_are_explained",
+      "local_normalization_contract"
+    ],
+    "failed_checks": [],
+    "integration": {
+      "maps": [
+        {
+          "exists": true,
+          "item": "H",
+          "map": "master",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\master_H.fits",
+          "path_key": "master_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "weight",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\weight_map_H.fits",
+          "path_key": "weight_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "coverage",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\coverage_map_H.fits",
+          "path_key": "coverage_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "dq",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+          "path_key": "dq_map_path",
+          "policy_skipped": false,
+          "required": true,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "low_rejection",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\low_rejection_H.fits",
+          "path_key": "low_rejection_map_path",
+          "policy_skipped": false,
+          "required": false,
+          "surface": "integration"
+        },
+        {
+          "exists": true,
+          "item": "H",
+          "map": "high_rejection",
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\high_rejection_H.fits",
+          "path_key": "high_rejection_map_path",
+          "policy_skipped": false,
+          "required": false,
+          "surface": "integration"
+        }
+      ],
+      "outputs": [
+        {
+          "backend": "cpu",
+          "dq_contract_ok": true,
+          "dq_map_exists": true,
+          "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+          "dq_provenance_engine": "stack_engine_cpu",
+          "dq_provenance_summary_present": true,
+          "dq_summary_has_valid": true,
+          "dq_summary_present": true,
+          "frame_count": 2,
+          "item": "H",
+          "rejection": "none",
+          "resident_result_contract": {
+            "check_count": 0,
+            "contract_type": null,
+            "passed": false,
+            "present": false,
+            "required": false,
+            "status": "not_required"
+          },
+          "stack_engine_enabled": true,
+          "stack_result_contract": {
+            "check_count": 10,
+            "contract_type": "stack_engine_result_contract",
+            "passed": true,
+            "present": true,
+            "required": true,
+            "status": "passed"
+          },
+          "tile_stack_mode": "stack_engine_cpu"
+        }
+      ]
+    },
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\pipeline_contract.json",
+    "pixel_verification": {
+      "enabled": true,
+      "integration_outputs": [
+        {
+          "count_maps": {
+            "coverage": {
+              "ok": true,
+              "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\coverage_map_H.fits",
+              "required": true,
+              "result": {
+                "finite_pixels": 1024,
+                "height": 32,
+                "max": 2.0,
+                "min": 1.0,
+                "nonfinite_pixels": 0,
+                "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\coverage_map_H.fits",
+                "positive_pixels": 1024,
+                "positive_threshold": 0.0,
+                "rounded_sum": 1954,
+                "schema_version": 1,
+                "sum": 1954.0,
+                "tile_size": 8,
+                "total_pixels": 1024,
+                "width": 32,
+                "zero_or_less_pixels": 0
+              },
+              "status": "verified",
+              "summary_match": {
+                "no_data": {
+                  "actual": 0,
+                  "delta": 0,
+                  "passed": true,
+                  "summary": 0
+                }
+              },
+              "verified": true
+            },
+            "high_rejection": {
+              "ok": true,
+              "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\high_rejection_H.fits",
+              "required": false,
+              "result": {
+                "finite_pixels": 1024,
+                "height": 32,
+                "max": 0.0,
+                "min": 0.0,
+                "nonfinite_pixels": 0,
+                "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\high_rejection_H.fits",
+                "positive_pixels": 0,
+                "positive_threshold": 0.0,
+                "rounded_sum": 0,
+                "schema_version": 1,
+                "sum": 0.0,
+                "tile_size": 8,
+                "total_pixels": 1024,
+                "width": 32,
+                "zero_or_less_pixels": 1024
+              },
+              "status": "verified",
+              "summary_match": {
+                "high_rejected": {
+                  "actual": 0,
+                  "delta": 0,
+                  "passed": true,
+                  "summary": 0
+                }
+              },
+              "verified": true
+            },
+            "low_rejection": {
+              "ok": true,
+              "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\low_rejection_H.fits",
+              "required": false,
+              "result": {
+                "finite_pixels": 1024,
+                "height": 32,
+                "max": 0.0,
+                "min": 0.0,
+                "nonfinite_pixels": 0,
+                "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\low_rejection_H.fits",
+                "positive_pixels": 0,
+                "positive_threshold": 0.0,
+                "rounded_sum": 0,
+                "schema_version": 1,
+                "sum": 0.0,
+                "tile_size": 8,
+                "total_pixels": 1024,
+                "width": 32,
+                "zero_or_less_pixels": 1024
+              },
+              "status": "verified",
+              "summary_match": {
+                "low_rejected": {
+                  "actual": 0,
+                  "delta": 0,
+                  "passed": true,
+                  "summary": 0
+                }
+              },
+              "verified": true
+            }
+          },
+          "dq": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+            "required": true,
+            "result": {
+              "counts": {
+                "high_rejected": 0,
+                "low_rejected": 0,
+                "no_data": 0,
+                "valid": 1024,
+                "warp_edge": 0
+              },
+              "flag_bits": {
+                "high_rejected": 512,
+                "low_rejected": 256,
+                "no_data": 1,
+                "valid": 0,
+                "warp_edge": 64
+              },
+              "height": 32,
+              "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+              "schema_version": 1,
+              "tile_size": 8,
+              "total_pixels": 1024,
+              "unknown_flags": [],
+              "width": 32
+            },
+            "status": "verified",
+            "summary_matches": {
+              "high_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              },
+              "low_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              },
+              "no_data": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              },
+              "valid": {
+                "actual": 1024,
+                "delta": 0,
+                "passed": true,
+                "summary": 1024
+              },
+              "warp_edge": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "item": "H"
+        }
+      ],
+      "tile_size": 8,
+      "tolerance_pixels": 0
+    },
+    "status": "passed"
+  },
+  "release_contract_evidence": {
+    "pipeline_contract": {
+      "benchmark_check_count": 0,
+      "checks": [
+        {
+          "evidence": {
+            "audit_type": "pipeline_invariant_contract",
+            "exists": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\pipeline_contract.json"
+          },
+          "name": "pipeline_contract_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed_checks": [],
+            "status": "passed"
+          },
+          "name": "pipeline_contract_passed",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "direct_check_count": 2,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "passed_check_count": 2,
+      "pipeline_contract_audit_type": "pipeline_invariant_contract",
+      "pipeline_contract_check_count": 12,
+      "pipeline_contract_passed": true,
+      "pipeline_contract_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\pipeline_contract.json",
+      "pipeline_contract_status": "passed",
+      "required_by_benchmark_contract": false,
+      "status": "passed"
+    },
+    "stack_engine_default_promotion": {
+      "adoption_recommendation": "stack_engine_default_ready",
+      "benchmark_check_count": 0,
+      "checks": [
+        {
+          "evidence": {
+            "audit_type": "stack_engine_default_contract",
+            "exists": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\stack_engine_contract.json"
+          },
+          "name": "stack_engine_contract_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed_checks": [],
+            "status": "passed"
+          },
+          "name": "stack_engine_contract_passed",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "default_promotion_blocker_count": 0,
+      "default_promotion_gap_count": 0,
+      "default_promotion_ready": true,
+      "default_promotion_status": "ready",
+      "direct_check_count": 2,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "passed_check_count": 2,
+      "required_by_benchmark_contract": false,
+      "stack_engine_contract_audit_type": "stack_engine_default_contract",
+      "stack_engine_contract_passed": true,
+      "stack_engine_contract_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\stack_engine_contract.json",
+      "stack_engine_contract_scope": "all",
+      "stack_engine_contract_status": "passed",
+      "status": "passed"
+    }
+  },
+  "resident_determinism": null,
+  "schema_version": 1,
+  "speedup_summary": {
+    "clean_room": {
+      "note": "This summary uses GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only. It does not use PixInsight/WBPP implementation source.",
+      "status": "compliant"
+    },
+    "comparison": {
+      "abs_diff_p50": null,
+      "abs_diff_p90": null,
+      "abs_diff_p99": 0.002,
+      "abs_diff_p999": null,
+      "compare_speedup_vs_reference": null,
+      "compared_pixels": 1024,
+      "coverage_fraction": 1,
+      "path": "C:\\glass_runs\\phase2_s2_gate_199_acceptance_bundle_ingestion\\compare.json",
+      "relative_rms_diff": null,
+      "rms_diff": 0.001,
+      "shape_match": true
+    },
+    "glass": {
+      "backend": "cpu",
+      "command": "audit",
+      "elapsed_s": 0.3923877999986871,
+      "frame_count": 2,
+      "master_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\master_H.fits",
+      "memory_mode": "tile",
+      "rejection": "none",
+      "resident_device": null,
+      "resident_estimated_peak_gib": null,
+      "run": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run",
+      "weighted_frame_count": 2,
+      "weighting": "none",
+      "zero_weight_frame_count": 0
+    },
+    "glass_faster": true,
+    "meets_min_speedup": true,
+    "min_speedup": 2.0,
+    "schema_version": 1,
+    "speedup_vs_wbpp": 25.484992143062193,
+    "wbpp_blackbox": {
+      "clean_room_note": null,
+      "dataset": "synthetic_bundle_ingestion_fixture",
+      "elapsed_s": 10.0,
+      "final_master_files": [],
+      "output_dir": null,
+      "reported_wbpp_time": null,
+      "result_path": "C:\\glass_runs\\phase2_s2_gate_199_acceptance_bundle_ingestion\\wbpp_result.json"
+    }
+  },
+  "stack_engine_contract": {
+    "adoption": {
+      "contract_ready_count": 4,
+      "cuda_resident_surface_count": 0,
+      "engine_counts": {
+        "stack_engine_cpu": 4
+      },
+      "fallback_count": 0,
+      "gap_surfaces": [],
+      "other_surface_count": 0,
+      "phase2_stack_engine_default_gap_count": 0,
+      "recommendation": "stack_engine_default_ready",
+      "result_contract_passed_count": 4,
+      "schema_version": 1,
+      "stack_engine_surface_count": 4,
+      "surface_count": 4,
+      "surfaces": [
+        {
+          "contract_ok": true,
+          "engine_family": "stack_engine_cpu",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "G132fda1914",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": null,
+          "resident_result_contract_passed": null,
+          "result_contract_passed": true,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": true,
+          "stack_result_contract_passed": null,
+          "summary_engine": "stack_engine_cpu",
+          "surface": "master_calibration",
+          "tile_stack_mode": "stack_engine_cpu",
+          "type": "dark"
+        },
+        {
+          "contract_ok": true,
+          "engine_family": "stack_engine_cpu",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "G493eaa9fef",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": null,
+          "resident_result_contract_passed": null,
+          "result_contract_passed": true,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": true,
+          "stack_result_contract_passed": null,
+          "summary_engine": "stack_engine_cpu",
+          "surface": "master_calibration",
+          "tile_stack_mode": "stack_engine_cpu_per_flat_normalized",
+          "type": "flat"
+        },
+        {
+          "contract_ok": true,
+          "engine_family": "stack_engine_cpu",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "Ga10b6dd84a",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": null,
+          "resident_result_contract_passed": null,
+          "result_contract_passed": true,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": true,
+          "stack_result_contract_passed": null,
+          "summary_engine": "stack_engine_cpu",
+          "surface": "master_calibration",
+          "tile_stack_mode": "stack_engine_cpu",
+          "type": "bias"
+        },
+        {
+          "contract_ok": true,
+          "engine_family": "stack_engine_cpu",
+          "fallback_reason": null,
+          "gap_reason": "",
+          "item": "H",
+          "phase2_stack_engine_default_gap": false,
+          "resident_calibration_contract_passed": null,
+          "resident_result_contract_passed": false,
+          "result_contract_passed": true,
+          "stack_engine_contract_ready": true,
+          "stack_engine_enabled": true,
+          "stack_result_contract_passed": true,
+          "summary_engine": "stack_engine_cpu",
+          "surface": "integration",
+          "tile_stack_mode": "stack_engine_cpu",
+          "type": "light"
+        }
+      ],
+      "target_engine": "stack_engine_cpu"
+    },
+    "audit_type": "stack_engine_default_contract",
+    "check_count": 6,
+    "check_names": [
+      "calibration_artifact_exists",
+      "calibration_master_records_present",
+      "calibration_masters_use_stack_engine",
+      "integration_artifact_exists",
+      "integration_output_records_present",
+      "integration_outputs_use:stack_engine_cpu"
+    ],
+    "default_promotion": {
+      "actual_scope": "all",
+      "blocker_count": 0,
+      "blockers": [],
+      "calibration_surface_count": 3,
+      "integration_surface_count": 1,
+      "phase2_stack_engine_default_gap_count": 0,
+      "ready": true,
+      "recommendation": "stack_engine_default_ready",
+      "required_scope": "all",
+      "schema_version": 1,
+      "status": "ready",
+      "surface_count": 4,
+      "target_engine": "stack_engine_cpu"
+    },
+    "expected_integration_engine": "stack_engine_cpu",
+    "failed_checks": [],
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\guardrails\\stack_engine_contract.json",
+    "scope": "all",
+    "status": "passed"
+  },
+  "status": "passed",
+  "wbpp_result": "C:\\glass_runs\\phase2_s2_gate_199_acceptance_bundle_ingestion\\wbpp_result.json"
+}

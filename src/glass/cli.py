@@ -1718,6 +1718,7 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         max_abs_diff_p99=args.max_abs_diff_p99,
         benchmark_contract=args.benchmark_contract,
         resident_determinism_json=args.resident_determinism_json,
+        contract_bundle_json=args.contract_bundle,
         pipeline_contract_json=args.pipeline_contract_json,
         stack_engine_contract_json=args.stack_engine_contract_json,
     )
@@ -4087,6 +4088,13 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "optional resident-determinism JSON; copied into the acceptance audit so reports can "
             "show strict drift status and numerical output-drift magnitude"
+        ),
+    )
+    acceptance.add_argument(
+        "--contract-bundle",
+        help=(
+            "optional glass guardrails acceptance_contract_bundle.json; supplies pipeline and "
+            "StackEngine contract paths unless explicit contract paths are also provided"
         ),
     )
     acceptance.add_argument(

@@ -1,0 +1,18 @@
+﻿{
+    "coverage_fraction":  1,
+    "candidate_transform":  {
+                                "offset":  null,
+                                "scale":  null,
+                                "clip_high":  null,
+                                "clip_low":  null,
+                                "applied":  false
+                            },
+    "shape_match":  true,
+    "abs_diff_p99":  0.002,
+    "comparison_region":  {
+                              "min_coverage":  2,
+                              "compared_pixels":  1024,
+                              "coverage_fraction":  1
+                          },
+    "rms_diff":  0.001
+}
