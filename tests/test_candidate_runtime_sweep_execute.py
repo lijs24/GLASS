@@ -8,14 +8,20 @@ from glass.report.candidate_runtime_sweep_execute import build_candidate_runtime
 from glass.report.candidate_runtime_sweep_execute import _command_tokens
 
 
-def _commands(name: str) -> dict[str, str]:
-    return {
+def _commands(name: str, *, pipeline_contract: bool = False) -> dict[str, str]:
+    commands = {
         "run": f"glass run --out runs/{name}",
         "compare_reference": f"glass compare --glass runs/{name}/master.fits --reference ref.xisf --out compare/{name}.html",
         "compare_baseline": f"glass compare --glass runs/{name}/master.fits --reference base.fits --out compare/{name}_base.html",
         "acceptance_audit": f"glass acceptance-audit --glass-run runs/{name} --out acceptance/{name}.json",
         "candidate_comparison": f"glass candidate-comparison --candidate-run runs/{name} --out comparison/{name}.json",
     }
+    if pipeline_contract:
+        commands["pipeline_contract"] = (
+            f"glass pipeline-contract --run runs/{name} --out pipeline_contract/{name}.json"
+        )
+        commands["acceptance_audit"] += f" --pipeline-contract-json pipeline_contract/{name}.json"
+    return commands
 
 
 def _write_plan(path: Path, existing_comparison: Path | None = None) -> None:
@@ -54,6 +60,36 @@ def test_candidate_runtime_sweep_execute_dry_run_records_steps(tmp_path: Path) -
     assert payload["variants"][0]["variant_id"] == "prefetch12_workers6"
     assert [step["status"] for step in payload["variants"][0]["steps"]] == ["planned"] * 5
     assert payload["sweep_summary"]["status"] == "planned"
+
+
+def test_candidate_runtime_sweep_execute_records_pipeline_contract_step(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.json"
+    write_json(
+        plan,
+        {
+            "schema_version": 1,
+            "artifact_type": "candidate_runtime_sweep_plan",
+            "sweep_command": "glass candidate-comparison-sweep --comparison comparison/a.json --out sweep.json",
+            "variants": [
+                {
+                    "variant_id": "prefetch10_workers5",
+                    "artifacts": {"candidate_comparison_json": str(tmp_path / "missing_a.json")},
+                    "commands": _commands("a", pipeline_contract=True),
+                }
+            ],
+        },
+    )
+
+    payload = build_candidate_runtime_sweep_execution(plan, dry_run=True)
+
+    assert [step["step"] for step in payload["variants"][0]["steps"]] == [
+        "run",
+        "compare_reference",
+        "compare_baseline",
+        "pipeline_contract",
+        "acceptance_audit",
+        "candidate_comparison",
+    ]
 
 
 def test_candidate_runtime_sweep_execute_splits_windows_paths() -> None:

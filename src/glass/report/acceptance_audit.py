@@ -140,17 +140,24 @@ def build_acceptance_audit(
     )
     pipeline_contract = None
     if pipeline_contract_path is not None:
+        contract_checks = [
+            item for item in pipeline_contract_payload.get("checks") or [] if isinstance(item, dict)
+        ]
+        check_names = [
+            str(item.get("name")) for item in contract_checks if item.get("name") is not None
+        ]
         failed_checks = [
             item.get("name")
-            for item in pipeline_contract_payload.get("checks") or []
-            if isinstance(item, dict) and not item.get("passed")
+            for item in contract_checks
+            if not item.get("passed")
         ]
         pipeline_contract = {
             "path": str(pipeline_contract_path),
             "audit_type": pipeline_contract_payload.get("audit_type"),
             "status": pipeline_contract_payload.get("status"),
             "passed": pipeline_contract_payload.get("passed"),
-            "check_count": len(pipeline_contract_payload.get("checks") or []),
+            "check_count": len(contract_checks),
+            "check_names": check_names,
             "failed_checks": failed_checks,
             "integration": pipeline_contract_payload.get("integration") or {},
             "pixel_verification": pipeline_contract_payload.get("pixel_verification") or {},
@@ -225,6 +232,7 @@ def build_acceptance_audit(
                 frame_accounting_record=frame_accounting_record,
                 resident_determinism=resident_determinism,
                 output_numerical_drifts=output_numerical_drifts,
+                pipeline_contract=pipeline_contract,
             )
         )
         performance_regression = build_benchmark_performance_diagnostics(

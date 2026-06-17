@@ -361,6 +361,19 @@ def _add_frame_accounting_contract(path: Path, *, active: int = 193, zero: int =
     write_json(path, payload)
 
 
+def _add_pipeline_contract_requirement(path: Path) -> None:
+    payload = read_json(path)
+    payload["pipeline_contract"] = {
+        "required": True,
+        "required_audit_type": "pipeline_invariant_contract",
+        "require_passed": True,
+        "min_check_count": 1,
+        "required_check_names": ["integration_resident_result_contract"],
+        "allow_failed_checks": False,
+    }
+    write_json(path, payload)
+
+
 def _write_resident_determinism(
     path: Path,
     *,
@@ -545,6 +558,87 @@ def test_acceptance_audit_fails_missing_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_present"]["evidence"]["exists"] is False
     assert checks["pipeline_contract_passed"]["passed"] is False
     assert audit["pipeline_contract"]["check_count"] == 0
+
+
+def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_pipeline_contract_requirement(contract)
+    _write_pipeline_contract(pipeline, passed=True)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert checks["contract_pipeline_contract_present"] is True
+    assert checks["contract_pipeline_contract_audit_type"] is True
+    assert checks["contract_pipeline_contract_passed"] is True
+    assert checks["contract_pipeline_contract_min_check_count"] is True
+    assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is True
+    assert checks["contract_pipeline_contract_no_failed_checks"] is True
+
+
+def test_acceptance_audit_benchmark_pipeline_contract_requires_artifact(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_pipeline_contract_requirement(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["pipeline_contract"] is None
+    assert checks["contract_pipeline_contract_present"] is False
+    assert checks["contract_pipeline_contract_passed"] is False
+    assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is False
 
 
 def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):

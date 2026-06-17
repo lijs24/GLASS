@@ -1109,6 +1109,90 @@ def _build_resident_determinism_contract_checks(
     return checks
 
 
+def _build_pipeline_contract_checks(
+    pipeline_contract_requirements: dict[str, Any],
+    *,
+    pipeline_contract: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    present = bool(pipeline_contract)
+    contract = pipeline_contract or {}
+    failed_checks = contract.get("failed_checks") if isinstance(contract.get("failed_checks"), list) else []
+    check_names = contract.get("check_names") if isinstance(contract.get("check_names"), list) else []
+
+    if pipeline_contract_requirements.get("required"):
+        checks.append(
+            _check(
+                "contract_pipeline_contract_present",
+                present,
+                {
+                    "required": True,
+                    "present": present,
+                    "path": contract.get("path"),
+                },
+            )
+        )
+
+    required_audit_type = pipeline_contract_requirements.get("required_audit_type")
+    if required_audit_type is not None:
+        checks.append(
+            _check(
+                "contract_pipeline_contract_audit_type",
+                present and contract.get("audit_type") == str(required_audit_type),
+                {
+                    "actual": contract.get("audit_type"),
+                    "required": str(required_audit_type),
+                },
+            )
+        )
+
+    if pipeline_contract_requirements.get("require_passed"):
+        checks.append(
+            _check(
+                "contract_pipeline_contract_passed",
+                contract.get("passed") is True,
+                {
+                    "actual": contract.get("passed"),
+                    "status": contract.get("status"),
+                    "failed_checks": failed_checks,
+                },
+            )
+        )
+
+    min_check_count = pipeline_contract_requirements.get("min_check_count")
+    if min_check_count is not None:
+        required = int(min_check_count)
+        actual = int(contract.get("check_count") or 0)
+        checks.append(
+            _check(
+                "contract_pipeline_contract_min_check_count",
+                actual >= required,
+                {"actual": actual, "required_min": required},
+            )
+        )
+
+    for required_name in pipeline_contract_requirements.get("required_check_names") or []:
+        name = str(required_name)
+        checks.append(
+            _check(
+                f"contract_pipeline_contract_check:{name}",
+                name in {str(item) for item in check_names},
+                {"required": name, "available": [str(item) for item in check_names]},
+            )
+        )
+
+    if pipeline_contract_requirements.get("allow_failed_checks") is False:
+        checks.append(
+            _check(
+                "contract_pipeline_contract_no_failed_checks",
+                present and not failed_checks,
+                {"failed_checks": failed_checks},
+            )
+        )
+
+    return checks
+
+
 def build_benchmark_contract_checks(
     contract: dict[str, Any],
     *,
@@ -1120,6 +1204,7 @@ def build_benchmark_contract_checks(
     frame_accounting_record: dict[str, Any] | None = None,
     resident_determinism: dict[str, Any] | None = None,
     output_numerical_drifts: list[dict[str, Any]] | None = None,
+    pipeline_contract: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     dataset = contract.get("dataset_requirements") or {}
@@ -1302,6 +1387,14 @@ def build_benchmark_contract_checks(
                 resident_contract,
                 resident_determinism=resident_determinism,
                 output_numerical_drifts=output_numerical_drifts or [],
+            )
+        )
+    pipeline_contract_requirements = contract.get("pipeline_contract") or {}
+    if isinstance(pipeline_contract_requirements, dict) and pipeline_contract_requirements:
+        checks.extend(
+            _build_pipeline_contract_checks(
+                pipeline_contract_requirements,
+                pipeline_contract=pipeline_contract,
             )
         )
     return checks

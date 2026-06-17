@@ -132,6 +132,16 @@
     "match_dq_active_frame_count": true,
     "match_registration_accepted_frames": true
   },
+  "pipeline_contract": {
+    "required": true,
+    "required_audit_type": "pipeline_invariant_contract",
+    "require_passed": true,
+    "min_check_count": 1,
+    "required_check_names": [
+      "integration_resident_result_contract"
+    ],
+    "allow_failed_checks": false
+  },
   "required_command_tokens": [
     "--backend cuda",
     "--until-stage integration",

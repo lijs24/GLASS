@@ -13,7 +13,15 @@ from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 
 
-STEP_ORDER = ["run", "compare_reference", "compare_baseline", "acceptance_audit", "candidate_comparison"]
+STEP_ORDER = [
+    "run",
+    "compare_reference",
+    "compare_baseline",
+    "pipeline_contract",
+    "acceptance_audit",
+    "candidate_comparison",
+]
+OPTIONAL_LEGACY_STEPS = {"pipeline_contract"}
 
 
 def _read_plan(path: str | Path) -> dict[str, Any]:
@@ -141,6 +149,8 @@ def build_candidate_runtime_sweep_execution(
         for step in STEP_ORDER:
             command = commands.get(step)
             if not command:
+                if step in OPTIONAL_LEGACY_STEPS:
+                    continue
                 raise ValueError(f"variant {variant_id} is missing command for step {step}")
             step_result = _step_record(
                 step=step,

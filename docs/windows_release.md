@@ -107,6 +107,10 @@ Installer:
 - `glass doctor --allow-cpu-only` succeeds.
 - CUDA machine: `glass doctor` reports native CUDA available.
 - CUDA smoke tests pass on the release machine.
+- Release-grade 200-light acceptance uses the benchmark contract plus
+  `--pipeline-contract-json`, and all `contract_pipeline_contract_*` checks pass.
+- Candidate/runtime sweep plans include a `pipeline_contract` step before
+  `acceptance_audit`.
 - Portable zip starts on a clean Windows test account.
 - Installer runs `glass-doctor.cmd` after install.
 - No `runs/`, `.venv/`, `build/`, `.pdb`, `.ilk`, or local data files are

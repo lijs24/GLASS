@@ -196,6 +196,21 @@ def _compare_command(
     return _command(tokens)
 
 
+def _pipeline_contract_command(*, glass_run: Path, out: Path, markdown: Path) -> str:
+    return _command(
+        [
+            "glass",
+            "pipeline-contract",
+            "--run",
+            glass_run,
+            "--out",
+            out,
+            "--markdown",
+            markdown,
+        ]
+    )
+
+
 def _acceptance_command(
     *,
     manifest: str | Path,
@@ -204,6 +219,7 @@ def _acceptance_command(
     compare_json: Path,
     out: Path,
     benchmark_contract: str | Path | None,
+    pipeline_contract_json: str | Path | None,
 ) -> str:
     tokens: list[str | Path | int | float] = [
         "glass",
@@ -221,6 +237,8 @@ def _acceptance_command(
     ]
     if benchmark_contract is not None:
         tokens.extend(["--benchmark-contract", benchmark_contract])
+    if pipeline_contract_json is not None:
+        tokens.extend(["--pipeline-contract-json", pipeline_contract_json])
     return _command(tokens)
 
 
@@ -298,6 +316,8 @@ def build_candidate_runtime_sweep_plan(
         master, coverage = _run_master_paths(run_dir)
         compare_reference_html = root_path / "compare" / f"{variant_id}_vs_reference.html"
         compare_baseline_html = root_path / "compare" / f"{variant_id}_vs_baseline.html"
+        pipeline_contract_json = root_path / "pipeline_contract" / f"{variant_id}_pipeline_contract.json"
+        pipeline_contract_md = root_path / "pipeline_contract" / f"{variant_id}_pipeline_contract.md"
         acceptance_json = root_path / "acceptance" / f"{variant_id}_acceptance.json"
         comparison_json = root_path / "comparison" / f"{variant_id}_candidate_comparison.json"
         comparison_md = root_path / "comparison" / f"{variant_id}_candidate_comparison.md"
@@ -324,6 +344,11 @@ def build_candidate_runtime_sweep_plan(
                 glass_offset=None,
                 min_coverage=min_coverage,
             ),
+            "pipeline_contract": _pipeline_contract_command(
+                glass_run=run_dir,
+                out=pipeline_contract_json,
+                markdown=pipeline_contract_md,
+            ),
             "acceptance_audit": _acceptance_command(
                 manifest=manifest,
                 glass_run=run_dir,
@@ -331,6 +356,7 @@ def build_candidate_runtime_sweep_plan(
                 compare_json=compare_reference_html.with_suffix(".json"),
                 out=acceptance_json,
                 benchmark_contract=benchmark_contract,
+                pipeline_contract_json=pipeline_contract_json,
             ),
             "candidate_comparison": _candidate_comparison_command(
                 baseline_run=baseline_run,
@@ -367,6 +393,7 @@ def build_candidate_runtime_sweep_plan(
                 "artifacts": {
                     "compare_reference_json": str(compare_reference_html.with_suffix(".json")),
                     "compare_baseline_json": str(compare_baseline_html.with_suffix(".json")),
+                    "pipeline_contract_json": str(pipeline_contract_json),
                     "acceptance_json": str(acceptance_json),
                     "candidate_comparison_json": str(comparison_json),
                 },

@@ -2849,6 +2849,23 @@ integration where applicable.
   contract status `passed`, zero failed pipeline checks, and the same measured
   `46.82815250883293x` speedup versus the black-box reference.
 
+### S2-Gate 172: Benchmark Contract Requires Pipeline Contract Evidence
+
+- Extend benchmark contracts with a `pipeline_contract` requirement block.
+- Add contract checks for pipeline-contract presence, audit type, pass status,
+  minimum check count, required check names, and absence of failed checks.
+- Update the M38 200-light release contracts so a release-grade acceptance audit
+  cannot pass without a passing `pipeline_invariant_contract` artifact.
+- Extend candidate runtime sweep plans with a `pipeline_contract` command between
+  compare and acceptance, and pass its JSON into `acceptance-audit`.
+- Keep the runtime sweep executor compatible with older plans that lack the new
+  step while executing the step for new plans.
+- Run the updated contract against the Gate160 `throughput_v1` resident run under
+  `C:\glass_runs\phase2_s2_gate_172_release_contract_pipeline`.
+- Current real artifact result: passed, with 98 acceptance checks, all six
+  benchmark pipeline-contract checks passing, and dry-run sweep execution
+  showing the new `pipeline_contract` step before `acceptance_audit`.
+
 ## Gate Rules
 
 Each gate requires:
