@@ -16,3 +16,16 @@ def test_windows_portable_builder_declares_package_label_and_isolated_user_site(
     assert "Import-VisualStudioBuildEnvironment" in script
     assert "vswhere.exe" in script
     assert "vcvars64.bat" in script
+
+
+def test_minimal_cuda_toolkit_installer_is_component_scoped():
+    script = Path("packaging/windows/install_cuda_toolkit_minimal.ps1").read_text(encoding="utf-8")
+
+    assert "cuda_12.4.1_551.78_windows.exe" in script
+    assert "cuda_11.8.0_522.06_windows.exe" in script
+    assert "nvcc_12.4" in script
+    assert "cudart_12.4" in script
+    assert "nvcc_11.8" in script
+    assert "cudart_11.8" in script
+    assert "driver_component_included = $false" in script
+    assert "Display driver components are not requested" in script

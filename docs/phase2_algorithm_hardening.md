@@ -3177,6 +3177,26 @@ integration where applicable.
   match `major_compatible`, and recommendation
   `build_ready_variants_and_install_missing_toolkits`.
 
+### S2-Gate 186: Minimal CUDA Toolkit Installer Plan
+
+- Add `packaging\windows\install_cuda_toolkit_minimal.ps1`, a driver-safe
+  helper for CUDA12/CUDA11 Toolkit preparation.
+- The helper defaults to `plan_only`; explicit `-Download` or `-Install` is
+  required for external actions.
+- The helper records installer URL, expected SHA256, target Toolkit root,
+  planned components, and `driver_component_included=false`.
+- Planned components are limited to `nvcc_12.4`/`cudart_12.4` and
+  `nvcc_11.8`/`cudart_11.8`.
+- Extend `glass windows-package-build-plan` so missing `cuda12` and `cuda11`
+  rows include read-only download and install commands for the minimal helper.
+- Run plan-only artifacts for `cuda12` and `cuda11` under
+  `C:\glass_runs\phase2_s2_gate_186_cuda_toolkit_minimal_installer` and mirror
+  them into `runs\checkpoints`.
+- Current real artifact result: both Toolkit helper artifacts report
+  `status=plan_only`, `install_requested=false`, `download_requested=false`,
+  `driver_component_included=false`, and the refreshed package build plan still
+  reports ready variants `cuda13,cpu` with missing variants `cuda12,cuda11`.
+
 ## Gate Rules
 
 Each gate requires:

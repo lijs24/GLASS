@@ -117,6 +117,20 @@ current machine, which CUDA Toolkit roots are missing, and the exact
 `--require-all-toolkits` in CI/release automation when all CUDA variants must be
 present.
 
+When CUDA12/CUDA11 Toolkits are missing, use the minimal installer helper rather
+than a default full Toolkit install:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/install_cuda_toolkit_minimal.ps1 -Label cuda12
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/install_cuda_toolkit_minimal.ps1 -Label cuda12 -Download
+powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/install_cuda_toolkit_minimal.ps1 -Label cuda12 -Install
+```
+
+The helper defaults to plan-only mode. The `-Install` path requests only the
+`nvcc` and `cudart` Toolkit components for the selected label and does not
+request display driver components. Rerun `glass windows-package-build-plan`
+after installation to verify `nvcc.exe` discovery.
+
 Installer:
 
 1. Build the portable folder.

@@ -97,6 +97,28 @@ def _command_text(command: list[str]) -> str:
     return " ".join(_quote_arg(str(part)) for part in command)
 
 
+def _minimal_toolkit_command(label: str, action: str) -> list[str] | None:
+    if label not in {"cuda12", "cuda11"}:
+        return None
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "packaging/windows/install_cuda_toolkit_minimal.ps1",
+        "-Label",
+        label,
+    ]
+    if action == "download":
+        command.append("-Download")
+    elif action == "install":
+        command.append("-Install")
+    else:
+        return None
+    return command
+
+
 def _find_toolkit_for_package(
     package: WindowsCudaPackage,
     *,
@@ -219,6 +241,8 @@ def _variant_row(
     if toolkit["toolkit_root"] is not None:
         command.extend(["-CudaToolkitRoot", str(toolkit["toolkit_root"])])
     ready = bool(toolkit["ready"])
+    download_command = _minimal_toolkit_command(label, "download")
+    install_command = _minimal_toolkit_command(label, "install")
     return {
         "label": label,
         "build_cuda": True,
@@ -237,6 +261,10 @@ def _variant_row(
         "zip_path": str(zip_path),
         "build_command": command if ready else None,
         "build_command_text": _command_text(command) if ready else None,
+        "toolkit_download_command": None if download_command is None else download_command,
+        "toolkit_download_command_text": None if download_command is None else _command_text(download_command),
+        "toolkit_install_command": None if install_command is None else install_command,
+        "toolkit_install_command_text": None if install_command is None else _command_text(install_command),
     }
 
 
@@ -372,6 +400,21 @@ def _markdown(payload: dict[str, Any]) -> str:
         command = row.get("build_command_text")
         if command:
             lines.extend([f"### {row.get('label')}", "", "```powershell", str(command), "```", ""])
+    missing_rows = [
+        row
+        for row in payload.get("variants") or []
+        if row.get("build_cuda") is True and not row.get("build_ready")
+    ]
+    if missing_rows:
+        lines.extend(["## Missing Toolkit Commands", ""])
+        for row in missing_rows:
+            label = row.get("label")
+            download = row.get("toolkit_download_command_text")
+            install = row.get("toolkit_install_command_text")
+            if download:
+                lines.extend([f"### {label} download", "", "```powershell", str(download), "```", ""])
+            if install:
+                lines.extend([f"### {label} install", "", "```powershell", str(install), "```", ""])
     lines.extend(["## Checks", ""])
     for item in payload.get("checks") or []:
         marker = "PASS" if item.get("passed") else "FAIL"

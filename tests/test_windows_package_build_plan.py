@@ -49,6 +49,9 @@ def test_windows_package_build_plan_marks_missing_cuda_variants(tmp_path: Path):
     assert cuda12_row["build_ready"] is False
     assert cuda12_row["skip_reason"] == "matching_cuda_toolkit_not_found"
     assert cuda12_row["build_command"] is None
+    assert "install_cuda_toolkit_minimal.ps1" in cuda12_row["toolkit_download_command_text"]
+    assert "-Download" in cuda12_row["toolkit_download_command_text"]
+    assert "-Install" in cuda12_row["toolkit_install_command_text"]
 
 
 def test_windows_package_build_plan_strict_requires_all_toolkits(tmp_path: Path):
