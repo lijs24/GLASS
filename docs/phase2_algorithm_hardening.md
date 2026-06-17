@@ -2833,6 +2833,22 @@ integration where applicable.
 - Run the updated pipeline-contract against the Gate160 `throughput-v1` resident
   run under `C:\glass_runs\phase2_s2_gate_170_pipeline_resident_contract`.
 
+### S2-Gate 171: Acceptance Audit Requires Pipeline Contract Evidence
+
+- Extend `glass acceptance-audit` with optional `--pipeline-contract-json`.
+- When supplied, require the referenced audit to exist, identify as
+  `pipeline_invariant_contract`, and pass all pipeline-contract checks.
+- Expose the pipeline-contract status, failed checks, integration summary, and
+  pixel-verification summary in the acceptance JSON/Markdown.
+- Add tests for passing and failing pipeline-contract artifacts without changing
+  the default acceptance path when the option is omitted.
+- Run the updated acceptance audit against the Gate160 `throughput-v1` resident
+  run and Gate170 pipeline contract under
+  `C:\glass_runs\phase2_s2_gate_171_acceptance_pipeline_contract`.
+- Current real artifact result: passed, with 92 acceptance checks, pipeline
+  contract status `passed`, zero failed pipeline checks, and the same measured
+  `46.82815250883293x` speedup versus the black-box reference.
+
 ## Gate Rules
 
 Each gate requires:

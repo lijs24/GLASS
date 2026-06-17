@@ -398,6 +398,41 @@ def _write_resident_determinism(
     )
 
 
+def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
+    checks = [
+        {
+            "name": "integration_resident_result_contract",
+            "passed": passed,
+            "evidence": {"required_count": 1, "failed": [] if passed else ["H"]},
+            "note": "",
+        }
+    ]
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "audit_type": "pipeline_invariant_contract",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "checks": checks,
+            "integration": {
+                "outputs": [
+                    {
+                        "item": "H",
+                        "resident_result_contract": {
+                            "required": True,
+                            "present": True,
+                            "passed": passed,
+                            "status": "passed" if passed else "failed",
+                        },
+                    }
+                ]
+            },
+            "pixel_verification": {"enabled": False},
+        },
+    )
+
+
 def test_acceptance_audit_passes_real_benchmark_thresholds(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     gp_run = tmp_path / "gp"
@@ -420,6 +455,96 @@ def test_acceptance_audit_passes_real_benchmark_thresholds(tmp_path: Path):
     assert audit["passed"] is True
     assert audit["frame_type_counts"] == {"light": 200, "bias": 20, "dark": 20, "flat": 20}
     assert audit["speedup_summary"]["speedup_vs_wbpp"] == 10.0
+
+
+def test_acceptance_audit_accepts_passing_pipeline_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert checks["pipeline_contract_present"]["passed"] is True
+    assert checks["pipeline_contract_passed"]["passed"] is True
+    assert audit["pipeline_contract"]["passed"] is True
+    assert audit["pipeline_contract"]["check_count"] == 1
+
+
+def test_acceptance_audit_fails_failed_pipeline_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=False)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert checks["pipeline_contract_present"]["passed"] is True
+    assert checks["pipeline_contract_passed"]["passed"] is False
+    assert audit["pipeline_contract"]["failed_checks"] == [
+        "integration_resident_result_contract"
+    ]
+
+
+def test_acceptance_audit_fails_missing_pipeline_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "missing_pipeline_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert checks["pipeline_contract_present"]["passed"] is False
+    assert checks["pipeline_contract_present"]["evidence"]["exists"] is False
+    assert checks["pipeline_contract_passed"]["passed"] is False
+    assert audit["pipeline_contract"]["check_count"] == 0
 
 
 def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):

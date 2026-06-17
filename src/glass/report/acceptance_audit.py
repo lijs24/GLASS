@@ -53,6 +53,7 @@ def build_acceptance_audit(
     max_abs_diff_p99: float | None = 0.01,
     benchmark_contract: str | Path | None = None,
     resident_determinism_json: str | Path | None = None,
+    pipeline_contract_json: str | Path | None = None,
 ) -> dict[str, Any]:
     manifest = _read_json_lenient(manifest_path)
     speedup = summarize_wbpp_speedup(
@@ -129,6 +130,52 @@ def build_acceptance_audit(
                 p99 is not None and p99 <= float(max_abs_diff_p99),
                 {"actual": p99, "required_max": float(max_abs_diff_p99)},
             )
+        )
+
+    pipeline_contract_path = Path(pipeline_contract_json) if pipeline_contract_json is not None else None
+    pipeline_contract_payload = (
+        _read_json_lenient(pipeline_contract_path)
+        if pipeline_contract_path is not None and pipeline_contract_path.exists()
+        else {}
+    )
+    pipeline_contract = None
+    if pipeline_contract_path is not None:
+        failed_checks = [
+            item.get("name")
+            for item in pipeline_contract_payload.get("checks") or []
+            if isinstance(item, dict) and not item.get("passed")
+        ]
+        pipeline_contract = {
+            "path": str(pipeline_contract_path),
+            "audit_type": pipeline_contract_payload.get("audit_type"),
+            "status": pipeline_contract_payload.get("status"),
+            "passed": pipeline_contract_payload.get("passed"),
+            "check_count": len(pipeline_contract_payload.get("checks") or []),
+            "failed_checks": failed_checks,
+            "integration": pipeline_contract_payload.get("integration") or {},
+            "pixel_verification": pipeline_contract_payload.get("pixel_verification") or {},
+        }
+        checks.extend(
+            [
+                _check(
+                    "pipeline_contract_present",
+                    pipeline_contract_path.exists()
+                    and pipeline_contract_payload.get("audit_type") == "pipeline_invariant_contract",
+                    {
+                        "path": str(pipeline_contract_path),
+                        "exists": pipeline_contract_path.exists(),
+                        "audit_type": pipeline_contract_payload.get("audit_type"),
+                    },
+                ),
+                _check(
+                    "pipeline_contract_passed",
+                    pipeline_contract_payload.get("passed") is True,
+                    {
+                        "status": pipeline_contract_payload.get("status"),
+                        "failed_checks": failed_checks,
+                    },
+                ),
+            ]
         )
 
     contract_payload: dict[str, Any] | None = None
@@ -218,6 +265,7 @@ def build_acceptance_audit(
         },
         "frame_accounting": frame_accounting_record,
         "resident_determinism": resident_determinism,
+        "pipeline_contract": pipeline_contract,
         "output_numerical_drifts": output_numerical_drifts,
         "speedup_summary": speedup,
         "clean_room": {
@@ -238,6 +286,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         "",
         f"- Status: {audit['status']}",
         f"- Benchmark contract: {(audit.get('benchmark_contract') or {}).get('name')}",
+        f"- Pipeline contract: {(audit.get('pipeline_contract') or {}).get('status')}",
         f"- DQ provenance records: {(audit.get('dq_provenance') or {}).get('record_count')}",
         f"- Frame accounting artifact: {(audit.get('frame_accounting') or {}).get('path')}",
         f"- Speedup vs WBPP: {speedup.get('speedup_vs_wbpp')}",

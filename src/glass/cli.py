@@ -1682,6 +1682,7 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         max_abs_diff_p99=args.max_abs_diff_p99,
         benchmark_contract=args.benchmark_contract,
         resident_determinism_json=args.resident_determinism_json,
+        pipeline_contract_json=args.pipeline_contract_json,
     )
     write_acceptance_audit(args.out, audit, markdown=args.markdown)
     console.print(
@@ -3754,6 +3755,10 @@ def build_parser() -> argparse.ArgumentParser:
             "optional resident-determinism JSON; copied into the acceptance audit so reports can "
             "show strict drift status and numerical output-drift magnitude"
         ),
+    )
+    acceptance.add_argument(
+        "--pipeline-contract-json",
+        help="optional pipeline-contract JSON; required to pass when supplied",
     )
     acceptance.set_defaults(func=cmd_acceptance_audit)
 
