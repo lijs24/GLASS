@@ -16,3 +16,10 @@ def test_capability_report_records_structured_gate_flags():
     assert "resident global/grid mean/std" in report["local_normalization"]["cuda"]
     assert "simple_snr weights" in report["weighted_integration"]["cuda"]
     assert report["weighted_integration"]["status"] == "partial WBPP-like integration"
+
+
+def test_capability_report_can_skip_cuda_probe():
+    report = capability_report(probe_cuda=False)
+
+    assert report["cuda_available"] is False
+    assert report["cuda_features"] == {}

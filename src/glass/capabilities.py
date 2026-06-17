@@ -37,8 +37,8 @@ def cuda_extension_available() -> bool:
     return bool(getattr(glass_cuda, "cuda_available", lambda: False)())
 
 
-def capability_report() -> dict[str, object]:
-    cuda_flags = _cuda_feature_flags()
+def capability_report(*, probe_cuda: bool = True) -> dict[str, object]:
+    cuda_flags = _cuda_feature_flags() if probe_cuda else {}
     return {
         "metadata_scan": True,
         "planning": True,
@@ -46,7 +46,7 @@ def capability_report() -> dict[str, object]:
         "synthetic_data": True,
         "cpu_baseline": True,
         "cuda_extension_importable": find_spec("glass_cuda") is not None,
-        "cuda_available": cuda_extension_available(),
+        "cuda_available": cuda_extension_available() if probe_cuda else False,
         "cuda_features": cuda_flags,
         "out_of_core_design": True,
         "registration": {

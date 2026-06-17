@@ -2621,6 +2621,24 @@ integration where applicable.
 - Keep this as a planning/preflight gate when GPU is occupied. The measured
   matrix execution remains the next gate after GPU memory is available.
 
+### S2-Gate 157: Resumable Runtime Sweep Executor
+
+- Add `glass candidate-runtime-sweep-execute` to execute or dry-run the
+  S2-Gate 156 prefetch/worker matrix plan from one auditable command.
+- Support variant selection, `--start-at`, `--stop-after`, `--skip-existing`,
+  dry-run review, executable substitution, working-directory control, and
+  fail-on-failed behavior so interrupted sweeps can resume without rerunning
+  completed candidate-comparison artifacts.
+- Record every planned or executed step with command, status, return code, and
+  elapsed time in a `candidate_runtime_sweep_execution` JSON artifact.
+- Harden local diagnostics for Windows/loaded-GPU environments: `glass doctor`
+  can skip CUDA probing, CUDA tests skip when the GPU is externally saturated,
+  optional astroalign-dependent tests skip when the library smoke test hangs,
+  and benchmark subprocesses have explicit timeouts.
+- Keep this as an orchestration and test-hardening gate. The dry-run artifact
+  proves the executor contract; measured matrix execution remains the next gate
+  when the GPU is reserved for GLASS.
+
 ## Gate Rules
 
 Each gate requires:

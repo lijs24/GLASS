@@ -24,7 +24,7 @@ def test_resident_stack_download_frame_tile() -> None:
 
     tile = np.asarray(stack.download_frame_tile(0, 1, 1, 4, 3), dtype=np.float32)
 
-    np.testing.assert_array_equal(tile, frame[1:3, 1:4])
+    assert np.array_equal(tile, frame[1:3, 1:4])
 
 
 def _write_capture_fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path]:

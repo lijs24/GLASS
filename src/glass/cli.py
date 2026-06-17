@@ -92,6 +92,10 @@ from glass.report.candidate_runtime_sweep_plan import (
     build_candidate_runtime_sweep_plan,
     write_candidate_runtime_sweep_plan,
 )
+from glass.report.candidate_runtime_sweep_execute import (
+    build_candidate_runtime_sweep_execution,
+    write_candidate_runtime_sweep_execution,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -172,6 +176,16 @@ def _local_norm_override_from_arg(value: str) -> bool | None:
     if value == "off":
         return False
     return None
+
+
+def _safe_platform_label() -> str:
+    if sys.platform.startswith("win"):
+        version = sys.getwindowsversion()
+        return f"Windows-{version.major}.{version.minor}.{version.build}"
+    try:
+        return platform.platform()
+    except Exception as exc:  # pragma: no cover - environment-specific diagnostic path
+        return f"{sys.platform} ({exc})"
 
 
 def _new_timing(command: str, backend: str | None = None, tile_size: int | None = None) -> dict:
@@ -1370,6 +1384,32 @@ def cmd_candidate_runtime_sweep_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_candidate_runtime_sweep_execute(args: argparse.Namespace) -> int:
+    payload = build_candidate_runtime_sweep_execution(
+        args.plan,
+        dry_run=args.dry_run,
+        skip_existing=args.skip_existing,
+        variants=args.variant,
+        start_at=args.start_at,
+        stop_after=args.stop_after,
+        run_sweep_summary=not args.no_sweep_summary,
+        glass_executable=args.glass_executable,
+        cwd=args.cwd,
+    )
+    write_candidate_runtime_sweep_execution(args.out, payload)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": summary.get("status"),
+            "completed_variant_count": summary.get("completed_variant_count"),
+            "skipped_existing_count": summary.get("skipped_existing_count"),
+            "out": args.out,
+        }
+    )
+    return 2 if args.fail_on_failed and summary.get("failed") else 0
+
+
 def cmd_tile_local_policy_replay(args: argparse.Namespace) -> int:
     payload = build_tile_local_policy_replay(args.contribution, args.proposal)
     write_tile_local_policy_replay(args.out, payload, markdown=args.markdown)
@@ -1824,7 +1864,7 @@ def cmd_synthetic(args: argparse.Namespace) -> int:
     return 0
 
 
-def _doctor_payload() -> dict:
+def _doctor_payload(*, skip_cuda_probe: bool = False) -> dict:
     cuda_importable = importlib.util.find_spec("glass_cuda") is not None
     cuda_info: dict = {
         "wrapper_importable": cuda_importable,
@@ -1832,8 +1872,9 @@ def _doctor_payload() -> dict:
         "cuda_available": False,
         "devices": [],
         "error": None,
+        "probe_skipped": bool(skip_cuda_probe),
     }
-    if cuda_importable:
+    if cuda_importable and not skip_cuda_probe:
         try:
             import glass_cuda  # type: ignore
 
@@ -1852,9 +1893,9 @@ def _doctor_payload() -> dict:
         "python": {
             "version": sys.version.split()[0],
             "executable": sys.executable,
-            "platform": platform.platform(),
+            "platform": _safe_platform_label(),
         },
-        "capabilities": capability_report(),
+        "capabilities": capability_report(probe_cuda=not skip_cuda_probe),
         "cuda": cuda_info,
         "windows_cuda_packages": recommend_windows_cuda_packages(cuda_info["devices"]),
         "recommendation": (
@@ -1866,7 +1907,7 @@ def _doctor_payload() -> dict:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    payload = _doctor_payload()
+    payload = _doctor_payload(skip_cuda_probe=args.skip_cuda_probe)
     if args.json:
         write_json(args.json, payload)
         console.print(f"Wrote GLASS doctor report: {args.json}")
@@ -1874,6 +1915,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     console.print(f"Python: {payload['python']['version']} ({payload['python']['platform']})")
     cuda = payload["cuda"]
     console.print(f"CUDA wrapper importable: {cuda['wrapper_importable']}")
+    if cuda.get("probe_skipped"):
+        console.print("CUDA probe skipped: True")
     console.print(f"CUDA native extension loaded: {cuda['native_extension_loaded']}")
     console.print(f"CUDA available: {cuda['cuda_available']}")
     if cuda.get("error"):
@@ -1903,6 +1946,11 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser("doctor", help="diagnose GLASS CPU/CUDA runtime availability")
     doctor.add_argument("--json", help="optional output JSON report")
     doctor.add_argument("--allow-cpu-only", action="store_true", help="return success when CUDA is unavailable")
+    doctor.add_argument(
+        "--skip-cuda-probe",
+        action="store_true",
+        help="avoid importing/probing the CUDA backend; useful for CPU-only diagnostics when the GPU is busy",
+    )
     doctor.set_defaults(func=cmd_doctor)
 
     scan = sub.add_parser("scan", help="scan FITS/FIT/XISF metadata")
@@ -3222,6 +3270,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="resident prefetch worker count for a generated matrix variant; may be repeated",
     )
     candidate_runtime_sweep_plan.set_defaults(func=cmd_candidate_runtime_sweep_plan)
+
+    candidate_runtime_sweep_execute = sub.add_parser(
+        "candidate-runtime-sweep-execute",
+        help="execute or dry-run a candidate-runtime-sweep-plan with resume-friendly skipping",
+    )
+    candidate_runtime_sweep_execute.add_argument("--plan", required=True, help="candidate runtime sweep plan JSON")
+    candidate_runtime_sweep_execute.add_argument("--out", required=True, help="output execution audit JSON")
+    candidate_runtime_sweep_execute.add_argument(
+        "--variant",
+        action="append",
+        help="variant id to execute; may be repeated, defaults to every variant in the plan",
+    )
+    candidate_runtime_sweep_execute.add_argument("--start-at", help="start at this selected variant id")
+    candidate_runtime_sweep_execute.add_argument("--stop-after", help="stop after this selected variant id")
+    candidate_runtime_sweep_execute.add_argument("--dry-run", action="store_true", help="record commands without executing")
+    candidate_runtime_sweep_execute.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="skip variants whose candidate-comparison artifact already exists",
+    )
+    candidate_runtime_sweep_execute.add_argument(
+        "--no-sweep-summary",
+        action="store_true",
+        help="do not execute the final candidate-comparison-sweep command",
+    )
+    candidate_runtime_sweep_execute.add_argument(
+        "--glass-executable",
+        help="optional executable path used to replace command tokens that start with glass",
+    )
+    candidate_runtime_sweep_execute.add_argument("--cwd", help="working directory for executed commands")
+    candidate_runtime_sweep_execute.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when an executed step fails",
+    )
+    candidate_runtime_sweep_execute.set_defaults(func=cmd_candidate_runtime_sweep_execute)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",

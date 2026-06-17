@@ -138,6 +138,7 @@ def test_cli_help_commands():
         "candidate-comparison",
         "candidate-comparison-sweep",
         "candidate-runtime-sweep-plan",
+        "candidate-runtime-sweep-execute",
         "tile-local-policy-replay",
         "tile-local-policy-subset",
         "tile-local-apply-experiment",
@@ -205,11 +206,12 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
 
 def test_cli_doctor_cpu_only_success(tmp_path: Path):
     out = tmp_path / "doctor.json"
-    assert main(["doctor", "--allow-cpu-only", "--json", str(out)]) == 0
+    assert main(["doctor", "--allow-cpu-only", "--skip-cuda-probe", "--json", str(out)]) == 0
     payload = read_json(out)
     assert payload["product"] == "GLASS"
     assert payload["full_name"] == "GPU-Accelerated Lightframe Alignment and Stacking System"
     assert "cuda" in payload
+    assert payload["cuda"]["probe_skipped"] is True
     assert "capabilities" in payload
     assert "windows_cuda_packages" in payload
     assert "ordered_try_list" in payload["windows_cuda_packages"]

@@ -1,0 +1,108 @@
+{
+  "capabilities": {
+    "cpu_baseline": true,
+    "cuda_available": false,
+    "cuda_extension_importable": true,
+    "cuda_features": {},
+    "html_report": true,
+    "local_normalization": {
+      "cpu": "tile median/std baseline with coefficient artifacts",
+      "cuda": "tile mean/std primitive, resident global/grid mean/std, resident grid apply",
+      "status": "partial; full interpolated/windowed LN is not complete"
+    },
+    "metadata_scan": true,
+    "out_of_core_design": true,
+    "planning": true,
+    "registration": {
+      "cpu": "star catalog translation/similarity helpers",
+      "cuda": "resident translation, catalog similarity, triangle descriptors, bilinear/Lanczos3 matrix warp",
+      "status": "partial WBPP-like registration; not PixInsight-equivalent"
+    },
+    "synthetic_data": true,
+    "weighted_integration": {
+      "cpu": "mean, simple_snr, sigma/winsorized rejection maps",
+      "cuda": "resident weighted mean, simple_snr weights, and sigma/winsorized rejection maps",
+      "status": "partial WBPP-like integration"
+    }
+  },
+  "cuda": {
+    "cuda_available": false,
+    "devices": [],
+    "error": null,
+    "native_extension_loaded": false,
+    "probe_skipped": true,
+    "wrapper_importable": true
+  },
+  "full_name": "GPU-Accelerated Lightframe Alignment and Stacking System",
+  "product": "GLASS",
+  "python": {
+    "executable": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.venv\\Scripts\\python.exe",
+    "platform": "Windows-10.0.26200",
+    "version": "3.12.10"
+  },
+  "recommendation": "cpu; install a GLASS CUDA wheel and update the NVIDIA driver to enable GPU acceleration",
+  "schema_version": 1,
+  "windows_cuda_packages": {
+    "fallbacks": [],
+    "guidance": "No NVIDIA compute capability was detected. Use the CPU package or run on the target GPU machine.",
+    "ordered_try_list": [
+      "cpu"
+    ],
+    "packages": [
+      {
+        "architectures": [
+          "5.0",
+          "5.2",
+          "6.0",
+          "6.1",
+          "7.0",
+          "7.5",
+          "8.0",
+          "8.6"
+        ],
+        "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+        "compatible": null,
+        "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+        "label": "cuda11",
+        "match": "unknown_device",
+        "note": "GPU compute capability is unknown; run glass-doctor on the target machine.",
+        "toolkit": "11.8"
+      },
+      {
+        "architectures": [
+          "7.5",
+          "8.0",
+          "8.6",
+          "8.9",
+          "9.0"
+        ],
+        "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+        "compatible": null,
+        "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+        "label": "cuda12",
+        "match": "unknown_device",
+        "note": "GPU compute capability is unknown; run glass-doctor on the target machine.",
+        "toolkit": "12.4"
+      },
+      {
+        "architectures": [
+          "8.6",
+          "8.9",
+          "9.0",
+          "10.0",
+          "12.0"
+        ],
+        "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+        "compatible": null,
+        "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+        "label": "cuda13",
+        "match": "unknown_device",
+        "note": "GPU compute capability is unknown; run glass-doctor on the target machine.",
+        "toolkit": "13.0"
+      }
+    ],
+    "primary": "cpu",
+    "ptx_forward_compatibility": true,
+    "selected_device": null
+  }
+}

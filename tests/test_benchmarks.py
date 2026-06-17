@@ -9,11 +9,23 @@ from pathlib import Path
 import pytest
 
 from glass.synthetic.generator import generate_synthetic_dataset
+from tests.conftest import astroalign_or_skip
 from tests.conftest import cuda_module_or_skip
 
 
-def _run(script: str, *args: str) -> None:
-    subprocess.run([sys.executable, script, *args], check=True)
+def _run(
+    script: str,
+    *args: str,
+    timeout_s: float = 120.0,
+    skip_on_timeout: bool = False,
+) -> None:
+    command = [sys.executable, script, *args]
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True, timeout=timeout_s)
+    except subprocess.TimeoutExpired as exc:
+        if skip_on_timeout:
+            pytest.skip(f"optional benchmark timed out after {timeout_s:g}s: {' '.join(command)}")
+        raise exc
 
 
 def test_bench_scan_outputs_required_fields(tmp_path: Path):
@@ -55,7 +67,7 @@ def test_bench_end_to_end_cpu_outputs_required_fields(tmp_path: Path):
 
 
 def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
-    pytest.importorskip("astroalign")
+    astroalign_or_skip()
     cuda_module_or_skip()
     out = tmp_path / "astroalign_vs_gpu.json"
 
@@ -87,6 +99,8 @@ def test_compare_astroalign_gpu_alignment_records_direct_diff(tmp_path: Path):
         "4",
         "--catalog-similarity-top-k",
         "4",
+        timeout_s=45.0,
+        skip_on_timeout=True,
     )
 
     payload = json.loads(out.read_text(encoding="utf-8"))

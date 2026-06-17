@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from glass.cpu.registration import (
     estimate_astroalign_transform,
@@ -16,6 +15,7 @@ from glass.engine.registration import _registration_preview
 from glass.engine.registration import register_calibrated_frames
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import write_json
+from tests.conftest import astroalign_or_skip
 
 
 def _star_field(shape: tuple[int, int] = (96, 112)) -> np.ndarray:
@@ -186,7 +186,7 @@ def test_estimate_star_transform_homography_model():
 
 
 def test_estimate_astroalign_transform_translation_like_similarity():
-    pytest.importorskip("astroalign")
+    astroalign_or_skip()
     reference = _star_field()
     moving = _shift_image(reference, 4, -3)
 
@@ -202,7 +202,7 @@ def test_estimate_astroalign_transform_translation_like_similarity():
 
 
 def test_triangle_asterism_transform_agrees_with_astroalign_on_star_field():
-    pytest.importorskip("astroalign")
+    astroalign_or_skip()
     reference_image = _star_field()
     moving_image = _shift_image(reference_image, 4, -3)
     reference_stars = detect_stars(reference_image, threshold_sigma=3, max_stars=50)
@@ -233,7 +233,7 @@ def test_triangle_asterism_transform_agrees_with_astroalign_on_star_field():
 
 
 def test_register_calibrated_frames_can_use_astroalign_backend(tmp_path):
-    pytest.importorskip("astroalign")
+    astroalign_or_skip()
     reference = _star_field()
     moving = _shift_image(reference, 4, -3)
     run = tmp_path / "run"
