@@ -83,9 +83,14 @@ def test_candidate_runtime_sweep_plan_generates_runtime_only_variants(tmp_path: 
     assert "--resident-triangle-min-agreement-score 0.6" in payload["variants"][1]["commands"]["run"]
     assert "--resident-prefetch-frames 12" in payload["variants"][1]["commands"]["run"]
     assert "pipeline-contract" in payload["variants"][1]["commands"]["pipeline_contract"]
+    assert "stack-engine-contract" in payload["variants"][1]["commands"]["stack_engine_contract"]
     assert "--pipeline-contract-json" in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert "--stack-engine-contract-json" in payload["variants"][1]["commands"]["acceptance_audit"]
     assert payload["variants"][1]["artifacts"]["pipeline_contract_json"].endswith(
         "prefetch12_workers6_pipeline_contract.json"
+    )
+    assert payload["variants"][1]["artifacts"]["stack_engine_contract_json"].endswith(
+        "prefetch12_workers6_stack_engine_contract.json"
     )
     assert "--fail-on-failed" not in payload["variants"][1]["commands"]["candidate_comparison"]
     assert "candidate-comparison-sweep" in payload["sweep_command"]

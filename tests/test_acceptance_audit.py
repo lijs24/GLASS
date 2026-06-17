@@ -374,6 +374,22 @@ def _add_pipeline_contract_requirement(path: Path) -> None:
     write_json(path, payload)
 
 
+def _add_stack_engine_default_promotion_requirement(path: Path) -> None:
+    payload = read_json(path)
+    payload["stack_engine_default_promotion"] = {
+        "required": True,
+        "required_audit_type": "stack_engine_default_contract",
+        "require_passed": True,
+        "require_default_promotion_ready": True,
+        "required_scope": "all",
+        "required_recommendation": "stack_engine_default_ready",
+        "max_default_gap_count": 0,
+        "max_blocker_count": 0,
+        "allow_failed_checks": False,
+    }
+    write_json(path, payload)
+
+
 def _write_resident_determinism(
     path: Path,
     *,
@@ -442,6 +458,72 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
                 ]
             },
             "pixel_verification": {"enabled": False},
+        },
+    )
+
+
+def _write_stack_engine_contract(path: Path, *, passed: bool = True, ready: bool = True) -> None:
+    blockers = [] if ready else [
+        {
+            "name": "phase2_stack_engine_default_gaps",
+            "gap_count": 1,
+        }
+    ]
+    checks = [
+        {
+            "name": "calibration_masters_use_stack_engine",
+            "passed": passed,
+            "evidence": {"master_count": 3, "failed": [] if passed else ["bias"]},
+            "note": "",
+        },
+        {
+            "name": "integration_outputs_use:any",
+            "passed": passed,
+            "evidence": {"output_count": 1, "failed": [] if passed else [0]},
+            "note": "",
+        },
+    ]
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "audit_type": "stack_engine_default_contract",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "scope": "all",
+            "expected_integration_engine": "any",
+            "checks": checks,
+            "adoption": {
+                "target_engine": "stack_engine_cpu",
+                "surface_count": 4,
+                "stack_engine_surface_count": 4 if ready else 3,
+                "cuda_resident_surface_count": 0 if ready else 1,
+                "phase2_stack_engine_default_gap_count": 0 if ready else 1,
+                "recommendation": "stack_engine_default_ready" if ready else "resident_cuda_surfaces_remain",
+                "gap_surfaces": []
+                if ready
+                else [
+                    {
+                        "surface": "integration",
+                        "item": "H",
+                        "engine_family": "cuda_resident_stack",
+                        "gap_reason": "resident_cuda_surface",
+                    }
+                ],
+            },
+            "default_promotion": {
+                "ready": ready,
+                "status": "ready" if ready else "blocked",
+                "required_scope": "all",
+                "actual_scope": "all",
+                "surface_count": 4,
+                "calibration_surface_count": 3,
+                "integration_surface_count": 1,
+                "phase2_stack_engine_default_gap_count": 0 if ready else 1,
+                "recommendation": "stack_engine_default_ready" if ready else "resident_cuda_surfaces_remain",
+                "blocker_count": len(blockers),
+                "blockers": blockers,
+            },
         },
     )
 
@@ -658,6 +740,206 @@ def test_acceptance_audit_benchmark_pipeline_contract_requires_artifact(tmp_path
     assert pipeline_evidence["required_by_benchmark_contract"] is True
     assert pipeline_evidence["pipeline_contract_passed"] is None
     assert pipeline_evidence["failed_check_count"] >= 1
+
+
+def test_acceptance_audit_applies_benchmark_stack_engine_default_promotion(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    stack_contract = tmp_path / "stack_engine_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_stack_engine_default_promotion_requirement(contract)
+    _write_stack_engine_contract(stack_contract, passed=True, ready=True)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        stack_engine_contract_json=stack_contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert checks["stack_engine_contract_present"] is True
+    assert checks["stack_engine_contract_passed"] is True
+    assert checks["contract_stack_engine_default_promotion_present"] is True
+    assert checks["contract_stack_engine_default_promotion_contract_passed"] is True
+    assert checks["contract_stack_engine_default_promotion_ready"] is True
+    assert checks["contract_stack_engine_default_promotion_gap_count"] is True
+    evidence = audit["release_contract_evidence"]["stack_engine_default_promotion"]
+    assert evidence["status"] == "passed"
+    assert evidence["required_by_benchmark_contract"] is True
+    assert evidence["stack_engine_contract_passed"] is True
+    assert evidence["default_promotion_ready"] is True
+    assert evidence["benchmark_check_count"] >= 6
+    assert evidence["failed_check_count"] == 0
+
+
+def test_acceptance_audit_benchmark_stack_engine_default_promotion_requires_artifact(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_stack_engine_default_promotion_requirement(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["stack_engine_contract"] is None
+    assert checks["contract_stack_engine_default_promotion_present"] is False
+    assert checks["contract_stack_engine_default_promotion_contract_passed"] is False
+    assert checks["contract_stack_engine_default_promotion_ready"] is False
+    evidence = audit["release_contract_evidence"]["stack_engine_default_promotion"]
+    assert evidence["status"] == "failed"
+    assert evidence["required_by_benchmark_contract"] is True
+    assert evidence["stack_engine_contract_passed"] is None
+    assert evidence["failed_check_count"] >= 1
+
+
+def test_acceptance_audit_benchmark_stack_engine_default_promotion_blocks_not_ready(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    stack_contract = tmp_path / "stack_engine_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_stack_engine_default_promotion_requirement(contract)
+    _write_stack_engine_contract(stack_contract, passed=True, ready=False)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        stack_engine_contract_json=stack_contract,
+    )
+
+    checks = {item["name"]: item["passed"] for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert checks["stack_engine_contract_present"] is True
+    assert checks["stack_engine_contract_passed"] is True
+    assert checks["contract_stack_engine_default_promotion_contract_passed"] is True
+    assert checks["contract_stack_engine_default_promotion_ready"] is False
+    assert checks["contract_stack_engine_default_promotion_gap_count"] is False
+    assert checks["contract_stack_engine_default_promotion_blocker_count"] is False
+    evidence = audit["release_contract_evidence"]["stack_engine_default_promotion"]
+    assert evidence["status"] == "failed"
+    assert evidence["stack_engine_contract_passed"] is True
+    assert evidence["default_promotion_ready"] is False
+    assert "contract_stack_engine_default_promotion_ready" in evidence["failed_checks"]
+
+
+def test_acceptance_audit_cli_writes_stack_engine_default_promotion_evidence(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    stack_contract = tmp_path / "stack_engine_contract.json"
+    out_json = tmp_path / "audit.json"
+    out_md = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_stack_engine_default_promotion_requirement(contract)
+    _write_stack_engine_contract(stack_contract, passed=True, ready=True)
+
+    result = main(
+        [
+            "acceptance-audit",
+            "--manifest",
+            str(manifest),
+            "--glass-run",
+            str(gp_run),
+            "--wbpp-result",
+            str(wbpp),
+            "--compare-json",
+            str(compare),
+            "--benchmark-contract",
+            str(contract),
+            "--stack-engine-contract-json",
+            str(stack_contract),
+            "--out",
+            str(out_json),
+            "--markdown",
+            str(out_md),
+            "--min-active-frames",
+            "190",
+        ]
+    )
+
+    assert result == 0
+    payload = read_json(out_json)
+    evidence = payload["release_contract_evidence"]["stack_engine_default_promotion"]
+    assert evidence["status"] == "passed"
+    markdown = out_md.read_text(encoding="utf-8")
+    assert "StackEngine Default Promotion Evidence" in markdown
+    assert "Required by benchmark contract: True" in markdown
+    assert "PASS: contract_stack_engine_default_promotion_ready" in markdown
+    assert "Default promotion ready: True" in markdown
 
 
 def test_acceptance_audit_cli_writes_pipeline_contract_evidence(tmp_path: Path):

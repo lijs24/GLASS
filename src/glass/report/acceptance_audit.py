@@ -73,6 +73,53 @@ def _pipeline_contract_release_evidence(
     }
 
 
+def _stack_engine_default_promotion_release_evidence(
+    *,
+    checks: list[dict[str, Any]],
+    stack_engine_contract: dict[str, Any] | None,
+    contract_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    stack_checks = [
+        item
+        for item in checks
+        if str(item.get("name", "")).startswith(
+            ("stack_engine_contract_", "contract_stack_engine_default_promotion")
+        )
+    ]
+    failed_checks = [str(item.get("name")) for item in stack_checks if not item.get("passed")]
+    if stack_checks:
+        status = "passed" if not failed_checks else "failed"
+    else:
+        status = "not_requested"
+    requirements = (contract_payload or {}).get("stack_engine_default_promotion")
+    promotion = (stack_engine_contract or {}).get("default_promotion") or {}
+    adoption = (stack_engine_contract or {}).get("adoption") or {}
+    return {
+        "status": status,
+        "required_by_benchmark_contract": isinstance(requirements, dict) and bool(requirements),
+        "stack_engine_contract_path": None if stack_engine_contract is None else stack_engine_contract.get("path"),
+        "stack_engine_contract_audit_type": None
+        if stack_engine_contract is None
+        else stack_engine_contract.get("audit_type"),
+        "stack_engine_contract_status": None if stack_engine_contract is None else stack_engine_contract.get("status"),
+        "stack_engine_contract_passed": None if stack_engine_contract is None else stack_engine_contract.get("passed"),
+        "stack_engine_contract_scope": None if stack_engine_contract is None else stack_engine_contract.get("scope"),
+        "default_promotion_ready": promotion.get("ready"),
+        "default_promotion_status": promotion.get("status"),
+        "default_promotion_gap_count": promotion.get("phase2_stack_engine_default_gap_count"),
+        "default_promotion_blocker_count": promotion.get("blocker_count"),
+        "adoption_recommendation": adoption.get("recommendation"),
+        "direct_check_count": sum(1 for item in stack_checks if str(item.get("name", "")).startswith("stack_engine_")),
+        "benchmark_check_count": sum(
+            1 for item in stack_checks if str(item.get("name", "")).startswith("contract_stack_engine_")
+        ),
+        "passed_check_count": sum(1 for item in stack_checks if item.get("passed")),
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "checks": stack_checks,
+    }
+
+
 def build_acceptance_audit(
     *,
     manifest_path: str | Path,
@@ -91,6 +138,7 @@ def build_acceptance_audit(
     benchmark_contract: str | Path | None = None,
     resident_determinism_json: str | Path | None = None,
     pipeline_contract_json: str | Path | None = None,
+    stack_engine_contract_json: str | Path | None = None,
 ) -> dict[str, Any]:
     manifest = _read_json_lenient(manifest_path)
     speedup = summarize_wbpp_speedup(
@@ -222,6 +270,63 @@ def build_acceptance_audit(
             ]
         )
 
+    stack_engine_contract_path = (
+        Path(stack_engine_contract_json) if stack_engine_contract_json is not None else None
+    )
+    stack_engine_contract_payload = (
+        _read_json_lenient(stack_engine_contract_path)
+        if stack_engine_contract_path is not None and stack_engine_contract_path.exists()
+        else {}
+    )
+    stack_engine_contract = None
+    if stack_engine_contract_path is not None:
+        contract_checks = [
+            item for item in stack_engine_contract_payload.get("checks") or [] if isinstance(item, dict)
+        ]
+        check_names = [
+            str(item.get("name")) for item in contract_checks if item.get("name") is not None
+        ]
+        failed_checks = [
+            item.get("name")
+            for item in contract_checks
+            if not item.get("passed")
+        ]
+        stack_engine_contract = {
+            "path": str(stack_engine_contract_path),
+            "audit_type": stack_engine_contract_payload.get("audit_type"),
+            "status": stack_engine_contract_payload.get("status"),
+            "passed": stack_engine_contract_payload.get("passed"),
+            "scope": stack_engine_contract_payload.get("scope"),
+            "expected_integration_engine": stack_engine_contract_payload.get("expected_integration_engine"),
+            "check_count": len(contract_checks),
+            "check_names": check_names,
+            "failed_checks": failed_checks,
+            "adoption": stack_engine_contract_payload.get("adoption") or {},
+            "default_promotion": stack_engine_contract_payload.get("default_promotion") or {},
+        }
+        checks.extend(
+            [
+                _check(
+                    "stack_engine_contract_present",
+                    stack_engine_contract_path.exists()
+                    and stack_engine_contract_payload.get("audit_type") == "stack_engine_default_contract",
+                    {
+                        "path": str(stack_engine_contract_path),
+                        "exists": stack_engine_contract_path.exists(),
+                        "audit_type": stack_engine_contract_payload.get("audit_type"),
+                    },
+                ),
+                _check(
+                    "stack_engine_contract_passed",
+                    stack_engine_contract_payload.get("passed") is True,
+                    {
+                        "status": stack_engine_contract_payload.get("status"),
+                        "failed_checks": failed_checks,
+                    },
+                ),
+            ]
+        )
+
     contract_payload: dict[str, Any] | None = None
     if benchmark_contract is not None:
         contract_payload = load_benchmark_contract(benchmark_contract)
@@ -270,6 +375,7 @@ def build_acceptance_audit(
                 resident_determinism=resident_determinism,
                 output_numerical_drifts=output_numerical_drifts,
                 pipeline_contract=pipeline_contract,
+                stack_engine_contract=stack_engine_contract,
             )
         )
         performance_regression = build_benchmark_performance_diagnostics(
@@ -286,7 +392,12 @@ def build_acceptance_audit(
             checks=checks,
             pipeline_contract=pipeline_contract,
             contract_payload=contract_payload,
-        )
+        ),
+        "stack_engine_default_promotion": _stack_engine_default_promotion_release_evidence(
+            checks=checks,
+            stack_engine_contract=stack_engine_contract,
+            contract_payload=contract_payload,
+        ),
     }
 
     passed = all(item["passed"] for item in checks)
@@ -318,6 +429,7 @@ def build_acceptance_audit(
         "frame_accounting": frame_accounting_record,
         "resident_determinism": resident_determinism,
         "pipeline_contract": pipeline_contract,
+        "stack_engine_contract": stack_engine_contract,
         "release_contract_evidence": release_contract_evidence,
         "output_numerical_drifts": output_numerical_drifts,
         "speedup_summary": speedup,
@@ -340,6 +452,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         f"- Status: {audit['status']}",
         f"- Benchmark contract: {(audit.get('benchmark_contract') or {}).get('name')}",
         f"- Pipeline contract: {(audit.get('pipeline_contract') or {}).get('status')}",
+        f"- StackEngine contract: {(audit.get('stack_engine_contract') or {}).get('status')}",
         f"- DQ provenance records: {(audit.get('dq_provenance') or {}).get('record_count')}",
         f"- Frame accounting artifact: {(audit.get('frame_accounting') or {}).get('path')}",
         f"- Speedup vs WBPP: {speedup.get('speedup_vs_wbpp')}",
@@ -375,6 +488,37 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
             ]
         )
         for item in release_evidence.get("checks") or []:
+            marker = "PASS" if item.get("passed") else "FAIL"
+            lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
+        lines.append("")
+    stack_release_evidence = (
+        (audit.get("release_contract_evidence") or {}).get("stack_engine_default_promotion")
+        if isinstance(audit.get("release_contract_evidence"), dict)
+        else None
+    )
+    if stack_release_evidence:
+        lines.extend(
+            [
+                "## StackEngine Default Promotion Evidence",
+                "",
+                f"- Status: {stack_release_evidence.get('status')}",
+                f"- Required by benchmark contract: {stack_release_evidence.get('required_by_benchmark_contract')}",
+                f"- StackEngine contract path: {stack_release_evidence.get('stack_engine_contract_path')}",
+                f"- StackEngine contract audit type: {stack_release_evidence.get('stack_engine_contract_audit_type')}",
+                f"- StackEngine contract passed: {stack_release_evidence.get('stack_engine_contract_passed')}",
+                f"- StackEngine contract scope: {stack_release_evidence.get('stack_engine_contract_scope')}",
+                f"- Default promotion ready: {stack_release_evidence.get('default_promotion_ready')}",
+                f"- Default promotion status: {stack_release_evidence.get('default_promotion_status')}",
+                f"- Default promotion gaps: {stack_release_evidence.get('default_promotion_gap_count')}",
+                f"- Default promotion blockers: {stack_release_evidence.get('default_promotion_blocker_count')}",
+                f"- Adoption recommendation: {stack_release_evidence.get('adoption_recommendation')}",
+                f"- Acceptance StackEngine checks passed: {stack_release_evidence.get('passed_check_count')}",
+                f"- Acceptance StackEngine checks failed: {stack_release_evidence.get('failed_check_count')}",
+                f"- Failed StackEngine checks: {stack_release_evidence.get('failed_checks')}",
+                "",
+            ]
+        )
+        for item in stack_release_evidence.get("checks") or []:
             marker = "PASS" if item.get("passed") else "FAIL"
             lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
         lines.append("")

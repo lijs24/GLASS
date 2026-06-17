@@ -494,6 +494,11 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                     "passed": True,
                     "evidence": {"actual": True, "status": "passed", "failed_checks": []},
                 },
+                {
+                    "name": "contract_stack_engine_default_promotion_ready",
+                    "passed": True,
+                    "evidence": {"actual": True, "status": "ready", "blockers": []},
+                },
             ],
             "release_contract_evidence": {
                 "pipeline_contract": {
@@ -523,6 +528,39 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
                                 "required": "integration_resident_result_contract",
                                 "available": ["integration_resident_result_contract"],
                             },
+                            "note": "",
+                        },
+                    ],
+                },
+                "stack_engine_default_promotion": {
+                    "status": "passed",
+                    "required_by_benchmark_contract": True,
+                    "stack_engine_contract_path": "stack_engine_contract.json",
+                    "stack_engine_contract_audit_type": "stack_engine_default_contract",
+                    "stack_engine_contract_status": "passed",
+                    "stack_engine_contract_passed": True,
+                    "stack_engine_contract_scope": "all",
+                    "default_promotion_ready": True,
+                    "default_promotion_status": "ready",
+                    "default_promotion_gap_count": 0,
+                    "default_promotion_blocker_count": 0,
+                    "adoption_recommendation": "stack_engine_default_ready",
+                    "direct_check_count": 2,
+                    "benchmark_check_count": 7,
+                    "passed_check_count": 9,
+                    "failed_check_count": 0,
+                    "failed_checks": [],
+                    "checks": [
+                        {
+                            "name": "contract_stack_engine_default_promotion_ready",
+                            "passed": True,
+                            "evidence": {"actual": True, "status": "ready", "blockers": []},
+                            "note": "",
+                        },
+                        {
+                            "name": "contract_stack_engine_default_promotion_gap_count",
+                            "passed": True,
+                            "evidence": {"actual": 0, "required_max": 0},
                             "note": "",
                         },
                     ],
@@ -590,6 +628,10 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "contract_pipeline_contract_passed" in html
     assert "contract_pipeline_contract_check:integration_resident_result_contract" in html
     assert "pipeline_invariant_contract" in html
+    assert "stack_engine_default_promotion" in html
+    assert "contract_stack_engine_default_promotion_ready" in html
+    assert "stack_engine_default_contract" in html
+    assert "stack_engine_default_ready" in html
     assert "Optimization guidance" in html
     assert "I/O + upload + calibration overlap" in html
     assert "Resident registration/warp batching" in html

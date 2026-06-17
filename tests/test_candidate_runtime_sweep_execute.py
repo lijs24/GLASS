@@ -8,7 +8,12 @@ from glass.report.candidate_runtime_sweep_execute import build_candidate_runtime
 from glass.report.candidate_runtime_sweep_execute import _command_tokens
 
 
-def _commands(name: str, *, pipeline_contract: bool = False) -> dict[str, str]:
+def _commands(
+    name: str,
+    *,
+    pipeline_contract: bool = False,
+    stack_engine_contract: bool = False,
+) -> dict[str, str]:
     commands = {
         "run": f"glass run --out runs/{name}",
         "compare_reference": f"glass compare --glass runs/{name}/master.fits --reference ref.xisf --out compare/{name}.html",
@@ -21,6 +26,11 @@ def _commands(name: str, *, pipeline_contract: bool = False) -> dict[str, str]:
             f"glass pipeline-contract --run runs/{name} --out pipeline_contract/{name}.json"
         )
         commands["acceptance_audit"] += f" --pipeline-contract-json pipeline_contract/{name}.json"
+    if stack_engine_contract:
+        commands["stack_engine_contract"] = (
+            f"glass stack-engine-contract --run runs/{name} --out stack_engine_contract/{name}.json"
+        )
+        commands["acceptance_audit"] += f" --stack-engine-contract-json stack_engine_contract/{name}.json"
     return commands
 
 
@@ -62,7 +72,7 @@ def test_candidate_runtime_sweep_execute_dry_run_records_steps(tmp_path: Path) -
     assert payload["sweep_summary"]["status"] == "planned"
 
 
-def test_candidate_runtime_sweep_execute_records_pipeline_contract_step(tmp_path: Path) -> None:
+def test_candidate_runtime_sweep_execute_records_contract_steps(tmp_path: Path) -> None:
     plan = tmp_path / "plan.json"
     write_json(
         plan,
@@ -74,7 +84,7 @@ def test_candidate_runtime_sweep_execute_records_pipeline_contract_step(tmp_path
                 {
                     "variant_id": "prefetch10_workers5",
                     "artifacts": {"candidate_comparison_json": str(tmp_path / "missing_a.json")},
-                    "commands": _commands("a", pipeline_contract=True),
+                    "commands": _commands("a", pipeline_contract=True, stack_engine_contract=True),
                 }
             ],
         },
@@ -86,6 +96,7 @@ def test_candidate_runtime_sweep_execute_records_pipeline_contract_step(tmp_path
         "run",
         "compare_reference",
         "compare_baseline",
+        "stack_engine_contract",
         "pipeline_contract",
         "acceptance_audit",
         "candidate_comparison",

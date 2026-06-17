@@ -1193,6 +1193,144 @@ def _build_pipeline_contract_checks(
     return checks
 
 
+def _build_stack_engine_default_promotion_contract_checks(
+    requirements: dict[str, Any],
+    *,
+    stack_engine_contract: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    present = bool(stack_engine_contract)
+    contract = stack_engine_contract or {}
+    failed_checks = contract.get("failed_checks") if isinstance(contract.get("failed_checks"), list) else []
+    check_names = contract.get("check_names") if isinstance(contract.get("check_names"), list) else []
+    promotion = contract.get("default_promotion") if isinstance(contract.get("default_promotion"), dict) else {}
+    adoption = contract.get("adoption") if isinstance(contract.get("adoption"), dict) else {}
+
+    if requirements.get("required"):
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_present",
+                present,
+                {
+                    "required": True,
+                    "present": present,
+                    "path": contract.get("path"),
+                },
+            )
+        )
+
+    required_audit_type = requirements.get("required_audit_type")
+    if required_audit_type is not None:
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_audit_type",
+                present and contract.get("audit_type") == str(required_audit_type),
+                {
+                    "actual": contract.get("audit_type"),
+                    "required": str(required_audit_type),
+                },
+            )
+        )
+
+    if requirements.get("require_passed"):
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_contract_passed",
+                contract.get("passed") is True,
+                {
+                    "actual": contract.get("passed"),
+                    "status": contract.get("status"),
+                    "failed_checks": failed_checks,
+                },
+            )
+        )
+
+    if requirements.get("require_default_promotion_ready"):
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_ready",
+                promotion.get("ready") is True,
+                {
+                    "actual": promotion.get("ready"),
+                    "status": promotion.get("status"),
+                    "blockers": promotion.get("blockers") or [],
+                },
+            )
+        )
+
+    required_scope = requirements.get("required_scope")
+    if required_scope is not None:
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_scope",
+                promotion.get("actual_scope") == str(required_scope),
+                {
+                    "actual": promotion.get("actual_scope"),
+                    "required": str(required_scope),
+                },
+            )
+        )
+
+    required_recommendation = requirements.get("required_recommendation")
+    if required_recommendation is not None:
+        actual = promotion.get("recommendation") or adoption.get("recommendation")
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_recommendation",
+                actual == str(required_recommendation),
+                {
+                    "actual": actual,
+                    "required": str(required_recommendation),
+                },
+            )
+        )
+
+    max_gap_count = requirements.get("max_default_gap_count")
+    if max_gap_count is not None:
+        actual = int(promotion.get("phase2_stack_engine_default_gap_count") or 0)
+        required = int(max_gap_count)
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_gap_count",
+                actual <= required,
+                {"actual": actual, "required_max": required},
+            )
+        )
+
+    max_blocker_count = requirements.get("max_blocker_count")
+    if max_blocker_count is not None:
+        actual = int(promotion.get("blocker_count") or 0)
+        required = int(max_blocker_count)
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_blocker_count",
+                actual <= required,
+                {"actual": actual, "required_max": required},
+            )
+        )
+
+    for required_name in requirements.get("required_check_names") or []:
+        name = str(required_name)
+        checks.append(
+            _check(
+                f"contract_stack_engine_default_promotion_check:{name}",
+                name in {str(item) for item in check_names},
+                {"required": name, "available": [str(item) for item in check_names]},
+            )
+        )
+
+    if requirements.get("allow_failed_checks") is False:
+        checks.append(
+            _check(
+                "contract_stack_engine_default_promotion_no_failed_checks",
+                present and not failed_checks,
+                {"failed_checks": failed_checks},
+            )
+        )
+
+    return checks
+
+
 def build_benchmark_contract_checks(
     contract: dict[str, Any],
     *,
@@ -1205,6 +1343,7 @@ def build_benchmark_contract_checks(
     resident_determinism: dict[str, Any] | None = None,
     output_numerical_drifts: list[dict[str, Any]] | None = None,
     pipeline_contract: dict[str, Any] | None = None,
+    stack_engine_contract: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     dataset = contract.get("dataset_requirements") or {}
@@ -1395,6 +1534,14 @@ def build_benchmark_contract_checks(
             _build_pipeline_contract_checks(
                 pipeline_contract_requirements,
                 pipeline_contract=pipeline_contract,
+            )
+        )
+    stack_default_requirements = contract.get("stack_engine_default_promotion") or {}
+    if isinstance(stack_default_requirements, dict) and stack_default_requirements:
+        checks.extend(
+            _build_stack_engine_default_promotion_contract_checks(
+                stack_default_requirements,
+                stack_engine_contract=stack_engine_contract,
             )
         )
     return checks

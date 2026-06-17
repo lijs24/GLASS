@@ -17,11 +17,12 @@ STEP_ORDER = [
     "run",
     "compare_reference",
     "compare_baseline",
+    "stack_engine_contract",
     "pipeline_contract",
     "acceptance_audit",
     "candidate_comparison",
 ]
-OPTIONAL_LEGACY_STEPS = {"pipeline_contract"}
+OPTIONAL_LEGACY_STEPS = {"pipeline_contract", "stack_engine_contract"}
 
 
 def _read_plan(path: str | Path) -> dict[str, Any]:

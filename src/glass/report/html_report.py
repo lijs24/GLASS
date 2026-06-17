@@ -294,10 +294,11 @@ def _release_contract_evidence_rows(acceptance_audit: dict[str, Any] | None) -> 
     if not isinstance(evidence, dict):
         return []
     pipeline = evidence.get("pipeline_contract")
-    if not isinstance(pipeline, dict):
-        return []
-    return [
-        {
+    stack_default = evidence.get("stack_engine_default_promotion")
+    rows: list[dict[str, Any]] = []
+    if isinstance(pipeline, dict):
+        rows.append(
+            {
             "surface": "pipeline_contract",
             "status": pipeline.get("status"),
             "required_by_benchmark_contract": pipeline.get("required_by_benchmark_contract"),
@@ -309,28 +310,56 @@ def _release_contract_evidence_rows(acceptance_audit: dict[str, Any] | None) -> 
             "acceptance_pipeline_checks_failed": pipeline.get("failed_check_count"),
             "failed_checks": ", ".join(str(item) for item in pipeline.get("failed_checks") or []),
             "path": pipeline.get("pipeline_contract_path"),
-        }
-    ]
+            }
+        )
+    if isinstance(stack_default, dict):
+        rows.append(
+            {
+                "surface": "stack_engine_default_promotion",
+                "status": stack_default.get("status"),
+                "required_by_benchmark_contract": stack_default.get("required_by_benchmark_contract"),
+                "stack_engine_contract_audit_type": stack_default.get("stack_engine_contract_audit_type"),
+                "stack_engine_contract_passed": stack_default.get("stack_engine_contract_passed"),
+                "stack_engine_contract_status": stack_default.get("stack_engine_contract_status"),
+                "stack_engine_contract_scope": stack_default.get("stack_engine_contract_scope"),
+                "default_promotion_ready": stack_default.get("default_promotion_ready"),
+                "default_promotion_status": stack_default.get("default_promotion_status"),
+                "default_promotion_gaps": stack_default.get("default_promotion_gap_count"),
+                "default_promotion_blockers": stack_default.get("default_promotion_blocker_count"),
+                "adoption_recommendation": stack_default.get("adoption_recommendation"),
+                "acceptance_stack_checks_passed": stack_default.get("passed_check_count"),
+                "acceptance_stack_checks_failed": stack_default.get("failed_check_count"),
+                "failed_checks": ", ".join(str(item) for item in stack_default.get("failed_checks") or []),
+                "path": stack_default.get("stack_engine_contract_path"),
+            }
+        )
+    return rows
 
 
 def _release_contract_check_rows(acceptance_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
     evidence = (acceptance_audit or {}).get("release_contract_evidence")
     pipeline = evidence.get("pipeline_contract") if isinstance(evidence, dict) else None
-    if not isinstance(pipeline, dict):
-        return []
+    stack_default = evidence.get("stack_engine_default_promotion") if isinstance(evidence, dict) else None
     rows: list[dict[str, Any]] = []
-    for item in pipeline.get("checks") or []:
-        if not isinstance(item, dict):
+    for surface, payload in (
+        ("pipeline_contract", pipeline),
+        ("stack_engine_default_promotion", stack_default),
+    ):
+        if not isinstance(payload, dict):
             continue
-        evidence_payload = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
-        rows.append(
-            {
-                "check": item.get("name"),
-                "passed": item.get("passed"),
-                "note": item.get("note", ""),
-                "evidence": ", ".join(f"{key}={value}" for key, value in evidence_payload.items()),
-            }
-        )
+        for item in payload.get("checks") or []:
+            if not isinstance(item, dict):
+                continue
+            evidence_payload = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+            rows.append(
+                {
+                    "surface": surface,
+                    "check": item.get("name"),
+                    "passed": item.get("passed"),
+                    "note": item.get("note", ""),
+                    "evidence": ", ".join(f"{key}={value}" for key, value in evidence_payload.items()),
+                }
+            )
     return rows
 
 

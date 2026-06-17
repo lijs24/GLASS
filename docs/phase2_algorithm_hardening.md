@@ -2931,6 +2931,33 @@ integration where applicable.
   `missing_calibration_surface`, `phase2_stack_engine_default_gaps`, and
   `adoption_recommendation_not_ready`.
 
+### S2-Gate 176: Release Contract Requires StackEngine Default Promotion
+
+- Extend benchmark contracts with a `stack_engine_default_promotion` requirement
+  block.
+- Add benchmark checks for StackEngine contract presence, audit type, pass
+  status, default-promotion readiness, scope, adoption recommendation, default
+  gap count, blocker count, and failed contract checks.
+- Extend `glass acceptance-audit` with `--stack-engine-contract-json` and embed
+  `stack_engine_contract` plus
+  `release_contract_evidence.stack_engine_default_promotion` in acceptance JSON
+  and Markdown.
+- Extend HTML reports so release contract evidence includes both pipeline
+  contract evidence and StackEngine default-promotion evidence.
+- Update candidate runtime sweep plans to generate `glass stack-engine-contract`
+  artifacts and pass them into `acceptance-audit`; keep the sweep executor
+  compatible with older plans that lack this step.
+- Update the M38 200-light release benchmark contracts so release-grade
+  acceptance cannot pass while `default_promotion.ready` is false.
+- Run the updated acceptance audit against the Gate160 resident CUDA run with
+  Gate170 pipeline contract and Gate175 StackEngine contract under
+  `C:\glass_runs\phase2_s2_gate_176_release_stack_default_contract`.
+- Current real artifact result: acceptance fails only on StackEngine
+  default-promotion checks while retaining the measured `46.82815250883293x`
+  speedup and passing pipeline-contract evidence. The failure is intentional:
+  the current resident run is fast and pipeline-valid, but not yet eligible to
+  be advertised as full StackEngine default.
+
 ## Gate Rules
 
 Each gate requires:

@@ -171,5 +171,16 @@
         "--resident-star-grid-cols 28"
       ]
     }
-  ]
+  ],
+  "stack_engine_default_promotion": {
+    "required": true,
+    "required_audit_type": "stack_engine_default_contract",
+    "require_passed": true,
+    "require_default_promotion_ready": true,
+    "required_scope": "all",
+    "required_recommendation": "stack_engine_default_ready",
+    "max_default_gap_count": 0,
+    "max_blocker_count": 0,
+    "allow_failed_checks": false
+  }
 }
