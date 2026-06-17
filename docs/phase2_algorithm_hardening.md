@@ -3770,6 +3770,22 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 226: Windows Release Matrix Promotion Provenance
+
+- Extend `glass windows-release-matrix` with a
+  `--default-promotion-manifest` input so Windows package-matrix readiness
+  consumes the Gate 225 default-route promotion provenance.
+- Require the default-promotion manifest, unless explicitly waived, to be
+  present, `default_promotion_ready`, passed, default-change ready, and backed by
+  a passing default-route route contract with at least four route checks.
+- Surface the default-promotion summary in Windows release matrix JSON and
+  Markdown beside CUDA package compatibility, runtime, and release-decision
+  evidence.
+- Keep an explicit diagnostic escape hatch for old matrix artifacts that do not
+  yet carry the manifest, but use the strict path for release checkpoints.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

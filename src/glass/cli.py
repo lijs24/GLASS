@@ -1920,9 +1920,11 @@ def cmd_windows_release_matrix(args: argparse.Namespace) -> int:
         doctor_json=args.doctor_json,
         release_decision_json=args.release_decision,
         acceptance_audit_json=args.acceptance_audit,
+        default_promotion_manifest_json=args.default_promotion_manifest,
         default_runtime_preset=args.default_runtime_preset,
         require_cuda=not args.allow_cpu_only,
         require_default_change_ready=not args.allow_not_default_ready,
+        require_default_promotion_ready=not args.allow_missing_default_promotion,
         expected_primary_package=args.expected_primary_package,
         max_runtime_ratio=args.max_runtime_ratio,
     )
@@ -1933,6 +1935,9 @@ def cmd_windows_release_matrix(args: argparse.Namespace) -> int:
             "recommendation": payload["recommendation"],
             "passed": payload["passed"],
             "primary_package": payload["current_machine"]["primary_package"],
+            "default_promotion_status": (
+                payload.get("default_promotion_manifest") or {}
+            ).get("status"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -4604,6 +4609,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--acceptance-audit",
         help="optional acceptance-audit JSON; when supplied it must have passed",
     )
+    windows_release_matrix.add_argument(
+        "--default-promotion-manifest",
+        help="default-promotion-manifest JSON proving default-route promotion provenance",
+    )
     windows_release_matrix.add_argument("--out", required=True, help="output Windows release matrix JSON")
     windows_release_matrix.add_argument("--markdown", help="optional output Markdown summary")
     windows_release_matrix.add_argument(
@@ -4630,6 +4639,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-not-default-ready",
         action="store_true",
         help="do not require release-decision default_change_ready=true",
+    )
+    windows_release_matrix.add_argument(
+        "--allow-missing-default-promotion",
+        action="store_true",
+        help="do not require a default-promotion-manifest artifact",
     )
     windows_release_matrix.add_argument(
         "--fail-on-not-ready",

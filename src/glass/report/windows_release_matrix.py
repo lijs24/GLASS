@@ -28,6 +28,42 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _read_json_object_optional(path: str | Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    return _read_json_object(path)
+
+
+def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    if not payload:
+        return {"present": False}
+    default_route = (
+        payload.get("default_route_acceptance")
+        if isinstance(payload.get("default_route_acceptance"), dict)
+        else {}
+    )
+    default_candidate = (
+        payload.get("default_candidate") if isinstance(payload.get("default_candidate"), dict) else {}
+    )
+    return {
+        "present": True,
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "default_change_ready": payload.get("default_change_ready"),
+        "recommendation": payload.get("recommendation"),
+        "default_memory_mode": default_candidate.get("memory_mode"),
+        "fallback_memory_mode": default_candidate.get("fallback_memory_mode"),
+        "resident_runtime_preset": default_candidate.get("resident_runtime_preset"),
+        "integration_engine": default_candidate.get("integration_engine"),
+        "default_route_present": default_route.get("present"),
+        "default_route_passed": default_route.get("passed"),
+        "default_route_route_contract_passed": default_route.get("route_contract_passed"),
+        "default_route_route_check_count": default_route.get("route_check_count"),
+        "default_route_speedup_vs_reference": default_route.get("speedup_vs_reference"),
+    }
+
+
 def _package_rows(recommendation: dict[str, Any]) -> list[dict[str, Any]]:
     ordered_try_list = [str(item) for item in recommendation.get("ordered_try_list") or []]
     recommendation_rows = {
@@ -76,16 +112,21 @@ def build_windows_release_matrix(
     doctor_json: str | Path,
     release_decision_json: str | Path,
     acceptance_audit_json: str | Path | None = None,
+    default_promotion_manifest_json: str | Path | None = None,
     default_runtime_preset: str = "throughput-v1",
     required_cuda_packages: tuple[str, ...] = ("cuda13", "cuda12", "cuda11"),
     require_cuda: bool = True,
     require_default_change_ready: bool = True,
+    require_default_promotion_ready: bool = True,
     expected_primary_package: str | None = None,
     max_runtime_ratio: float = 1.25,
 ) -> dict[str, Any]:
     doctor = _read_json_object(doctor_json)
     decision = _read_json_object(release_decision_json)
     acceptance = _read_json_object(acceptance_audit_json) if acceptance_audit_json is not None else {}
+    default_promotion = _default_promotion_summary(
+        _read_json_object_optional(default_promotion_manifest_json)
+    )
     cuda = doctor.get("cuda") if isinstance(doctor.get("cuda"), dict) else {}
     recommendation = (
         doctor.get("windows_cuda_packages")
@@ -155,6 +196,48 @@ def build_windows_release_matrix(
             {"actual": decision.get("recommendation"), "required": "promote_default_candidate"},
         ),
         _check(
+            "default_promotion_manifest_present",
+            bool(default_promotion.get("present")) if require_default_promotion_ready else True,
+            {
+                "present": default_promotion.get("present"),
+                "required": bool(require_default_promotion_ready),
+            },
+        ),
+        _check(
+            "default_promotion_manifest_ready",
+            (
+                default_promotion.get("artifact_type") == "default_promotion_manifest"
+                and default_promotion.get("status") == "default_promotion_ready"
+                and default_promotion.get("passed") is True
+                and default_promotion.get("default_change_ready") is True
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "artifact_type": default_promotion.get("artifact_type"),
+                "status": default_promotion.get("status"),
+                "passed": default_promotion.get("passed"),
+                "default_change_ready": default_promotion.get("default_change_ready"),
+            },
+        ),
+        _check(
+            "default_promotion_default_route_passed",
+            (
+                default_promotion.get("default_route_passed") is True
+                and default_promotion.get("default_route_route_contract_passed") is True
+                and int(default_promotion.get("default_route_route_check_count") or 0) >= 4
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "default_route_passed": default_promotion.get("default_route_passed"),
+                "route_contract_passed": default_promotion.get(
+                    "default_route_route_contract_passed"
+                ),
+                "route_check_count": default_promotion.get("default_route_route_check_count"),
+            },
+        ),
+        _check(
             "default_runtime_preset",
             default_runtime_preset == "throughput-v1",
             {"actual": default_runtime_preset, "required": "throughput-v1"},
@@ -207,6 +290,9 @@ def build_windows_release_matrix(
             "doctor_json": str(doctor_json),
             "release_decision_json": str(release_decision_json),
             "acceptance_audit_json": None if acceptance_audit_json is None else str(acceptance_audit_json),
+            "default_promotion_manifest_json": None
+            if default_promotion_manifest_json is None
+            else str(default_promotion_manifest_json),
         },
         "default_runtime": {
             "resident_runtime_preset": default_runtime_preset,
@@ -214,6 +300,7 @@ def build_windows_release_matrix(
             "release_decision_status": decision.get("status"),
             "default_change_ready": decision.get("default_change_ready"),
         },
+        "default_promotion_manifest": default_promotion,
         "current_machine": {
             "cuda_available": cuda.get("cuda_available"),
             "native_extension_loaded": cuda.get("native_extension_loaded"),
@@ -248,6 +335,11 @@ def _markdown(payload: dict[str, Any]) -> str:
         "",
     ]
     machine = payload.get("current_machine") if isinstance(payload.get("current_machine"), dict) else {}
+    default_promotion = (
+        payload.get("default_promotion_manifest")
+        if isinstance(payload.get("default_promotion_manifest"), dict)
+        else {}
+    )
     lines.extend(
         [
             f"- CUDA available: `{machine.get('cuda_available')}`",
@@ -255,6 +347,18 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Primary package: `{machine.get('primary_package')}`",
             f"- Try order: `{', '.join(machine.get('ordered_try_list') or [])}`",
             f"- Guidance: {machine.get('guidance')}",
+            "",
+            "## Default Promotion Manifest",
+            "",
+            f"- Present: `{default_promotion.get('present')}`",
+            f"- Status: `{default_promotion.get('status')}`",
+            f"- Passed: `{default_promotion.get('passed')}`",
+            f"- Default route passed: `{default_promotion.get('default_route_passed')}`",
+            (
+                "- Default route contract/checks: "
+                f"`{default_promotion.get('default_route_route_contract_passed')}`/"
+                f"`{default_promotion.get('default_route_route_check_count')}`"
+            ),
             "",
             "## Packages",
             "",
