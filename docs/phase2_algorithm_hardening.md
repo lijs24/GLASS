@@ -3197,6 +3197,22 @@ integration where applicable.
   `driver_component_included=false`, and the refreshed package build plan still
   reports ready variants `cuda13,cpu` with missing variants `cuda12,cuda11`.
 
+### S2-Gate 187: CUDA12 Minimal Toolkit Install
+
+- Use the Gate186 minimal installer helper to download and install CUDA12
+  Toolkit components needed for release-package compilation.
+- Download `cuda_12.4.1_551.78_windows.exe` with BITS, verify SHA256
+  `7d20c5eb186e4d3c64680fe5096bed05926aea89754192102323c956c26244de`, then
+  install only `nvcc_12.4` and `cudart_12.4`.
+- Confirm `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\bin\nvcc.exe`
+  reports CUDA compilation tools `V12.4.131`.
+- Confirm `cuda_runtime.h`, `cudart.lib`, and `cudart64_12.dll` exist under
+  the CUDA12 Toolkit root.
+- Confirm `nvidia-smi` still reports driver `596.21` after install.
+- Refresh `glass windows-package-build-plan`; current result reports ready
+  variants `cuda13,cuda12,cpu`, missing variant `cuda11`, and CUDA12 Toolkit
+  match `exact`.
+
 ## Gate Rules
 
 Each gate requires:

@@ -131,6 +131,12 @@ The helper defaults to plan-only mode. The `-Install` path requests only the
 request display driver components. Rerun `glass windows-package-build-plan`
 after installation to verify `nvcc.exe` discovery.
 
+After installing a missing Toolkit, verify it before building:
+
+```powershell
+glass windows-package-build-plan --out windows_package_build_plan_after_install.json --markdown windows_package_build_plan_after_install.md
+```
+
 Installer:
 
 1. Build the portable folder.
