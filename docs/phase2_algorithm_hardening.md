@@ -2866,6 +2866,26 @@ integration where applicable.
   benchmark pipeline-contract checks passing, and dry-run sweep execution
   showing the new `pipeline_contract` step before `acceptance_audit`.
 
+### S2-Gate 173: Release Evidence Report Surface
+
+- Add `release_contract_evidence.pipeline_contract` to acceptance-audit JSON so
+  release-grade pipeline-contract evidence is a stable summary, not only a set
+  of individual checks.
+- Extend acceptance Markdown with a `Pipeline Contract Evidence` section showing
+  required-by-contract status, pipeline-contract path, pass state, check counts,
+  and all pipeline-related acceptance checks.
+- Extend HTML reports with a `Release contract evidence` section immediately
+  after benchmark comparison, showing pipeline-contract release evidence even
+  when all checks pass.
+- Keep failed-check tables unchanged; this gate adds positive evidence
+  visibility for green release candidates.
+- Run the updated acceptance audit and HTML report over the Gate160
+  `throughput_v1` resident run under
+  `C:\glass_runs\phase2_s2_gate_173_release_evidence_report`.
+- Current real artifact result: passed, with release evidence status `passed`,
+  `2` direct pipeline checks, `6` benchmark pipeline checks, `0` failed
+  pipeline checks, and visible Markdown/HTML evidence rows.
+
 ## Gate Rules
 
 Each gate requires:

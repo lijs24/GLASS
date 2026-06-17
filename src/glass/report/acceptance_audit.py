@@ -36,6 +36,43 @@ def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") ->
     return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
 
 
+def _pipeline_contract_release_evidence(
+    *,
+    checks: list[dict[str, Any]],
+    pipeline_contract: dict[str, Any] | None,
+    contract_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    pipeline_checks = [
+        item
+        for item in checks
+        if str(item.get("name", "")).startswith(("pipeline_contract_", "contract_pipeline_contract"))
+    ]
+    failed_checks = [str(item.get("name")) for item in pipeline_checks if not item.get("passed")]
+    if pipeline_checks:
+        status = "passed" if not failed_checks else "failed"
+    else:
+        status = "not_requested"
+    contract_requirements = (contract_payload or {}).get("pipeline_contract")
+    return {
+        "status": status,
+        "required_by_benchmark_contract": isinstance(contract_requirements, dict)
+        and bool(contract_requirements),
+        "pipeline_contract_path": None if pipeline_contract is None else pipeline_contract.get("path"),
+        "pipeline_contract_audit_type": None if pipeline_contract is None else pipeline_contract.get("audit_type"),
+        "pipeline_contract_status": None if pipeline_contract is None else pipeline_contract.get("status"),
+        "pipeline_contract_passed": None if pipeline_contract is None else pipeline_contract.get("passed"),
+        "pipeline_contract_check_count": 0 if pipeline_contract is None else pipeline_contract.get("check_count", 0),
+        "direct_check_count": sum(1 for item in pipeline_checks if str(item.get("name", "")).startswith("pipeline_")),
+        "benchmark_check_count": sum(
+            1 for item in pipeline_checks if str(item.get("name", "")).startswith("contract_pipeline_")
+        ),
+        "passed_check_count": sum(1 for item in pipeline_checks if item.get("passed")),
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "checks": pipeline_checks,
+    }
+
+
 def build_acceptance_audit(
     *,
     manifest_path: str | Path,
@@ -244,6 +281,13 @@ def build_acceptance_audit(
         frame_accounting=frame_accounting_record,
         glass_run=glass_run,
     )
+    release_contract_evidence = {
+        "pipeline_contract": _pipeline_contract_release_evidence(
+            checks=checks,
+            pipeline_contract=pipeline_contract,
+            contract_payload=contract_payload,
+        )
+    }
 
     passed = all(item["passed"] for item in checks)
     return {
@@ -274,6 +318,7 @@ def build_acceptance_audit(
         "frame_accounting": frame_accounting_record,
         "resident_determinism": resident_determinism,
         "pipeline_contract": pipeline_contract,
+        "release_contract_evidence": release_contract_evidence,
         "output_numerical_drifts": output_numerical_drifts,
         "speedup_summary": speedup,
         "clean_room": {
@@ -307,6 +352,32 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         "## Checks",
         "",
     ]
+    release_evidence = (
+        (audit.get("release_contract_evidence") or {}).get("pipeline_contract")
+        if isinstance(audit.get("release_contract_evidence"), dict)
+        else None
+    )
+    if release_evidence:
+        lines.extend(
+            [
+                "## Pipeline Contract Evidence",
+                "",
+                f"- Status: {release_evidence.get('status')}",
+                f"- Required by benchmark contract: {release_evidence.get('required_by_benchmark_contract')}",
+                f"- Pipeline contract path: {release_evidence.get('pipeline_contract_path')}",
+                f"- Pipeline contract audit type: {release_evidence.get('pipeline_contract_audit_type')}",
+                f"- Pipeline contract passed: {release_evidence.get('pipeline_contract_passed')}",
+                f"- Pipeline contract checks: {release_evidence.get('pipeline_contract_check_count')}",
+                f"- Acceptance pipeline checks passed: {release_evidence.get('passed_check_count')}",
+                f"- Acceptance pipeline checks failed: {release_evidence.get('failed_check_count')}",
+                f"- Failed pipeline checks: {release_evidence.get('failed_checks')}",
+                "",
+            ]
+        )
+        for item in release_evidence.get("checks") or []:
+            marker = "PASS" if item.get("passed") else "FAIL"
+            lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
+        lines.append("")
     for item in audit["checks"]:
         marker = "PASS" if item["passed"] else "FAIL"
         lines.append(f"- {marker}: {item['name']} - {item['evidence']}")

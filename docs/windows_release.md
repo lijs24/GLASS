@@ -109,6 +109,8 @@ Installer:
 - CUDA smoke tests pass on the release machine.
 - Release-grade 200-light acceptance uses the benchmark contract plus
   `--pipeline-contract-json`, and all `contract_pipeline_contract_*` checks pass.
+- Acceptance Markdown and HTML report show the release pipeline-contract
+  evidence section for the same run.
 - Candidate/runtime sweep plans include a `pipeline_contract` step before
   `acceptance_audit`.
 - Portable zip starts on a clean Windows test account.

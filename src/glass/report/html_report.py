@@ -21,6 +21,7 @@ _REPORT_TABLE_ROW_LIMIT = 200
 _REPORT_SECTIONS = [
     ("project-summary", "Project summary"),
     ("benchmark-comparison", "Benchmark comparison"),
+    ("release-contract-evidence", "Release contract evidence"),
     ("optimization-guidance", "Optimization guidance"),
     ("acceptance-check-failures", "Acceptance check failures"),
     ("output-numerical-drift", "Output numerical drift"),
@@ -283,6 +284,51 @@ def _acceptance_failure_rows(acceptance_audit: dict[str, Any] | None) -> list[di
                     for key, value in evidence.items()
                     if key not in {"actual", "required", "required_min", "required_max"}
                 ),
+            }
+        )
+    return rows
+
+
+def _release_contract_evidence_rows(acceptance_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
+    evidence = (acceptance_audit or {}).get("release_contract_evidence")
+    if not isinstance(evidence, dict):
+        return []
+    pipeline = evidence.get("pipeline_contract")
+    if not isinstance(pipeline, dict):
+        return []
+    return [
+        {
+            "surface": "pipeline_contract",
+            "status": pipeline.get("status"),
+            "required_by_benchmark_contract": pipeline.get("required_by_benchmark_contract"),
+            "pipeline_contract_audit_type": pipeline.get("pipeline_contract_audit_type"),
+            "pipeline_contract_passed": pipeline.get("pipeline_contract_passed"),
+            "pipeline_contract_status": pipeline.get("pipeline_contract_status"),
+            "pipeline_contract_checks": pipeline.get("pipeline_contract_check_count"),
+            "acceptance_pipeline_checks_passed": pipeline.get("passed_check_count"),
+            "acceptance_pipeline_checks_failed": pipeline.get("failed_check_count"),
+            "failed_checks": ", ".join(str(item) for item in pipeline.get("failed_checks") or []),
+            "path": pipeline.get("pipeline_contract_path"),
+        }
+    ]
+
+
+def _release_contract_check_rows(acceptance_audit: dict[str, Any] | None) -> list[dict[str, Any]]:
+    evidence = (acceptance_audit or {}).get("release_contract_evidence")
+    pipeline = evidence.get("pipeline_contract") if isinstance(evidence, dict) else None
+    if not isinstance(pipeline, dict):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in pipeline.get("checks") or []:
+        if not isinstance(item, dict):
+            continue
+        evidence_payload = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        rows.append(
+            {
+                "check": item.get("name"),
+                "passed": item.get("passed"),
+                "note": item.get("note", ""),
+                "evidence": ", ".join(f"{key}={value}" for key, value in evidence_payload.items()),
             }
         )
     return rows
@@ -1177,6 +1223,8 @@ def write_html_report(
     optimization_target_rows = _optimization_target_rows(optimization_guidance)
     optimization_stage_rows = _optimization_stage_rows(optimization_guidance)
     optimization_exception_rows = _optimization_exception_rows(optimization_guidance)
+    release_contract_evidence_rows = _release_contract_evidence_rows(acceptance_audit)
+    release_contract_check_rows = _release_contract_check_rows(acceptance_audit)
     acceptance_failure_rows = _acceptance_failure_rows(acceptance_audit)
     output_numerical_drift_rows = _output_numerical_drift_rows(acceptance_audit)
     master_rows = []
@@ -1315,6 +1363,12 @@ def write_html_report(
   brings speed, image-difference, frame-count, and pass/fail evidence into the
   main report.</p>
   {_table(benchmark_comparison_rows)}
+  {_h2("release-contract-evidence", "Release contract evidence")}
+  <p>Release-grade benchmark acceptance must carry the pipeline invariant
+  contract evidence required by the benchmark contract. This section shows those
+  checks even when they all pass.</p>
+  {_table(release_contract_evidence_rows)}
+  {_table(release_contract_check_rows)}
   {_h2("optimization-guidance", "Optimization guidance")}
   <p>This diagnostic view joins benchmark stage timings with rejected-frame
   accounting so the next optimization target is explicit instead of inferred

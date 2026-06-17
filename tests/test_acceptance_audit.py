@@ -601,6 +601,20 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
     assert checks["contract_pipeline_contract_min_check_count"] is True
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is True
     assert checks["contract_pipeline_contract_no_failed_checks"] is True
+    pipeline_evidence = audit["release_contract_evidence"]["pipeline_contract"]
+    assert pipeline_evidence["status"] == "passed"
+    assert pipeline_evidence["required_by_benchmark_contract"] is True
+    assert pipeline_evidence["pipeline_contract_passed"] is True
+    assert pipeline_evidence["pipeline_contract_check_count"] == 1
+    assert pipeline_evidence["benchmark_check_count"] == 6
+    assert pipeline_evidence["failed_check_count"] == 0
+    assert {item["name"] for item in pipeline_evidence["checks"]} >= {
+        "pipeline_contract_present",
+        "pipeline_contract_passed",
+        "contract_pipeline_contract_present",
+        "contract_pipeline_contract_passed",
+        "contract_pipeline_contract_check:integration_resident_result_contract",
+    }
 
 
 def test_acceptance_audit_benchmark_pipeline_contract_requires_artifact(tmp_path: Path):
@@ -639,6 +653,70 @@ def test_acceptance_audit_benchmark_pipeline_contract_requires_artifact(tmp_path
     assert checks["contract_pipeline_contract_present"] is False
     assert checks["contract_pipeline_contract_passed"] is False
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is False
+    pipeline_evidence = audit["release_contract_evidence"]["pipeline_contract"]
+    assert pipeline_evidence["status"] == "failed"
+    assert pipeline_evidence["required_by_benchmark_contract"] is True
+    assert pipeline_evidence["pipeline_contract_passed"] is None
+    assert pipeline_evidence["failed_check_count"] >= 1
+
+
+def test_acceptance_audit_cli_writes_pipeline_contract_evidence(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    out_json = tmp_path / "audit.json"
+    out_md = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_pipeline_contract_requirement(contract)
+    _write_pipeline_contract(pipeline, passed=True)
+
+    result = main(
+        [
+            "acceptance-audit",
+            "--manifest",
+            str(manifest),
+            "--glass-run",
+            str(gp_run),
+            "--wbpp-result",
+            str(wbpp),
+            "--compare-json",
+            str(compare),
+            "--benchmark-contract",
+            str(contract),
+            "--pipeline-contract-json",
+            str(pipeline),
+            "--out",
+            str(out_json),
+            "--markdown",
+            str(out_md),
+            "--min-active-frames",
+            "190",
+        ]
+    )
+
+    assert result == 0
+    payload = read_json(out_json)
+    evidence = payload["release_contract_evidence"]["pipeline_contract"]
+    assert evidence["status"] == "passed"
+    markdown = out_md.read_text(encoding="utf-8")
+    assert "Pipeline Contract Evidence" in markdown
+    assert "Required by benchmark contract: True" in markdown
+    assert "PASS: contract_pipeline_contract_passed" in markdown
+    assert "integration_resident_result_contract" in markdown
 
 
 def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):

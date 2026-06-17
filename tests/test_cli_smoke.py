@@ -483,7 +483,45 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
             "checks": [
                 {"name": "minimum_speedup", "passed": True},
                 {"name": "maximum_rms_diff", "passed": True},
+                {
+                    "name": "contract_pipeline_contract_passed",
+                    "passed": True,
+                    "evidence": {"actual": True, "status": "passed", "failed_checks": []},
+                },
             ],
+            "release_contract_evidence": {
+                "pipeline_contract": {
+                    "status": "passed",
+                    "required_by_benchmark_contract": True,
+                    "pipeline_contract_path": "pipeline_contract.json",
+                    "pipeline_contract_audit_type": "pipeline_invariant_contract",
+                    "pipeline_contract_status": "passed",
+                    "pipeline_contract_passed": True,
+                    "pipeline_contract_check_count": 7,
+                    "direct_check_count": 2,
+                    "benchmark_check_count": 6,
+                    "passed_check_count": 8,
+                    "failed_check_count": 0,
+                    "failed_checks": [],
+                    "checks": [
+                        {
+                            "name": "contract_pipeline_contract_passed",
+                            "passed": True,
+                            "evidence": {"actual": True, "status": "passed", "failed_checks": []},
+                            "note": "",
+                        },
+                        {
+                            "name": "contract_pipeline_contract_check:integration_resident_result_contract",
+                            "passed": True,
+                            "evidence": {
+                                "required": "integration_resident_result_contract",
+                                "available": ["integration_resident_result_contract"],
+                            },
+                            "note": "",
+                        },
+                    ],
+                }
+            },
             "speedup_summary": {
                 "speedup_vs_wbpp": 25.0,
                 "glass": {"elapsed_s": 10.0, "weighted_frame_count": 2, "zero_weight_frame_count": 0},
@@ -531,6 +569,8 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert 'class="section-anchor"' in html
     assert 'href="#benchmark-comparison"' in html
     assert 'id="benchmark-comparison"' in html
+    assert 'href="#release-contract-evidence"' in html
+    assert 'id="release-contract-evidence"' in html
     assert 'href="#optimization-guidance"' in html
     assert 'id="optimization-guidance"' in html
     assert 'href="#resident-output-maps"' in html
@@ -540,6 +580,10 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert 'href="#output-numerical-drift"' in html
     assert 'id="output-numerical-drift"' in html
     assert "Benchmark comparison" in html
+    assert "Release contract evidence" in html
+    assert "contract_pipeline_contract_passed" in html
+    assert "contract_pipeline_contract_check:integration_resident_result_contract" in html
+    assert "pipeline_invariant_contract" in html
     assert "Optimization guidance" in html
     assert "I/O + upload + calibration overlap" in html
     assert "Resident registration/warp batching" in html
