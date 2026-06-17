@@ -2312,6 +2312,17 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     stack_default_ready = bool(stack_default_promotion.get("ready"))
     stack_default_required = bool(getattr(args, "require_stack_default_ready", False))
     stack_default_condition = (not stack_default_required) or stack_default_ready
+    pipeline_calibration = (
+        pipeline_audit.get("calibration") if isinstance(pipeline_audit.get("calibration"), dict) else {}
+    )
+    resident_native_calibration = {
+        "artifact_present": bool(pipeline_calibration.get("resident_native_calibration_artifact")),
+        "master_count": pipeline_calibration.get("local_master_count"),
+        "resident_calibrated_light_count": pipeline_calibration.get("resident_calibrated_light_count"),
+        "resident_calibration_contract_attached": bool(
+            pipeline_calibration.get("resident_calibration_contract_attached")
+        ),
+    }
     passed = bool(stack_audit.get("passed")) and bool(pipeline_audit.get("passed")) and stack_default_condition
     summary = {
         "schema_version": 1,
@@ -2329,6 +2340,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "resident_result_contract_json": args.resident_result_contract_json,
         "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
+        "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
             "stack_engine_contract": str(stack_path),
@@ -2388,6 +2400,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "resident_result_contract_json": args.resident_result_contract_json,
         "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
+        "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
             "guardrails_summary": str(summary_path),
@@ -2424,6 +2437,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "require_stack_default_ready": stack_default_required,
             "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
+            "resident_native_calibration": resident_native_calibration,
         }
     )
     return 0 if passed else 2

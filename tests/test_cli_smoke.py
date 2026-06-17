@@ -496,6 +496,89 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
         },
     )
     write_json(
+        run / "calibration_artifacts.json",
+        {
+            "artifact_type": "resident_cuda_calibration_artifacts",
+            "source_stage": "resident_calibrated_stack",
+            "backend": "cuda_resident_stack",
+            "memory_mode": "resident",
+            "resident_artifacts_path": str(run / "resident_artifacts.json"),
+            "policy": {
+                "master_rejection": "winsorized_sigma",
+                "flat_normalization": "median",
+                "flat_floor": 0.05,
+            },
+            "masters": {
+                "resident_bias_H": {
+                    "type": "bias",
+                    "filter": "H",
+                    "path": "calib_cache/resident_masters/master_bias.npy",
+                    "backend": "cuda_resident_stack",
+                    "tile_stack_mode": "cuda_resident_stack",
+                    "resident_surface_scope": "full_frame_vram",
+                    "source_frame_count": 20,
+                    "stats": {"mean": 100.0, "std": 2.0},
+                    "resident_calibration_contract": {
+                        "status": "passed",
+                        "passed": True,
+                    },
+                },
+                "resident_dark_H": {
+                    "type": "dark",
+                    "filter": "H",
+                    "path": "calib_cache/resident_masters/master_dark.npy",
+                    "backend": "cuda_resident_stack",
+                    "tile_stack_mode": "cuda_resident_stack",
+                    "resident_surface_scope": "full_frame_vram",
+                    "source_frame_count": 20,
+                    "master_dark_includes_bias": True,
+                    "stats": {"mean": 110.0, "std": 3.0},
+                    "resident_calibration_contract": {
+                        "status": "passed",
+                        "passed": True,
+                    },
+                },
+                "resident_flat_H": {
+                    "type": "flat",
+                    "filter": "H",
+                    "path": "calib_cache/resident_masters/master_flat.npy",
+                    "backend": "cuda_resident_stack",
+                    "tile_stack_mode": "cuda_resident_stack",
+                    "resident_surface_scope": "full_frame_vram",
+                    "source_frame_count": 20,
+                    "flat_floor": 0.05,
+                    "stats": {"mean": 1.0, "std": 0.05},
+                    "resident_calibration_contract": {
+                        "status": "passed",
+                        "passed": True,
+                    },
+                },
+            },
+            "calibrated_lights": [
+                {
+                    "frame_id": "F1",
+                    "filter": "H",
+                    "status": "resident_in_vram",
+                    "backend": "cuda_resident_stack",
+                    "source_stage": "resident_calibrated_stack",
+                    "resident_output_index": 0,
+                    "resident_stack_index": 0,
+                    "resident_master_path": "integration/resident_master_H.fits",
+                },
+                {
+                    "frame_id": "F2",
+                    "filter": "H",
+                    "status": "resident_in_vram",
+                    "backend": "cuda_resident_stack",
+                    "source_stage": "resident_calibrated_stack",
+                    "resident_output_index": 0,
+                    "resident_stack_index": 1,
+                    "resident_master_path": "integration/resident_master_H.fits",
+                },
+            ],
+        },
+    )
+    write_json(
         run / "integration_results.json",
         {
             "source_stage": "resident_calibrated_stack",
@@ -728,6 +811,11 @@ def test_cli_report_includes_resident_artifacts(tmp_path: Path):
     assert "0.97" in html
     assert "12345" in html
     assert "Resident CUDA summary" in html
+    assert "Resident calibration artifact" in html
+    assert "resident_cuda_calibration_artifacts" in html
+    assert "resident_light_ledger_rows" in html
+    assert "resident_stack_index" in html
+    assert "full_frame_vram" in html
     assert "cuda_resident_stack" in html
     assert "Test GPU" in html
     assert "estimated_peak_gib" in html

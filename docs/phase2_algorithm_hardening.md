@@ -3532,6 +3532,17 @@ integration where applicable.
 - Keep this gate artifact-only: no image processing algorithm changes and no
   new algorithm-source entry required.
 
+### S2-Gate 210: Native Resident Calibration Reporting
+
+- Surface native resident calibration artifact evidence in
+  `frame_accounting.json` summary and per-frame rows.
+- Add an HTML report section for resident calibration artifacts, including
+  resident master surfaces and per-light in-VRAM ledger rows.
+- Include native resident calibration evidence in `glass guardrails` summaries
+  and acceptance bundles.
+- Keep this gate reporting/accounting only: no image processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

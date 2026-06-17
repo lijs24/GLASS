@@ -178,6 +178,40 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     run.mkdir()
     write_json(run / "processing_plan.json", {"frames": [_plan_frame("ref"), _plan_frame("excluded")]})
     write_json(
+        run / "calibration_artifacts.json",
+        {
+            "artifact_type": "resident_cuda_calibration_artifacts",
+            "source_stage": "resident_calibrated_stack",
+            "masters": {
+                "resident_bias_H": {"type": "bias", "backend": "cuda_resident_stack"},
+                "resident_dark_H": {"type": "dark", "backend": "cuda_resident_stack"},
+                "resident_flat_H": {"type": "flat", "backend": "cuda_resident_stack"},
+            },
+            "calibrated_lights": [
+                {
+                    "frame_id": "ref",
+                    "filter": "H",
+                    "status": "resident_in_vram",
+                    "source_stage": "resident_calibrated_stack",
+                    "backend": "cuda_resident_stack",
+                    "resident_output_index": 0,
+                    "resident_stack_index": 0,
+                    "resident_master_path": "integration/resident_master_H.fits",
+                },
+                {
+                    "frame_id": "excluded",
+                    "filter": "H",
+                    "status": "resident_in_vram",
+                    "source_stage": "resident_calibrated_stack",
+                    "backend": "cuda_resident_stack",
+                    "resident_output_index": 0,
+                    "resident_stack_index": 1,
+                    "resident_master_path": "integration/resident_master_H.fits",
+                },
+            ],
+        },
+    )
+    write_json(
         run / "registration_results.json",
         {
             "source_stage": "resident_calibrated_stack",
@@ -204,9 +238,17 @@ def test_resident_frame_accounting_uses_frame_weights(tmp_path: Path):
     rows = {item["frame_id"]: item for item in accounting["frames"]}
 
     assert rows["ref"]["calibration_status"] == "resident_in_vram"
+    assert rows["ref"]["calibration_backend"] == "cuda_resident_stack"
+    assert rows["ref"]["calibration_source_stage"] == "resident_calibrated_stack"
+    assert rows["ref"]["resident_stack_index"] == 0
+    assert rows["excluded"]["resident_stack_index"] == 1
     assert rows["ref"]["warp_status"] == "resident_in_vram"
     assert rows["ref"]["local_norm_status"] == "resident_applied"
     assert rows["excluded"]["final_status"] == "zero_weight"
     written = read_json(run / "frame_accounting.json")
     assert written["sources"]["integration"] is True
+    assert written["resident_native_calibration_artifact"] is True
+    assert written["summary"]["resident_native_calibration_artifact"] is True
+    assert written["summary"]["resident_calibrated_light_ledger_rows"] == 2
+    assert written["summary"]["calibration_master_count"] == 3
     assert written["exception_summary"]["primary_stage_counts"] == {"integration": 1}

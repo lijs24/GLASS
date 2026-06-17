@@ -30,6 +30,7 @@ _REPORT_SECTIONS = [
     ("frame-type-distribution", "Frame type distribution"),
     ("calibration-group-matching", "Calibration group matching"),
     ("master-frame-statistics", "Master frame statistics"),
+    ("resident-calibration-artifact", "Resident calibration artifact"),
     ("xisf-input-cache", "XISF input cache"),
     ("frame-quality-table", "Frame quality table"),
     ("registration-table", "Registration table"),
@@ -200,6 +201,10 @@ def _frame_accounting_summary_rows(frame_accounting: dict[str, Any] | None) -> l
             "integrated_frames": summary.get("integrated_frames"),
             "zero_weight_frames": summary.get("zero_weight_frames"),
             "quality_rejected_frames": summary.get("quality_rejected_frames"),
+            "resident_native_calibration_artifact": summary.get("resident_native_calibration_artifact"),
+            "calibration_artifact_type": summary.get("calibration_artifact_type"),
+            "calibration_master_count": summary.get("calibration_master_count"),
+            "resident_calibrated_light_ledger_rows": summary.get("resident_calibrated_light_ledger_rows"),
             "registration_accepted_frames": summary.get("registration_accepted_frames"),
             "warp_accepted_frames": summary.get("warp_accepted_frames"),
             "warp_skipped_frames": summary.get("warp_skipped_frames"),
@@ -220,6 +225,9 @@ def _frame_accounting_rows(frame_accounting: dict[str, Any] | None) -> list[dict
                 "filter": item.get("filter"),
                 "final_status": item.get("final_status"),
                 "quality_gate": item.get("quality_gate_status"),
+                "calibration_backend": item.get("calibration_backend"),
+                "calibration_source_stage": item.get("calibration_source_stage"),
+                "resident_stack_index": item.get("resident_stack_index"),
                 "registration": item.get("registration_status"),
                 "warp": item.get("warp_status"),
                 "local_norm": item.get("local_norm_status"),
@@ -228,6 +236,99 @@ def _frame_accounting_rows(frame_accounting: dict[str, Any] | None) -> list[dict
                 "reason_count": len(reasons),
                 "first_reason": reasons[0] if reasons else "",
                 "warning_count": len(warnings),
+            }
+        )
+    return rows
+
+
+def _resident_calibration_artifact_rows(calibration: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not calibration:
+        return []
+    masters = calibration.get("masters") if isinstance(calibration.get("masters"), dict) else {}
+    lights = calibration.get("calibrated_lights") if isinstance(calibration.get("calibrated_lights"), list) else []
+    resident_lights = [
+        item
+        for item in lights
+        if isinstance(item, dict)
+        and (
+            item.get("status") == "resident_in_vram"
+            or item.get("backend") == "cuda_resident_stack"
+            or item.get("source_stage") == "resident_calibrated_stack"
+        )
+    ]
+    policy = calibration.get("policy") if isinstance(calibration.get("policy"), dict) else {}
+    return [
+        {
+            "artifact_type": calibration.get("artifact_type"),
+            "source_stage": calibration.get("source_stage"),
+            "backend": calibration.get("backend"),
+            "memory_mode": calibration.get("memory_mode"),
+            "master_count": len(masters),
+            "calibrated_light_count": len(lights),
+            "resident_light_ledger_rows": len(resident_lights),
+            "master_rejection": policy.get("master_rejection"),
+            "flat_normalization": policy.get("flat_normalization"),
+            "flat_floor": policy.get("flat_floor"),
+            "resident_artifacts_path": calibration.get("resident_artifacts_path"),
+        }
+    ]
+
+
+def _resident_calibration_master_rows(
+    calibration: dict[str, Any] | None,
+    run_root: str | Path | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    masters = calibration.get("masters") if isinstance((calibration or {}).get("masters"), dict) else {}
+    for name, master in masters.items():
+        if not isinstance(master, dict):
+            continue
+        if master.get("backend") != "cuda_resident_stack" and master.get("tile_stack_mode") != "cuda_resident_stack":
+            continue
+        stats = master.get("stats") if isinstance(master.get("stats"), dict) else {}
+        contract = (
+            master.get("resident_calibration_contract")
+            if isinstance(master.get("resident_calibration_contract"), dict)
+            else {}
+        )
+        rows.append(
+            {
+                "name": name,
+                "type": master.get("type"),
+                "filter": master.get("filter"),
+                "path_exists": _path_exists(master.get("path"), run_root),
+                "source_frames": master.get("source_frame_count"),
+                "tile_stack_mode": master.get("tile_stack_mode"),
+                "resident_scope": master.get("resident_surface_scope"),
+                "mean": stats.get("mean"),
+                "std": stats.get("std"),
+                "master_dark_includes_bias": master.get("master_dark_includes_bias"),
+                "flat_floor": master.get("flat_floor"),
+                "contract_status": contract.get("status"),
+                "contract_passed": contract.get("passed"),
+            }
+        )
+    return rows
+
+
+def _resident_calibration_light_rows(calibration: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    lights = calibration.get("calibrated_lights") if isinstance((calibration or {}).get("calibrated_lights"), list) else []
+    for item in lights:
+        if not isinstance(item, dict):
+            continue
+        if item.get("status") != "resident_in_vram" and item.get("backend") != "cuda_resident_stack":
+            continue
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "filter": item.get("filter"),
+                "status": item.get("status"),
+                "backend": item.get("backend"),
+                "source_stage": item.get("source_stage"),
+                "resident_output_index": item.get("resident_output_index"),
+                "resident_stack_index": item.get("resident_stack_index"),
+                "resident_master_path": item.get("resident_master_path"),
             }
         )
     return rows
@@ -1104,12 +1205,16 @@ def _pipeline_contract_summary_rows(contract: dict[str, Any] | None) -> list[dic
         return []
     artifacts = contract.get("artifacts") if isinstance(contract.get("artifacts"), dict) else {}
     pixel = contract.get("pixel_verification") if isinstance(contract.get("pixel_verification"), dict) else {}
+    calibration = contract.get("calibration") if isinstance(contract.get("calibration"), dict) else {}
     return [
         {
             "status": contract.get("status"),
             "passed": contract.get("passed"),
             "source": contract.get("_report_source_path"),
             "calibration_artifact": (artifacts.get("calibration") or {}).get("exists"),
+            "resident_native_calibration_artifact": calibration.get("resident_native_calibration_artifact"),
+            "resident_calibrated_light_count": calibration.get("resident_calibrated_light_count"),
+            "local_calibrated_light_count": calibration.get("local_calibrated_light_count"),
             "warp_artifact": (artifacts.get("warp") or {}).get("exists"),
             "local_norm_artifact": (artifacts.get("local_norm") or {}).get("exists"),
             "integration_artifact": (artifacts.get("integration") or {}).get("exists"),
@@ -1166,11 +1271,17 @@ def _pipeline_contract_calibrated_light_rows(contract: dict[str, Any] | None) ->
             {
                 "frame_id": row.get("frame_id"),
                 "backend": row.get("backend"),
+                "status": row.get("status"),
+                "source_stage": row.get("source_stage"),
+                "resident": row.get("resident"),
+                "resident_stack_index": row.get("resident_stack_index"),
                 "path_exists": row.get("path_exists"),
                 "dq_mask_path_exists": row.get("dq_mask_path_exists"),
                 "dq_summary_has_valid": row.get("dq_summary_has_valid"),
                 "tile_count": row.get("tile_count"),
                 "tile_size": row.get("tile_size"),
+                "resident_contract_ok": row.get("resident_contract_ok"),
+                "dq_contract_ok": row.get("dq_contract_ok"),
                 "contract_ok": row.get("contract_ok"),
             }
         )
@@ -1370,6 +1481,9 @@ def write_html_report(
             }
         )
     calibration_policy = (calibration or {}).get("policy", {})
+    resident_calibration_artifact_rows = _resident_calibration_artifact_rows(calibration)
+    resident_calibration_master_rows = _resident_calibration_master_rows(calibration, run_root)
+    resident_calibration_light_rows = _resident_calibration_light_rows(calibration)
     input_cache_rows = (calibration or {}).get("input_cache", [])
     frame_quality = (quality or {}).get("frame_quality", [])
     quality_gate_rows = _quality_gate_rows(quality)
@@ -1527,6 +1641,13 @@ def write_html_report(
   {_h2("master-frame-statistics", "Master frame statistics")}
   <pre>{escape(str(calibration_policy))}</pre>
   {_table(master_rows)}
+  {_h2("resident-calibration-artifact", "Resident calibration artifact")}
+  <p>Resident CUDA calibration artifacts record master bias/dark/flat surfaces
+  and per-light in-VRAM calibration ledger rows without implying calibrated
+  FITS intermediates were written to disk.</p>
+  {_table(resident_calibration_artifact_rows)}
+  {_limited_table(resident_calibration_master_rows, label="resident calibration master rows", artifact="calibration_artifacts.json")}
+  {_limited_table(resident_calibration_light_rows, label="resident calibrated light ledger rows", artifact="calibration_artifacts.json")}
   {_h2("xisf-input-cache", "XISF input cache")}
   <p>XISF sources are streamed into run-local FITS cache files before calibration.</p>
   {_table(input_cache_rows)}

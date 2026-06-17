@@ -203,6 +203,19 @@ def build_frame_accounting(
     calibration_by_id = {
         str(item.get("frame_id")): item for item in (calibration or {}).get("calibrated_lights", [])
     }
+    calibration_artifact_type = (calibration or {}).get("artifact_type")
+    resident_native_calibration = (
+        calibration_artifact_type == "resident_cuda_calibration_artifacts"
+        or (calibration or {}).get("source_stage") == "resident_calibrated_stack"
+    )
+    calibration_master_count = len((calibration or {}).get("masters") or {})
+    resident_calibrated_light_ledger_count = sum(
+        1
+        for item in (calibration or {}).get("calibrated_lights", [])
+        if item.get("status") == "resident_in_vram"
+        or item.get("backend") == "cuda_resident_stack"
+        or item.get("source_stage") == "resident_calibrated_stack"
+    )
     registration_by_id = {str(item.get("frame_id")): item for item in _registration_rows(registration)}
     warp_by_id = {str(item.get("frame_id")): item for item in (warp or {}).get("warp_results", [])}
     warp_skipped_by_id = {
@@ -223,14 +236,34 @@ def build_frame_accounting(
         calibration_row = calibration_by_id.get(frame_id)
         if calibration_row:
             calibration_status = str(calibration_row.get("status") or "calibrated")
+            calibration_source_stage = calibration_row.get("source_stage")
+            calibration_backend = calibration_row.get("backend")
+            resident_stack_index = calibration_row.get("resident_stack_index")
+            resident_output_index = calibration_row.get("resident_output_index")
+            resident_master_path = calibration_row.get("resident_master_path")
             _extend_unique(warnings, calibration_row.get("warnings", []))
         elif has_resident_integration:
             calibration_status = "resident_in_vram"
+            calibration_source_stage = "resident_calibrated_stack"
+            calibration_backend = "cuda_resident_stack"
+            resident_stack_index = None
+            resident_output_index = None
+            resident_master_path = None
         elif calibration:
             calibration_status = "missing"
+            calibration_source_stage = None
+            calibration_backend = None
+            resident_stack_index = None
+            resident_output_index = None
+            resident_master_path = None
             _append_unique(reasons, "missing calibrated-light artifact")
         else:
             calibration_status = "not_run"
+            calibration_source_stage = None
+            calibration_backend = None
+            resident_stack_index = None
+            resident_output_index = None
+            resident_master_path = None
 
         quality_row = quality_by_id.get(frame_id)
         if quality_row:
@@ -312,6 +345,11 @@ def build_frame_accounting(
                 "filter": base.get("filter"),
                 "input_path": base.get("input_path"),
                 "calibration_status": calibration_status,
+                "calibration_source_stage": calibration_source_stage,
+                "calibration_backend": calibration_backend,
+                "resident_stack_index": resident_stack_index,
+                "resident_output_index": resident_output_index,
+                "resident_master_path": resident_master_path,
                 "quality_gate_status": quality_gate_status,
                 "reference_candidate": reference_candidate,
                 "quality_score": quality_score,
@@ -336,6 +374,10 @@ def build_frame_accounting(
         "resident_calibrated_frames": sum(
             1 for row in rows if row["calibration_status"] == "resident_in_vram"
         ),
+        "resident_native_calibration_artifact": resident_native_calibration,
+        "calibration_artifact_type": calibration_artifact_type,
+        "calibration_master_count": calibration_master_count,
+        "resident_calibrated_light_ledger_rows": resident_calibrated_light_ledger_count,
         "quality_accepted_frames": sum(
             1 for row in rows if row["quality_gate_status"] == "accepted"
         ),
@@ -366,6 +408,8 @@ def build_frame_accounting(
             "integration": bool(integration),
             "resident": bool(resident),
         },
+        "calibration_artifact_type": calibration_artifact_type,
+        "resident_native_calibration_artifact": resident_native_calibration,
         "integration_source_stage": (integration or {}).get("source_stage"),
         "summary": summary,
         "exception_summary": _exception_summary(exceptions),
