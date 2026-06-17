@@ -3246,6 +3246,23 @@ integration where applicable.
   reports status `build_plan_ready`, ready variants `cuda13,cuda12,cuda11,cpu`,
   no missing CUDA variants, and recommendation `build_all_variants`.
 
+### S2-Gate 190: CUDA11 Portable Package Smoke
+
+- Build `GLASS-Portable-win64-cuda11.zip` using CUDA Toolkit 11.8 and the
+  Gate189 build-plan command.
+- Build settings: `-PackageLabel cuda11`, `-BuildCuda`,
+  `-StaticCudaRuntime`, `-CudaArchitectures "50;52;60;61;70;75;80;86"`, and
+  `-CudaToolkitRoot "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8"`.
+- Package manifest records package label `cuda11`, CUDA Toolkit root `v11.8`,
+  architecture string `50;52;60;61;70;75;80;86`, runtime linkage `Static`, and
+  source stamp `260c832`.
+- Run `glass windows-package-smoke` with `--expected-package-label cuda11`,
+  `--expected-source 260c832`, and `--require-cuda`.
+- Current real artifact result: status `package_smoke_passed`, recommendation
+  `portable_package_ready_for_next_release_step`, zip size `342183616` bytes,
+  native extension loaded, CUDA available on RTX PRO 6000 Blackwell cc 12.0,
+  driver `596.21`, and zero failed checks.
+
 ## Gate Rules
 
 Each gate requires:
