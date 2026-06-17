@@ -3786,6 +3786,25 @@ integration where applicable.
 - Keep this gate release/status only: no image processing algorithm changes and
   no new algorithm-source entry required.
 
+### S2-Gate 227: GitHub Release Handoff Matrix Provenance
+
+- Extend `glass windows-github-release-plan` with a
+  `--windows-release-matrix` input so release notes, JSON handoff artifacts, and
+  the dry-run publish script consume the Gate 226 package/default-promotion
+  matrix.
+- Require the Windows release matrix by default, unless explicitly waived, to be
+  present, `release_matrix_ready`, passed, backed by a ready default-promotion
+  manifest, and backed by a passing default-route route contract with at least
+  four route checks.
+- Verify that every matrix package label has a matching release-manifest asset
+  in the GitHub release handoff plan, and preserve the CPU fallback in the
+  matrix install order.
+- Surface the matrix primary package, install order, default-promotion status,
+  and default-route evidence in release-plan JSON, Markdown, generated release
+  notes, and generated PowerShell publish scripts.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

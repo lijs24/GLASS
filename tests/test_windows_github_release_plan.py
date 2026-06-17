@@ -145,11 +145,53 @@ def _phase2_compare(path: Path, *, passed: bool = True, baseline_gate: int = 203
     )
 
 
+def _release_matrix(path: Path, *, labels: list[str], ready: bool = True) -> None:
+    ordered_try_list = labels if "cpu" in labels else [*labels, "cpu"]
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "windows_release_matrix",
+            "status": "release_matrix_ready" if ready else "blocked",
+            "passed": ready,
+            "recommendation": "publish_windows_cuda_matrix"
+            if ready
+            else "fix_release_matrix_blockers",
+            "current_machine": {
+                "primary_package": labels[0] if labels else None,
+                "ordered_try_list": ordered_try_list,
+                "cuda_available": "cpu" not in labels[:1],
+                "native_extension_loaded": "cpu" not in labels[:1],
+            },
+            "default_promotion_manifest": {
+                "status": "default_promotion_ready" if ready else "blocked",
+                "passed": ready,
+                "default_change_ready": ready,
+                "default_route_passed": ready,
+                "default_route_route_contract_passed": ready,
+                "default_route_route_check_count": 4 if ready else 2,
+                "default_route_speedup_vs_reference": 28.75,
+            },
+            "packages": [
+                {
+                    "label": label,
+                    "release_artifact": f"GLASS-Portable-win64-{label}.zip",
+                    "compatible": True,
+                }
+                for label in labels
+            ],
+            "failed_checks": [] if ready else ["default_promotion_manifest_ready"],
+        },
+    )
+
+
 def test_windows_github_release_plan_records_assets(tmp_path: Path):
     zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
     zip_file.write_bytes(b"zip")
     manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
     _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(matrix, labels=["cuda13"])
 
     payload = build_windows_github_release_plan(
         manifest_artifact=manifest,
@@ -157,11 +199,13 @@ def test_windows_github_release_plan_records_assets(tmp_path: Path):
         title="Test Release",
         notes_file=tmp_path / "notes.md",
         require_same_source_stamp=True,
+        windows_release_matrix=matrix,
     )
 
     assert payload["passed"] is True
     assert payload["publication_ready"] is True
     assert payload["assets"][0]["label"] == "cuda13"
+    assert payload["release_matrix"]["status"] == "release_matrix_ready"
     assert "gh release create v0.1.0-test" in payload["release"]["command"]
     assert "--draft" in payload["release"]["command"]
 
@@ -172,15 +216,18 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     manifest = tmp_path / "manifest.json"
     phase2_status = tmp_path / "phase2_status.json"
     phase2_compare = tmp_path / "phase2_compare.json"
+    matrix = tmp_path / "matrix.json"
     _manifest(manifest, zip_paths={"cuda13": zip_file})
     _phase2_status(phase2_status, gate=204)
     _phase2_compare(phase2_compare, baseline_gate=203, candidate_gate=204)
+    _release_matrix(matrix, labels=["cuda13"])
 
     payload = build_windows_github_release_plan(
         manifest_artifact=manifest,
         tag="v0.1.0-test",
         phase2_status=phase2_status,
         phase2_status_compare=phase2_compare,
+        windows_release_matrix=matrix,
     )
 
     checks = {str(item["name"]): item["passed"] for item in payload["checks"]}
@@ -202,10 +249,13 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["phase2"]["status"]["release_decision_default_change_ready"] is True
     assert payload["phase2"]["status"]["release_runtime_repeat_elapsed_ratio_vs_best"] == 1.053
     assert payload["phase2"]["status_compare"]["candidate_gate"] == 204
+    assert payload["release_matrix"]["primary_package"] == "cuda13"
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
     assert checks["phase2_status_compare_present"] is True
     assert checks["phase2_status_compare_passed"] is True
+    assert checks["windows_release_matrix_ready"] is True
+    assert checks["windows_release_matrix_default_route_passed"] is True
 
 
 def test_windows_github_release_plan_blocks_failed_phase2_handoff_evidence(tmp_path: Path):
@@ -214,15 +264,18 @@ def test_windows_github_release_plan_blocks_failed_phase2_handoff_evidence(tmp_p
     manifest = tmp_path / "manifest.json"
     phase2_status = tmp_path / "phase2_status.json"
     phase2_compare = tmp_path / "phase2_compare.json"
+    matrix = tmp_path / "matrix.json"
     _manifest(manifest, zip_paths={"cuda13": zip_file})
     _phase2_status(phase2_status, passed=False, gate=204)
     _phase2_compare(phase2_compare, passed=False, baseline_gate=204, candidate_gate=203)
+    _release_matrix(matrix, labels=["cuda13", "cpu"])
 
     payload = build_windows_github_release_plan(
         manifest_artifact=manifest,
         tag="v0.1.0-test",
         phase2_status=phase2_status,
         phase2_status_compare=phase2_compare,
+        windows_release_matrix=matrix,
     )
 
     checks = {str(item["name"]): item["passed"] for item in payload["checks"]}
@@ -234,13 +287,54 @@ def test_windows_github_release_plan_blocks_failed_phase2_handoff_evidence(tmp_p
     assert "phase2_status_compare_passed" in payload["failed_checks"]
 
 
+def test_windows_github_release_plan_blocks_missing_windows_release_matrix(tmp_path: Path):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+    )
+
+    checks = {str(item["name"]): item["passed"] for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_present"] is False
+    assert checks["windows_release_matrix_ready"] is False
+    assert "windows_release_matrix_present" in payload["failed_checks"]
+
+
+def test_windows_github_release_plan_blocks_failed_windows_release_matrix(tmp_path: Path):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(matrix, labels=["cuda13", "cpu"], ready=False)
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item["passed"] for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_present"] is True
+    assert checks["windows_release_matrix_ready"] is False
+    assert checks["windows_release_matrix_default_promotion_ready"] is False
+
+
 def test_windows_github_release_plan_blocks_mixed_sources(tmp_path: Path):
     zip_a = tmp_path / "a.zip"
     zip_b = tmp_path / "b.zip"
     zip_a.write_bytes(b"a")
     zip_b.write_bytes(b"b")
     manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
     _manifest(manifest, zip_paths={"cuda13": zip_a}, source="aaa1111")
+    _release_matrix(matrix, labels=["cuda13", "cpu"])
     payload = read_json(manifest)
     payload["packages"].append(
         {
@@ -258,6 +352,7 @@ def test_windows_github_release_plan_blocks_mixed_sources(tmp_path: Path):
         manifest_artifact=manifest,
         tag="v0.1.0-test",
         require_same_source_stamp=True,
+        windows_release_matrix=matrix,
     )
 
     checks = {str(item["name"]): item["passed"] for item in plan["checks"]}
@@ -276,8 +371,10 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     script = tmp_path / "publish_release.ps1"
     phase2_status = tmp_path / "phase2_status.json"
     phase2_compare = tmp_path / "phase2_compare.json"
+    matrix = tmp_path / "matrix.json"
     _phase2_status(phase2_status)
     _phase2_compare(phase2_compare)
+    _release_matrix(matrix, labels=["cpu"])
 
     result = main(
         [
@@ -298,6 +395,8 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
             str(phase2_status),
             "--phase2-status-compare",
             str(phase2_compare),
+            "--windows-release-matrix",
+            str(matrix),
             "--require-same-source-stamp",
             "--fail-on-failure",
         ]
@@ -311,6 +410,9 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     markdown_text = markdown.read_text(encoding="utf-8")
     assert "GLASS Windows GitHub Release Plan" in markdown_text
     assert "Publish script" in markdown_text
+    assert "Windows Release Matrix Handoff" in markdown_text
+    assert "Matrix status: `release_matrix_ready`" in markdown_text
+    assert "Default route contract/checks: `True`/`4`" in markdown_text
     assert "Phase 2 Handoff Preflight" in markdown_text
     assert "Native resident contract source: `run_default`" in markdown_text
     assert "Native calibrated lights: `200`" in markdown_text
@@ -322,6 +424,8 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Runtime repeat ratio vs best: `1.053`" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
     notes_text = notes.read_text(encoding="utf-8")
+    assert "Windows Release Matrix Evidence" in notes_text
+    assert "Default route contract: `True` checks `4`" in notes_text
     assert "Native resident contract source: `run_default`" in notes_text
     assert "calibrated lights `200`" in notes_text
     assert "Resident registration fast path: `present`" in notes_text
@@ -332,6 +436,9 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Runtime repeat evidence: runs `3`" in notes_text
     script_text = script.read_text(encoding="utf-8")
     assert "$ExpectedTag = 'v0.1.0-test'" in script_text
+    assert "$WindowsReleaseMatrixFile =" in script_text
+    assert "Windows release matrix check failed" in script_text
+    assert "Windows release matrix default-promotion evidence failed" in script_text
     assert "$Phase2StatusFile =" in script_text
     assert "$Phase2StatusCompareFile =" in script_text
     assert "Phase 2 status check failed" in script_text
@@ -348,7 +455,9 @@ def test_windows_github_release_plan_auth_check_blocks_publication(tmp_path: Pat
     zip_file = tmp_path / "GLASS-Portable-win64-cpu.zip"
     zip_file.write_bytes(b"cpu")
     manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
     _manifest(manifest, zip_paths={"cpu": zip_file})
+    _release_matrix(matrix, labels=["cpu"])
 
     payload = build_windows_github_release_plan(
         manifest_artifact=manifest,
@@ -356,6 +465,7 @@ def test_windows_github_release_plan_auth_check_blocks_publication(tmp_path: Pat
         gh_path=sys.executable,
         check_gh=True,
         check_gh_auth=True,
+        windows_release_matrix=matrix,
     )
 
     assert payload["passed"] is True

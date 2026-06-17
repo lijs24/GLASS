@@ -219,6 +219,48 @@ def _phase2_artifact_summary(
     }
 
 
+def _windows_release_matrix_summary(path: str | Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    target = Path(path)
+    payload = _read_json_object(target) if target.exists() else {}
+    current_machine = (
+        payload.get("current_machine") if isinstance(payload.get("current_machine"), dict) else {}
+    )
+    default_promotion = (
+        payload.get("default_promotion_manifest")
+        if isinstance(payload.get("default_promotion_manifest"), dict)
+        else {}
+    )
+    package_rows = [row for row in payload.get("packages") or [] if isinstance(row, dict)]
+    package_labels = [str(row.get("label")) for row in package_rows if row.get("label")]
+    return {
+        "path": str(target),
+        "exists": target.exists(),
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "recommendation": payload.get("recommendation"),
+        "primary_package": current_machine.get("primary_package"),
+        "ordered_try_list": [str(item) for item in current_machine.get("ordered_try_list") or []],
+        "cuda_available": current_machine.get("cuda_available"),
+        "native_extension_loaded": current_machine.get("native_extension_loaded"),
+        "package_labels": package_labels,
+        "package_count": len(package_labels),
+        "default_promotion_status": default_promotion.get("status"),
+        "default_promotion_passed": default_promotion.get("passed"),
+        "default_promotion_default_change_ready": default_promotion.get("default_change_ready"),
+        "default_route_passed": default_promotion.get("default_route_passed"),
+        "default_route_route_contract_passed": default_promotion.get(
+            "default_route_route_contract_passed"
+        ),
+        "default_route_route_check_count": default_promotion.get("default_route_route_check_count"),
+        "default_route_speedup_vs_reference": default_promotion.get(
+            "default_route_speedup_vs_reference"
+        ),
+    }
+
+
 def _run_gh(command: list[str], *, timeout_s: int = 30) -> dict[str, Any]:
     try:
         completed = subprocess.run(
@@ -317,6 +359,10 @@ def _release_notes(payload: dict[str, Any]) -> str:
     phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
     phase2_status = phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
     phase2_compare = phase2.get("status_compare") if isinstance(phase2.get("status_compare"), dict) else {}
+    release_matrix = (
+        payload.get("release_matrix") if isinstance(payload.get("release_matrix"), dict) else {}
+    )
+    install_order = release_matrix.get("ordered_try_list") or ["cuda13", "cuda12", "cuda11", "cpu"]
     lines = [
         f"# {payload['release']['title']}",
         "",
@@ -339,10 +385,38 @@ def _release_notes(payload: dict[str, Any]) -> str:
             "",
             "## Recommended Install Order",
             "",
-            "Try `cuda13` first on current NVIDIA GPUs, then `cuda12`, `cuda11`, and finally `cpu`.",
+            "Try " + ", then ".join(f"`{item}`" for item in install_order) + ".",
             "",
         ]
     )
+    if release_matrix:
+        lines.extend(
+            [
+                "## Windows Release Matrix Evidence",
+                "",
+                (
+                    "- Windows release matrix: "
+                    f"`{release_matrix.get('status')}` passed `{release_matrix.get('passed')}`"
+                ),
+                (
+                    "- Primary package: "
+                    f"`{release_matrix.get('primary_package')}` "
+                    f"packages `{', '.join(release_matrix.get('package_labels') or [])}`"
+                ),
+                (
+                    "- Default promotion: "
+                    f"`{release_matrix.get('default_promotion_status')}` "
+                    f"passed `{release_matrix.get('default_promotion_passed')}`"
+                ),
+                (
+                    "- Default route contract: "
+                    f"`{release_matrix.get('default_route_route_contract_passed')}` "
+                    f"checks `{release_matrix.get('default_route_route_check_count')}` "
+                    f"speedup `{release_matrix.get('default_route_speedup_vs_reference')}`"
+                ),
+                "",
+            ]
+        )
     if phase2_status or phase2_compare:
         lines.extend(
             [
@@ -447,6 +521,9 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
     phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
     phase2_status = phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
     phase2_compare = phase2.get("status_compare") if isinstance(phase2.get("status_compare"), dict) else {}
+    release_matrix = (
+        payload.get("release_matrix") if isinstance(payload.get("release_matrix"), dict) else {}
+    )
     gh_path = gh.get("path") or "gh"
     notes_file = release.get("notes_file")
     assets = payload.get("assets") if isinstance(payload.get("assets"), list) else []
@@ -461,6 +538,7 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
         f"$ExpectedTag = {_ps_literal(str(release.get('tag') or ''))}",
         f"$ReleaseTitle = {_ps_literal(str(release.get('title') or ''))}",
         f"$NotesFile = {_ps_literal(str(notes_file) if notes_file else None)}",
+        f"$WindowsReleaseMatrixFile = {_ps_literal(release_matrix.get('path'))}",
         f"$Phase2StatusFile = {_ps_literal(phase2_status.get('path'))}",
         f"$Phase2StatusCompareFile = {_ps_literal(phase2_compare.get('path'))}",
         "$Assets = @(",
@@ -502,6 +580,18 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "}",
             "if ($NotesFile -and -not (Test-Path -LiteralPath $NotesFile -PathType Leaf)) {",
             "    throw \"Missing release notes file: $NotesFile\"",
+            "}",
+            "if ($WindowsReleaseMatrixFile) {",
+            "    if (-not (Test-Path -LiteralPath $WindowsReleaseMatrixFile -PathType Leaf)) {",
+            "        throw \"Missing Windows release matrix artifact: $WindowsReleaseMatrixFile\"",
+            "    }",
+            "    $matrix = Get-Content -LiteralPath $WindowsReleaseMatrixFile -Raw | ConvertFrom-Json",
+            "    if ($matrix.artifact_type -ne 'windows_release_matrix' -or $matrix.status -ne 'release_matrix_ready' -or $matrix.passed -ne $true) {",
+            "        throw \"Windows release matrix check failed: $WindowsReleaseMatrixFile\"",
+            "    }",
+            "    if (-not $matrix.default_promotion_manifest -or $matrix.default_promotion_manifest.status -ne 'default_promotion_ready' -or $matrix.default_promotion_manifest.passed -ne $true -or $matrix.default_promotion_manifest.default_route_passed -ne $true) {",
+            "        throw \"Windows release matrix default-promotion evidence failed: $WindowsReleaseMatrixFile\"",
+            "    }",
             "}",
             "if ($Phase2StatusFile) {",
             "    if (-not (Test-Path -LiteralPath $Phase2StatusFile -PathType Leaf)) {",
@@ -566,6 +656,8 @@ def build_windows_github_release_plan(
     gh_path: str | Path | None = None,
     phase2_status: str | Path | None = None,
     phase2_status_compare: str | Path | None = None,
+    windows_release_matrix: str | Path | None = None,
+    require_windows_release_matrix: bool = True,
 ) -> dict[str, Any]:
     manifest_path = Path(manifest_artifact)
     manifest = _read_json_object(manifest_path)
@@ -578,6 +670,7 @@ def build_windows_github_release_plan(
         phase2_status_compare,
         expected_artifact_type="glass_phase2_status_compare",
     )
+    release_matrix_summary = _windows_release_matrix_summary(windows_release_matrix)
     source_stamps = sorted({str(row["source_stamp"]) for row in assets if row.get("source_stamp")})
     release_title = title or f"GLASS {tag} Windows packages"
     notes_path = str(Path(notes_file).resolve()) if notes_file is not None else None
@@ -678,6 +771,89 @@ def build_windows_github_release_plan(
                 ),
             ]
         )
+    release_matrix_for_checks = release_matrix_summary or {}
+    if require_windows_release_matrix or release_matrix_summary is not None:
+        asset_labels = {str(asset.get("label")) for asset in assets if asset.get("label")}
+        matrix_labels = [
+            str(label) for label in release_matrix_for_checks.get("package_labels") or []
+        ]
+        missing_matrix_assets = [label for label in matrix_labels if label not in asset_labels]
+        checks.extend(
+            [
+                _check(
+                    "windows_release_matrix_present",
+                    bool(release_matrix_summary and release_matrix_summary.get("exists")),
+                    {
+                        "path": release_matrix_for_checks.get("path"),
+                        "required": bool(require_windows_release_matrix),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_type",
+                    release_matrix_for_checks.get("artifact_type") == "windows_release_matrix",
+                    {
+                        "artifact_type": release_matrix_for_checks.get("artifact_type"),
+                        "required": "windows_release_matrix",
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_ready",
+                    release_matrix_for_checks.get("status") == "release_matrix_ready"
+                    and release_matrix_for_checks.get("passed") is True,
+                    {
+                        "status": release_matrix_for_checks.get("status"),
+                        "passed": release_matrix_for_checks.get("passed"),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_default_promotion_ready",
+                    release_matrix_for_checks.get("default_promotion_status")
+                    == "default_promotion_ready"
+                    and release_matrix_for_checks.get("default_promotion_passed") is True
+                    and release_matrix_for_checks.get("default_promotion_default_change_ready")
+                    is True,
+                    {
+                        "status": release_matrix_for_checks.get("default_promotion_status"),
+                        "passed": release_matrix_for_checks.get("default_promotion_passed"),
+                        "default_change_ready": release_matrix_for_checks.get(
+                            "default_promotion_default_change_ready"
+                        ),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_default_route_passed",
+                    release_matrix_for_checks.get("default_route_passed") is True
+                    and release_matrix_for_checks.get("default_route_route_contract_passed") is True
+                    and int(release_matrix_for_checks.get("default_route_route_check_count") or 0)
+                    >= 4,
+                    {
+                        "default_route_passed": release_matrix_for_checks.get(
+                            "default_route_passed"
+                        ),
+                        "route_contract_passed": release_matrix_for_checks.get(
+                            "default_route_route_contract_passed"
+                        ),
+                        "route_check_count": release_matrix_for_checks.get(
+                            "default_route_route_check_count"
+                        ),
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_assets_present",
+                    bool(matrix_labels) and not missing_matrix_assets,
+                    {
+                        "matrix_labels": matrix_labels,
+                        "asset_labels": sorted(asset_labels),
+                        "missing": missing_matrix_assets,
+                    },
+                ),
+                _check(
+                    "windows_release_matrix_try_order_has_cpu_fallback",
+                    "cpu" in (release_matrix_for_checks.get("ordered_try_list") or []),
+                    {"ordered_try_list": release_matrix_for_checks.get("ordered_try_list")},
+                ),
+            ]
+        )
 
     failed = [item for item in checks if not item.get("passed")]
     command_parts = [
@@ -741,6 +917,10 @@ def build_windows_github_release_plan(
             "status": phase2_status_summary,
             "status_compare": phase2_compare_summary,
         },
+        "release_matrix": release_matrix_summary,
+        "requirements": {
+            "require_windows_release_matrix": bool(require_windows_release_matrix),
+        },
         "source_stamps": source_stamps,
         "assets": assets,
         "checks": checks,
@@ -758,6 +938,9 @@ def _markdown(payload: dict[str, Any]) -> str:
     phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
     phase2_status = phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
     phase2_compare = phase2.get("status_compare") if isinstance(phase2.get("status_compare"), dict) else {}
+    release_matrix = (
+        payload.get("release_matrix") if isinstance(payload.get("release_matrix"), dict) else {}
+    )
     lines = [
         "# GLASS Windows GitHub Release Plan",
         "",
@@ -770,9 +953,10 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Source stamps: `{', '.join(payload.get('source_stamps') or [])}`",
         f"- GitHub CLI available: `{gh.get('available')}`",
         f"- GitHub CLI auth OK: `{gh.get('auth_ok')}`",
-        f"- Publish script: `{release.get('script_file')}`",
-        f"- Publish script mode: `{release.get('script_default_mode')}`",
-        "",
+            f"- Publish script: `{release.get('script_file')}`",
+            f"- Publish script mode: `{release.get('script_default_mode')}`",
+            f"- Windows release matrix: `{release_matrix.get('status')}`",
+            "",
         "## Assets",
         "",
         "| Label | Size bytes | SHA256 | Path |",
@@ -783,6 +967,29 @@ def _markdown(payload: dict[str, Any]) -> str:
             "| "
             f"{asset.get('label')} | {asset.get('size_bytes')} | `{asset.get('sha256')}` | "
             f"`{asset.get('zip_path')}` |"
+        )
+    if release_matrix:
+        lines.extend(
+            [
+                "",
+                "## Windows Release Matrix Handoff",
+                "",
+                f"- Matrix path: `{release_matrix.get('path')}`",
+                f"- Matrix status: `{release_matrix.get('status')}`",
+                f"- Matrix passed: `{release_matrix.get('passed')}`",
+                f"- Primary package: `{release_matrix.get('primary_package')}`",
+                f"- Try order: `{', '.join(release_matrix.get('ordered_try_list') or [])}`",
+                (
+                    "- Default promotion: "
+                    f"`{release_matrix.get('default_promotion_status')}` "
+                    f"passed `{release_matrix.get('default_promotion_passed')}`"
+                ),
+                (
+                    "- Default route contract/checks: "
+                    f"`{release_matrix.get('default_route_route_contract_passed')}`/"
+                    f"`{release_matrix.get('default_route_route_check_count')}`"
+                ),
+            ]
         )
     if phase2_status or phase2_compare:
         lines.extend(

@@ -2067,6 +2067,8 @@ def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
         gh_path=args.gh_path,
         phase2_status=args.phase2_status,
         phase2_status_compare=args.phase2_status_compare,
+        windows_release_matrix=args.windows_release_matrix,
+        require_windows_release_matrix=not args.allow_missing_windows_release_matrix,
     )
     write_windows_github_release_plan(
         args.out,
@@ -2083,6 +2085,9 @@ def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
             "recommendation": payload["recommendation"],
             "tag": payload["release"]["tag"],
             "assets": len(payload["assets"]),
+            "windows_release_matrix_status": (
+                payload.get("release_matrix") or {}
+            ).get("status"),
             "out": args.out,
             "markdown": args.markdown,
             "notes": args.notes,
@@ -4824,6 +4829,15 @@ def build_parser() -> argparse.ArgumentParser:
     windows_github_release_plan.add_argument(
         "--phase2-status-compare",
         help="optional glass phase2-status-compare JSON artifact required to pass before release handoff",
+    )
+    windows_github_release_plan.add_argument(
+        "--windows-release-matrix",
+        help="optional Windows release-matrix JSON artifact required for strict release handoff",
+    )
+    windows_github_release_plan.add_argument(
+        "--allow-missing-windows-release-matrix",
+        action="store_true",
+        help="do not require a Windows release-matrix artifact in the release handoff plan",
     )
     windows_github_release_plan.add_argument(
         "--fail-on-failure",

@@ -1,0 +1,210 @@
+{
+  "artifact_type": "glass_phase2_status_compare",
+  "baseline": {
+    "acceptance_status": "passed",
+    "cuda_available": true,
+    "default_change_ready": true,
+    "default_route_acceptance_passed": true,
+    "default_route_acceptance_status": "passed",
+    "github_release_plan_status": "release_plan_ready",
+    "latest_gate": 226,
+    "pipeline_contract_passed": true,
+    "pipeline_contract_status": "passed",
+    "release_decision_status": "default_change_ready",
+    "release_manifest_status": "release_manifest_ready",
+    "status": "green"
+  },
+  "baseline_path": "runs\\checkpoints\\s2_gate_226_phase2_status.json",
+  "candidate": {
+    "acceptance_status": "passed",
+    "cuda_available": true,
+    "default_change_ready": true,
+    "default_route_acceptance_passed": true,
+    "default_route_acceptance_status": "passed",
+    "github_release_plan_status": "release_plan_ready",
+    "latest_gate": 227,
+    "pipeline_contract_passed": true,
+    "pipeline_contract_status": "passed",
+    "release_decision_status": "default_change_ready",
+    "release_manifest_status": "release_manifest_ready",
+    "status": "green"
+  },
+  "candidate_path": "runs\\checkpoints\\s2_gate_227_phase2_status.json",
+  "checks": [
+    {
+      "evidence": {
+        "baseline": "glass_phase2_status",
+        "candidate": "glass_phase2_status"
+      },
+      "name": "baseline_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "glass_phase2_status",
+        "candidate": "glass_phase2_status"
+      },
+      "name": "candidate_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": 226,
+        "candidate": 227
+      },
+      "name": "latest_checkpoint_gate_not_decreased",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "green",
+        "candidate": "green"
+      },
+      "name": "overall_status_green_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "latest_checkpoint_green_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "acceptance_audit_passed_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "passed",
+        "candidate": "passed"
+      },
+      "name": "acceptance_status_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "default_route_acceptance_passed_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "default_route_acceptance_route_contract_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "passed",
+        "candidate": "passed"
+      },
+      "name": "resident_registration_fastpath_contract_passed_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": 24,
+        "candidate": 24
+      },
+      "name": "resident_registration_fastpath_contract_check_count_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "cuda_available_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "release_manifest_ready",
+        "candidate": "release_manifest_ready"
+      },
+      "name": "release_manifest_ready_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "release_plan_ready",
+        "candidate": "release_plan_ready"
+      },
+      "name": "github_release_plan_ready_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "pipeline_contract_passed_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "pipeline_integration_dq_contract_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "pipeline_pixel_verification_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "release_decision_default_change_ready_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "promote_default_candidate",
+        "candidate": "promote_default_candidate"
+      },
+      "name": "release_decision_promote_recommendation_preserved",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T21:48:06+00:00",
+  "passed": true,
+  "schema_version": 1,
+  "status": "passed"
+}
