@@ -2804,6 +2804,21 @@ integration where applicable.
 - Generate a synthetic CPU audit and pixel-verifying pipeline-contract artifact
   under `C:\glass_runs\phase2_s2_gate_168_pipeline_result_contract`.
 
+### S2-Gate 169: Resident CUDA Result Contract Audit
+
+- Add `glass resident-result-contract` to audit resident CUDA integration
+  outputs without rerunning image processing.
+- Validate resident identity, required output map paths, DQ summary presence,
+  resident DQ provenance schema, DQ summary/provenance agreement, active-frame
+  counts, coverage provenance, source terms, and geometric warp coverage
+  frame-count agreement.
+- Support optional tiled FITS pixel verification for DQ/count maps, with tests
+  covering passing and mismatched summaries on tiny synthetic maps.
+- Run the JSON-only audit against the Gate160 `throughput-v1` resident run under
+  `C:\glass_runs\phase2_s2_gate_169_resident_result_contract`.
+- Current real artifact result: passed, with one H output, active frame count
+  `193`, input frame count `200`, and nine resident output checks.
+
 ## Gate Rules
 
 Each gate requires:

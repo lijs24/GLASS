@@ -72,6 +72,10 @@ from glass.report.resident_runtime_repeat_preflight import (
     build_resident_runtime_repeat_preflight,
     write_resident_runtime_repeat_preflight,
 )
+from glass.report.resident_result_contract import (
+    build_resident_result_contract,
+    write_resident_result_contract,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1863,6 +1867,27 @@ def cmd_resident_runtime_repeat_preflight(args: argparse.Namespace) -> int:
     if args.fail_when_not_ready and not payload.get("ready_to_execute"):
         return 2
     return 0
+
+
+def cmd_resident_result_contract(args: argparse.Namespace) -> int:
+    payload = build_resident_result_contract(
+        args.run,
+        pixel_verify=args.pixel_verify,
+        pixel_verify_tile_size=args.pixel_verify_tile_size,
+        pixel_tolerance=args.pixel_tolerance,
+    )
+    write_resident_result_contract(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "output_count": len(payload.get("outputs") or []),
+            "pixel_verify": payload.get("pixel_verify"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if payload.get("passed") or not args.fail_on_failed else 2
 
 
 def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
@@ -3926,6 +3951,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the preflight recommends execution",
     )
     resident_runtime_repeat_preflight.set_defaults(func=cmd_resident_runtime_repeat_preflight)
+
+    resident_result_contract = sub.add_parser(
+        "resident-result-contract",
+        help="audit resident CUDA integration outputs for result-contract invariants",
+    )
+    resident_result_contract.add_argument("--run", required=True, help="GLASS run directory with integration_results.json")
+    resident_result_contract.add_argument("--out", required=True, help="output resident result-contract JSON")
+    resident_result_contract.add_argument("--markdown", help="optional output Markdown summary")
+    resident_result_contract.add_argument(
+        "--pixel-verify",
+        action="store_true",
+        help="verify DQ/count maps by tiled FITS reads",
+    )
+    resident_result_contract.add_argument(
+        "--pixel-verify-tile-size",
+        type=int,
+        default=2048,
+        help="tile size for optional pixel verification",
+    )
+    resident_result_contract.add_argument(
+        "--pixel-tolerance",
+        type=int,
+        default=0,
+        help="allowed pixel-count delta during optional pixel verification",
+    )
+    resident_result_contract.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 if the contract fails",
+    )
+    resident_result_contract.set_defaults(func=cmd_resident_result_contract)
 
     resident_reg_triage = sub.add_parser(
         "resident-registration-triage",
