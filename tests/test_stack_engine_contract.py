@@ -262,6 +262,63 @@ def test_stack_engine_contract_accepts_resident_result_contract_parity(tmp_path:
     assert "missing_calibration_surface" in promotion_blockers
 
 
+def test_stack_engine_contract_auto_discovers_native_resident_result_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    write_json(
+        run / "resident_result_contract.json",
+        {
+            "artifact_type": "resident_cuda_result_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "contract_type": "resident_cuda_result_contract",
+                    "active_frame_count": 193,
+                    "frame_count": 200,
+                    "checks": [
+                        {"name": "resident_identity", "passed": True},
+                        {"name": "required_maps_exist", "passed": True},
+                    ],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                        "active_frame_count": 193,
+                    },
+                }
+            ]
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(
+        run,
+        scope="integration",
+        expected_integration_engine="cuda_resident_stack",
+    )
+
+    assert audit["passed"] is True
+    assert audit["resident_result_contract_attached"] is True
+    assert audit["resident_result_contract_source"] == "run_default"
+    assert audit["resident_result_contract_path"] == str(run / "resident_result_contract.json")
+    assert audit["integration"]["outputs"][0]["resident_result_contract_passed"] is True
+    assert audit["adoption"]["phase2_stack_engine_default_gap_count"] == 0
+
+
 def test_stack_engine_contract_accepts_resident_calibration_for_default_ready(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()

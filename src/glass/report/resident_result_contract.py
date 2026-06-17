@@ -209,8 +209,11 @@ def _resident_output_contract(
     )
     frame_count = _int_value(output.get("frame_count"))
     map_rows = _map_rows(output, run_root, rejection=rejection)
+    coverage_required = _map_required(output, "coverage", rejection=rejection)
+    coverage_available = bool(coverage_provenance) and bool(coverage_provenance.get("available", True))
     summary_match = _summary_matches(dq_summary, provenance_summary)
     source_terms = {str(item) for item in (provenance_summary.get("source_terms") or [])}
+    source_terms_required = coverage_required or coverage_available
     checks = [
         _check(
             "resident_identity",
@@ -254,13 +257,17 @@ def _resident_output_contract(
         ),
         _check(
             "coverage_provenance_present",
-            bool(coverage_provenance) and bool(coverage_provenance.get("available", True)),
-            {"keys": sorted(coverage_provenance.keys())},
+            (not coverage_required) or coverage_available,
+            {"keys": sorted(coverage_provenance.keys()), "coverage_required": coverage_required},
         ),
         _check(
             "source_terms_present",
-            "post_rejection_coverage" in source_terms and "geometric_warp_coverage" in source_terms,
-            {"source_terms": sorted(source_terms)},
+            (not source_terms_required)
+            or (
+                "post_rejection_coverage" in source_terms
+                and "geometric_warp_coverage" in source_terms
+            ),
+            {"source_terms": sorted(source_terms), "required": source_terms_required},
         ),
         _check(
             "geometric_frame_count_matches_active",

@@ -21,6 +21,10 @@ from glass.engine.resident_calibration_artifacts import write_resident_calibrati
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
+from glass.report.resident_result_contract import (
+    build_resident_result_contract,
+    write_resident_result_contract,
+)
 
 
 _AUTO_STAR_THRESHOLD_SIGMAS = (0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
@@ -7152,6 +7156,9 @@ def run_resident_calibration_integration(
                 "warnings": integration_warnings,
             },
         )
+        resident_result_contract_path = run / "resident_result_contract.json"
+        resident_result_contract = build_resident_result_contract(run)
+        write_resident_result_contract(resident_result_contract_path, resident_result_contract)
         from glass.engine.frame_accounting import build_frame_accounting
 
         build_frame_accounting(run)
@@ -7168,6 +7175,15 @@ def run_resident_calibration_integration(
             PipelineArtifact(
                 stage="resident_calibration_integration",
                 path=str(resident_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_result_contract",
+                path=str(resident_result_contract_path),
                 format="json",
                 created_at=now_iso(),
                 source_frames=list(frames.keys()),

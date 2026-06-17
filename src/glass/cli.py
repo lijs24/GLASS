@@ -7,6 +7,7 @@ import subprocess
 import sys
 from time import perf_counter
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 
@@ -2187,16 +2188,34 @@ def cmd_resident_registration_triage(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_optional_run_contract(
+    *,
+    explicit_path: str | None,
+    run: str | Path,
+    default_name: str,
+) -> tuple[dict[str, Any] | None, str | None, str]:
+    if explicit_path:
+        payload = read_json(explicit_path)
+        return (payload if isinstance(payload, dict) else None), str(explicit_path), "explicit"
+    default_path = Path(run) / default_name
+    if default_path.exists():
+        payload = read_json(default_path)
+        return (payload if isinstance(payload, dict) else None), str(default_path), "run_default"
+    return None, None, "missing"
+
+
 def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
     resident_calibration_contract = (
         read_json(args.resident_calibration_contract_json)
         if getattr(args, "resident_calibration_contract_json", None)
         else None
     )
-    resident_result_contract = (
-        read_json(args.resident_result_contract_json)
-        if getattr(args, "resident_result_contract_json", None)
-        else None
+    resident_result_contract, resident_result_contract_path, resident_result_contract_source = (
+        _load_optional_run_contract(
+            explicit_path=getattr(args, "resident_result_contract_json", None),
+            run=args.run,
+            default_name="resident_result_contract.json",
+        )
     )
     audit = build_stack_engine_contract_audit(
         args.run,
@@ -2205,7 +2224,9 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
         resident_calibration_contract=resident_calibration_contract
         if isinstance(resident_calibration_contract, dict)
         else None,
-        resident_result_contract=resident_result_contract if isinstance(resident_result_contract, dict) else None,
+        resident_result_contract=resident_result_contract
+        if resident_result_contract_source == "explicit" and isinstance(resident_result_contract, dict)
+        else None,
     )
     write_stack_engine_contract_audit(args.out, audit, markdown=args.markdown)
     default_promotion = audit.get("default_promotion") if isinstance(audit.get("default_promotion"), dict) else {}
@@ -2216,6 +2237,8 @@ def cmd_stack_engine_contract(args: argparse.Namespace) -> int:
             "expected_integration_engine": audit["expected_integration_engine"],
             "resident_calibration_contract_attached": audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": audit.get("resident_result_contract_attached"),
+            "resident_result_contract_json": resident_result_contract_path,
+            "resident_result_contract_source": resident_result_contract_source,
             "default_promotion_ready": default_promotion.get("ready"),
             "default_promotion_status": default_promotion.get("status"),
             "out": args.out,
@@ -2272,10 +2295,12 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         if getattr(args, "resident_calibration_contract_json", None)
         else None
     )
-    resident_result_contract = (
-        read_json(args.resident_result_contract_json)
-        if getattr(args, "resident_result_contract_json", None)
-        else None
+    resident_result_contract, resident_result_contract_path, resident_result_contract_source = (
+        _load_optional_run_contract(
+            explicit_path=getattr(args, "resident_result_contract_json", None),
+            run=run,
+            default_name="resident_result_contract.json",
+        )
     )
 
     stack_audit = build_stack_engine_contract_audit(
@@ -2285,7 +2310,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         resident_calibration_contract=resident_calibration_contract
         if isinstance(resident_calibration_contract, dict)
         else None,
-        resident_result_contract=resident_result_contract if isinstance(resident_result_contract, dict) else None,
+        resident_result_contract=resident_result_contract
+        if resident_result_contract_source == "explicit" and isinstance(resident_result_contract, dict)
+        else None,
     )
     write_stack_engine_contract_audit(stack_path, stack_audit, markdown=stack_markdown)
     pipeline_audit = build_pipeline_contract_audit(
@@ -2337,7 +2364,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
-        "resident_result_contract_json": args.resident_result_contract_json,
+        "resident_result_contract_json": resident_result_contract_path,
+        "resident_result_contract_source": resident_result_contract_source,
         "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
         "resident_native_calibration": resident_native_calibration,
@@ -2350,7 +2378,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "acceptance_contract_bundle": str(bundle_path),
             "report": str(report_path),
             "resident_calibration_contract": args.resident_calibration_contract_json,
-            "resident_result_contract": args.resident_result_contract_json,
+            "resident_result_contract": resident_result_contract_path,
         },
         "checks": [
             {
@@ -2397,7 +2425,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
-        "resident_result_contract_json": args.resident_result_contract_json,
+        "resident_result_contract_json": resident_result_contract_path,
+        "resident_result_contract_source": resident_result_contract_source,
         "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
         "resident_native_calibration": resident_native_calibration,
@@ -2410,7 +2439,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "pipeline_contract_markdown": str(pipeline_markdown),
             "report": str(report_path),
             "resident_calibration_contract": args.resident_calibration_contract_json,
-            "resident_result_contract": args.resident_result_contract_json,
+            "resident_result_contract": resident_result_contract_path,
         },
         "acceptance_audit_arguments": [
             "--pipeline-contract-json",
@@ -2437,6 +2466,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "require_stack_default_ready": stack_default_required,
             "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
+            "resident_result_contract_json": resident_result_contract_path,
+            "resident_result_contract_source": resident_result_contract_source,
             "resident_native_calibration": resident_native_calibration,
         }
     )

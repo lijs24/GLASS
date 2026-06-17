@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
+
 from glass.cli import _apply_resident_runtime_preset
 from glass.cli import build_parser
 from glass.cli import main
+from glass.engine.contracts import DQFlag
+from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from tests.conftest import cuda_module_or_skip
 
@@ -364,6 +368,119 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert "stats_ok" in html
     assert "science_ok" in html
     assert "dq_summary_has_valid" in html
+
+
+def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    out_dir = tmp_path / "guardrails"
+    integration = run / "integration"
+    integration.mkdir(parents=True)
+    for name, data in {
+        "master_H.fits": np.ones((2, 2), dtype=np.float32),
+        "weight_H.fits": np.ones((2, 2), dtype=np.float32),
+        "coverage_H.fits": np.ones((2, 2), dtype=np.float32),
+        "dq_H.fits": np.array([[0, 0], [0, int(DQFlag.NO_DATA)]], dtype=np.float32),
+    }.items():
+        write_fits_data(integration / name, data)
+    write_json(
+        run / "integration_results.json",
+        {
+            "rejection": "none",
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "memory_mode": "resident",
+                    "frame_count": 3,
+                    "master_path": str(integration / "master_H.fits"),
+                    "weight_map_path": str(integration / "weight_H.fits"),
+                    "coverage_map_path": str(integration / "coverage_H.fits"),
+                    "dq_map_path": str(integration / "dq_H.fits"),
+                    "dq_summary": {"valid": 3, "no_data": 1, "warp_edge": 0},
+                    "dq_coverage_provenance": {
+                        "available": True,
+                        "active_frame_count": 3,
+                        "geometric_frame_count_matches_active": True,
+                        "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
+                    },
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "stage": "integration",
+                        "item": "H",
+                        "engine": "cuda_resident_stack",
+                        "active_frame_count": 3,
+                        "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
+                        "output_dq_summary": {"valid": 3, "no_data": 1, "warp_edge": 0},
+                    },
+                    "geometric_warp_coverage": {
+                        "available": True,
+                        "frame_count": 3,
+                        "frame_count_matches_active": True,
+                    },
+                    "output_map_policy": {
+                        "available": ["master", "weight", "coverage", "dq"],
+                        "written": ["master", "weight", "coverage", "dq"],
+                        "skipped": ["low_rejection", "high_rejection"],
+                    },
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "resident_result_contract.json",
+        {
+            "artifact_type": "resident_cuda_result_contract",
+            "passed": True,
+            "outputs": [
+                {
+                    "index": 0,
+                    "filter": "H",
+                    "passed": True,
+                    "status": "passed",
+                    "contract_type": "resident_cuda_result_contract",
+                    "active_frame_count": 3,
+                    "frame_count": 3,
+                    "checks": [
+                        {"name": "resident_identity", "passed": True},
+                        {"name": "required_maps_exist", "passed": True},
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(out_dir),
+                "--stack-scope",
+                "integration",
+                "--expected-integration-engine",
+                "cuda_resident_stack",
+            ]
+        )
+        == 0
+    )
+
+    summary = read_json(out_dir / "guardrails_summary.json")
+    bundle = read_json(out_dir / "acceptance_contract_bundle.json")
+    stack_contract = read_json(out_dir / "stack_engine_contract.json")
+    assert summary["passed"] is True
+    assert summary["resident_result_contract_json"] == str(run / "resident_result_contract.json")
+    assert summary["resident_result_contract_source"] == "run_default"
+    assert summary["resident_result_contract_attached"] is True
+    assert summary["artifacts"]["resident_result_contract"] == str(run / "resident_result_contract.json")
+    assert bundle["resident_result_contract_json"] == str(run / "resident_result_contract.json")
+    assert bundle["resident_result_contract_source"] == "run_default"
+    assert bundle["resident_result_contract_attached"] is True
+    assert bundle["artifacts"]["resident_result_contract"] == str(run / "resident_result_contract.json")
+    assert stack_contract["resident_result_contract_attached"] is True
+    assert stack_contract["resident_result_contract_source"] == "run_default"
+    assert stack_contract["integration"]["outputs"][0]["resident_result_contract_passed"] is True
 
 
 def test_cli_doctor_cpu_only_success(tmp_path: Path):

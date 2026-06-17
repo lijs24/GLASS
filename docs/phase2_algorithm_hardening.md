@@ -3543,6 +3543,19 @@ integration where applicable.
 - Keep this gate reporting/accounting only: no image processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 211: Native Resident Result Contract Artifact
+
+- Make resident CUDA runs write a first-class `resident_result_contract.json`
+  after `integration_results.json`.
+- Register the native resident result contract in `run_state.json` artifacts.
+- Let StackEngine contract audits auto-discover
+  `RUN/resident_result_contract.json` when no explicit
+  `--resident-result-contract-json` is supplied.
+- Let `glass guardrails` auto-discover and bundle the native resident result
+  contract path, while preserving explicit-path override behavior.
+- Keep this gate artifact/contract only: no image processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

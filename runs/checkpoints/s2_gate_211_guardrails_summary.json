@@ -1,0 +1,71 @@
+{
+  "artifacts": {
+    "acceptance_contract_bundle": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\acceptance_contract_bundle.json",
+    "pipeline_contract": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\pipeline_contract.json",
+    "pipeline_contract_markdown": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\pipeline_contract.md",
+    "report": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\report.html",
+    "resident_calibration_contract": null,
+    "resident_result_contract": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_result_contract.json",
+    "stack_engine_contract": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\stack_engine_contract.json",
+    "stack_engine_contract_markdown": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails\\stack_engine_contract.md"
+  },
+  "audit_type": "glass_guardrails",
+  "checks": [
+    {
+      "failed": [],
+      "name": "stack_engine_contract",
+      "passed": true,
+      "status": "passed"
+    },
+    {
+      "failed": [],
+      "name": "pipeline_contract",
+      "passed": true,
+      "status": "passed"
+    },
+    {
+      "blockers": [],
+      "name": "stack_default_promotion",
+      "passed": true,
+      "ready": true,
+      "required": true,
+      "status": "ready"
+    }
+  ],
+  "created_at": "2026-06-17T19:46:18+00:00",
+  "expected_integration_engine": "cuda_resident_stack",
+  "out_dir": "C:\\glass_runs\\phase2_s2_gate_211_native_result_contract\\guardrails",
+  "passed": true,
+  "pixel_verify": true,
+  "require_stack_default_ready": true,
+  "resident_calibration_contract_attached": false,
+  "resident_calibration_contract_json": null,
+  "resident_native_calibration": {
+    "artifact_present": true,
+    "master_count": 3,
+    "resident_calibrated_light_count": 200,
+    "resident_calibration_contract_attached": false
+  },
+  "resident_result_contract_attached": true,
+  "resident_result_contract_json": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view\\resident_result_contract.json",
+  "resident_result_contract_source": "run_default",
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_209_native_artifact\\contract_view",
+  "schema_version": 1,
+  "stack_default_promotion": {
+    "actual_scope": "all",
+    "blocker_count": 0,
+    "blockers": [],
+    "calibration_surface_count": 3,
+    "integration_surface_count": 1,
+    "phase2_stack_engine_default_gap_count": 0,
+    "ready": true,
+    "recommendation": "stack_engine_default_ready",
+    "required_scope": "all",
+    "schema_version": 1,
+    "status": "ready",
+    "surface_count": 4,
+    "target_engine": "stack_engine_cpu"
+  },
+  "stack_scope": "all",
+  "status": "passed"
+}

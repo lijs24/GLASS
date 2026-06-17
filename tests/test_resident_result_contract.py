@@ -123,6 +123,57 @@ def test_resident_result_contract_detects_dq_summary_mismatch(tmp_path: Path) ->
     assert payload["outputs"][0]["pixel_verification"]["dq"]["matches"]["low_rejected"]["passed"] is False
 
 
+def test_resident_result_contract_allows_policy_skipped_coverage_provenance(tmp_path: Path) -> None:
+    integration = tmp_path / "integration"
+    integration.mkdir(parents=True)
+    for name, data in {
+        "master_H.fits": np.ones((2, 2), dtype=np.float32),
+        "weight_H.fits": np.ones((2, 2), dtype=np.float32),
+        "dq_H.fits": np.zeros((2, 2), dtype=np.float32),
+    }.items():
+        write_fits_data(integration / name, data)
+    write_json(
+        tmp_path / "integration_results.json",
+        {
+            "rejection": "none",
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "memory_mode": "resident",
+                    "frame_count": 3,
+                    "master_path": str(integration / "master_H.fits"),
+                    "weight_map_path": str(integration / "weight_H.fits"),
+                    "dq_map_path": str(integration / "dq_H.fits"),
+                    "dq_summary": {"valid": 4},
+                    "dq_coverage_provenance": {"available": False, "reason": "coverage map skipped by policy"},
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "stage": "integration",
+                        "item": "H",
+                        "engine": "cuda_resident_stack",
+                        "active_frame_count": 3,
+                        "source_terms": [],
+                        "output_dq_summary": {"valid": 4},
+                    },
+                    "output_map_policy": {
+                        "available": ["master", "weight", "dq"],
+                        "written": ["master", "weight", "dq"],
+                        "skipped": ["coverage", "low_rejection", "high_rejection"],
+                    },
+                }
+            ],
+        },
+    )
+
+    payload = build_resident_result_contract(tmp_path)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    assert payload["passed"] is True
+    assert checks["coverage_provenance_present"]["passed"] is True
+    assert checks["source_terms_present"]["passed"] is True
+
+
 def test_resident_result_contract_cli_writes_outputs(tmp_path: Path) -> None:
     _write_resident_run(tmp_path)
     out = tmp_path / "resident_contract.json"

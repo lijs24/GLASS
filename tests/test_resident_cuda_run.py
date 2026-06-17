@@ -833,6 +833,7 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     state = read_json(run / "run_state.json")
     resident = read_json(run / "resident_artifacts.json")
     calibration = read_json(run / "calibration_artifacts.json")
+    resident_result_contract = read_json(run / "resident_result_contract.json")
     assert integration["source_stage"] == "resident_calibrated_stack"
     assert integration["outputs"][0]["backend"] == "cuda_resident_stack"
     assert integration["outputs"][0]["resident_registration"] == "translation_preview"
@@ -871,6 +872,10 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert len(calibration["calibrated_lights"]) == len(resident["artifacts"][0]["frame_ids"])
     assert all(item["status"] == "resident_in_vram" for item in calibration["calibrated_lights"])
     assert all(item["resident_calibration_contract"]["passed"] for item in calibration["masters"].values())
+    assert resident_result_contract["artifact_type"] == "resident_cuda_result_contract"
+    assert resident_result_contract["passed"] is True
+    assert resident_result_contract["outputs"][0]["filter"] == "H"
+    assert resident_result_contract["outputs"][0]["backend"] == "cuda_resident_stack"
     assert resident["artifacts"][0]["resident_registration"]["mode"] == "translation_preview"
     assert resident["artifacts"][0]["output_diagnostics"]["clipping_probe"]["nonfinite_count"] == 0
     timing = resident["artifacts"][0]["timing_s"]
