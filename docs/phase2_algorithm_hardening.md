@@ -2471,6 +2471,22 @@ integration where applicable.
 - Keep this as an artifact/diagnostic gate only. It must not change resident
   integration defaults, image pixels, or promotion thresholds.
 
+### S2-Gate 147: Tile-Local Frame-Family Search
+
+- Add `glass tile-local-frame-family-search` to rank contiguous frame windows
+  from a resident contribution artifact by bounded tile-local residual
+  correction potential.
+- Score candidate frame windows with the same residual, GLASS-to-reference
+  scale, multiplier bounds, and saturation diagnostics used by
+  `tile-local-policy-proposal`.
+- Run the search on the S2-Gate 144 new-region contribution artifact across
+  1/3/5/11-frame windows and retain both top-ranked and all-candidate
+  artifacts.
+- Use the result to decide whether F000100-F000110 is an arbitrary focus group
+  or the best currently visible frame-family explanation.
+- Keep this as a search/diagnostic gate only. It must not change resident
+  integration defaults, image pixels, or promotion thresholds.
+
 ## Gate Rules
 
 Each gate requires:

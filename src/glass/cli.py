@@ -67,6 +67,10 @@ from glass.report.resident_tile_contribution import (
 )
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
+from glass.report.tile_local_frame_family_search import (
+    build_tile_local_frame_family_search,
+    write_tile_local_frame_family_search,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -1150,6 +1154,35 @@ def cmd_tile_local_policy_proposal(args: argparse.Namespace) -> int:
             "away": summary.get("moves_away_from_reference"),
             "boost_tiles": summary.get("boost_tiles"),
             "clamped_tiles": summary.get("clamped_tiles"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0
+
+
+def cmd_tile_local_frame_family_search(args: argparse.Namespace) -> int:
+    payload = build_tile_local_frame_family_search(
+        args.contribution,
+        tile_pack=args.tile_pack,
+        residual_stat=args.residual_stat,
+        min_multiplier=args.min_multiplier,
+        max_multiplier=args.max_multiplier,
+        glass_scale=args.glass_scale,
+        window_sizes=args.window_size or [1, 3, 5, 11],
+        stride=args.stride,
+        top_n=args.top_n,
+    )
+    write_tile_local_frame_family_search(args.out, payload, markdown=args.markdown)
+    top = payload.get("top_candidate") if isinstance(payload.get("top_candidate"), dict) else {}
+    top_summary = top.get("summary") if isinstance(top.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "candidate_count": payload.get("candidate_count"),
+            "top_candidate": top.get("candidate_id"),
+            "top_reduction": top_summary.get("total_abs_residual_reduction"),
+            "top_mean_abs_after": top_summary.get("mean_abs_residual_after"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -2778,6 +2811,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional GLASS-to-reference scale; defaults to tile-pack candidate_transform.scale",
     )
     tile_local_policy.set_defaults(func=cmd_tile_local_policy_proposal)
+
+    tile_local_frame_family = sub.add_parser(
+        "tile-local-frame-family-search",
+        help="rank frame windows by tile-local residual correction potential",
+    )
+    tile_local_frame_family.add_argument(
+        "--contribution",
+        required=True,
+        help="resident-tile-contribution JSON artifact",
+    )
+    tile_local_frame_family.add_argument(
+        "--tile-pack",
+        help="optional tile_pack_manifest.json; defaults to the path recorded in the contribution artifact",
+    )
+    tile_local_frame_family.add_argument("--out", required=True, help="output frame-family search JSON")
+    tile_local_frame_family.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_frame_family.add_argument(
+        "--residual-stat",
+        choices=["signed_mean", "tail_signed_mean"],
+        default="tail_signed_mean",
+        help="residual summary used to score frame windows",
+    )
+    tile_local_frame_family.add_argument("--min-multiplier", type=float, default=0.0)
+    tile_local_frame_family.add_argument("--max-multiplier", type=float, default=2.0)
+    tile_local_frame_family.add_argument(
+        "--glass-scale",
+        type=float,
+        help="optional GLASS-to-reference scale; defaults to tile-pack candidate_transform.scale",
+    )
+    tile_local_frame_family.add_argument(
+        "--window-size",
+        action="append",
+        type=int,
+        default=None,
+        help="contiguous sorted frame-window size to scan; may be repeated",
+    )
+    tile_local_frame_family.add_argument("--stride", type=int, default=1, help="frame-window stride")
+    tile_local_frame_family.add_argument("--top-n", type=int, default=20, help="number of ranked candidates to retain")
+    tile_local_frame_family.set_defaults(func=cmd_tile_local_frame_family_search)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",
