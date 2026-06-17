@@ -51,6 +51,35 @@ def _asset_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _phase2_artifact_summary(
+    path: str | Path | None,
+    *,
+    expected_artifact_type: str,
+) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    target = Path(path)
+    payload = _read_json_object(target) if target.exists() else {}
+    latest_checkpoint = (
+        payload.get("latest_checkpoint")
+        if isinstance(payload.get("latest_checkpoint"), dict)
+        else {}
+    )
+    baseline = payload.get("baseline") if isinstance(payload.get("baseline"), dict) else {}
+    candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    return {
+        "path": str(target),
+        "exists": target.exists(),
+        "artifact_type": payload.get("artifact_type"),
+        "expected_artifact_type": expected_artifact_type,
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "latest_gate": latest_checkpoint.get("gate"),
+        "baseline_gate": baseline.get("latest_gate"),
+        "candidate_gate": candidate.get("latest_gate"),
+    }
+
+
 def _run_gh(command: list[str], *, timeout_s: int = 30) -> dict[str, Any]:
     try:
         completed = subprocess.run(
@@ -78,6 +107,9 @@ def _run_gh(command: list[str], *, timeout_s: int = 30) -> dict[str, Any]:
 
 
 def _release_notes(payload: dict[str, Any]) -> str:
+    phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
+    phase2_status = phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
+    phase2_compare = phase2.get("status_compare") if isinstance(phase2.get("status_compare"), dict) else {}
     lines = [
         f"# {payload['release']['title']}",
         "",
@@ -104,12 +136,30 @@ def _release_notes(payload: dict[str, Any]) -> str:
             "",
         ]
     )
+    if phase2_status or phase2_compare:
+        lines.extend(
+            [
+                "## Phase 2 Handoff Evidence",
+                "",
+                f"- Phase 2 status: `{phase2_status.get('status')}` gate `{phase2_status.get('latest_gate')}`",
+                (
+                    "- Phase 2 status compare: "
+                    f"`{phase2_compare.get('status')}` "
+                    f"baseline `{phase2_compare.get('baseline_gate')}` "
+                    f"candidate `{phase2_compare.get('candidate_gate')}`"
+                ),
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
 def _powershell_release_script(payload: dict[str, Any]) -> str:
     release = payload.get("release") if isinstance(payload.get("release"), dict) else {}
     gh = payload.get("gh") if isinstance(payload.get("gh"), dict) else {}
+    phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
+    phase2_status = phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
+    phase2_compare = phase2.get("status_compare") if isinstance(phase2.get("status_compare"), dict) else {}
     gh_path = gh.get("path") or "gh"
     notes_file = release.get("notes_file")
     assets = payload.get("assets") if isinstance(payload.get("assets"), list) else []
@@ -124,6 +174,8 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
         f"$ExpectedTag = {_ps_literal(str(release.get('tag') or ''))}",
         f"$ReleaseTitle = {_ps_literal(str(release.get('title') or ''))}",
         f"$NotesFile = {_ps_literal(str(notes_file) if notes_file else None)}",
+        f"$Phase2StatusFile = {_ps_literal(phase2_status.get('path'))}",
+        f"$Phase2StatusCompareFile = {_ps_literal(phase2_compare.get('path'))}",
         "$Assets = @(",
     ]
     for index, asset in enumerate(assets):
@@ -163,6 +215,24 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "}",
             "if ($NotesFile -and -not (Test-Path -LiteralPath $NotesFile -PathType Leaf)) {",
             "    throw \"Missing release notes file: $NotesFile\"",
+            "}",
+            "if ($Phase2StatusFile) {",
+            "    if (-not (Test-Path -LiteralPath $Phase2StatusFile -PathType Leaf)) {",
+            "        throw \"Missing Phase 2 status artifact: $Phase2StatusFile\"",
+            "    }",
+            "    $phase2Status = Get-Content -LiteralPath $Phase2StatusFile -Raw | ConvertFrom-Json",
+            "    if ($phase2Status.artifact_type -ne 'glass_phase2_status' -or $phase2Status.status -ne 'green' -or $phase2Status.passed -ne $true) {",
+            "        throw \"Phase 2 status check failed: $Phase2StatusFile\"",
+            "    }",
+            "}",
+            "if ($Phase2StatusCompareFile) {",
+            "    if (-not (Test-Path -LiteralPath $Phase2StatusCompareFile -PathType Leaf)) {",
+            "        throw \"Missing Phase 2 status compare artifact: $Phase2StatusCompareFile\"",
+            "    }",
+            "    $phase2Compare = Get-Content -LiteralPath $Phase2StatusCompareFile -Raw | ConvertFrom-Json",
+            "    if ($phase2Compare.artifact_type -ne 'glass_phase2_status_compare' -or $phase2Compare.status -ne 'passed' -or $phase2Compare.passed -ne $true) {",
+            "        throw \"Phase 2 status compare check failed: $Phase2StatusCompareFile\"",
+            "    }",
             "}",
             "",
             "$releaseArgs = @('release', 'create', $ExpectedTag)",
@@ -207,10 +277,20 @@ def build_windows_github_release_plan(
     check_gh: bool = False,
     check_gh_auth: bool = False,
     gh_path: str | Path | None = None,
+    phase2_status: str | Path | None = None,
+    phase2_status_compare: str | Path | None = None,
 ) -> dict[str, Any]:
     manifest_path = Path(manifest_artifact)
     manifest = _read_json_object(manifest_path)
     assets = _asset_rows(manifest)
+    phase2_status_summary = _phase2_artifact_summary(
+        phase2_status,
+        expected_artifact_type="glass_phase2_status",
+    )
+    phase2_compare_summary = _phase2_artifact_summary(
+        phase2_status_compare,
+        expected_artifact_type="glass_phase2_status_compare",
+    )
     source_stamps = sorted({str(row["source_stamp"]) for row in assets if row.get("source_stamp")})
     release_title = title or f"GLASS {tag} Windows packages"
     notes_path = str(Path(notes_file).resolve()) if notes_file is not None else None
@@ -253,6 +333,63 @@ def build_windows_github_release_plan(
                 len(source_stamps) == 1,
                 {"source_stamps": source_stamps},
             )
+        )
+    if phase2_status_summary is not None:
+        checks.extend(
+            [
+                _check(
+                    "phase2_status_present",
+                    bool(phase2_status_summary.get("exists")),
+                    {"path": phase2_status_summary.get("path")},
+                ),
+                _check(
+                    "phase2_status_type",
+                    phase2_status_summary.get("artifact_type") == "glass_phase2_status",
+                    {
+                        "artifact_type": phase2_status_summary.get("artifact_type"),
+                        "required": "glass_phase2_status",
+                    },
+                ),
+                _check(
+                    "phase2_status_green",
+                    phase2_status_summary.get("status") == "green"
+                    and phase2_status_summary.get("passed") is True,
+                    {
+                        "status": phase2_status_summary.get("status"),
+                        "passed": phase2_status_summary.get("passed"),
+                        "latest_gate": phase2_status_summary.get("latest_gate"),
+                    },
+                ),
+            ]
+        )
+    if phase2_compare_summary is not None:
+        checks.extend(
+            [
+                _check(
+                    "phase2_status_compare_present",
+                    bool(phase2_compare_summary.get("exists")),
+                    {"path": phase2_compare_summary.get("path")},
+                ),
+                _check(
+                    "phase2_status_compare_type",
+                    phase2_compare_summary.get("artifact_type") == "glass_phase2_status_compare",
+                    {
+                        "artifact_type": phase2_compare_summary.get("artifact_type"),
+                        "required": "glass_phase2_status_compare",
+                    },
+                ),
+                _check(
+                    "phase2_status_compare_passed",
+                    phase2_compare_summary.get("status") == "passed"
+                    and phase2_compare_summary.get("passed") is True,
+                    {
+                        "status": phase2_compare_summary.get("status"),
+                        "passed": phase2_compare_summary.get("passed"),
+                        "baseline_gate": phase2_compare_summary.get("baseline_gate"),
+                        "candidate_gate": phase2_compare_summary.get("candidate_gate"),
+                    },
+                ),
+            ]
         )
 
     failed = [item for item in checks if not item.get("passed")]
@@ -313,6 +450,10 @@ def build_windows_github_release_plan(
             "auth_status": gh_auth,
             "auth_ok": gh_auth_ok,
         },
+        "phase2": {
+            "status": phase2_status_summary,
+            "status_compare": phase2_compare_summary,
+        },
         "source_stamps": source_stamps,
         "assets": assets,
         "checks": checks,
@@ -327,6 +468,9 @@ def build_windows_github_release_plan(
 def _markdown(payload: dict[str, Any]) -> str:
     release = payload.get("release") if isinstance(payload.get("release"), dict) else {}
     gh = payload.get("gh") if isinstance(payload.get("gh"), dict) else {}
+    phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
+    phase2_status = phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
+    phase2_compare = phase2.get("status_compare") if isinstance(phase2.get("status_compare"), dict) else {}
     lines = [
         "# GLASS Windows GitHub Release Plan",
         "",
@@ -352,6 +496,21 @@ def _markdown(payload: dict[str, Any]) -> str:
             "| "
             f"{asset.get('label')} | {asset.get('size_bytes')} | `{asset.get('sha256')}` | "
             f"`{asset.get('zip_path')}` |"
+        )
+    if phase2_status or phase2_compare:
+        lines.extend(
+            [
+                "",
+                "## Phase 2 Handoff Preflight",
+                "",
+                f"- Phase 2 status path: `{phase2_status.get('path')}`",
+                f"- Phase 2 status: `{phase2_status.get('status')}`",
+                f"- Phase 2 latest gate: `{phase2_status.get('latest_gate')}`",
+                f"- Phase 2 status compare path: `{phase2_compare.get('path')}`",
+                f"- Phase 2 status compare: `{phase2_compare.get('status')}`",
+                f"- Phase 2 compare baseline gate: `{phase2_compare.get('baseline_gate')}`",
+                f"- Phase 2 compare candidate gate: `{phase2_compare.get('candidate_gate')}`",
+            ]
         )
     lines.extend(["", "## Command", "", "```powershell", str(release.get("command") or ""), "```", ""])
     lines.extend(["## Checks", ""])

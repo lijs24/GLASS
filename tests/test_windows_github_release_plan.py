@@ -32,6 +32,33 @@ def _manifest(path: Path, *, zip_paths: dict[str, Path], source: str = "abc1234"
     )
 
 
+def _phase2_status(path: Path, *, passed: bool = True, gate: int = 204) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "glass_phase2_status",
+            "status": "green" if passed else "attention_required",
+            "passed": passed,
+            "latest_checkpoint": {"gate": gate, "status": "green" if passed else "failed", "green": passed},
+        },
+    )
+
+
+def _phase2_compare(path: Path, *, passed: bool = True, baseline_gate: int = 203, candidate_gate: int = 204) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "glass_phase2_status_compare",
+            "status": "passed" if passed else "regressed",
+            "passed": passed,
+            "baseline": {"latest_gate": baseline_gate},
+            "candidate": {"latest_gate": candidate_gate},
+        },
+    )
+
+
 def test_windows_github_release_plan_records_assets(tmp_path: Path):
     zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
     zip_file.write_bytes(b"zip")
@@ -51,6 +78,59 @@ def test_windows_github_release_plan_records_assets(tmp_path: Path):
     assert payload["assets"][0]["label"] == "cuda13"
     assert "gh release create v0.1.0-test" in payload["release"]["command"]
     assert "--draft" in payload["release"]["command"]
+
+
+def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: Path):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    phase2_status = tmp_path / "phase2_status.json"
+    phase2_compare = tmp_path / "phase2_compare.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _phase2_status(phase2_status, gate=204)
+    _phase2_compare(phase2_compare, baseline_gate=203, candidate_gate=204)
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        phase2_status=phase2_status,
+        phase2_status_compare=phase2_compare,
+    )
+
+    checks = {str(item["name"]): item["passed"] for item in payload["checks"]}
+    assert payload["passed"] is True
+    assert payload["phase2"]["status"]["latest_gate"] == 204
+    assert payload["phase2"]["status_compare"]["candidate_gate"] == 204
+    assert checks["phase2_status_present"] is True
+    assert checks["phase2_status_green"] is True
+    assert checks["phase2_status_compare_present"] is True
+    assert checks["phase2_status_compare_passed"] is True
+
+
+def test_windows_github_release_plan_blocks_failed_phase2_handoff_evidence(tmp_path: Path):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    phase2_status = tmp_path / "phase2_status.json"
+    phase2_compare = tmp_path / "phase2_compare.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _phase2_status(phase2_status, passed=False, gate=204)
+    _phase2_compare(phase2_compare, passed=False, baseline_gate=204, candidate_gate=203)
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        phase2_status=phase2_status,
+        phase2_status_compare=phase2_compare,
+    )
+
+    checks = {str(item["name"]): item["passed"] for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert checks["phase2_status_green"] is False
+    assert checks["phase2_status_compare_passed"] is False
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "phase2_status_compare_passed" in payload["failed_checks"]
 
 
 def test_windows_github_release_plan_blocks_mixed_sources(tmp_path: Path):
@@ -93,6 +173,10 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     markdown = tmp_path / "plan.md"
     notes = tmp_path / "notes.md"
     script = tmp_path / "publish_release.ps1"
+    phase2_status = tmp_path / "phase2_status.json"
+    phase2_compare = tmp_path / "phase2_compare.json"
+    _phase2_status(phase2_status)
+    _phase2_compare(phase2_compare)
 
     result = main(
         [
@@ -109,6 +193,10 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
             str(notes),
             "--script",
             str(script),
+            "--phase2-status",
+            str(phase2_status),
+            "--phase2-status-compare",
+            str(phase2_compare),
             "--require-same-source-stamp",
             "--fail-on-failure",
         ]
@@ -122,9 +210,14 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     markdown_text = markdown.read_text(encoding="utf-8")
     assert "GLASS Windows GitHub Release Plan" in markdown_text
     assert "Publish script" in markdown_text
+    assert "Phase 2 Handoff Preflight" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
     script_text = script.read_text(encoding="utf-8")
     assert "$ExpectedTag = 'v0.1.0-test'" in script_text
+    assert "$Phase2StatusFile =" in script_text
+    assert "$Phase2StatusCompareFile =" in script_text
+    assert "Phase 2 status check failed" in script_text
+    assert "Phase 2 status compare check failed" in script_text
     assert "GitHub CLI authentication check failed" in script_text
     assert "Get-FileHash -LiteralPath $asset.Path -Algorithm SHA256" in script_text
     assert "SizeBytes = 3" in script_text

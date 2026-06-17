@@ -3453,6 +3453,19 @@ integration where applicable.
 - Validate with passing, failing, and CLI-output tests plus a real comparison
   between the previous and current Phase 2 handoff artifacts.
 
+### S2-Gate 205: Release Plan Phase 2 Preflight
+
+- Extend `glass windows-github-release-plan` with optional `--phase2-status`
+  and `--phase2-status-compare` evidence inputs.
+- Require supplied Phase 2 status artifacts to be structurally correct and
+  green/passed before the release plan can pass.
+- Include Phase 2 preflight evidence in release-plan JSON, Markdown, release
+  notes, and generated PowerShell publish scripts.
+- Keep publication explicit: the script remains dry-run by default and still
+  requires `-Publish` before calling GitHub CLI.
+- Validate with passing/failing preflight tests and a real release-plan
+  artifact using the latest Gate204 handoff status and regression comparison.
+
 ## Gate Rules
 
 Each gate requires:

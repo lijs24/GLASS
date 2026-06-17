@@ -1913,6 +1913,8 @@ def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
         check_gh=args.check_gh,
         check_gh_auth=args.check_gh_auth,
         gh_path=args.gh_path,
+        phase2_status=args.phase2_status,
+        phase2_status_compare=args.phase2_status_compare,
     )
     write_windows_github_release_plan(
         args.out,
@@ -4486,6 +4488,14 @@ def build_parser() -> argparse.ArgumentParser:
     windows_github_release_plan.add_argument(
         "--gh-path",
         help="explicit path to gh executable for CLI/auth checks",
+    )
+    windows_github_release_plan.add_argument(
+        "--phase2-status",
+        help="optional glass phase2-status JSON artifact required to be green before release handoff",
+    )
+    windows_github_release_plan.add_argument(
+        "--phase2-status-compare",
+        help="optional glass phase2-status-compare JSON artifact required to pass before release handoff",
     )
     windows_github_release_plan.add_argument(
         "--fail-on-failure",
