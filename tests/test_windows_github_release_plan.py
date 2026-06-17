@@ -50,6 +50,46 @@ def _phase2_status(path: Path, *, passed: bool = True, gate: int = 204) -> None:
                 "resident_native_calibration_artifact": True,
                 "resident_calibration_master_count": 3,
                 "resident_calibrated_light_count": 200,
+                "resident_registration_fastpath_status": "present",
+                "resident_registration_fastpath_contract_status": "passed",
+                "resident_registration_fastpath_mode": "similarity_cuda_triangle",
+                "triangle_descriptor_fit_batch": True,
+                "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+                "triangle_descriptor_fit_device_reuse": {
+                    "reference": True,
+                    "moving": True,
+                    "output": True,
+                },
+                "triangle_pixel_refine_batch": True,
+                "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+                "triangle_warp_batch": True,
+                "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                "triangle_warp_batch_frame_count": 188,
+                "resident_warp_copy_mode": "default_stream_async_device_to_device",
+                "resident_warp_scratch_bytes": 493209636,
+                "resident_registration_fastpath_contract_check_count": 24,
+                "resident_registration_fastpath_contract_failed_check_count": 0,
+                "resident_registration_fastpath": {
+                    "status": "present",
+                    "contract_status": "passed",
+                    "mode": "similarity_cuda_triangle",
+                    "triangle_descriptor_fit_batch": True,
+                    "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+                    "triangle_descriptor_fit_device_reuse": {
+                        "reference": True,
+                        "moving": True,
+                        "output": True,
+                    },
+                    "triangle_pixel_refine_batch": True,
+                    "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+                    "triangle_warp_batch": True,
+                    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                    "triangle_warp_batch_frame_count": 188,
+                    "resident_warp_copy_mode": "default_stream_async_device_to_device",
+                    "resident_warp_scratch_bytes": 493209636,
+                    "contract_check_count": 24,
+                    "contract_failed_check_count": 0,
+                },
                 "native_guardrails_bundle": {
                     "status": "present",
                     "resident_result_contract_source": "run_default",
@@ -122,6 +162,11 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["phase2"]["status"]["resident_result_contract_run_default"] is True
     assert payload["phase2"]["status"]["resident_native_calibration_artifact"] is True
     assert payload["phase2"]["status"]["resident_calibrated_light_count"] == 200
+    assert payload["phase2"]["status"]["resident_registration_fastpath_status"] == "present"
+    assert payload["phase2"]["status"]["resident_registration_fastpath_contract_status"] == "passed"
+    assert payload["phase2"]["status"]["resident_registration_fastpath_mode"] == "similarity_cuda_triangle"
+    assert payload["phase2"]["status"]["triangle_descriptor_fit_batch"] is True
+    assert payload["phase2"]["status"]["triangle_warp_batch_frame_count"] == 188
     assert payload["phase2"]["status_compare"]["candidate_gate"] == 204
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
@@ -235,10 +280,14 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Phase 2 Handoff Preflight" in markdown_text
     assert "Native resident contract source: `run_default`" in markdown_text
     assert "Native calibrated lights: `200`" in markdown_text
+    assert "Resident registration fast path: `present`" in markdown_text
+    assert "Triangle warp batch: `True`" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
     notes_text = notes.read_text(encoding="utf-8")
     assert "Native resident contract source: `run_default`" in notes_text
     assert "calibrated lights `200`" in notes_text
+    assert "Resident registration fast path: `present`" in notes_text
+    assert "warp batch `True` frames `188`" in notes_text
     script_text = script.read_text(encoding="utf-8")
     assert "$ExpectedTag = 'v0.1.0-test'" in script_text
     assert "$Phase2StatusFile =" in script_text

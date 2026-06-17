@@ -71,6 +71,11 @@ def _phase2_artifact_summary(
         if isinstance(acceptance.get("native_guardrails_bundle"), dict)
         else None
     )
+    registration_fastpath = (
+        acceptance.get("resident_registration_fastpath")
+        if isinstance(acceptance.get("resident_registration_fastpath"), dict)
+        else None
+    )
     baseline = payload.get("baseline") if isinstance(payload.get("baseline"), dict) else {}
     candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
     return {
@@ -101,6 +106,56 @@ def _phase2_artifact_summary(
         or (native_guardrails_bundle or {}).get("resident_calibration_master_count"),
         "resident_calibrated_light_count": acceptance.get("resident_calibrated_light_count")
         or (native_guardrails_bundle or {}).get("resident_calibrated_light_count"),
+        "resident_registration_fastpath": registration_fastpath,
+        "resident_registration_fastpath_status": acceptance.get(
+            "resident_registration_fastpath_status"
+        )
+        or (registration_fastpath or {}).get("status"),
+        "resident_registration_fastpath_contract_status": acceptance.get(
+            "resident_registration_fastpath_contract_status"
+        )
+        or (registration_fastpath or {}).get("contract_status"),
+        "resident_registration_fastpath_mode": acceptance.get("resident_registration_fastpath_mode")
+        or (registration_fastpath or {}).get("mode"),
+        "triangle_descriptor_fit_batch": acceptance.get("triangle_descriptor_fit_batch")
+        if acceptance.get("triangle_descriptor_fit_batch") is not None
+        else (registration_fastpath or {}).get("triangle_descriptor_fit_batch"),
+        "triangle_descriptor_fit_batch_mode": acceptance.get("triangle_descriptor_fit_batch_mode")
+        or (registration_fastpath or {}).get("triangle_descriptor_fit_batch_mode"),
+        "triangle_descriptor_fit_device_reuse": acceptance.get(
+            "triangle_descriptor_fit_device_reuse"
+        )
+        or (registration_fastpath or {}).get("triangle_descriptor_fit_device_reuse"),
+        "triangle_pixel_refine_batch": acceptance.get("triangle_pixel_refine_batch")
+        if acceptance.get("triangle_pixel_refine_batch") is not None
+        else (registration_fastpath or {}).get("triangle_pixel_refine_batch"),
+        "triangle_pixel_refine_batch_metric_mode": acceptance.get(
+            "triangle_pixel_refine_batch_metric_mode"
+        )
+        or (registration_fastpath or {}).get("triangle_pixel_refine_batch_metric_mode"),
+        "triangle_warp_batch": acceptance.get("triangle_warp_batch")
+        if acceptance.get("triangle_warp_batch") is not None
+        else (registration_fastpath or {}).get("triangle_warp_batch"),
+        "triangle_warp_batch_mode": acceptance.get("triangle_warp_batch_mode")
+        or (registration_fastpath or {}).get("triangle_warp_batch_mode"),
+        "triangle_warp_batch_frame_count": acceptance.get("triangle_warp_batch_frame_count")
+        if acceptance.get("triangle_warp_batch_frame_count") is not None
+        else (registration_fastpath or {}).get("triangle_warp_batch_frame_count"),
+        "resident_warp_copy_mode": acceptance.get("resident_warp_copy_mode")
+        or (registration_fastpath or {}).get("resident_warp_copy_mode"),
+        "resident_warp_scratch_bytes": acceptance.get("resident_warp_scratch_bytes")
+        if acceptance.get("resident_warp_scratch_bytes") is not None
+        else (registration_fastpath or {}).get("resident_warp_scratch_bytes"),
+        "resident_registration_fastpath_contract_check_count": acceptance.get(
+            "resident_registration_fastpath_contract_check_count"
+        )
+        if acceptance.get("resident_registration_fastpath_contract_check_count") is not None
+        else (registration_fastpath or {}).get("contract_check_count"),
+        "resident_registration_fastpath_contract_failed_check_count": acceptance.get(
+            "resident_registration_fastpath_contract_failed_check_count"
+        )
+        if acceptance.get("resident_registration_fastpath_contract_failed_check_count") is not None
+        else (registration_fastpath or {}).get("contract_failed_check_count"),
     }
 
 
@@ -141,6 +196,29 @@ def _has_native_phase2_provenance(phase2_status: dict[str, Any]) -> bool:
             "resident_native_calibration_artifact",
             "resident_calibration_master_count",
             "resident_calibrated_light_count",
+        )
+    )
+
+
+def _has_registration_fastpath_phase2_provenance(phase2_status: dict[str, Any]) -> bool:
+    return any(
+        phase2_status.get(key) is not None
+        for key in (
+            "resident_registration_fastpath_status",
+            "resident_registration_fastpath_contract_status",
+            "resident_registration_fastpath_mode",
+            "triangle_descriptor_fit_batch",
+            "triangle_descriptor_fit_batch_mode",
+            "triangle_descriptor_fit_device_reuse",
+            "triangle_pixel_refine_batch",
+            "triangle_pixel_refine_batch_metric_mode",
+            "triangle_warp_batch",
+            "triangle_warp_batch_mode",
+            "triangle_warp_batch_frame_count",
+            "resident_warp_copy_mode",
+            "resident_warp_scratch_bytes",
+            "resident_registration_fastpath_contract_check_count",
+            "resident_registration_fastpath_contract_failed_check_count",
         )
     )
 
@@ -196,6 +274,26 @@ def _release_notes(payload: dict[str, Any]) -> str:
                         f"`{phase2_status.get('resident_native_calibration_artifact')}` "
                         f"masters `{phase2_status.get('resident_calibration_master_count')}` "
                         f"calibrated lights `{phase2_status.get('resident_calibrated_light_count')}`"
+                    ),
+                ]
+            )
+        if _has_registration_fastpath_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    (
+                        "- Resident registration fast path: "
+                        f"`{phase2_status.get('resident_registration_fastpath_status')}` "
+                        "contract "
+                        f"`{phase2_status.get('resident_registration_fastpath_contract_status')}` "
+                        f"mode `{phase2_status.get('resident_registration_fastpath_mode')}`"
+                    ),
+                    (
+                        "- Fast path details: descriptor batch "
+                        f"`{phase2_status.get('triangle_descriptor_fit_batch')}`, "
+                        f"pixel refine batch `{phase2_status.get('triangle_pixel_refine_batch')}`, "
+                        f"warp batch `{phase2_status.get('triangle_warp_batch')}` "
+                        f"frames `{phase2_status.get('triangle_warp_batch_frame_count')}`, "
+                        f"copy `{phase2_status.get('resident_warp_copy_mode')}`"
                     ),
                 ]
             )
@@ -583,6 +681,48 @@ def _markdown(payload: dict[str, Any]) -> str:
                     ),
                     f"- Native calibration masters: `{phase2_status.get('resident_calibration_master_count')}`",
                     f"- Native calibrated lights: `{phase2_status.get('resident_calibrated_light_count')}`",
+                ]
+            )
+        if _has_registration_fastpath_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    (
+                        "- Resident registration fast path: "
+                        f"`{phase2_status.get('resident_registration_fastpath_status')}`"
+                    ),
+                    (
+                        "- Resident registration fast path contract: "
+                        f"`{phase2_status.get('resident_registration_fastpath_contract_status')}` "
+                        f"checks `{phase2_status.get('resident_registration_fastpath_contract_check_count')}` "
+                        "failed "
+                        f"`{phase2_status.get('resident_registration_fastpath_contract_failed_check_count')}`"
+                    ),
+                    (
+                        "- Resident registration fast path mode: "
+                        f"`{phase2_status.get('resident_registration_fastpath_mode')}`"
+                    ),
+                    (
+                        "- Descriptor fit batch: "
+                        f"`{phase2_status.get('triangle_descriptor_fit_batch')}` "
+                        f"mode `{phase2_status.get('triangle_descriptor_fit_batch_mode')}`"
+                    ),
+                    (
+                        "- Descriptor device reuse: "
+                        f"`{phase2_status.get('triangle_descriptor_fit_device_reuse')}`"
+                    ),
+                    (
+                        "- Pixel refine batch: "
+                        f"`{phase2_status.get('triangle_pixel_refine_batch')}` "
+                        f"metric `{phase2_status.get('triangle_pixel_refine_batch_metric_mode')}`"
+                    ),
+                    (
+                        "- Triangle warp batch: "
+                        f"`{phase2_status.get('triangle_warp_batch')}` "
+                        f"mode `{phase2_status.get('triangle_warp_batch_mode')}` "
+                        f"frames `{phase2_status.get('triangle_warp_batch_frame_count')}`"
+                    ),
+                    f"- Resident warp copy mode: `{phase2_status.get('resident_warp_copy_mode')}`",
+                    f"- Resident warp scratch bytes: `{phase2_status.get('resident_warp_scratch_bytes')}`",
                 ]
             )
         lines.extend(

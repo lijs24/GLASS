@@ -3602,6 +3602,19 @@ integration where applicable.
 - Keep this gate contract/reporting only: no image processing algorithm
   changes and no new algorithm-source entry required.
 
+### S2-Gate 215: Resident Registration Fast-Path Release Provenance
+
+- Propagate resident registration fast-path evidence from acceptance-audit
+  artifacts into Phase 2 status JSON and Markdown.
+- Include fast-path status, contract status, contract check counts,
+  descriptor-fit batching, device buffer reuse, pixel-refine batching,
+  matrix-Lanczos warp batching, warp batch frame count, resident copy mode,
+  and scratch allocation in Windows release handoff artifacts.
+- Ensure generated GitHub release notes and preflight Markdown surface this
+  evidence whenever a Phase 2 status artifact contains it.
+- Keep this gate reporting/release-handoff only: no processing algorithm
+  changes and no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

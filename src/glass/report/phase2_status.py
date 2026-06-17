@@ -83,6 +83,7 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
         payload.get("resident_contracts") if isinstance(payload.get("resident_contracts"), dict) else {}
     )
     native_guardrails_bundle = _native_guardrails_summary(payload)
+    registration_fastpath = _resident_registration_fastpath_summary(payload)
     return {
         "path": payload.get("_path"),
         "exists": True,
@@ -128,12 +129,134 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
         )
         if native_guardrails_bundle
         else None,
+        "resident_registration_fastpath": registration_fastpath,
+        "resident_registration_fastpath_status": registration_fastpath.get("status")
+        if registration_fastpath
+        else None,
+        "resident_registration_fastpath_contract_status": registration_fastpath.get("contract_status")
+        if registration_fastpath
+        else None,
+        "resident_registration_fastpath_mode": registration_fastpath.get("mode")
+        if registration_fastpath
+        else None,
+        "triangle_descriptor_fit_batch": registration_fastpath.get("triangle_descriptor_fit_batch")
+        if registration_fastpath
+        else None,
+        "triangle_descriptor_fit_batch_mode": registration_fastpath.get(
+            "triangle_descriptor_fit_batch_mode"
+        )
+        if registration_fastpath
+        else None,
+        "triangle_descriptor_fit_device_reuse": registration_fastpath.get(
+            "triangle_descriptor_fit_device_reuse"
+        )
+        if registration_fastpath
+        else None,
+        "triangle_pixel_refine_batch": registration_fastpath.get("triangle_pixel_refine_batch")
+        if registration_fastpath
+        else None,
+        "triangle_pixel_refine_batch_metric_mode": registration_fastpath.get(
+            "triangle_pixel_refine_batch_metric_mode"
+        )
+        if registration_fastpath
+        else None,
+        "triangle_warp_batch": registration_fastpath.get("triangle_warp_batch")
+        if registration_fastpath
+        else None,
+        "triangle_warp_batch_mode": registration_fastpath.get("triangle_warp_batch_mode")
+        if registration_fastpath
+        else None,
+        "triangle_warp_batch_frame_count": registration_fastpath.get(
+            "triangle_warp_batch_frame_count"
+        )
+        if registration_fastpath
+        else None,
+        "resident_warp_copy_mode": registration_fastpath.get("resident_warp_copy_mode")
+        if registration_fastpath
+        else None,
+        "resident_warp_scratch_bytes": registration_fastpath.get("resident_warp_scratch_bytes")
+        if registration_fastpath
+        else None,
+        "resident_registration_fastpath_contract_check_count": registration_fastpath.get(
+            "contract_check_count"
+        )
+        if registration_fastpath
+        else None,
+        "resident_registration_fastpath_contract_failed_check_count": registration_fastpath.get(
+            "contract_failed_check_count"
+        )
+        if registration_fastpath
+        else None,
         "resident_calibration_contract_passed": (resident_contracts.get("calibration") or {}).get("passed")
         if isinstance(resident_contracts.get("calibration"), dict)
         else None,
         "resident_result_contract_passed": (resident_contracts.get("result") or {}).get("passed")
         if isinstance(resident_contracts.get("result"), dict)
         else None,
+    }
+
+
+def _resident_registration_fastpath_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
+    fastpath = (
+        payload.get("resident_registration_fastpath")
+        if isinstance(payload.get("resident_registration_fastpath"), dict)
+        else None
+    )
+    if fastpath is None:
+        return None
+    registration = (
+        fastpath.get("resident_registration")
+        if isinstance(fastpath.get("resident_registration"), dict)
+        else {}
+    )
+    artifact = fastpath.get("artifact") if isinstance(fastpath.get("artifact"), dict) else {}
+    io_pipeline = (
+        fastpath.get("resident_io_pipeline")
+        if isinstance(fastpath.get("resident_io_pipeline"), dict)
+        else {}
+    )
+    contract_checks = [
+        item
+        for item in payload.get("checks") or []
+        if isinstance(item, dict)
+        and str(item.get("name") or "").startswith("contract_resident_registration_fastpath")
+    ]
+    failed_checks = [str(item.get("name")) for item in contract_checks if not item.get("passed")]
+    device_reuse = {
+        "reference": registration.get("triangle_descriptor_fit_reference_device_reuse"),
+        "moving": registration.get("triangle_descriptor_fit_moving_device_reuse"),
+        "output": registration.get("triangle_descriptor_fit_output_device_reuse"),
+    }
+    contract_status = "not_requested"
+    if contract_checks:
+        contract_status = "passed" if not failed_checks else "failed"
+    return {
+        "schema_version": 1,
+        "status": "present" if fastpath.get("exists") and fastpath.get("available") else "missing",
+        "path": fastpath.get("path"),
+        "exists": fastpath.get("exists"),
+        "available": fastpath.get("available"),
+        "artifact_count": fastpath.get("artifact_count"),
+        "contract_status": contract_status,
+        "contract_check_count": len(contract_checks),
+        "contract_failed_check_count": len(failed_checks),
+        "contract_failed_checks": failed_checks,
+        "mode": registration.get("mode"),
+        "triangle_descriptor_fit_batch": registration.get("triangle_descriptor_fit_batch"),
+        "triangle_descriptor_fit_batch_mode": registration.get("triangle_descriptor_fit_batch_mode"),
+        "triangle_descriptor_fit_device_reuse": device_reuse,
+        "triangle_pixel_refine_batch": registration.get("triangle_pixel_refine_batch"),
+        "triangle_pixel_refine_batch_mode": registration.get("triangle_pixel_refine_batch_mode"),
+        "triangle_pixel_refine_batch_metric_mode": registration.get(
+            "triangle_pixel_refine_batch_metric_mode"
+        ),
+        "triangle_warp_batch": registration.get("triangle_warp_batch"),
+        "triangle_warp_batch_mode": registration.get("triangle_warp_batch_mode"),
+        "triangle_warp_batch_frame_count": registration.get("triangle_warp_batch_frame_count"),
+        "resident_warp_copy_mode": artifact.get("resident_warp_copy_mode"),
+        "resident_io_pipeline_warp_copy_mode": io_pipeline.get("warp_copy_mode"),
+        "resident_warp_scratch_bytes": artifact.get("resident_warp_scratch_bytes"),
+        "resident_io_pipeline_warp_scratch_bytes": io_pipeline.get("warp_scratch_bytes"),
     }
 
 
@@ -361,6 +484,24 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Native calibration artifact: {acceptance.get('resident_native_calibration_artifact')}",
                 f"- Native calibration masters: {acceptance.get('resident_calibration_master_count')}",
                 f"- Native calibrated lights: {acceptance.get('resident_calibrated_light_count')}",
+                f"- Registration fast path: {acceptance.get('resident_registration_fastpath_status')}",
+                (
+                    "- Registration fast path contract: "
+                    f"{acceptance.get('resident_registration_fastpath_contract_status')} "
+                    f"checks={acceptance.get('resident_registration_fastpath_contract_check_count')} "
+                    f"failed={acceptance.get('resident_registration_fastpath_contract_failed_check_count')}"
+                ),
+                f"- Registration fast path mode: {acceptance.get('resident_registration_fastpath_mode')}",
+                f"- Descriptor fit batch: {acceptance.get('triangle_descriptor_fit_batch')}",
+                f"- Descriptor fit batch mode: {acceptance.get('triangle_descriptor_fit_batch_mode')}",
+                f"- Descriptor device reuse: {acceptance.get('triangle_descriptor_fit_device_reuse')}",
+                f"- Pixel refine batch: {acceptance.get('triangle_pixel_refine_batch')}",
+                f"- Pixel refine metric mode: {acceptance.get('triangle_pixel_refine_batch_metric_mode')}",
+                f"- Triangle warp batch: {acceptance.get('triangle_warp_batch')}",
+                f"- Triangle warp batch mode: {acceptance.get('triangle_warp_batch_mode')}",
+                f"- Triangle warp batch frames: {acceptance.get('triangle_warp_batch_frame_count')}",
+                f"- Resident warp copy mode: {acceptance.get('resident_warp_copy_mode')}",
+                f"- Resident warp scratch bytes: {acceptance.get('resident_warp_scratch_bytes')}",
             ]
         )
     if doctor:

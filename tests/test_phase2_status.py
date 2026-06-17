@@ -45,10 +45,44 @@ def _write_acceptance(path: Path) -> None:
                 "resident_calibration_master_count": 3,
                 "resident_calibrated_light_count": 200,
             },
+            "resident_registration_fastpath": {
+                "exists": True,
+                "available": True,
+                "artifact_count": 1,
+                "path": "C:/glass_runs/run/resident_registration_fastpath.json",
+                "resident_registration": {
+                    "mode": "similarity_cuda_triangle",
+                    "triangle_descriptor_fit_batch": True,
+                    "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+                    "triangle_descriptor_fit_reference_device_reuse": True,
+                    "triangle_descriptor_fit_moving_device_reuse": True,
+                    "triangle_descriptor_fit_output_device_reuse": True,
+                    "triangle_pixel_refine_batch": True,
+                    "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+                    "triangle_warp_batch": True,
+                    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                    "triangle_warp_batch_frame_count": 188,
+                },
+                "artifact": {
+                    "resident_warp_copy_mode": "default_stream_async_device_to_device",
+                    "resident_warp_scratch_bytes": 493209636,
+                },
+                "resident_io_pipeline": {
+                    "warp_copy_mode": "default_stream_async_device_to_device",
+                    "warp_scratch_bytes": 493209636,
+                },
+            },
             "resident_contracts": {
                 "calibration": {"passed": True},
                 "result": {"passed": True},
             },
+            "checks": [
+                {"name": "contract_resident_registration_fastpath_present", "passed": True},
+                {
+                    "name": "contract_resident_registration_fastpath_true:descriptor_batch",
+                    "passed": True,
+                },
+            ],
             "speedup_summary": {
                 "speedup_vs_wbpp": 58.0,
                 "glass": {"weighted_frame_count": 193},
@@ -160,6 +194,11 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["acceptance_audit"]["resident_result_contract_run_default"] is True
     assert payload["acceptance_audit"]["resident_native_calibration_artifact"] is True
     assert payload["acceptance_audit"]["resident_calibrated_light_count"] == 200
+    assert payload["acceptance_audit"]["resident_registration_fastpath_status"] == "present"
+    assert payload["acceptance_audit"]["resident_registration_fastpath_contract_status"] == "passed"
+    assert payload["acceptance_audit"]["resident_registration_fastpath_mode"] == "similarity_cuda_triangle"
+    assert payload["acceptance_audit"]["triangle_descriptor_fit_batch"] is True
+    assert payload["acceptance_audit"]["triangle_warp_batch_frame_count"] == 188
     assert payload["doctor"]["primary_gpu"] == "Fixture GPU"
     assert payload["release_manifest"]["package_count"] == 4
     assert payload["github_release_plan"]["status"] == "release_plan_ready"
@@ -200,6 +239,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Acceptance" in text
     assert "Native resident result source: run_default" in text
     assert "Native calibrated lights: 200" in text
+    assert "Registration fast path: present" in text
+    assert "Triangle warp batch frames: 188" in text
 
 
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
