@@ -3706,6 +3706,22 @@ integration where applicable.
 - Keep this gate execution-routing only: no processing algorithm changes and no
   new algorithm-source entry required.
 
+### S2-Gate 222: Default Route Acceptance Evidence
+
+- Teach the benchmark acceptance contract to treat explicit command tokens and
+  audited runtime artifacts as equivalent evidence for execution-route tokens.
+- Allow `--memory-mode resident` and `--backend cuda` requirements to be proven
+  by `run_timing.json` and `execution_default_resolution` when Gate 221 selected
+  the CUDA resident default route.
+- Allow resident runtime preset requirements to be proven by run timing default
+  metadata or resident I/O pipeline artifacts, and resident registration mode
+  requirements to be proven by `resident_artifacts.json`.
+- Keep scientific parameter requirements explicit: parameters such as
+  `--flat-floor 0.05` are still required in the command unless a later gate adds
+  a dedicated scientific-parameter artifact.
+- Keep this gate release-contract only: no processing algorithm changes and no
+  new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:

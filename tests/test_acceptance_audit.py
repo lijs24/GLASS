@@ -26,13 +26,18 @@ def _write_glass_run(
     active: int = 193,
     zero: int = 7,
     command: str | None = None,
+    run_timing_extra: dict[str, object] | None = None,
     resident_timing: dict[str, float] | None = None,
     resident_io_pipeline: dict[str, object] | None = None,
+    resident_registration_mode: str | None = None,
     resident_dq: bool = False,
     frame_accounting: bool = False,
 ) -> None:
     path.mkdir()
-    write_json(path / "run_timing.json", {"total_elapsed_s": elapsed_s, "memory_mode": "resident"})
+    run_timing: dict[str, object] = {"total_elapsed_s": elapsed_s, "memory_mode": "resident"}
+    if run_timing_extra is not None:
+        run_timing.update(run_timing_extra)
+    write_json(path / "run_timing.json", run_timing)
     if command is not None:
         (path / "run_command.txt").write_text(command, encoding="utf-8")
     weights = {f"L{idx:04d}": 1.0 for idx in range(active)}
@@ -48,6 +53,8 @@ def _write_glass_run(
         resident_artifact["timing_s"] = resident_timing
     if resident_io_pipeline is not None:
         resident_artifact["resident_io_pipeline"] = resident_io_pipeline
+    if resident_registration_mode is not None:
+        resident_artifact["resident_registration"] = {"mode": resident_registration_mode}
     if resident_dq:
         master = path / "master.fits"
         weight_map = path / "weight_map.fits"
@@ -1665,6 +1672,90 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert cumulative["actual_key"] == "light_read_worker_cumulative"
     assert cumulative["status"] == "informational_cumulative"
     assert cumulative["timing_kind"] == "worker_cumulative"
+
+
+def test_acceptance_audit_accepts_default_route_evidence_for_resident_tokens(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        command="glass run --flat-floor 0.05",
+        run_timing_extra={
+            "backend": "cuda",
+            "backend_requested": "auto",
+            "memory_mode": "resident",
+            "memory_mode_requested": "resident",
+            "resident_runtime_preset_effective": {
+                "preset": "throughput-v1",
+                "source": "resident_cuda_default",
+            },
+            "execution_default_resolution": {
+                "schema_version": 1,
+                "requested_backend": "auto",
+                "requested_memory_mode": "resident",
+                "effective_backend": "cuda",
+                "effective_memory_mode": "resident",
+                "reason": "resident_cuda_default",
+                "default_runtime_preset": "throughput-v1",
+            },
+        },
+        resident_timing={
+            "master_build_or_load": 11.0,
+            "light_read_upload_calibrate": 16.0,
+            "resident_registration_warp": 12.0,
+            "output_write": 3.5,
+        },
+        resident_registration_mode="similarity_cuda_triangle",
+    )
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    contract_payload = read_json(contract)
+    contract_payload["required_command_tokens"].append("--backend cuda")
+    contract_payload["required_command_token_groups"] = [
+        {
+            "name": "resident_h2d_or_runtime_preset",
+            "any_of": [
+                "--resident-h2d-mode pinned_ring",
+                "--resident-runtime-preset throughput-v1",
+            ],
+        }
+    ]
+    write_json(contract, contract_payload)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    memory_check = checks["contract_required_command_token:--memory-mode resident"]
+    backend_check = checks["contract_required_command_token:--backend cuda"]
+    registration_check = checks[
+        "contract_required_command_token:--resident-registration similarity_cuda_triangle"
+    ]
+    flat_floor_check = checks["contract_required_command_token:--flat-floor 0.05"]
+    runtime_group_check = checks[
+        "contract_required_command_token_group:resident_h2d_or_runtime_preset"
+    ]
+    assert memory_check["evidence"]["command_match"] is False
+    assert memory_check["evidence"]["artifact_match"]["reason"] == "resident_cuda_default"
+    assert backend_check["evidence"]["artifact_match"]["actual"] == "cuda"
+    assert registration_check["evidence"]["artifact_match"]["field"] == "resident_registration.mode"
+    assert flat_floor_check["evidence"]["command_match"] is True
+    assert runtime_group_check["passed"] is True
+    assert runtime_group_check["evidence"]["artifact_matches"][0]["actual"] == "throughput-v1"
 
 
 def test_acceptance_audit_applies_resident_registration_fastpath_contract(tmp_path: Path):

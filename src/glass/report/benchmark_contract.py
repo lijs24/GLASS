@@ -51,6 +51,14 @@ def _read_run_command(glass_run: str | Path) -> str | None:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def _load_run_timing(glass_run: str | Path) -> dict[str, Any]:
+    path = Path(glass_run) / "run_timing.json"
+    if not path.exists():
+        return {}
+    payload = _read_json_lenient(path)
+    return payload if isinstance(payload, dict) else {}
+
+
 def _load_resident_timing(glass_run: str | Path) -> dict[str, Any]:
     path = Path(glass_run) / "resident_artifacts.json"
     if not path.exists():
@@ -245,6 +253,98 @@ def _resident_pipeline_match_for_command_token(
     if match is not None:
         match["token"] = token_text
     return match
+
+
+def _timing_value(run_timing: dict[str, Any], *keys: str) -> Any:
+    current: Any = run_timing
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _route_match_for_command_token(
+    token_text: str,
+    *,
+    run_timing: dict[str, Any],
+    resident_io_pipelines: list[dict[str, Any]],
+    resident_registration_fastpath: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    pipeline_match = _resident_pipeline_match_for_command_token(token_text, resident_io_pipelines)
+    if pipeline_match is not None:
+        pipeline_match["source"] = "resident_io_pipeline"
+        return pipeline_match
+
+    parts = token_text.split()
+    if len(parts) != 2:
+        return None
+    flag, expected = parts
+    resolution = (
+        run_timing.get("execution_default_resolution")
+        if isinstance(run_timing.get("execution_default_resolution"), dict)
+        else {}
+    )
+    if flag == "--memory-mode":
+        actual = run_timing.get("memory_mode") or resolution.get("effective_memory_mode")
+        if str(actual) == expected:
+            return {
+                "token": token_text,
+                "source": "run_timing",
+                "field": "memory_mode",
+                "actual": actual,
+                "requested": run_timing.get("memory_mode_requested")
+                or resolution.get("requested_memory_mode"),
+                "reason": resolution.get("reason"),
+            }
+        return None
+    if flag == "--backend":
+        actual = run_timing.get("backend") or resolution.get("effective_backend")
+        if str(actual) == expected:
+            return {
+                "token": token_text,
+                "source": "run_timing",
+                "field": "backend",
+                "actual": actual,
+                "requested": run_timing.get("backend_requested") or resolution.get("requested_backend"),
+                "reason": resolution.get("reason"),
+            }
+        return None
+    if flag == "--resident-runtime-preset":
+        actual = (
+            run_timing.get("resident_runtime_preset")
+            or _timing_value(run_timing, "resident_runtime_preset_effective", "preset")
+            or resolution.get("default_runtime_preset")
+        )
+        if str(actual) == expected:
+            return {
+                "token": token_text,
+                "source": "run_timing",
+                "field": "resident_runtime_preset",
+                "actual": actual,
+                "reason": resolution.get("reason"),
+            }
+        return None
+    if flag == "--resident-registration":
+        registration = (
+            resident_registration_fastpath.get("resident_registration")
+            if isinstance(resident_registration_fastpath, dict)
+            and isinstance(resident_registration_fastpath.get("resident_registration"), dict)
+            else {}
+        )
+        actual = registration.get("mode")
+        if str(actual) == expected:
+            return {
+                "token": token_text,
+                "source": "resident_artifacts",
+                "field": "resident_registration.mode",
+                "actual": actual,
+                "artifact": resident_registration_fastpath.get("path")
+                if isinstance(resident_registration_fastpath, dict)
+                else None,
+            }
+        return None
+    return None
 
 
 def _build_resident_registration_fastpath_contract_checks(
@@ -1669,14 +1769,28 @@ def build_benchmark_contract_checks(
         )
 
     command_text = _read_run_command(glass_run)
+    run_timing = _load_run_timing(glass_run)
     resident_io_pipelines = _load_resident_io_pipelines(glass_run)
     for token in contract.get("required_command_tokens") or []:
         token_text = str(token)
+        command_match = command_text is not None and token_text in command_text
+        artifact_match = _route_match_for_command_token(
+            token_text,
+            run_timing=run_timing,
+            resident_io_pipelines=resident_io_pipelines,
+            resident_registration_fastpath=resident_registration_fastpath,
+        )
         checks.append(
             _check(
                 f"contract_required_command_token:{token_text}",
-                command_text is not None and token_text in command_text,
-                {"token": token_text, "run_command_present": command_text is not None},
+                command_match or artifact_match is not None,
+                {
+                    "token": token_text,
+                    "command_match": command_match,
+                    "artifact_match": artifact_match,
+                    "run_command_present": command_text is not None,
+                    "run_timing_present": bool(run_timing),
+                },
             )
         )
     for index, group in enumerate(contract.get("required_command_token_groups") or []):
@@ -1690,12 +1804,16 @@ def build_benchmark_contract_checks(
             tokens = [str(token) for token in group]
             group_name = f"group_{index}"
         matched = [token for token in tokens if command_text is not None and token in command_text]
-        artifact_matches = [
-            match
-            for token in tokens
-            for match in [_resident_pipeline_match_for_command_token(token, resident_io_pipelines)]
-            if match is not None
-        ]
+        artifact_matches = []
+        for token in tokens:
+            match = _route_match_for_command_token(
+                token,
+                run_timing=run_timing,
+                resident_io_pipelines=resident_io_pipelines,
+                resident_registration_fastpath=resident_registration_fastpath,
+            )
+            if match is not None:
+                artifact_matches.append(match)
         checks.append(
             _check(
                 f"contract_required_command_token_group:{group_name}",
@@ -1706,6 +1824,7 @@ def build_benchmark_contract_checks(
                     "artifact_matches": artifact_matches,
                     "resident_io_pipeline_records": len(resident_io_pipelines),
                     "run_command_present": command_text is not None,
+                    "run_timing_present": bool(run_timing),
                 },
             )
         )
