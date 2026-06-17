@@ -1,0 +1,255 @@
+{
+  "adoption": {
+    "contract_ready_count": 4,
+    "cuda_resident_surface_count": 0,
+    "engine_counts": {
+      "stack_engine_cpu": 4
+    },
+    "fallback_count": 0,
+    "gap_surfaces": [],
+    "other_surface_count": 0,
+    "phase2_stack_engine_default_gap_count": 0,
+    "recommendation": "stack_engine_default_ready",
+    "result_contract_passed_count": 4,
+    "schema_version": 1,
+    "stack_engine_surface_count": 4,
+    "surface_count": 4,
+    "surfaces": [
+      {
+        "contract_ok": true,
+        "engine_family": "stack_engine_cpu",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "G132fda1914",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": null,
+        "resident_result_contract_passed": null,
+        "result_contract_passed": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": null,
+        "summary_engine": "stack_engine_cpu",
+        "surface": "master_calibration",
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "dark"
+      },
+      {
+        "contract_ok": true,
+        "engine_family": "stack_engine_cpu",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "G493eaa9fef",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": null,
+        "resident_result_contract_passed": null,
+        "result_contract_passed": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": null,
+        "summary_engine": "stack_engine_cpu",
+        "surface": "master_calibration",
+        "tile_stack_mode": "stack_engine_cpu_per_flat_normalized",
+        "type": "flat"
+      },
+      {
+        "contract_ok": true,
+        "engine_family": "stack_engine_cpu",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "Ga10b6dd84a",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": null,
+        "resident_result_contract_passed": null,
+        "result_contract_passed": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": null,
+        "summary_engine": "stack_engine_cpu",
+        "surface": "master_calibration",
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "bias"
+      },
+      {
+        "contract_ok": true,
+        "engine_family": "stack_engine_cpu",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "H",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": null,
+        "resident_result_contract_passed": false,
+        "result_contract_passed": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "summary_engine": "stack_engine_cpu",
+        "surface": "integration",
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "light"
+      }
+    ],
+    "target_engine": "stack_engine_cpu"
+  },
+  "audit_type": "stack_engine_default_contract",
+  "calibration": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\calibration_artifacts.json",
+    "master_count": 3,
+    "masters": [
+      {
+        "contract_ok": true,
+        "fallback_reason": null,
+        "has_dq_provenance": true,
+        "input_samples": 3072,
+        "name": "G132fda1914",
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\calib_cache\\masters\\master_dark_G132fda1914.fits",
+        "path_exists": true,
+        "result_contract_passed": true,
+        "stack_engine_enabled": true,
+        "summary_engine": "stack_engine_cpu",
+        "summary_source_schema": "stack_engine_dq_provenance",
+        "summary_stage": "master_calibration",
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "dark"
+      },
+      {
+        "contract_ok": true,
+        "fallback_reason": null,
+        "has_dq_provenance": true,
+        "input_samples": 3072,
+        "name": "G493eaa9fef",
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\calib_cache\\masters\\master_flat_G493eaa9fef.fits",
+        "path_exists": true,
+        "result_contract_passed": true,
+        "stack_engine_enabled": true,
+        "summary_engine": "stack_engine_cpu",
+        "summary_source_schema": "stack_engine_dq_provenance",
+        "summary_stage": "master_calibration",
+        "tile_stack_mode": "stack_engine_cpu_per_flat_normalized",
+        "type": "flat"
+      },
+      {
+        "contract_ok": true,
+        "fallback_reason": null,
+        "has_dq_provenance": true,
+        "input_samples": 3072,
+        "name": "Ga10b6dd84a",
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\calib_cache\\masters\\master_bias_Ga10b6dd84a.fits",
+        "path_exists": true,
+        "result_contract_passed": true,
+        "stack_engine_enabled": true,
+        "summary_engine": "stack_engine_cpu",
+        "summary_source_schema": "stack_engine_dq_provenance",
+        "summary_stage": "master_calibration",
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "bias"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "evidence": {
+        "exists": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\calibration_artifacts.json",
+        "resident_calibration_contract_attached": false
+      },
+      "name": "calibration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 1
+      },
+      "name": "calibration_master_records_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 3
+      },
+      "name": "calibration_masters_use_stack_engine",
+      "note": "All master bias/dark/flat records must use StackEngine without fallback.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_output_records_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_outputs_use:stack_engine_cpu",
+      "note": "Tile/CPU light integration must use StackEngine by default; resident CUDA is explicit.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T17:58:20+00:00",
+  "default_promotion": {
+    "actual_scope": "all",
+    "blocker_count": 0,
+    "blockers": [],
+    "calibration_surface_count": 3,
+    "integration_surface_count": 1,
+    "phase2_stack_engine_default_gap_count": 0,
+    "ready": true,
+    "recommendation": "stack_engine_default_ready",
+    "required_scope": "all",
+    "schema_version": 1,
+    "status": "ready",
+    "surface_count": 4,
+    "target_engine": "stack_engine_cpu"
+  },
+  "expected_integration_engine": "stack_engine_cpu",
+  "integration": {
+    "artifact_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration_results.json",
+    "output_count": 1,
+    "outputs": [
+      {
+        "backend": "cpu",
+        "contract_ok": true,
+        "expected_engine": "stack_engine_cpu",
+        "filter": "H",
+        "has_stack_engine_dq_provenance": true,
+        "index": 0,
+        "input_samples": 2048,
+        "resident_result_contract_active_frame_count": null,
+        "resident_result_contract_check_count": null,
+        "resident_result_contract_passed": false,
+        "resident_result_contract_status": null,
+        "result_contract_passed": true,
+        "source_stage": null,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "summary_engine": "stack_engine_cpu",
+        "summary_source_schema": "stack_engine_dq_provenance",
+        "summary_stage": "integration",
+        "tile_stack_mode": "stack_engine_cpu"
+      }
+    ]
+  },
+  "passed": true,
+  "resident_calibration_contract_attached": false,
+  "resident_result_contract_attached": false,
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run",
+  "schema_version": 1,
+  "scope": "all",
+  "status": "passed"
+}

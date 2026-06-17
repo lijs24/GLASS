@@ -3356,6 +3356,22 @@ integration where applicable.
   a generated publish script is ready for use once GitHub CLI authentication is
   completed.
 
+### S2-Gate 198: Guardrails Acceptance Contract Bundle
+
+- Extend `glass guardrails` so every guardrail run emits
+  `acceptance_contract_bundle.json` alongside StackEngine contract, pipeline
+  contract, Markdown summaries, and the HTML report.
+- Record the contract bundle path in `guardrails_summary.json`.
+- Include an acceptance-audit argument vector and map for
+  `--pipeline-contract-json` and `--stack-engine-contract-json` so 200-light
+  release checks can consume the exact generated contracts without hand
+  assembling paths.
+- Preserve existing guardrail pass/fail behavior and keep the bundle available
+  for failed guardrail runs as diagnostic evidence.
+- Current real artifact result: a synthetic CPU audit run produced passing
+  StackEngine and pipeline contracts, `stack_default_promotion.ready=true`, and
+  a passing `glass_acceptance_contract_bundle` under the Gate198 checkpoint.
+
 ## Gate Rules
 
 Each gate requires:

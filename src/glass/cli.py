@@ -2232,6 +2232,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     pipeline_path = out_dir / "pipeline_contract.json"
     pipeline_markdown = out_dir / "pipeline_contract.md"
     report_path = Path(args.report) if args.report else out_dir / "report.html"
+    bundle_path = out_dir / "acceptance_contract_bundle.json"
     summary_path = out_dir / "guardrails_summary.json"
 
     stack_audit = build_stack_engine_contract_audit(
@@ -2280,6 +2281,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "stack_engine_contract_markdown": str(stack_markdown),
             "pipeline_contract": str(pipeline_path),
             "pipeline_contract_markdown": str(pipeline_markdown),
+            "acceptance_contract_bundle": str(bundle_path),
             "report": str(report_path),
         },
         "checks": [
@@ -2313,11 +2315,47 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             },
         ],
     }
+    bundle = {
+        "schema_version": 1,
+        "created_at": now_iso(),
+        "artifact_type": "glass_acceptance_contract_bundle",
+        "run_dir": str(run),
+        "out_dir": str(out_dir),
+        "status": summary["status"],
+        "passed": passed,
+        "purpose": "acceptance_audit_contract_inputs",
+        "pixel_verify": bool(args.pixel_verify),
+        "stack_scope": args.stack_scope,
+        "expected_integration_engine": args.expected_integration_engine,
+        "require_stack_default_ready": stack_default_required,
+        "stack_default_promotion": stack_default_promotion,
+        "artifacts": {
+            "guardrails_summary": str(summary_path),
+            "stack_engine_contract": str(stack_path),
+            "stack_engine_contract_markdown": str(stack_markdown),
+            "pipeline_contract": str(pipeline_path),
+            "pipeline_contract_markdown": str(pipeline_markdown),
+            "report": str(report_path),
+        },
+        "acceptance_audit_arguments": [
+            "--pipeline-contract-json",
+            str(pipeline_path),
+            "--stack-engine-contract-json",
+            str(stack_path),
+        ],
+        "acceptance_audit_argument_map": {
+            "pipeline_contract_json": str(pipeline_path),
+            "stack_engine_contract_json": str(stack_path),
+        },
+        "checks": summary["checks"],
+    }
+    write_json(bundle_path, bundle)
     write_json(summary_path, summary)
     console.print(
         {
             "status": summary["status"],
             "summary": str(summary_path),
+            "acceptance_contract_bundle": str(bundle_path),
             "report": str(report_path),
             "pixel_verify": args.pixel_verify,
             "stack_default_promotion_ready": stack_default_ready,

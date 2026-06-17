@@ -1,0 +1,484 @@
+{
+  "artifacts": {
+    "integration": {
+      "exists": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration_results.json"
+    },
+    "local_norm": {
+      "exists": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\local_norm_results.json"
+    },
+    "warp": {
+      "exists": true,
+      "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\warp_results.json"
+    }
+  },
+  "audit_type": "pipeline_invariant_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "map_count": 6
+      },
+      "name": "integration_output_maps_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_dq_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 1
+      },
+      "name": "integration_stack_result_contract",
+      "note": "CPU StackEngine integration outputs must carry an embedded passing result contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 0
+      },
+      "name": "integration_resident_result_contract",
+      "note": "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_dq_map_pixels_match_summary",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_coverage_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 2
+      },
+      "name": "integration_rejection_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "warp_output_count": 2
+      },
+      "name": "warp_outputs_have_dq_and_coverage",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "skipped_count": 2
+      },
+      "name": "warp_skipped_frames_are_explained",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": false,
+        "failed": [],
+        "row_count": 2,
+        "top_level_crop_box_recorded": true
+      },
+      "name": "local_normalization_contract",
+      "note": "LN rows must record crop_box and DQ state; enabled LN rows must record coefficient grids.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T17:58:20+00:00",
+  "integration": {
+    "maps": [
+      {
+        "exists": true,
+        "item": "H",
+        "map": "master",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\master_H.fits",
+        "path_key": "master_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "weight",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\weight_map_H.fits",
+        "path_key": "weight_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "coverage",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\coverage_map_H.fits",
+        "path_key": "coverage_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "dq",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+        "path_key": "dq_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "low_rejection",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\low_rejection_H.fits",
+        "path_key": "low_rejection_map_path",
+        "policy_skipped": false,
+        "required": false,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "high_rejection",
+        "ok": true,
+        "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\high_rejection_H.fits",
+        "path_key": "high_rejection_map_path",
+        "policy_skipped": false,
+        "required": false,
+        "surface": "integration"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cpu",
+        "dq_contract_ok": true,
+        "dq_map_exists": true,
+        "dq_map_path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_count": 2,
+        "item": "H",
+        "rejection": "none",
+        "resident_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 10,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "tile_stack_mode": "stack_engine_cpu"
+      }
+    ]
+  },
+  "local_normalization": {
+    "crop_box": null,
+    "enabled": false,
+    "outputs": [
+      {
+        "coefficient_grid_exists": true,
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "crop_box": null,
+        "crop_box_recorded": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_present": true,
+        "enabled": false,
+        "frame_id": "F000011",
+        "model": "disabled_passthrough",
+        "normalized_path_exists": true,
+        "status": "disabled_passthrough"
+      },
+      {
+        "coefficient_grid_exists": true,
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "crop_box": null,
+        "crop_box_recorded": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_present": true,
+        "enabled": false,
+        "frame_id": "F000012",
+        "model": "disabled_passthrough",
+        "normalized_path_exists": true,
+        "status": "disabled_passthrough"
+      }
+    ],
+    "reference_frame_id": "F000012"
+  },
+  "passed": true,
+  "pixel_verification": {
+    "enabled": true,
+    "integration_outputs": [
+      {
+        "count_maps": {
+          "coverage": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\coverage_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 1024,
+              "height": 32,
+              "max": 2.0,
+              "min": 1.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\coverage_map_H.fits",
+              "positive_pixels": 1024,
+              "positive_threshold": 0.0,
+              "rounded_sum": 1954,
+              "schema_version": 1,
+              "sum": 1954.0,
+              "tile_size": 8,
+              "total_pixels": 1024,
+              "width": 32,
+              "zero_or_less_pixels": 0
+            },
+            "status": "verified",
+            "summary_match": {
+              "no_data": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "high_rejection": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\high_rejection_H.fits",
+            "required": false,
+            "result": {
+              "finite_pixels": 1024,
+              "height": 32,
+              "max": 0.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\high_rejection_H.fits",
+              "positive_pixels": 0,
+              "positive_threshold": 0.0,
+              "rounded_sum": 0,
+              "schema_version": 1,
+              "sum": 0.0,
+              "tile_size": 8,
+              "total_pixels": 1024,
+              "width": 32,
+              "zero_or_less_pixels": 1024
+            },
+            "status": "verified",
+            "summary_match": {
+              "high_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "low_rejection": {
+            "ok": true,
+            "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\low_rejection_H.fits",
+            "required": false,
+            "result": {
+              "finite_pixels": 1024,
+              "height": 32,
+              "max": 0.0,
+              "min": 0.0,
+              "nonfinite_pixels": 0,
+              "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\low_rejection_H.fits",
+              "positive_pixels": 0,
+              "positive_threshold": 0.0,
+              "rounded_sum": 0,
+              "schema_version": 1,
+              "sum": 0.0,
+              "tile_size": 8,
+              "total_pixels": 1024,
+              "width": 32,
+              "zero_or_less_pixels": 1024
+            },
+            "status": "verified",
+            "summary_match": {
+              "low_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          }
+        },
+        "dq": {
+          "ok": true,
+          "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+          "required": true,
+          "result": {
+            "counts": {
+              "high_rejected": 0,
+              "low_rejected": 0,
+              "no_data": 0,
+              "valid": 1024,
+              "warp_edge": 0
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "no_data": 1,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 32,
+            "path": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run\\integration\\dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 8,
+            "total_pixels": 1024,
+            "unknown_flags": [],
+            "width": 32
+          },
+          "status": "verified",
+          "summary_matches": {
+            "high_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "low_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "no_data": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "valid": {
+              "actual": 1024,
+              "delta": 0,
+              "passed": true,
+              "summary": 1024
+            },
+            "warp_edge": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            }
+          },
+          "verified": true
+        },
+        "item": "H"
+      }
+    ],
+    "tile_size": 8,
+    "tolerance_pixels": 0
+  },
+  "run_dir": "C:\\glass_runs\\phase2_s2_gate_198_guardrails_contract_bundle\\run",
+  "schema_version": 1,
+  "status": "passed",
+  "warp": {
+    "outputs": [
+      {
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000011",
+        "interpolation": "bilinear",
+        "registered_path_exists": true
+      },
+      {
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000012",
+        "interpolation": "bilinear",
+        "registered_path_exists": true
+      }
+    ],
+    "skipped_frames": [
+      {
+        "contract_ok": true,
+        "frame_id": "F000010",
+        "has_reason": true,
+        "status": "quality_rejected"
+      },
+      {
+        "contract_ok": true,
+        "frame_id": "F000013",
+        "has_reason": true,
+        "status": "quality_rejected"
+      }
+    ]
+  }
+}

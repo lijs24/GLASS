@@ -306,11 +306,27 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     )
 
     summary = read_json(out_dir / "guardrails_summary.json")
+    bundle = read_json(out_dir / "acceptance_contract_bundle.json")
     stack_contract = read_json(out_dir / "stack_engine_contract.json")
     pipeline_contract = read_json(out_dir / "pipeline_contract.json")
     assert summary["passed"] is True
     assert summary["pixel_verify"] is True
     assert summary["require_stack_default_ready"] is True
+    assert summary["artifacts"]["acceptance_contract_bundle"] == str(out_dir / "acceptance_contract_bundle.json")
+    assert bundle["artifact_type"] == "glass_acceptance_contract_bundle"
+    assert bundle["passed"] is True
+    assert bundle["purpose"] == "acceptance_audit_contract_inputs"
+    assert bundle["acceptance_audit_arguments"] == [
+        "--pipeline-contract-json",
+        str(out_dir / "pipeline_contract.json"),
+        "--stack-engine-contract-json",
+        str(out_dir / "stack_engine_contract.json"),
+    ]
+    assert bundle["acceptance_audit_argument_map"] == {
+        "pipeline_contract_json": str(out_dir / "pipeline_contract.json"),
+        "stack_engine_contract_json": str(out_dir / "stack_engine_contract.json"),
+    }
+    assert bundle["artifacts"]["guardrails_summary"] == str(out_dir / "guardrails_summary.json")
     assert summary["stack_default_promotion"]["ready"] is True
     assert summary["checks"][2]["name"] == "stack_default_promotion"
     assert summary["checks"][2]["ready"] is True
