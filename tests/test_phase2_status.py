@@ -283,27 +283,81 @@ def _write_release_decision(path: Path, *, ready: bool = True) -> None:
     )
 
 
-def _write_publish_preflight(path: Path, *, ready: bool = True) -> None:
+def _write_publish_preflight(
+    path: Path,
+    *,
+    ready: bool = True,
+    rejection_sample_accounting_ready: bool = True,
+    include_rejection_sample_accounting: bool = True,
+) -> None:
+    artifact_ready = ready and (
+        rejection_sample_accounting_ready or not include_rejection_sample_accounting
+    )
+    summary = {
+        "release_tag": "v0.1.0-test",
+        "asset_count": 4,
+        "package_count": 4,
+        "primary_package": "cuda13",
+        "ordered_try_list": ["cuda13", "cuda12", "cuda11", "cpu"],
+        "source_stamps": ["abcdef0"],
+        "default_promotion_status": "default_promotion_ready" if ready else "blocked",
+        "default_route_check_count": 4 if ready else 2,
+        "default_route_speedup_vs_reference": 28.75,
+    }
+    checks = []
+    failed_checks = [] if artifact_ready else ["manifest_assets_match_github_plan"]
+    if include_rejection_sample_accounting:
+        status = "passed" if rejection_sample_accounting_ready else "failed"
+        summary.update(
+            {
+                "github_plan_phase2_rejection_sample_accounting_status": status,
+                "github_plan_matrix_rejection_sample_accounting_status": status,
+                "matrix_rejection_sample_accounting_status": status,
+                "default_promotion_rejection_sample_accounting_status": status,
+            }
+        )
+        checks = [
+            {
+                "name": "github_plan_phase2_rejection_sample_accounting_passed",
+                "passed": rejection_sample_accounting_ready,
+            },
+            {
+                "name": "github_plan_matrix_rejection_sample_accounting_passed",
+                "passed": rejection_sample_accounting_ready,
+            },
+            {
+                "name": "matrix_rejection_sample_accounting_passed",
+                "passed": rejection_sample_accounting_ready,
+            },
+            {
+                "name": "default_promotion_rejection_sample_accounting_passed",
+                "passed": rejection_sample_accounting_ready,
+            },
+            {
+                "name": "github_plan_matrix_rejection_accounting_matches_matrix",
+                "passed": rejection_sample_accounting_ready,
+            },
+        ]
+        if not rejection_sample_accounting_ready:
+            failed_checks = [
+                "github_plan_phase2_rejection_sample_accounting_passed",
+                "github_plan_matrix_rejection_sample_accounting_passed",
+                "matrix_rejection_sample_accounting_passed",
+                "default_promotion_rejection_sample_accounting_passed",
+            ]
     write_json(
         path,
         {
             "schema_version": 1,
             "artifact_type": "windows_publish_preflight",
-            "status": "publish_preflight_ready" if ready else "blocked",
-            "passed": ready,
-            "recommendation": "publish_release_bundle" if ready else "fix_publish_preflight_blockers",
-            "failed_checks": [] if ready else ["manifest_assets_match_github_plan"],
-            "summary": {
-                "release_tag": "v0.1.0-test",
-                "asset_count": 4,
-                "package_count": 4,
-                "primary_package": "cuda13",
-                "ordered_try_list": ["cuda13", "cuda12", "cuda11", "cpu"],
-                "source_stamps": ["abcdef0"],
-                "default_promotion_status": "default_promotion_ready" if ready else "blocked",
-                "default_route_check_count": 4 if ready else 2,
-                "default_route_speedup_vs_reference": 28.75,
-            },
+            "status": "publish_preflight_ready" if artifact_ready else "blocked",
+            "passed": artifact_ready,
+            "recommendation": "publish_release_bundle"
+            if artifact_ready
+            else "fix_publish_preflight_blockers",
+            "failed_checks": failed_checks,
+            "summary": summary,
+            "checks": checks,
         },
     )
 
@@ -344,6 +398,7 @@ def _status_payload(
     release_status: str = "release_manifest_ready",
     github_status: str = "release_plan_ready",
     publish_preflight_status: str = "publish_preflight_ready",
+    publish_preflight_rejection_sample_status: str = "passed",
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -376,7 +431,36 @@ def _status_payload(
         "doctor": {"cuda_available": cuda_available},
         "release_manifest": {"status": release_status},
         "github_release_plan": {"status": github_status},
-        "publish_preflight": {"status": publish_preflight_status},
+        "publish_preflight": {
+            "status": publish_preflight_status,
+            "github_plan_phase2_rejection_sample_accounting_status": (
+                publish_preflight_rejection_sample_status
+            ),
+            "github_plan_matrix_rejection_sample_accounting_status": (
+                publish_preflight_rejection_sample_status
+            ),
+            "matrix_rejection_sample_accounting_status": (
+                publish_preflight_rejection_sample_status
+            ),
+            "default_promotion_rejection_sample_accounting_status": (
+                publish_preflight_rejection_sample_status
+            ),
+            "github_plan_phase2_rejection_sample_accounting_passed": (
+                publish_preflight_rejection_sample_status == "passed"
+            ),
+            "github_plan_matrix_rejection_sample_accounting_passed": (
+                publish_preflight_rejection_sample_status == "passed"
+            ),
+            "matrix_rejection_sample_accounting_passed": (
+                publish_preflight_rejection_sample_status == "passed"
+            ),
+            "default_promotion_rejection_sample_accounting_passed": (
+                publish_preflight_rejection_sample_status == "passed"
+            ),
+            "github_plan_matrix_rejection_accounting_matches_matrix": (
+                publish_preflight_rejection_sample_status == "passed"
+            ),
+        },
         "pipeline_contract": {
             "status": "passed" if pipeline_passed else "failed",
             "passed": pipeline_passed,
@@ -480,6 +564,11 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
     assert payload["publish_preflight"]["asset_count"] == 4
     assert payload["publish_preflight"]["primary_package"] == "cuda13"
+    assert (
+        payload["publish_preflight"]["github_plan_phase2_rejection_sample_accounting_status"]
+        == "passed"
+    )
+    assert payload["publish_preflight"]["matrix_rejection_sample_accounting_passed"] is True
     assert payload["pipeline_contract"]["status"] == "passed"
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
@@ -498,6 +587,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["default_route_acceptance_route_contract_passed"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["windows_publish_preflight_ready"] is True
+    assert checks["windows_publish_preflight_rejection_sample_accounting_passed"] is True
 
 
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
@@ -571,6 +661,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Windows Publish Preflight" in text
     assert "Preflight status: publish_preflight_ready" in text
     assert "Default route checks: 4" in text
+    assert "Rejection sample accounting statuses: phase2=passed" in text
 
 
 def test_phase2_status_blocks_default_ready_without_fastpath_contract(tmp_path: Path):
@@ -672,6 +763,84 @@ def test_phase2_status_blocks_failed_publish_preflight_when_supplied(tmp_path: P
     ]
 
 
+def test_phase2_status_blocks_missing_publish_preflight_rejection_sample_accounting(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=241)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        include_rejection_sample_accounting=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert checks["windows_publish_preflight_rejection_sample_accounting_passed"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_rejection_sample_accounting_passed"][
+        "evidence"
+    ]["phase2_check"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_rejection_sample_accounting(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=241)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(publish_preflight, rejection_sample_accounting_ready=False)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert (
+        status["publish_preflight"]["matrix_rejection_sample_accounting_status"]
+        == "failed"
+    )
+    assert checks["windows_publish_preflight_rejection_sample_accounting_passed"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_rejection_sample_accounting_passed"][
+        "evidence"
+    ]["matrix_check"] is False
+
+
 def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -732,6 +901,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["release_manifest_ready_preserved"] is True
     assert checks["github_release_plan_ready_preserved"] is True
     assert checks["windows_publish_preflight_ready_preserved"] is True
+    assert checks["windows_publish_preflight_rejection_sample_accounting_preserved"] is True
+    assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
@@ -757,6 +928,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             release_status="failed",
             github_status="failed",
             publish_preflight_status="blocked",
+            publish_preflight_rejection_sample_status="failed",
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
@@ -786,6 +958,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["release_manifest_ready_preserved"] is False
     assert checks["github_release_plan_ready_preserved"] is False
     assert checks["windows_publish_preflight_ready_preserved"] is False
+    assert checks["windows_publish_preflight_rejection_sample_accounting_preserved"] is False
+    assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["pipeline_integration_dq_contract_preserved"] is False
     assert checks["pipeline_pixel_verification_preserved"] is False

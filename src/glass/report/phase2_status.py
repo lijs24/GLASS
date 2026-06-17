@@ -463,6 +463,38 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_route_speedup_vs_reference": summary.get(
             "default_route_speedup_vs_reference"
         ),
+        "github_plan_phase2_rejection_sample_accounting_status": summary.get(
+            "github_plan_phase2_rejection_sample_accounting_status"
+        ),
+        "github_plan_matrix_rejection_sample_accounting_status": summary.get(
+            "github_plan_matrix_rejection_sample_accounting_status"
+        ),
+        "matrix_rejection_sample_accounting_status": summary.get(
+            "matrix_rejection_sample_accounting_status"
+        ),
+        "default_promotion_rejection_sample_accounting_status": summary.get(
+            "default_promotion_rejection_sample_accounting_status"
+        ),
+        "github_plan_phase2_rejection_sample_accounting_passed": _check_passed(
+            payload,
+            "github_plan_phase2_rejection_sample_accounting_passed",
+        ),
+        "github_plan_matrix_rejection_sample_accounting_passed": _check_passed(
+            payload,
+            "github_plan_matrix_rejection_sample_accounting_passed",
+        ),
+        "matrix_rejection_sample_accounting_passed": _check_passed(
+            payload,
+            "matrix_rejection_sample_accounting_passed",
+        ),
+        "default_promotion_rejection_sample_accounting_passed": _check_passed(
+            payload,
+            "default_promotion_rejection_sample_accounting_passed",
+        ),
+        "github_plan_matrix_rejection_accounting_matches_matrix": _check_passed(
+            payload,
+            "github_plan_matrix_rejection_accounting_matches_matrix",
+        ),
         "failed_checks": payload.get("failed_checks"),
     }
 
@@ -806,6 +838,58 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "windows_publish_preflight_rejection_sample_accounting_passed",
+                "passed": (
+                    preflight.get("github_plan_phase2_rejection_sample_accounting_passed")
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_rejection_sample_accounting_passed"
+                    )
+                    is True
+                    and preflight.get("matrix_rejection_sample_accounting_passed") is True
+                    and preflight.get(
+                        "default_promotion_rejection_sample_accounting_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_rejection_accounting_matches_matrix"
+                    )
+                    is True
+                ),
+                "evidence": {
+                    "phase2_status": preflight.get(
+                        "github_plan_phase2_rejection_sample_accounting_status"
+                    ),
+                    "plan_matrix_status": preflight.get(
+                        "github_plan_matrix_rejection_sample_accounting_status"
+                    ),
+                    "matrix_status": preflight.get(
+                        "matrix_rejection_sample_accounting_status"
+                    ),
+                    "default_promotion_status": preflight.get(
+                        "default_promotion_rejection_sample_accounting_status"
+                    ),
+                    "phase2_check": preflight.get(
+                        "github_plan_phase2_rejection_sample_accounting_passed"
+                    ),
+                    "plan_matrix_check": preflight.get(
+                        "github_plan_matrix_rejection_sample_accounting_passed"
+                    ),
+                    "matrix_check": preflight.get(
+                        "matrix_rejection_sample_accounting_passed"
+                    ),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_rejection_sample_accounting_passed"
+                    ),
+                    "matrix_match_check": preflight.get(
+                        "github_plan_matrix_rejection_accounting_matches_matrix"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
     if pipeline is not None:
         checks.append(
             {
@@ -1039,6 +1123,24 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     "- Default route speedup vs reference: "
                     f"{preflight.get('default_route_speedup_vs_reference')}"
                 ),
+                (
+                    "- Rejection sample accounting statuses: "
+                    f"phase2={preflight.get('github_plan_phase2_rejection_sample_accounting_status')}, "
+                    f"plan-matrix={preflight.get('github_plan_matrix_rejection_sample_accounting_status')}, "
+                    f"matrix={preflight.get('matrix_rejection_sample_accounting_status')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_rejection_sample_accounting_status')}"
+                ),
+                (
+                    "- Rejection sample accounting checks: "
+                    f"phase2={preflight.get('github_plan_phase2_rejection_sample_accounting_passed')}, "
+                    f"plan-matrix={preflight.get('github_plan_matrix_rejection_sample_accounting_passed')}, "
+                    f"matrix={preflight.get('matrix_rejection_sample_accounting_passed')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_rejection_sample_accounting_passed')}, "
+                    "matrix-match="
+                    f"{preflight.get('github_plan_matrix_rejection_accounting_matches_matrix')}"
+                ),
             ]
         )
     if pipeline:
@@ -1191,6 +1293,41 @@ def _compare_check(
         "evidence": {"baseline": baseline, "candidate": candidate},
         "note": note,
     }
+
+
+_PUBLISH_PREFLIGHT_REJECTION_CHECK_FIELDS = (
+    "github_plan_phase2_rejection_sample_accounting_passed",
+    "github_plan_matrix_rejection_sample_accounting_passed",
+    "matrix_rejection_sample_accounting_passed",
+    "default_promotion_rejection_sample_accounting_passed",
+    "github_plan_matrix_rejection_accounting_matches_matrix",
+)
+
+_PUBLISH_PREFLIGHT_REJECTION_STATUS_FIELDS = (
+    "github_plan_phase2_rejection_sample_accounting_status",
+    "github_plan_matrix_rejection_sample_accounting_status",
+    "matrix_rejection_sample_accounting_status",
+    "default_promotion_rejection_sample_accounting_status",
+)
+
+
+def _publish_preflight_rejection_checks_passed(payload: dict[str, Any]) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_REJECTION_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_rejection_statuses(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_REJECTION_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_rejection_statuses_passed(payload: dict[str, Any]) -> bool:
+    statuses = _publish_preflight_rejection_statuses(payload)
+    return bool(statuses) and all(value == "passed" for value in statuses.values())
 
 
 def build_phase2_status_compare(
@@ -1364,6 +1501,26 @@ def build_phase2_status_compare(
             candidate=_status_value(candidate, "publish_preflight", "status"),
         ),
         _compare_check(
+            "windows_publish_preflight_rejection_sample_accounting_preserved",
+            not _publish_preflight_rejection_checks_passed(baseline)
+            or _publish_preflight_rejection_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_rejection_checks_passed(baseline),
+                "statuses": _publish_preflight_rejection_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_rejection_checks_passed(candidate),
+                "statuses": _publish_preflight_rejection_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_rejection_sample_status_preserved",
+            not _publish_preflight_rejection_statuses_passed(baseline)
+            or _publish_preflight_rejection_statuses_passed(candidate),
+            baseline=_publish_preflight_rejection_statuses(baseline),
+            candidate=_publish_preflight_rejection_statuses(candidate),
+        ),
+        _compare_check(
             "pipeline_contract_passed_preserved",
             _status_value(baseline, "pipeline_contract", "passed") is not True
             or _status_value(candidate, "pipeline_contract", "passed") is True,
@@ -1486,6 +1643,9 @@ def build_phase2_status_compare(
             "release_manifest_status": _status_value(baseline, "release_manifest", "status"),
             "github_release_plan_status": _status_value(baseline, "github_release_plan", "status"),
             "publish_preflight_status": _status_value(baseline, "publish_preflight", "status"),
+            "publish_preflight_rejection_sample_accounting": (
+                _publish_preflight_rejection_statuses(baseline)
+            ),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "release_decision_status": _status_value(baseline, "release_decision", "status"),
@@ -1513,6 +1673,9 @@ def build_phase2_status_compare(
             "release_manifest_status": _status_value(candidate, "release_manifest", "status"),
             "github_release_plan_status": _status_value(candidate, "github_release_plan", "status"),
             "publish_preflight_status": _status_value(candidate, "publish_preflight", "status"),
+            "publish_preflight_rejection_sample_accounting": (
+                _publish_preflight_rejection_statuses(candidate)
+            ),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
             "release_decision_status": _status_value(candidate, "release_decision", "status"),

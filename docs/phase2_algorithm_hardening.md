@@ -4043,6 +4043,24 @@ integration where applicable.
 - Keep this gate publication-preflight scoped: no image math, CUDA kernel,
   runtime default change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 241: Phase 2 Publish Preflight Rejection Status
+
+- Extend `glass phase2-status --publish-preflight` so Phase 2 status artifacts
+  preserve the publish-preflight rejection sample accounting chain introduced in
+  Gate 240.
+- Surface publish-preflight Phase 2, plan-matrix, direct matrix, and
+  default-promotion accounting statuses and checks in Phase 2 JSON and Markdown.
+- Add `windows_publish_preflight_rejection_sample_accounting_passed` so a
+  publish-preflight artifact that is ready but lacks rejected-sample accounting
+  evidence still blocks a green Phase 2 status.
+- Extend `glass phase2-status-compare` so a candidate cannot regress from a
+  baseline whose publish-preflight rejected-sample accounting chain was fully
+  passed.
+- Add Phase 2 status tests for passing accounting, missing accounting, failed
+  accounting, Markdown output, and compare regression detection.
+- Keep this gate status/compare scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
