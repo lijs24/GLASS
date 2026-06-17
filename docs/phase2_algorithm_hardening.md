@@ -3891,6 +3891,27 @@ integration where applicable.
 - Keep this gate resident-contract scoped: no CUDA kernel math, runtime default,
   release packaging, or real-data benchmark rerun.
 
+### S2-Gate 233: Pipeline Rejection Sample Pixel Handoff
+
+- Extend `glass pipeline-contract --pixel-verify` so integration pixel
+  verification reports rejected-sample accounting directly in pipeline guardrail
+  artifacts.
+- Verify low/high rejection FITS maps as finite, non-negative, near-integer
+  count maps in the pipeline count-map verifier, not only in the resident
+  result-contract verifier.
+- Add `rejection_sample_accounting` rows that sum low/high rejection-map
+  rounded counts and compare the total with available resident provenance
+  fields or StackEngine metrics.
+- Add a top-level pipeline check
+  `integration_rejection_sample_counts_match_maps` so guardrails fail when DQ
+  touched-pixel counts still match but rejected-sample totals drift.
+- Preserve DQ semantics: DQ low/high flags count touched pixels; rejection maps
+  count rejected samples.
+- Add resident pipeline pixel-verification tests for pass, JSON sample-count
+  drift, and fractional rejection-map values.
+- Keep this gate pipeline-contract scoped: no image math, CUDA kernel, runtime
+  default, release packaging, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

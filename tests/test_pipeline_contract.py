@@ -153,6 +153,7 @@ def test_pipeline_contract_pixel_verification_passes_for_cpu_audit_run(tmp_path:
     assert checks["integration_dq_map_pixels_match_summary"]["passed"] is True
     assert checks["integration_coverage_map_pixels_match_dq"]["passed"] is True
     assert checks["integration_rejection_map_pixels_match_dq"]["passed"] is True
+    assert checks["integration_rejection_sample_counts_match_maps"]["passed"] is True
 
 
 def test_pipeline_contract_pixel_verification_fails_corrupt_dq_summary(tmp_path: Path):
@@ -216,6 +217,64 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+
+
+def test_pipeline_contract_pixel_verification_reports_resident_rejection_sample_accounting(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+
+    audit = build_pipeline_contract_audit(run, pixel_verify=True, pixel_verify_tile_size=1)
+    checks = {item["name"]: item for item in audit["checks"]}
+    row = audit["pixel_verification"]["integration_outputs"][0]
+    accounting = row["rejection_sample_accounting"]
+
+    assert audit["passed"] is True
+    assert checks["integration_rejection_map_pixels_match_dq"]["passed"] is True
+    assert checks["integration_rejection_sample_counts_match_maps"]["passed"] is True
+    assert row["count_maps"]["high_rejection"]["result"]["positive_pixels"] == 1
+    assert row["count_maps"]["high_rejection"]["result"]["rounded_sum"] == 2
+    assert accounting["ok"] is True
+    assert accounting["map_rejected_sample_sum"] == 3
+    assert accounting["source_counts"] == [
+        {"name": "dq_coverage_provenance.rejected_sample_count", "count": 3},
+        {"name": "dq_provenance_summary.rejected_samples", "count": 3},
+    ]
+
+
+def test_pipeline_contract_pixel_verification_detects_resident_rejection_sample_drift(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    payload = read_json(run / "integration_results.json")
+    output = payload["outputs"][0]
+    output["dq_coverage_provenance"]["rejected_sample_count"] = 2.0
+    output["dq_provenance_summary"]["rejected_samples"] = 2
+    write_json(run / "integration_results.json", payload)
+
+    audit = build_pipeline_contract_audit(run, pixel_verify=True, pixel_verify_tile_size=1)
+    checks = {item["name"]: item for item in audit["checks"]}
+    accounting = audit["pixel_verification"]["integration_outputs"][0]["rejection_sample_accounting"]
+
+    assert audit["passed"] is False
+    assert checks["integration_resident_result_contract"]["passed"] is True
+    assert checks["integration_rejection_sample_counts_match_maps"]["passed"] is False
+    assert accounting["map_rejected_sample_sum"] == 3
+    assert all(match["actual"] == 3 and match["summary"] == 2 for match in accounting["source_matches"])
+
+
+def test_pipeline_contract_pixel_verification_detects_fractional_rejection_count_map(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    write_fits_data(run / "integration" / "low_H.fits", np.array([[0.0, 1.5], [0.0, 0.0]], dtype=np.float32))
+
+    audit = build_pipeline_contract_audit(run, pixel_verify=True, pixel_verify_tile_size=1)
+    checks = {item["name"]: item for item in audit["checks"]}
+    low_map = audit["pixel_verification"]["integration_outputs"][0]["count_maps"]["low_rejection"]
+
+    assert audit["passed"] is False
+    assert checks["integration_rejection_map_pixels_match_dq"]["passed"] is False
+    assert checks["integration_rejection_sample_counts_match_maps"]["passed"] is False
+    assert low_map["count_integrity"]["passed"] is False
+    assert low_map["result"]["fractional_pixels"] == 1
 
 
 def test_pipeline_contract_accepts_resident_calibration_contract(tmp_path: Path):

@@ -62,6 +62,15 @@ def _summary_count(summary: dict[str, Any], key: str, *, default_zero: bool = Tr
         return None
 
 
+def _optional_rounded_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
 def _positive_int(value: Any) -> bool:
     try:
         return int(value) > 0
@@ -96,7 +105,7 @@ def _stack_result_contract_state_from_provenance(
 
 
 def _count_match(actual: Any, expected: int | None, tolerance: int) -> dict[str, Any]:
-    actual_int = None if actual is None else int(actual)
+    actual_int = _optional_rounded_int(actual)
     delta = None if actual_int is None or expected is None else actual_int - expected
     return {
         "actual": actual_int,
@@ -470,14 +479,125 @@ def _verify_integration_count_map_pixels(
         _summary_count(dq_summary, expected_dq_flag),
         tolerance_pixels,
     )
+    count_integrity = {
+        "passed": True,
+        "nonfinite_pixels": pixel_summary.get("nonfinite_pixels"),
+        "negative_pixels": pixel_summary.get("negative_pixels"),
+        "fractional_pixels": pixel_summary.get("fractional_pixels"),
+    }
+    if map_name in _REJECTION_MAPS:
+        count_integrity["passed"] = (
+            _optional_rounded_int(pixel_summary.get("nonfinite_pixels")) == 0
+            and _optional_rounded_int(pixel_summary.get("negative_pixels")) == 0
+            and _optional_rounded_int(pixel_summary.get("fractional_pixels")) == 0
+        )
     return {
         "status": "verified",
         "verified": True,
-        "ok": bool(match.get("passed")),
+        "ok": bool(match.get("passed")) and bool(count_integrity["passed"]),
         "path": path_value,
         "required": required,
         "result": pixel_summary,
+        "count_integrity": count_integrity,
         "summary_match": {expected_dq_flag: match},
+    }
+
+
+def _rejection_sample_sources(output: dict[str, Any]) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+    coverage_provenance = (
+        output.get("dq_coverage_provenance") if isinstance(output.get("dq_coverage_provenance"), dict) else {}
+    )
+    provenance_summary = (
+        output.get("dq_provenance_summary") if isinstance(output.get("dq_provenance_summary"), dict) else {}
+    )
+    stack_metrics = output.get("stack_engine_metrics") if isinstance(output.get("stack_engine_metrics"), dict) else {}
+    for name, value in [
+        ("dq_coverage_provenance.rejected_sample_count", coverage_provenance.get("rejected_sample_count")),
+        ("dq_provenance_summary.rejected_samples", provenance_summary.get("rejected_samples")),
+    ]:
+        count = _optional_rounded_int(value)
+        if count is not None:
+            sources.append({"name": name, "count": count})
+    stack_low = _optional_rounded_int(stack_metrics.get("low_rejected"))
+    stack_high = _optional_rounded_int(stack_metrics.get("high_rejected"))
+    if stack_low is not None or stack_high is not None:
+        sources.append(
+            {
+                "name": "stack_engine_metrics.low_high_rejected",
+                "count": int(stack_low or 0) + int(stack_high or 0),
+            }
+        )
+    return sources
+
+
+def _verify_integration_rejection_sample_accounting(
+    output: dict[str, Any],
+    *,
+    integration: dict[str, Any],
+    count_maps: dict[str, Any],
+    tolerance_pixels: int,
+) -> dict[str, Any]:
+    rejection = _integration_rejection_mode(integration, output)
+    expected = rejection != "none" and any(
+        _count_map_required(output, map_name, integration) for map_name in _REJECTION_MAPS
+    )
+    map_results = {
+        map_name: count_maps.get(map_name) or {}
+        for map_name in ("low_rejection", "high_rejection")
+    }
+    verified_results = {
+        map_name: row
+        for map_name, row in map_results.items()
+        if row.get("verified") and isinstance(row.get("result"), dict)
+    }
+    map_sum = sum(
+        int((row.get("result") or {}).get("rounded_sum") or 0)
+        for row in verified_results.values()
+    )
+    integrity = {
+        map_name: {
+            "verified": bool(row.get("verified")),
+            "required": bool(row.get("required")),
+            "ok": bool(row.get("ok")),
+            "rounded_sum": (row.get("result") or {}).get("rounded_sum")
+            if isinstance(row.get("result"), dict)
+            else None,
+            "positive_pixels": (row.get("result") or {}).get("positive_pixels")
+            if isinstance(row.get("result"), dict)
+            else None,
+            "count_integrity": row.get("count_integrity"),
+        }
+        for map_name, row in map_results.items()
+    }
+    sources = _rejection_sample_sources(output)
+    matches = [
+        {
+            "source": source["name"],
+            **_count_match(map_sum, source["count"], tolerance_pixels),
+        }
+        for source in sources
+    ]
+    required_maps_ok = all(
+        (not row.get("required")) or bool(row.get("ok"))
+        for row in map_results.values()
+    )
+    source_match_ok = (not expected) or (bool(matches) and all(bool(match["passed"]) for match in matches))
+    ok = (not expected) or (required_maps_ok and source_match_ok)
+    return {
+        "status": "verified" if verified_results else ("required" if expected else "not_required"),
+        "verified": bool(verified_results),
+        "ok": ok,
+        "required": expected,
+        "rejection": rejection,
+        "map_rejected_sample_sum": map_sum if verified_results else None,
+        "source_counts": sources,
+        "source_matches": matches,
+        "map_integrity": integrity,
+        "semantics": (
+            "Low/high rejection count maps store rejected-sample counts; DQ low/high flags "
+            "store pixels touched by rejection."
+        ),
     }
 
 
@@ -493,6 +613,38 @@ def _integration_pixel_verification_rows(
         if not isinstance(output, dict):
             continue
         item = str(output.get("filter") or index)
+        count_maps = {
+            "coverage": _verify_integration_count_map_pixels(
+                output,
+                integration=integration,
+                map_name="coverage",
+                path_key="coverage_map_path",
+                expected_dq_flag="no_data",
+                run_root=run_root,
+                tile_size=tile_size,
+                tolerance_pixels=tolerance_pixels,
+            ),
+            "low_rejection": _verify_integration_count_map_pixels(
+                output,
+                integration=integration,
+                map_name="low_rejection",
+                path_key="low_rejection_map_path",
+                expected_dq_flag="low_rejected",
+                run_root=run_root,
+                tile_size=tile_size,
+                tolerance_pixels=tolerance_pixels,
+            ),
+            "high_rejection": _verify_integration_count_map_pixels(
+                output,
+                integration=integration,
+                map_name="high_rejection",
+                path_key="high_rejection_map_path",
+                expected_dq_flag="high_rejected",
+                run_root=run_root,
+                tile_size=tile_size,
+                tolerance_pixels=tolerance_pixels,
+            ),
+        }
         rows.append(
             {
                 "item": item,
@@ -502,38 +654,13 @@ def _integration_pixel_verification_rows(
                     tile_size=tile_size,
                     tolerance_pixels=tolerance_pixels,
                 ),
-                "count_maps": {
-                    "coverage": _verify_integration_count_map_pixels(
-                        output,
-                        integration=integration,
-                        map_name="coverage",
-                        path_key="coverage_map_path",
-                        expected_dq_flag="no_data",
-                        run_root=run_root,
-                        tile_size=tile_size,
-                        tolerance_pixels=tolerance_pixels,
-                    ),
-                    "low_rejection": _verify_integration_count_map_pixels(
-                        output,
-                        integration=integration,
-                        map_name="low_rejection",
-                        path_key="low_rejection_map_path",
-                        expected_dq_flag="low_rejected",
-                        run_root=run_root,
-                        tile_size=tile_size,
-                        tolerance_pixels=tolerance_pixels,
-                    ),
-                    "high_rejection": _verify_integration_count_map_pixels(
-                        output,
-                        integration=integration,
-                        map_name="high_rejection",
-                        path_key="high_rejection_map_path",
-                        expected_dq_flag="high_rejected",
-                        run_root=run_root,
-                        tile_size=tile_size,
-                        tolerance_pixels=tolerance_pixels,
-                    ),
-                },
+                "count_maps": count_maps,
+                "rejection_sample_accounting": _verify_integration_rejection_sample_accounting(
+                    output,
+                    integration=integration,
+                    count_maps=count_maps,
+                    tolerance_pixels=tolerance_pixels,
+                ),
             }
         )
     return rows
@@ -914,6 +1041,10 @@ def build_pipeline_contract_audit(
             for row in pixel_verification_rows
             for map_name in ("low_rejection", "high_rejection")
         ]
+        rejection_sample_rows = [
+            row.get("rejection_sample_accounting") or {}
+            for row in pixel_verification_rows
+        ]
         checks.extend(
             [
                 _check(
@@ -958,6 +1089,27 @@ def build_pipeline_contract_audit(
                         ],
                         "tolerance_pixels": max(0, int(pixel_tolerance)),
                     },
+                ),
+                _check(
+                    "integration_rejection_sample_counts_match_maps",
+                    bool(rejection_sample_rows)
+                    and all(bool(row.get("ok")) for row in rejection_sample_rows),
+                    {
+                        "verified_records": sum(1 for row in rejection_sample_rows if row.get("verified")),
+                        "required_records": sum(1 for row in rejection_sample_rows if row.get("required")),
+                        "failed": [
+                            {
+                                "item": pixel_verification_rows[index].get("item"),
+                                "status": row.get("status"),
+                                "map_rejected_sample_sum": row.get("map_rejected_sample_sum"),
+                                "source_counts": row.get("source_counts"),
+                            }
+                            for index, row in enumerate(rejection_sample_rows)
+                            if not row.get("ok")
+                        ],
+                        "tolerance_pixels": max(0, int(pixel_tolerance)),
+                    },
+                    "Rejection maps count samples; DQ rejection flags count touched pixels.",
                 ),
             ]
         )
