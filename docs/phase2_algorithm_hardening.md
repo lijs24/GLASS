@@ -3290,6 +3290,20 @@ integration where applicable.
   zip sizes `339732356`, `341206870`, `342183616`, and `296215418` bytes, and
   zero failed checks.
 
+### S2-Gate 193: Windows Release Manifest
+
+- Add `glass windows-release-manifest`, which consumes the Gate192 suite
+  artifact, reads the release zip files, and records package size plus SHA256
+  for every package label.
+- Validate that the suite passed, every referenced zip exists and is non-empty,
+  zip sizes match the smoke artifacts, each suite row passed, and each SHA256
+  digest is recorded.
+- Keep `--require-same-source-stamp` optional so historical multi-gate package
+  sets can be archived while final release automation can enforce one source
+  tag.
+- Current real artifact result: status `release_manifest_ready`,
+  recommendation `ready_for_upload`, package count `4`, and zero failed checks.
+
 ## Gate Rules
 
 Each gate requires:

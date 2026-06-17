@@ -98,6 +98,11 @@ from glass.report.windows_package_suite import (
     parse_labeled_paths,
     write_windows_package_suite,
 )
+from glass.report.windows_release_manifest import (
+    build_windows_release_manifest,
+    parse_labeled_zip_paths,
+    write_windows_release_manifest,
+)
 from glass.report.windows_package_smoke import (
     build_windows_package_smoke,
     write_windows_package_smoke,
@@ -1854,6 +1859,28 @@ def cmd_windows_package_suite(args: argparse.Namespace) -> int:
             "passed": payload["passed"],
             "recommendation": payload["recommendation"],
             "source_stamps": payload["source_stamps"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_windows_release_manifest(args: argparse.Namespace) -> int:
+    payload = build_windows_release_manifest(
+        suite_artifact=args.suite,
+        zip_overrides=parse_labeled_zip_paths(args.zip),
+        require_same_source_stamp=args.require_same_source_stamp,
+    )
+    write_windows_release_manifest(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "recommendation": payload["recommendation"],
+            "packages": len(payload["packages"]),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -4180,6 +4207,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the package suite passes",
     )
     windows_package_suite.set_defaults(func=cmd_windows_package_suite)
+
+    windows_release_manifest = sub.add_parser(
+        "windows-release-manifest",
+        help="record Windows release zip sizes and SHA256 checksums from a package suite",
+    )
+    windows_release_manifest.add_argument(
+        "--suite",
+        required=True,
+        help="windows-package-suite JSON artifact",
+    )
+    windows_release_manifest.add_argument(
+        "--zip",
+        action="append",
+        default=[],
+        help="optional package zip override in LABEL=PATH form; repeat as needed",
+    )
+    windows_release_manifest.add_argument("--out", required=True, help="output release manifest JSON")
+    windows_release_manifest.add_argument("--markdown", help="optional output Markdown summary")
+    windows_release_manifest.add_argument(
+        "--require-same-source-stamp",
+        action="store_true",
+        help="fail unless every package in the manifest reports the same source stamp",
+    )
+    windows_release_manifest.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the release manifest checks pass",
+    )
+    windows_release_manifest.set_defaults(func=cmd_windows_release_manifest)
 
     windows_package_smoke = sub.add_parser(
         "windows-package-smoke",

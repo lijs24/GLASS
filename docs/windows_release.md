@@ -176,6 +176,12 @@ glass windows-package-smoke --package-root .release\windows\GLASS --zip .release
 glass windows-package-suite --smoke cuda13=windows_package_smoke_cuda13.json --smoke cuda12=windows_package_smoke_cuda12.json --smoke cuda11=windows_package_smoke_cuda11.json --smoke cpu=windows_package_smoke_cpu.json --out windows_package_suite.json --markdown windows_package_suite.md --require-same-source-stamp --fail-on-failure
 ```
 
+- Record final release file sizes and SHA256 checksums:
+
+```powershell
+glass windows-release-manifest --suite windows_package_suite.json --out windows_release_manifest.json --markdown windows_release_manifest.md --require-same-source-stamp --fail-on-failure
+```
+
 - Release-grade 200-light acceptance uses the benchmark contract plus
   `--pipeline-contract-json`, and all `contract_pipeline_contract_*` checks pass.
 - Acceptance Markdown and HTML report show the release pipeline-contract
