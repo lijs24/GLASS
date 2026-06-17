@@ -8,17 +8,18 @@ from glass.cli import main
 from glass.engine.contracts import DQFlag
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
+from glass.report.dq_map_verify import summarize_count_map_pixels
 from glass.report.resident_result_contract import build_resident_result_contract
 
 
-def _write_resident_run(path: Path, *, mismatch_summary: bool = False) -> None:
+def _write_resident_run(path: Path, *, mismatch_summary: bool = False, mismatch_sample_count: bool = False) -> None:
     integration = path / "integration"
     integration.mkdir(parents=True)
     master = np.ones((2, 2), dtype=np.float32)
     weight = np.ones((2, 2), dtype=np.float32)
     coverage = np.array([[0, 1], [1, 1]], dtype=np.float32)
     low = np.array([[0, 1], [0, 0]], dtype=np.float32)
-    high = np.array([[0, 0], [1, 0]], dtype=np.float32)
+    high = np.array([[0, 0], [2, 0]], dtype=np.float32)
     dq = np.array(
         [
             [int(DQFlag.NO_DATA), int(DQFlag.LOW_REJECTED)],
@@ -62,6 +63,8 @@ def _write_resident_run(path: Path, *, mismatch_summary: bool = False) -> None:
                         "available": True,
                         "active_frame_count": 3,
                         "geometric_frame_count_matches_active": True,
+                        "rejected_sample_count": 2.0 if mismatch_sample_count else 3.0,
+                        "rejected_sample_count_source": "low_high_rejection_maps",
                         "source_terms": [
                             "post_rejection_coverage",
                             "low_rejection",
@@ -81,6 +84,7 @@ def _write_resident_run(path: Path, *, mismatch_summary: bool = False) -> None:
                             "high_rejection",
                             "geometric_warp_coverage",
                         ],
+                        "rejected_samples": 2 if mismatch_sample_count else 3,
                         "output_dq_summary": dq_summary,
                     },
                     "geometric_warp_coverage": {
@@ -110,6 +114,28 @@ def test_resident_result_contract_passes_with_pixel_verify(tmp_path: Path) -> No
     assert checks["resident_identity"]["passed"] is True
     assert checks["pixel_maps_match_summaries"]["passed"] is True
     assert payload["outputs"][0]["pixel_verification"]["dq"]["ok"] is True
+    accounting = payload["outputs"][0]["pixel_verification"]["rejection_sample_accounting"]
+    assert accounting["ok"] is True
+    assert accounting["map_rejected_sample_sum"] == 3
+    assert accounting["coverage_provenance_rejected_samples"] == 3
+    assert accounting["provenance_summary_rejected_samples"] == 3
+
+
+def test_resident_result_contract_distinguishes_rejected_samples_from_dq_pixels(tmp_path: Path) -> None:
+    _write_resident_run(tmp_path)
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    output = payload["outputs"][0]
+    pixel = output["pixel_verification"]
+    high_map = pixel["count_maps"]["high_rejection"]
+    high_dq = pixel["dq"]["matches"]["high_rejected"]
+    assert payload["passed"] is True
+    assert high_map["result"]["positive_pixels"] == 1
+    assert high_map["result"]["rounded_sum"] == 2
+    assert high_map["summary_match"]["high_rejected"]["summary"] == 1
+    assert high_dq["summary"] == 1
+    assert pixel["rejection_sample_accounting"]["map_rejected_sample_sum"] == 3
 
 
 def test_resident_result_contract_detects_dq_summary_mismatch(tmp_path: Path) -> None:
@@ -121,6 +147,47 @@ def test_resident_result_contract_detects_dq_summary_mismatch(tmp_path: Path) ->
     checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
     assert checks["pixel_maps_match_summaries"]["passed"] is False
     assert payload["outputs"][0]["pixel_verification"]["dq"]["matches"]["low_rejected"]["passed"] is False
+
+
+def test_resident_result_contract_detects_rejection_sample_count_mismatch(tmp_path: Path) -> None:
+    _write_resident_run(tmp_path, mismatch_sample_count=True)
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    accounting = payload["outputs"][0]["pixel_verification"]["rejection_sample_accounting"]
+    assert payload["passed"] is False
+    assert checks["rejection_sample_count_recorded"]["passed"] is True
+    assert checks["rejection_sample_count_summary_matches_coverage"]["passed"] is True
+    assert checks["pixel_maps_match_summaries"]["passed"] is False
+    assert accounting["map_vs_coverage"]["passed"] is False
+    assert accounting["map_vs_summary"]["passed"] is False
+    assert accounting["map_rejected_sample_sum"] == 3
+    assert accounting["coverage_provenance_rejected_samples"] == 2
+
+
+def test_resident_result_contract_detects_fractional_rejection_count_map(tmp_path: Path) -> None:
+    _write_resident_run(tmp_path)
+    low_path = tmp_path / "integration" / "low_H.fits"
+    write_fits_data(low_path, np.array([[0.0, 1.5], [0.0, 0.0]], dtype=np.float32))
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    low_map = payload["outputs"][0]["pixel_verification"]["count_maps"]["low_rejection"]
+    assert payload["passed"] is False
+    assert low_map["ok"] is False
+    assert low_map["count_integrity"]["passed"] is False
+    assert low_map["result"]["fractional_pixels"] == 1
+
+
+def test_count_map_summary_reports_negative_and_fractional_pixels(tmp_path: Path) -> None:
+    count_map = tmp_path / "count.fits"
+    write_fits_data(count_map, np.array([[0.0, 1.5], [-1.0, 2.0]], dtype=np.float32))
+
+    summary = summarize_count_map_pixels(count_map, tile_size=1)
+
+    assert summary["negative_pixels"] == 1
+    assert summary["fractional_pixels"] == 1
 
 
 def test_resident_result_contract_allows_policy_skipped_coverage_provenance(tmp_path: Path) -> None:

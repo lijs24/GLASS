@@ -3873,6 +3873,24 @@ integration where applicable.
 - Keep this gate algorithm-contract scoped: no CUDA kernel, runtime default,
   release packaging, or external-reference behavior changes.
 
+### S2-Gate 232: Resident Rejection Sample Accounting Parity
+
+- Extend `glass resident-result-contract` so resident CUDA artifacts preserve
+  the same sample-versus-pixel rejection semantics introduced for StackEngine
+  in Gate 231.
+- Require resident JSON provenance to record rejected-sample totals in both
+  `dq_coverage_provenance.rejected_sample_count` and
+  `dq_provenance_summary.rejected_samples` when low/high rejection source terms
+  are present.
+- When `--pixel-verify` is enabled, read low/high rejection FITS maps in tiles,
+  require finite non-negative near-integer counts, and require their rounded
+  sample sum to match both resident rejected-sample provenance fields.
+- Preserve existing DQ checks: DQ low/high flags still count touched pixels,
+  while rejection count maps carry sample totals.
+- Add positive, JSON-mismatch, and fractional-count-map tests.
+- Keep this gate resident-contract scoped: no CUDA kernel math, runtime default,
+  release packaging, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -92,6 +92,8 @@ def summarize_count_map_pixels(
     nonfinite_pixels = 0
     positive_pixels = 0
     zero_or_less_pixels = 0
+    negative_pixels = 0
+    fractional_pixels = 0
     value_sum = 0.0
     min_value: float | None = None
     max_value: float | None = None
@@ -113,6 +115,8 @@ def summarize_count_map_pixels(
                 positive = values > np.float32(positive_threshold)
                 positive_pixels += int(np.count_nonzero(positive))
                 zero_or_less_pixels += int(np.count_nonzero(~positive))
+                negative_pixels += int(np.count_nonzero(values < 0.0))
+                fractional_pixels += int(np.count_nonzero(np.abs(values - np.rint(values)) > 1.0e-3))
                 value_sum += float(np.sum(values, dtype=np.float64))
                 tile_min = float(np.min(values))
                 tile_max = float(np.max(values))
@@ -131,6 +135,8 @@ def summarize_count_map_pixels(
         "nonfinite_pixels": nonfinite_pixels,
         "positive_pixels": positive_pixels,
         "zero_or_less_pixels": zero_or_less_pixels,
+        "negative_pixels": negative_pixels,
+        "fractional_pixels": fractional_pixels,
         "sum": value_sum,
         "rounded_sum": int(round(value_sum)),
         "min": min_value,

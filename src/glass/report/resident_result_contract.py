@@ -91,9 +91,19 @@ def _int_value(value: Any) -> int | None:
     if value is None:
         return None
     try:
-        return int(value)
+        return int(round(float(value)))
     except (TypeError, ValueError):
         return None
+
+
+def _sample_match(actual: int | None, expected: int | None, tolerance: int) -> dict[str, Any]:
+    delta = None if actual is None or expected is None else int(actual) - int(expected)
+    return {
+        "actual": actual,
+        "expected": expected,
+        "delta": delta,
+        "passed": delta is not None and abs(delta) <= int(tolerance),
+    }
 
 
 def _summary_matches(dq_summary: dict[str, Any], provenance_summary: dict[str, Any]) -> dict[str, Any]:
@@ -152,6 +162,8 @@ def _pixel_verify(
         result["dq"] = {"ok": all(match["passed"] for match in matches.values()), "result": dq_pixels, "matches": matches}
 
     count_maps: dict[str, Any] = {}
+    rejection_sample_sum = 0
+    rejection_sample_maps_present = False
     for map_name, path_key, flag in [
         ("coverage", "coverage_map_path", "no_data"),
         ("low_rejection", "low_rejection_map_path", "low_rejected"),
@@ -168,10 +180,25 @@ def _pixel_verify(
         if expected is None and flag in {"no_data", "low_rejected", "high_rejected"}:
             expected = 0
         delta = None if expected is None else int(value) - expected
+        count_integrity = {
+            "passed": True,
+            "nonfinite_pixels": pixels.get("nonfinite_pixels"),
+            "negative_pixels": pixels.get("negative_pixels"),
+            "fractional_pixels": pixels.get("fractional_pixels"),
+        }
+        if map_name in _REJECTION_MAPS:
+            rejection_sample_maps_present = True
+            rejection_sample_sum += int(pixels.get("rounded_sum") or 0)
+            count_integrity["passed"] = (
+                _int_value(pixels.get("nonfinite_pixels")) == 0
+                and _int_value(pixels.get("negative_pixels")) == 0
+                and _int_value(pixels.get("fractional_pixels")) == 0
+            )
         count_maps[map_name] = {
-            "ok": delta is not None and abs(delta) <= tolerance_pixels,
+            "ok": delta is not None and abs(delta) <= tolerance_pixels and bool(count_integrity["passed"]),
             "required": required,
             "result": pixels,
+            "count_integrity": count_integrity,
             "summary_match": {
                 flag: {
                     "actual": int(value),
@@ -182,7 +209,39 @@ def _pixel_verify(
             },
         }
     result["count_maps"] = count_maps
-    result["ok"] = bool(result.get("dq", {}).get("ok")) and all(bool(row.get("ok")) for row in count_maps.values())
+    coverage_provenance = (
+        output.get("dq_coverage_provenance") if isinstance(output.get("dq_coverage_provenance"), dict) else {}
+    )
+    provenance_summary = (
+        output.get("dq_provenance_summary") if isinstance(output.get("dq_provenance_summary"), dict) else {}
+    )
+    coverage_rejected_samples = _int_value(coverage_provenance.get("rejected_sample_count"))
+    summary_rejected_samples = _int_value(provenance_summary.get("rejected_samples"))
+    map_vs_coverage = _sample_match(rejection_sample_sum, coverage_rejected_samples, tolerance_pixels)
+    map_vs_summary = _sample_match(rejection_sample_sum, summary_rejected_samples, tolerance_pixels)
+    coverage_vs_summary = _sample_match(coverage_rejected_samples, summary_rejected_samples, tolerance_pixels)
+    expected_sample_accounting = rejection != "none" and rejection_sample_maps_present
+    rejection_sample_accounting = {
+        "ok": (not expected_sample_accounting)
+        or (map_vs_coverage["passed"] and map_vs_summary["passed"] and coverage_vs_summary["passed"]),
+        "expected": expected_sample_accounting,
+        "map_rejected_sample_sum": rejection_sample_sum if rejection_sample_maps_present else None,
+        "coverage_provenance_rejected_samples": coverage_rejected_samples,
+        "provenance_summary_rejected_samples": summary_rejected_samples,
+        "map_vs_coverage": map_vs_coverage,
+        "map_vs_summary": map_vs_summary,
+        "coverage_vs_summary": coverage_vs_summary,
+        "semantics": (
+            "Low/high rejection count maps store rejected-sample counts; DQ low/high flags "
+            "store pixels touched by rejection."
+        ),
+    }
+    result["rejection_sample_accounting"] = rejection_sample_accounting
+    result["ok"] = (
+        bool(result.get("dq", {}).get("ok"))
+        and all(bool(row.get("ok")) for row in count_maps.values())
+        and bool(rejection_sample_accounting["ok"])
+    )
     return result
 
 
@@ -214,6 +273,16 @@ def _resident_output_contract(
     summary_match = _summary_matches(dq_summary, provenance_summary)
     source_terms = {str(item) for item in (provenance_summary.get("source_terms") or [])}
     source_terms_required = coverage_required or coverage_available
+    coverage_rejected_samples = _int_value(coverage_provenance.get("rejected_sample_count"))
+    summary_rejected_samples = _int_value(provenance_summary.get("rejected_samples"))
+    rejection_sample_count_required = rejection != "none" and bool(
+        source_terms & {"low_rejection", "high_rejection"}
+    )
+    rejection_sample_count_match = _sample_match(
+        coverage_rejected_samples,
+        summary_rejected_samples,
+        0,
+    )
     checks = [
         _check(
             "resident_identity",
@@ -281,6 +350,24 @@ def _resident_output_contract(
                 if isinstance(output.get("geometric_warp_coverage"), dict)
                 else None,
             },
+        ),
+        _check(
+            "rejection_sample_count_recorded",
+            (not rejection_sample_count_required)
+            or (coverage_rejected_samples is not None and summary_rejected_samples is not None),
+            {
+                "required": rejection_sample_count_required,
+                "rejection": rejection,
+                "source_terms": sorted(source_terms),
+                "coverage_provenance_rejected_samples": coverage_rejected_samples,
+                "provenance_summary_rejected_samples": summary_rejected_samples,
+            },
+            "Resident rejection provenance records rejected samples separately from DQ pixels.",
+        ),
+        _check(
+            "rejection_sample_count_summary_matches_coverage",
+            (not rejection_sample_count_required) or bool(rejection_sample_count_match["passed"]),
+            rejection_sample_count_match,
         ),
     ]
     pixel_result = None

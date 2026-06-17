@@ -20,7 +20,7 @@ def _write_resident_pipeline_run(path: Path, *, missing_source_terms: bool = Fal
     weight = np.ones((2, 2), dtype=np.float32)
     coverage = np.array([[0, 1], [1, 1]], dtype=np.float32)
     low = np.array([[0, 1], [0, 0]], dtype=np.float32)
-    high = np.array([[0, 0], [1, 0]], dtype=np.float32)
+    high = np.array([[0, 0], [2, 0]], dtype=np.float32)
     dq = np.array(
         [
             [int(DQFlag.NO_DATA), int(DQFlag.LOW_REJECTED)],
@@ -65,6 +65,8 @@ def _write_resident_pipeline_run(path: Path, *, missing_source_terms: bool = Fal
                         "available": True,
                         "active_frame_count": 3,
                         "geometric_frame_count_matches_active": True,
+                        "rejected_sample_count": 3.0,
+                        "rejected_sample_count_source": "low_high_rejection_maps",
                         "source_terms": source_terms,
                     },
                     "dq_provenance_summary": {
@@ -73,6 +75,7 @@ def _write_resident_pipeline_run(path: Path, *, missing_source_terms: bool = Fal
                         "engine": "cuda_resident_stack",
                         "active_frame_count": 3,
                         "source_terms": source_terms,
+                        "rejected_samples": 3,
                         "output_dq_summary": dq_summary,
                     },
                     "geometric_warp_coverage": {
