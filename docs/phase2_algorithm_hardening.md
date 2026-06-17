@@ -2668,6 +2668,21 @@ integration where applicable.
 - Record the effective values in existing resident artifacts through the
   `resident_io_pipeline` contract.
 
+### S2-Gate 160: Throughput Preset Confirmation and Contract Update
+
+- Run the 200-light benchmark with `--resident-runtime-preset throughput-v1`
+  instead of manually expanding every runtime scheduling flag.
+- Compare the preset run against the black-box reference and the historical
+  GLASS baseline with the same scale/offset and coverage contract.
+- Extend benchmark contracts with `required_command_token_groups` so a contract
+  can accept equivalent command evidence, such as explicit `--resident-h2d-mode
+  pinned_ring` or the measured throughput preset.
+- Record that the preset path applied the intended runtime values in
+  `resident_io_pipeline`.
+- Current confirmation result: accepted and scientifically consistent, but
+  slower than the Gate158 winner because read/decode wait time increased.
+  Therefore the preset remains opt-in and is not promoted to default.
+
 ## Gate Rules
 
 Each gate requires:

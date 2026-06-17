@@ -125,13 +125,11 @@
     "--backend cuda",
     "--until-stage integration",
     "--memory-mode resident",
-    "--resident-h2d-mode pinned_ring",
     "--resident-registration similarity_cuda_triangle",
     "--resident-warp-interpolation lanczos3",
     "--resident-warp-clamping-threshold 0.3",
     "--resident-star-threshold 350",
     "--resident-star-max-candidates 48",
-    "--resident-star-grid-cols 24",
     "--resident-star-grid-rows 16",
     "--resident-triangle-pixel-refine-coarse-stride 4",
     "--resident-triangle-pixel-refine-final-stride 8",
@@ -147,5 +145,21 @@
     "--exclude-frame-id LIGHT_H_0156",
     "--exclude-frame-id LIGHT_H_0157",
     "--exclude-frame-id LIGHT_H_0158"
+  ],
+  "required_command_token_groups": [
+    {
+      "name": "resident_h2d_or_runtime_preset",
+      "any_of": [
+        "--resident-h2d-mode pinned_ring",
+        "--resident-runtime-preset throughput-v1"
+      ]
+    },
+    {
+      "name": "resident_star_grid_cols",
+      "any_of": [
+        "--resident-star-grid-cols 24",
+        "--resident-star-grid-cols 28"
+      ]
+    }
   ]
 }

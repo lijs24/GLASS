@@ -1187,6 +1187,28 @@ def build_benchmark_contract_checks(
                 {"token": token_text, "run_command_present": command_text is not None},
             )
         )
+    for index, group in enumerate(contract.get("required_command_token_groups") or []):
+        if isinstance(group, dict):
+            tokens = [str(token) for token in group.get("any_of") or []]
+            group_name = str(group.get("name") or f"group_{index}")
+        elif isinstance(group, str):
+            tokens = [group]
+            group_name = f"group_{index}"
+        else:
+            tokens = [str(token) for token in group]
+            group_name = f"group_{index}"
+        matched = [token for token in tokens if command_text is not None and token in command_text]
+        checks.append(
+            _check(
+                f"contract_required_command_token_group:{group_name}",
+                bool(matched),
+                {
+                    "any_of": tokens,
+                    "matched": matched,
+                    "run_command_present": command_text is not None,
+                },
+            )
+        )
 
     compare_contract = contract.get("comparison") or {}
     transform = compare_payload.get("candidate_transform") or {}

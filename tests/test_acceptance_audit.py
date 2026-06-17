@@ -434,7 +434,7 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
         elapsed_s=38.0,
         command=(
             "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
-            "--flat-floor 0.05"
+            "--flat-floor 0.05 --resident-runtime-preset throughput-v1"
         ),
         resident_timing={
             "master_build_or_load": 11.0,
@@ -448,6 +448,15 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     _write_compare(compare)
     _write_contract(contract)
     contract_payload = read_json(contract)
+    contract_payload["required_command_token_groups"] = [
+        {
+            "name": "resident_h2d_or_runtime_preset",
+            "any_of": [
+                "--resident-h2d-mode pinned_ring",
+                "--resident-runtime-preset throughput-v1",
+            ],
+        }
+    ]
     timing_baseline = contract_payload["timing_baseline"]
     timing_baseline["stages_s"]["light_read_decode_worker"] = 45.0
     timing_baseline["cumulative_stages"] = ["light_read_decode_worker"]
@@ -474,6 +483,7 @@ def test_acceptance_audit_applies_benchmark_contract(tmp_path: Path):
     assert audit["benchmark_contract"]["name"] == "fixture_contract"
     assert checks["contract_max_runtime_vs_release_baseline"] is True
     assert checks["contract_required_command_token:--flat-floor 0.05"] is True
+    assert checks["contract_required_command_token_group:resident_h2d_or_runtime_preset"] is True
     assert checks["contract_compare_scale"] is True
     assert checks["contract_compare_min_coverage"] is True
     regression = audit["performance_regression"]
@@ -873,6 +883,17 @@ def test_acceptance_audit_contract_catches_missing_parameters(tmp_path: Path):
     _write_wbpp_result(wbpp, elapsed_s=1092.541)
     _write_compare(compare, scale=1.0, min_coverage=99.0, coverage_fraction=0.5)
     _write_contract(contract)
+    contract_payload = read_json(contract)
+    contract_payload["required_command_token_groups"] = [
+        {
+            "name": "resident_h2d_or_runtime_preset",
+            "any_of": [
+                "--resident-h2d-mode pinned_ring",
+                "--resident-runtime-preset throughput-v1",
+            ],
+        }
+    ]
+    write_json(contract, contract_payload)
 
     audit = build_acceptance_audit(
         manifest_path=manifest,
@@ -888,6 +909,7 @@ def test_acceptance_audit_contract_catches_missing_parameters(tmp_path: Path):
     assert audit["passed"] is False
     assert checks["contract_max_runtime_vs_release_baseline"] is False
     assert checks["contract_required_command_token:--flat-floor 0.05"] is False
+    assert checks["contract_required_command_token_group:resident_h2d_or_runtime_preset"] is False
     assert checks["contract_compare_scale"] is False
     assert checks["contract_compare_min_coverage"] is False
     assert checks["contract_min_coverage_fraction"] is False
