@@ -333,3 +333,179 @@ def write_phase2_status(
     write_json(out_json, payload)
     if markdown is not None:
         write_phase2_status_markdown(markdown, payload)
+
+
+def _load_phase2_status(path: str | Path) -> dict[str, Any]:
+    target = Path(path)
+    payload = read_json(target)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Phase 2 status artifact must be a JSON object: {target}")
+    payload = dict(payload)
+    payload["_path"] = str(target)
+    return payload
+
+
+def _status_value(payload: dict[str, Any], *keys: str) -> Any:
+    current: Any = payload
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _compare_check(
+    name: str,
+    passed: bool,
+    *,
+    baseline: Any,
+    candidate: Any,
+    note: str = "",
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "passed": bool(passed),
+        "evidence": {"baseline": baseline, "candidate": candidate},
+        "note": note,
+    }
+
+
+def build_phase2_status_compare(
+    *,
+    baseline_status: str | Path,
+    candidate_status: str | Path,
+) -> dict[str, Any]:
+    baseline = _load_phase2_status(baseline_status)
+    candidate = _load_phase2_status(candidate_status)
+    baseline_gate = _status_value(baseline, "latest_checkpoint", "gate")
+    candidate_gate = _status_value(candidate, "latest_checkpoint", "gate")
+    checks = [
+        _compare_check(
+            "baseline_artifact_type",
+            baseline.get("artifact_type") == "glass_phase2_status",
+            baseline=baseline.get("artifact_type"),
+            candidate="glass_phase2_status",
+        ),
+        _compare_check(
+            "candidate_artifact_type",
+            candidate.get("artifact_type") == "glass_phase2_status",
+            baseline="glass_phase2_status",
+            candidate=candidate.get("artifact_type"),
+        ),
+        _compare_check(
+            "latest_checkpoint_gate_not_decreased",
+            candidate_gate is not None and baseline_gate is not None and int(candidate_gate) >= int(baseline_gate),
+            baseline=baseline_gate,
+            candidate=candidate_gate,
+        ),
+        _compare_check(
+            "overall_status_green_preserved",
+            baseline.get("status") != "green" or candidate.get("status") == "green",
+            baseline=baseline.get("status"),
+            candidate=candidate.get("status"),
+        ),
+        _compare_check(
+            "latest_checkpoint_green_preserved",
+            _status_value(baseline, "latest_checkpoint", "green") is not True
+            or _status_value(candidate, "latest_checkpoint", "green") is True,
+            baseline=_status_value(baseline, "latest_checkpoint", "green"),
+            candidate=_status_value(candidate, "latest_checkpoint", "green"),
+        ),
+        _compare_check(
+            "acceptance_audit_passed_preserved",
+            _status_value(baseline, "acceptance_audit", "passed") is not True
+            or _status_value(candidate, "acceptance_audit", "passed") is True,
+            baseline=_status_value(baseline, "acceptance_audit", "passed"),
+            candidate=_status_value(candidate, "acceptance_audit", "passed"),
+        ),
+        _compare_check(
+            "acceptance_status_preserved",
+            _status_value(baseline, "acceptance_audit", "status") != "passed"
+            or _status_value(candidate, "acceptance_audit", "status") == "passed",
+            baseline=_status_value(baseline, "acceptance_audit", "status"),
+            candidate=_status_value(candidate, "acceptance_audit", "status"),
+        ),
+        _compare_check(
+            "cuda_available_preserved",
+            _status_value(baseline, "doctor", "cuda_available") is not True
+            or _status_value(candidate, "doctor", "cuda_available") is True,
+            baseline=_status_value(baseline, "doctor", "cuda_available"),
+            candidate=_status_value(candidate, "doctor", "cuda_available"),
+        ),
+        _compare_check(
+            "release_manifest_ready_preserved",
+            _status_value(baseline, "release_manifest", "status") != "release_manifest_ready"
+            or _status_value(candidate, "release_manifest", "status") == "release_manifest_ready",
+            baseline=_status_value(baseline, "release_manifest", "status"),
+            candidate=_status_value(candidate, "release_manifest", "status"),
+        ),
+        _compare_check(
+            "github_release_plan_ready_preserved",
+            _status_value(baseline, "github_release_plan", "status") != "release_plan_ready"
+            or _status_value(candidate, "github_release_plan", "status") == "release_plan_ready",
+            baseline=_status_value(baseline, "github_release_plan", "status"),
+            candidate=_status_value(candidate, "github_release_plan", "status"),
+        ),
+    ]
+    passed = all(item["passed"] for item in checks)
+    return {
+        "schema_version": 1,
+        "artifact_type": "glass_phase2_status_compare",
+        "created_at": now_iso(),
+        "status": "passed" if passed else "regressed",
+        "passed": passed,
+        "baseline_path": str(baseline_status),
+        "candidate_path": str(candidate_status),
+        "baseline": {
+            "status": baseline.get("status"),
+            "latest_gate": baseline_gate,
+            "acceptance_status": _status_value(baseline, "acceptance_audit", "status"),
+            "cuda_available": _status_value(baseline, "doctor", "cuda_available"),
+            "release_manifest_status": _status_value(baseline, "release_manifest", "status"),
+            "github_release_plan_status": _status_value(baseline, "github_release_plan", "status"),
+        },
+        "candidate": {
+            "status": candidate.get("status"),
+            "latest_gate": candidate_gate,
+            "acceptance_status": _status_value(candidate, "acceptance_audit", "status"),
+            "cuda_available": _status_value(candidate, "doctor", "cuda_available"),
+            "release_manifest_status": _status_value(candidate, "release_manifest", "status"),
+            "github_release_plan_status": _status_value(candidate, "github_release_plan", "status"),
+        },
+        "checks": checks,
+    }
+
+
+def write_phase2_status_compare_markdown(path: str | Path, payload: dict[str, Any]) -> None:
+    lines = [
+        "# GLASS Phase 2 Status Compare",
+        "",
+        f"- Status: {payload.get('status')}",
+        f"- Baseline: {payload.get('baseline_path')}",
+        f"- Candidate: {payload.get('candidate_path')}",
+        "",
+        "## Summary",
+        "",
+        f"- Baseline: {payload.get('baseline')}",
+        f"- Candidate: {payload.get('candidate')}",
+        "",
+        "## Checks",
+        "",
+    ]
+    for item in payload.get("checks") or []:
+        marker = "PASS" if item.get("passed") else "FAIL"
+        lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_phase2_status_compare(
+    out_json: str | Path,
+    payload: dict[str, Any],
+    *,
+    markdown: str | Path | None = None,
+) -> None:
+    write_json(out_json, payload)
+    if markdown is not None:
+        write_phase2_status_compare_markdown(markdown, payload)

@@ -1,0 +1,117 @@
+{
+  "artifact_type": "glass_phase2_status_compare",
+  "baseline": {
+    "acceptance_status": "passed",
+    "cuda_available": true,
+    "github_release_plan_status": "release_plan_ready",
+    "latest_gate": 203,
+    "release_manifest_status": "release_manifest_ready",
+    "status": "green"
+  },
+  "baseline_path": "runs\\checkpoints\\s2_gate_203_phase2_status.json",
+  "candidate": {
+    "acceptance_status": "passed",
+    "cuda_available": true,
+    "github_release_plan_status": "release_plan_ready",
+    "latest_gate": 204,
+    "release_manifest_status": "release_manifest_ready",
+    "status": "green"
+  },
+  "candidate_path": "runs\\checkpoints\\s2_gate_204_phase2_status.json",
+  "checks": [
+    {
+      "evidence": {
+        "baseline": "glass_phase2_status",
+        "candidate": "glass_phase2_status"
+      },
+      "name": "baseline_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "glass_phase2_status",
+        "candidate": "glass_phase2_status"
+      },
+      "name": "candidate_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": 203,
+        "candidate": 204
+      },
+      "name": "latest_checkpoint_gate_not_decreased",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "green",
+        "candidate": "green"
+      },
+      "name": "overall_status_green_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "latest_checkpoint_green_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "acceptance_audit_passed_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "passed",
+        "candidate": "passed"
+      },
+      "name": "acceptance_status_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": true,
+        "candidate": true
+      },
+      "name": "cuda_available_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "release_manifest_ready",
+        "candidate": "release_manifest_ready"
+      },
+      "name": "release_manifest_ready_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline": "release_plan_ready",
+        "candidate": "release_plan_ready"
+      },
+      "name": "github_release_plan_ready_preserved",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T18:32:04+00:00",
+  "passed": true,
+  "schema_version": 1,
+  "status": "passed"
+}

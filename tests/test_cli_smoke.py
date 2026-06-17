@@ -221,6 +221,7 @@ def test_cli_help_commands():
     for command in [
         "doctor",
         "phase2-status",
+        "phase2-status-compare",
         "scan",
         "plan",
         "subset",

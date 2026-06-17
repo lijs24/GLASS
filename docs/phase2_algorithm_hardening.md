@@ -3441,6 +3441,18 @@ integration where applicable.
 - Validate command help, direct report tests, and a real handoff summary from
   the latest checkpoints and release artifacts.
 
+### S2-Gate 204: Phase 2 Handoff Regression Guard
+
+- Add `glass phase2-status-compare`, a read-only comparison artifact for two
+  `glass_phase2_status` JSON files.
+- Flag regressions in latest checkpoint gate/status, overall green status,
+  acceptance audit pass/status, CUDA availability, Windows release-manifest
+  readiness, and GitHub release-plan readiness.
+- Emit machine-readable JSON and optional Markdown.
+- Support `--fail-on-regression` for CI/handoff guard usage.
+- Validate with passing, failing, and CLI-output tests plus a real comparison
+  between the previous and current Phase 2 handoff artifacts.
+
 ## Gate Rules
 
 Each gate requires:

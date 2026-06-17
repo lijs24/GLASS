@@ -84,7 +84,12 @@ from glass.report.release_promotion_decision import (
     build_release_promotion_decision,
     write_release_promotion_decision,
 )
-from glass.report.phase2_status import build_phase2_status, write_phase2_status
+from glass.report.phase2_status import (
+    build_phase2_status,
+    build_phase2_status_compare,
+    write_phase2_status,
+    write_phase2_status_compare,
+)
 from glass.report.windows_release_matrix import (
     build_windows_release_matrix,
     write_windows_release_matrix,
@@ -2536,6 +2541,24 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
     return 0 if payload.get("passed") or not args.fail_on_not_green else 2
 
 
+def cmd_phase2_status_compare(args: argparse.Namespace) -> int:
+    payload = build_phase2_status_compare(
+        baseline_status=args.baseline_status,
+        candidate_status=args.candidate_status,
+    )
+    write_phase2_status_compare(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload.get("status"),
+            "baseline_gate": (payload.get("baseline") or {}).get("latest_gate"),
+            "candidate_gate": (payload.get("candidate") or {}).get("latest_gate"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if payload.get("passed") or not args.fail_on_regression else 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="glass")
     parser.add_argument("--version", action="version", version="glass 0.1.0")
@@ -2572,6 +2595,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless all supplied status checks pass",
     )
     phase2_status.set_defaults(func=cmd_phase2_status)
+
+    phase2_status_compare = sub.add_parser(
+        "phase2-status-compare",
+        help="compare two Phase 2 status artifacts and flag handoff regressions",
+    )
+    phase2_status_compare.add_argument("--baseline-status", required=True, help="baseline glass_phase2_status JSON")
+    phase2_status_compare.add_argument("--candidate-status", required=True, help="candidate glass_phase2_status JSON")
+    phase2_status_compare.add_argument("--out", required=True, help="output comparison JSON")
+    phase2_status_compare.add_argument("--markdown", help="optional output Markdown summary")
+    phase2_status_compare.add_argument(
+        "--fail-on-regression",
+        action="store_true",
+        help="return exit code 2 if the candidate regresses relative to the baseline",
+    )
+    phase2_status_compare.set_defaults(func=cmd_phase2_status_compare)
 
     scan = sub.add_parser("scan", help="scan FITS/FIT/XISF metadata")
     scan.add_argument("--root", required=True)
