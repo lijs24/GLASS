@@ -200,6 +200,8 @@ def _status_payload(
     checkpoint_green: bool = True,
     acceptance_passed: bool = True,
     acceptance_status: str = "passed",
+    fastpath_contract_status: str = "passed",
+    fastpath_contract_check_count: int = 24,
     cuda_available: bool = True,
     release_status: str = "release_manifest_ready",
     github_status: str = "release_plan_ready",
@@ -219,7 +221,12 @@ def _status_payload(
             "status": "green" if checkpoint_green else "failed",
             "green": checkpoint_green,
         },
-        "acceptance_audit": {"status": acceptance_status, "passed": acceptance_passed},
+        "acceptance_audit": {
+            "status": acceptance_status,
+            "passed": acceptance_passed,
+            "resident_registration_fastpath_contract_status": fastpath_contract_status,
+            "resident_registration_fastpath_contract_check_count": fastpath_contract_check_count,
+        },
         "doctor": {"cuda_available": cuda_available},
         "release_manifest": {"status": release_status},
         "github_release_plan": {"status": github_status},
@@ -309,6 +316,8 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["release_decision"]["recommendation"] == "promote_default_candidate"
     assert payload["release_decision"]["runtime_repeat_elapsed_ratio_vs_best"] == 1.053
+    checks = {item["name"]: item["passed"] for item in payload["checks"]}
+    assert checks["resident_registration_fastpath_contract_passed_for_default"] is True
 
 
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
@@ -357,6 +366,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Native resident result source: run_default" in text
     assert "Native calibrated lights: 200" in text
     assert "Registration fast path: present" in text
+    assert "Registration fast path contract: passed" in text
     assert "Triangle warp batch frames: 188" in text
     assert "Pipeline Contract" in text
     assert "Integration DQ contract: True" in text
@@ -364,6 +374,40 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Release Decision" in text
     assert "Default change ready: True" in text
     assert "Runtime repeat ratio vs best: 1.053" in text
+
+
+def test_phase2_status_blocks_default_ready_without_fastpath_contract(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=223)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    _write_acceptance(acceptance)
+    payload = read_json(acceptance)
+    payload["checks"] = [
+        item
+        for item in payload["checks"]
+        if not str(item.get("name") or "").startswith("contract_resident_registration_fastpath")
+    ]
+    write_json(acceptance, payload)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    fastpath_check = checks["resident_registration_fastpath_contract_passed_for_default"]
+    assert fastpath_check["passed"] is False
+    assert fastpath_check["evidence"]["status"] == "not_requested"
+    assert fastpath_check["evidence"]["check_count"] == 0
 
 
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
@@ -381,6 +425,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert payload["status"] == "passed"
     assert checks["latest_checkpoint_gate_not_decreased"] is True
     assert checks["acceptance_audit_passed_preserved"] is True
+    assert checks["resident_registration_fastpath_contract_passed_preserved"] is True
+    assert checks["resident_registration_fastpath_contract_check_count_preserved"] is True
     assert checks["cuda_available_preserved"] is True
     assert checks["release_manifest_ready_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
@@ -425,6 +471,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["latest_checkpoint_green_preserved"] is False
     assert checks["acceptance_audit_passed_preserved"] is False
     assert checks["acceptance_status_preserved"] is False
+    assert checks["resident_registration_fastpath_contract_passed_preserved"] is True
+    assert checks["resident_registration_fastpath_contract_check_count_preserved"] is True
     assert checks["cuda_available_preserved"] is False
     assert checks["release_manifest_ready_preserved"] is False
     assert checks["github_release_plan_ready_preserved"] is False
@@ -433,6 +481,38 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["pipeline_pixel_verification_preserved"] is False
     assert checks["release_decision_default_change_ready_preserved"] is False
     assert checks["release_decision_promote_recommendation_preserved"] is False
+
+
+def test_phase2_status_compare_flags_fastpath_contract_evidence_regression(tmp_path: Path):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=221))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=222,
+            fastpath_contract_status="not_requested",
+            fastpath_contract_check_count=0,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["resident_registration_fastpath_contract_passed_preserved"]["passed"] is False
+    assert checks["resident_registration_fastpath_contract_passed_preserved"]["evidence"] == {
+        "baseline": "passed",
+        "candidate": "not_requested",
+    }
+    assert checks["resident_registration_fastpath_contract_check_count_preserved"]["passed"] is False
+    assert checks["resident_registration_fastpath_contract_check_count_preserved"]["evidence"] == {
+        "baseline": 24,
+        "candidate": 0,
+    }
 
 
 def test_cli_phase2_status_compare_writes_outputs_and_returns_failure(tmp_path: Path):

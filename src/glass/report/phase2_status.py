@@ -490,6 +490,24 @@ def _release_decision_summary(path: str | Path | None) -> dict[str, Any] | None:
     }
 
 
+def _default_change_is_ready(decision: dict[str, Any] | None) -> bool:
+    if not isinstance(decision, dict):
+        return False
+    return (
+        decision.get("default_change_ready") is True
+        and decision.get("recommendation") == "promote_default_candidate"
+    )
+
+
+def _resident_fastpath_contract_passed(acceptance: dict[str, Any] | None) -> bool:
+    if not isinstance(acceptance, dict):
+        return False
+    return (
+        acceptance.get("resident_registration_fastpath_contract_status") == "passed"
+        and int(acceptance.get("resident_registration_fastpath_contract_check_count") or 0) > 0
+    )
+
+
 def build_phase2_status(
     *,
     checkpoint_dir: str | Path,
@@ -576,8 +594,7 @@ def build_phase2_status(
         checks.append(
             {
                 "name": "release_decision_default_change_ready",
-                "passed": decision.get("default_change_ready") is True
-                and decision.get("recommendation") == "promote_default_candidate",
+                "passed": _default_change_is_ready(decision),
                 "evidence": {
                     "status": decision.get("status"),
                     "release_candidate_ready": decision.get("release_candidate_ready"),
@@ -589,6 +606,28 @@ def build_phase2_status(
                 },
             }
         )
+        if acceptance is not None and _default_change_is_ready(decision):
+            checks.append(
+                {
+                    "name": "resident_registration_fastpath_contract_passed_for_default",
+                    "passed": _resident_fastpath_contract_passed(acceptance),
+                    "evidence": {
+                        "status": acceptance.get(
+                            "resident_registration_fastpath_contract_status"
+                        ),
+                        "check_count": acceptance.get(
+                            "resident_registration_fastpath_contract_check_count"
+                        ),
+                        "failed_check_count": acceptance.get(
+                            "resident_registration_fastpath_contract_failed_check_count"
+                        ),
+                        "fastpath_status": acceptance.get(
+                            "resident_registration_fastpath_status"
+                        ),
+                        "mode": acceptance.get("resident_registration_fastpath_mode"),
+                    },
+                }
+            )
     passed = all(item["passed"] for item in checks)
     return {
         "schema_version": 1,
@@ -874,6 +913,69 @@ def build_phase2_status_compare(
             or _status_value(candidate, "acceptance_audit", "status") == "passed",
             baseline=_status_value(baseline, "acceptance_audit", "status"),
             candidate=_status_value(candidate, "acceptance_audit", "status"),
+        ),
+        _compare_check(
+            "resident_registration_fastpath_contract_passed_preserved",
+            _status_value(
+                baseline,
+                "acceptance_audit",
+                "resident_registration_fastpath_contract_status",
+            )
+            != "passed"
+            or _status_value(
+                candidate,
+                "acceptance_audit",
+                "resident_registration_fastpath_contract_status",
+            )
+            == "passed",
+            baseline=_status_value(
+                baseline,
+                "acceptance_audit",
+                "resident_registration_fastpath_contract_status",
+            ),
+            candidate=_status_value(
+                candidate,
+                "acceptance_audit",
+                "resident_registration_fastpath_contract_status",
+            ),
+        ),
+        _compare_check(
+            "resident_registration_fastpath_contract_check_count_preserved",
+            int(
+                _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "resident_registration_fastpath_contract_check_count",
+                )
+                or 0
+            )
+            <= 0
+            or int(
+                _status_value(
+                    candidate,
+                    "acceptance_audit",
+                    "resident_registration_fastpath_contract_check_count",
+                )
+                or 0
+            )
+            >= int(
+                _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "resident_registration_fastpath_contract_check_count",
+                )
+                or 0
+            ),
+            baseline=_status_value(
+                baseline,
+                "acceptance_audit",
+                "resident_registration_fastpath_contract_check_count",
+            ),
+            candidate=_status_value(
+                candidate,
+                "acceptance_audit",
+                "resident_registration_fastpath_contract_check_count",
+            ),
         ),
         _compare_check(
             "cuda_available_preserved",

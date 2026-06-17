@@ -3722,6 +3722,24 @@ integration where applicable.
 - Keep this gate release-contract only: no processing algorithm changes and no
   new algorithm-source entry required.
 
+### S2-Gate 223: Fast-Path Contract Status Preservation
+
+- Treat resident registration fast-path acceptance as required release evidence
+  whenever the Phase 2 release decision is ready to promote the default
+  candidate.
+- Make `glass phase2-status` fail closed if the acceptance artifact has no
+  resident registration fast-path contract checks, or if those checks did not
+  pass, while preserving the existing CUDA/package/pipeline checks.
+- Make `glass phase2-status-compare` detect evidence regressions where a
+  baseline had `resident_registration_fastpath_contract_status=passed` and a
+  candidate falls back to `not_requested`, `failed`, or a smaller contract check
+  count.
+- Use the preserved 200-light fast-path acceptance audit as the authoritative
+  Phase 2 status input for release handoff; keep smaller default-route fixtures
+  as behavioral tests rather than release-strength evidence.
+- Keep this gate release/status only: no image processing algorithm changes and
+  no new algorithm-source entry required.
+
 ## Gate Rules
 
 Each gate requires:
