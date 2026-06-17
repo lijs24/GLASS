@@ -277,6 +277,98 @@ def _contract_attachment_audit(
     return record, checks
 
 
+def _pipeline_rejection_sample_accounting_summary(
+    pipeline_contract: dict[str, Any] | None,
+) -> dict[str, Any]:
+    check_name = "integration_rejection_sample_counts_match_maps"
+    if pipeline_contract is None:
+        return {
+            "status": "not_requested",
+            "check_name": check_name,
+            "check_present": False,
+            "check_passed": None,
+            "pixel_verification_enabled": False,
+            "output_count": 0,
+            "accounted_output_count": 0,
+            "required_count": 0,
+            "verified_count": 0,
+            "failed_count": 0,
+            "failed_items": [],
+            "rows": [],
+        }
+
+    pixel_verification = pipeline_contract.get("pixel_verification")
+    if not isinstance(pixel_verification, dict):
+        pixel_verification = {}
+    integration_outputs = pixel_verification.get("integration_outputs")
+    if not isinstance(integration_outputs, list):
+        integration_outputs = []
+
+    rows: list[dict[str, Any]] = []
+    for output in integration_outputs:
+        if not isinstance(output, dict):
+            continue
+        accounting = output.get("rejection_sample_accounting")
+        if not isinstance(accounting, dict):
+            continue
+        source_counts = accounting.get("source_counts")
+        if not isinstance(source_counts, list):
+            source_counts = []
+        source_matches = accounting.get("source_matches")
+        if not isinstance(source_matches, list):
+            source_matches = []
+        failed_matches = [
+            {
+                "source": match.get("source"),
+                "actual": match.get("actual"),
+                "summary": match.get("summary"),
+                "delta": match.get("delta"),
+            }
+            for match in source_matches
+            if isinstance(match, dict) and not match.get("passed")
+        ]
+        rows.append(
+            {
+                "item": output.get("item"),
+                "status": accounting.get("status"),
+                "required": bool(accounting.get("required")),
+                "verified": bool(accounting.get("verified")),
+                "ok": bool(accounting.get("ok")),
+                "rejection": accounting.get("rejection"),
+                "map_rejected_sample_sum": accounting.get("map_rejected_sample_sum"),
+                "source_counts": source_counts,
+                "failed_matches": failed_matches,
+                "semantics": accounting.get("semantics"),
+            }
+        )
+
+    check_names = {str(name) for name in pipeline_contract.get("check_names") or []}
+    failed_check_names = {str(name) for name in pipeline_contract.get("failed_checks") or []}
+    check_present = check_name in check_names
+    check_passed = None if not check_present else check_name not in failed_check_names
+    failed_items = [row for row in rows if not row.get("ok")]
+    if check_present:
+        status = "passed" if check_passed else "failed"
+    elif rows:
+        status = "passed" if not failed_items else "failed"
+    else:
+        status = "not_available"
+    return {
+        "status": status,
+        "check_name": check_name,
+        "check_present": check_present,
+        "check_passed": check_passed,
+        "pixel_verification_enabled": bool(pixel_verification.get("enabled")),
+        "output_count": len(integration_outputs),
+        "accounted_output_count": len(rows),
+        "required_count": sum(1 for row in rows if row.get("required")),
+        "verified_count": sum(1 for row in rows if row.get("verified")),
+        "failed_count": len(failed_items),
+        "failed_items": failed_items,
+        "rows": rows,
+    }
+
+
 def _pipeline_contract_release_evidence(
     *,
     checks: list[dict[str, Any]],
@@ -294,6 +386,7 @@ def _pipeline_contract_release_evidence(
     else:
         status = "not_requested"
     contract_requirements = (contract_payload or {}).get("pipeline_contract")
+    rejection_sample_accounting = _pipeline_rejection_sample_accounting_summary(pipeline_contract)
     return {
         "status": status,
         "required_by_benchmark_contract": isinstance(contract_requirements, dict)
@@ -310,6 +403,7 @@ def _pipeline_contract_release_evidence(
         "passed_check_count": sum(1 for item in pipeline_checks if item.get("passed")),
         "failed_check_count": len(failed_checks),
         "failed_checks": failed_checks,
+        "rejection_sample_accounting": rejection_sample_accounting,
         "checks": pipeline_checks,
     }
 
@@ -535,6 +629,9 @@ def build_acceptance_audit(
             "integration": pipeline_contract_payload.get("integration") or {},
             "pixel_verification": pipeline_contract_payload.get("pixel_verification") or {},
         }
+        pipeline_contract["rejection_sample_accounting"] = _pipeline_rejection_sample_accounting_summary(
+            pipeline_contract
+        )
         checks.extend(
             [
                 _check(
@@ -786,6 +883,44 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                 "",
             ]
         )
+        accounting = release_evidence.get("rejection_sample_accounting")
+        if isinstance(accounting, dict):
+            lines.extend(
+                [
+                    "### Rejection Sample Accounting",
+                    "",
+                    f"- Status: {accounting.get('status')}",
+                    f"- Check passed: {accounting.get('check_passed')}",
+                    f"- Pixel verification enabled: {accounting.get('pixel_verification_enabled')}",
+                    f"- Accounting rows: {accounting.get('accounted_output_count')}",
+                    f"- Required rows: {accounting.get('required_count')}",
+                    f"- Verified rows: {accounting.get('verified_count')}",
+                    f"- Failed rows: {accounting.get('failed_count')}",
+                ]
+            )
+            for row in accounting.get("failed_items") or []:
+                if not isinstance(row, dict):
+                    continue
+                source_counts = ", ".join(
+                    f"{source.get('name')}={source.get('count')}"
+                    for source in row.get("source_counts") or []
+                    if isinstance(source, dict)
+                )
+                failed_matches = "; ".join(
+                    (
+                        f"{match.get('source')}: actual={match.get('actual')} "
+                        f"summary={match.get('summary')} delta={match.get('delta')}"
+                    )
+                    for match in row.get("failed_matches") or []
+                    if isinstance(match, dict)
+                )
+                lines.append(
+                    "- Rejection sample mismatch "
+                    f"{row.get('item')}: map_rejected_sample_sum="
+                    f"{row.get('map_rejected_sample_sum')} source_counts=[{source_counts}] "
+                    f"failed_matches=[{failed_matches}]"
+                )
+            lines.append("")
         for item in release_evidence.get("checks") or []:
             marker = "PASS" if item.get("passed") else "FAIL"
             lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")

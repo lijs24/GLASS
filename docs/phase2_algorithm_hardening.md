@@ -3928,6 +3928,25 @@ integration where applicable.
 - Keep this gate report-surface scoped: no image math, CUDA kernel, runtime
   default, release packaging, or real-data benchmark rerun.
 
+### S2-Gate 235: Acceptance Rejection Sample Triage
+
+- Extend acceptance audit release evidence so pipeline-contract rejection
+  sample accounting is machine-readable in
+  `release_contract_evidence.pipeline_contract.rejection_sample_accounting`.
+- Summarize the pipeline check
+  `integration_rejection_sample_counts_match_maps`, pixel-verification state,
+  accounted/required/verified/failed row counts, failed output items, low/high
+  rejection-map rejected-sample totals, provenance source counts, and failed
+  source deltas.
+- Also attach the same compact summary to `pipeline_contract` inside the
+  acceptance JSON so downstream status tools can consume either location.
+- Add Markdown output for failed rejection sample accounting rows so release
+  reviewers can diagnose sample-count drift without opening raw contract JSON.
+- Add acceptance-audit tests for a pipeline contract where rejected-sample maps
+  disagree with provenance while the rest of the benchmark fixture is valid.
+- Keep this gate acceptance/report scoped: no image math, CUDA kernel, runtime
+  default, release packaging, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

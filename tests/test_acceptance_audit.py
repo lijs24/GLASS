@@ -574,6 +574,121 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
     )
 
 
+def _write_pipeline_contract_with_rejection_sample_drift(path: Path) -> None:
+    checks = [
+        {
+            "name": "calibration_master_surface_contract",
+            "passed": True,
+            "evidence": {"master_count": 1, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "resident_calibrated_light_contract",
+            "passed": True,
+            "evidence": {"light_count": 3, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "integration_resident_result_contract",
+            "passed": True,
+            "evidence": {"required_count": 1, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "integration_rejection_sample_counts_match_maps",
+            "passed": False,
+            "evidence": {
+                "verified_records": 1,
+                "required_records": 1,
+                "failed": [
+                    {
+                        "item": "H",
+                        "status": "verified",
+                        "map_rejected_sample_sum": 7,
+                        "source_counts": [
+                            {
+                                "name": "dq_coverage_provenance.rejected_sample_count",
+                                "count": 6,
+                            }
+                        ],
+                    }
+                ],
+            },
+            "note": "fixture sample-count drift",
+        },
+    ]
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "audit_type": "pipeline_invariant_contract",
+            "status": "failed",
+            "passed": False,
+            "checks": checks,
+            "integration": {
+                "outputs": [
+                    {
+                        "item": "H",
+                        "resident_result_contract": {
+                            "required": True,
+                            "present": True,
+                            "passed": True,
+                            "status": "passed",
+                        },
+                    }
+                ]
+            },
+            "pixel_verification": {
+                "enabled": True,
+                "integration_outputs": [
+                    {
+                        "item": "H",
+                        "status": "verified",
+                        "rejection_sample_accounting": {
+                            "status": "verified",
+                            "verified": True,
+                            "ok": False,
+                            "required": True,
+                            "rejection": "winsorized_sigma",
+                            "map_rejected_sample_sum": 7,
+                            "source_counts": [
+                                {
+                                    "name": "dq_coverage_provenance.rejected_sample_count",
+                                    "count": 6,
+                                },
+                                {
+                                    "name": "dq_provenance_summary.rejected_samples",
+                                    "count": 6,
+                                },
+                            ],
+                            "source_matches": [
+                                {
+                                    "source": "dq_coverage_provenance.rejected_sample_count",
+                                    "actual": 7,
+                                    "summary": 6,
+                                    "delta": 1,
+                                    "passed": False,
+                                },
+                                {
+                                    "source": "dq_provenance_summary.rejected_samples",
+                                    "actual": 7,
+                                    "summary": 6,
+                                    "delta": 1,
+                                    "passed": False,
+                                },
+                            ],
+                            "semantics": (
+                                "Low/high rejection count maps store rejected-sample counts; "
+                                "DQ low/high flags store pixels touched by rejection."
+                            ),
+                        },
+                    }
+                ],
+            },
+        },
+    )
+
+
 def _write_stack_engine_contract(path: Path, *, passed: bool = True, ready: bool = True) -> None:
     blockers = [] if ready else [
         {
@@ -764,6 +879,66 @@ def test_acceptance_audit_accepts_passing_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_passed"]["passed"] is True
     assert audit["pipeline_contract"]["passed"] is True
     assert audit["pipeline_contract"]["check_count"] == 3
+
+
+def test_acceptance_audit_summarizes_pipeline_rejection_sample_accounting(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    markdown = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract_with_rejection_sample_drift(pipeline)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    evidence = audit["release_contract_evidence"]["pipeline_contract"]
+    accounting = evidence["rejection_sample_accounting"]
+    top_level_accounting = audit["pipeline_contract"]["rejection_sample_accounting"]
+
+    assert audit["passed"] is False
+    assert evidence["status"] == "failed"
+    assert accounting["status"] == "failed"
+    assert accounting["check_present"] is True
+    assert accounting["check_passed"] is False
+    assert accounting["pixel_verification_enabled"] is True
+    assert accounting["accounted_output_count"] == 1
+    assert accounting["required_count"] == 1
+    assert accounting["verified_count"] == 1
+    assert accounting["failed_count"] == 1
+    assert accounting["failed_items"][0]["item"] == "H"
+    assert accounting["failed_items"][0]["map_rejected_sample_sum"] == 7
+    assert accounting["failed_items"][0]["source_counts"][0] == {
+        "name": "dq_coverage_provenance.rejected_sample_count",
+        "count": 6,
+    }
+    assert accounting["failed_items"][0]["failed_matches"][0] == {
+        "source": "dq_coverage_provenance.rejected_sample_count",
+        "actual": 7,
+        "summary": 6,
+        "delta": 1,
+    }
+    assert top_level_accounting["failed_count"] == 1
+
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "Rejection Sample Accounting" in text
+    assert "Check passed: False" in text
+    assert "map_rejected_sample_sum=7" in text
+    assert "dq_coverage_provenance.rejected_sample_count=6" in text
+    assert "actual=7 summary=6 delta=1" in text
 
 
 def test_acceptance_audit_accepts_contract_bundle(tmp_path: Path):
