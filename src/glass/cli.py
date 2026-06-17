@@ -64,6 +64,10 @@ from glass.report.resident_runtime_repeat_plan import (
     build_resident_runtime_repeat_plan,
     write_resident_runtime_repeat_plan,
 )
+from glass.report.resident_runtime_repeat_execute import (
+    build_resident_runtime_repeat_execution,
+    write_resident_runtime_repeat_execution,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1791,6 +1795,31 @@ def cmd_resident_runtime_repeat_plan(args: argparse.Namespace) -> int:
             "markdown": args.markdown,
         }
     )
+    return 0
+
+
+def cmd_resident_runtime_repeat_execute(args: argparse.Namespace) -> int:
+    payload = build_resident_runtime_repeat_execution(
+        args.plan,
+        dry_run=args.dry_run,
+        skip_existing=args.skip_existing,
+        run_compare=not args.no_run_compare,
+        glass_executable=args.glass_executable,
+        cwd=args.cwd,
+    )
+    write_resident_runtime_repeat_execution(args.out, payload)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("summary", {}).get("status"),
+            "recorded_run_count": payload.get("summary", {}).get("recorded_run_count"),
+            "skipped_existing_count": payload.get("summary", {}).get("skipped_existing_count"),
+            "compare_status": payload.get("summary", {}).get("compare_status"),
+            "out": args.out,
+        }
+    )
+    if args.fail_on_failed and payload.get("summary", {}).get("failed"):
+        return 2
     return 0
 
 
@@ -3756,6 +3785,39 @@ def build_parser() -> argparse.ArgumentParser:
     resident_runtime_repeat_plan.add_argument("--out", required=True, help="output repeat plan JSON")
     resident_runtime_repeat_plan.add_argument("--markdown", help="optional output Markdown plan")
     resident_runtime_repeat_plan.set_defaults(func=cmd_resident_runtime_repeat_plan)
+
+    resident_runtime_repeat_execute = sub.add_parser(
+        "resident-runtime-repeat-execute",
+        help="execute or dry-run a resident-runtime-repeat-plan",
+    )
+    resident_runtime_repeat_execute.add_argument("--plan", required=True, help="resident runtime repeat plan JSON")
+    resident_runtime_repeat_execute.add_argument("--out", required=True, help="output execution audit JSON")
+    resident_runtime_repeat_execute.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="record planned commands without executing them",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="skip repeat runs that already contain run_timing.json",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--no-run-compare",
+        action="store_true",
+        help="do not run the final resident-runtime-compare step",
+    )
+    resident_runtime_repeat_execute.add_argument(
+        "--glass-executable",
+        help="replace leading 'glass' token with this executable while executing",
+    )
+    resident_runtime_repeat_execute.add_argument("--cwd", help="working directory for executed commands")
+    resident_runtime_repeat_execute.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when an executed step fails",
+    )
+    resident_runtime_repeat_execute.set_defaults(func=cmd_resident_runtime_repeat_execute)
 
     resident_reg_triage = sub.add_parser(
         "resident-registration-triage",

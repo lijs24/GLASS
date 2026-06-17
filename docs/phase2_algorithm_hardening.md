@@ -2715,6 +2715,20 @@ integration where applicable.
   next measured gate can execute the generated commands when the machine is in
   a controlled I/O/GPU window.
 
+### S2-Gate 163: Resident Runtime Repeat Executor
+
+- Add `glass resident-runtime-repeat-execute` to execute or dry-run a
+  `resident-runtime-repeat-plan`.
+- Support dry-run review, `--skip-existing` based on `run_timing.json`,
+  optional `glass` executable substitution, working-directory control, optional
+  final compare execution, and fail-on-failed exit status.
+- Record each repeat run command and the final `resident-runtime-compare`
+  command with status, return code, and elapsed time when executed.
+- Validate the Gate162 real repeat plan with a dry-run execution audit under
+  `C:\glass_runs\phase2_s2_gate_163_repeat_executor`.
+- Keep this as an orchestration gate. Heavy 200-light repeat execution remains
+  blocked until the local GPU and disks are available for a controlled window.
+
 ## Gate Rules
 
 Each gate requires:
