@@ -2760,6 +2760,21 @@ integration where applicable.
 - Current result: guarded execution correctly blocks before launching repeats
   because the local GPU remains externally busy.
 
+### S2-Gate 166: StackEngine Result DQ Contract
+
+- Add an in-memory StackEngine result contract builder for CPU StackEngine
+  outputs.
+- Validate requested output-map presence, map shape consistency, finite master
+  pixels, coverage/no-data agreement, rejection-map/DQ-flag agreement,
+  DQ-summary/provenance agreement, coverage-sum/metrics agreement, and
+  request-shape/input-sample agreement.
+- Embed the result contract into `StackEngineResult.dq_provenance` and expose
+  a `result_contract_passed` metric without changing pixel calculations.
+- Add synthetic CPU StackEngine tests that cover passing results, provenance
+  drift, missing requested maps, and rejection/DQ mismatch.
+- Keep this as a core contract gate. It strengthens DQ/mask invariants at the
+  engine boundary and does not require the externally busy GPU.
+
 ## Gate Rules
 
 Each gate requires:

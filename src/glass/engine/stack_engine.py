@@ -6,6 +6,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from glass.engine.contracts import DQFlag, DQMask, ImageSource, RejectionPolicy, StackRequest, TileWindow
+from glass.engine.stack_contract import build_stack_engine_result_contract
 from glass.gpu.tile_scheduler import iter_tiles
 
 
@@ -144,7 +145,7 @@ class CPUStackEngine:
             metrics["variance_mean"] = float(np.mean(finite_variance)) if finite_variance.size else 0.0
             metrics["variance_max"] = float(np.max(finite_variance)) if finite_variance.size else 0.0
 
-        return StackEngineResult(
+        result = StackEngineResult(
             master=master,
             weight_map=weight_map,
             coverage_map=coverage_map,
@@ -155,6 +156,10 @@ class CPUStackEngine:
             dq_provenance=dq_provenance,
             metrics=metrics,
         )
+        result_contract = build_stack_engine_result_contract(result, request=request)
+        result.dq_provenance["result_contract"] = result_contract
+        result.metrics["result_contract_passed"] = bool(result_contract["passed"])
+        return result
 
     def _validate_sources(self, request: StackRequest, sources: list[ImageSource]) -> tuple[int, int]:
         if len(sources) != len(request.frame_ids):
