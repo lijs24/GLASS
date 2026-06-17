@@ -2790,6 +2790,20 @@ integration where applicable.
 - Generate a small synthetic CPU audit and StackEngine contract artifact under
   `C:\glass_runs\phase2_s2_gate_167_stack_contract_result_gate`.
 
+### S2-Gate 168: Pipeline Contract Exposes StackEngine Result Contract
+
+- Extend `glass pipeline-contract` so integration rows expose
+  `stack_result_contract` status from embedded StackEngine DQ provenance.
+- Add a new `integration_stack_result_contract` check: CPU StackEngine
+  integration outputs must carry `result_contract.passed=true`.
+- Preserve resident CUDA behavior by treating result-contract status as not
+  required unless the output declares CPU StackEngine provenance or
+  `tile_stack_mode=stack_engine_cpu`.
+- Add regression coverage for CPU StackEngine-looking integration artifacts
+  with DQ provenance but no embedded result contract.
+- Generate a synthetic CPU audit and pixel-verifying pipeline-contract artifact
+  under `C:\glass_runs\phase2_s2_gate_168_pipeline_result_contract`.
+
 ## Gate Rules
 
 Each gate requires:

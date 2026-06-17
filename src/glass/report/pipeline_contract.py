@@ -345,6 +345,30 @@ def _integration_pixel_verification_rows(
     return rows
 
 
+def _stack_result_contract_state(output: dict[str, Any]) -> dict[str, Any]:
+    provenance = output.get("stack_engine_dq_provenance")
+    summary = output.get("dq_provenance_summary")
+    tile_mode = str(output.get("tile_stack_mode") or "")
+    summary_engine = summary.get("engine") if isinstance(summary, dict) else None
+    required = (
+        bool(output.get("stack_engine_enabled"))
+        or tile_mode.startswith("stack_engine_cpu")
+        or summary_engine == "stack_engine_cpu"
+    )
+    contract = provenance.get("result_contract") if isinstance(provenance, dict) else None
+    present = isinstance(contract, dict)
+    passed = bool(contract.get("passed")) if isinstance(contract, dict) else False
+    check_count = len(contract.get("checks") or []) if isinstance(contract, dict) else 0
+    return {
+        "required": required,
+        "present": present,
+        "passed": passed,
+        "check_count": check_count,
+        "status": "not_required" if not required else ("passed" if passed else "missing_or_failed"),
+        "contract_type": contract.get("contract_type") if isinstance(contract, dict) else None,
+    }
+
+
 def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, output in enumerate(integration.get("outputs") or []):
@@ -354,18 +378,22 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
         summary = output.get("dq_provenance_summary")
         item = str(output.get("filter") or index)
         dq_required = not _map_skipped(output, "dq")
+        result_contract = _stack_result_contract_state(output)
         rows.append(
             {
                 "item": item,
                 "backend": output.get("backend"),
                 "rejection": _integration_rejection_mode(integration, output),
                 "frame_count": output.get("frame_count"),
+                "tile_stack_mode": output.get("tile_stack_mode"),
+                "stack_engine_enabled": bool(output.get("stack_engine_enabled")),
                 "dq_map_path": output.get("dq_map_path"),
                 "dq_map_exists": _path_exists(output.get("dq_map_path"), run_root),
                 "dq_summary_present": isinstance(dq_summary, dict),
                 "dq_summary_has_valid": isinstance(dq_summary, dict) and "valid" in dq_summary,
                 "dq_provenance_summary_present": isinstance(summary, dict),
                 "dq_provenance_engine": summary.get("engine") if isinstance(summary, dict) else None,
+                "stack_result_contract": result_contract,
                 "dq_contract_ok": (
                     (not dq_required)
                     or (
@@ -515,6 +543,24 @@ def build_pipeline_contract_audit(
                 "output_count": len(integration_rows),
                 "failed": [row["item"] for row in integration_rows if not row["dq_contract_ok"]],
             },
+        ),
+        _check(
+            "integration_stack_result_contract",
+            bool(integration_rows)
+            and all(
+                (not row["stack_result_contract"]["required"]) or row["stack_result_contract"]["passed"]
+                for row in integration_rows
+            ),
+            {
+                "output_count": len(integration_rows),
+                "required_count": sum(1 for row in integration_rows if row["stack_result_contract"]["required"]),
+                "failed": [
+                    row["item"]
+                    for row in integration_rows
+                    if row["stack_result_contract"]["required"] and not row["stack_result_contract"]["passed"]
+                ],
+            },
+            "CPU StackEngine integration outputs must carry an embedded passing result contract.",
         ),
     ]
     if pixel_verify:
