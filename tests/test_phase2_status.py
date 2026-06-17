@@ -142,8 +142,9 @@ def _write_pipeline_contract(
     *,
     passed: bool = True,
     rejection_sample_accounting_passed: bool = True,
+    sample_accounting_closure_passed: bool = True,
 ) -> None:
-    pipeline_passed = passed and rejection_sample_accounting_passed
+    pipeline_passed = passed and rejection_sample_accounting_passed and sample_accounting_closure_passed
     write_json(
         path,
         {
@@ -182,6 +183,25 @@ def _write_pipeline_contract(
                         ],
                     },
                 },
+                {
+                    "name": "integration_sample_accounting_closure",
+                    "passed": sample_accounting_closure_passed,
+                    "evidence": {
+                        "output_count": 1,
+                        "present_count": 1,
+                        "failed": []
+                        if sample_accounting_closure_passed
+                        else [
+                            {
+                                "item": "H",
+                                "status": "failed",
+                                "input_valid_samples_before_rejection": 9,
+                                "valid_samples_after_rejection": 6,
+                                "rejected_samples": 2,
+                            }
+                        ],
+                    },
+                },
             ],
             "calibration": {
                 "master_count": 3,
@@ -190,7 +210,28 @@ def _write_pipeline_contract(
                 "resident_calibrated_light_count": 200,
             },
             "integration": {
-                "outputs": [{"item": "H"}],
+                "outputs": [
+                    {
+                        "item": "H",
+                        "sample_accounting_closure": {
+                            "present": True,
+                            "required": True,
+                            "status": "passed"
+                            if sample_accounting_closure_passed
+                            else "failed",
+                            "passed": sample_accounting_closure_passed,
+                            "input_total_match": True,
+                            "valid_rejection_match": sample_accounting_closure_passed,
+                            "input_samples": 12,
+                            "input_valid_samples_before_rejection": 9,
+                            "input_invalid_samples_before_rejection": 3,
+                            "valid_samples_after_rejection": 6,
+                            "rejected_samples": 3
+                            if sample_accounting_closure_passed
+                            else 2,
+                        },
+                    }
+                ],
                 "maps": [
                     {"item": "H", "map": "master"},
                     {"item": "H", "map": "coverage"},
@@ -404,6 +445,8 @@ def _status_payload(
     pixel_verification: bool = True,
     pipeline_rejection_sample_check_present: bool = True,
     pipeline_rejection_sample_status: str = "passed",
+    pipeline_sample_closure_check_present: bool = True,
+    pipeline_sample_closure_status: str = "passed",
     default_change_ready: bool = True,
     release_recommendation: str = "promote_default_candidate",
 ) -> dict:
@@ -478,6 +521,20 @@ def _status_payload(
                 if pipeline_rejection_sample_check_present
                 else None,
                 "failed_count": 0 if pipeline_rejection_sample_status == "passed" else 1,
+            },
+            "integration_sample_accounting_closure": (
+                pipeline_sample_closure_status == "passed"
+            )
+            if pipeline_sample_closure_check_present
+            else None,
+            "sample_accounting_closure": {
+                "status": pipeline_sample_closure_status,
+                "check_present": pipeline_sample_closure_check_present,
+                "check_passed": (pipeline_sample_closure_status == "passed")
+                if pipeline_sample_closure_check_present
+                else None,
+                "present_count": 1 if pipeline_sample_closure_check_present else 0,
+                "failed_count": 0 if pipeline_sample_closure_status == "passed" else 1,
             },
         },
         "release_decision": {
@@ -577,6 +634,10 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["pipeline_contract"]["integration_rejection_sample_counts_match_maps"] is True
     assert payload["pipeline_contract"]["rejection_sample_accounting_status"] == "passed"
     assert payload["pipeline_contract"]["rejection_sample_accounting_failed_count"] == 0
+    assert payload["pipeline_contract"]["integration_sample_accounting_closure"] is True
+    assert payload["pipeline_contract"]["sample_accounting_closure_status"] == "passed"
+    assert payload["pipeline_contract"]["sample_accounting_closure_present_count"] == 1
+    assert payload["pipeline_contract"]["sample_accounting_closure_failed_count"] == 0
     assert payload["release_decision"]["status"] == "default_change_ready"
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["release_decision"]["recommendation"] == "promote_default_candidate"
@@ -586,6 +647,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["default_route_acceptance_passed"] is True
     assert checks["default_route_acceptance_route_contract_passed"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
+    assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["windows_publish_preflight_ready"] is True
     assert checks["windows_publish_preflight_rejection_sample_accounting_passed"] is True
 
@@ -878,6 +940,43 @@ def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
     }
 
 
+def test_phase2_status_blocks_pipeline_sample_closure_drift(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=245)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(
+        pipeline_contract,
+        sample_accounting_closure_passed=False,
+    )
+    _write_release_decision(release_decision)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    closure = status["pipeline_contract"]["sample_accounting_closure"]
+    assert status["status"] == "attention_required"
+    assert checks["pipeline_contract_passed"]["passed"] is False
+    assert checks["pipeline_sample_accounting_closure_passed"]["passed"] is False
+    assert closure["status"] == "failed"
+    assert closure["check_present"] is True
+    assert closure["check_passed"] is False
+    assert closure["present_count"] == 1
+    assert closure["failed_count"] == 1
+    assert closure["failed_items"][0]["input_valid_samples_before_rejection"] == 9
+    assert closure["failed_items"][0]["valid_samples_after_rejection"] == 6
+    assert closure["failed_items"][0]["rejected_samples"] == 2
+
+
 def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     baseline = tmp_path / "baseline.json"
     candidate = tmp_path / "candidate.json"
@@ -908,6 +1007,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["pipeline_pixel_verification_preserved"] is True
     assert checks["pipeline_rejection_sample_accounting_check_preserved"] is True
     assert checks["pipeline_rejection_sample_accounting_passed_preserved"] is True
+    assert checks["pipeline_sample_accounting_closure_check_preserved"] is True
+    assert checks["pipeline_sample_accounting_closure_passed_preserved"] is True
     assert checks["release_decision_default_change_ready_preserved"] is True
     assert checks["release_decision_promote_recommendation_preserved"] is True
 
@@ -933,6 +1034,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             pipeline_dq_contract=False,
             pixel_verification=False,
             pipeline_rejection_sample_status="failed",
+            pipeline_sample_closure_status="failed",
             default_change_ready=False,
             release_recommendation="repeat_benchmark_before_default_change",
         ),
@@ -965,6 +1067,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["pipeline_pixel_verification_preserved"] is False
     assert checks["pipeline_rejection_sample_accounting_check_preserved"] is True
     assert checks["pipeline_rejection_sample_accounting_passed_preserved"] is False
+    assert checks["pipeline_sample_accounting_closure_check_preserved"] is True
+    assert checks["pipeline_sample_accounting_closure_passed_preserved"] is False
     assert checks["release_decision_default_change_ready_preserved"] is False
     assert checks["release_decision_promote_recommendation_preserved"] is False
 
@@ -1060,6 +1164,38 @@ def test_phase2_status_compare_flags_rejection_sample_accounting_regression(tmp_
     }
     assert checks["pipeline_rejection_sample_accounting_passed_preserved"]["passed"] is False
     assert checks["pipeline_rejection_sample_accounting_passed_preserved"]["evidence"] == {
+        "baseline": "passed",
+        "candidate": "not_available",
+    }
+
+
+def test_phase2_status_compare_flags_sample_closure_regression(tmp_path: Path):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=244))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=245,
+            pipeline_sample_closure_check_present=False,
+            pipeline_sample_closure_status="not_available",
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["pipeline_sample_accounting_closure_check_preserved"]["passed"] is False
+    assert checks["pipeline_sample_accounting_closure_check_preserved"]["evidence"] == {
+        "baseline": True,
+        "candidate": False,
+    }
+    assert checks["pipeline_sample_accounting_closure_passed_preserved"]["passed"] is False
+    assert checks["pipeline_sample_accounting_closure_passed_preserved"]["evidence"] == {
         "baseline": "passed",
         "candidate": "not_available",
     }

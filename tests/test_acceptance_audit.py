@@ -689,6 +689,88 @@ def _write_pipeline_contract_with_rejection_sample_drift(path: Path) -> None:
     )
 
 
+def _write_pipeline_contract_with_sample_closure_drift(path: Path) -> None:
+    checks = [
+        {
+            "name": "calibration_master_surface_contract",
+            "passed": True,
+            "evidence": {"master_count": 1, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "resident_calibrated_light_contract",
+            "passed": True,
+            "evidence": {"light_count": 3, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "integration_resident_result_contract",
+            "passed": True,
+            "evidence": {"required_count": 1, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "integration_sample_accounting_closure",
+            "passed": False,
+            "evidence": {
+                "output_count": 1,
+                "present_count": 1,
+                "failed": [
+                    {
+                        "item": "H",
+                        "status": "failed",
+                        "input_valid_samples_before_rejection": 9,
+                        "valid_samples_after_rejection": 6,
+                        "rejected_samples": 2,
+                    }
+                ],
+            },
+            "note": "fixture sample-closure drift",
+        },
+    ]
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "audit_type": "pipeline_invariant_contract",
+            "status": "failed",
+            "passed": False,
+            "checks": checks,
+            "integration": {
+                "outputs": [
+                    {
+                        "item": "H",
+                        "resident_result_contract": {
+                            "required": True,
+                            "present": True,
+                            "passed": True,
+                            "status": "passed",
+                        },
+                        "sample_accounting_closure": {
+                            "present": True,
+                            "required": True,
+                            "status": "failed",
+                            "passed": False,
+                            "input_total_match": True,
+                            "valid_rejection_match": False,
+                            "input_samples": 12,
+                            "input_valid_samples_before_rejection": 9,
+                            "input_invalid_samples_before_rejection": 3,
+                            "valid_samples_after_rejection": 6,
+                            "rejected_samples": 2,
+                            "semantics": (
+                                "input valid samples before rejection must equal "
+                                "valid samples after rejection plus rejected samples"
+                            ),
+                        },
+                    }
+                ]
+            },
+            "pixel_verification": {"enabled": False},
+        },
+    )
+
+
 def _write_stack_engine_contract(path: Path, *, passed: bool = True, ready: bool = True) -> None:
     blockers = [] if ready else [
         {
@@ -939,6 +1021,60 @@ def test_acceptance_audit_summarizes_pipeline_rejection_sample_accounting(tmp_pa
     assert "map_rejected_sample_sum=7" in text
     assert "dq_coverage_provenance.rejected_sample_count=6" in text
     assert "actual=7 summary=6 delta=1" in text
+
+
+def test_acceptance_audit_summarizes_pipeline_sample_accounting_closure(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    markdown = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract_with_sample_closure_drift(pipeline)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    evidence = audit["release_contract_evidence"]["pipeline_contract"]
+    closure = evidence["sample_accounting_closure"]
+    top_level_closure = audit["pipeline_contract"]["sample_accounting_closure"]
+
+    assert audit["passed"] is False
+    assert evidence["status"] == "failed"
+    assert evidence["sample_accounting_closure_status"] == "failed"
+    assert evidence["sample_accounting_closure_present_count"] == 1
+    assert evidence["sample_accounting_closure_failed_count"] == 1
+    assert evidence["integration_sample_accounting_closure"] is False
+    assert closure["status"] == "failed"
+    assert closure["check_present"] is True
+    assert closure["check_passed"] is False
+    assert closure["present_count"] == 1
+    assert closure["failed_count"] == 1
+    assert closure["failed_items"][0]["item"] == "H"
+    assert closure["failed_items"][0]["input_valid_samples_before_rejection"] == 9
+    assert closure["failed_items"][0]["valid_samples_after_rejection"] == 6
+    assert closure["failed_items"][0]["rejected_samples"] == 2
+    assert top_level_closure["failed_count"] == 1
+    assert audit["pipeline_contract"]["sample_accounting_closure_status"] == "failed"
+
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "Integration Sample Accounting Closure" in text
+    assert "Check passed: False" in text
+    assert "input_valid_samples_before_rejection=9" in text
+    assert "valid_samples_after_rejection=6" in text
+    assert "rejected_samples=2" in text
 
 
 def test_acceptance_audit_accepts_contract_bundle(tmp_path: Path):

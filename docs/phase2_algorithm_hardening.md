@@ -4114,6 +4114,19 @@ integration where applicable.
 - Keep this gate report/contract scoped: no image math, CUDA kernel, runtime
   default change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 245: Acceptance and Status Sample Closure Handoff
+
+- Carry pipeline `integration_sample_accounting_closure` evidence into
+  acceptance-audit release evidence and top-level pipeline-contract summaries.
+- Extend acceptance Markdown with a compact Integration Sample Accounting
+  Closure section listing failed valid/invalid/rejected sample closure rows.
+- Extend `glass phase2-status` with pipeline sample-closure summary fields and a
+  `pipeline_sample_accounting_closure_passed` readiness check.
+- Extend `glass phase2-status-compare` so candidates cannot silently lose a
+  previously present or passing sample-closure contract.
+- Keep this gate acceptance/status scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

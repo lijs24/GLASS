@@ -369,6 +369,89 @@ def _pipeline_rejection_sample_accounting_summary(
     }
 
 
+def _pipeline_sample_accounting_closure_summary(
+    pipeline_contract: dict[str, Any] | None,
+) -> dict[str, Any]:
+    check_name = "integration_sample_accounting_closure"
+    if pipeline_contract is None:
+        return {
+            "status": "not_requested",
+            "check_name": check_name,
+            "check_present": False,
+            "check_passed": None,
+            "output_count": 0,
+            "present_count": 0,
+            "required_count": 0,
+            "failed_count": 0,
+            "failed_items": [],
+            "rows": [],
+        }
+
+    integration = pipeline_contract.get("integration")
+    if not isinstance(integration, dict):
+        integration = {}
+    integration_outputs = integration.get("outputs")
+    if not isinstance(integration_outputs, list):
+        integration_outputs = []
+
+    rows: list[dict[str, Any]] = []
+    for output in integration_outputs:
+        if not isinstance(output, dict):
+            continue
+        closure = output.get("sample_accounting_closure")
+        if not isinstance(closure, dict):
+            continue
+        present = bool(closure.get("present"))
+        passed = bool(closure.get("passed"))
+        rows.append(
+            {
+                "item": output.get("item"),
+                "status": closure.get("status"),
+                "present": present,
+                "required": bool(closure.get("required")),
+                "passed": passed,
+                "input_total_match": closure.get("input_total_match"),
+                "valid_rejection_match": closure.get("valid_rejection_match"),
+                "input_samples": closure.get("input_samples"),
+                "input_valid_samples_before_rejection": closure.get(
+                    "input_valid_samples_before_rejection"
+                ),
+                "input_invalid_samples_before_rejection": closure.get(
+                    "input_invalid_samples_before_rejection"
+                ),
+                "valid_samples_after_rejection": closure.get(
+                    "valid_samples_after_rejection"
+                ),
+                "rejected_samples": closure.get("rejected_samples"),
+                "semantics": closure.get("semantics"),
+            }
+        )
+
+    check_names = {str(name) for name in pipeline_contract.get("check_names") or []}
+    failed_check_names = {str(name) for name in pipeline_contract.get("failed_checks") or []}
+    check_present = check_name in check_names
+    check_passed = None if not check_present else check_name not in failed_check_names
+    failed_items = [row for row in rows if not row.get("passed")]
+    if check_present:
+        status = "passed" if check_passed else "failed"
+    elif rows:
+        status = "passed" if not failed_items else "failed"
+    else:
+        status = "not_available"
+    return {
+        "status": status,
+        "check_name": check_name,
+        "check_present": check_present,
+        "check_passed": check_passed,
+        "output_count": len(integration_outputs),
+        "present_count": sum(1 for row in rows if row.get("present")),
+        "required_count": sum(1 for row in rows if row.get("required")),
+        "failed_count": len(failed_items),
+        "failed_items": failed_items,
+        "rows": rows,
+    }
+
+
 def _pipeline_contract_release_evidence(
     *,
     checks: list[dict[str, Any]],
@@ -387,6 +470,7 @@ def _pipeline_contract_release_evidence(
         status = "not_requested"
     contract_requirements = (contract_payload or {}).get("pipeline_contract")
     rejection_sample_accounting = _pipeline_rejection_sample_accounting_summary(pipeline_contract)
+    sample_accounting_closure = _pipeline_sample_accounting_closure_summary(pipeline_contract)
     return {
         "status": status,
         "required_by_benchmark_contract": isinstance(contract_requirements, dict)
@@ -404,6 +488,20 @@ def _pipeline_contract_release_evidence(
         "failed_check_count": len(failed_checks),
         "failed_checks": failed_checks,
         "rejection_sample_accounting": rejection_sample_accounting,
+        "integration_sample_accounting_closure": sample_accounting_closure.get(
+            "check_passed"
+        ),
+        "sample_accounting_closure_status": sample_accounting_closure.get("status"),
+        "sample_accounting_closure_present_count": sample_accounting_closure.get(
+            "present_count"
+        ),
+        "sample_accounting_closure_failed_count": sample_accounting_closure.get(
+            "failed_count"
+        ),
+        "sample_accounting_closure_failed_items": sample_accounting_closure.get(
+            "failed_items"
+        ),
+        "sample_accounting_closure": sample_accounting_closure,
         "checks": pipeline_checks,
     }
 
@@ -632,6 +730,21 @@ def build_acceptance_audit(
         pipeline_contract["rejection_sample_accounting"] = _pipeline_rejection_sample_accounting_summary(
             pipeline_contract
         )
+        pipeline_contract["sample_accounting_closure"] = _pipeline_sample_accounting_closure_summary(
+            pipeline_contract
+        )
+        pipeline_contract["integration_sample_accounting_closure"] = pipeline_contract[
+            "sample_accounting_closure"
+        ].get("check_passed")
+        pipeline_contract["sample_accounting_closure_status"] = pipeline_contract[
+            "sample_accounting_closure"
+        ].get("status")
+        pipeline_contract["sample_accounting_closure_present_count"] = pipeline_contract[
+            "sample_accounting_closure"
+        ].get("present_count")
+        pipeline_contract["sample_accounting_closure_failed_count"] = pipeline_contract[
+            "sample_accounting_closure"
+        ].get("failed_count")
         checks.extend(
             [
                 _check(
@@ -919,6 +1032,34 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                     f"{row.get('item')}: map_rejected_sample_sum="
                     f"{row.get('map_rejected_sample_sum')} source_counts=[{source_counts}] "
                     f"failed_matches=[{failed_matches}]"
+                )
+            lines.append("")
+        sample_closure = release_evidence.get("sample_accounting_closure")
+        if isinstance(sample_closure, dict):
+            lines.extend(
+                [
+                    "### Integration Sample Accounting Closure",
+                    "",
+                    f"- Status: {sample_closure.get('status')}",
+                    f"- Check passed: {sample_closure.get('check_passed')}",
+                    f"- Output rows: {sample_closure.get('output_count')}",
+                    f"- Present rows: {sample_closure.get('present_count')}",
+                    f"- Required rows: {sample_closure.get('required_count')}",
+                    f"- Failed rows: {sample_closure.get('failed_count')}",
+                ]
+            )
+            for row in sample_closure.get("failed_items") or []:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "- Sample closure mismatch "
+                    f"{row.get('item')}: status={row.get('status')} "
+                    "input_valid_samples_before_rejection="
+                    f"{row.get('input_valid_samples_before_rejection')} "
+                    "valid_samples_after_rejection="
+                    f"{row.get('valid_samples_after_rejection')} "
+                    f"rejected_samples={row.get('rejected_samples')} "
+                    f"valid_rejection_match={row.get('valid_rejection_match')}"
                 )
             lines.append("")
         for item in release_evidence.get("checks") or []:
