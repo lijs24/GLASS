@@ -76,6 +76,10 @@ from glass.report.tile_local_apply_verify import (
     build_tile_local_apply_verification,
     write_tile_local_apply_verification,
 )
+from glass.report.tile_local_policy_decision import (
+    build_tile_local_policy_decision,
+    write_tile_local_policy_decision,
+)
 from glass.report.speedup_report import summarize_wbpp_speedup, write_speedup_summary
 from glass.report.stack_engine_contract import (
     build_stack_engine_contract_audit,
@@ -1212,6 +1216,31 @@ def cmd_tile_local_apply_verify(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_failed and not summary.get("passed") else 0
+
+
+def cmd_tile_local_policy_decision(args: argparse.Namespace) -> int:
+    payload = build_tile_local_policy_decision(
+        args.verification,
+        apply_experiment=args.apply_experiment,
+        acceptance_audit=args.acceptance_audit,
+        min_signed_fraction=args.min_signed_fraction,
+        min_rms_fraction=args.min_rms_fraction,
+        min_mean_abs_fraction=args.min_mean_abs_fraction,
+        require_aggregate_mean_abs=not args.allow_aggregate_mean_abs_regression,
+        require_aggregate_rms=not args.allow_aggregate_rms_regression,
+    )
+    write_tile_local_policy_decision(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "status": summary.get("status"),
+            "recommendation": summary.get("recommendation"),
+            "top_score": summary.get("top_score"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_rejected and not summary.get("accepted") else 0
 
 
 def cmd_speedup_summary(args: argparse.Namespace) -> int:
@@ -2711,6 +2740,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when measured tile residuals fail to improve",
     )
     tile_local_verify.set_defaults(func=cmd_tile_local_apply_verify)
+
+    tile_local_decision = sub.add_parser(
+        "tile-local-policy-decision",
+        help="rank and accept/reject measured tile-local policy candidates",
+    )
+    tile_local_decision.add_argument(
+        "--verification",
+        action="append",
+        required=True,
+        help="tile-local-apply-verify JSON artifact; may be repeated",
+    )
+    tile_local_decision.add_argument("--apply-experiment", help="optional tile-local-apply-experiment JSON")
+    tile_local_decision.add_argument("--acceptance-audit", help="optional acceptance-audit JSON")
+    tile_local_decision.add_argument("--out", required=True, help="output policy decision JSON")
+    tile_local_decision.add_argument("--markdown", help="optional output Markdown summary")
+    tile_local_decision.add_argument("--min-signed-fraction", type=float, default=1.0)
+    tile_local_decision.add_argument("--min-rms-fraction", type=float, default=1.0)
+    tile_local_decision.add_argument("--min-mean-abs-fraction", type=float, default=0.0)
+    tile_local_decision.add_argument(
+        "--allow-aggregate-mean-abs-regression",
+        action="store_true",
+        help="do not require aggregate mean-absolute residual improvement",
+    )
+    tile_local_decision.add_argument(
+        "--allow-aggregate-rms-regression",
+        action="store_true",
+        help="do not require aggregate RMS improvement",
+    )
+    tile_local_decision.add_argument(
+        "--fail-on-rejected",
+        action="store_true",
+        help="return exit code 2 when the top measured candidate is rejected",
+    )
+    tile_local_decision.set_defaults(func=cmd_tile_local_policy_decision)
 
     speedup = sub.add_parser("speedup-summary", help="summarize GLASS timing against WBPP black-box timing")
     speedup.add_argument("--glass-run", required=True, help="GLASS run directory containing run_timing.json")

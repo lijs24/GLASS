@@ -2368,6 +2368,23 @@ integration where applicable.
 - Keep this as a diagnostic gate. It must not mutate pipeline outputs and must
   not enable tile-local apply by default.
 
+### S2-Gate 140: Measured Tile-Local Policy Decision
+
+- Add `glass tile-local-policy-decision` to rank and accept/reject one or more
+  measured tile-local apply verification artifacts.
+- Consume optional `tile-local-apply-experiment` and `acceptance-audit`
+  artifacts so local measured improvement is gated by the same real-data
+  200-light runtime, frame-accounting, compare, and DQ contracts.
+- Require configurable minimum signed-mean improvement fraction, RMS
+  improvement fraction, mean-absolute-residual improvement fraction, aggregate
+  mean-absolute-residual improvement, and aggregate RMS improvement.
+- Emit candidate scores, per-candidate checks, global checks, failed reasons,
+  top candidate, accepted/rejected status, and Markdown summary.
+- Run the decision command on the S2-Gate 139 two-tile verification plus the
+  S2-Gate 138 apply experiment and acceptance audit.
+- Keep this as a promotion-control artifact only. It must not mutate pipeline
+  outputs and must not enable tile-local apply by default.
+
 ## Gate Rules
 
 Each gate requires:
