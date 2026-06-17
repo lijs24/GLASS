@@ -3386,6 +3386,25 @@ integration where applicable.
   consumed by `glass acceptance-audit --contract-bundle`, producing a passing
   acceptance audit with both pipeline and StackEngine contract checks active.
 
+### S2-Gate 200: Real 200-Light Bundle Acceptance
+
+- Extend `glass guardrails` with optional
+  `--resident-calibration-contract-json` and
+  `--resident-result-contract-json` so resident CUDA guardrail bundles can carry
+  the same calibration/result contracts used by StackEngine default-promotion
+  audits.
+- Record resident contract inputs and attachment status in
+  `guardrails_summary.json` and `acceptance_contract_bundle.json`.
+- Rebuild guardrails for the Gate181 M38 H-alpha 200-light resident CUDA run
+  using its resident calibration and result contracts.
+- Run `glass acceptance-audit --contract-bundle` against the real 200-light
+  manifest, GLASS run, WBPP black-box timing, reference comparison, and
+  `benchmarks/phase2_m38_h_200_contract.json`.
+- Current real artifact result: acceptance status `passed`, speedup versus
+  WBPP `58.099101701945926x`, frame counts `200/20/20/20`, active frames `193`,
+  coverage fraction `0.9577924192878646`, StackEngine default promotion
+  `ready=true`, and both contract-bundle checks passed.
+
 ## Gate Rules
 
 Each gate requires:

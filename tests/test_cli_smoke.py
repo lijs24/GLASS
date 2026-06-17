@@ -284,6 +284,10 @@ def test_cli_help_commands():
 def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_path: Path):
     run = tmp_path / "run"
     out_dir = tmp_path / "guardrails"
+    resident_calibration = tmp_path / "resident_calibration_contract.json"
+    resident_result = tmp_path / "resident_result_contract.json"
+    write_json(resident_calibration, {"artifact_type": "resident_cuda_calibration_contract", "passed": True, "outputs": []})
+    write_json(resident_result, {"artifact_type": "resident_cuda_result_contract", "passed": True, "outputs": []})
     assert main(["audit", "--root", str(small_fits_dataset), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
 
     assert (
@@ -296,6 +300,10 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
                 str(out_dir),
                 "--expected-integration-engine",
                 "stack_engine_cpu",
+                "--resident-calibration-contract-json",
+                str(resident_calibration),
+                "--resident-result-contract-json",
+                str(resident_result),
                 "--require-stack-default-ready",
                 "--pixel-verify",
                 "--pixel-verify-tile-size",
@@ -312,10 +320,18 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["passed"] is True
     assert summary["pixel_verify"] is True
     assert summary["require_stack_default_ready"] is True
+    assert summary["resident_calibration_contract_json"] == str(resident_calibration)
+    assert summary["resident_result_contract_json"] == str(resident_result)
+    assert summary["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
+    assert summary["artifacts"]["resident_result_contract"] == str(resident_result)
     assert summary["artifacts"]["acceptance_contract_bundle"] == str(out_dir / "acceptance_contract_bundle.json")
     assert bundle["artifact_type"] == "glass_acceptance_contract_bundle"
     assert bundle["passed"] is True
     assert bundle["purpose"] == "acceptance_audit_contract_inputs"
+    assert bundle["resident_calibration_contract_json"] == str(resident_calibration)
+    assert bundle["resident_result_contract_json"] == str(resident_result)
+    assert bundle["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
+    assert bundle["artifacts"]["resident_result_contract"] == str(resident_result)
     assert bundle["acceptance_audit_arguments"] == [
         "--pipeline-contract-json",
         str(out_dir / "pipeline_contract.json"),

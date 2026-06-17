@@ -2235,11 +2235,25 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     report_path = Path(args.report) if args.report else out_dir / "report.html"
     bundle_path = out_dir / "acceptance_contract_bundle.json"
     summary_path = out_dir / "guardrails_summary.json"
+    resident_calibration_contract = (
+        read_json(args.resident_calibration_contract_json)
+        if getattr(args, "resident_calibration_contract_json", None)
+        else None
+    )
+    resident_result_contract = (
+        read_json(args.resident_result_contract_json)
+        if getattr(args, "resident_result_contract_json", None)
+        else None
+    )
 
     stack_audit = build_stack_engine_contract_audit(
         run,
         scope=args.stack_scope,
         expected_integration_engine=args.expected_integration_engine,
+        resident_calibration_contract=resident_calibration_contract
+        if isinstance(resident_calibration_contract, dict)
+        else None,
+        resident_result_contract=resident_result_contract if isinstance(resident_result_contract, dict) else None,
     )
     write_stack_engine_contract_audit(stack_path, stack_audit, markdown=stack_markdown)
     pipeline_audit = build_pipeline_contract_audit(
@@ -2276,6 +2290,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "stack_scope": args.stack_scope,
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
+        "resident_calibration_contract_json": args.resident_calibration_contract_json,
+        "resident_result_contract_json": args.resident_result_contract_json,
+        "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
+        "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
             "stack_engine_contract": str(stack_path),
@@ -2284,6 +2302,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "pipeline_contract_markdown": str(pipeline_markdown),
             "acceptance_contract_bundle": str(bundle_path),
             "report": str(report_path),
+            "resident_calibration_contract": args.resident_calibration_contract_json,
+            "resident_result_contract": args.resident_result_contract_json,
         },
         "checks": [
             {
@@ -2329,6 +2349,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "stack_scope": args.stack_scope,
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
+        "resident_calibration_contract_json": args.resident_calibration_contract_json,
+        "resident_result_contract_json": args.resident_result_contract_json,
+        "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
+        "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
             "guardrails_summary": str(summary_path),
@@ -2337,6 +2361,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "pipeline_contract": str(pipeline_path),
             "pipeline_contract_markdown": str(pipeline_markdown),
             "report": str(report_path),
+            "resident_calibration_contract": args.resident_calibration_contract_json,
+            "resident_result_contract": args.resident_result_contract_json,
         },
         "acceptance_audit_arguments": [
             "--pipeline-contract-json",
@@ -2361,6 +2387,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "pixel_verify": args.pixel_verify,
             "stack_default_promotion_ready": stack_default_ready,
             "require_stack_default_ready": stack_default_required,
+            "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
+            "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
         }
     )
     return 0 if passed else 2
@@ -4759,6 +4787,14 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["stack_engine_cpu", "cuda_resident_stack", "any"],
         default="any",
         help="expected integration engine for the StackEngine contract",
+    )
+    guardrails.add_argument(
+        "--resident-calibration-contract-json",
+        help="optional resident CUDA calibration contract JSON to attach to the StackEngine contract audit",
+    )
+    guardrails.add_argument(
+        "--resident-result-contract-json",
+        help="optional resident CUDA result contract JSON to attach to the StackEngine contract audit",
     )
     guardrails.add_argument(
         "--require-stack-default-ready",
