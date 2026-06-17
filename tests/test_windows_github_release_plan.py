@@ -92,6 +92,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     out = tmp_path / "plan.json"
     markdown = tmp_path / "plan.md"
     notes = tmp_path / "notes.md"
+    script = tmp_path / "publish_release.ps1"
 
     result = main(
         [
@@ -106,15 +107,30 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
             str(markdown),
             "--notes",
             str(notes),
+            "--script",
+            str(script),
             "--require-same-source-stamp",
             "--fail-on-failure",
         ]
     )
 
     assert result == 0
-    assert read_json(out)["status"] == "release_plan_ready"
-    assert "GLASS Windows GitHub Release Plan" in markdown.read_text(encoding="utf-8")
+    payload = read_json(out)
+    assert payload["status"] == "release_plan_ready"
+    assert payload["release"]["script_file"] == str(script.resolve())
+    assert payload["release"]["script_default_mode"] == "dry_run_requires_publish_switch"
+    markdown_text = markdown.read_text(encoding="utf-8")
+    assert "GLASS Windows GitHub Release Plan" in markdown_text
+    assert "Publish script" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
+    script_text = script.read_text(encoding="utf-8")
+    assert "$ExpectedTag = 'v0.1.0-test'" in script_text
+    assert "GitHub CLI authentication check failed" in script_text
+    assert "Get-FileHash -LiteralPath $asset.Path -Algorithm SHA256" in script_text
+    assert "SizeBytes = 3" in script_text
+    assert "Re-run this script with -Publish" in script_text
+    assert "& $GhPath @releaseArgs" in script_text
+    assert "GitHub release creation failed" in script_text
 
 
 def test_windows_github_release_plan_auth_check_blocks_publication(tmp_path: Path):

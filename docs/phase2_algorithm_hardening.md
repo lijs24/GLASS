@@ -3342,6 +3342,20 @@ integration where applicable.
   `gh.available=true`, `gh.auth_ok=false`, and recommendation
   `authenticate_github_cli_then_run_release_command`.
 
+### S2-Gate 197: Windows GitHub Release Script
+
+- Extend `glass windows-github-release-plan` with `--script` to emit a
+  PowerShell release script from the strict Windows release manifest.
+- Keep the generated script dry-run by default; require `-Publish` before it
+  calls `gh release create`.
+- Have the script verify GitHub CLI authentication, asset existence, recorded
+  file sizes, SHA256 hashes, and release notes presence before upload.
+- Record the script path and dry-run publication mode in the JSON release plan.
+- Current real artifact result: status `release_plan_ready`, package count `4`,
+  `publication_ready=false` because `gh auth status` still fails locally, and
+  a generated publish script is ready for use once GitHub CLI authentication is
+  completed.
+
 ## Gate Rules
 
 Each gate requires:

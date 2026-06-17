@@ -182,11 +182,17 @@ glass windows-package-suite --smoke cuda13=windows_package_smoke_cuda13.json --s
 glass windows-release-manifest --suite windows_package_suite.json --out windows_release_manifest.json --markdown windows_release_manifest.md --require-same-source-stamp --fail-on-failure
 ```
 
-- Before uploading, generate release notes and the exact GitHub upload command:
+- Before uploading, generate release notes, the exact GitHub upload command,
+  and a dry-run PowerShell publish script:
 
 ```powershell
-glass windows-github-release-plan --manifest windows_release_manifest.json --tag v0.1.0-windows-gpu.N --title "GLASS v0.1.0-windows-gpu.N Windows CUDA packages" --out github_release_plan.json --markdown github_release_plan.md --notes github_release_notes.md --require-same-source-stamp --check-gh --check-gh-auth --fail-on-failure
+glass windows-github-release-plan --manifest windows_release_manifest.json --tag v0.1.0-windows-gpu.N --title "GLASS v0.1.0-windows-gpu.N Windows CUDA packages" --out github_release_plan.json --markdown github_release_plan.md --notes github_release_notes.md --script publish_github_release.ps1 --require-same-source-stamp --check-gh --check-gh-auth --fail-on-failure
 ```
+
+The generated script verifies GitHub CLI authentication, asset existence,
+recorded file sizes, and SHA256 hashes before publishing. It is dry-run by
+default; run it with `-Publish` only after the checks pass and the release tag,
+title, notes, and asset table have been reviewed.
 
 - Release-grade 200-light acceptance uses the benchmark contract plus
   `--pipeline-contract-json`, and all `contract_pipeline_contract_*` checks pass.

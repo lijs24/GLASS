@@ -1912,6 +1912,7 @@ def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
         payload,
         markdown=args.markdown,
         notes=args.notes,
+        script=args.script,
     )
     console.print(
         {
@@ -1924,6 +1925,7 @@ def cmd_windows_github_release_plan(args: argparse.Namespace) -> int:
             "out": args.out,
             "markdown": args.markdown,
             "notes": args.notes,
+            "script": args.script,
         }
     )
     if bool(args.fail_on_failure) and not payload.get("passed"):
@@ -4292,6 +4294,10 @@ def build_parser() -> argparse.ArgumentParser:
     windows_github_release_plan.add_argument("--out", required=True, help="output release plan JSON")
     windows_github_release_plan.add_argument("--markdown", help="optional output Markdown plan")
     windows_github_release_plan.add_argument("--notes", help="optional output Markdown release notes")
+    windows_github_release_plan.add_argument(
+        "--script",
+        help="optional output PowerShell script that verifies assets before publishing with gh",
+    )
     windows_github_release_plan.add_argument(
         "--no-draft",
         action="store_true",

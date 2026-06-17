@@ -25,6 +25,12 @@ def _quote(value: str) -> str:
     return shlex.quote(value)
 
 
+def _ps_literal(value: str | None) -> str:
+    if value is None:
+        return "$null"
+    return "'" + str(value).replace("'", "''") + "'"
+
+
 def _asset_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in manifest.get("packages") or []:
@@ -95,6 +101,94 @@ def _release_notes(payload: dict[str, Any]) -> str:
             "## Recommended Install Order",
             "",
             "Try `cuda13` first on current NVIDIA GPUs, then `cuda12`, `cuda11`, and finally `cpu`.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _powershell_release_script(payload: dict[str, Any]) -> str:
+    release = payload.get("release") if isinstance(payload.get("release"), dict) else {}
+    gh = payload.get("gh") if isinstance(payload.get("gh"), dict) else {}
+    gh_path = gh.get("path") or "gh"
+    notes_file = release.get("notes_file")
+    assets = payload.get("assets") if isinstance(payload.get("assets"), list) else []
+
+    lines = [
+        "param(",
+        f"    [string]$GhPath = {_ps_literal(str(gh_path))},",
+        "    [switch]$Publish",
+        ")",
+        "",
+        "$ErrorActionPreference = 'Stop'",
+        f"$ExpectedTag = {_ps_literal(str(release.get('tag') or ''))}",
+        f"$ReleaseTitle = {_ps_literal(str(release.get('title') or ''))}",
+        f"$NotesFile = {_ps_literal(str(notes_file) if notes_file else None)}",
+        "$Assets = @(",
+    ]
+    for index, asset in enumerate(assets):
+        suffix = "," if index + 1 < len(assets) else ""
+        lines.append(
+            "    @{"
+            f" Label = {_ps_literal(str(asset.get('label') or ''))};"
+            f" Path = {_ps_literal(str(asset.get('zip_path') or ''))};"
+            f" Sha256 = {_ps_literal(str(asset.get('sha256') or ''))};"
+            f" SizeBytes = {int(asset.get('size_bytes') or 0)}"
+            f" }}{suffix}"
+        )
+    lines.extend(
+        [
+            ")",
+            "",
+            "if (-not (Get-Command $GhPath -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath $GhPath -PathType Leaf)) {",
+            "    throw \"GitHub CLI not found: $GhPath\"",
+            "}",
+            "& $GhPath auth status | Out-Host",
+            "if ($LASTEXITCODE -ne 0) {",
+            "    throw 'GitHub CLI authentication check failed. Run gh auth login, then retry.'",
+            "}",
+            "",
+            "foreach ($asset in $Assets) {",
+            "    if (-not (Test-Path -LiteralPath $asset.Path -PathType Leaf)) {",
+            "        throw \"Missing release asset: $($asset.Path)\"",
+            "    }",
+            "    $actualSize = (Get-Item -LiteralPath $asset.Path).Length",
+            "    if ($actualSize -ne [int64]$asset.SizeBytes) {",
+            "        throw \"Asset size mismatch for $($asset.Label): expected $($asset.SizeBytes), got $actualSize\"",
+            "    }",
+            "    $actualSha = (Get-FileHash -LiteralPath $asset.Path -Algorithm SHA256).Hash.ToLowerInvariant()",
+            "    if ($actualSha -ne $asset.Sha256.ToLowerInvariant()) {",
+            "        throw \"Asset SHA256 mismatch for $($asset.Label): expected $($asset.Sha256), got $actualSha\"",
+            "    }",
+            "}",
+            "if ($NotesFile -and -not (Test-Path -LiteralPath $NotesFile -PathType Leaf)) {",
+            "    throw \"Missing release notes file: $NotesFile\"",
+            "}",
+            "",
+            "$releaseArgs = @('release', 'create', $ExpectedTag)",
+            "$releaseArgs += @($Assets | ForEach-Object { $_.Path })",
+            "$releaseArgs += @('--title', $ReleaseTitle)",
+            "if ($NotesFile) {",
+            "    $releaseArgs += @('--notes-file', $NotesFile)",
+            "}",
+        ]
+    )
+    if release.get("draft") is True:
+        lines.append("$releaseArgs += '--draft'")
+    if release.get("prerelease") is True:
+        lines.append("$releaseArgs += '--prerelease'")
+    lines.extend(
+        [
+            "",
+            "Write-Host 'GLASS release assets verified.'",
+            "Write-Host 'Dry-run complete. Re-run this script with -Publish to create the GitHub release.'",
+            "if (-not $Publish) {",
+            "    exit 0",
+            "}",
+            "& $GhPath @releaseArgs",
+            "if ($LASTEXITCODE -ne 0) {",
+            "    throw \"GitHub release creation failed with exit code $LASTEXITCODE\"",
+            "}",
             "",
         ]
     )
@@ -245,6 +339,8 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Source stamps: `{', '.join(payload.get('source_stamps') or [])}`",
         f"- GitHub CLI available: `{gh.get('available')}`",
         f"- GitHub CLI auth OK: `{gh.get('auth_ok')}`",
+        f"- Publish script: `{release.get('script_file')}`",
+        f"- Publish script mode: `{release.get('script_default_mode')}`",
         "",
         "## Assets",
         "",
@@ -272,7 +368,13 @@ def write_windows_github_release_plan(
     *,
     markdown: str | Path | None = None,
     notes: str | Path | None = None,
+    script: str | Path | None = None,
 ) -> None:
+    if script is not None:
+        release = payload.get("release")
+        if isinstance(release, dict):
+            release["script_file"] = str(Path(script).resolve())
+            release["script_default_mode"] = "dry_run_requires_publish_switch"
     write_json(out, payload)
     if markdown is not None:
         Path(markdown).parent.mkdir(parents=True, exist_ok=True)
@@ -280,3 +382,6 @@ def write_windows_github_release_plan(
     if notes is not None:
         Path(notes).parent.mkdir(parents=True, exist_ok=True)
         Path(notes).write_text(_release_notes(payload), encoding="utf-8")
+    if script is not None:
+        Path(script).parent.mkdir(parents=True, exist_ok=True)
+        Path(script).write_text(_powershell_release_script(payload), encoding="utf-8")
