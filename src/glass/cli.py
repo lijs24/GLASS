@@ -84,6 +84,10 @@ from glass.report.tile_local_rejection_registration_plan import (
     write_tile_local_rejection_registration_plan,
 )
 from glass.report.candidate_comparison import build_candidate_comparison, write_candidate_comparison
+from glass.report.candidate_comparison_sweep import (
+    build_candidate_comparison_sweep,
+    write_candidate_comparison_sweep,
+)
 from glass.report.tile_local_policy_replay import build_tile_local_policy_replay, write_tile_local_policy_replay
 from glass.report.tile_local_policy_subset import build_tile_local_policy_subset, write_tile_local_policy_subset
 from glass.report.tile_local_apply_experiment import (
@@ -1309,6 +1313,24 @@ def cmd_candidate_comparison(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_failed and not summary.get("passed") else 0
+
+
+def cmd_candidate_comparison_sweep(args: argparse.Namespace) -> int:
+    payload = build_candidate_comparison_sweep(args.comparison)
+    write_candidate_comparison_sweep(args.out, payload, markdown=args.markdown)
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    console.print(
+        {
+            "status": summary.get("status"),
+            "recommendation": summary.get("recommendation"),
+            "candidate_count": summary.get("candidate_count"),
+            "passed_candidate_count": summary.get("passed_candidate_count"),
+            "top_candidate_id": summary.get("top_candidate_id"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_no_passed and not summary.get("passed") else 0
 
 
 def cmd_tile_local_policy_replay(args: argparse.Namespace) -> int:
@@ -3102,6 +3124,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when required candidate-comparison checks fail",
     )
     candidate_comparison.set_defaults(func=cmd_candidate_comparison)
+
+    candidate_comparison_sweep = sub.add_parser(
+        "candidate-comparison-sweep",
+        help="rank multiple candidate-comparison artifacts for a measured sweep",
+    )
+    candidate_comparison_sweep.add_argument(
+        "--comparison",
+        action="append",
+        required=True,
+        help="candidate-comparison JSON artifact; may be repeated",
+    )
+    candidate_comparison_sweep.add_argument("--out", required=True, help="output candidate sweep JSON")
+    candidate_comparison_sweep.add_argument("--markdown", help="optional output Markdown summary")
+    candidate_comparison_sweep.add_argument(
+        "--fail-on-no-passed",
+        action="store_true",
+        help="return exit code 2 when no candidate comparison passed",
+    )
+    candidate_comparison_sweep.set_defaults(func=cmd_candidate_comparison_sweep)
 
     tile_local_replay = sub.add_parser(
         "tile-local-policy-replay",

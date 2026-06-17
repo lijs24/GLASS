@@ -2563,6 +2563,20 @@ integration where applicable.
 - Keep this as an artifact/decision gate only. It must not execute integration,
   mutate image pixels, alter CUDA kernels, or change resident defaults.
 
+### S2-Gate 153: Candidate Comparison Sweep Summary
+
+- Add `glass candidate-comparison-sweep` to rank multiple
+  `candidate-comparison` artifacts in one measured sweep summary.
+- Preserve failed candidate attempts as first-class rows instead of discarding
+  them, including failed required checks and runtime/speedup evidence.
+- Rank candidates by acceptance pass status, speedup, runtime, and reference
+  agreement, while keeping the recommendation scoped to broader sweep planning
+  rather than default promotion.
+- Run the sweep over the Gate151 failed first attempt and the Gate151 retry
+  success artifact so the runtime anomaly and recovery remain auditable.
+- Keep this as an artifact/decision gate only. It must not execute integration,
+  run image compares, mutate image pixels, or alter resident defaults.
+
 ## Gate Rules
 
 Each gate requires:
