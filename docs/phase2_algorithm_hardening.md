@@ -3086,6 +3086,29 @@ integration where applicable.
   zero ignored warm-up runs, and release decision
   `default_change_ready=true` / recommendation `promote_default_candidate`.
 
+### S2-Gate 182: Windows CUDA Release Matrix Guard
+
+- Add `glass windows-release-matrix`, a release-readiness artifact that joins
+  `glass doctor` CUDA/package compatibility evidence with the Gate181 release
+  promotion decision and optional acceptance audit.
+- Audit the planned Windows package set: `cuda13`, `cuda12`, `cuda11`, and CPU
+  fallback. The matrix records package artifact names, compatibility state,
+  native-cubin versus PTX-JIT match mode, release role, and recommended try
+  order.
+- Require the release machine to have CUDA available by default, while retaining
+  `--allow-cpu-only` for documentation or CPU package dry-runs.
+- Require `default_change_ready=true`, promotion recommendation
+  `promote_default_candidate`, default resident preset `throughput-v1`, stable
+  runtime repeat ratio, package recommendation presence, CPU fallback, and
+  compatible CUDA 13/12/11 rows.
+- Run the guard against the Gate181 doctor, acceptance, and release-decision
+  artifacts under `C:\glass_runs\phase2_s2_gate_182_windows_release_matrix`.
+- Current real artifact result: status `release_matrix_ready`, recommendation
+  `publish_windows_cuda_matrix`, primary package `cuda13`, try order
+  `cuda13,cuda12,cuda11,cpu`, `cuda13` native-cubin match, `cuda12` and `cuda11`
+  PTX forward-JIT fallback matches, CPU fallback present, and zero failed
+  checks.
+
 ## Gate Rules
 
 Each gate requires:

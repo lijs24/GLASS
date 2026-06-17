@@ -257,6 +257,7 @@ def test_cli_help_commands():
         "speedup-summary",
         "acceptance-audit",
         "release-promotion-decision",
+        "windows-release-matrix",
         "resident-determinism",
         "resident-registration-audit",
         "resident-registration-compare",

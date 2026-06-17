@@ -1,0 +1,317 @@
+{
+  "artifact_type": "windows_release_matrix",
+  "checks": [
+    {
+      "evidence": {
+        "actual": 1,
+        "path": "runs\\checkpoints\\s2_gate_181_doctor.json",
+        "required": 1
+      },
+      "name": "doctor_schema_version",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "probe_skipped": false
+      },
+      "name": "cuda_probe_completed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "native_extension_loaded": true,
+        "required": true,
+        "wrapper_importable": true
+      },
+      "name": "cuda_available_for_release_machine",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ],
+        "package_count": 3
+      },
+      "name": "windows_package_recommendation_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ]
+      },
+      "name": "ordered_try_list_has_cpu_fallback",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda13",
+        "required": "cuda13"
+      },
+      "name": "primary_package_matches_expected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "recommendation": "promote_default_candidate",
+        "required": true,
+        "status": "default_change_ready"
+      },
+      "name": "release_decision_default_change_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "promote_default_candidate",
+        "required": "promote_default_candidate"
+      },
+      "name": "release_decision_recommends_promotion",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "throughput-v1",
+        "required": "throughput-v1"
+      },
+      "name": "default_runtime_preset",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.0140343433372492,
+        "required_max": 1.25
+      },
+      "name": "runtime_repeat_ratio_within_release_bound",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\acceptance_default_no_preset.json",
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "cpu",
+          "cuda11",
+          "cuda12",
+          "cuda13"
+        ],
+        "label": "cuda13"
+      },
+      "name": "required_cuda_package_present:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "compatible": true,
+        "label": "cuda13",
+        "match": "native_cubin"
+      },
+      "name": "required_cuda_package_compatible:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "cpu",
+          "cuda11",
+          "cuda12",
+          "cuda13"
+        ],
+        "label": "cuda12"
+      },
+      "name": "required_cuda_package_present:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "compatible": true,
+        "label": "cuda12",
+        "match": "ptx_jit_forward"
+      },
+      "name": "required_cuda_package_compatible:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "cpu",
+          "cuda11",
+          "cuda12",
+          "cuda13"
+        ],
+        "label": "cuda11"
+      },
+      "name": "required_cuda_package_present:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "compatible": true,
+        "label": "cuda11",
+        "match": "ptx_jit_forward"
+      },
+      "name": "required_cuda_package_compatible:cuda11",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-17T14:46:36+00:00",
+  "current_machine": {
+    "cuda_available": true,
+    "device": {
+      "compute_capability": "12.0",
+      "compute_capability_code": 120,
+      "device_id": 0,
+      "driver_version": "596.21",
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+    },
+    "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+    "native_extension_loaded": true,
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "primary_package": "cuda13"
+  },
+  "default_runtime": {
+    "default_change_ready": true,
+    "release_decision_status": "default_change_ready",
+    "resident_runtime_preset": "throughput-v1",
+    "source": "Gate181 promoted default"
+  },
+  "failed_checks": [],
+  "inputs": {
+    "acceptance_audit_json": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\acceptance_default_no_preset.json",
+    "doctor_json": "runs\\checkpoints\\s2_gate_181_doctor.json",
+    "release_decision_json": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\release_promotion_decision_default.json"
+  },
+  "limitations": [
+    "This artifact audits release readiness from existing GLASS artifacts; it does not build packages.",
+    "CUDA package compatibility is based on detected compute capability and planned package targets.",
+    "Older CUDA packages on newer GPUs may use PTX JIT and can be slower than the native package."
+  ],
+  "packages": [
+    {
+      "architectures": [
+        "5.0",
+        "5.2",
+        "6.0",
+        "6.1",
+        "7.0",
+        "7.5",
+        "8.0",
+        "8.6"
+      ],
+      "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+      "compatible": true,
+      "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+      "label": "cuda11",
+      "match": "ptx_jit_forward",
+      "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+      "recommended_order": 3,
+      "release_artifact": "GLASS-Portable-win64-cuda11.zip",
+      "release_role": "cuda_fallback_candidate",
+      "toolkit": "11.8"
+    },
+    {
+      "architectures": [
+        "7.5",
+        "8.0",
+        "8.6",
+        "8.9",
+        "9.0"
+      ],
+      "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+      "compatible": true,
+      "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+      "label": "cuda12",
+      "match": "ptx_jit_forward",
+      "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+      "recommended_order": 2,
+      "release_artifact": "GLASS-Portable-win64-cuda12.zip",
+      "release_role": "cuda_fallback_candidate",
+      "toolkit": "12.4"
+    },
+    {
+      "architectures": [
+        "8.6",
+        "8.9",
+        "9.0",
+        "10.0",
+        "12.0"
+      ],
+      "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+      "compatible": true,
+      "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+      "label": "cuda13",
+      "match": "native_cubin",
+      "note": "This package contains native GPU code for this compute capability.",
+      "recommended_order": 1,
+      "release_artifact": "GLASS-Portable-win64-cuda13.zip",
+      "release_role": "primary_cuda_package",
+      "toolkit": "13.0"
+    },
+    {
+      "architectures": [],
+      "compatible": true,
+      "label": "cpu",
+      "match": "cpu_fallback",
+      "note": "CPU package remains the fallback and does not require CUDA.",
+      "recommended_order": 4,
+      "release_artifact": "GLASS-Portable-win64-cpu.zip",
+      "release_role": "universal_cpu_fallback",
+      "toolkit": null
+    }
+  ],
+  "passed": true,
+  "recommendation": "publish_windows_cuda_matrix",
+  "runtime_repeat": {
+    "best_elapsed_s": 18.54452279999896,
+    "best_label": "repeat02",
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.0140343433372492,
+    "ignored_warmup_labels": [],
+    "ignored_warmup_run_count": 0,
+    "max_elapsed_ratio_vs_best": 1.25,
+    "present": true,
+    "recommendation": "best_observed:repeat02",
+    "required_min_runtime_runs": 2,
+    "run_count": 3,
+    "slowest_elapsed_s": 18.80478299999959
+  },
+  "schema_version": 1,
+  "status": "release_matrix_ready"
+}

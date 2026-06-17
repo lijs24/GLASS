@@ -84,6 +84,10 @@ from glass.report.release_promotion_decision import (
     build_release_promotion_decision,
     write_release_promotion_decision,
 )
+from glass.report.windows_release_matrix import (
+    build_windows_release_matrix,
+    write_windows_release_matrix,
+)
 from glass.report.resident_registration_triage import (
     build_resident_registration_triage,
     write_resident_registration_triage,
@@ -1732,6 +1736,33 @@ def cmd_release_promotion_decision(args: argparse.Namespace) -> int:
     if bool(args.fail_on_not_ready) and not payload.get("default_change_ready"):
         return 2
     return 0 if payload.get("release_candidate_ready") else 2
+
+
+def cmd_windows_release_matrix(args: argparse.Namespace) -> int:
+    payload = build_windows_release_matrix(
+        doctor_json=args.doctor_json,
+        release_decision_json=args.release_decision,
+        acceptance_audit_json=args.acceptance_audit,
+        default_runtime_preset=args.default_runtime_preset,
+        require_cuda=not args.allow_cpu_only,
+        require_default_change_ready=not args.allow_not_default_ready,
+        expected_primary_package=args.expected_primary_package,
+        max_runtime_ratio=args.max_runtime_ratio,
+    )
+    write_windows_release_matrix(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "recommendation": payload["recommendation"],
+            "passed": payload["passed"],
+            "primary_package": payload["current_machine"]["primary_package"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_not_ready) and not payload.get("passed"):
+        return 2
+    return 0
 
 
 def cmd_resident_determinism(args: argparse.Namespace) -> int:
@@ -3914,6 +3945,54 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless default_change_ready is true",
     )
     release_promotion_decision.set_defaults(func=cmd_release_promotion_decision)
+
+    windows_release_matrix = sub.add_parser(
+        "windows-release-matrix",
+        help="audit Windows CPU/CUDA package matrix readiness from doctor and release decision artifacts",
+    )
+    windows_release_matrix.add_argument("--doctor-json", required=True, help="glass doctor JSON artifact")
+    windows_release_matrix.add_argument(
+        "--release-decision",
+        required=True,
+        help="release-promotion-decision JSON artifact",
+    )
+    windows_release_matrix.add_argument(
+        "--acceptance-audit",
+        help="optional acceptance-audit JSON; when supplied it must have passed",
+    )
+    windows_release_matrix.add_argument("--out", required=True, help="output Windows release matrix JSON")
+    windows_release_matrix.add_argument("--markdown", help="optional output Markdown summary")
+    windows_release_matrix.add_argument(
+        "--default-runtime-preset",
+        default=DEFAULT_RESIDENT_RUNTIME_PRESET,
+        help="resident runtime preset expected in the release default",
+    )
+    windows_release_matrix.add_argument(
+        "--expected-primary-package",
+        help="expected first package for the current machine, e.g. cuda13 on Blackwell",
+    )
+    windows_release_matrix.add_argument(
+        "--max-runtime-ratio",
+        type=float,
+        default=1.25,
+        help="maximum accepted slowest/best runtime repeat ratio from release decision evidence",
+    )
+    windows_release_matrix.add_argument(
+        "--allow-cpu-only",
+        action="store_true",
+        help="do not fail the matrix solely because CUDA is unavailable on this machine",
+    )
+    windows_release_matrix.add_argument(
+        "--allow-not-default-ready",
+        action="store_true",
+        help="do not require release-decision default_change_ready=true",
+    )
+    windows_release_matrix.add_argument(
+        "--fail-on-not-ready",
+        action="store_true",
+        help="return exit code 2 unless the Windows release matrix passes",
+    )
+    windows_release_matrix.set_defaults(func=cmd_windows_release_matrix)
 
     resident_det = sub.add_parser(
         "resident-determinism",

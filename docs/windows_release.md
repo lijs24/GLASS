@@ -107,6 +107,11 @@ Installer:
 - `glass doctor --allow-cpu-only` succeeds.
 - CUDA machine: `glass doctor` reports native CUDA available.
 - CUDA smoke tests pass on the release machine.
+- `glass windows-release-matrix --doctor-json DOCTOR.json --release-decision
+  RELEASE_DECISION.json --acceptance-audit ACCEPTANCE.json
+  --expected-primary-package cuda13 --out windows_release_matrix.json
+  --fail-on-not-ready` passes on the release GPU machine before publishing CUDA
+  packages.
 - Release-grade 200-light acceptance uses the benchmark contract plus
   `--pipeline-contract-json`, and all `contract_pipeline_contract_*` checks pass.
 - Acceptance Markdown and HTML report show the release pipeline-contract

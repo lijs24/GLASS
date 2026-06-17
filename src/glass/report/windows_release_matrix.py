@@ -1,0 +1,288 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from glass.gpu.compatibility import WINDOWS_CUDA_PACKAGES
+from glass.io.json_io import read_json, write_json
+from glass.models import now_iso
+
+
+def _read_json_object(path: str | Path) -> dict[str, Any]:
+    payload = read_json(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"JSON artifact must be an object: {path}")
+    return payload
+
+
+def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
+    return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
+
+
+def _number(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _package_rows(recommendation: dict[str, Any]) -> list[dict[str, Any]]:
+    ordered_try_list = [str(item) for item in recommendation.get("ordered_try_list") or []]
+    recommendation_rows = {
+        str(item.get("label")): item
+        for item in recommendation.get("packages") or []
+        if isinstance(item, dict) and item.get("label") is not None
+    }
+    rows: list[dict[str, Any]] = []
+    for package in WINDOWS_CUDA_PACKAGES:
+        row = dict(recommendation_rows.get(package.label) or {})
+        row.setdefault("label", package.label)
+        row.setdefault("toolkit", package.toolkit)
+        row.setdefault("architectures", [f"{arch // 10}.{arch % 10}" for arch in package.architectures])
+        row.setdefault("compatible", None)
+        row.setdefault("match", "not_evaluated")
+        row["release_artifact"] = f"GLASS-Portable-win64-{package.label}.zip"
+        row["recommended_order"] = (
+            ordered_try_list.index(package.label) + 1 if package.label in ordered_try_list else None
+        )
+        row["release_role"] = (
+            "primary_cuda_package"
+            if recommendation.get("primary") == package.label
+            else "cuda_fallback_candidate"
+            if row.get("compatible") is True
+            else "cuda_planned_package"
+        )
+        rows.append(row)
+    rows.append(
+        {
+            "label": "cpu",
+            "toolkit": None,
+            "architectures": [],
+            "compatible": True,
+            "match": "cpu_fallback",
+            "release_artifact": "GLASS-Portable-win64-cpu.zip",
+            "recommended_order": ordered_try_list.index("cpu") + 1 if "cpu" in ordered_try_list else None,
+            "release_role": "universal_cpu_fallback",
+            "note": "CPU package remains the fallback and does not require CUDA.",
+        }
+    )
+    return rows
+
+
+def build_windows_release_matrix(
+    *,
+    doctor_json: str | Path,
+    release_decision_json: str | Path,
+    acceptance_audit_json: str | Path | None = None,
+    default_runtime_preset: str = "throughput-v1",
+    required_cuda_packages: tuple[str, ...] = ("cuda13", "cuda12", "cuda11"),
+    require_cuda: bool = True,
+    require_default_change_ready: bool = True,
+    expected_primary_package: str | None = None,
+    max_runtime_ratio: float = 1.25,
+) -> dict[str, Any]:
+    doctor = _read_json_object(doctor_json)
+    decision = _read_json_object(release_decision_json)
+    acceptance = _read_json_object(acceptance_audit_json) if acceptance_audit_json is not None else {}
+    cuda = doctor.get("cuda") if isinstance(doctor.get("cuda"), dict) else {}
+    recommendation = (
+        doctor.get("windows_cuda_packages")
+        if isinstance(doctor.get("windows_cuda_packages"), dict)
+        else {}
+    )
+    package_rows = _package_rows(recommendation)
+    package_by_label = {str(row.get("label")): row for row in package_rows}
+    ordered_try_list = [str(item) for item in recommendation.get("ordered_try_list") or []]
+    primary = str(recommendation.get("primary") or "")
+    expected_primary = expected_primary_package or primary
+    runtime_repeat = decision.get("runtime_repeat") if isinstance(decision.get("runtime_repeat"), dict) else {}
+    runtime_ratio = _number(runtime_repeat.get("elapsed_ratio_vs_best"))
+
+    checks = [
+        _check(
+            "doctor_schema_version",
+            doctor.get("schema_version") == 1,
+            {"actual": doctor.get("schema_version"), "required": 1, "path": str(doctor_json)},
+        ),
+        _check(
+            "cuda_probe_completed",
+            not bool(cuda.get("probe_skipped")),
+            {"probe_skipped": cuda.get("probe_skipped")},
+        ),
+        _check(
+            "cuda_available_for_release_machine",
+            bool(cuda.get("cuda_available")) if require_cuda else True,
+            {
+                "actual": cuda.get("cuda_available"),
+                "required": bool(require_cuda),
+                "wrapper_importable": cuda.get("wrapper_importable"),
+                "native_extension_loaded": cuda.get("native_extension_loaded"),
+            },
+        ),
+        _check(
+            "windows_package_recommendation_present",
+            bool(recommendation.get("ordered_try_list")) and bool(recommendation.get("packages")),
+            {
+                "ordered_try_list": ordered_try_list,
+                "package_count": len(recommendation.get("packages") or []),
+            },
+        ),
+        _check(
+            "ordered_try_list_has_cpu_fallback",
+            "cpu" in ordered_try_list,
+            {"ordered_try_list": ordered_try_list},
+        ),
+        _check(
+            "primary_package_matches_expected",
+            not expected_primary or primary == expected_primary,
+            {"actual": primary, "required": expected_primary},
+        ),
+        _check(
+            "release_decision_default_change_ready",
+            bool(decision.get("default_change_ready")) if require_default_change_ready else True,
+            {
+                "actual": decision.get("default_change_ready"),
+                "required": bool(require_default_change_ready),
+                "status": decision.get("status"),
+                "recommendation": decision.get("recommendation"),
+            },
+        ),
+        _check(
+            "release_decision_recommends_promotion",
+            decision.get("recommendation") == "promote_default_candidate",
+            {"actual": decision.get("recommendation"), "required": "promote_default_candidate"},
+        ),
+        _check(
+            "default_runtime_preset",
+            default_runtime_preset == "throughput-v1",
+            {"actual": default_runtime_preset, "required": "throughput-v1"},
+        ),
+        _check(
+            "runtime_repeat_ratio_within_release_bound",
+            runtime_ratio is not None and runtime_ratio <= float(max_runtime_ratio),
+            {"actual": runtime_ratio, "required_max": float(max_runtime_ratio)},
+        ),
+    ]
+    if acceptance_audit_json is not None:
+        checks.append(
+            _check(
+                "acceptance_audit_passed",
+                acceptance.get("passed") is True,
+                {"status": acceptance.get("status"), "path": str(acceptance_audit_json)},
+            )
+        )
+    for label in required_cuda_packages:
+        row = package_by_label.get(label)
+        checks.append(
+            _check(
+                f"required_cuda_package_present:{label}",
+                row is not None,
+                {"label": label, "available": sorted(package_by_label)},
+            )
+        )
+        checks.append(
+            _check(
+                f"required_cuda_package_compatible:{label}",
+                row is not None and row.get("compatible") is True,
+                {
+                    "label": label,
+                    "compatible": None if row is None else row.get("compatible"),
+                    "match": None if row is None else row.get("match"),
+                },
+            )
+        )
+
+    failed = [item for item in checks if not item.get("passed")]
+    current_device = recommendation.get("selected_device")
+    payload = {
+        "schema_version": 1,
+        "artifact_type": "windows_release_matrix",
+        "created_at": now_iso(),
+        "status": "release_matrix_ready" if not failed else "blocked",
+        "passed": not failed,
+        "recommendation": "publish_windows_cuda_matrix" if not failed else "fix_release_matrix_blockers",
+        "inputs": {
+            "doctor_json": str(doctor_json),
+            "release_decision_json": str(release_decision_json),
+            "acceptance_audit_json": None if acceptance_audit_json is None else str(acceptance_audit_json),
+        },
+        "default_runtime": {
+            "resident_runtime_preset": default_runtime_preset,
+            "source": "Gate181 promoted default",
+            "release_decision_status": decision.get("status"),
+            "default_change_ready": decision.get("default_change_ready"),
+        },
+        "current_machine": {
+            "cuda_available": cuda.get("cuda_available"),
+            "native_extension_loaded": cuda.get("native_extension_loaded"),
+            "device": current_device,
+            "ordered_try_list": ordered_try_list,
+            "primary_package": primary,
+            "guidance": recommendation.get("guidance"),
+        },
+        "packages": package_rows,
+        "runtime_repeat": runtime_repeat,
+        "checks": checks,
+        "failed_checks": [str(item.get("name")) for item in failed],
+        "limitations": [
+            "This artifact audits release readiness from existing GLASS artifacts; it does not build packages.",
+            "CUDA package compatibility is based on detected compute capability and planned package targets.",
+            "Older CUDA packages on newer GPUs may use PTX JIT and can be slower than the native package.",
+        ],
+    }
+    return payload
+
+
+def _markdown(payload: dict[str, Any]) -> str:
+    lines = [
+        "# GLASS Windows Release Matrix",
+        "",
+        f"- Status: `{payload.get('status')}`",
+        f"- Recommendation: `{payload.get('recommendation')}`",
+        f"- Passed: `{payload.get('passed')}`",
+        f"- Default resident runtime preset: `{(payload.get('default_runtime') or {}).get('resident_runtime_preset')}`",
+        "",
+        "## Current Machine",
+        "",
+    ]
+    machine = payload.get("current_machine") if isinstance(payload.get("current_machine"), dict) else {}
+    lines.extend(
+        [
+            f"- CUDA available: `{machine.get('cuda_available')}`",
+            f"- Native extension loaded: `{machine.get('native_extension_loaded')}`",
+            f"- Primary package: `{machine.get('primary_package')}`",
+            f"- Try order: `{', '.join(machine.get('ordered_try_list') or [])}`",
+            f"- Guidance: {machine.get('guidance')}",
+            "",
+            "## Packages",
+            "",
+            "| Package | Artifact | Compatible | Match | Role |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for row in payload.get("packages") or []:
+        lines.append(
+            "| "
+            f"{row.get('label')} | {row.get('release_artifact')} | {row.get('compatible')} | "
+            f"{row.get('match')} | {row.get('release_role')} |"
+        )
+    lines.extend(["", "## Checks", ""])
+    for item in payload.get("checks") or []:
+        marker = "PASS" if item.get("passed") else "FAIL"
+        lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_windows_release_matrix(
+    out: str | Path,
+    payload: dict[str, Any],
+    *,
+    markdown: str | Path | None = None,
+) -> None:
+    write_json(out, payload)
+    if markdown is not None:
+        Path(markdown).parent.mkdir(parents=True, exist_ok=True)
+        Path(markdown).write_text(_markdown(payload), encoding="utf-8")
