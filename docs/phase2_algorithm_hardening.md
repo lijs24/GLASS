@@ -4080,6 +4080,23 @@ integration where applicable.
 - Keep this gate StackEngine/DQ-contract scoped: no CUDA kernel, runtime default
   change, package build, upload, or real-data benchmark rerun.
 
+### S2-Gate 243: DQ Provenance Sample Closure Handoff
+
+- Carry StackEngine valid/invalid/rejected sample accounting into
+  `dq_provenance_summary_from_stack_engine` so pipeline and report artifacts can
+  consume the Gate 242 closure fields without opening raw StackEngine
+  provenance.
+- Add low/high rejected sample totals, final valid sample totals, and a
+  `sample_accounting_closure` object to StackEngine DQ summaries.
+- Add resident coverage `rounded_sum` statistics and carry optional resident
+  pre/post rejection sample closure into `dq_provenance_summary_from_resident`.
+- Extend resident result contracts to pass old artifacts with missing closure
+  evidence but fail when a supplied resident closure explicitly fails.
+- Add DQ provenance and resident result-contract tests for passing and failed
+  sample closure evidence.
+- Keep this gate DQ/report-contract scoped: no image math, CUDA kernel,
+  runtime default change, package build, upload, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

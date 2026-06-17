@@ -909,12 +909,16 @@ def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
     if finite_count == 0:
         return {
             "finite_pixels": 0,
+            "rounded_sum": 0,
             "min": 0.0,
             "max": 0.0,
             "mean": 0.0,
         }
+    finite_values = values[finite_mask]
+    rounded = np.rint(finite_values)
     return {
         "finite_pixels": finite_count,
+        "rounded_sum": int(round(float(np.sum(rounded, dtype=np.float64)))),
         "min": float(np.nanmin(values)),
         "max": float(np.nanmax(values)),
         "mean": float(np.nanmean(values)),

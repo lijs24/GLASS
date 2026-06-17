@@ -7,9 +7,15 @@ def test_stack_engine_dq_provenance_summary_contract():
     summary = dq_provenance_summary_from_stack_engine(
         {
             "input_samples": 8,
+            "input_valid_samples_before_rejection": 6,
+            "input_invalid_samples_before_rejection": 2,
             "input_flagged_samples": 2,
             "input_nonfinite_samples": 1,
             "input_dq_flag_counts": {"hot_pixel": 1, "no_data": 1},
+            "valid_samples_after_rejection": 4,
+            "low_rejected_samples": 1,
+            "high_rejected_samples": 1,
+            "rejected_samples": 2,
             "output_coverage_zero_pixels": 3,
             "output_low_rejected_pixels": 4,
             "output_high_rejected_pixels": 5,
@@ -25,9 +31,18 @@ def test_stack_engine_dq_provenance_summary_contract():
     assert summary["stage"] == "integration"
     assert summary["item"] == "H"
     assert summary["input_samples"] == 8
+    assert summary["input_valid_samples_before_rejection"] == 6
+    assert summary["input_invalid_samples_before_rejection"] == 2
     assert summary["input_flagged_samples"] == 2
     assert summary["input_nonfinite_samples"] == 1
     assert summary["source_dq_flag_counts"]["hot_pixel"] == 1
+    assert summary["valid_samples_after_rejection"] == 4
+    assert summary["low_rejected_samples"] == 1
+    assert summary["high_rejected_samples"] == 1
+    assert summary["rejected_samples"] == 2
+    assert summary["sample_accounting_closure"]["status"] == "passed"
+    assert summary["sample_accounting_closure"]["input_total_match"] is True
+    assert summary["sample_accounting_closure"]["valid_rejection_match"] is True
     assert summary["zero_coverage_pixels"] == 3
     assert summary["partial_coverage_pixels"] is None
     assert summary["low_rejected_pixels"] == 4
@@ -41,8 +56,8 @@ def test_resident_dq_provenance_summary_contract():
         {
             "active_frame_count": 3,
             "source_terms": ["post_rejection_coverage", "geometric_warp_coverage"],
-            "finite_pre_rejection_coverage": {"finite_pixels": 20},
-            "post_rejection_coverage": {"finite_pixels": 18},
+            "finite_pre_rejection_coverage": {"finite_pixels": 20, "rounded_sum": 54},
+            "post_rejection_coverage": {"finite_pixels": 18, "rounded_sum": 48},
             "rejected_sample_count": 6,
             "geometric_zero_pixels": 1,
             "geometric_partial_pixels": 2,
@@ -58,7 +73,11 @@ def test_resident_dq_provenance_summary_contract():
     assert summary["source_terms"] == ["post_rejection_coverage", "geometric_warp_coverage"]
     assert summary["finite_pre_rejection_pixels"] == 20
     assert summary["post_rejection_pixels"] == 18
+    assert summary["input_valid_samples_before_rejection"] == 54
+    assert summary["valid_samples_after_rejection"] == 48
     assert summary["rejected_samples"] == 6
+    assert summary["sample_accounting_closure"]["status"] == "passed"
+    assert summary["sample_accounting_closure"]["valid_rejection_match"] is True
     assert summary["zero_coverage_pixels"] == 1
     assert summary["partial_coverage_pixels"] == 2
     assert summary["low_rejected_pixels"] == 3

@@ -12,7 +12,13 @@ from glass.report.dq_map_verify import summarize_count_map_pixels
 from glass.report.resident_result_contract import build_resident_result_contract
 
 
-def _write_resident_run(path: Path, *, mismatch_summary: bool = False, mismatch_sample_count: bool = False) -> None:
+def _write_resident_run(
+    path: Path,
+    *,
+    mismatch_summary: bool = False,
+    mismatch_sample_count: bool = False,
+    sample_closure_status: str | None = None,
+) -> None:
     integration = path / "integration"
     integration.mkdir(parents=True)
     master = np.ones((2, 2), dtype=np.float32)
@@ -42,6 +48,29 @@ def _write_resident_run(path: Path, *, mismatch_summary: bool = False, mismatch_
         "low_rejected": 2 if mismatch_summary else 1,
         "high_rejected": 1,
     }
+    provenance_summary = {
+        "source_schema": "resident_dq_coverage_provenance",
+        "stage": "integration",
+        "item": "H",
+        "engine": "cuda_resident_stack",
+        "active_frame_count": 3,
+        "source_terms": [
+            "post_rejection_coverage",
+            "low_rejection",
+            "high_rejection",
+            "geometric_warp_coverage",
+        ],
+        "rejected_samples": 2 if mismatch_sample_count else 3,
+        "output_dq_summary": dq_summary,
+    }
+    if sample_closure_status is not None:
+        provenance_summary["sample_accounting_closure"] = {
+            "status": sample_closure_status,
+            "input_valid_samples_before_rejection": 9,
+            "valid_samples_after_rejection": 6,
+            "rejected_samples": 3,
+            "valid_rejection_match": sample_closure_status == "passed",
+        }
     write_json(
         path / "integration_results.json",
         {
@@ -72,21 +101,7 @@ def _write_resident_run(path: Path, *, mismatch_summary: bool = False, mismatch_
                             "geometric_warp_coverage",
                         ],
                     },
-                    "dq_provenance_summary": {
-                        "source_schema": "resident_dq_coverage_provenance",
-                        "stage": "integration",
-                        "item": "H",
-                        "engine": "cuda_resident_stack",
-                        "active_frame_count": 3,
-                        "source_terms": [
-                            "post_rejection_coverage",
-                            "low_rejection",
-                            "high_rejection",
-                            "geometric_warp_coverage",
-                        ],
-                        "rejected_samples": 2 if mismatch_sample_count else 3,
-                        "output_dq_summary": dq_summary,
-                    },
+                    "dq_provenance_summary": provenance_summary,
                     "geometric_warp_coverage": {
                         "available": True,
                         "frame_count": 3,
@@ -119,6 +134,35 @@ def test_resident_result_contract_passes_with_pixel_verify(tmp_path: Path) -> No
     assert accounting["map_rejected_sample_sum"] == 3
     assert accounting["coverage_provenance_rejected_samples"] == 3
     assert accounting["provenance_summary_rejected_samples"] == 3
+    assert payload["outputs"][0]["sample_accounting_closure"]["status"] == "missing"
+
+
+def test_resident_result_contract_accepts_sample_accounting_closure(tmp_path: Path) -> None:
+    _write_resident_run(tmp_path, sample_closure_status="passed")
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    closure = payload["outputs"][0]["sample_accounting_closure"]
+    assert payload["passed"] is True
+    assert closure["present"] is True
+    assert closure["status"] == "passed"
+    assert checks["sample_accounting_closure_valid"]["passed"] is True
+
+
+def test_resident_result_contract_detects_sample_accounting_closure_failure(
+    tmp_path: Path,
+) -> None:
+    _write_resident_run(tmp_path, sample_closure_status="failed")
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    closure = payload["outputs"][0]["sample_accounting_closure"]
+    assert payload["passed"] is False
+    assert closure["present"] is True
+    assert closure["status"] == "failed"
+    assert checks["sample_accounting_closure_valid"]["passed"] is False
 
 
 def test_resident_result_contract_distinguishes_rejected_samples_from_dq_pixels(tmp_path: Path) -> None:

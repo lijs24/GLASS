@@ -123,6 +123,32 @@ def _summary_matches(dq_summary: dict[str, Any], provenance_summary: dict[str, A
     return {"passed": not mismatches, "mismatches": mismatches}
 
 
+def _sample_accounting_closure_state(provenance_summary: dict[str, Any]) -> dict[str, Any]:
+    closure = provenance_summary.get("sample_accounting_closure")
+    if not isinstance(closure, dict):
+        return {
+            "present": False,
+            "status": "missing",
+            "passed": True,
+            "required": False,
+        }
+    status = closure.get("status")
+    present = status in {"passed", "failed"}
+    return {
+        "present": present,
+        "status": status,
+        "passed": (not present) or status == "passed",
+        "required": present,
+        "input_valid_samples_before_rejection": closure.get(
+            "input_valid_samples_before_rejection"
+        ),
+        "valid_samples_after_rejection": closure.get("valid_samples_after_rejection"),
+        "rejected_samples": closure.get("rejected_samples"),
+        "valid_rejection_match": closure.get("valid_rejection_match"),
+        "input_total_match": closure.get("input_total_match"),
+    }
+
+
 def _dq_flags(dq_summary: dict[str, Any]) -> list[str]:
     flags = ["valid", "no_data", "warp_edge", "low_rejected", "high_rejected"]
     for key in dq_summary:
@@ -283,6 +309,7 @@ def _resident_output_contract(
         summary_rejected_samples,
         0,
     )
+    sample_closure = _sample_accounting_closure_state(provenance_summary)
     checks = [
         _check(
             "resident_identity",
@@ -369,6 +396,12 @@ def _resident_output_contract(
             (not rejection_sample_count_required) or bool(rejection_sample_count_match["passed"]),
             rejection_sample_count_match,
         ),
+        _check(
+            "sample_accounting_closure_valid",
+            bool(sample_closure["passed"]),
+            sample_closure,
+            "Optional resident sample closure verifies pre-rejection valid samples against post-rejection valid plus rejected samples.",
+        ),
     ]
     pixel_result = None
     if pixel_verify:
@@ -405,6 +438,7 @@ def _resident_output_contract(
         "rejection": rejection,
         "active_frame_count": active_frame_count,
         "frame_count": frame_count,
+        "sample_accounting_closure": sample_closure,
         "maps": map_rows,
         "checks": checks,
         "pixel_verification": pixel_result or {
