@@ -308,6 +308,109 @@ def _publish_preflight_resident_winsorized_summary(
     return result
 
 
+def _resident_result_contract_summary_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("plan_matrix_ready") is True
+        and summary.get("matrix_ready") is True
+        and summary.get("default_promotion_ready") is True
+        and summary.get("plan_matrix_status") == "passed"
+        and summary.get("matrix_status") == "passed"
+        and summary.get("default_promotion_status") == "passed"
+        and summary.get("plan_matrix_phase2_check_passed") is True
+        and summary.get("matrix_phase2_check_passed") is True
+        and summary.get("default_promotion_phase2_check_passed") is True
+        and _int_or_zero(summary.get("plan_matrix_required_count")) > 0
+        and _int_or_zero(summary.get("matrix_required_count")) > 0
+        and _int_or_zero(summary.get("default_promotion_required_count")) > 0
+        and _int_or_zero(summary.get("plan_matrix_failed_count")) == 0
+        and _int_or_zero(summary.get("matrix_failed_count")) == 0
+        and _int_or_zero(summary.get("default_promotion_failed_count")) == 0
+        and _all_true(
+            [
+                summary.get("plan_matrix_handoff_passed"),
+                summary.get("matrix_handoff_passed"),
+                summary.get("default_promotion_handoff_passed"),
+                summary.get("plan_matrix_matches_matrix"),
+                summary.get("matrix_matches_default_promotion"),
+            ]
+        )
+    )
+
+
+def _publish_preflight_resident_result_contract_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "plan_matrix_ready": summary.get(
+            "github_plan_matrix_resident_result_contract_ready"
+        ),
+        "plan_matrix_status": summary.get(
+            "github_plan_matrix_resident_result_contract_status"
+        ),
+        "plan_matrix_phase2_check_passed": summary.get(
+            "github_plan_matrix_resident_result_contract_phase2_check_passed"
+        ),
+        "plan_matrix_required_count": summary.get(
+            "github_plan_matrix_resident_result_contract_required_count"
+        ),
+        "plan_matrix_failed_count": summary.get(
+            "github_plan_matrix_resident_result_contract_failed_count"
+        ),
+        "matrix_ready": summary.get("matrix_resident_result_contract_ready"),
+        "matrix_status": summary.get("matrix_resident_result_contract_status"),
+        "matrix_phase2_check_passed": summary.get(
+            "matrix_resident_result_contract_phase2_check_passed"
+        ),
+        "matrix_required_count": summary.get(
+            "matrix_resident_result_contract_required_count"
+        ),
+        "matrix_failed_count": summary.get(
+            "matrix_resident_result_contract_failed_count"
+        ),
+        "default_promotion_ready": summary.get(
+            "default_promotion_resident_result_contract_ready"
+        ),
+        "default_promotion_status": summary.get(
+            "default_promotion_resident_result_contract_status"
+        ),
+        "default_promotion_phase2_check_passed": summary.get(
+            "default_promotion_resident_result_contract_phase2_check_passed"
+        ),
+        "default_promotion_required_count": summary.get(
+            "default_promotion_resident_result_contract_required_count"
+        ),
+        "default_promotion_failed_count": summary.get(
+            "default_promotion_resident_result_contract_failed_count"
+        ),
+        "plan_matrix_handoff_passed": _check_passed(
+            payload,
+            "github_plan_matrix_resident_result_contract_handoff_passed",
+        ),
+        "matrix_handoff_passed": _check_passed(
+            payload,
+            "matrix_resident_result_contract_handoff_passed",
+        ),
+        "default_promotion_handoff_passed": _check_passed(
+            payload,
+            "default_promotion_resident_result_contract_handoff_passed",
+        ),
+        "plan_matrix_matches_matrix": _check_passed(
+            payload,
+            "github_plan_matrix_resident_result_contract_matches_matrix",
+        ),
+        "matrix_matches_default_promotion": _check_passed(
+            payload,
+            "matrix_resident_result_contract_matches_default_promotion",
+        ),
+    }
+    result["ready"] = _resident_result_contract_summary_ready(result)
+    return result
+
+
 def _engine_policy_summary_ready(summary: dict[str, Any]) -> bool:
     return (
         summary.get("matrix_ready") is True
@@ -694,6 +797,85 @@ def _phase2_publish_preflight_resident_winsorized_summary(
     return result
 
 
+def _phase2_publish_preflight_resident_result_contract_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "plan_matrix_ready": preflight.get(
+            "github_plan_matrix_resident_result_contract_ready"
+        ),
+        "plan_matrix_status": preflight.get(
+            "github_plan_matrix_resident_result_contract_status"
+        ),
+        "plan_matrix_phase2_check_passed": preflight.get(
+            "github_plan_matrix_resident_result_contract_phase2_check_passed"
+        ),
+        "plan_matrix_required_count": preflight.get(
+            "github_plan_matrix_resident_result_contract_required_count"
+        ),
+        "plan_matrix_failed_count": preflight.get(
+            "github_plan_matrix_resident_result_contract_failed_count"
+        ),
+        "matrix_ready": preflight.get("matrix_resident_result_contract_ready"),
+        "matrix_status": preflight.get("matrix_resident_result_contract_status"),
+        "matrix_phase2_check_passed": preflight.get(
+            "matrix_resident_result_contract_phase2_check_passed"
+        ),
+        "matrix_required_count": preflight.get(
+            "matrix_resident_result_contract_required_count"
+        ),
+        "matrix_failed_count": preflight.get(
+            "matrix_resident_result_contract_failed_count"
+        ),
+        "default_promotion_ready": preflight.get(
+            "default_promotion_resident_result_contract_ready"
+        ),
+        "default_promotion_status": preflight.get(
+            "default_promotion_resident_result_contract_status"
+        ),
+        "default_promotion_phase2_check_passed": preflight.get(
+            "default_promotion_resident_result_contract_phase2_check_passed"
+        ),
+        "default_promotion_required_count": preflight.get(
+            "default_promotion_resident_result_contract_required_count"
+        ),
+        "default_promotion_failed_count": preflight.get(
+            "default_promotion_resident_result_contract_failed_count"
+        ),
+        "plan_matrix_handoff_passed": preflight.get(
+            "github_plan_matrix_resident_result_contract_handoff_passed"
+        ),
+        "matrix_handoff_passed": preflight.get(
+            "matrix_resident_result_contract_handoff_passed"
+        ),
+        "default_promotion_handoff_passed": preflight.get(
+            "default_promotion_resident_result_contract_handoff_passed"
+        ),
+        "plan_matrix_matches_matrix": preflight.get(
+            "github_plan_matrix_resident_result_contract_matches_matrix"
+        ),
+        "matrix_matches_default_promotion": preflight.get(
+            "matrix_resident_result_contract_matches_default_promotion"
+        ),
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_resident_result_contract_handoff_passed",
+        ),
+    }
+    result["ready"] = (
+        _resident_result_contract_summary_ready(result)
+        and result.get("phase2_check_passed") is True
+    )
+    return result
+
+
 def _resident_winsorized_summaries_match(
     phase2_summary: dict[str, Any],
     preflight_summary: dict[str, Any],
@@ -713,6 +895,36 @@ def _resident_winsorized_summaries_match(
         "default_promotion_audit_passed",
         "default_promotion_required_frame_passed",
         "default_promotion_matches_matrix",
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
+def _resident_result_contract_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "plan_matrix_ready",
+        "plan_matrix_status",
+        "plan_matrix_phase2_check_passed",
+        "plan_matrix_required_count",
+        "plan_matrix_failed_count",
+        "matrix_ready",
+        "matrix_status",
+        "matrix_phase2_check_passed",
+        "matrix_required_count",
+        "matrix_failed_count",
+        "default_promotion_ready",
+        "default_promotion_status",
+        "default_promotion_phase2_check_passed",
+        "default_promotion_required_count",
+        "default_promotion_failed_count",
+        "plan_matrix_handoff_passed",
+        "matrix_handoff_passed",
+        "default_promotion_handoff_passed",
+        "plan_matrix_matches_matrix",
+        "matrix_matches_default_promotion",
         "ready",
     )
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
@@ -1160,6 +1372,12 @@ def build_stack_engine_publication_audit(
     phase2_preflight_winsorized = (
         _phase2_publish_preflight_resident_winsorized_summary(phase2_payload)
     )
+    preflight_resident_result_contract = (
+        _publish_preflight_resident_result_contract_summary(preflight_payload)
+    )
+    phase2_preflight_resident_result_contract = (
+        _phase2_publish_preflight_resident_result_contract_summary(phase2_payload)
+    )
     preflight_engine_policy = _publish_preflight_engine_policy_summary(
         preflight_payload
     )
@@ -1196,6 +1414,12 @@ def build_stack_engine_publication_audit(
         "publish_preflight_resident_winsorized_sweep": preflight_winsorized,
         "phase2_publish_preflight_resident_winsorized_sweep": (
             phase2_preflight_winsorized
+        ),
+        "publish_preflight_resident_result_contract": (
+            preflight_resident_result_contract
+        ),
+        "phase2_publish_preflight_resident_result_contract": (
+            phase2_preflight_resident_result_contract
         ),
         "publish_preflight_integration_engine_policy": preflight_engine_policy,
         "phase2_publish_preflight_integration_engine_policy": (
@@ -1310,6 +1534,29 @@ def build_stack_engine_publication_audit(
             {
                 "phase2_publish_preflight": phase2_preflight_winsorized,
                 "publish_preflight": preflight_winsorized,
+            },
+        ),
+        _check(
+            "publish_preflight_resident_result_contract_ready",
+            preflight_resident_result_contract.get("ready") is True,
+            preflight_resident_result_contract,
+        ),
+        _check(
+            "phase2_publish_preflight_resident_result_contract_ready",
+            phase2_preflight_resident_result_contract.get("ready") is True,
+            phase2_preflight_resident_result_contract,
+        ),
+        _check(
+            "phase2_publish_preflight_resident_result_contract_matches_publish_preflight",
+            _resident_result_contract_summaries_match(
+                phase2_preflight_resident_result_contract,
+                preflight_resident_result_contract,
+            ),
+            {
+                "phase2_publish_preflight": (
+                    phase2_preflight_resident_result_contract
+                ),
+                "publish_preflight": preflight_resident_result_contract,
             },
         ),
         _check(

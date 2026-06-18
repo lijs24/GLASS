@@ -37,6 +37,10 @@ def _write_chain(
     matrix_gap_count: int = 0,
     resident_winsorized_ready: bool = True,
     phase2_resident_winsorized_ready: bool | None = None,
+    resident_result_contract_ready: bool = True,
+    phase2_resident_result_contract_ready: bool | None = None,
+    include_resident_result_contract: bool = True,
+    include_phase2_resident_result_contract: bool = True,
     integration_engine_policy_ready: bool = True,
     phase2_integration_engine_policy_ready: bool | None = None,
     include_integration_engine_policy: bool = True,
@@ -61,6 +65,11 @@ def _write_chain(
         if phase2_resident_winsorized_ready is None
         else phase2_resident_winsorized_ready
     )
+    phase2_result_contract_ready = (
+        resident_result_contract_ready
+        if phase2_resident_result_contract_ready is None
+        else phase2_resident_result_contract_ready
+    )
     phase2_engine_policy_ready = (
         integration_engine_policy_ready
         if phase2_integration_engine_policy_ready is None
@@ -83,6 +92,10 @@ def _write_chain(
     )
     resident_status = "passed" if resident_winsorized_ready else "failed"
     phase2_resident_status = "passed" if phase2_winsorized_ready else "failed"
+    resident_result_status = "passed" if resident_result_contract_ready else "failed"
+    phase2_resident_result_status = (
+        "passed" if phase2_result_contract_ready else "failed"
+    )
     engine_policy_status = "passed" if integration_engine_policy_ready else "failed"
     phase2_engine_policy_status = (
         "passed" if phase2_engine_policy_ready else "failed"
@@ -107,6 +120,11 @@ def _write_chain(
         source_fields["ready"]
         and matrix_fields["ready"]
         and phase2_winsorized_ready
+        and (
+            phase2_result_contract_ready
+            if include_phase2_resident_result_contract
+            else True
+        )
         and (phase2_engine_policy_ready if include_phase2_integration_engine_policy else True)
         and (phase2_runtime_ready if include_phase2_runtime_default else True)
         and (phase2_direct_ready if include_phase2_direct_runtime else True)
@@ -258,6 +276,70 @@ def _write_chain(
         },
     )
     phase2_payload = read_json(paths["phase2"])
+    if include_phase2_resident_result_contract:
+        failed_count = 0 if phase2_result_contract_ready else 1
+        phase2_payload["publish_preflight"].update(
+            {
+                "github_plan_matrix_resident_result_contract_ready": (
+                    phase2_result_contract_ready
+                ),
+                "github_plan_matrix_resident_result_contract_status": (
+                    phase2_resident_result_status
+                ),
+                "github_plan_matrix_resident_result_contract_phase2_check_passed": (
+                    phase2_result_contract_ready
+                ),
+                "github_plan_matrix_resident_result_contract_required_count": 1,
+                "github_plan_matrix_resident_result_contract_failed_count": (
+                    failed_count
+                ),
+                "matrix_resident_result_contract_ready": (
+                    phase2_result_contract_ready
+                ),
+                "matrix_resident_result_contract_status": (
+                    phase2_resident_result_status
+                ),
+                "matrix_resident_result_contract_phase2_check_passed": (
+                    phase2_result_contract_ready
+                ),
+                "matrix_resident_result_contract_required_count": 1,
+                "matrix_resident_result_contract_failed_count": failed_count,
+                "default_promotion_resident_result_contract_ready": (
+                    phase2_result_contract_ready
+                ),
+                "default_promotion_resident_result_contract_status": (
+                    phase2_resident_result_status
+                ),
+                "default_promotion_resident_result_contract_phase2_check_passed": (
+                    phase2_result_contract_ready
+                ),
+                "default_promotion_resident_result_contract_required_count": 1,
+                "default_promotion_resident_result_contract_failed_count": (
+                    failed_count
+                ),
+                "github_plan_matrix_resident_result_contract_handoff_passed": (
+                    phase2_result_contract_ready
+                ),
+                "matrix_resident_result_contract_handoff_passed": (
+                    phase2_result_contract_ready
+                ),
+                "default_promotion_resident_result_contract_handoff_passed": (
+                    phase2_result_contract_ready
+                ),
+                "github_plan_matrix_resident_result_contract_matches_matrix": (
+                    phase2_result_contract_ready
+                ),
+                "matrix_resident_result_contract_matches_default_promotion": (
+                    phase2_result_contract_ready
+                ),
+            }
+        )
+        phase2_payload["checks"].append(
+            {
+                "name": "windows_publish_preflight_resident_result_contract_handoff_passed",
+                "passed": phase2_result_contract_ready,
+            }
+        )
     if include_phase2_integration_engine_policy:
         phase2_payload["publish_preflight"].update(
             {
@@ -552,6 +634,11 @@ def _write_chain(
                 matrix_fields["ready"]
                 and resident_winsorized_ready
                 and (
+                    resident_result_contract_ready
+                    if include_resident_result_contract
+                    else True
+                )
+                and (
                     integration_engine_policy_ready
                     if include_integration_engine_policy
                     else True
@@ -564,6 +651,11 @@ def _write_chain(
             "passed": (
                 matrix_fields["ready"]
                 and resident_winsorized_ready
+                and (
+                    resident_result_contract_ready
+                    if include_resident_result_contract
+                    else True
+                )
                 and (
                     integration_engine_policy_ready
                     if include_integration_engine_policy
@@ -754,6 +846,72 @@ def _write_chain(
         },
     )
     preflight_payload = read_json(paths["preflight"])
+    if include_resident_result_contract:
+        failed_count = 0 if resident_result_contract_ready else 1
+        preflight_payload["summary"].update(
+            {
+                "github_plan_matrix_resident_result_contract_ready": (
+                    resident_result_contract_ready
+                ),
+                "github_plan_matrix_resident_result_contract_status": (
+                    resident_result_status
+                ),
+                "github_plan_matrix_resident_result_contract_phase2_check_passed": (
+                    resident_result_contract_ready
+                ),
+                "github_plan_matrix_resident_result_contract_required_count": 1,
+                "github_plan_matrix_resident_result_contract_failed_count": (
+                    failed_count
+                ),
+                "matrix_resident_result_contract_ready": (
+                    resident_result_contract_ready
+                ),
+                "matrix_resident_result_contract_status": resident_result_status,
+                "matrix_resident_result_contract_phase2_check_passed": (
+                    resident_result_contract_ready
+                ),
+                "matrix_resident_result_contract_required_count": 1,
+                "matrix_resident_result_contract_failed_count": failed_count,
+                "default_promotion_resident_result_contract_ready": (
+                    resident_result_contract_ready
+                ),
+                "default_promotion_resident_result_contract_status": (
+                    resident_result_status
+                ),
+                "default_promotion_resident_result_contract_phase2_check_passed": (
+                    resident_result_contract_ready
+                ),
+                "default_promotion_resident_result_contract_required_count": 1,
+                "default_promotion_resident_result_contract_failed_count": (
+                    failed_count
+                ),
+            }
+        )
+        preflight_payload["checks"].extend(
+            [
+                {
+                    "name": "github_plan_matrix_resident_result_contract_handoff_passed",
+                    "passed": resident_result_contract_ready,
+                },
+                {
+                    "name": "matrix_resident_result_contract_handoff_passed",
+                    "passed": resident_result_contract_ready,
+                },
+                {
+                    "name": "default_promotion_resident_result_contract_handoff_passed",
+                    "passed": resident_result_contract_ready,
+                },
+                {
+                    "name": "github_plan_matrix_resident_result_contract_matches_matrix",
+                    "passed": resident_result_contract_ready,
+                },
+                {
+                    "name": "matrix_resident_result_contract_matches_default_promotion",
+                    "passed": resident_result_contract_ready,
+                },
+            ]
+        )
+        write_json(paths["preflight"], preflight_payload)
     if not include_runtime_default:
         for key in (
             "matrix_stack_engine_runtime_default_ready",
@@ -938,6 +1096,14 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     assert checks["phase2_publish_preflight_stack_engine_ready"] is True
     assert checks["publish_preflight_resident_winsorized_sweep_ready"] is True
     assert checks["phase2_publish_preflight_resident_winsorized_sweep_ready"] is True
+    assert checks["publish_preflight_resident_result_contract_ready"] is True
+    assert checks["phase2_publish_preflight_resident_result_contract_ready"] is True
+    assert (
+        checks[
+            "phase2_publish_preflight_resident_result_contract_matches_publish_preflight"
+        ]
+        is True
+    )
     assert checks["publish_preflight_integration_engine_policy_ready"] is True
     assert checks["phase2_publish_preflight_integration_engine_policy_ready"] is True
     assert checks["publish_preflight_stack_engine_runtime_default_ready"] is True
@@ -1397,6 +1563,98 @@ def test_stack_engine_publication_audit_blocks_phase2_resident_winsorized_mismat
     ]["evidence"]["phase2_publish_preflight"]["matrix_status"] == "failed"
 
 
+def test_stack_engine_publication_audit_blocks_resident_result_contract_failure(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, resident_result_contract_ready=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert payload["passed"] is False
+    assert checks["publish_preflight_resident_result_contract_ready"][
+        "passed"
+    ] is False
+    assert checks["phase2_publish_preflight_resident_result_contract_ready"][
+        "passed"
+    ] is False
+    assert checks["publish_preflight_resident_result_contract_ready"]["evidence"][
+        "matrix_status"
+    ] == "failed"
+    assert checks["publish_preflight_resident_result_contract_ready"]["evidence"][
+        "matrix_failed_count"
+    ] == 1
+
+
+def test_stack_engine_publication_audit_blocks_phase2_resident_result_contract_mismatch(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        resident_result_contract_ready=True,
+        phase2_resident_result_contract_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_resident_result_contract_ready"][
+        "passed"
+    ] is True
+    assert checks["phase2_publish_preflight_resident_result_contract_ready"][
+        "passed"
+    ] is False
+    assert checks[
+        "phase2_publish_preflight_resident_result_contract_matches_publish_preflight"
+    ]["passed"] is False
+    assert checks[
+        "phase2_publish_preflight_resident_result_contract_matches_publish_preflight"
+    ]["evidence"]["phase2_publish_preflight"]["matrix_status"] == "failed"
+
+
+def test_stack_engine_publication_audit_blocks_missing_phase2_resident_result_contract(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, include_phase2_resident_result_contract=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_resident_result_contract_ready"][
+        "passed"
+    ] is True
+    assert checks["phase2_publish_preflight_resident_result_contract_ready"][
+        "passed"
+    ] is False
+    assert checks["phase2_publish_preflight_resident_result_contract_ready"][
+        "evidence"
+    ]["phase2_check_passed"] is None
+
+
 def test_stack_engine_publication_audit_blocks_phase2_engine_policy_mismatch(
     tmp_path: Path,
 ):
@@ -1469,6 +1727,7 @@ def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
     assert "GLASS StackEngine Publication Audit" in text
     assert "phase2_publish_preflight_stack_engine_ready" in text
     assert "publish_preflight_resident_winsorized_sweep_ready" in text
+    assert "publish_preflight_resident_result_contract_ready" in text
     assert "publish_preflight_integration_engine_policy_ready" in text
     assert "publish_preflight_stack_engine_runtime_default_ready" in text
     assert "publish_preflight_publication_audit_ready" in text

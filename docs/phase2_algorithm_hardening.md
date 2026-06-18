@@ -6106,6 +6106,23 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 344: StackEngine Publication Audit Resident Result-Contract Handoff
+
+- Carry final publish-preflight resident result-contract evidence and the
+  Phase2 publish-preflight handoff into `glass stack-engine-publication-audit`.
+- Add publication-audit checks requiring raw publish-preflight resident
+  result-contract evidence to be ready and requiring Phase2 status to preserve
+  matching resident result-contract handoff evidence.
+- Require plan/matrix/default-promotion readiness, passed statuses,
+  Phase2-checked state, nonzero required output counts, zero failed output
+  counts, and cross-artifact agreement before the final StackEngine
+  publication audit can pass.
+- Generate Gate344 publication-audit artifacts from controlled Gate342/Gate343
+  release-chain fixtures.
+- Keep this gate publication-audit scoped: no registration math change, no
+  CUDA kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
