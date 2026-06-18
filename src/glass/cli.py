@@ -66,6 +66,13 @@ from glass.report.resident_winsorized_benchmark import (
     build_resident_winsorized_benchmark,
     write_resident_winsorized_benchmark,
 )
+from glass.report.resident_winsorized_benchmark_contract import (
+    DEFAULT_CONTRACT_PATH as DEFAULT_RESIDENT_WINSORIZED_BENCHMARK_CONTRACT,
+)
+from glass.report.resident_winsorized_benchmark_contract import (
+    build_resident_winsorized_benchmark_audit,
+    write_resident_winsorized_benchmark_audit,
+)
 from glass.report.resident_runtime_repeat_plan import (
     build_resident_runtime_repeat_plan,
     write_resident_runtime_repeat_plan,
@@ -2276,6 +2283,29 @@ def cmd_resident_winsorized_benchmark(args: argparse.Namespace) -> int:
             "status": payload.get("status"),
             "passed": payload.get("passed"),
             "timing_s": payload.get("timing_s"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_resident_winsorized_benchmark_audit(args: argparse.Namespace) -> int:
+    payload = build_resident_winsorized_benchmark_audit(
+        args.artifact,
+        contract=args.contract,
+    )
+    write_resident_winsorized_benchmark_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "contract": payload.get("contract_path"),
+            "benchmark": payload.get("benchmark_path"),
+            "failed_checks": payload.get("failed_checks"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -5183,6 +5213,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless CUDA is available and hardened parity checks pass",
     )
     resident_winsorized_benchmark.set_defaults(func=cmd_resident_winsorized_benchmark)
+
+    resident_winsorized_benchmark_audit = sub.add_parser(
+        "resident-winsorized-benchmark-audit",
+        help="audit a resident winsorized benchmark artifact against a machine-readable contract",
+    )
+    resident_winsorized_benchmark_audit.add_argument(
+        "--artifact",
+        required=True,
+        help="resident-winsorized-benchmark JSON artifact",
+    )
+    resident_winsorized_benchmark_audit.add_argument(
+        "--contract",
+        default=str(DEFAULT_RESIDENT_WINSORIZED_BENCHMARK_CONTRACT),
+        help="resident winsorized benchmark contract JSON",
+    )
+    resident_winsorized_benchmark_audit.add_argument("--out", required=True, help="output audit JSON")
+    resident_winsorized_benchmark_audit.add_argument("--markdown", help="optional output Markdown summary")
+    resident_winsorized_benchmark_audit.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 when the benchmark artifact fails the contract",
+    )
+    resident_winsorized_benchmark_audit.set_defaults(func=cmd_resident_winsorized_benchmark_audit)
 
     resident_runtime_repeat_plan = sub.add_parser(
         "resident-runtime-repeat-plan",

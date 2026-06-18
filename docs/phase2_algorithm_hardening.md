@@ -4473,6 +4473,20 @@ integration where applicable.
   benchmark, change image math, optimize kernels, build/upload packages, or
   change defaults.
 
+### S2-Gate 266: Resident Winsorized Microbenchmark Contract Audit
+
+- Add a machine-readable contract for the Gate265 resident winsorized
+  microbenchmark artifact.
+- Add `glass resident-winsorized-benchmark-audit` to validate benchmark status,
+  CUDA availability, deterministic synthetic configuration, hardened-vs-CPU
+  RMS/max-absolute tolerances, required timing metadata, and fast-approximation
+  context.
+- Emit JSON and optional Markdown with pass/fail checks so hardened winsorized
+  parity drift can be caught without rerunning the 200-light benchmark.
+- Add focused contract and CLI tests, plus help-list coverage.
+- Keep this gate contract scoped: no image math, CUDA kernel, runtime default,
+  package build/upload, release update, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,232 @@
+{
+  "artifact_type": "resident_winsorized_benchmark_audit",
+  "benchmark_path": "runs\\checkpoints\\s2_gate_265_resident_winsorized_benchmark.json",
+  "checks": [
+    {
+      "evidence": {
+        "actual": "resident_winsorized_benchmark",
+        "expected": "resident_winsorized_benchmark"
+      },
+      "name": "artifact_type_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "passed": true,
+        "status": "passed"
+      },
+      "name": "benchmark_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "benchmark_check": {
+          "evidence": {
+            "cuda_available": true
+          },
+          "name": "cuda_available",
+          "note": "",
+          "passed": true
+        },
+        "status": "passed"
+      },
+      "name": "cuda_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 8,
+        "expected": 8,
+        "tolerance": 1e-12
+      },
+      "name": "config_frame_count_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 16,
+        "expected": 16,
+        "tolerance": 1e-12
+      },
+      "name": "config_height_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3.0,
+        "expected": 3.0,
+        "tolerance": 1e-12
+      },
+      "name": "config_high_sigma_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3.0,
+        "expected": 3.0,
+        "tolerance": 1e-12
+      },
+      "name": "config_low_sigma_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 265,
+        "expected": 265,
+        "tolerance": 1e-12
+      },
+      "name": "config_seed_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 16,
+        "expected": 16,
+        "tolerance": 1e-12
+      },
+      "name": "config_width_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 5.781343294611998e-06,
+        "required_max": 2e-05
+      },
+      "name": "hardened_master_rms_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.52587890625e-05,
+        "required_max": 0.0002
+      },
+      "name": "hardened_master_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0002
+      },
+      "name": "hardened_weight_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0002
+      },
+      "name": "hardened_coverage_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0002
+      },
+      "name": "hardened_low_rejection_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0002
+      },
+      "name": "hardened_high_rejection_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 0.014615500003856141
+      },
+      "name": "timing_cpu_baseline_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 0.0008526000019628555
+      },
+      "name": "timing_cuda_fast_approx_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 0.000185800003237091
+      },
+      "name": "timing_cuda_hardened_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "hardened_cpu_parity",
+        "expected": "hardened_cpu_parity"
+      },
+      "name": "hardened_timing_mode_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+        "expected": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma"
+      },
+      "name": "hardened_native_method_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "stats_present": true,
+        "timing_present": true
+      },
+      "name": "fast_approx_context_present",
+      "note": "Fast approximation is context only and is not required to match CPU parity.",
+      "passed": true
+    }
+  ],
+  "contract_name": "s2_gate_266_default_resident_winsorized_microbenchmark",
+  "contract_path": "benchmarks\\resident_winsorized_microbenchmark_contract.json",
+  "created_at": "2026-06-18T01:49:45+00:00",
+  "failed_checks": [],
+  "limitations": [
+    "This audit validates the synthetic microbenchmark artifact only.",
+    "Timing presence is required, but the default contract does not impose a wall-time limit.",
+    "Fast approximation drift is reported as context; hardened CPU-parity agreement is the gate."
+  ],
+  "passed": true,
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "benchmark_passed": true,
+    "benchmark_status": "passed",
+    "cpu_baseline_s": 0.014615500003856141,
+    "cuda_fast_approx_s": 0.0008526000019628555,
+    "cuda_hardened_s": 0.000185800003237091,
+    "fast_approx_master_rms": 0.566935986706338,
+    "frame_count": 8,
+    "hardened_master_max_abs": 1.52587890625e-05,
+    "hardened_master_rms": 5.781343294611998e-06,
+    "shape": [
+      16,
+      16
+    ]
+  }
+}

@@ -374,6 +374,7 @@ def test_cli_help_commands():
         "resident-result-contract",
         "resident-runtime-compare",
         "resident-winsorized-benchmark",
+        "resident-winsorized-benchmark-audit",
         "resident-runtime-repeat-execute",
         "resident-runtime-repeat-plan",
         "resident-runtime-repeat-preflight",

@@ -1,0 +1,39 @@
+{
+  "artifact_type": "resident_winsorized_microbenchmark_contract",
+  "name": "s2_gate_266_default_resident_winsorized_microbenchmark",
+  "requirements": {
+    "artifact_type": "resident_winsorized_benchmark",
+    "config": {
+      "frame_count": 8,
+      "height": 16,
+      "high_sigma": 3.0,
+      "low_sigma": 3.0,
+      "seed": 265,
+      "width": 16
+    },
+    "config_float_tolerance": 1e-12,
+    "fast_approx": {
+      "parity_required": false,
+      "require_present": true
+    },
+    "hardened_vs_cpu": {
+      "map_max_abs_max": 0.0002,
+      "master": {
+        "max_abs_max": 0.0002,
+        "rms_max": 2e-05
+      }
+    },
+    "require_cuda_available": true,
+    "require_passed": true,
+    "timing": {
+      "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+      "required_timing_keys": [
+        "cpu_baseline",
+        "cuda_fast_approx",
+        "cuda_hardened"
+      ],
+      "resident_winsorized_mode": "hardened_cpu_parity"
+    }
+  },
+  "schema_version": 1
+}
