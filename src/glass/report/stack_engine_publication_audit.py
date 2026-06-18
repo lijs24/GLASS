@@ -1157,6 +1157,160 @@ def _direct_runtime_summaries_match(
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
 
 
+def _quality_compare_summary_present(summary: dict[str, Any]) -> bool:
+    return any(
+        summary.get(field) is not None
+        for field in (
+            "matrix_present",
+            "matrix_ready",
+            "matrix_status",
+            "matrix_failed_check_count",
+            "default_promotion_present",
+            "default_promotion_ready",
+            "default_promotion_status",
+            "default_promotion_failed_check_count",
+        )
+    )
+
+
+def _quality_compare_summary_ready(summary: dict[str, Any]) -> bool:
+    if not _quality_compare_summary_present(summary):
+        return True
+    return (
+        summary.get("matrix_present") is True
+        and summary.get("matrix_ready") is True
+        and summary.get("matrix_status") == "passed"
+        and _int_or_zero(summary.get("matrix_failed_check_count")) == 0
+        and summary.get("default_promotion_present") is True
+        and summary.get("default_promotion_ready") is True
+        and summary.get("default_promotion_status") == "passed"
+        and _int_or_zero(summary.get("default_promotion_failed_check_count")) == 0
+        and _all_true(
+            [
+                summary.get("matrix_handoff_passed"),
+                summary.get("default_promotion_handoff_passed"),
+                summary.get("matches_default_promotion"),
+            ]
+        )
+    )
+
+
+def _publish_preflight_quality_compare_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "matrix_present": summary.get("matrix_quality_metrics_compare_present"),
+        "matrix_ready": summary.get("matrix_quality_metrics_compare_ready"),
+        "matrix_status": summary.get("matrix_quality_metrics_compare_status"),
+        "matrix_failed_check_count": summary.get(
+            "matrix_quality_metrics_compare_failed_check_count"
+        ),
+        "default_promotion_present": summary.get(
+            "default_promotion_quality_metrics_compare_present"
+        ),
+        "default_promotion_ready": summary.get(
+            "default_promotion_quality_metrics_compare_ready"
+        ),
+        "default_promotion_status": summary.get(
+            "default_promotion_quality_metrics_compare_status"
+        ),
+        "default_promotion_failed_check_count": summary.get(
+            "default_promotion_quality_metrics_compare_failed_check_count"
+        ),
+        "matrix_handoff_passed": _check_passed(
+            payload,
+            "windows_release_matrix_quality_metrics_compare_handoff_passed",
+        ),
+        "default_promotion_handoff_passed": _check_passed(
+            payload,
+            "default_promotion_quality_metrics_compare_handoff_passed",
+        ),
+        "matches_default_promotion": _check_passed(
+            payload,
+            "matrix_quality_metrics_compare_matches_default_promotion",
+        ),
+    }
+    result["present"] = _quality_compare_summary_present(result)
+    result["ready"] = _quality_compare_summary_ready(result)
+    return result
+
+
+def _phase2_publish_preflight_quality_compare_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "matrix_present": preflight.get("matrix_quality_metrics_compare_present"),
+        "matrix_ready": preflight.get("matrix_quality_metrics_compare_ready"),
+        "matrix_status": preflight.get("matrix_quality_metrics_compare_status"),
+        "matrix_failed_check_count": preflight.get(
+            "matrix_quality_metrics_compare_failed_check_count"
+        ),
+        "default_promotion_present": preflight.get(
+            "default_promotion_quality_metrics_compare_present"
+        ),
+        "default_promotion_ready": preflight.get(
+            "default_promotion_quality_metrics_compare_ready"
+        ),
+        "default_promotion_status": preflight.get(
+            "default_promotion_quality_metrics_compare_status"
+        ),
+        "default_promotion_failed_check_count": preflight.get(
+            "default_promotion_quality_metrics_compare_failed_check_count"
+        ),
+        "matrix_handoff_passed": preflight.get(
+            "windows_release_matrix_quality_metrics_compare_handoff_passed"
+        ),
+        "default_promotion_handoff_passed": preflight.get(
+            "default_promotion_quality_metrics_compare_handoff_passed"
+        ),
+        "matches_default_promotion": preflight.get(
+            "matrix_quality_metrics_compare_matches_default_promotion"
+        ),
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_quality_metrics_compare_passed",
+        ),
+    }
+    result["present"] = _quality_compare_summary_present(result)
+    result["ready"] = _quality_compare_summary_ready(result) and (
+        not result["present"] or result.get("phase2_check_passed") is True
+    )
+    return result
+
+
+def _quality_compare_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "present",
+        "matrix_present",
+        "matrix_ready",
+        "matrix_status",
+        "matrix_failed_check_count",
+        "default_promotion_present",
+        "default_promotion_ready",
+        "default_promotion_status",
+        "default_promotion_failed_check_count",
+        "matrix_handoff_passed",
+        "default_promotion_handoff_passed",
+        "matches_default_promotion",
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
 def _publication_audit_summary_ready(summary: dict[str, Any]) -> bool:
     return (
         summary.get("matrix_status") == "passed"
@@ -1402,6 +1556,12 @@ def build_stack_engine_publication_audit(
     phase2_preflight_publication_audit = (
         _phase2_publish_preflight_publication_audit_summary(phase2_payload)
     )
+    preflight_quality_compare = _publish_preflight_quality_compare_summary(
+        preflight_payload
+    )
+    phase2_preflight_quality_compare = (
+        _phase2_publish_preflight_quality_compare_summary(phase2_payload)
+    )
 
     layers = {
         "source_contract": source,
@@ -1436,6 +1596,10 @@ def build_stack_engine_publication_audit(
         "publish_preflight_publication_audit": preflight_publication_audit,
         "phase2_publish_preflight_publication_audit": (
             phase2_preflight_publication_audit
+        ),
+        "publish_preflight_quality_metrics_compare": preflight_quality_compare,
+        "phase2_publish_preflight_quality_metrics_compare": (
+            phase2_preflight_quality_compare
         ),
     }
     direct_gap_counts = [
@@ -1641,6 +1805,27 @@ def build_stack_engine_publication_audit(
             {
                 "phase2_publish_preflight": phase2_preflight_publication_audit,
                 "publish_preflight": preflight_publication_audit,
+            },
+        ),
+        _check(
+            "publish_preflight_quality_metrics_compare_ready",
+            preflight_quality_compare.get("ready") is True,
+            preflight_quality_compare,
+        ),
+        _check(
+            "phase2_publish_preflight_quality_metrics_compare_ready",
+            phase2_preflight_quality_compare.get("ready") is True,
+            phase2_preflight_quality_compare,
+        ),
+        _check(
+            "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight",
+            _quality_compare_summaries_match(
+                phase2_preflight_quality_compare,
+                preflight_quality_compare,
+            ),
+            {
+                "phase2_publish_preflight": phase2_preflight_quality_compare,
+                "publish_preflight": preflight_quality_compare,
             },
         ),
         _check(

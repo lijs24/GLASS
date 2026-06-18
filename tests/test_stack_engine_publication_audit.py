@@ -57,6 +57,10 @@ def _write_chain(
     phase2_publication_audit_ready: bool | None = None,
     include_publication_audit: bool = True,
     include_phase2_publication_audit: bool = True,
+    quality_metrics_compare_ready: bool = True,
+    phase2_quality_metrics_compare_ready: bool | None = None,
+    include_quality_metrics_compare: bool = True,
+    include_phase2_quality_metrics_compare: bool = True,
 ) -> dict[str, Path]:
     source_fields = _stack_fields(ready=source_ready)
     matrix_fields = _stack_fields(ready=matrix_ready, gap_count=matrix_gap_count)
@@ -90,6 +94,11 @@ def _write_chain(
         if phase2_publication_audit_ready is None
         else phase2_publication_audit_ready
     )
+    phase2_quality_compare_ready = (
+        quality_metrics_compare_ready
+        if phase2_quality_metrics_compare_ready is None
+        else phase2_quality_metrics_compare_ready
+    )
     resident_status = "passed" if resident_winsorized_ready else "failed"
     phase2_resident_status = "passed" if phase2_winsorized_ready else "failed"
     resident_result_status = "passed" if resident_result_contract_ready else "failed"
@@ -116,6 +125,10 @@ def _write_chain(
     phase2_publication_audit_status = (
         "passed" if phase2_publication_ready else "failed"
     )
+    quality_compare_status = "passed" if quality_metrics_compare_ready else "failed"
+    phase2_quality_compare_status = (
+        "passed" if phase2_quality_compare_ready else "failed"
+    )
     phase2_status_ready = (
         source_fields["ready"]
         and matrix_fields["ready"]
@@ -129,6 +142,11 @@ def _write_chain(
         and (phase2_runtime_ready if include_phase2_runtime_default else True)
         and (phase2_direct_ready if include_phase2_direct_runtime else True)
         and (phase2_publication_ready if include_phase2_publication_audit else True)
+        and (
+            phase2_quality_compare_ready
+            if include_phase2_quality_metrics_compare
+            else True
+        )
     )
     paths = {
         "stack": tmp_path / "stack_engine_contract.json",
@@ -544,6 +562,41 @@ def _write_chain(
                 "passed": phase2_publication_ready,
             }
         )
+    if include_phase2_quality_metrics_compare:
+        failed_count = 0 if phase2_quality_compare_ready else 1
+        phase2_payload["publish_preflight"].update(
+            {
+                "matrix_quality_metrics_compare_present": True,
+                "matrix_quality_metrics_compare_ready": phase2_quality_compare_ready,
+                "matrix_quality_metrics_compare_status": phase2_quality_compare_status,
+                "matrix_quality_metrics_compare_failed_check_count": failed_count,
+                "default_promotion_quality_metrics_compare_present": True,
+                "default_promotion_quality_metrics_compare_ready": (
+                    phase2_quality_compare_ready
+                ),
+                "default_promotion_quality_metrics_compare_status": (
+                    phase2_quality_compare_status
+                ),
+                "default_promotion_quality_metrics_compare_failed_check_count": (
+                    failed_count
+                ),
+                "windows_release_matrix_quality_metrics_compare_handoff_passed": (
+                    phase2_quality_compare_ready
+                ),
+                "default_promotion_quality_metrics_compare_handoff_passed": (
+                    phase2_quality_compare_ready
+                ),
+                "matrix_quality_metrics_compare_matches_default_promotion": (
+                    phase2_quality_compare_ready
+                ),
+            }
+        )
+        phase2_payload["checks"].append(
+            {
+                "name": "windows_publish_preflight_quality_metrics_compare_passed",
+                "passed": phase2_quality_compare_ready,
+            }
+        )
     write_json(paths["phase2"], phase2_payload)
     write_json(
         paths["promotion"],
@@ -646,6 +699,11 @@ def _write_chain(
                 and (runtime_default_ready if include_runtime_default else True)
                 and (direct_runtime_ready if include_direct_runtime else True)
                 and (publication_audit_ready if include_publication_audit else True)
+                and (
+                    quality_metrics_compare_ready
+                    if include_quality_metrics_compare
+                    else True
+                )
             )
             else "blocked",
             "passed": (
@@ -664,6 +722,11 @@ def _write_chain(
                 and (runtime_default_ready if include_runtime_default else True)
                 and (direct_runtime_ready if include_direct_runtime else True)
                 and (publication_audit_ready if include_publication_audit else True)
+                and (
+                    quality_metrics_compare_ready
+                    if include_quality_metrics_compare
+                    else True
+                )
             ),
             "summary": {
                 "github_plan_phase2_stack_engine_contract_status": source_fields[
@@ -1074,6 +1137,43 @@ def _write_chain(
             ]
         )
         write_json(paths["preflight"], preflight_payload)
+    if include_quality_metrics_compare:
+        failed_count = 0 if quality_metrics_compare_ready else 1
+        preflight_payload["summary"].update(
+            {
+                "matrix_quality_metrics_compare_present": True,
+                "matrix_quality_metrics_compare_ready": quality_metrics_compare_ready,
+                "matrix_quality_metrics_compare_status": quality_compare_status,
+                "matrix_quality_metrics_compare_failed_check_count": failed_count,
+                "default_promotion_quality_metrics_compare_present": True,
+                "default_promotion_quality_metrics_compare_ready": (
+                    quality_metrics_compare_ready
+                ),
+                "default_promotion_quality_metrics_compare_status": (
+                    quality_compare_status
+                ),
+                "default_promotion_quality_metrics_compare_failed_check_count": (
+                    failed_count
+                ),
+            }
+        )
+        preflight_payload["checks"].extend(
+            [
+                {
+                    "name": "windows_release_matrix_quality_metrics_compare_handoff_passed",
+                    "passed": quality_metrics_compare_ready,
+                },
+                {
+                    "name": "default_promotion_quality_metrics_compare_handoff_passed",
+                    "passed": quality_metrics_compare_ready,
+                },
+                {
+                    "name": "matrix_quality_metrics_compare_matches_default_promotion",
+                    "passed": quality_metrics_compare_ready,
+                },
+            ]
+        )
+        write_json(paths["preflight"], preflight_payload)
     return paths
 
 
@@ -1121,6 +1221,14 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     )
     assert checks["publish_preflight_publication_audit_ready"] is True
     assert checks["phase2_publish_preflight_publication_audit_ready"] is True
+    assert checks["publish_preflight_quality_metrics_compare_ready"] is True
+    assert checks["phase2_publish_preflight_quality_metrics_compare_ready"] is True
+    assert (
+        checks[
+            "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight"
+        ]
+        is True
+    )
     assert (
         checks[
             "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
@@ -1210,6 +1318,131 @@ def test_stack_engine_publication_audit_blocks_failed_phase2_publication_audit(
     assert checks["phase2_publish_preflight_publication_audit_ready"]["evidence"][
         "matrix_status"
     ] == "failed"
+
+
+def test_stack_engine_publication_audit_allows_missing_quality_compare_chain(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        include_quality_metrics_compare=False,
+        include_phase2_quality_metrics_compare=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "passed"
+    assert checks["publish_preflight_quality_metrics_compare_ready"]["passed"] is True
+    assert (
+        checks["phase2_publish_preflight_quality_metrics_compare_ready"]["passed"]
+        is True
+    )
+    assert (
+        checks[
+            "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight"
+        ]["passed"]
+        is True
+    )
+    assert checks["publish_preflight_quality_metrics_compare_ready"]["evidence"][
+        "present"
+    ] is False
+
+
+def test_stack_engine_publication_audit_blocks_failed_quality_compare_chain(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, quality_metrics_compare_ready=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_quality_metrics_compare_ready"]["passed"] is False
+    assert (
+        checks["phase2_publish_preflight_quality_metrics_compare_ready"]["passed"]
+        is False
+    )
+    assert checks["publish_preflight_quality_metrics_compare_ready"]["evidence"][
+        "matrix_status"
+    ] == "failed"
+    assert checks["publish_preflight_quality_metrics_compare_ready"]["evidence"][
+        "matrix_failed_check_count"
+    ] == 1
+
+
+def test_stack_engine_publication_audit_blocks_phase2_quality_compare_mismatch(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        quality_metrics_compare_ready=True,
+        phase2_quality_metrics_compare_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_quality_metrics_compare_ready"]["passed"] is True
+    assert (
+        checks["phase2_publish_preflight_quality_metrics_compare_ready"]["passed"]
+        is False
+    )
+    match_check = checks[
+        "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight"
+    ]
+    assert match_check["passed"] is False
+    assert match_check["evidence"]["phase2_publish_preflight"]["matrix_status"] == "failed"
+
+
+def test_stack_engine_publication_audit_blocks_missing_phase2_quality_compare(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, include_phase2_quality_metrics_compare=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_quality_metrics_compare_ready"]["passed"] is True
+    assert (
+        checks["phase2_publish_preflight_quality_metrics_compare_ready"]["passed"]
+        is True
+    )
+    match_check = checks[
+        "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight"
+    ]
+    assert match_check["passed"] is False
+    assert match_check["evidence"]["phase2_publish_preflight"]["present"] is False
 
 
 def test_stack_engine_publication_audit_blocks_missing_publish_preflight_engine_policy(
@@ -1731,3 +1964,4 @@ def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
     assert "publish_preflight_integration_engine_policy_ready" in text
     assert "publish_preflight_stack_engine_runtime_default_ready" in text
     assert "publish_preflight_publication_audit_ready" in text
+    assert "publish_preflight_quality_metrics_compare_ready" in text

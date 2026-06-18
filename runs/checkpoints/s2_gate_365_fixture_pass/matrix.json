@@ -1,0 +1,15 @@
+{
+  "artifact_type": "windows_release_matrix",
+  "default_promotion_manifest": {
+    "stack_engine_contract_adoption_recommendation": "stack_engine_default_ready",
+    "stack_engine_contract_blocker_count": 0,
+    "stack_engine_contract_blockers": [],
+    "stack_engine_contract_default_gap_count": 0,
+    "stack_engine_contract_passed": true,
+    "stack_engine_contract_phase2_check_passed": true,
+    "stack_engine_contract_present": true,
+    "stack_engine_contract_ready": true,
+    "stack_engine_contract_scope": "all",
+    "stack_engine_contract_status": "passed"
+  }
+}

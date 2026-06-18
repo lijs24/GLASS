@@ -6503,6 +6503,27 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 365: StackEngine Publication-Audit Quality Metric Compare Guard
+
+- Carry raw `windows-publish-preflight` and Phase2 status
+  quality-metrics-compare evidence into `glass stack-engine-publication-audit`.
+- Add raw, Phase2, and agreement checks:
+  `publish_preflight_quality_metrics_compare_ready`,
+  `phase2_publish_preflight_quality_metrics_compare_ready`, and
+  `phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight`.
+- Keep older artifacts without the optional quality compare fields non-blocking
+  when both raw publish-preflight and Phase2 status lack that evidence; block
+  failed handoffs and raw/Phase2 mismatches once evidence is present.
+- Surface the quality compare layers in the StackEngine publication-audit JSON
+  and Markdown layer list.
+- Add focused ready, compatibility, failure, mismatch, missing-Phase2, and CLI
+  Markdown tests.
+- Keep this gate publication-audit scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
