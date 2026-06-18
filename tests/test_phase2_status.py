@@ -330,9 +330,13 @@ def _write_publish_preflight(
     ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
     include_rejection_sample_accounting: bool = True,
+    sample_accounting_closure_ready: bool = True,
+    include_sample_accounting_closure: bool = True,
 ) -> None:
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
+    ) and (
+        sample_accounting_closure_ready or not include_sample_accounting_closure
     )
     summary = {
         "release_tag": "v0.1.0-test",
@@ -385,6 +389,48 @@ def _write_publish_preflight(
                 "github_plan_matrix_rejection_sample_accounting_passed",
                 "matrix_rejection_sample_accounting_passed",
                 "default_promotion_rejection_sample_accounting_passed",
+            ]
+    if include_sample_accounting_closure:
+        status = "passed" if sample_accounting_closure_ready else "failed"
+        summary.update(
+            {
+                "github_plan_phase2_sample_accounting_closure_status": status,
+                "github_plan_matrix_sample_accounting_closure_status": status,
+                "matrix_sample_accounting_closure_status": status,
+                "default_promotion_sample_accounting_closure_status": status,
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "github_plan_phase2_sample_accounting_closure_passed",
+                    "passed": sample_accounting_closure_ready,
+                },
+                {
+                    "name": "github_plan_matrix_sample_accounting_closure_passed",
+                    "passed": sample_accounting_closure_ready,
+                },
+                {
+                    "name": "matrix_sample_accounting_closure_passed",
+                    "passed": sample_accounting_closure_ready,
+                },
+                {
+                    "name": "default_promotion_sample_accounting_closure_passed",
+                    "passed": sample_accounting_closure_ready,
+                },
+                {
+                    "name": "github_plan_matrix_sample_closure_matches_matrix",
+                    "passed": sample_accounting_closure_ready,
+                },
+            ]
+        )
+        if not sample_accounting_closure_ready:
+            failed_checks = [
+                *failed_checks,
+                "github_plan_phase2_sample_accounting_closure_passed",
+                "github_plan_matrix_sample_accounting_closure_passed",
+                "matrix_sample_accounting_closure_passed",
+                "default_promotion_sample_accounting_closure_passed",
             ]
     write_json(
         path,
@@ -440,6 +486,7 @@ def _status_payload(
     github_status: str = "release_plan_ready",
     publish_preflight_status: str = "publish_preflight_ready",
     publish_preflight_rejection_sample_status: str = "passed",
+    publish_preflight_sample_closure_status: str = "passed",
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -488,6 +535,18 @@ def _status_payload(
             "default_promotion_rejection_sample_accounting_status": (
                 publish_preflight_rejection_sample_status
             ),
+            "github_plan_phase2_sample_accounting_closure_status": (
+                publish_preflight_sample_closure_status
+            ),
+            "github_plan_matrix_sample_accounting_closure_status": (
+                publish_preflight_sample_closure_status
+            ),
+            "matrix_sample_accounting_closure_status": (
+                publish_preflight_sample_closure_status
+            ),
+            "default_promotion_sample_accounting_closure_status": (
+                publish_preflight_sample_closure_status
+            ),
             "github_plan_phase2_rejection_sample_accounting_passed": (
                 publish_preflight_rejection_sample_status == "passed"
             ),
@@ -502,6 +561,21 @@ def _status_payload(
             ),
             "github_plan_matrix_rejection_accounting_matches_matrix": (
                 publish_preflight_rejection_sample_status == "passed"
+            ),
+            "github_plan_phase2_sample_accounting_closure_passed": (
+                publish_preflight_sample_closure_status == "passed"
+            ),
+            "github_plan_matrix_sample_accounting_closure_passed": (
+                publish_preflight_sample_closure_status == "passed"
+            ),
+            "matrix_sample_accounting_closure_passed": (
+                publish_preflight_sample_closure_status == "passed"
+            ),
+            "default_promotion_sample_accounting_closure_passed": (
+                publish_preflight_sample_closure_status == "passed"
+            ),
+            "github_plan_matrix_sample_closure_matches_matrix": (
+                publish_preflight_sample_closure_status == "passed"
             ),
         },
         "pipeline_contract": {
@@ -626,6 +700,15 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         == "passed"
     )
     assert payload["publish_preflight"]["matrix_rejection_sample_accounting_passed"] is True
+    assert (
+        payload["publish_preflight"]["github_plan_phase2_sample_accounting_closure_status"]
+        == "passed"
+    )
+    assert payload["publish_preflight"]["matrix_sample_accounting_closure_passed"] is True
+    assert (
+        payload["publish_preflight"]["github_plan_matrix_sample_closure_matches_matrix"]
+        is True
+    )
     assert payload["pipeline_contract"]["status"] == "passed"
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
@@ -650,6 +733,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["windows_publish_preflight_ready"] is True
     assert checks["windows_publish_preflight_rejection_sample_accounting_passed"] is True
+    assert checks["windows_publish_preflight_sample_accounting_closure_passed"] is True
 
 
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
@@ -903,6 +987,84 @@ def test_phase2_status_blocks_failed_publish_preflight_rejection_sample_accounti
     ]["matrix_check"] is False
 
 
+def test_phase2_status_blocks_missing_publish_preflight_sample_closure(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=250)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        include_sample_accounting_closure=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert checks["windows_publish_preflight_sample_accounting_closure_passed"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_sample_accounting_closure_passed"][
+        "evidence"
+    ]["phase2_check"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_sample_closure(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=250)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        sample_accounting_closure_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert status["publish_preflight"]["matrix_sample_accounting_closure_status"] == "failed"
+    assert checks["windows_publish_preflight_sample_accounting_closure_passed"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_sample_accounting_closure_passed"][
+        "evidence"
+    ]["matrix_check"] is False
+
+
 def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -1002,6 +1164,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["windows_publish_preflight_ready_preserved"] is True
     assert checks["windows_publish_preflight_rejection_sample_accounting_preserved"] is True
     assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is True
+    assert checks["windows_publish_preflight_sample_accounting_closure_preserved"] is True
+    assert checks["windows_publish_preflight_sample_closure_status_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
@@ -1030,6 +1194,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             github_status="failed",
             publish_preflight_status="blocked",
             publish_preflight_rejection_sample_status="failed",
+            publish_preflight_sample_closure_status="failed",
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
@@ -1062,6 +1227,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["windows_publish_preflight_ready_preserved"] is False
     assert checks["windows_publish_preflight_rejection_sample_accounting_preserved"] is False
     assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is False
+    assert checks["windows_publish_preflight_sample_accounting_closure_preserved"] is False
+    assert checks["windows_publish_preflight_sample_closure_status_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["pipeline_integration_dq_contract_preserved"] is False
     assert checks["pipeline_pixel_verification_preserved"] is False
@@ -1199,6 +1366,41 @@ def test_phase2_status_compare_flags_sample_closure_regression(tmp_path: Path):
         "baseline": "passed",
         "candidate": "not_available",
     }
+
+
+def test_phase2_status_compare_flags_publish_preflight_sample_closure_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=249))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=250,
+            publish_preflight_sample_closure_status="failed",
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["windows_publish_preflight_sample_accounting_closure_preserved"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_sample_accounting_closure_preserved"][
+        "evidence"
+    ]["candidate"]["checks_passed"] is False
+    assert checks["windows_publish_preflight_sample_closure_status_preserved"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_sample_closure_status_preserved"][
+        "evidence"
+    ]["candidate"]["matrix_sample_accounting_closure_status"] == "failed"
 
 
 def test_cli_phase2_status_compare_writes_outputs_and_returns_failure(tmp_path: Path):

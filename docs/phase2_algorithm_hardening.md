@@ -4192,6 +4192,23 @@ integration where applicable.
   default change, package build, upload, package release, or real-data benchmark
   rerun.
 
+### S2-Gate 250: Phase 2 Publish-Preflight Sample Closure Status
+
+- Carry final Windows publish-preflight sample-closure evidence into
+  `glass phase2-status`.
+- Add `windows_publish_preflight_sample_accounting_closure_passed` so Phase 2
+  status cannot remain green when publish-preflight sample closure is missing or
+  failed.
+- Extend Phase 2 Markdown with publish-preflight sample-closure status and
+  check summaries beside the existing rejected-sample publication evidence.
+- Extend `glass phase2-status-compare` so candidates cannot lose a previously
+  passing publish-preflight sample-closure chain.
+- Add focused tests for green handoff, missing sample closure, failed sample
+  closure, and publish-preflight sample-closure compare regression.
+- Keep this gate Phase2-status scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, package release, publish-preflight
+  behavior change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

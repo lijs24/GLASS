@@ -475,6 +475,18 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_promotion_rejection_sample_accounting_status": summary.get(
             "default_promotion_rejection_sample_accounting_status"
         ),
+        "github_plan_phase2_sample_accounting_closure_status": summary.get(
+            "github_plan_phase2_sample_accounting_closure_status"
+        ),
+        "github_plan_matrix_sample_accounting_closure_status": summary.get(
+            "github_plan_matrix_sample_accounting_closure_status"
+        ),
+        "matrix_sample_accounting_closure_status": summary.get(
+            "matrix_sample_accounting_closure_status"
+        ),
+        "default_promotion_sample_accounting_closure_status": summary.get(
+            "default_promotion_sample_accounting_closure_status"
+        ),
         "github_plan_phase2_rejection_sample_accounting_passed": _check_passed(
             payload,
             "github_plan_phase2_rejection_sample_accounting_passed",
@@ -494,6 +506,26 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "github_plan_matrix_rejection_accounting_matches_matrix": _check_passed(
             payload,
             "github_plan_matrix_rejection_accounting_matches_matrix",
+        ),
+        "github_plan_phase2_sample_accounting_closure_passed": _check_passed(
+            payload,
+            "github_plan_phase2_sample_accounting_closure_passed",
+        ),
+        "github_plan_matrix_sample_accounting_closure_passed": _check_passed(
+            payload,
+            "github_plan_matrix_sample_accounting_closure_passed",
+        ),
+        "matrix_sample_accounting_closure_passed": _check_passed(
+            payload,
+            "matrix_sample_accounting_closure_passed",
+        ),
+        "default_promotion_sample_accounting_closure_passed": _check_passed(
+            payload,
+            "default_promotion_sample_accounting_closure_passed",
+        ),
+        "github_plan_matrix_sample_closure_matches_matrix": _check_passed(
+            payload,
+            "github_plan_matrix_sample_closure_matches_matrix",
         ),
         "failed_checks": payload.get("failed_checks"),
     }
@@ -970,6 +1002,54 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "windows_publish_preflight_sample_accounting_closure_passed",
+                "passed": (
+                    preflight.get("github_plan_phase2_sample_accounting_closure_passed")
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_sample_accounting_closure_passed"
+                    )
+                    is True
+                    and preflight.get("matrix_sample_accounting_closure_passed") is True
+                    and preflight.get(
+                        "default_promotion_sample_accounting_closure_passed"
+                    )
+                    is True
+                    and preflight.get("github_plan_matrix_sample_closure_matches_matrix")
+                    is True
+                ),
+                "evidence": {
+                    "phase2_status": preflight.get(
+                        "github_plan_phase2_sample_accounting_closure_status"
+                    ),
+                    "plan_matrix_status": preflight.get(
+                        "github_plan_matrix_sample_accounting_closure_status"
+                    ),
+                    "matrix_status": preflight.get(
+                        "matrix_sample_accounting_closure_status"
+                    ),
+                    "default_promotion_status": preflight.get(
+                        "default_promotion_sample_accounting_closure_status"
+                    ),
+                    "phase2_check": preflight.get(
+                        "github_plan_phase2_sample_accounting_closure_passed"
+                    ),
+                    "plan_matrix_check": preflight.get(
+                        "github_plan_matrix_sample_accounting_closure_passed"
+                    ),
+                    "matrix_check": preflight.get("matrix_sample_accounting_closure_passed"),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_sample_accounting_closure_passed"
+                    ),
+                    "matrix_match_check": preflight.get(
+                        "github_plan_matrix_sample_closure_matches_matrix"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
     if pipeline is not None:
         checks.append(
             {
@@ -1246,6 +1326,24 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     "matrix-match="
                     f"{preflight.get('github_plan_matrix_rejection_accounting_matches_matrix')}"
                 ),
+                (
+                    "- Sample accounting closure statuses: "
+                    f"phase2={preflight.get('github_plan_phase2_sample_accounting_closure_status')}, "
+                    f"plan-matrix={preflight.get('github_plan_matrix_sample_accounting_closure_status')}, "
+                    f"matrix={preflight.get('matrix_sample_accounting_closure_status')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_sample_accounting_closure_status')}"
+                ),
+                (
+                    "- Sample accounting closure checks: "
+                    f"phase2={preflight.get('github_plan_phase2_sample_accounting_closure_passed')}, "
+                    f"plan-matrix={preflight.get('github_plan_matrix_sample_accounting_closure_passed')}, "
+                    f"matrix={preflight.get('matrix_sample_accounting_closure_passed')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_sample_accounting_closure_passed')}, "
+                    "matrix-match="
+                    f"{preflight.get('github_plan_matrix_sample_closure_matches_matrix')}"
+                ),
             ]
         )
     if pipeline:
@@ -1437,6 +1535,22 @@ _PUBLISH_PREFLIGHT_REJECTION_STATUS_FIELDS = (
 )
 
 
+_PUBLISH_PREFLIGHT_SAMPLE_CLOSURE_CHECK_FIELDS = (
+    "github_plan_phase2_sample_accounting_closure_passed",
+    "github_plan_matrix_sample_accounting_closure_passed",
+    "matrix_sample_accounting_closure_passed",
+    "default_promotion_sample_accounting_closure_passed",
+    "github_plan_matrix_sample_closure_matches_matrix",
+)
+
+_PUBLISH_PREFLIGHT_SAMPLE_CLOSURE_STATUS_FIELDS = (
+    "github_plan_phase2_sample_accounting_closure_status",
+    "github_plan_matrix_sample_accounting_closure_status",
+    "matrix_sample_accounting_closure_status",
+    "default_promotion_sample_accounting_closure_status",
+)
+
+
 def _publish_preflight_rejection_checks_passed(payload: dict[str, Any]) -> bool:
     return all(
         _status_value(payload, "publish_preflight", field) is True
@@ -1453,6 +1567,25 @@ def _publish_preflight_rejection_statuses(payload: dict[str, Any]) -> dict[str, 
 
 def _publish_preflight_rejection_statuses_passed(payload: dict[str, Any]) -> bool:
     statuses = _publish_preflight_rejection_statuses(payload)
+    return bool(statuses) and all(value == "passed" for value in statuses.values())
+
+
+def _publish_preflight_sample_closure_checks_passed(payload: dict[str, Any]) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_SAMPLE_CLOSURE_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_sample_closure_statuses(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_SAMPLE_CLOSURE_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_sample_closure_statuses_passed(payload: dict[str, Any]) -> bool:
+    statuses = _publish_preflight_sample_closure_statuses(payload)
     return bool(statuses) and all(value == "passed" for value in statuses.values())
 
 
@@ -1647,6 +1780,28 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_rejection_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_sample_accounting_closure_preserved",
+            not _publish_preflight_sample_closure_checks_passed(baseline)
+            or _publish_preflight_sample_closure_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_sample_closure_checks_passed(baseline),
+                "statuses": _publish_preflight_sample_closure_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_sample_closure_checks_passed(
+                    candidate
+                ),
+                "statuses": _publish_preflight_sample_closure_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_sample_closure_status_preserved",
+            not _publish_preflight_sample_closure_statuses_passed(baseline)
+            or _publish_preflight_sample_closure_statuses_passed(candidate),
+            baseline=_publish_preflight_sample_closure_statuses(baseline),
+            candidate=_publish_preflight_sample_closure_statuses(candidate),
+        ),
+        _compare_check(
             "pipeline_contract_passed_preserved",
             _status_value(baseline, "pipeline_contract", "passed") is not True
             or _status_value(candidate, "pipeline_contract", "passed") is True,
@@ -1830,6 +1985,9 @@ def build_phase2_status_compare(
             "publish_preflight_rejection_sample_accounting": (
                 _publish_preflight_rejection_statuses(baseline)
             ),
+            "publish_preflight_sample_accounting_closure": (
+                _publish_preflight_sample_closure_statuses(baseline)
+            ),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "pipeline_sample_accounting_closure": _status_value(
@@ -1865,6 +2023,9 @@ def build_phase2_status_compare(
             "publish_preflight_status": _status_value(candidate, "publish_preflight", "status"),
             "publish_preflight_rejection_sample_accounting": (
                 _publish_preflight_rejection_statuses(candidate)
+            ),
+            "publish_preflight_sample_accounting_closure": (
+                _publish_preflight_sample_closure_statuses(candidate)
             ),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
