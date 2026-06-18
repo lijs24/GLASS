@@ -26,7 +26,12 @@ def _write_checkpoint(path: Path, *, gate: int, status: str = "green") -> Path:
     return target
 
 
-def _write_acceptance(path: Path, *, integration_engine_policy_passed: bool = True) -> None:
+def _write_acceptance(
+    path: Path,
+    *,
+    integration_engine_policy_passed: bool = True,
+    runtime_default_passed: bool = True,
+) -> None:
     engine_policy_status = "passed" if integration_engine_policy_passed else "failed"
     engine_policy_failed_items = [] if integration_engine_policy_passed else [
         {
@@ -37,11 +42,22 @@ def _write_acceptance(path: Path, *, integration_engine_policy_passed: bool = Tr
             "failures": ["cuda_fast_path_not_explicit"],
         }
     ]
+    runtime_default_status = "passed" if runtime_default_passed else "failed"
+    runtime_default_failed_masters = [] if runtime_default_passed else [
+        {
+            "name": "bias_legacy",
+            "type": "bias",
+            "tile_stack_mode": "legacy_streaming_accumulator",
+            "status": "failed",
+            "failures": ["legacy_master_stack_mode"],
+        }
+    ]
+    acceptance_passed = integration_engine_policy_passed and runtime_default_passed
     write_json(
         path,
         {
-            "status": "passed" if integration_engine_policy_passed else "failed",
-            "passed": integration_engine_policy_passed,
+            "status": "passed" if acceptance_passed else "failed",
+            "passed": acceptance_passed,
             "benchmark_contract": {"name": "fixture_contract"},
             "frame_type_counts": {"light": 200, "bias": 20, "dark": 20, "flat": 20},
             "contract_bundle_schema": {"status": "passed"},
@@ -88,7 +104,7 @@ def _write_acceptance(path: Path, *, integration_engine_policy_passed: bool = Tr
             },
             "release_contract_evidence": {
                 "pipeline_contract": {
-                    "status": engine_policy_status,
+                    "status": "passed" if acceptance_passed else "failed",
                     "integration_default_engine_policy": integration_engine_policy_passed,
                     "integration_engine_policy_status": engine_policy_status,
                     "integration_engine_policy_non_resident_count": 0
@@ -129,6 +145,35 @@ def _write_acceptance(path: Path, *, integration_engine_policy_passed: bool = Tr
                                 else ["cuda_fast_path_not_explicit"],
                             }
                         ],
+                    },
+                    "stack_engine_runtime_default": runtime_default_passed,
+                    "stack_engine_runtime_default_status": runtime_default_status,
+                    "stack_engine_runtime_default_legacy_master_count": 0
+                    if runtime_default_passed
+                    else 1,
+                    "stack_engine_runtime_default_failed_master_count": 0
+                    if runtime_default_passed
+                    else 1,
+                    "stack_engine_runtime_default_failed_output_count": 0,
+                    "runtime_default": {
+                        "status": runtime_default_status,
+                        "check_name": "stack_engine_runtime_default_path",
+                        "check_present": True,
+                        "check_passed": runtime_default_passed,
+                        "master_count": 1,
+                        "master_stack_engine_count": 1
+                        if runtime_default_passed
+                        else 0,
+                        "master_resident_count": 0,
+                        "legacy_master_count": 0 if runtime_default_passed else 1,
+                        "integration_output_count": 1,
+                        "integration_stack_engine_default_count": 0,
+                        "integration_resident_count": 1,
+                        "explicit_cuda_fast_path_count": 0,
+                        "failed_master_count": 0 if runtime_default_passed else 1,
+                        "failed_output_count": 0,
+                        "failed_masters": runtime_default_failed_masters,
+                        "failed_outputs": [],
                     },
                 }
             },
@@ -270,12 +315,14 @@ def _write_pipeline_contract(
     rejection_sample_accounting_passed: bool = True,
     sample_accounting_closure_passed: bool = True,
     integration_engine_policy_passed: bool = True,
+    runtime_default_passed: bool = True,
 ) -> None:
     pipeline_passed = (
         passed
         and rejection_sample_accounting_passed
         and sample_accounting_closure_passed
         and integration_engine_policy_passed
+        and runtime_default_passed
     )
     engine_policy_failed = []
     if not integration_engine_policy_passed:
@@ -288,6 +335,29 @@ def _write_pipeline_contract(
                 "failures": ["cuda_fast_path_not_explicit"],
             }
         ]
+    runtime_default_failed_masters = [] if runtime_default_passed else [
+        {
+            "name": "bias_legacy",
+            "type": "bias",
+            "tile_stack_mode": "legacy_streaming_accumulator",
+            "status": "failed",
+            "failures": ["legacy_master_stack_mode"],
+        }
+    ]
+    runtime_default = {
+        "passed": runtime_default_passed,
+        "status": "passed" if runtime_default_passed else "failed",
+        "master_count": 1,
+        "master_stack_engine_count": 1 if runtime_default_passed else 0,
+        "master_resident_count": 0,
+        "legacy_master_count": 0 if runtime_default_passed else 1,
+        "integration_output_count": 1,
+        "integration_stack_engine_default_count": 0,
+        "integration_resident_count": 1,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_masters": runtime_default_failed_masters,
+        "failed_outputs": [],
+    }
     write_json(
         path,
         {
@@ -313,6 +383,36 @@ def _write_pipeline_contract(
                         "top_level_present": not integration_engine_policy_passed,
                         "top_level_default_ok": not integration_engine_policy_passed,
                         "failed": engine_policy_failed,
+                    },
+                },
+                {
+                    "name": "stack_engine_runtime_default_path",
+                    "passed": runtime_default_passed,
+                    "evidence": {
+                        "master_count": runtime_default["master_count"],
+                        "master_stack_engine_count": runtime_default[
+                            "master_stack_engine_count"
+                        ],
+                        "master_resident_count": runtime_default[
+                            "master_resident_count"
+                        ],
+                        "legacy_master_count": runtime_default[
+                            "legacy_master_count"
+                        ],
+                        "integration_output_count": runtime_default[
+                            "integration_output_count"
+                        ],
+                        "integration_stack_engine_default_count": runtime_default[
+                            "integration_stack_engine_default_count"
+                        ],
+                        "integration_resident_count": runtime_default[
+                            "integration_resident_count"
+                        ],
+                        "explicit_cuda_fast_path_count": runtime_default[
+                            "explicit_cuda_fast_path_count"
+                        ],
+                        "failed_masters": runtime_default["failed_masters"],
+                        "failed_outputs": runtime_default["failed_outputs"],
                     },
                 },
                 {
@@ -424,6 +524,7 @@ def _write_pipeline_contract(
                     {"item": "H", "map": "dq"},
                 ],
             },
+            "stack_engine_runtime_default": runtime_default,
             "pixel_verification": {
                 "enabled": True,
                 "tile_size": 256,
@@ -1118,6 +1219,10 @@ def _status_payload(
     acceptance_pipeline_engine_policy_status: str = "passed",
     acceptance_pipeline_engine_policy_check_present: bool = True,
     acceptance_pipeline_engine_policy_check_passed: bool = True,
+    acceptance_pipeline_runtime_default_status: str = "passed",
+    acceptance_pipeline_runtime_default_check_present: bool = True,
+    acceptance_pipeline_runtime_default_check_passed: bool = True,
+    acceptance_pipeline_runtime_default_legacy_master_count: int = 0,
     fastpath_contract_status: str = "passed",
     fastpath_contract_check_count: int = 24,
     default_route_passed: bool = True,
@@ -1150,6 +1255,9 @@ def _status_payload(
     pipeline_sample_closure_status: str = "passed",
     pipeline_engine_policy_check_present: bool = True,
     pipeline_engine_policy_status: str = "passed",
+    pipeline_runtime_default_check_present: bool = True,
+    pipeline_runtime_default_status: str = "passed",
+    pipeline_runtime_default_legacy_master_count: int = 0,
     stack_engine_ready: bool = True,
     stack_engine_status: str = "passed",
     stack_engine_gap_count: int = 0,
@@ -1187,6 +1295,24 @@ def _status_payload(
             "pipeline_integration_engine_policy_check_passed": (
                 acceptance_pipeline_engine_policy_check_passed
             ),
+            "pipeline_stack_engine_runtime_default_status": (
+                acceptance_pipeline_runtime_default_status
+            ),
+            "pipeline_stack_engine_runtime_default_check_present": (
+                acceptance_pipeline_runtime_default_check_present
+            ),
+            "pipeline_stack_engine_runtime_default_check_passed": (
+                acceptance_pipeline_runtime_default_check_passed
+            ),
+            "pipeline_stack_engine_runtime_default_master_count": 1,
+            "pipeline_stack_engine_runtime_default_legacy_master_count": (
+                acceptance_pipeline_runtime_default_legacy_master_count
+            ),
+            "pipeline_stack_engine_runtime_default_failed_master_count": (
+                acceptance_pipeline_runtime_default_legacy_master_count
+            ),
+            "pipeline_stack_engine_runtime_default_failed_output_count": 0,
+            "pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count": 0,
             "resident_registration_fastpath_contract_status": fastpath_contract_status,
             "resident_registration_fastpath_contract_check_count": fastpath_contract_check_count,
         },
@@ -1477,6 +1603,35 @@ def _status_payload(
                     }
                 ],
             },
+            "stack_engine_runtime_default": {
+                "status": pipeline_runtime_default_status,
+                "check_present": pipeline_runtime_default_check_present,
+                "check_passed": (pipeline_runtime_default_status == "passed")
+                if pipeline_runtime_default_check_present
+                else None,
+                "master_count": 1,
+                "master_stack_engine_count": 1
+                if pipeline_runtime_default_status == "passed"
+                else 0,
+                "master_resident_count": 0,
+                "legacy_master_count": pipeline_runtime_default_legacy_master_count,
+                "integration_output_count": 1,
+                "integration_stack_engine_default_count": 0,
+                "integration_resident_count": 1,
+                "explicit_cuda_fast_path_count": 0,
+                "failed_master_count": pipeline_runtime_default_legacy_master_count,
+                "failed_output_count": 0,
+                "failed_masters": []
+                if pipeline_runtime_default_legacy_master_count == 0
+                else [
+                    {
+                        "name": "bias_legacy",
+                        "tile_stack_mode": "legacy_streaming_accumulator",
+                        "status": "failed",
+                    }
+                ],
+                "failed_outputs": [],
+            },
             "integration_dq_contract": pipeline_dq_contract,
             "pixel_verification_enabled": pixel_verification,
             "integration_rejection_sample_counts_match_maps": (
@@ -1623,6 +1778,28 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["acceptance_audit"]["pipeline_integration_engine_policy_status"] == "passed"
     assert payload["acceptance_audit"]["pipeline_integration_engine_policy_check_present"] is True
     assert payload["acceptance_audit"]["pipeline_integration_engine_policy_check_passed"] is True
+    assert (
+        payload["acceptance_audit"]["pipeline_stack_engine_runtime_default_status"]
+        == "passed"
+    )
+    assert (
+        payload["acceptance_audit"][
+            "pipeline_stack_engine_runtime_default_check_present"
+        ]
+        is True
+    )
+    assert (
+        payload["acceptance_audit"][
+            "pipeline_stack_engine_runtime_default_check_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["acceptance_audit"][
+            "pipeline_stack_engine_runtime_default_legacy_master_count"
+        ]
+        == 0
+    )
     assert payload["acceptance_audit"]["triangle_descriptor_fit_batch"] is True
     assert payload["acceptance_audit"]["triangle_warp_batch_frame_count"] == 188
     assert payload["default_route_acceptance"]["status"] == "passed"
@@ -1814,6 +1991,19 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["pipeline_contract"]["integration_default_engine_policy"] is True
     assert payload["pipeline_contract"]["integration_engine_policy_status"] == "passed"
     assert payload["pipeline_contract"]["integration_engine_policy_check_present"] is True
+    assert payload["pipeline_contract"]["stack_engine_runtime_default_status"] == "passed"
+    assert (
+        payload["pipeline_contract"]["stack_engine_runtime_default_check_present"]
+        is True
+    )
+    assert (
+        payload["pipeline_contract"]["stack_engine_runtime_default_check_passed"]
+        is True
+    )
+    assert (
+        payload["pipeline_contract"]["stack_engine_runtime_default_legacy_master_count"]
+        == 0
+    )
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
     assert payload["pipeline_contract"]["pixel_verification_enabled"] is True
     assert payload["pipeline_contract"]["integration_dq_map_pixels_match_summary"] is True
@@ -1835,9 +2025,11 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     checks = {item["name"]: item["passed"] for item in payload["checks"]}
     assert checks["resident_registration_fastpath_contract_passed_for_default"] is True
     assert checks["acceptance_pipeline_integration_engine_policy_passed"] is True
+    assert checks["acceptance_pipeline_stack_engine_runtime_default_passed"] is True
     assert checks["default_route_acceptance_passed"] is True
     assert checks["default_route_acceptance_route_contract_passed"] is True
     assert checks["pipeline_integration_engine_policy_passed"] is True
+    assert checks["pipeline_stack_engine_runtime_default_passed"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["stack_engine_default_contract_ready"] is True
@@ -1857,6 +2049,67 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         checks["stack_engine_publication_audit_resident_winsorized_chain_passed"]
         is True
     )
+
+
+def test_phase2_status_blocks_acceptance_runtime_default_regression(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=294)
+    acceptance = tmp_path / "acceptance.json"
+    _write_acceptance(acceptance, runtime_default_passed=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "attention_required"
+    assert (
+        payload["acceptance_audit"]["pipeline_stack_engine_runtime_default_status"]
+        == "failed"
+    )
+    assert (
+        payload["acceptance_audit"][
+            "pipeline_stack_engine_runtime_default_legacy_master_count"
+        ]
+        == 1
+    )
+    assert checks["acceptance_pipeline_stack_engine_runtime_default_passed"][
+        "passed"
+    ] is False
+    assert checks["acceptance_pipeline_stack_engine_runtime_default_passed"][
+        "evidence"
+    ]["legacy_master_count"] == 1
+
+
+def test_phase2_status_blocks_pipeline_runtime_default_regression(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=294)
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    _write_pipeline_contract(pipeline_contract, runtime_default_passed=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        pipeline_contract=pipeline_contract,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "attention_required"
+    assert payload["pipeline_contract"]["stack_engine_runtime_default_status"] == "failed"
+    assert (
+        payload["pipeline_contract"][
+            "stack_engine_runtime_default_legacy_master_count"
+        ]
+        == 1
+    )
+    assert checks["pipeline_stack_engine_runtime_default_passed"]["passed"] is False
+    assert checks["pipeline_stack_engine_runtime_default_passed"]["evidence"][
+        "legacy_master_count"
+    ] == 1
 
 
 def test_phase2_status_summarizes_resident_winsorized_benchmark_audit(tmp_path: Path):
@@ -2844,10 +3097,24 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is True
+    assert (
+        checks[
+            "acceptance_pipeline_stack_engine_runtime_default_check_preserved"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "acceptance_pipeline_stack_engine_runtime_default_passed_preserved"
+        ]
+        is True
+    )
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
     assert checks["pipeline_integration_engine_policy_check_preserved"] is True
     assert checks["pipeline_integration_engine_policy_passed_preserved"] is True
+    assert checks["pipeline_stack_engine_runtime_default_check_preserved"] is True
+    assert checks["pipeline_stack_engine_runtime_default_passed_preserved"] is True
     assert checks["pipeline_rejection_sample_accounting_check_preserved"] is True
     assert checks["pipeline_rejection_sample_accounting_passed_preserved"] is True
     assert checks["pipeline_sample_accounting_closure_check_preserved"] is True
@@ -2872,6 +3139,9 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             acceptance_status="failed",
             acceptance_pipeline_engine_policy_status="failed",
             acceptance_pipeline_engine_policy_check_passed=False,
+            acceptance_pipeline_runtime_default_status="failed",
+            acceptance_pipeline_runtime_default_check_passed=False,
+            acceptance_pipeline_runtime_default_legacy_master_count=1,
             cuda_available=False,
             release_status="failed",
             github_status="failed",
@@ -2888,6 +3158,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             pipeline_dq_contract=False,
             pixel_verification=False,
             pipeline_engine_policy_status="failed",
+            pipeline_runtime_default_status="failed",
+            pipeline_runtime_default_legacy_master_count=1,
             pipeline_rejection_sample_status="failed",
             pipeline_sample_closure_status="failed",
             default_change_ready=False,
@@ -2933,10 +3205,18 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is False
+    assert (
+        checks[
+            "acceptance_pipeline_stack_engine_runtime_default_passed_preserved"
+        ]
+        is False
+    )
     assert checks["pipeline_integration_dq_contract_preserved"] is False
     assert checks["pipeline_pixel_verification_preserved"] is False
     assert checks["pipeline_integration_engine_policy_check_preserved"] is True
     assert checks["pipeline_integration_engine_policy_passed_preserved"] is False
+    assert checks["pipeline_stack_engine_runtime_default_check_preserved"] is True
+    assert checks["pipeline_stack_engine_runtime_default_passed_preserved"] is False
     assert checks["pipeline_rejection_sample_accounting_check_preserved"] is True
     assert checks["pipeline_rejection_sample_accounting_passed_preserved"] is False
     assert checks["pipeline_sample_accounting_closure_check_preserved"] is True
@@ -3021,6 +3301,51 @@ def test_phase2_status_compare_flags_acceptance_engine_policy_regression(
     }
 
 
+def test_phase2_status_compare_flags_acceptance_runtime_default_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=294))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=295,
+            status="attention_required",
+            acceptance_passed=False,
+            acceptance_status="failed",
+            acceptance_pipeline_runtime_default_status="failed",
+            acceptance_pipeline_runtime_default_check_passed=False,
+            acceptance_pipeline_runtime_default_legacy_master_count=1,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks[
+        "acceptance_pipeline_stack_engine_runtime_default_passed_preserved"
+    ]["passed"] is False
+    assert checks[
+        "acceptance_pipeline_stack_engine_runtime_default_passed_preserved"
+    ]["evidence"] == {
+        "baseline": {
+            "status": "passed",
+            "check_passed": True,
+            "legacy_master_count": 0,
+        },
+        "candidate": {
+            "status": "failed",
+            "check_passed": False,
+            "legacy_master_count": 1,
+        },
+    }
+
+
 def test_phase2_status_compare_flags_pipeline_engine_policy_regression(
     tmp_path: Path,
 ):
@@ -3058,6 +3383,59 @@ def test_phase2_status_compare_flags_pipeline_engine_policy_regression(
     assert checks["pipeline_integration_engine_policy_passed_preserved"]["evidence"] == {
         "baseline": "passed",
         "candidate": "not_available",
+    }
+
+
+def test_phase2_status_compare_flags_pipeline_runtime_default_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=294))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=295,
+            status="attention_required",
+            pipeline_passed=False,
+            pipeline_runtime_default_check_present=False,
+            pipeline_runtime_default_status="not_available",
+            pipeline_runtime_default_legacy_master_count=1,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["pipeline_stack_engine_runtime_default_check_preserved"][
+        "passed"
+    ] is False
+    assert checks["pipeline_stack_engine_runtime_default_check_preserved"][
+        "evidence"
+    ] == {
+        "baseline": True,
+        "candidate": False,
+    }
+    assert checks["pipeline_stack_engine_runtime_default_passed_preserved"][
+        "passed"
+    ] is False
+    assert checks["pipeline_stack_engine_runtime_default_passed_preserved"][
+        "evidence"
+    ] == {
+        "baseline": {
+            "status": "passed",
+            "check_passed": True,
+            "legacy_master_count": 0,
+        },
+        "candidate": {
+            "status": "not_available",
+            "check_passed": None,
+            "legacy_master_count": 1,
+        },
     }
 
 

@@ -468,6 +468,7 @@ def _add_pipeline_contract_requirement(path: Path) -> None:
             "calibration_master_surface_contract",
             "resident_calibrated_light_contract",
             "integration_default_engine_policy",
+            "stack_engine_runtime_default_path",
             "integration_resident_result_contract",
         ],
         "allow_failed_checks": False,
@@ -528,7 +529,127 @@ def _write_resident_determinism(
     )
 
 
+def _runtime_default_state(
+    *,
+    passed: bool = True,
+    legacy_master: bool = False,
+    failed_output: bool = False,
+) -> dict:
+    failed_masters = []
+    if legacy_master:
+        failed_masters = [
+            {
+                "name": "bias_legacy",
+                "type": "bias",
+                "tile_stack_mode": "legacy_streaming_accumulator",
+                "path_exists": True,
+                "stack_engine_enabled": False,
+                "contract_ok": True,
+                "status": "failed",
+                "failures": [
+                    "master_stack_engine_not_enabled",
+                    "legacy_master_stack_mode",
+                ],
+            }
+        ]
+    failed_outputs = []
+    if failed_output:
+        failed_outputs = [
+            {
+                "item": "H",
+                "backend": "cuda",
+                "memory_mode": None,
+                "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                "status": "implicit_cuda_fast_path",
+                "passed": False,
+                "required": True,
+                "failures": [
+                    "integration_engine_policy_failed",
+                    "unsupported_integration_runtime_status",
+                ],
+            }
+        ]
+    ok = passed and not failed_masters and not failed_outputs
+    return {
+        "passed": ok,
+        "status": "passed" if ok else "failed",
+        "master_required": True,
+        "master_count": 1,
+        "master_stack_engine_count": 0 if legacy_master else 1,
+        "master_resident_count": 0,
+        "legacy_master_count": 1 if legacy_master else 0,
+        "integration_required": True,
+        "integration_output_count": 1,
+        "integration_stack_engine_default_count": 0,
+        "integration_resident_count": 0 if failed_output else 1,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_masters": failed_masters,
+        "failed_outputs": failed_outputs,
+        "masters": failed_masters
+        or [
+            {
+                "name": "master_bias",
+                "type": "bias",
+                "tile_stack_mode": "stack_engine_cpu",
+                "path_exists": True,
+                "stack_engine_enabled": True,
+                "contract_ok": True,
+                "status": "passed",
+                "failures": [],
+            }
+        ],
+        "outputs": failed_outputs
+        or [
+            {
+                "item": "H",
+                "backend": "cuda_resident_stack",
+                "memory_mode": "resident",
+                "tile_stack_mode": None,
+                "status": "resident_not_required",
+                "passed": True,
+                "required": False,
+                "failures": [],
+            }
+        ],
+        "stack_result_contract_failures": [],
+        "resident_result_contract_failures": [],
+    }
+
+
+def _runtime_default_check(
+    *,
+    passed: bool = True,
+    legacy_master: bool = False,
+    failed_output: bool = False,
+) -> dict:
+    state = _runtime_default_state(
+        passed=passed,
+        legacy_master=legacy_master,
+        failed_output=failed_output,
+    )
+    return {
+        "name": "stack_engine_runtime_default_path",
+        "passed": state["passed"],
+        "evidence": {
+            "master_count": state["master_count"],
+            "master_stack_engine_count": state["master_stack_engine_count"],
+            "master_resident_count": state["master_resident_count"],
+            "legacy_master_count": state["legacy_master_count"],
+            "integration_output_count": state["integration_output_count"],
+            "integration_stack_engine_default_count": state[
+                "integration_stack_engine_default_count"
+            ],
+            "integration_resident_count": state["integration_resident_count"],
+            "explicit_cuda_fast_path_count": state["explicit_cuda_fast_path_count"],
+            "failed_masters": state["failed_masters"],
+            "failed_outputs": state["failed_outputs"],
+        },
+        "note": "fixture runtime-default guard",
+    }
+
+
 def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
+    runtime_default = _runtime_default_state(passed=passed, legacy_master=not passed)
     checks = [
         {
             "name": "calibration_master_surface_contract",
@@ -560,7 +681,8 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
                 "failed": [],
             },
             "note": "resident-only fixture",
-        }
+        },
+        _runtime_default_check(passed=passed, legacy_master=not passed),
     ]
     write_json(
         path,
@@ -604,6 +726,7 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
                     }
                 ]
             },
+            "stack_engine_runtime_default": runtime_default,
             "pixel_verification": {"enabled": False},
         },
     )
@@ -642,6 +765,7 @@ def _write_pipeline_contract_with_rejection_sample_drift(path: Path) -> None:
             },
             "note": "resident-only fixture",
         },
+        _runtime_default_check(),
         {
             "name": "integration_rejection_sample_counts_match_maps",
             "passed": False,
@@ -707,6 +831,7 @@ def _write_pipeline_contract_with_rejection_sample_drift(path: Path) -> None:
                     }
                 ]
             },
+            "stack_engine_runtime_default": _runtime_default_state(),
             "pixel_verification": {
                 "enabled": True,
                 "integration_outputs": [
@@ -791,6 +916,7 @@ def _write_pipeline_contract_with_sample_closure_drift(path: Path) -> None:
             },
             "note": "resident-only fixture",
         },
+        _runtime_default_check(),
         {
             "name": "integration_sample_accounting_closure",
             "passed": False,
@@ -869,6 +995,7 @@ def _write_pipeline_contract_with_sample_closure_drift(path: Path) -> None:
                     }
                 ]
             },
+            "stack_engine_runtime_default": _runtime_default_state(),
             "pixel_verification": {"enabled": False},
         },
     )
@@ -915,6 +1042,7 @@ def _write_pipeline_contract_with_engine_policy_drift(path: Path) -> None:
             },
             "note": "fixture implicit non-resident CUDA fast path",
         },
+        _runtime_default_check(passed=False, failed_output=True),
     ]
     write_json(
         path,
@@ -969,6 +1097,10 @@ def _write_pipeline_contract_with_engine_policy_drift(path: Path) -> None:
                     }
                 ],
             },
+            "stack_engine_runtime_default": _runtime_default_state(
+                passed=False,
+                failed_output=True,
+            ),
             "pixel_verification": {"enabled": False},
         },
     )
@@ -1163,10 +1295,113 @@ def test_acceptance_audit_accepts_passing_pipeline_contract(tmp_path: Path):
     assert checks["pipeline_contract_present"]["passed"] is True
     assert checks["pipeline_contract_passed"]["passed"] is True
     assert checks["pipeline_contract_integration_default_engine_policy"]["passed"] is True
+    assert checks["pipeline_contract_stack_engine_runtime_default"]["passed"] is True
     assert audit["pipeline_contract"]["passed"] is True
-    assert audit["pipeline_contract"]["check_count"] == 4
+    assert audit["pipeline_contract"]["check_count"] == 5
     assert audit["pipeline_contract"]["integration_default_engine_policy"] is True
     assert audit["pipeline_contract"]["integration_engine_policy"]["resident_count"] == 1
+    assert audit["pipeline_contract"]["runtime_default"]["status"] == "passed"
+    assert audit["pipeline_contract"]["runtime_default"]["legacy_master_count"] == 0
+
+
+def test_acceptance_audit_summarizes_pipeline_runtime_default(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    markdown = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = audit["release_contract_evidence"]["pipeline_contract"]
+    runtime_default = evidence["runtime_default"]
+
+    assert audit["passed"] is True
+    assert checks["pipeline_contract_stack_engine_runtime_default"]["passed"] is True
+    assert evidence["stack_engine_runtime_default"] is True
+    assert evidence["stack_engine_runtime_default_status"] == "passed"
+    assert runtime_default["check_present"] is True
+    assert runtime_default["check_passed"] is True
+    assert runtime_default["master_count"] == 1
+    assert runtime_default["legacy_master_count"] == 0
+    assert runtime_default["integration_resident_count"] == 1
+
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "StackEngine Runtime Default Path" in text
+    assert "Legacy master rows: 0" in text
+    assert "Explicit CUDA fast paths: 0" in text
+
+
+def test_acceptance_audit_blocks_pipeline_runtime_default_drift(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    markdown = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+    payload = read_json(pipeline)
+    payload["status"] = "failed"
+    payload["passed"] = False
+    for check in payload["checks"]:
+        if check["name"] == "stack_engine_runtime_default_path":
+            check["passed"] = False
+            check["evidence"] = _runtime_default_check(
+                passed=False,
+                legacy_master=True,
+            )["evidence"]
+    payload["stack_engine_runtime_default"] = _runtime_default_state(
+        passed=False,
+        legacy_master=True,
+    )
+    write_json(pipeline, payload)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = audit["release_contract_evidence"]["pipeline_contract"]
+    runtime_default = evidence["runtime_default"]
+
+    assert audit["passed"] is False
+    assert checks["pipeline_contract_stack_engine_runtime_default"]["passed"] is False
+    assert evidence["stack_engine_runtime_default"] is False
+    assert evidence["stack_engine_runtime_default_status"] == "failed"
+    assert evidence["stack_engine_runtime_default_legacy_master_count"] == 1
+    assert runtime_default["failed_master_count"] == 1
+    assert runtime_default["failed_masters"][0]["name"] == "bias_legacy"
+
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "Runtime-default master mismatch bias_legacy" in text
+    assert "legacy_streaming_accumulator" in text
 
 
 def test_acceptance_audit_summarizes_pipeline_rejection_sample_accounting(tmp_path: Path):
@@ -1692,6 +1927,7 @@ def test_acceptance_audit_fails_failed_pipeline_contract(tmp_path: Path):
         "calibration_master_surface_contract",
         "resident_calibrated_light_contract",
         "integration_resident_result_contract",
+        "stack_engine_runtime_default_path",
     ]
 
 
@@ -1772,8 +2008,8 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
     assert pipeline_evidence["status"] == "passed"
     assert pipeline_evidence["required_by_benchmark_contract"] is True
     assert pipeline_evidence["pipeline_contract_passed"] is True
-    assert pipeline_evidence["pipeline_contract_check_count"] == 4
-    assert pipeline_evidence["benchmark_check_count"] == 9
+    assert pipeline_evidence["pipeline_contract_check_count"] == 5
+    assert pipeline_evidence["benchmark_check_count"] == 10
     assert pipeline_evidence["failed_check_count"] == 0
     assert {item["name"] for item in pipeline_evidence["checks"]} >= {
         "pipeline_contract_present",
@@ -1784,6 +2020,7 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
         "contract_pipeline_contract_check:calibration_master_surface_contract",
         "contract_pipeline_contract_check:resident_calibrated_light_contract",
         "contract_pipeline_contract_check:integration_default_engine_policy",
+        "contract_pipeline_contract_check:stack_engine_runtime_default_path",
         "contract_pipeline_contract_check:integration_resident_result_contract",
     }
 
@@ -1824,6 +2061,7 @@ def test_acceptance_audit_benchmark_pipeline_contract_requires_artifact(tmp_path
     assert checks["contract_pipeline_contract_present"] is False
     assert checks["contract_pipeline_contract_passed"] is False
     assert checks["contract_pipeline_contract_check:integration_default_engine_policy"] is False
+    assert checks["contract_pipeline_contract_check:stack_engine_runtime_default_path"] is False
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is False
     pipeline_evidence = audit["release_contract_evidence"]["pipeline_contract"]
     assert pipeline_evidence["status"] == "failed"
@@ -2089,6 +2327,8 @@ def test_acceptance_audit_cli_writes_pipeline_contract_evidence(tmp_path: Path):
     assert "Required by benchmark contract: True" in markdown
     assert "PASS: contract_pipeline_contract_passed" in markdown
     assert "integration_resident_result_contract" in markdown
+    assert "StackEngine Runtime Default Path" in markdown
+    assert "stack_engine_runtime_default_path" in markdown
 
 
 def test_acceptance_audit_cli_accepts_contract_bundle(tmp_path: Path):

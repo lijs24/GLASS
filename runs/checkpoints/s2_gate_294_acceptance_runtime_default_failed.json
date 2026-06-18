@@ -1,0 +1,864 @@
+{
+  "benchmark_contract": null,
+  "checks": [
+    {
+      "evidence": {
+        "actual": 200,
+        "required": 200
+      },
+      "name": "minimum_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "minimum_bias_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "minimum_dark_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 20,
+        "required": 20
+      },
+      "name": "minimum_flat_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "required": 190
+      },
+      "name": "minimum_active_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 10.0,
+        "required": 2.0
+      },
+      "name": "minimum_speedup",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "required": true
+      },
+      "name": "shape_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.97,
+        "required": 0.95
+      },
+      "name": "minimum_coverage_fraction",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.001,
+        "required_max": 0.01
+      },
+      "name": "maximum_rms_diff",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.002,
+        "required_max": 0.01
+      },
+      "name": "maximum_abs_diff_p99",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "pipeline_invariant_contract",
+        "exists": true,
+        "path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\pipeline_legacy_master.json"
+      },
+      "name": "pipeline_contract_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [
+          "stack_engine_runtime_default_path"
+        ],
+        "status": "failed"
+      },
+      "name": "pipeline_contract_passed",
+      "note": "",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "status": "passed"
+      },
+      "name": "pipeline_contract_integration_default_engine_policy",
+      "note": "Acceptance evidence must preserve the pipeline-contract integration engine policy guard.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": false,
+        "check_present": true,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_masters": [
+          {
+            "contract_ok": true,
+            "failures": [
+              "master_stack_engine_not_enabled",
+              "legacy_master_stack_mode"
+            ],
+            "name": "bias_legacy",
+            "path_exists": true,
+            "stack_engine_enabled": false,
+            "status": "failed",
+            "tile_stack_mode": "legacy_streaming_accumulator",
+            "type": "bias"
+          }
+        ],
+        "failed_outputs": [],
+        "integration_output_count": 1,
+        "legacy_master_count": 1,
+        "master_count": 1,
+        "status": "failed"
+      },
+      "name": "pipeline_contract_stack_engine_runtime_default",
+      "note": "Acceptance evidence must preserve the pipeline-contract StackEngine runtime-default path.",
+      "passed": false
+    }
+  ],
+  "clean_room": {
+    "note": "Acceptance audit consumes GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only.",
+    "status": "compliant"
+  },
+  "compare_json": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\compare.json",
+  "contract_bundle": null,
+  "contract_bundle_schema": null,
+  "dq_provenance": {
+    "contract": null,
+    "record_count": 0,
+    "records": [],
+    "schema_version": 1
+  },
+  "frame_accounting": {
+    "calculated_final_status_counts": {},
+    "exception_frames": [],
+    "exception_summary": {},
+    "exists": false,
+    "frame_count": 0,
+    "integration_source_stage": null,
+    "integration_weight_counts": {
+      "invalid": 0,
+      "positive": 193,
+      "total": 200,
+      "zero": 7
+    },
+    "path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\gp\\frame_accounting.json",
+    "registration_counts": {
+      "accepted": 0,
+      "status_counts": {},
+      "total": 0,
+      "zero_weight_statuses": 0
+    },
+    "schema_version": 1,
+    "sources": {},
+    "summary": {}
+  },
+  "frame_type_counts": {
+    "bias": 20,
+    "dark": 20,
+    "flat": 20,
+    "light": 200
+  },
+  "glass_run": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\gp",
+  "manifest_path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\manifest.json",
+  "native_guardrails_bundle": null,
+  "optimization_guidance": {
+    "exception_context": {
+      "count": 0,
+      "dominant_stage": null,
+      "final_status_counts": {},
+      "note": "No rejected or zero-weight frame exceptions were recorded.",
+      "primary_stage_counts": {},
+      "sample_frame_ids": []
+    },
+    "primary_target": null,
+    "schema_version": 1,
+    "stage_timing_rows": [],
+    "targets": []
+  },
+  "output_numerical_drifts": [],
+  "passed": false,
+  "performance_regression": null,
+  "pipeline_contract": {
+    "audit_type": "pipeline_invariant_contract",
+    "check_count": 5,
+    "check_names": [
+      "calibration_master_surface_contract",
+      "resident_calibrated_light_contract",
+      "integration_resident_result_contract",
+      "integration_default_engine_policy",
+      "stack_engine_runtime_default_path"
+    ],
+    "checks": [
+      {
+        "evidence": {
+          "failed": [],
+          "master_count": 1
+        },
+        "name": "calibration_master_surface_contract",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "failed": [],
+          "light_count": 3
+        },
+        "name": "resident_calibrated_light_contract",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "failed": [],
+          "required_count": 1
+        },
+        "name": "integration_resident_result_contract",
+        "note": "",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "failed": [],
+          "non_resident_count": 0,
+          "output_count": 1,
+          "resident_count": 1,
+          "top_level_default_ok": false,
+          "top_level_present": false
+        },
+        "name": "integration_default_engine_policy",
+        "note": "resident-only fixture",
+        "passed": true
+      },
+      {
+        "evidence": {
+          "explicit_cuda_fast_path_count": 0,
+          "failed_masters": [
+            {
+              "contract_ok": true,
+              "failures": [
+                "master_stack_engine_not_enabled",
+                "legacy_master_stack_mode"
+              ],
+              "name": "bias_legacy",
+              "path_exists": true,
+              "stack_engine_enabled": false,
+              "status": "failed",
+              "tile_stack_mode": "legacy_streaming_accumulator",
+              "type": "bias"
+            }
+          ],
+          "failed_outputs": [],
+          "integration_output_count": 1,
+          "integration_resident_count": 1,
+          "integration_stack_engine_default_count": 0,
+          "legacy_master_count": 1,
+          "master_count": 1,
+          "master_resident_count": 0,
+          "master_stack_engine_count": 0
+        },
+        "name": "stack_engine_runtime_default_path",
+        "note": "fixture runtime-default guard",
+        "passed": false
+      }
+    ],
+    "failed_checks": [
+      "stack_engine_runtime_default_path"
+    ],
+    "integration": {
+      "engine_policy": {
+        "failed": [],
+        "non_resident_count": 0,
+        "output_count": 1,
+        "outputs": [
+          {
+            "backend": "cuda_resident_stack",
+            "failures": [],
+            "item": "H",
+            "memory_mode": "resident",
+            "passed": true,
+            "required": false,
+            "status": "resident_not_required",
+            "tile_stack_mode": null
+          }
+        ],
+        "passed": true,
+        "resident_count": 1,
+        "top_level_default_ok": false,
+        "top_level_present": false
+      },
+      "outputs": [
+        {
+          "item": "H",
+          "resident_result_contract": {
+            "passed": true,
+            "present": true,
+            "required": true,
+            "status": "passed"
+          }
+        }
+      ]
+    },
+    "integration_default_engine_policy": true,
+    "integration_engine_policy": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "resident_count": 1,
+      "rows": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": null
+        }
+      ],
+      "status": "passed",
+      "top_level_default_ok": false,
+      "top_level_present": false
+    },
+    "integration_engine_policy_failed_count": 0,
+    "integration_engine_policy_status": "passed",
+    "integration_sample_accounting_closure": null,
+    "passed": false,
+    "path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\pipeline_legacy_master.json",
+    "pixel_verification": {
+      "enabled": false
+    },
+    "rejection_sample_accounting": {
+      "accounted_output_count": 0,
+      "check_name": "integration_rejection_sample_counts_match_maps",
+      "check_passed": null,
+      "check_present": false,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 0,
+      "pixel_verification_enabled": false,
+      "required_count": 0,
+      "rows": [],
+      "status": "not_available",
+      "verified_count": 0
+    },
+    "runtime_default": {
+      "check_name": "stack_engine_runtime_default_path",
+      "check_passed": false,
+      "check_present": true,
+      "explicit_cuda_fast_path_count": 0,
+      "failed_master_count": 1,
+      "failed_masters": [
+        {
+          "contract_ok": true,
+          "failures": [
+            "master_stack_engine_not_enabled",
+            "legacy_master_stack_mode"
+          ],
+          "name": "bias_legacy",
+          "path_exists": true,
+          "stack_engine_enabled": false,
+          "status": "failed",
+          "tile_stack_mode": "legacy_streaming_accumulator",
+          "type": "bias"
+        }
+      ],
+      "failed_output_count": 0,
+      "failed_outputs": [],
+      "integration_output_count": 1,
+      "integration_required": true,
+      "integration_resident_count": 1,
+      "integration_stack_engine_default_count": 0,
+      "legacy_master_count": 1,
+      "master_count": 1,
+      "master_required": true,
+      "master_resident_count": 0,
+      "master_stack_engine_count": 0,
+      "passed": false,
+      "resident_result_contract_failures": [],
+      "rows": {
+        "masters": [
+          {
+            "contract_ok": true,
+            "failures": [
+              "master_stack_engine_not_enabled",
+              "legacy_master_stack_mode"
+            ],
+            "name": "bias_legacy",
+            "path_exists": true,
+            "stack_engine_enabled": false,
+            "status": "failed",
+            "tile_stack_mode": "legacy_streaming_accumulator",
+            "type": "bias"
+          }
+        ],
+        "outputs": [
+          {
+            "backend": "cuda_resident_stack",
+            "failures": [],
+            "item": "H",
+            "memory_mode": "resident",
+            "passed": true,
+            "required": false,
+            "status": "resident_not_required",
+            "tile_stack_mode": null
+          }
+        ]
+      },
+      "semantics": null,
+      "stack_result_contract_failures": [],
+      "status": "failed"
+    },
+    "sample_accounting_closure": {
+      "check_name": "integration_sample_accounting_closure",
+      "check_passed": null,
+      "check_present": false,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "present_count": 0,
+      "required_count": 0,
+      "rows": [],
+      "status": "not_available"
+    },
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 0,
+    "sample_accounting_closure_status": "not_available",
+    "stack_engine_runtime_default": {
+      "explicit_cuda_fast_path_count": 0,
+      "failed_masters": [
+        {
+          "contract_ok": true,
+          "failures": [
+            "master_stack_engine_not_enabled",
+            "legacy_master_stack_mode"
+          ],
+          "name": "bias_legacy",
+          "path_exists": true,
+          "stack_engine_enabled": false,
+          "status": "failed",
+          "tile_stack_mode": "legacy_streaming_accumulator",
+          "type": "bias"
+        }
+      ],
+      "failed_outputs": [],
+      "integration_output_count": 1,
+      "integration_required": true,
+      "integration_resident_count": 1,
+      "integration_stack_engine_default_count": 0,
+      "legacy_master_count": 1,
+      "master_count": 1,
+      "master_required": true,
+      "master_resident_count": 0,
+      "master_stack_engine_count": 0,
+      "masters": [
+        {
+          "contract_ok": true,
+          "failures": [
+            "master_stack_engine_not_enabled",
+            "legacy_master_stack_mode"
+          ],
+          "name": "bias_legacy",
+          "path_exists": true,
+          "stack_engine_enabled": false,
+          "status": "failed",
+          "tile_stack_mode": "legacy_streaming_accumulator",
+          "type": "bias"
+        }
+      ],
+      "outputs": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": null
+        }
+      ],
+      "passed": false,
+      "resident_result_contract_failures": [],
+      "stack_result_contract_failures": [],
+      "status": "failed"
+    },
+    "stack_engine_runtime_default_check_passed": false,
+    "stack_engine_runtime_default_failed_master_count": 1,
+    "stack_engine_runtime_default_failed_output_count": 0,
+    "stack_engine_runtime_default_legacy_master_count": 1,
+    "stack_engine_runtime_default_status": "failed",
+    "status": "failed"
+  },
+  "release_contract_evidence": {
+    "pipeline_contract": {
+      "benchmark_check_count": 0,
+      "checks": [
+        {
+          "evidence": {
+            "audit_type": "pipeline_invariant_contract",
+            "exists": true,
+            "path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\pipeline_legacy_master.json"
+          },
+          "name": "pipeline_contract_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed_checks": [
+              "stack_engine_runtime_default_path"
+            ],
+            "status": "failed"
+          },
+          "name": "pipeline_contract_passed",
+          "note": "",
+          "passed": false
+        },
+        {
+          "evidence": {
+            "check_passed": true,
+            "check_present": true,
+            "failed_count": 0,
+            "failed_items": [],
+            "non_resident_count": 0,
+            "status": "passed"
+          },
+          "name": "pipeline_contract_integration_default_engine_policy",
+          "note": "Acceptance evidence must preserve the pipeline-contract integration engine policy guard.",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "check_passed": false,
+            "check_present": true,
+            "explicit_cuda_fast_path_count": 0,
+            "failed_masters": [
+              {
+                "contract_ok": true,
+                "failures": [
+                  "master_stack_engine_not_enabled",
+                  "legacy_master_stack_mode"
+                ],
+                "name": "bias_legacy",
+                "path_exists": true,
+                "stack_engine_enabled": false,
+                "status": "failed",
+                "tile_stack_mode": "legacy_streaming_accumulator",
+                "type": "bias"
+              }
+            ],
+            "failed_outputs": [],
+            "integration_output_count": 1,
+            "legacy_master_count": 1,
+            "master_count": 1,
+            "status": "failed"
+          },
+          "name": "pipeline_contract_stack_engine_runtime_default",
+          "note": "Acceptance evidence must preserve the pipeline-contract StackEngine runtime-default path.",
+          "passed": false
+        }
+      ],
+      "direct_check_count": 4,
+      "failed_check_count": 2,
+      "failed_checks": [
+        "pipeline_contract_passed",
+        "pipeline_contract_stack_engine_runtime_default"
+      ],
+      "integration_default_engine_policy": true,
+      "integration_engine_policy": {
+        "check_name": "integration_default_engine_policy",
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "output_count": 1,
+        "resident_count": 1,
+        "rows": [
+          {
+            "backend": "cuda_resident_stack",
+            "failures": [],
+            "item": "H",
+            "memory_mode": "resident",
+            "passed": true,
+            "required": false,
+            "status": "resident_not_required",
+            "tile_stack_mode": null
+          }
+        ],
+        "status": "passed",
+        "top_level_default_ok": false,
+        "top_level_present": false
+      },
+      "integration_engine_policy_failed_count": 0,
+      "integration_engine_policy_failed_items": [],
+      "integration_engine_policy_non_resident_count": 0,
+      "integration_engine_policy_status": "passed",
+      "integration_sample_accounting_closure": null,
+      "passed_check_count": 2,
+      "pipeline_contract_audit_type": "pipeline_invariant_contract",
+      "pipeline_contract_check_count": 5,
+      "pipeline_contract_passed": false,
+      "pipeline_contract_path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\pipeline_legacy_master.json",
+      "pipeline_contract_status": "failed",
+      "rejection_sample_accounting": {
+        "accounted_output_count": 0,
+        "check_name": "integration_rejection_sample_counts_match_maps",
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "output_count": 0,
+        "pixel_verification_enabled": false,
+        "required_count": 0,
+        "rows": [],
+        "status": "not_available",
+        "verified_count": 0
+      },
+      "required_by_benchmark_contract": false,
+      "runtime_default": {
+        "check_name": "stack_engine_runtime_default_path",
+        "check_passed": false,
+        "check_present": true,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_master_count": 1,
+        "failed_masters": [
+          {
+            "contract_ok": true,
+            "failures": [
+              "master_stack_engine_not_enabled",
+              "legacy_master_stack_mode"
+            ],
+            "name": "bias_legacy",
+            "path_exists": true,
+            "stack_engine_enabled": false,
+            "status": "failed",
+            "tile_stack_mode": "legacy_streaming_accumulator",
+            "type": "bias"
+          }
+        ],
+        "failed_output_count": 0,
+        "failed_outputs": [],
+        "integration_output_count": 1,
+        "integration_required": true,
+        "integration_resident_count": 1,
+        "integration_stack_engine_default_count": 0,
+        "legacy_master_count": 1,
+        "master_count": 1,
+        "master_required": true,
+        "master_resident_count": 0,
+        "master_stack_engine_count": 0,
+        "passed": false,
+        "resident_result_contract_failures": [],
+        "rows": {
+          "masters": [
+            {
+              "contract_ok": true,
+              "failures": [
+                "master_stack_engine_not_enabled",
+                "legacy_master_stack_mode"
+              ],
+              "name": "bias_legacy",
+              "path_exists": true,
+              "stack_engine_enabled": false,
+              "status": "failed",
+              "tile_stack_mode": "legacy_streaming_accumulator",
+              "type": "bias"
+            }
+          ],
+          "outputs": [
+            {
+              "backend": "cuda_resident_stack",
+              "failures": [],
+              "item": "H",
+              "memory_mode": "resident",
+              "passed": true,
+              "required": false,
+              "status": "resident_not_required",
+              "tile_stack_mode": null
+            }
+          ]
+        },
+        "semantics": null,
+        "stack_result_contract_failures": [],
+        "status": "failed"
+      },
+      "sample_accounting_closure": {
+        "check_name": "integration_sample_accounting_closure",
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "output_count": 1,
+        "present_count": 0,
+        "required_count": 0,
+        "rows": [],
+        "status": "not_available"
+      },
+      "sample_accounting_closure_failed_count": 0,
+      "sample_accounting_closure_failed_items": [],
+      "sample_accounting_closure_present_count": 0,
+      "sample_accounting_closure_status": "not_available",
+      "stack_engine_runtime_default": false,
+      "stack_engine_runtime_default_failed_master_count": 1,
+      "stack_engine_runtime_default_failed_masters": [
+        {
+          "contract_ok": true,
+          "failures": [
+            "master_stack_engine_not_enabled",
+            "legacy_master_stack_mode"
+          ],
+          "name": "bias_legacy",
+          "path_exists": true,
+          "stack_engine_enabled": false,
+          "status": "failed",
+          "tile_stack_mode": "legacy_streaming_accumulator",
+          "type": "bias"
+        }
+      ],
+      "stack_engine_runtime_default_failed_output_count": 0,
+      "stack_engine_runtime_default_failed_outputs": [],
+      "stack_engine_runtime_default_legacy_master_count": 1,
+      "stack_engine_runtime_default_status": "failed",
+      "status": "failed"
+    },
+    "stack_engine_default_promotion": {
+      "adoption_recommendation": null,
+      "benchmark_check_count": 0,
+      "checks": [],
+      "default_promotion_blocker_count": null,
+      "default_promotion_gap_count": null,
+      "default_promotion_ready": null,
+      "default_promotion_status": null,
+      "direct_check_count": 0,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "passed_check_count": 0,
+      "required_by_benchmark_contract": false,
+      "stack_engine_contract_audit_type": null,
+      "stack_engine_contract_passed": null,
+      "stack_engine_contract_path": null,
+      "stack_engine_contract_scope": null,
+      "stack_engine_contract_status": null,
+      "status": "not_requested"
+    }
+  },
+  "resident_contracts": {
+    "calibration": null,
+    "result": null
+  },
+  "resident_determinism": null,
+  "resident_registration_fastpath": {
+    "artifact": {
+      "resident_warp_copy_mode": null,
+      "resident_warp_scratch_bytes": null
+    },
+    "artifact_count": 0,
+    "artifact_index": null,
+    "available": false,
+    "exists": false,
+    "path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\gp\\resident_artifacts.json",
+    "registration_component_seconds": {},
+    "resident_io_pipeline": {},
+    "resident_registration": {},
+    "schema_version": 1
+  },
+  "schema_version": 1,
+  "speedup_summary": {
+    "clean_room": {
+      "note": "This summary uses GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only. It does not use PixInsight/WBPP implementation source.",
+      "status": "compliant"
+    },
+    "comparison": {
+      "abs_diff_p50": null,
+      "abs_diff_p90": null,
+      "abs_diff_p99": 0.002,
+      "abs_diff_p999": null,
+      "compare_speedup_vs_reference": null,
+      "compared_pixels": 123,
+      "coverage_fraction": 0.97,
+      "path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\compare.json",
+      "relative_rms_diff": null,
+      "rms_diff": 0.001,
+      "shape_match": true
+    },
+    "glass": {
+      "backend": "cuda_resident_stack",
+      "command": null,
+      "elapsed_s": 100.0,
+      "frame_count": 200,
+      "master_path": "master.fits",
+      "memory_mode": "resident",
+      "rejection": "winsorized_sigma",
+      "resident_device": null,
+      "resident_estimated_peak_gib": null,
+      "run": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\gp",
+      "weighted_frame_count": 193,
+      "weighting": "none",
+      "zero_weight_frame_count": 7
+    },
+    "glass_faster": true,
+    "meets_min_speedup": true,
+    "min_speedup": 2.0,
+    "schema_version": 1,
+    "speedup_vs_wbpp": 10.0,
+    "wbpp_blackbox": {
+      "clean_room_note": null,
+      "dataset": "fixture",
+      "elapsed_s": 1000.0,
+      "final_master_files": [],
+      "output_dir": null,
+      "reported_wbpp_time": null,
+      "result_path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\wbpp.json"
+    }
+  },
+  "stack_engine_contract": null,
+  "status": "failed",
+  "wbpp_result": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\wbpp.json"
+}

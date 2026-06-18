@@ -33,6 +33,13 @@ def _numeric(value: Any) -> float | None:
         return None
 
 
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "evidence": evidence, "note": note}
 
@@ -527,6 +534,122 @@ def _pipeline_integration_engine_policy_summary(
     }
 
 
+def _pipeline_stack_engine_runtime_default_summary(
+    pipeline_contract: dict[str, Any] | None,
+) -> dict[str, Any]:
+    check_name = "stack_engine_runtime_default_path"
+    if pipeline_contract is None:
+        return {
+            "status": "not_requested",
+            "check_name": check_name,
+            "check_present": False,
+            "check_passed": None,
+            "master_count": 0,
+            "master_stack_engine_count": 0,
+            "master_resident_count": 0,
+            "legacy_master_count": 0,
+            "integration_output_count": 0,
+            "integration_stack_engine_default_count": 0,
+            "integration_resident_count": 0,
+            "explicit_cuda_fast_path_count": 0,
+            "failed_master_count": 0,
+            "failed_output_count": 0,
+            "failed_masters": [],
+            "failed_outputs": [],
+            "rows": {"masters": [], "outputs": []},
+        }
+
+    runtime_default = pipeline_contract.get("stack_engine_runtime_default")
+    if not isinstance(runtime_default, dict):
+        runtime_default = {}
+    checks = [
+        item
+        for item in pipeline_contract.get("checks") or []
+        if isinstance(item, dict)
+    ]
+    runtime_check = next((item for item in checks if item.get("name") == check_name), None)
+    if not runtime_default and isinstance(runtime_check, dict):
+        evidence = runtime_check.get("evidence")
+        if isinstance(evidence, dict):
+            runtime_default = dict(evidence)
+
+    check_names = {str(name) for name in pipeline_contract.get("check_names") or []}
+    failed_check_names = {str(name) for name in pipeline_contract.get("failed_checks") or []}
+    check_present = check_name in check_names
+    check_passed = None if not check_present else check_name not in failed_check_names
+    failed_masters = runtime_default.get("failed_masters")
+    if not isinstance(failed_masters, list):
+        failed_masters = []
+    failed_outputs = runtime_default.get("failed_outputs")
+    if not isinstance(failed_outputs, list):
+        failed_outputs = []
+    masters = runtime_default.get("masters")
+    if not isinstance(masters, list):
+        masters = []
+    outputs = runtime_default.get("outputs")
+    if not isinstance(outputs, list):
+        outputs = []
+
+    if check_present:
+        status = "passed" if check_passed else "failed"
+    elif runtime_default:
+        status = (
+            "passed"
+            if runtime_default.get("passed") is True
+            and not failed_masters
+            and not failed_outputs
+            else "failed"
+        )
+    else:
+        status = "not_available"
+
+    return {
+        "status": status,
+        "check_name": check_name,
+        "check_present": check_present,
+        "check_passed": check_passed,
+        "passed": runtime_default.get("passed"),
+        "master_required": runtime_default.get("master_required"),
+        "integration_required": runtime_default.get("integration_required"),
+        "master_count": _int_or_zero(runtime_default.get("master_count")),
+        "master_stack_engine_count": _int_or_zero(
+            runtime_default.get("master_stack_engine_count")
+        ),
+        "master_resident_count": _int_or_zero(
+            runtime_default.get("master_resident_count")
+        ),
+        "legacy_master_count": _int_or_zero(runtime_default.get("legacy_master_count")),
+        "integration_output_count": _int_or_zero(
+            runtime_default.get("integration_output_count")
+        ),
+        "integration_stack_engine_default_count": _int_or_zero(
+            runtime_default.get("integration_stack_engine_default_count")
+        ),
+        "integration_resident_count": _int_or_zero(
+            runtime_default.get("integration_resident_count")
+        ),
+        "explicit_cuda_fast_path_count": _int_or_zero(
+            runtime_default.get("explicit_cuda_fast_path_count")
+        ),
+        "failed_master_count": len(failed_masters),
+        "failed_output_count": len(failed_outputs),
+        "failed_masters": failed_masters,
+        "failed_outputs": failed_outputs,
+        "stack_result_contract_failures": runtime_default.get(
+            "stack_result_contract_failures"
+        )
+        if isinstance(runtime_default.get("stack_result_contract_failures"), list)
+        else [],
+        "resident_result_contract_failures": runtime_default.get(
+            "resident_result_contract_failures"
+        )
+        if isinstance(runtime_default.get("resident_result_contract_failures"), list)
+        else [],
+        "semantics": runtime_default.get("semantics"),
+        "rows": {"masters": masters, "outputs": outputs},
+    }
+
+
 def _pipeline_contract_release_evidence(
     *,
     checks: list[dict[str, Any]],
@@ -547,6 +670,7 @@ def _pipeline_contract_release_evidence(
     rejection_sample_accounting = _pipeline_rejection_sample_accounting_summary(pipeline_contract)
     sample_accounting_closure = _pipeline_sample_accounting_closure_summary(pipeline_contract)
     integration_engine_policy = _pipeline_integration_engine_policy_summary(pipeline_contract)
+    runtime_default = _pipeline_stack_engine_runtime_default_summary(pipeline_contract)
     return {
         "status": status,
         "required_by_benchmark_contract": isinstance(contract_requirements, dict)
@@ -572,6 +696,24 @@ def _pipeline_contract_release_evidence(
         "integration_engine_policy_failed_count": integration_engine_policy.get("failed_count"),
         "integration_engine_policy_failed_items": integration_engine_policy.get("failed_items"),
         "integration_engine_policy": integration_engine_policy,
+        "stack_engine_runtime_default": runtime_default.get("check_passed"),
+        "stack_engine_runtime_default_status": runtime_default.get("status"),
+        "stack_engine_runtime_default_legacy_master_count": runtime_default.get(
+            "legacy_master_count"
+        ),
+        "stack_engine_runtime_default_failed_master_count": runtime_default.get(
+            "failed_master_count"
+        ),
+        "stack_engine_runtime_default_failed_output_count": runtime_default.get(
+            "failed_output_count"
+        ),
+        "stack_engine_runtime_default_failed_masters": runtime_default.get(
+            "failed_masters"
+        ),
+        "stack_engine_runtime_default_failed_outputs": runtime_default.get(
+            "failed_outputs"
+        ),
+        "runtime_default": runtime_default,
         "integration_sample_accounting_closure": sample_accounting_closure.get(
             "check_passed"
         ),
@@ -808,8 +950,13 @@ def build_acceptance_audit(
             "check_count": len(contract_checks),
             "check_names": check_names,
             "failed_checks": failed_checks,
+            "checks": contract_checks,
             "integration": pipeline_contract_payload.get("integration") or {},
             "pixel_verification": pipeline_contract_payload.get("pixel_verification") or {},
+            "stack_engine_runtime_default": pipeline_contract_payload.get(
+                "stack_engine_runtime_default"
+            )
+            or {},
         }
         pipeline_contract["rejection_sample_accounting"] = _pipeline_rejection_sample_accounting_summary(
             pipeline_contract
@@ -820,6 +967,9 @@ def build_acceptance_audit(
         pipeline_contract["integration_engine_policy"] = _pipeline_integration_engine_policy_summary(
             pipeline_contract
         )
+        pipeline_contract["runtime_default"] = (
+            _pipeline_stack_engine_runtime_default_summary(pipeline_contract)
+        )
         pipeline_contract["integration_default_engine_policy"] = pipeline_contract[
             "integration_engine_policy"
         ].get("check_passed")
@@ -829,6 +979,21 @@ def build_acceptance_audit(
         pipeline_contract["integration_engine_policy_failed_count"] = pipeline_contract[
             "integration_engine_policy"
         ].get("failed_count")
+        pipeline_contract["stack_engine_runtime_default_check_passed"] = (
+            pipeline_contract["runtime_default"].get("check_passed")
+        )
+        pipeline_contract["stack_engine_runtime_default_status"] = pipeline_contract[
+            "runtime_default"
+        ].get("status")
+        pipeline_contract["stack_engine_runtime_default_legacy_master_count"] = (
+            pipeline_contract["runtime_default"].get("legacy_master_count")
+        )
+        pipeline_contract["stack_engine_runtime_default_failed_master_count"] = (
+            pipeline_contract["runtime_default"].get("failed_master_count")
+        )
+        pipeline_contract["stack_engine_runtime_default_failed_output_count"] = (
+            pipeline_contract["runtime_default"].get("failed_output_count")
+        )
         pipeline_contract["integration_sample_accounting_closure"] = pipeline_contract[
             "sample_accounting_closure"
         ].get("check_passed")
@@ -884,6 +1049,39 @@ def build_acceptance_audit(
                         ),
                     },
                     "Acceptance evidence must preserve the pipeline-contract integration engine policy guard.",
+                ),
+                _check(
+                    "pipeline_contract_stack_engine_runtime_default",
+                    pipeline_contract["runtime_default"].get("check_present") is True
+                    and pipeline_contract["runtime_default"].get("check_passed") is True,
+                    {
+                        "status": pipeline_contract["runtime_default"].get("status"),
+                        "check_present": pipeline_contract["runtime_default"].get(
+                            "check_present"
+                        ),
+                        "check_passed": pipeline_contract["runtime_default"].get(
+                            "check_passed"
+                        ),
+                        "master_count": pipeline_contract["runtime_default"].get(
+                            "master_count"
+                        ),
+                        "legacy_master_count": pipeline_contract["runtime_default"].get(
+                            "legacy_master_count"
+                        ),
+                        "integration_output_count": pipeline_contract[
+                            "runtime_default"
+                        ].get("integration_output_count"),
+                        "explicit_cuda_fast_path_count": pipeline_contract[
+                            "runtime_default"
+                        ].get("explicit_cuda_fast_path_count"),
+                        "failed_masters": pipeline_contract["runtime_default"].get(
+                            "failed_masters"
+                        ),
+                        "failed_outputs": pipeline_contract["runtime_default"].get(
+                            "failed_outputs"
+                        ),
+                    },
+                    "Acceptance evidence must preserve the pipeline-contract StackEngine runtime-default path.",
                 ),
             ]
         )
@@ -1175,6 +1373,46 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                     f"{row.get('item')}: status={row.get('status')} "
                     f"backend={row.get('backend')} mode={row.get('tile_stack_mode')} "
                     f"failures={row.get('failures')}"
+                )
+            lines.append("")
+        runtime_default = release_evidence.get("runtime_default")
+        if isinstance(runtime_default, dict):
+            lines.extend(
+                [
+                    "### StackEngine Runtime Default Path",
+                    "",
+                    f"- Status: {runtime_default.get('status')}",
+                    f"- Check passed: {runtime_default.get('check_passed')}",
+                    f"- Master rows: {runtime_default.get('master_count')}",
+                    f"- Master StackEngine rows: {runtime_default.get('master_stack_engine_count')}",
+                    f"- Master resident rows: {runtime_default.get('master_resident_count')}",
+                    f"- Legacy master rows: {runtime_default.get('legacy_master_count')}",
+                    f"- Integration outputs: {runtime_default.get('integration_output_count')}",
+                    (
+                        "- Integration StackEngine defaults: "
+                        f"{runtime_default.get('integration_stack_engine_default_count')}"
+                    ),
+                    f"- Integration resident outputs: {runtime_default.get('integration_resident_count')}",
+                    f"- Explicit CUDA fast paths: {runtime_default.get('explicit_cuda_fast_path_count')}",
+                    f"- Failed master rows: {runtime_default.get('failed_master_count')}",
+                    f"- Failed integration rows: {runtime_default.get('failed_output_count')}",
+                ]
+            )
+            for row in runtime_default.get("failed_masters") or []:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "- Runtime-default master mismatch "
+                    f"{row.get('name')}: mode={row.get('tile_stack_mode')} "
+                    f"status={row.get('status')} failures={row.get('failures')}"
+                )
+            for row in runtime_default.get("failed_outputs") or []:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "- Runtime-default integration mismatch "
+                    f"{row.get('item')}: status={row.get('status')} "
+                    f"backend={row.get('backend')} failures={row.get('failures')}"
                 )
             lines.append("")
         sample_closure = release_evidence.get("sample_accounting_closure")

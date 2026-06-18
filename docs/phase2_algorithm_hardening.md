@@ -5000,6 +5000,28 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 294: Acceptance/Phase2 StackEngine Runtime Default Handoff
+
+- Carry the S2-Gate 293 `stack_engine_runtime_default_path` pipeline-contract
+  evidence into `glass acceptance-audit` and `glass phase2-status`.
+- Require acceptance evidence to preserve a present and passing
+  runtime-default check, including zero legacy master rows and zero failed
+  runtime-default integration rows.
+- Require Phase 2 green status to preserve the same acceptance-side
+  runtime-default handoff and, when a direct pipeline contract is supplied, the
+  direct pipeline-contract runtime-default summary.
+- Extend `glass phase2-status-compare` so candidate status artifacts cannot
+  drop or fail a previously passing acceptance or direct pipeline
+  runtime-default check.
+- Surface runtime-default master/integration counts, explicit CUDA fast-path
+  counts, legacy master counts, and failed row details in JSON and Markdown.
+- Add focused acceptance and Phase 2 tests for passing evidence, legacy-master
+  runtime drift, direct pipeline-contract runtime drift, and compare
+  regressions.
+- Keep this gate status/acceptance scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

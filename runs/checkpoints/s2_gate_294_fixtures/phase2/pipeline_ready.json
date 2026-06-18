@@ -1,0 +1,202 @@
+{
+  "audit_type": "pipeline_invariant_contract",
+  "calibration": {
+    "calibrated_light_count": 200,
+    "master_count": 3,
+    "resident_calibrated_light_count": 200,
+    "resident_native_calibration_artifact": true
+  },
+  "checks": [
+    {
+      "name": "integration_output_maps_available",
+      "passed": true
+    },
+    {
+      "name": "integration_dq_contract",
+      "passed": true
+    },
+    {
+      "name": "integration_stack_result_contract",
+      "passed": true
+    },
+    {
+      "name": "integration_resident_result_contract",
+      "passed": true
+    },
+    {
+      "name": "integration_dq_map_pixels_match_summary",
+      "passed": true
+    },
+    {
+      "name": "integration_coverage_map_pixels_match_dq",
+      "passed": true
+    },
+    {
+      "name": "integration_rejection_map_pixels_match_dq",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "non_resident_count": 0,
+        "output_count": 1,
+        "resident_count": 1,
+        "top_level_default_ok": false,
+        "top_level_present": false
+      },
+      "name": "integration_default_engine_policy",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "explicit_cuda_fast_path_count": 0,
+        "failed_masters": [],
+        "failed_outputs": [],
+        "integration_output_count": 1,
+        "integration_resident_count": 1,
+        "integration_stack_engine_default_count": 0,
+        "legacy_master_count": 0,
+        "master_count": 1,
+        "master_resident_count": 0,
+        "master_stack_engine_count": 1
+      },
+      "name": "stack_engine_runtime_default_path",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "required_records": 1,
+        "verified_records": 1
+      },
+      "name": "integration_rejection_sample_counts_match_maps",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "present_count": 1
+      },
+      "name": "integration_sample_accounting_closure",
+      "passed": true
+    }
+  ],
+  "integration": {
+    "engine_policy": {
+      "failed": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "outputs": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": null
+        }
+      ],
+      "passed": true,
+      "resident_count": 1,
+      "top_level_default_ok": false,
+      "top_level_present": false
+    },
+    "maps": [
+      {
+        "item": "H",
+        "map": "master"
+      },
+      {
+        "item": "H",
+        "map": "coverage"
+      },
+      {
+        "item": "H",
+        "map": "dq"
+      }
+    ],
+    "outputs": [
+      {
+        "item": "H",
+        "sample_accounting_closure": {
+          "input_invalid_samples_before_rejection": 3,
+          "input_samples": 12,
+          "input_total_match": true,
+          "input_valid_samples_before_rejection": 9,
+          "passed": true,
+          "present": true,
+          "rejected_samples": 3,
+          "required": true,
+          "status": "passed",
+          "valid_rejection_match": true,
+          "valid_samples_after_rejection": 6
+        }
+      }
+    ]
+  },
+  "passed": true,
+  "pixel_verification": {
+    "enabled": true,
+    "integration_outputs": [
+      {
+        "item": "H",
+        "rejection_sample_accounting": {
+          "map_rejected_sample_sum": 6,
+          "ok": true,
+          "rejection": "winsorized_sigma",
+          "required": true,
+          "source_counts": [
+            {
+              "count": 6,
+              "name": "dq_coverage_provenance.rejected_sample_count"
+            },
+            {
+              "count": 6,
+              "name": "dq_provenance_summary.rejected_samples"
+            }
+          ],
+          "source_matches": [
+            {
+              "actual": 6,
+              "delta": 0,
+              "passed": true,
+              "source": "dq_coverage_provenance.rejected_sample_count",
+              "summary": 6
+            },
+            {
+              "actual": 6,
+              "delta": 0,
+              "passed": true,
+              "source": "dq_provenance_summary.rejected_samples",
+              "summary": 6
+            }
+          ],
+          "status": "verified",
+          "verified": true
+        },
+        "status": "verified"
+      }
+    ],
+    "tile_size": 256,
+    "tolerance_pixels": 0
+  },
+  "schema_version": 1,
+  "stack_engine_runtime_default": {
+    "explicit_cuda_fast_path_count": 0,
+    "failed_masters": [],
+    "failed_outputs": [],
+    "integration_output_count": 1,
+    "integration_resident_count": 1,
+    "integration_stack_engine_default_count": 0,
+    "legacy_master_count": 0,
+    "master_count": 1,
+    "master_resident_count": 0,
+    "master_stack_engine_count": 1,
+    "passed": true,
+    "status": "passed"
+  },
+  "status": "passed"
+}

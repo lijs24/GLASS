@@ -1,0 +1,175 @@
+{
+  "audit_type": "pipeline_invariant_contract",
+  "checks": [
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 1
+      },
+      "name": "calibration_master_surface_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "light_count": 3
+      },
+      "name": "resident_calibrated_light_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "required_count": 1
+      },
+      "name": "integration_resident_result_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "non_resident_count": 0,
+        "output_count": 1,
+        "resident_count": 1,
+        "top_level_default_ok": false,
+        "top_level_present": false
+      },
+      "name": "integration_default_engine_policy",
+      "note": "resident-only fixture",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "explicit_cuda_fast_path_count": 0,
+        "failed_masters": [
+          {
+            "contract_ok": true,
+            "failures": [
+              "master_stack_engine_not_enabled",
+              "legacy_master_stack_mode"
+            ],
+            "name": "bias_legacy",
+            "path_exists": true,
+            "stack_engine_enabled": false,
+            "status": "failed",
+            "tile_stack_mode": "legacy_streaming_accumulator",
+            "type": "bias"
+          }
+        ],
+        "failed_outputs": [],
+        "integration_output_count": 1,
+        "integration_resident_count": 1,
+        "integration_stack_engine_default_count": 0,
+        "legacy_master_count": 1,
+        "master_count": 1,
+        "master_resident_count": 0,
+        "master_stack_engine_count": 0
+      },
+      "name": "stack_engine_runtime_default_path",
+      "note": "fixture runtime-default guard",
+      "passed": false
+    }
+  ],
+  "integration": {
+    "engine_policy": {
+      "failed": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "outputs": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": null
+        }
+      ],
+      "passed": true,
+      "resident_count": 1,
+      "top_level_default_ok": false,
+      "top_level_present": false
+    },
+    "outputs": [
+      {
+        "item": "H",
+        "resident_result_contract": {
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        }
+      }
+    ]
+  },
+  "passed": false,
+  "pixel_verification": {
+    "enabled": false
+  },
+  "schema_version": 1,
+  "stack_engine_runtime_default": {
+    "explicit_cuda_fast_path_count": 0,
+    "failed_masters": [
+      {
+        "contract_ok": true,
+        "failures": [
+          "master_stack_engine_not_enabled",
+          "legacy_master_stack_mode"
+        ],
+        "name": "bias_legacy",
+        "path_exists": true,
+        "stack_engine_enabled": false,
+        "status": "failed",
+        "tile_stack_mode": "legacy_streaming_accumulator",
+        "type": "bias"
+      }
+    ],
+    "failed_outputs": [],
+    "integration_output_count": 1,
+    "integration_required": true,
+    "integration_resident_count": 1,
+    "integration_stack_engine_default_count": 0,
+    "legacy_master_count": 1,
+    "master_count": 1,
+    "master_required": true,
+    "master_resident_count": 0,
+    "master_stack_engine_count": 0,
+    "masters": [
+      {
+        "contract_ok": true,
+        "failures": [
+          "master_stack_engine_not_enabled",
+          "legacy_master_stack_mode"
+        ],
+        "name": "bias_legacy",
+        "path_exists": true,
+        "stack_engine_enabled": false,
+        "status": "failed",
+        "tile_stack_mode": "legacy_streaming_accumulator",
+        "type": "bias"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "failures": [],
+        "item": "H",
+        "memory_mode": "resident",
+        "passed": true,
+        "required": false,
+        "status": "resident_not_required",
+        "tile_stack_mode": null
+      }
+    ],
+    "passed": false,
+    "resident_result_contract_failures": [],
+    "stack_result_contract_failures": [],
+    "status": "failed"
+  },
+  "status": "failed"
+}
