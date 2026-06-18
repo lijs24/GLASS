@@ -597,6 +597,32 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_promotion_stack_engine_contract_default_gap_count": summary.get(
             "default_promotion_stack_engine_contract_default_gap_count"
         ),
+        "matrix_resident_winsorized_sweep_status": summary.get(
+            "matrix_resident_winsorized_sweep_status"
+        ),
+        "matrix_resident_winsorized_sweep_required_frame_count": summary.get(
+            "matrix_resident_winsorized_sweep_required_frame_count"
+        ),
+        "matrix_resident_winsorized_sweep_required_frame_count_passed": summary.get(
+            "matrix_resident_winsorized_sweep_required_frame_count_passed"
+        ),
+        "matrix_resident_winsorized_sweep_check_count": summary.get(
+            "matrix_resident_winsorized_sweep_check_count"
+        ),
+        "default_promotion_resident_winsorized_sweep_status": summary.get(
+            "default_promotion_resident_winsorized_sweep_status"
+        ),
+        "default_promotion_resident_winsorized_sweep_required_frame_count": summary.get(
+            "default_promotion_resident_winsorized_sweep_required_frame_count"
+        ),
+        "default_promotion_resident_winsorized_sweep_required_frame_count_passed": (
+            summary.get(
+                "default_promotion_resident_winsorized_sweep_required_frame_count_passed"
+            )
+        ),
+        "default_promotion_resident_winsorized_sweep_check_count": summary.get(
+            "default_promotion_resident_winsorized_sweep_check_count"
+        ),
         "github_plan_phase2_rejection_sample_accounting_passed": _check_passed(
             payload,
             "github_plan_phase2_rejection_sample_accounting_passed",
@@ -664,6 +690,30 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "matrix_stack_engine_contract_matches_default_promotion": _check_passed(
             payload,
             "matrix_stack_engine_contract_matches_default_promotion",
+        ),
+        "matrix_resident_winsorized_sweep_audit_passed": _check_passed(
+            payload,
+            "matrix_resident_winsorized_sweep_audit_passed",
+        ),
+        "matrix_resident_winsorized_required_frame_passed": _check_passed(
+            payload,
+            "matrix_resident_winsorized_required_frame_passed",
+        ),
+        "matrix_resident_winsorized_sweep_check_count_passed": _check_passed(
+            payload,
+            "matrix_resident_winsorized_sweep_check_count",
+        ),
+        "default_promotion_resident_winsorized_sweep_audit_passed": _check_passed(
+            payload,
+            "default_promotion_resident_winsorized_sweep_audit_passed",
+        ),
+        "default_promotion_resident_winsorized_required_frame_passed": _check_passed(
+            payload,
+            "default_promotion_resident_winsorized_required_frame_passed",
+        ),
+        "default_promotion_resident_winsorized_sweep_matches_matrix": _check_passed(
+            payload,
+            "default_promotion_resident_winsorized_sweep_matches_matrix",
         ),
         "failed_checks": payload.get("failed_checks"),
     }
@@ -1368,6 +1418,80 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "windows_publish_preflight_resident_winsorized_sweep_passed",
+                "passed": (
+                    preflight.get("matrix_resident_winsorized_sweep_audit_passed")
+                    is True
+                    and preflight.get(
+                        "matrix_resident_winsorized_required_frame_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_resident_winsorized_sweep_check_count_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_resident_winsorized_sweep_audit_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_resident_winsorized_required_frame_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_resident_winsorized_sweep_matches_matrix"
+                    )
+                    is True
+                ),
+                "evidence": {
+                    "matrix_status": preflight.get(
+                        "matrix_resident_winsorized_sweep_status"
+                    ),
+                    "matrix_required_frame_count": preflight.get(
+                        "matrix_resident_winsorized_sweep_required_frame_count"
+                    ),
+                    "matrix_required_frame_count_passed": preflight.get(
+                        "matrix_resident_winsorized_sweep_required_frame_count_passed"
+                    ),
+                    "matrix_check_count": preflight.get(
+                        "matrix_resident_winsorized_sweep_check_count"
+                    ),
+                    "default_promotion_status": preflight.get(
+                        "default_promotion_resident_winsorized_sweep_status"
+                    ),
+                    "default_promotion_required_frame_count": preflight.get(
+                        "default_promotion_resident_winsorized_sweep_required_frame_count"
+                    ),
+                    "default_promotion_required_frame_count_passed": preflight.get(
+                        "default_promotion_resident_winsorized_sweep_required_frame_count_passed"
+                    ),
+                    "default_promotion_check_count": preflight.get(
+                        "default_promotion_resident_winsorized_sweep_check_count"
+                    ),
+                    "matrix_audit_check": preflight.get(
+                        "matrix_resident_winsorized_sweep_audit_passed"
+                    ),
+                    "matrix_required_frame_check": preflight.get(
+                        "matrix_resident_winsorized_required_frame_passed"
+                    ),
+                    "matrix_check_count_check": preflight.get(
+                        "matrix_resident_winsorized_sweep_check_count_passed"
+                    ),
+                    "default_promotion_audit_check": preflight.get(
+                        "default_promotion_resident_winsorized_sweep_audit_passed"
+                    ),
+                    "default_promotion_required_frame_check": preflight.get(
+                        "default_promotion_resident_winsorized_required_frame_passed"
+                    ),
+                    "default_promotion_match_check": preflight.get(
+                        "default_promotion_resident_winsorized_sweep_matches_matrix"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
     if pipeline is not None:
         checks.append(
             {
@@ -1778,6 +1902,37 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     "default-promotion="
                     f"{preflight.get('default_promotion_stack_engine_contract_default_gap_count')}"
                 ),
+                (
+                    "- Resident winsorized sweep statuses: "
+                    f"matrix={preflight.get('matrix_resident_winsorized_sweep_status')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_resident_winsorized_sweep_status')}"
+                ),
+                (
+                    "- Resident winsorized sweep required frame: "
+                    f"matrix={preflight.get('matrix_resident_winsorized_sweep_required_frame_count')}/"
+                    f"{preflight.get('matrix_resident_winsorized_sweep_required_frame_count_passed')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_resident_winsorized_sweep_required_frame_count')}/"
+                    f"{preflight.get('default_promotion_resident_winsorized_sweep_required_frame_count_passed')}"
+                ),
+                (
+                    "- Resident winsorized sweep checks: "
+                    f"matrix-count={preflight.get('matrix_resident_winsorized_sweep_check_count')}, "
+                    "default-promotion-count="
+                    f"{preflight.get('default_promotion_resident_winsorized_sweep_check_count')}, "
+                    f"matrix-audit={preflight.get('matrix_resident_winsorized_sweep_audit_passed')}, "
+                    "matrix-frame="
+                    f"{preflight.get('matrix_resident_winsorized_required_frame_passed')}, "
+                    "matrix-count-check="
+                    f"{preflight.get('matrix_resident_winsorized_sweep_check_count_passed')}, "
+                    "default-promotion-audit="
+                    f"{preflight.get('default_promotion_resident_winsorized_sweep_audit_passed')}, "
+                    "default-promotion-frame="
+                    f"{preflight.get('default_promotion_resident_winsorized_required_frame_passed')}, "
+                    "default-promotion-match="
+                    f"{preflight.get('default_promotion_resident_winsorized_sweep_matches_matrix')}"
+                ),
             ]
         )
     if pipeline:
@@ -2055,6 +2210,13 @@ def _int_status_value(payload: dict[str, Any], *keys: str) -> int | None:
         return None
 
 
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _compare_check(
     name: str,
     passed: bool,
@@ -2120,6 +2282,26 @@ _PUBLISH_PREFLIGHT_STACK_ENGINE_STATUS_FIELDS = (
     "default_promotion_stack_engine_contract_status",
 )
 
+_PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_CHECK_FIELDS = (
+    "matrix_resident_winsorized_sweep_audit_passed",
+    "matrix_resident_winsorized_required_frame_passed",
+    "matrix_resident_winsorized_sweep_check_count_passed",
+    "default_promotion_resident_winsorized_sweep_audit_passed",
+    "default_promotion_resident_winsorized_required_frame_passed",
+    "default_promotion_resident_winsorized_sweep_matches_matrix",
+)
+
+_PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_STATUS_FIELDS = (
+    "matrix_resident_winsorized_sweep_status",
+    "matrix_resident_winsorized_sweep_required_frame_count",
+    "matrix_resident_winsorized_sweep_required_frame_count_passed",
+    "matrix_resident_winsorized_sweep_check_count",
+    "default_promotion_resident_winsorized_sweep_status",
+    "default_promotion_resident_winsorized_sweep_required_frame_count",
+    "default_promotion_resident_winsorized_sweep_required_frame_count_passed",
+    "default_promotion_resident_winsorized_sweep_check_count",
+)
+
 
 def _publish_preflight_rejection_checks_passed(payload: dict[str, Any]) -> bool:
     return all(
@@ -2176,6 +2358,58 @@ def _publish_preflight_stack_engine_statuses(payload: dict[str, Any]) -> dict[st
 def _publish_preflight_stack_engine_statuses_passed(payload: dict[str, Any]) -> bool:
     statuses = _publish_preflight_stack_engine_statuses(payload)
     return bool(statuses) and all(value == "passed" for value in statuses.values())
+
+
+def _publish_preflight_resident_winsorized_checks_passed(payload: dict[str, Any]) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_resident_winsorized_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_resident_winsorized_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_resident_winsorized_statuses(payload)
+    return (
+        bool(statuses)
+        and statuses.get("matrix_resident_winsorized_sweep_status") == "passed"
+        and statuses.get("default_promotion_resident_winsorized_sweep_status")
+        == "passed"
+        and statuses.get(
+            "matrix_resident_winsorized_sweep_required_frame_count_passed"
+        )
+        is True
+        and statuses.get(
+            "default_promotion_resident_winsorized_sweep_required_frame_count_passed"
+        )
+        is True
+        and _int_or_zero(
+            statuses.get("matrix_resident_winsorized_sweep_required_frame_count")
+        )
+        >= 200
+        and _int_or_zero(
+            statuses.get(
+                "default_promotion_resident_winsorized_sweep_required_frame_count"
+            )
+        )
+        >= 200
+        and _int_or_zero(statuses.get("matrix_resident_winsorized_sweep_check_count"))
+        > 0
+        and _int_or_zero(
+            statuses.get("default_promotion_resident_winsorized_sweep_check_count")
+        )
+        > 0
+    )
 
 
 def _stack_engine_status_summary(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2479,6 +2713,30 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_stack_engine_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_resident_winsorized_sweep_preserved",
+            not _publish_preflight_resident_winsorized_checks_passed(baseline)
+            or _publish_preflight_resident_winsorized_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_resident_winsorized_checks_passed(
+                    baseline
+                ),
+                "statuses": _publish_preflight_resident_winsorized_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_resident_winsorized_checks_passed(
+                    candidate
+                ),
+                "statuses": _publish_preflight_resident_winsorized_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_resident_winsorized_status_preserved",
+            not _publish_preflight_resident_winsorized_statuses_passed(baseline)
+            or _publish_preflight_resident_winsorized_statuses_passed(candidate),
+            baseline=_publish_preflight_resident_winsorized_statuses(baseline),
+            candidate=_publish_preflight_resident_winsorized_statuses(candidate),
+        ),
+        _compare_check(
             "pipeline_contract_passed_preserved",
             _status_value(baseline, "pipeline_contract", "passed") is not True
             or _status_value(candidate, "pipeline_contract", "passed") is True,
@@ -2734,6 +2992,9 @@ def build_phase2_status_compare(
             "publish_preflight_stack_engine_contract": (
                 _publish_preflight_stack_engine_statuses(baseline)
             ),
+            "publish_preflight_resident_winsorized_sweep": (
+                _publish_preflight_resident_winsorized_statuses(baseline)
+            ),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "pipeline_sample_accounting_closure": _status_value(
@@ -2780,6 +3041,9 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_stack_engine_contract": (
                 _publish_preflight_stack_engine_statuses(candidate)
+            ),
+            "publish_preflight_resident_winsorized_sweep": (
+                _publish_preflight_resident_winsorized_statuses(candidate)
             ),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),

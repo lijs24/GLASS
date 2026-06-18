@@ -4618,6 +4618,24 @@ integration where applicable.
   runtime default, package build/upload, GitHub release creation, or real-data
   benchmark rerun.
 
+### S2-Gate 275: Phase 2 Publish Preflight Resident Winsorized Sweep Status Handoff
+
+- Carry the S2-Gate 274 Windows publish-preflight resident winsorized sweep
+  evidence into `glass phase2-status`.
+- Add a Phase 2 status blocker so publication status cannot remain green when
+  publish-preflight is ready but lacks resident winsorized sweep evidence, or
+  when publish-preflight records a failed resident winsorized sweep guard.
+- Surface matrix/default-promotion sweep status, required 200-frame pass flags,
+  and check counts in Phase 2 status JSON and Markdown.
+- Extend `glass phase2-status-compare` so a candidate cannot lose a previously
+  passing publish-preflight resident winsorized sweep chain, required-frame
+  status, or non-empty check-count evidence.
+- Add focused tests for green handoff, missing/failed publish-preflight sweep
+  evidence, CLI Markdown output, and compare regression detection.
+- Keep this gate status-handoff scoped: no image math, CUDA kernel, runtime
+  default, package build/upload, GitHub release creation, publish-preflight
+  behavior change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

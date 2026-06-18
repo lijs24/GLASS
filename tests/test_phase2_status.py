@@ -478,6 +478,8 @@ def _write_publish_preflight(
     include_sample_accounting_closure: bool = True,
     stack_engine_ready: bool = True,
     include_stack_engine_contract: bool = True,
+    resident_winsorized_sweep_ready: bool = True,
+    include_resident_winsorized_sweep: bool = True,
 ) -> None:
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
@@ -485,6 +487,8 @@ def _write_publish_preflight(
         sample_accounting_closure_ready or not include_sample_accounting_closure
     ) and (
         stack_engine_ready or not include_stack_engine_contract
+    ) and (
+        resident_winsorized_sweep_ready or not include_resident_winsorized_sweep
     )
     summary = {
         "release_tag": "v0.1.0-test",
@@ -637,6 +641,61 @@ def _write_publish_preflight(
                 "matrix_stack_engine_contract_ready",
                 "default_promotion_stack_engine_contract_ready",
             ]
+    if include_resident_winsorized_sweep:
+        status = "passed" if resident_winsorized_sweep_ready else "failed"
+        required_frame_passed = resident_winsorized_sweep_ready
+        summary.update(
+            {
+                "matrix_resident_winsorized_sweep_status": status,
+                "matrix_resident_winsorized_sweep_required_frame_count": 200,
+                "matrix_resident_winsorized_sweep_required_frame_count_passed": (
+                    required_frame_passed
+                ),
+                "matrix_resident_winsorized_sweep_check_count": 27,
+                "default_promotion_resident_winsorized_sweep_status": status,
+                "default_promotion_resident_winsorized_sweep_required_frame_count": 200,
+                "default_promotion_resident_winsorized_sweep_required_frame_count_passed": (
+                    required_frame_passed
+                ),
+                "default_promotion_resident_winsorized_sweep_check_count": 27,
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "matrix_resident_winsorized_sweep_audit_passed",
+                    "passed": resident_winsorized_sweep_ready,
+                },
+                {
+                    "name": "matrix_resident_winsorized_required_frame_passed",
+                    "passed": required_frame_passed,
+                },
+                {
+                    "name": "matrix_resident_winsorized_sweep_check_count",
+                    "passed": resident_winsorized_sweep_ready,
+                },
+                {
+                    "name": "default_promotion_resident_winsorized_sweep_audit_passed",
+                    "passed": resident_winsorized_sweep_ready,
+                },
+                {
+                    "name": "default_promotion_resident_winsorized_required_frame_passed",
+                    "passed": required_frame_passed,
+                },
+                {
+                    "name": "default_promotion_resident_winsorized_sweep_matches_matrix",
+                    "passed": resident_winsorized_sweep_ready,
+                },
+            ]
+        )
+        if not resident_winsorized_sweep_ready:
+            failed_checks = [
+                *failed_checks,
+                "matrix_resident_winsorized_sweep_audit_passed",
+                "matrix_resident_winsorized_required_frame_passed",
+                "default_promotion_resident_winsorized_sweep_audit_passed",
+                "default_promotion_resident_winsorized_required_frame_passed",
+            ]
     write_json(
         path,
         {
@@ -693,6 +752,9 @@ def _status_payload(
     publish_preflight_rejection_sample_status: str = "passed",
     publish_preflight_sample_closure_status: str = "passed",
     publish_preflight_stack_engine_status: str = "passed",
+    publish_preflight_resident_winsorized_status: str = "passed",
+    publish_preflight_resident_winsorized_required_frame_passed: bool = True,
+    publish_preflight_resident_winsorized_check_count: int = 27,
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -783,6 +845,26 @@ def _status_payload(
             "default_promotion_stack_engine_contract_default_gap_count": (
                 0 if publish_preflight_stack_engine_status == "passed" else 1
             ),
+            "matrix_resident_winsorized_sweep_status": (
+                publish_preflight_resident_winsorized_status
+            ),
+            "matrix_resident_winsorized_sweep_required_frame_count": 200,
+            "matrix_resident_winsorized_sweep_required_frame_count_passed": (
+                publish_preflight_resident_winsorized_required_frame_passed
+            ),
+            "matrix_resident_winsorized_sweep_check_count": (
+                publish_preflight_resident_winsorized_check_count
+            ),
+            "default_promotion_resident_winsorized_sweep_status": (
+                publish_preflight_resident_winsorized_status
+            ),
+            "default_promotion_resident_winsorized_sweep_required_frame_count": 200,
+            "default_promotion_resident_winsorized_sweep_required_frame_count_passed": (
+                publish_preflight_resident_winsorized_required_frame_passed
+            ),
+            "default_promotion_resident_winsorized_sweep_check_count": (
+                publish_preflight_resident_winsorized_check_count
+            ),
             "github_plan_phase2_rejection_sample_accounting_passed": (
                 publish_preflight_rejection_sample_status == "passed"
             ),
@@ -833,6 +915,24 @@ def _status_payload(
             ),
             "matrix_stack_engine_contract_matches_default_promotion": (
                 publish_preflight_stack_engine_status == "passed"
+            ),
+            "matrix_resident_winsorized_sweep_audit_passed": (
+                publish_preflight_resident_winsorized_status == "passed"
+            ),
+            "matrix_resident_winsorized_required_frame_passed": (
+                publish_preflight_resident_winsorized_required_frame_passed
+            ),
+            "matrix_resident_winsorized_sweep_check_count_passed": (
+                publish_preflight_resident_winsorized_check_count > 0
+            ),
+            "default_promotion_resident_winsorized_sweep_audit_passed": (
+                publish_preflight_resident_winsorized_status == "passed"
+            ),
+            "default_promotion_resident_winsorized_required_frame_passed": (
+                publish_preflight_resident_winsorized_required_frame_passed
+            ),
+            "default_promotion_resident_winsorized_sweep_matches_matrix": (
+                publish_preflight_resident_winsorized_status == "passed"
             ),
         },
         "pipeline_contract": {
@@ -1013,6 +1113,44 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         payload["publish_preflight"]["matrix_stack_engine_contract_default_gap_count"]
         == 0
     )
+    assert (
+        payload["publish_preflight"]["matrix_resident_winsorized_sweep_status"]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_resident_winsorized_sweep_required_frame_count"
+        ]
+        == 200
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_resident_winsorized_sweep_required_frame_count_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"]["matrix_resident_winsorized_sweep_check_count"]
+        == 27
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_resident_winsorized_sweep_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_resident_winsorized_sweep_check_count"
+        ]
+        == 27
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_resident_winsorized_sweep_check_count_passed"
+        ]
+        is True
+    )
     assert payload["pipeline_contract"]["status"] == "passed"
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
@@ -1044,6 +1182,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["windows_publish_preflight_rejection_sample_accounting_passed"] is True
     assert checks["windows_publish_preflight_sample_accounting_closure_passed"] is True
     assert checks["windows_publish_preflight_stack_engine_default_contract_ready"] is True
+    assert checks["windows_publish_preflight_resident_winsorized_sweep_passed"] is True
 
 
 def test_phase2_status_summarizes_resident_winsorized_benchmark_audit(tmp_path: Path):
@@ -1230,6 +1369,9 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Rejection sample accounting statuses: phase2=passed" in text
     assert "StackEngine default contract statuses: phase2=passed" in text
     assert "StackEngine default gaps: matrix=0, default-promotion=0" in text
+    assert "Resident winsorized sweep statuses: matrix=passed" in text
+    assert "Resident winsorized sweep required frame: matrix=200/True" in text
+    assert "Resident winsorized sweep checks: matrix-count=27" in text
 
 
 def test_phase2_status_blocks_stack_engine_default_contract_gap(tmp_path: Path):
@@ -1569,6 +1711,85 @@ def test_phase2_status_blocks_failed_publish_preflight_stack_engine_contract(
     ]["default_promotion_default_gap_count"] == 1
 
 
+def test_phase2_status_blocks_missing_publish_preflight_resident_winsorized_sweep(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=275)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        include_resident_winsorized_sweep=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    resident_check = checks[
+        "windows_publish_preflight_resident_winsorized_sweep_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert resident_check["passed"] is False
+    assert resident_check["evidence"]["matrix_audit_check"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_resident_winsorized_sweep(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=275)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        resident_winsorized_sweep_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    resident_check = checks[
+        "windows_publish_preflight_resident_winsorized_sweep_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert (
+        status["publish_preflight"]["matrix_resident_winsorized_sweep_status"]
+        == "failed"
+    )
+    assert resident_check["passed"] is False
+    assert resident_check["evidence"]["matrix_required_frame_check"] is False
+
+
 def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -1672,6 +1893,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["windows_publish_preflight_sample_closure_status_preserved"] is True
     assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is True
     assert checks["windows_publish_preflight_stack_engine_status_preserved"] is True
+    assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
+    assert checks["windows_publish_preflight_resident_winsorized_status_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
@@ -1983,6 +2206,51 @@ def test_phase2_status_compare_flags_publish_preflight_stack_engine_regression(
     assert checks["windows_publish_preflight_stack_engine_status_preserved"][
         "evidence"
     ]["candidate"]["matrix_stack_engine_contract_status"] == "failed"
+
+
+def test_phase2_status_compare_flags_publish_preflight_resident_winsorized_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=274))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=275,
+            publish_preflight_resident_winsorized_status="failed",
+            publish_preflight_resident_winsorized_required_frame_passed=False,
+            publish_preflight_resident_winsorized_check_count=26,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"][
+        "evidence"
+    ]["candidate"]["checks_passed"] is False
+    assert checks["windows_publish_preflight_resident_winsorized_status_preserved"][
+        "passed"
+    ] is False
+    candidate_statuses = checks[
+        "windows_publish_preflight_resident_winsorized_status_preserved"
+    ]["evidence"]["candidate"]
+    assert candidate_statuses["matrix_resident_winsorized_sweep_status"] == "failed"
+    assert (
+        candidate_statuses[
+            "matrix_resident_winsorized_sweep_required_frame_count_passed"
+        ]
+        is False
+    )
+    assert candidate_statuses["matrix_resident_winsorized_sweep_check_count"] == 26
 
 
 def test_phase2_status_compare_flags_resident_winsorized_sweep_regression(
