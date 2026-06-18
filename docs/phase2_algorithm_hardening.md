@@ -4956,6 +4956,28 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 292: StackEngine Publication Audit Phase 2 Publish Preflight Handoff
+
+- Carry the S2-Gate 291 Phase 2 publish-preflight StackEngine
+  publication-audit handoff back into `glass stack-engine-publication-audit`.
+- Require final StackEngine publication-audit readiness to preserve both raw
+  Windows publish-preflight publication-audit evidence and the matching Phase 2
+  status handoff evidence.
+- Block stale publish-preflight or Phase 2 status artifacts that still report
+  ready/green status but do not contain Gate290/Gate291 publication-audit
+  summary and check fields.
+- Cross-check matrix/default-promotion publication-audit status, readiness,
+  integration engine-policy agreement, resident winsorized-chain agreement, and
+  matrix/default agreement between raw publish-preflight and Phase 2 status.
+- Surface the new publish-preflight publication-audit and Phase 2 handoff layers
+  in StackEngine publication-audit JSON and Markdown.
+- Add focused publication-audit tests for ready evidence, missing raw
+  publish-preflight publication evidence, failed Phase 2 handoff evidence, and
+  CLI Markdown output.
+- Keep this gate publication-audit scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

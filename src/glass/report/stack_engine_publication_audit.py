@@ -584,6 +584,180 @@ def _engine_policy_summaries_match(
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
 
 
+def _publication_audit_summary_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("matrix_status") == "passed"
+        and summary.get("default_promotion_status") == "passed"
+        and summary.get("matrix_ready") is True
+        and summary.get("default_promotion_ready") is True
+        and summary.get("matrix_policy_agreement") is True
+        and summary.get("matrix_resident_winsorized_agreement") is True
+        and summary.get("default_promotion_policy_agreement") is True
+        and summary.get("default_promotion_resident_winsorized_agreement") is True
+        and _all_true(
+            [
+                summary.get("matrix_audit_passed"),
+                summary.get("matrix_policy_chain_passed"),
+                summary.get("matrix_resident_winsorized_chain_passed"),
+                summary.get("default_promotion_audit_passed"),
+                summary.get("default_promotion_policy_chain_passed"),
+                summary.get("default_promotion_resident_winsorized_chain_passed"),
+                summary.get("matches_default_promotion"),
+            ]
+        )
+    )
+
+
+def _publish_preflight_publication_audit_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "matrix_status": summary.get("matrix_stack_engine_publication_audit_status"),
+        "matrix_ready": summary.get("matrix_stack_engine_publication_audit_ready"),
+        "matrix_policy_agreement": summary.get(
+            "matrix_stack_engine_publication_policy_agreement"
+        ),
+        "matrix_resident_winsorized_agreement": summary.get(
+            "matrix_stack_engine_publication_resident_winsorized_agreement"
+        ),
+        "default_promotion_status": summary.get(
+            "default_promotion_stack_engine_publication_audit_status"
+        ),
+        "default_promotion_ready": summary.get(
+            "default_promotion_stack_engine_publication_audit_ready"
+        ),
+        "default_promotion_policy_agreement": summary.get(
+            "default_promotion_stack_engine_publication_policy_agreement"
+        ),
+        "default_promotion_resident_winsorized_agreement": summary.get(
+            "default_promotion_stack_engine_publication_resident_winsorized_agreement"
+        ),
+        "matrix_audit_passed": _check_passed(
+            payload,
+            "matrix_stack_engine_publication_audit_passed",
+        ),
+        "matrix_policy_chain_passed": _check_passed(
+            payload,
+            "matrix_stack_engine_publication_policy_chain_passed",
+        ),
+        "matrix_resident_winsorized_chain_passed": _check_passed(
+            payload,
+            "matrix_stack_engine_publication_resident_winsorized_chain_passed",
+        ),
+        "default_promotion_audit_passed": _check_passed(
+            payload,
+            "default_promotion_stack_engine_publication_audit_passed",
+        ),
+        "default_promotion_policy_chain_passed": _check_passed(
+            payload,
+            "default_promotion_stack_engine_publication_policy_chain_passed",
+        ),
+        "default_promotion_resident_winsorized_chain_passed": _check_passed(
+            payload,
+            "default_promotion_stack_engine_publication_resident_winsorized_chain_passed",
+        ),
+        "matches_default_promotion": _check_passed(
+            payload,
+            "matrix_stack_engine_publication_audit_matches_default_promotion",
+        ),
+    }
+    result["ready"] = _publication_audit_summary_ready(result)
+    return result
+
+
+def _phase2_publish_preflight_publication_audit_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "matrix_status": preflight.get("matrix_stack_engine_publication_audit_status"),
+        "matrix_ready": preflight.get("matrix_stack_engine_publication_audit_ready"),
+        "matrix_policy_agreement": preflight.get(
+            "matrix_stack_engine_publication_policy_agreement"
+        ),
+        "matrix_resident_winsorized_agreement": preflight.get(
+            "matrix_stack_engine_publication_resident_winsorized_agreement"
+        ),
+        "default_promotion_status": preflight.get(
+            "default_promotion_stack_engine_publication_audit_status"
+        ),
+        "default_promotion_ready": preflight.get(
+            "default_promotion_stack_engine_publication_audit_ready"
+        ),
+        "default_promotion_policy_agreement": preflight.get(
+            "default_promotion_stack_engine_publication_policy_agreement"
+        ),
+        "default_promotion_resident_winsorized_agreement": preflight.get(
+            "default_promotion_stack_engine_publication_resident_winsorized_agreement"
+        ),
+        "matrix_audit_passed": preflight.get(
+            "matrix_stack_engine_publication_audit_passed"
+        ),
+        "matrix_policy_chain_passed": preflight.get(
+            "matrix_stack_engine_publication_policy_chain_passed"
+        ),
+        "matrix_resident_winsorized_chain_passed": preflight.get(
+            "matrix_stack_engine_publication_resident_winsorized_chain_passed"
+        ),
+        "default_promotion_audit_passed": preflight.get(
+            "default_promotion_stack_engine_publication_audit_passed"
+        ),
+        "default_promotion_policy_chain_passed": preflight.get(
+            "default_promotion_stack_engine_publication_policy_chain_passed"
+        ),
+        "default_promotion_resident_winsorized_chain_passed": preflight.get(
+            "default_promotion_stack_engine_publication_resident_winsorized_chain_passed"
+        ),
+        "matches_default_promotion": preflight.get(
+            "matrix_stack_engine_publication_audit_matches_default_promotion"
+        ),
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_stack_engine_publication_audit_passed",
+        ),
+    }
+    result["ready"] = (
+        _publication_audit_summary_ready(result)
+        and result.get("phase2_check_passed") is True
+    )
+    return result
+
+
+def _publication_audit_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "matrix_status",
+        "matrix_ready",
+        "matrix_policy_agreement",
+        "matrix_resident_winsorized_agreement",
+        "default_promotion_status",
+        "default_promotion_ready",
+        "default_promotion_policy_agreement",
+        "default_promotion_resident_winsorized_agreement",
+        "matrix_audit_passed",
+        "matrix_policy_chain_passed",
+        "matrix_resident_winsorized_chain_passed",
+        "default_promotion_audit_passed",
+        "default_promotion_policy_chain_passed",
+        "default_promotion_resident_winsorized_chain_passed",
+        "matches_default_promotion",
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
 def _all_true(values: list[Any]) -> bool:
     return all(value is True for value in values)
 
@@ -631,6 +805,12 @@ def build_stack_engine_publication_audit(
     phase2_preflight_engine_policy = (
         _phase2_publish_preflight_engine_policy_summary(phase2_payload)
     )
+    preflight_publication_audit = _publish_preflight_publication_audit_summary(
+        preflight_payload
+    )
+    phase2_preflight_publication_audit = (
+        _phase2_publish_preflight_publication_audit_summary(phase2_payload)
+    )
 
     layers = {
         "source_contract": source,
@@ -647,6 +827,10 @@ def build_stack_engine_publication_audit(
         "publish_preflight_integration_engine_policy": preflight_engine_policy,
         "phase2_publish_preflight_integration_engine_policy": (
             phase2_preflight_engine_policy
+        ),
+        "publish_preflight_publication_audit": preflight_publication_audit,
+        "phase2_publish_preflight_publication_audit": (
+            phase2_preflight_publication_audit
         ),
     }
     direct_gap_counts = [
@@ -766,6 +950,27 @@ def build_stack_engine_publication_audit(
             {
                 "phase2_publish_preflight": phase2_preflight_engine_policy,
                 "publish_preflight": preflight_engine_policy,
+            },
+        ),
+        _check(
+            "publish_preflight_publication_audit_ready",
+            preflight_publication_audit.get("ready") is True,
+            preflight_publication_audit,
+        ),
+        _check(
+            "phase2_publish_preflight_publication_audit_ready",
+            phase2_preflight_publication_audit.get("ready") is True,
+            phase2_preflight_publication_audit,
+        ),
+        _check(
+            "phase2_publish_preflight_publication_audit_matches_publish_preflight",
+            _publication_audit_summaries_match(
+                phase2_preflight_publication_audit,
+                preflight_publication_audit,
+            ),
+            {
+                "phase2_publish_preflight": phase2_preflight_publication_audit,
+                "publish_preflight": preflight_publication_audit,
             },
         ),
         _check(

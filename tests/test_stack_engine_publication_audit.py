@@ -41,6 +41,10 @@ def _write_chain(
     phase2_integration_engine_policy_ready: bool | None = None,
     include_integration_engine_policy: bool = True,
     include_phase2_integration_engine_policy: bool = True,
+    publication_audit_ready: bool = True,
+    phase2_publication_audit_ready: bool | None = None,
+    include_publication_audit: bool = True,
+    include_phase2_publication_audit: bool = True,
 ) -> dict[str, Path]:
     source_fields = _stack_fields(ready=source_ready)
     matrix_fields = _stack_fields(ready=matrix_ready, gap_count=matrix_gap_count)
@@ -54,17 +58,27 @@ def _write_chain(
         if phase2_integration_engine_policy_ready is None
         else phase2_integration_engine_policy_ready
     )
+    phase2_publication_ready = (
+        publication_audit_ready
+        if phase2_publication_audit_ready is None
+        else phase2_publication_audit_ready
+    )
     resident_status = "passed" if resident_winsorized_ready else "failed"
     phase2_resident_status = "passed" if phase2_winsorized_ready else "failed"
     engine_policy_status = "passed" if integration_engine_policy_ready else "failed"
     phase2_engine_policy_status = (
         "passed" if phase2_engine_policy_ready else "failed"
     )
+    publication_audit_status = "passed" if publication_audit_ready else "failed"
+    phase2_publication_audit_status = (
+        "passed" if phase2_publication_ready else "failed"
+    )
     phase2_status_ready = (
         source_fields["ready"]
         and matrix_fields["ready"]
         and phase2_winsorized_ready
         and (phase2_engine_policy_ready if include_phase2_integration_engine_policy else True)
+        and (phase2_publication_ready if include_phase2_publication_audit else True)
     )
     paths = {
         "stack": tmp_path / "stack_engine_contract.json",
@@ -254,7 +268,63 @@ def _write_chain(
                 "passed": phase2_engine_policy_ready,
             }
         )
-        write_json(paths["phase2"], phase2_payload)
+    if include_phase2_publication_audit:
+        phase2_payload["publish_preflight"].update(
+            {
+                "matrix_stack_engine_publication_audit_status": (
+                    phase2_publication_audit_status
+                ),
+                "matrix_stack_engine_publication_audit_ready": (
+                    phase2_publication_ready
+                ),
+                "matrix_stack_engine_publication_policy_agreement": (
+                    phase2_publication_ready
+                ),
+                "matrix_stack_engine_publication_resident_winsorized_agreement": (
+                    phase2_publication_ready
+                ),
+                "default_promotion_stack_engine_publication_audit_status": (
+                    phase2_publication_audit_status
+                ),
+                "default_promotion_stack_engine_publication_audit_ready": (
+                    phase2_publication_ready
+                ),
+                "default_promotion_stack_engine_publication_policy_agreement": (
+                    phase2_publication_ready
+                ),
+                "default_promotion_stack_engine_publication_resident_winsorized_agreement": (
+                    phase2_publication_ready
+                ),
+                "matrix_stack_engine_publication_audit_passed": (
+                    phase2_publication_ready
+                ),
+                "matrix_stack_engine_publication_policy_chain_passed": (
+                    phase2_publication_ready
+                ),
+                "matrix_stack_engine_publication_resident_winsorized_chain_passed": (
+                    phase2_publication_ready
+                ),
+                "default_promotion_stack_engine_publication_audit_passed": (
+                    phase2_publication_ready
+                ),
+                "default_promotion_stack_engine_publication_policy_chain_passed": (
+                    phase2_publication_ready
+                ),
+                "default_promotion_stack_engine_publication_resident_winsorized_chain_passed": (
+                    phase2_publication_ready
+                ),
+                "matrix_stack_engine_publication_audit_matches_default_promotion": (
+                    phase2_publication_ready
+                ),
+            }
+        )
+        phase2_payload["checks"].append(
+            {
+                "name": "windows_publish_preflight_stack_engine_publication_audit_passed",
+                "passed": phase2_publication_ready,
+            }
+        )
+    write_json(paths["phase2"], phase2_payload)
     write_json(
         paths["promotion"],
         {
@@ -348,6 +418,7 @@ def _write_chain(
                     if include_integration_engine_policy
                     else True
                 )
+                and (publication_audit_ready if include_publication_audit else True)
             )
             else "blocked",
             "passed": (
@@ -358,6 +429,7 @@ def _write_chain(
                     if include_integration_engine_policy
                     else True
                 )
+                and (publication_audit_ready if include_publication_audit else True)
             ),
             "summary": {
                 "github_plan_phase2_stack_engine_contract_status": source_fields[
@@ -492,6 +564,68 @@ def _write_chain(
             ]
         )
         write_json(paths["preflight"], preflight_payload)
+    if include_publication_audit:
+        preflight_payload["summary"].update(
+            {
+                "matrix_stack_engine_publication_audit_status": (
+                    publication_audit_status
+                ),
+                "matrix_stack_engine_publication_audit_ready": (
+                    publication_audit_ready
+                ),
+                "matrix_stack_engine_publication_policy_agreement": (
+                    publication_audit_ready
+                ),
+                "matrix_stack_engine_publication_resident_winsorized_agreement": (
+                    publication_audit_ready
+                ),
+                "default_promotion_stack_engine_publication_audit_status": (
+                    publication_audit_status
+                ),
+                "default_promotion_stack_engine_publication_audit_ready": (
+                    publication_audit_ready
+                ),
+                "default_promotion_stack_engine_publication_policy_agreement": (
+                    publication_audit_ready
+                ),
+                "default_promotion_stack_engine_publication_resident_winsorized_agreement": (
+                    publication_audit_ready
+                ),
+            }
+        )
+        preflight_payload["checks"].extend(
+            [
+                {
+                    "name": "matrix_stack_engine_publication_audit_passed",
+                    "passed": publication_audit_ready,
+                },
+                {
+                    "name": "matrix_stack_engine_publication_policy_chain_passed",
+                    "passed": publication_audit_ready,
+                },
+                {
+                    "name": "matrix_stack_engine_publication_resident_winsorized_chain_passed",
+                    "passed": publication_audit_ready,
+                },
+                {
+                    "name": "default_promotion_stack_engine_publication_audit_passed",
+                    "passed": publication_audit_ready,
+                },
+                {
+                    "name": "default_promotion_stack_engine_publication_policy_chain_passed",
+                    "passed": publication_audit_ready,
+                },
+                {
+                    "name": "default_promotion_stack_engine_publication_resident_winsorized_chain_passed",
+                    "passed": publication_audit_ready,
+                },
+                {
+                    "name": "matrix_stack_engine_publication_audit_matches_default_promotion",
+                    "passed": publication_audit_ready,
+                },
+            ]
+        )
+        write_json(paths["preflight"], preflight_payload)
     return paths
 
 
@@ -516,6 +650,8 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     assert checks["phase2_publish_preflight_resident_winsorized_sweep_ready"] is True
     assert checks["publish_preflight_integration_engine_policy_ready"] is True
     assert checks["phase2_publish_preflight_integration_engine_policy_ready"] is True
+    assert checks["publish_preflight_publication_audit_ready"] is True
+    assert checks["phase2_publish_preflight_publication_audit_ready"] is True
     assert (
         checks[
             "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
@@ -528,8 +664,77 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
         ]
         is True
     )
+    assert (
+        checks[
+            "phase2_publish_preflight_publication_audit_matches_publish_preflight"
+        ]
+        is True
+    )
     assert checks["phase2_publish_preflight_matches_publish_preflight"] is True
     assert checks["stack_engine_gap_counts_zero"] is True
+
+
+def test_stack_engine_publication_audit_blocks_missing_publish_preflight_publication_audit(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, include_publication_audit=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert payload["passed"] is False
+    assert checks["publish_preflight_stack_engine_ready"]["passed"] is True
+    assert checks["publish_preflight_publication_audit_ready"]["passed"] is False
+    assert (
+        checks[
+            "phase2_publish_preflight_publication_audit_matches_publish_preflight"
+        ]["passed"]
+        is False
+    )
+    assert checks["publish_preflight_publication_audit_ready"]["evidence"][
+        "matrix_ready"
+    ] is None
+
+
+def test_stack_engine_publication_audit_blocks_failed_phase2_publication_audit(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        publication_audit_ready=True,
+        phase2_publication_audit_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_publication_audit_ready"]["passed"] is True
+    assert checks["phase2_publish_preflight_publication_audit_ready"]["passed"] is False
+    assert (
+        checks[
+            "phase2_publish_preflight_publication_audit_matches_publish_preflight"
+        ]["passed"]
+        is False
+    )
+    assert checks["phase2_publish_preflight_publication_audit_ready"]["evidence"][
+        "matrix_status"
+    ] == "failed"
 
 
 def test_stack_engine_publication_audit_blocks_missing_publish_preflight_engine_policy(
@@ -740,3 +945,4 @@ def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
     assert "phase2_publish_preflight_stack_engine_ready" in text
     assert "publish_preflight_resident_winsorized_sweep_ready" in text
     assert "publish_preflight_integration_engine_policy_ready" in text
+    assert "publish_preflight_publication_audit_ready" in text
