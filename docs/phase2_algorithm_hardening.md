@@ -6026,6 +6026,25 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 340: Windows Release Matrix Resident Result-Contract Guard
+
+- Carry default-promotion resident result-contract evidence into
+  `glass windows-release-matrix`.
+- Add `default_promotion_resident_result_contract_handoff_passed` as a Windows
+  release-matrix blocker requiring default-promotion resident result-contract
+  evidence to be present, ready, passed, Phase2-checked, required by at least
+  one output, and free of failed output rows or nested failed checks.
+- Surface resident result-contract readiness, status, Phase2 check state,
+  required count, failed count, and failed nested check names in release-matrix
+  Markdown.
+- Add focused tests for passing Blackwell/default promotion artifacts and
+  failed resident result-contract drift.
+- Generate Gate340 Windows release-matrix artifacts from controlled
+  default-promotion fixtures.
+- Keep this gate release-matrix scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

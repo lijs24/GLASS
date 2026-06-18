@@ -139,6 +139,7 @@ def _default_promotion(
     ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
     sample_accounting_closure_ready: bool = True,
+    resident_result_contract_ready: bool = True,
     include_stack_engine_contract: bool = True,
     stack_engine_ready: bool = True,
     stack_engine_gap_count: int = 0,
@@ -201,6 +202,7 @@ def _default_promotion(
     )
     manifest_ready = (
         ready
+        and resident_result_contract_ready
         and rejection_sample_accounting_ready
         and sample_accounting_closure_ready
         and (
@@ -227,6 +229,33 @@ def _default_promotion(
         if stack_engine_ready and stack_engine_gap_count == 0
         else "stack_engine_contract_gaps_remain"
     )
+    resident_result_contract = {
+        "present": True,
+        "ready": resident_result_contract_ready,
+        "status": "passed" if resident_result_contract_ready else "failed",
+        "top_level_check": resident_result_contract_ready,
+        "check_present": True,
+        "check_passed": resident_result_contract_ready,
+        "phase2_check_passed": resident_result_contract_ready,
+        "required_count": 1,
+        "failed_count": 0 if resident_result_contract_ready else 1,
+        "failed_check_count": 0 if resident_result_contract_ready else 1,
+        "failed_checks": []
+        if resident_result_contract_ready
+        else ["source_terms_present"],
+        "failed_items": []
+        if resident_result_contract_ready
+        else [
+            {
+                "item": "H",
+                "backend": "cuda_resident_stack",
+                "memory_mode": "resident",
+                "status": "failed",
+                "required": True,
+                "passed": False,
+            }
+        ],
+    }
     payload = {
             "schema_version": 1,
             "artifact_type": "default_promotion_manifest",
@@ -253,6 +282,7 @@ def _default_promotion(
             "pipeline_contract": {
                 "status": "passed" if manifest_ready else "failed",
                 "passed": manifest_ready,
+                "integration_resident_result_contract": resident_result_contract_ready,
                 "integration_rejection_sample_counts_match_maps": rejection_sample_accounting_ready,
                 "integration_sample_accounting_closure": sample_accounting_closure_ready,
                 "rejection_sample_accounting": {
@@ -306,6 +336,7 @@ def _default_promotion(
                 if sample_accounting_closure_ready
                 else 1,
             },
+            "resident_result_contract": resident_result_contract,
         }
     if include_integration_engine_policy:
         acceptance_policy_status = (
@@ -687,6 +718,15 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["default_promotion_default_route_passed"] is True
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
     assert checks["default_promotion_sample_accounting_closure_passed"] is True
+    assert checks["default_promotion_resident_result_contract_handoff_passed"] is True
+    assert payload["default_promotion_manifest"]["resident_result_contract_ready"] is True
+    assert (
+        payload["default_promotion_manifest"][
+            "resident_result_contract_phase2_check_passed"
+        ]
+        is True
+    )
+    assert payload["default_promotion_manifest"]["resident_result_contract_failed_count"] == 0
     assert checks["default_promotion_acceptance_integration_engine_policy_passed"] is True
     assert checks["default_promotion_pipeline_integration_engine_policy_passed"] is True
     assert payload["default_promotion_manifest"]["integration_engine_policy_ready"] is True
@@ -910,6 +950,56 @@ def test_windows_release_matrix_blocks_rejection_sample_accounting_drift(tmp_pat
             }
         ],
     }
+
+
+def test_windows_release_matrix_blocks_resident_result_contract_drift(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, resident_result_contract_ready=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    resident = payload["default_promotion_manifest"]
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_present"]["passed"] is True
+    assert checks["default_promotion_manifest_ready"]["passed"] is False
+    assert (
+        checks["default_promotion_resident_result_contract_handoff_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        "default_promotion_resident_result_contract_handoff_passed"
+        in payload["failed_checks"]
+    )
+    assert resident["resident_result_contract_ready"] is False
+    assert resident["resident_result_contract_status"] == "failed"
+    assert resident["resident_result_contract_top_level_check"] is False
+    assert resident["resident_result_contract_check_present"] is True
+    assert resident["resident_result_contract_check_passed"] is False
+    assert resident["resident_result_contract_phase2_check_passed"] is False
+    assert resident["resident_result_contract_required_count"] == 1
+    assert resident["resident_result_contract_failed_count"] == 1
+    assert resident["resident_result_contract_failed_check_count"] == 1
+    assert resident["resident_result_contract_failed_checks"] == [
+        "source_terms_present"
+    ]
+    assert checks["default_promotion_resident_result_contract_handoff_passed"][
+        "evidence"
+    ]["failed_items"][0]["item"] == "H"
 
 
 def test_windows_release_matrix_blocks_sample_accounting_closure_drift(tmp_path: Path):

@@ -167,6 +167,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(pipeline.get("sample_accounting_closure"), dict)
         else {}
     )
+    resident_result_contract = (
+        payload.get("resident_result_contract")
+        if isinstance(payload.get("resident_result_contract"), dict)
+        else {}
+    )
     stack_engine = (
         payload.get("stack_engine_contract")
         if isinstance(payload.get("stack_engine_contract"), dict)
@@ -226,6 +231,37 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "integration_sample_accounting_closure": pipeline.get(
             "integration_sample_accounting_closure"
+        ),
+        "resident_result_contract": resident_result_contract,
+        "resident_result_contract_present": resident_result_contract.get("present"),
+        "resident_result_contract_ready": resident_result_contract.get("ready"),
+        "resident_result_contract_status": resident_result_contract.get("status"),
+        "resident_result_contract_top_level_check": resident_result_contract.get(
+            "top_level_check"
+        ),
+        "resident_result_contract_check_present": resident_result_contract.get(
+            "check_present"
+        ),
+        "resident_result_contract_check_passed": resident_result_contract.get(
+            "check_passed"
+        ),
+        "resident_result_contract_phase2_check_passed": resident_result_contract.get(
+            "phase2_check_passed"
+        ),
+        "resident_result_contract_required_count": _int_value(
+            resident_result_contract.get("required_count")
+        ),
+        "resident_result_contract_failed_count": _int_value(
+            resident_result_contract.get("failed_count")
+        ),
+        "resident_result_contract_failed_check_count": _int_value(
+            resident_result_contract.get("failed_check_count")
+        ),
+        "resident_result_contract_failed_checks": (
+            resident_result_contract.get("failed_checks") or []
+        ),
+        "resident_result_contract_failed_items": (
+            resident_result_contract.get("failed_items") or []
         ),
         "integration_engine_policy": integration_engine_policy,
         "integration_engine_policy_ready": integration_engine_policy.get("ready"),
@@ -816,6 +852,78 @@ def build_windows_release_matrix(
                 "failed_items": (
                     default_promotion.get("sample_accounting_closure") or {}
                 ).get("failed_items"),
+            },
+        ),
+        _check(
+            "default_promotion_resident_result_contract_handoff_passed",
+            (
+                default_promotion.get("resident_result_contract_present") is True
+                and default_promotion.get("resident_result_contract_ready") is True
+                and default_promotion.get("resident_result_contract_status")
+                == "passed"
+                and default_promotion.get("resident_result_contract_top_level_check")
+                is True
+                and default_promotion.get("resident_result_contract_check_present")
+                is True
+                and default_promotion.get("resident_result_contract_check_passed")
+                is True
+                and default_promotion.get(
+                    "resident_result_contract_phase2_check_passed"
+                )
+                is True
+                and int(
+                    default_promotion.get(
+                        "resident_result_contract_required_count"
+                    )
+                    or 0
+                )
+                > 0
+                and int(
+                    default_promotion.get("resident_result_contract_failed_count")
+                    or 0
+                )
+                == 0
+                and int(
+                    default_promotion.get(
+                        "resident_result_contract_failed_check_count"
+                    )
+                    or 0
+                )
+                == 0
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "present": default_promotion.get("resident_result_contract_present"),
+                "ready": default_promotion.get("resident_result_contract_ready"),
+                "status": default_promotion.get("resident_result_contract_status"),
+                "top_level_check": default_promotion.get(
+                    "resident_result_contract_top_level_check"
+                ),
+                "check_present": default_promotion.get(
+                    "resident_result_contract_check_present"
+                ),
+                "check_passed": default_promotion.get(
+                    "resident_result_contract_check_passed"
+                ),
+                "phase2_check_passed": default_promotion.get(
+                    "resident_result_contract_phase2_check_passed"
+                ),
+                "required_count": default_promotion.get(
+                    "resident_result_contract_required_count"
+                ),
+                "failed_count": default_promotion.get(
+                    "resident_result_contract_failed_count"
+                ),
+                "failed_check_count": default_promotion.get(
+                    "resident_result_contract_failed_check_count"
+                ),
+                "failed_checks": default_promotion.get(
+                    "resident_result_contract_failed_checks"
+                ),
+                "failed_items": default_promotion.get(
+                    "resident_result_contract_failed_items"
+                ),
             },
         ),
         _check(
@@ -1765,6 +1873,18 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"`{default_promotion.get('sample_accounting_closure_status')}` "
                 f"present=`{default_promotion.get('sample_accounting_closure_present_count')}` "
                 f"failed=`{default_promotion.get('sample_accounting_closure_failed_count')}`"
+            ),
+            (
+                "- Resident result contract: "
+                f"ready=`{default_promotion.get('resident_result_contract_ready')}` "
+                f"status=`{default_promotion.get('resident_result_contract_status')}` "
+                f"check=`{default_promotion.get('resident_result_contract_check_passed')}` "
+                "phase2="
+                f"`{default_promotion.get('resident_result_contract_phase2_check_passed')}` "
+                f"required=`{default_promotion.get('resident_result_contract_required_count')}` "
+                f"failed=`{default_promotion.get('resident_result_contract_failed_count')}` "
+                "failed-checks="
+                f"`{default_promotion.get('resident_result_contract_failed_checks')}`"
             ),
             (
                 "- Integration engine policy: "
