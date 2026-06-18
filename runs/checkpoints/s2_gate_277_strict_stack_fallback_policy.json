@@ -1,0 +1,71 @@
+{
+  "artifact_type": "strict_stack_engine_master_fallback_policy",
+  "checks": [
+    {
+      "evidence": {
+        "cause": "gate277 forced stack engine failure",
+        "error": "StackEngine master calibration failed and legacy fallback is disabled by default; set calibration_policy.allow_legacy_stack_fallback=true only for explicit diagnostic compatibility runs"
+      },
+      "name": "strict_default_raises",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "output_exists": false
+      },
+      "name": "strict_default_writes_no_output",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "mean_pixel": 4.0,
+        "mode": "legacy_streaming_accumulator"
+      },
+      "name": "explicit_fallback_preserves_legacy_mean",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "metrics": {
+          "combine": "mean",
+          "frame_count": 2,
+          "legacy_fallback_explicitly_allowed": true,
+          "rejection": "none"
+        }
+      },
+      "name": "explicit_fallback_records_policy",
+      "passed": true
+    }
+  ],
+  "clean_room": "Synthetic FITS data and GLASS-owned pipeline functions only; no external implementation source or user image pixels were read.",
+  "created_at": "2026-06-18T04:45:45+00:00",
+  "explicit_fallback": {
+    "allow_legacy_stack_fallback": true,
+    "fallback_reason": "gate277 forced stack engine failure",
+    "mean_pixel": 4.0,
+    "metrics": {
+      "combine": "mean",
+      "frame_count": 2,
+      "legacy_fallback_explicitly_allowed": true,
+      "rejection": "none"
+    },
+    "mode": "legacy_streaming_accumulator",
+    "stats": {
+      "max": 4.0,
+      "mean": 4.0,
+      "median": 4.0,
+      "min": 4.0,
+      "std": 0.0
+    }
+  },
+  "passed": true,
+  "schema_version": 1,
+  "status": "passed",
+  "strict_default": {
+    "allow_legacy_stack_fallback": false,
+    "cause": "gate277 forced stack engine failure",
+    "error": "StackEngine master calibration failed and legacy fallback is disabled by default; set calibration_policy.allow_legacy_stack_fallback=true only for explicit diagnostic compatibility runs",
+    "output_exists": false,
+    "raised": true
+  }
+}

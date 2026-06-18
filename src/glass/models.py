@@ -79,6 +79,7 @@ class CalibrationPolicy:
     master_rejection_iterations: int = 1
     master_rejection_min_samples: int = 3
     master_rejection_max_fraction: float = 0.5
+    allow_legacy_stack_fallback: bool = False
     cosmetic_correction_enabled: bool = False
     cosmetic_hot_sigma: float = 8.0
     cosmetic_cold_sigma: float = 8.0

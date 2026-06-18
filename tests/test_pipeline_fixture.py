@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import struct
 
+import pytest
+
 from glass.cli import main
 from glass.engine.pipeline import (
     _exact_median_scratch,
@@ -295,7 +297,7 @@ def test_stack_engine_master_rejection_removes_extreme_samples(tmp_path: Path):
     assert stats["mean"] == 2.5
 
 
-def test_stack_engine_master_fallback_preserves_legacy_streaming(tmp_path: Path, monkeypatch):
+def test_stack_engine_master_failure_is_strict_by_default(tmp_path: Path, monkeypatch):
     import numpy as np
     import glass.engine.pipeline as pipeline_module
 
@@ -310,11 +312,44 @@ def test_stack_engine_master_fallback_preserves_legacy_streaming(tmp_path: Path,
         raise RuntimeError("forced stack engine failure")
 
     monkeypatch.setattr(pipeline_module, "_stack_mean_master_with_engine", fail_stack_engine)
-    stats, mode, fallback_reason, metrics = _stack_mean_master(paths, out, tile_size=2, header={})
+
+    with pytest.raises(RuntimeError, match="legacy fallback is disabled by default") as excinfo:
+        _stack_mean_master(paths, out, tile_size=2, header={})
+
+    assert "forced stack engine failure" in str(excinfo.value.__cause__)
+    assert not out.exists()
+
+
+def test_stack_engine_master_explicit_fallback_preserves_legacy_streaming(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import numpy as np
+    import glass.engine.pipeline as pipeline_module
+
+    paths = []
+    for index, value in enumerate([2.0, 6.0]):
+        path = tmp_path / f"frame_{index}.fits"
+        write_fits_data(path, np.full((4, 4), value, dtype=np.float32))
+        paths.append(str(path))
+    out = tmp_path / "fallback.fits"
+
+    def fail_stack_engine(*args, **kwargs):
+        raise RuntimeError("forced stack engine failure")
+
+    monkeypatch.setattr(pipeline_module, "_stack_mean_master_with_engine", fail_stack_engine)
+    stats, mode, fallback_reason, metrics = _stack_mean_master(
+        paths,
+        out,
+        tile_size=2,
+        header={},
+        policy=CalibrationPolicy(allow_legacy_stack_fallback=True),
+    )
 
     assert mode == "legacy_streaming_accumulator"
     assert "forced stack engine failure" in str(fallback_reason)
     assert metrics["rejection"] == "none"
+    assert metrics["legacy_fallback_explicitly_allowed"] is True
     assert np.allclose(read_fits_data(out), 4.0)
     assert stats["mean"] == 4.0
 

@@ -265,10 +265,16 @@ def _stack_mean_master(
     subtract_path: str | None = None,
     use_stack_engine: bool = True,
     policy: CalibrationPolicy | None = None,
+    allow_legacy_fallback: bool | None = None,
 ) -> tuple[dict[str, float], str, str | None, dict[str, Any]]:
     header = dict(header)
     if policy is not None:
         header["_calibration_policy"] = policy
+    legacy_fallback_allowed = (
+        bool(policy.allow_legacy_stack_fallback)
+        if allow_legacy_fallback is None and policy is not None
+        else bool(allow_legacy_fallback)
+    )
     if use_stack_engine:
         try:
             stats, metrics = _stack_mean_master_with_engine(paths, out_path, tile_size, header, subtract_path)
@@ -279,17 +285,30 @@ def _stack_mean_master(
                 metrics,
             )
         except Exception as exc:
+            if not legacy_fallback_allowed:
+                raise RuntimeError(
+                    "StackEngine master calibration failed and legacy fallback is "
+                    "disabled by default; set "
+                    "calibration_policy.allow_legacy_stack_fallback=true only for "
+                    "explicit diagnostic compatibility runs"
+                ) from exc
             fallback_stats = _stream_mean_master(paths, out_path, tile_size, header, subtract_path)
             return fallback_stats, "legacy_streaming_accumulator", str(exc), {
                 "combine": "mean",
                 "rejection": "none",
                 "frame_count": len(paths),
+                "legacy_fallback_explicitly_allowed": True,
             }
     return (
         _stream_mean_master(paths, out_path, tile_size, header, subtract_path),
         "legacy_streaming_accumulator",
         None,
-        {"combine": "mean", "rejection": "none", "frame_count": len(paths)},
+        {
+            "combine": "mean",
+            "rejection": "none",
+            "frame_count": len(paths),
+            "legacy_fallback_explicitly_allowed": legacy_fallback_allowed,
+        },
     )
 
 
@@ -465,6 +484,13 @@ def _stack_normalized_flat_master(
                 stats.update(tile_data)
         return stats.as_dict(), per_flat, "stack_engine_cpu_per_flat_normalized", None, metrics
     except Exception as exc:
+        if not policy.allow_legacy_stack_fallback:
+            raise RuntimeError(
+                "StackEngine per-flat master calibration failed and legacy flat "
+                "normalization fallback is disabled by default; set "
+                "calibration_policy.allow_legacy_stack_fallback=true only for "
+                "explicit diagnostic compatibility runs"
+            ) from exc
         raw_path = out_path.with_name(f"raw_{out_path.name}")
         _raw_stats, tile_stack_mode, fallback_reason, metrics = _stack_mean_master(
             paths,
@@ -473,6 +499,7 @@ def _stack_normalized_flat_master(
             {"IMAGETYP": "raw_flat", "FILTER": header.get("FILTER")},
             subtract_path=subtract_path,
             policy=policy,
+            allow_legacy_fallback=True,
         )
         stats, norm, norm_method = _normalize_flat_master(
             raw_path, out_path, tile_size, flat_floor, normalization, header

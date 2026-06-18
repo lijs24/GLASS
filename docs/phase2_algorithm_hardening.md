@@ -4656,6 +4656,26 @@ integration where applicable.
   default, package build/upload, GitHub release creation, publish-preflight
   behavior change, or real-data benchmark rerun.
 
+### S2-Gate 277: Strict StackEngine Master Calibration Default
+
+- Make master calibration StackEngine failures fatal by default instead of
+  silently falling back to the legacy streaming accumulator.
+- Add `CalibrationPolicy.allow_legacy_stack_fallback`, defaulting to `false`,
+  so diagnostic compatibility runs can explicitly request the legacy fallback
+  while normal Phase 2 runs preserve StackEngine as the default master-frame
+  execution path.
+- Apply the same strict default to flat per-frame normalization fallback: a
+  failed StackEngine flat master path must not silently downgrade unless the
+  policy explicitly allows legacy fallback.
+- Preserve the old legacy fallback behavior only under the explicit policy flag,
+  and record `legacy_fallback_explicitly_allowed=true` in fallback metrics.
+- Add focused tests proving default StackEngine failure is surfaced as an error,
+  and explicit fallback still reproduces the legacy streaming accumulator for
+  diagnostic runs.
+- Keep this gate default-contract scoped: no image math change when StackEngine
+  succeeds, no CUDA kernel change, no package build/upload, no publication
+  handoff change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
