@@ -5839,6 +5839,26 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 330: Default Promotion Resident Fastpath Handoff
+
+- Carry release-decision and Phase2 resident fastpath handoff evidence into
+  `glass default-promotion-manifest`.
+- Add `resident_registration_fastpath_release_handoff` with raw release
+  decision state, Phase2 embedded release-decision state, agreement status,
+  check state, mode, batch-mode, warp-copy, and failed-check evidence.
+- Add `resident_registration_fastpath_release_handoff_ready` as a
+  default-promotion blocker.
+- Require both raw release-decision and Phase2 handoff evidence to be ready
+  and agreeing before a resident CUDA default-promotion manifest passes.
+- Surface resident fastpath release handoff state in default-promotion
+  Markdown.
+- Add focused tests for passing and failed resident fastpath release handoff.
+- Generate Gate330 default-promotion artifacts from Gate328 release decision
+  and Gate329 Phase2 status.
+- Keep this gate promotion-policy scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

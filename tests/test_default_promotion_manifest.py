@@ -14,6 +14,8 @@ def _write_release_decision(
     ready: bool = True,
     include_direct_publication_guard: bool = True,
     direct_publication_guard_ready: bool = True,
+    include_resident_fastpath_handoff: bool = True,
+    resident_fastpath_ready: bool = True,
     direct_acceptance_source: str = "explicit_resident_artifacts_json",
     direct_calibration_source: str = "resident_artifacts_json_fallback",
     direct_resident_lights: int = 200,
@@ -62,6 +64,42 @@ def _write_release_decision(
                 "passed": direct_publication_guard_ready,
             }
         )
+    if include_resident_fastpath_handoff:
+        checks.append(
+            {
+                "name": "resident_registration_fastpath_handoff",
+                "passed": resident_fastpath_ready,
+            }
+        )
+    fastpath_failed_checks = (
+        []
+        if resident_fastpath_ready
+        else ["contract_resident_registration_fastpath_descriptor_batch_mode"]
+    )
+    resident_fastpath_handoff = (
+        {
+            "source": "explicit_resident_artifacts_json",
+            "present": True,
+            "status": "passed" if resident_fastpath_ready else "failed",
+            "ready": resident_fastpath_ready,
+            "required_by_benchmark_contract": True,
+            "path": "resident_artifacts.json",
+            "exists": True,
+            "available": True,
+            "resident_registration_mode": "similarity_cuda_triangle",
+            "descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+            "pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+            "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+            "triangle_warp_batch_frame_count": 3,
+            "warp_copy_mode": "default_stream_async_device_to_device",
+            "passed_check_count": 23 if resident_fastpath_ready else 22,
+            "failed_check_count": 0 if resident_fastpath_ready else 1,
+            "failed_checks": fastpath_failed_checks,
+            "failed_acceptance_checks": fastpath_failed_checks,
+        }
+        if include_resident_fastpath_handoff
+        else {}
+    )
     write_json(
         path,
         {
@@ -128,6 +166,7 @@ def _write_release_decision(
             "stack_engine_publication_direct_runtime_evidence": direct_guard
             if include_direct_publication_guard
             else {},
+            "resident_registration_fastpath_handoff": resident_fastpath_handoff,
             "checks": checks,
         },
     )
@@ -162,6 +201,8 @@ def _write_phase2_status(
     acceptance_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_check_present: bool = True,
+    include_resident_fastpath_handoff: bool = True,
+    resident_fastpath_ready: bool = True,
 ) -> None:
     acceptance_policy_chain_ready = (
         acceptance_integration_engine_policy_ready
@@ -196,6 +237,7 @@ def _write_phase2_status(
         pipeline_ready
         and acceptance_policy_chain_ready
         and acceptance_runtime_default_chain_ready
+        and (resident_fastpath_ready if include_resident_fastpath_handoff else True)
         and (stack_engine_ready if include_stack_engine_contract else True)
         and (
             stack_publication_audit_ready
@@ -248,6 +290,32 @@ def _write_phase2_status(
             "runtime_repeat_present": True,
             "runtime_repeat_considered_run_count": 3,
             "runtime_repeat_elapsed_ratio_vs_best": 1.053,
+            "resident_registration_fastpath_handoff": {
+                "source": "explicit_resident_artifacts_json",
+                "present": True,
+                "status": "passed" if resident_fastpath_ready else "failed",
+                "ready": resident_fastpath_ready,
+                "required_by_benchmark_contract": True,
+                "path": "resident_artifacts.json",
+                "exists": True,
+                "available": True,
+                "resident_registration_mode": "similarity_cuda_triangle",
+                "descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+                "pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+                "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                "triangle_warp_batch_frame_count": 3,
+                "warp_copy_mode": "default_stream_async_device_to_device",
+                "passed_check_count": 23 if resident_fastpath_ready else 22,
+                "failed_check_count": 0 if resident_fastpath_ready else 1,
+                "failed_checks": []
+                if resident_fastpath_ready
+                else ["contract_resident_registration_fastpath_descriptor_batch_mode"],
+                "failed_acceptance_checks": []
+                if resident_fastpath_ready
+                else ["contract_resident_registration_fastpath_descriptor_batch_mode"],
+            }
+            if include_resident_fastpath_handoff
+            else None,
         },
             "pipeline_contract": {
                 "audit_type": "pipeline_invariant_contract",
@@ -325,6 +393,12 @@ def _write_phase2_status(
             {
                 "name": "stack_engine_default_contract_ready",
                 "passed": stack_engine_ready if include_stack_engine_contract else False,
+            },
+            {
+                "name": "release_decision_resident_fastpath_handoff_ready",
+                "passed": resident_fastpath_ready
+                if include_resident_fastpath_handoff
+                else False,
             },
         ],
     }
@@ -812,6 +886,14 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["release_decision_direct_runtime_publication_guard_passed"] is True
+    assert checks["resident_registration_fastpath_release_handoff_ready"] is True
+    assert payload["resident_registration_fastpath_release_handoff"]["ready"] is True
+    assert payload["resident_registration_fastpath_release_handoff"][
+        "raw_passed_check_count"
+    ] == 23
+    assert payload["resident_registration_fastpath_release_handoff"][
+        "phase2_passed_check_count"
+    ] == 23
     assert payload["release_decision_direct_runtime_publication_guard"]["ready"] is True
     assert payload["release_decision_direct_runtime_publication_guard"][
         "raw_matrix_acceptance_source"
@@ -854,6 +936,36 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     ]
     assert payload["resident_winsorized_sweep_audit"]["required_frame_count"] == 200
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
+
+
+def test_default_promotion_manifest_blocks_failed_resident_fastpath_handoff(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision, resident_fastpath_ready=False)
+    _write_phase2_status(phase2, decision, resident_fastpath_ready=False)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    handoff = payload["resident_registration_fastpath_release_handoff"]
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "resident_registration_fastpath_release_handoff_ready" in payload[
+        "failed_checks"
+    ]
+    assert checks["resident_registration_fastpath_release_handoff_ready"][
+        "passed"
+    ] is False
+    assert handoff["raw_ready"] is False
+    assert handoff["phase2_ready"] is False
+    assert handoff["raw_failed_check_count"] == 1
+    assert handoff["phase2_failed_check_count"] == 1
 
 
 def test_default_promotion_manifest_summarizes_direct_runtime_evidence(

@@ -864,6 +864,115 @@ def _runtime_default_direct_evidence_summary(
     }
 
 
+def _resident_registration_fastpath_release_handoff_summary(
+    decision: dict[str, Any],
+    phase2: dict[str, Any],
+) -> dict[str, Any]:
+    raw = (
+        decision.get("resident_registration_fastpath_handoff")
+        if isinstance(decision.get("resident_registration_fastpath_handoff"), dict)
+        else {}
+    )
+    phase2_decision = (
+        phase2.get("release_decision")
+        if isinstance(phase2.get("release_decision"), dict)
+        else {}
+    )
+    phase2_handoff = (
+        phase2_decision.get("resident_registration_fastpath_handoff")
+        if isinstance(
+            phase2_decision.get("resident_registration_fastpath_handoff"),
+            dict,
+        )
+        else {}
+    )
+    raw_check = _decision_check_passed(
+        decision, "resident_registration_fastpath_handoff"
+    )
+    phase2_check = _phase2_check_passed(
+        phase2, "release_decision_resident_fastpath_handoff_ready"
+    )
+    raw_failed_count = _int_value(raw.get("failed_check_count"))
+    phase2_failed_count = _int_value(phase2_handoff.get("failed_check_count"))
+    raw_ready = (
+        bool(raw)
+        and raw.get("status") == "passed"
+        and raw.get("ready") is True
+        and raw.get("required_by_benchmark_contract") is True
+        and raw_check is True
+        and raw_failed_count == 0
+    )
+    phase2_ready = (
+        bool(phase2_handoff)
+        and phase2_handoff.get("status") == "passed"
+        and phase2_handoff.get("ready") is True
+        and phase2_handoff.get("required_by_benchmark_contract") is True
+        and phase2_check is True
+        and phase2_failed_count == 0
+    )
+    agreement = (
+        raw.get("status") == phase2_handoff.get("status")
+        and raw.get("ready") == phase2_handoff.get("ready")
+        and raw.get("required_by_benchmark_contract")
+        == phase2_handoff.get("required_by_benchmark_contract")
+        and raw.get("resident_registration_mode")
+        == phase2_handoff.get("resident_registration_mode")
+        and raw.get("passed_check_count") == phase2_handoff.get("passed_check_count")
+        and raw_failed_count == phase2_failed_count
+    )
+    return {
+        "present": bool(raw) or bool(phase2_handoff),
+        "ready": raw_ready and phase2_ready and agreement,
+        "raw_ready": raw_ready,
+        "phase2_ready": phase2_ready,
+        "agreement": agreement,
+        "decision_check_passed": raw_check,
+        "phase2_check_passed": phase2_check,
+        "raw_status": raw.get("status"),
+        "phase2_status": phase2_handoff.get("status"),
+        "raw_required": raw.get("required_by_benchmark_contract"),
+        "phase2_required": phase2_handoff.get("required_by_benchmark_contract"),
+        "raw_source": raw.get("source"),
+        "phase2_source": phase2_handoff.get("source"),
+        "raw_path": raw.get("path"),
+        "phase2_path": phase2_handoff.get("path"),
+        "raw_mode": raw.get("resident_registration_mode"),
+        "phase2_mode": phase2_handoff.get("resident_registration_mode"),
+        "raw_descriptor_fit_batch_mode": raw.get("descriptor_fit_batch_mode"),
+        "phase2_descriptor_fit_batch_mode": phase2_handoff.get(
+            "descriptor_fit_batch_mode"
+        ),
+        "raw_pixel_refine_batch_mode": raw.get("pixel_refine_batch_mode"),
+        "phase2_pixel_refine_batch_mode": phase2_handoff.get(
+            "pixel_refine_batch_mode"
+        ),
+        "raw_triangle_warp_batch_mode": raw.get("triangle_warp_batch_mode"),
+        "phase2_triangle_warp_batch_mode": phase2_handoff.get(
+            "triangle_warp_batch_mode"
+        ),
+        "raw_triangle_warp_batch_frame_count": raw.get(
+            "triangle_warp_batch_frame_count"
+        ),
+        "phase2_triangle_warp_batch_frame_count": phase2_handoff.get(
+            "triangle_warp_batch_frame_count"
+        ),
+        "raw_warp_copy_mode": raw.get("warp_copy_mode"),
+        "phase2_warp_copy_mode": phase2_handoff.get("warp_copy_mode"),
+        "raw_passed_check_count": _int_value(raw.get("passed_check_count")),
+        "phase2_passed_check_count": _int_value(
+            phase2_handoff.get("passed_check_count")
+        ),
+        "raw_failed_check_count": raw_failed_count,
+        "phase2_failed_check_count": phase2_failed_count,
+        "raw_failed_checks": raw.get("failed_checks") or [],
+        "phase2_failed_checks": phase2_handoff.get("failed_checks") or [],
+        "raw_failed_acceptance_checks": raw.get("failed_acceptance_checks") or [],
+        "phase2_failed_acceptance_checks": (
+            phase2_handoff.get("failed_acceptance_checks") or []
+        ),
+    }
+
+
 def _release_decision_direct_runtime_publication_guard(
     decision: dict[str, Any],
     *,
@@ -1043,6 +1152,12 @@ def build_default_promotion_manifest(
         decision,
         phase2,
     )
+    resident_fastpath_release_handoff = (
+        _resident_registration_fastpath_release_handoff_summary(
+            decision,
+            phase2,
+        )
+    )
     release_direct_publication_guard = (
         _release_decision_direct_runtime_publication_guard(
             decision,
@@ -1125,6 +1240,11 @@ def build_default_promotion_manifest(
             "release_decision_direct_runtime_publication_guard_passed",
             release_direct_publication_guard.get("ready") is True,
             release_direct_publication_guard,
+        ),
+        _check(
+            "resident_registration_fastpath_release_handoff_ready",
+            resident_fastpath_release_handoff.get("ready") is True,
+            resident_fastpath_release_handoff,
         ),
         _check(
             "default_route_acceptance_present",
@@ -1644,6 +1764,9 @@ def build_default_promotion_manifest(
         "integration_engine_policy": integration_engine_policy,
         "stack_engine_runtime_default": stack_engine_runtime_default,
         "runtime_default_direct_evidence": runtime_default_direct_evidence,
+        "resident_registration_fastpath_release_handoff": (
+            resident_fastpath_release_handoff
+        ),
         "release_decision_direct_runtime_publication_guard": (
             release_direct_publication_guard
         ),
@@ -1673,6 +1796,9 @@ def _markdown(payload: dict[str, Any]) -> str:
     )
     release_direct_publication_guard = (
         payload.get("release_decision_direct_runtime_publication_guard") or {}
+    )
+    resident_fastpath_release_handoff = (
+        payload.get("resident_registration_fastpath_release_handoff") or {}
     )
     stack_engine = payload.get("stack_engine_contract") or {}
     resident_winsorized_sweep = payload.get("resident_winsorized_sweep_audit") or {}
@@ -1772,6 +1898,14 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{release_direct_publication_guard.get('raw_matrix_pipeline_calibration_source')}` "
             "raw-lights="
             f"`{release_direct_publication_guard.get('raw_matrix_pipeline_resident_lights')}`"
+        ),
+        (
+            "- Resident fastpath release handoff: "
+            f"ready=`{resident_fastpath_release_handoff.get('ready')}` "
+            f"raw=`{resident_fastpath_release_handoff.get('raw_status')}` "
+            f"phase2=`{resident_fastpath_release_handoff.get('phase2_status')}` "
+            f"agreement=`{resident_fastpath_release_handoff.get('agreement')}` "
+            f"checks=`{resident_fastpath_release_handoff.get('raw_passed_check_count')}`"
         ),
         "",
         "## StackEngine Default Contract",
