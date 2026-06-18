@@ -708,6 +708,9 @@ def _write_publish_preflight(
     direct_runtime_acceptance_source: str = "explicit_resident_artifacts_json",
     direct_runtime_pipeline_calibration_source: str = "resident_artifacts_json_fallback",
     direct_runtime_pipeline_resident_lights: int = 200,
+    direct_publication_guard_ready: bool = True,
+    direct_publication_guard_lights: int | None = None,
+    include_direct_publication_guard: bool = True,
     stack_publication_audit_ready: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
@@ -724,6 +727,19 @@ def _write_publish_preflight(
         else default_promotion_stack_runtime_default_ready
     )
     runtime_defaults_ready = matrix_runtime_ready and default_runtime_ready
+    publication_guard_lights = (
+        direct_runtime_pipeline_resident_lights
+        if direct_publication_guard_lights is None
+        else direct_publication_guard_lights
+    )
+    direct_publication_guard_passed = (
+        direct_publication_guard_ready
+        and direct_runtime_evidence_ready
+        and direct_runtime_acceptance_source == "explicit_resident_artifacts_json"
+        and direct_runtime_pipeline_calibration_source
+        == "resident_artifacts_json_fallback"
+        and publication_guard_lights >= 200
+    )
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
     ) and (
@@ -738,6 +754,8 @@ def _write_publish_preflight(
         runtime_defaults_ready or not include_stack_runtime_default
     ) and (
         direct_runtime_evidence_ready or not include_direct_runtime_evidence
+    ) and (
+        direct_publication_guard_passed or not include_direct_publication_guard
     ) and (
         (
             stack_publication_audit_ready
@@ -1096,6 +1114,101 @@ def _write_publish_preflight(
                 "default_promotion_direct_acceptance_fastpath_evidence",
                 "default_promotion_direct_pipeline_calibration_evidence",
                 "matrix_direct_runtime_evidence_matches_default_promotion",
+            ]
+    if include_direct_publication_guard:
+        summary.update(
+            {
+                "github_plan_matrix_release_direct_publication_guard_ready": (
+                    direct_publication_guard_passed
+                ),
+                "github_plan_matrix_release_direct_publication_guard_lights": (
+                    publication_guard_lights
+                ),
+                "github_plan_matrix_default_promotion_release_direct_publication_guard_ready": (
+                    direct_publication_guard_passed
+                ),
+                "github_plan_matrix_default_promotion_release_direct_publication_guard_lights": (
+                    publication_guard_lights
+                ),
+                "matrix_release_direct_publication_guard_ready": (
+                    direct_publication_guard_passed
+                ),
+                "matrix_release_direct_publication_guard_source_ready": (
+                    direct_runtime_acceptance_source
+                    == "explicit_resident_artifacts_json"
+                    and direct_runtime_pipeline_calibration_source
+                    == "resident_artifacts_json_fallback"
+                ),
+                "matrix_release_direct_publication_guard_count_ready": (
+                    publication_guard_lights >= 200
+                ),
+                "matrix_release_direct_publication_guard_check_passed": (
+                    direct_publication_guard_passed
+                ),
+                "matrix_release_direct_publication_guard_lights": (
+                    publication_guard_lights
+                ),
+                "matrix_default_promotion_release_direct_publication_guard_ready": (
+                    direct_publication_guard_passed
+                ),
+                "matrix_default_promotion_release_direct_publication_guard_lights": (
+                    publication_guard_lights
+                ),
+                "default_promotion_release_direct_publication_guard_ready": (
+                    direct_publication_guard_passed
+                ),
+                "default_promotion_release_direct_publication_guard_lights": (
+                    publication_guard_lights
+                ),
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "github_plan_matrix_release_decision_direct_publication_guard_passed",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "github_plan_matrix_release_decision_direct_publication_guard_matches_matrix",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "matrix_release_decision_direct_runtime_publication_guard_passed",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "default_promotion_release_decision_direct_runtime_publication_guard_passed",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "matrix_release_decision_direct_publication_guard_matches_default_promotion",
+                    "passed": direct_publication_guard_passed,
+                },
+                {
+                    "name": "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest",
+                    "passed": direct_publication_guard_passed,
+                },
+            ]
+        )
+        if not direct_publication_guard_passed:
+            failed_checks = [
+                *failed_checks,
+                "github_plan_matrix_release_decision_direct_publication_guard_passed",
+                "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed",
+                "matrix_release_decision_direct_runtime_publication_guard_passed",
+                "default_promotion_release_decision_direct_runtime_publication_guard_passed",
             ]
     if include_resident_winsorized_sweep:
         status = "passed" if resident_winsorized_sweep_ready else "failed"
@@ -1458,6 +1571,8 @@ def _status_payload(
     publish_preflight_direct_runtime_acceptance_source: str = "explicit_resident_artifacts_json",
     publish_preflight_direct_runtime_pipeline_source: str = "resident_artifacts_json_fallback",
     publish_preflight_direct_runtime_resident_lights: int = 200,
+    publish_preflight_release_direct_publication_guard_ready: bool = True,
+    publish_preflight_release_direct_publication_guard_lights: int = 200,
     publish_preflight_resident_winsorized_status: str = "passed",
     publish_preflight_resident_winsorized_required_frame_passed: bool = True,
     publish_preflight_resident_winsorized_check_count: int = 27,
@@ -1494,6 +1609,11 @@ def _status_payload(
         "stack_engine_default_ready"
         if stack_engine_ready and stack_engine_gap_count == 0
         else "stack_engine_contract_gaps_remain"
+    )
+    publish_preflight_release_direct_publication_guard_passed = (
+        publish_preflight_direct_runtime_ready
+        and publish_preflight_release_direct_publication_guard_ready
+        and publish_preflight_release_direct_publication_guard_lights >= 200
     )
     return {
         "schema_version": 1,
@@ -1813,6 +1933,72 @@ def _status_payload(
             ),
             "matrix_direct_runtime_evidence_matches_default_promotion": (
                 publish_preflight_direct_runtime_ready
+            ),
+            "github_plan_matrix_release_direct_publication_guard_ready": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "github_plan_matrix_release_direct_publication_guard_lights": (
+                publish_preflight_release_direct_publication_guard_lights
+            ),
+            "github_plan_matrix_default_promotion_release_direct_publication_guard_ready": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "github_plan_matrix_default_promotion_release_direct_publication_guard_lights": (
+                publish_preflight_release_direct_publication_guard_lights
+            ),
+            "matrix_release_direct_publication_guard_ready": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_release_direct_publication_guard_source_ready": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_release_direct_publication_guard_count_ready": (
+                publish_preflight_release_direct_publication_guard_lights >= 200
+            ),
+            "matrix_release_direct_publication_guard_check_passed": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_release_direct_publication_guard_lights": (
+                publish_preflight_release_direct_publication_guard_lights
+            ),
+            "matrix_default_promotion_release_direct_publication_guard_ready": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_default_promotion_release_direct_publication_guard_lights": (
+                publish_preflight_release_direct_publication_guard_lights
+            ),
+            "default_promotion_release_direct_publication_guard_ready": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "default_promotion_release_direct_publication_guard_lights": (
+                publish_preflight_release_direct_publication_guard_lights
+            ),
+            "github_plan_matrix_release_decision_direct_publication_guard_passed": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "github_plan_matrix_release_decision_direct_publication_guard_matches_matrix": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_release_decision_direct_runtime_publication_guard_passed": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "default_promotion_release_decision_direct_runtime_publication_guard_passed": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_release_decision_direct_publication_guard_matches_default_promotion": (
+                publish_preflight_release_direct_publication_guard_passed
+            ),
+            "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest": (
+                publish_preflight_release_direct_publication_guard_passed
             ),
             "matrix_resident_winsorized_sweep_audit_passed": (
                 publish_preflight_resident_winsorized_status == "passed"
@@ -3488,12 +3674,89 @@ def test_phase2_status_blocks_stale_publish_preflight_direct_fastpath_source(
     checks = {item["name"]: item for item in status["checks"]}
     direct_check = checks["windows_publish_preflight_direct_runtime_evidence_passed"]
     assert status["status"] == "attention_required"
-    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert status["publish_preflight"]["status"] == "blocked"
     assert direct_check["passed"] is False
     assert direct_check["evidence"]["matrix_ready"] is True
     assert direct_check["evidence"]["matrix_acceptance_source"] == "phase2_status_handoff"
     assert direct_check["evidence"]["matrix_acceptance_check"] is False
     assert direct_check["evidence"]["matrix_pipeline_check"] is True
+
+
+def test_phase2_status_blocks_missing_publish_preflight_release_direct_guard(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=312)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        include_direct_publication_guard=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    guard_check = checks[
+        "windows_publish_preflight_release_direct_publication_guard_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert guard_check["passed"] is False
+    assert guard_check["evidence"]["github_plan_matrix_ready"] is None
+    assert guard_check["evidence"]["matrix_release_check"] is None
+
+
+def test_phase2_status_blocks_publish_preflight_release_direct_guard_regression(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=312)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        direct_publication_guard_lights=199,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    direct_check = checks["windows_publish_preflight_direct_runtime_evidence_passed"]
+    guard_check = checks[
+        "windows_publish_preflight_release_direct_publication_guard_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert direct_check["passed"] is True
+    assert guard_check["passed"] is False
+    assert guard_check["evidence"]["matrix_count_ready"] is False
+    assert guard_check["evidence"]["matrix_lights"] == 199
 
 
 def test_phase2_status_blocks_missing_publish_preflight_resident_winsorized_sweep(
@@ -3771,6 +4034,18 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
         checks["windows_publish_preflight_direct_runtime_status_preserved"]
         is True
     )
+    assert (
+        checks[
+            "windows_publish_preflight_release_direct_publication_guard_preserved"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "windows_publish_preflight_release_direct_publication_guard_status_preserved"
+        ]
+        is True
+    )
     assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_status_preserved"] is True
     assert checks["stack_engine_publication_audit_passed_preserved"] is True
@@ -3905,6 +4180,18 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     )
     assert (
         checks["windows_publish_preflight_direct_runtime_status_preserved"]
+        is False
+    )
+    assert (
+        checks[
+            "windows_publish_preflight_release_direct_publication_guard_preserved"
+        ]
+        is False
+    )
+    assert (
+        checks[
+            "windows_publish_preflight_release_direct_publication_guard_status_preserved"
+        ]
         is False
     )
     assert checks["stack_engine_publication_audit_passed_preserved"] is False
@@ -4538,6 +4825,51 @@ def test_phase2_status_compare_flags_publish_preflight_direct_runtime_regression
     ]["evidence"]["candidate"]
     assert candidate_statuses["matrix_direct_runtime_evidence_ready"] is False
     assert candidate_statuses["matrix_direct_runtime_acceptance_check_count"] == 0
+
+
+def test_phase2_status_compare_flags_publish_preflight_release_direct_guard_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=311))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=312,
+            status="attention_required",
+            publish_preflight_release_direct_publication_guard_lights=199,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    guard_check = checks[
+        "windows_publish_preflight_release_direct_publication_guard_preserved"
+    ]
+    assert guard_check["passed"] is False
+    assert guard_check["evidence"]["candidate"]["checks_passed"] is False
+    status_check = checks[
+        "windows_publish_preflight_release_direct_publication_guard_status_preserved"
+    ]
+    assert status_check["passed"] is False
+    candidate_statuses = status_check["evidence"]["candidate"]
+    assert candidate_statuses["matrix_release_direct_publication_guard_lights"] == 199
+    assert (
+        candidate_statuses["matrix_release_direct_publication_guard_count_ready"]
+        is False
+    )
+    assert (
+        candidate_statuses[
+            "github_plan_matrix_release_direct_publication_guard_ready"
+        ]
+        is False
+    )
 
 
 def test_phase2_status_compare_flags_publish_preflight_resident_winsorized_regression(

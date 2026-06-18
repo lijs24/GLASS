@@ -5431,6 +5431,32 @@ integration where applicable.
   CUDA kernel change, no runtime default change, no package build/upload, no
   GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 312: Phase2 Status Direct Publication Guard Handoff
+
+- Carry the S2-Gate 311 publish-preflight direct publication guard into
+  `phase2-status` and `phase2-status-compare`.
+- Add a Phase2 status check named
+  `windows_publish_preflight_release_direct_publication_guard_passed` so a
+  publish-preflight artifact cannot report ready status while omitting the
+  release-decision direct runtime publication guard, its GitHub-plan handoff,
+  its Windows release-matrix handoff, or its default-promotion preservation
+  guard.
+- Require the Phase2 status handoff to preserve ready/count/source/check
+  readiness and at least 200 resident calibrated lights across the GitHub plan,
+  Windows release matrix, matrix-embedded default-promotion summary, and
+  standalone default-promotion manifest.
+- Add Phase2 compare regression checks for both the release direct publication
+  guard checks and the readiness/count status fields.
+- Surface the guard readiness, resident-light counts, source/count readiness,
+  and all release-decision guard checks in Phase2 status Markdown.
+- Add focused tests for missing guard fields, too-small guard light counts,
+  compare-preserved state, and compare regression.
+- Generate Gate312 Phase2 status and compare artifacts from the existing
+  Gate304-Gate311 200-light evidence.
+- Keep this gate status/compare scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

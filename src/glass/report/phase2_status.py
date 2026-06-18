@@ -1158,6 +1158,103 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
             payload,
             "matrix_direct_runtime_evidence_matches_default_promotion",
         ),
+        "github_plan_matrix_release_direct_publication_guard_ready": summary.get(
+            "github_plan_matrix_release_direct_publication_guard_ready"
+        ),
+        "github_plan_matrix_release_direct_publication_guard_lights": summary.get(
+            "github_plan_matrix_release_direct_publication_guard_lights"
+        ),
+        "github_plan_matrix_default_promotion_release_direct_publication_guard_ready": (
+            summary.get(
+                "github_plan_matrix_default_promotion_release_direct_publication_guard_ready"
+            )
+        ),
+        "github_plan_matrix_default_promotion_release_direct_publication_guard_lights": (
+            summary.get(
+                "github_plan_matrix_default_promotion_release_direct_publication_guard_lights"
+            )
+        ),
+        "matrix_release_direct_publication_guard_ready": summary.get(
+            "matrix_release_direct_publication_guard_ready"
+        ),
+        "matrix_release_direct_publication_guard_source_ready": summary.get(
+            "matrix_release_direct_publication_guard_source_ready"
+        ),
+        "matrix_release_direct_publication_guard_count_ready": summary.get(
+            "matrix_release_direct_publication_guard_count_ready"
+        ),
+        "matrix_release_direct_publication_guard_check_passed": summary.get(
+            "matrix_release_direct_publication_guard_check_passed"
+        ),
+        "matrix_release_direct_publication_guard_lights": summary.get(
+            "matrix_release_direct_publication_guard_lights"
+        ),
+        "matrix_default_promotion_release_direct_publication_guard_ready": summary.get(
+            "matrix_default_promotion_release_direct_publication_guard_ready"
+        ),
+        "matrix_default_promotion_release_direct_publication_guard_lights": summary.get(
+            "matrix_default_promotion_release_direct_publication_guard_lights"
+        ),
+        "default_promotion_release_direct_publication_guard_ready": summary.get(
+            "default_promotion_release_direct_publication_guard_ready"
+        ),
+        "default_promotion_release_direct_publication_guard_lights": summary.get(
+            "default_promotion_release_direct_publication_guard_lights"
+        ),
+        "github_plan_matrix_release_decision_direct_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "github_plan_matrix_release_decision_direct_publication_guard_passed",
+            )
+        ),
+        "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed",
+            )
+        ),
+        "github_plan_matrix_release_decision_direct_publication_guard_matches_matrix": (
+            _check_passed(
+                payload,
+                "github_plan_matrix_release_decision_direct_publication_guard_matches_matrix",
+            )
+        ),
+        "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix": (
+            _check_passed(
+                payload,
+                "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix",
+            )
+        ),
+        "matrix_release_decision_direct_runtime_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_direct_runtime_publication_guard_passed",
+            )
+        ),
+        "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed",
+            )
+        ),
+        "default_promotion_release_decision_direct_runtime_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_release_decision_direct_runtime_publication_guard_passed",
+            )
+        ),
+        "matrix_release_decision_direct_publication_guard_matches_default_promotion": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_direct_publication_guard_matches_default_promotion",
+            )
+        ),
+        "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest": (
+            _check_passed(
+                payload,
+                "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest",
+            )
+        ),
         "failed_checks": payload.get("failed_checks"),
     }
 
@@ -2740,6 +2837,178 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "windows_publish_preflight_release_direct_publication_guard_passed",
+                "passed": (
+                    preflight.get(
+                        "github_plan_matrix_release_decision_direct_publication_guard_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_release_decision_direct_publication_guard_matches_matrix"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_release_decision_direct_runtime_publication_guard_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_release_decision_direct_runtime_publication_guard_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_release_decision_direct_publication_guard_matches_default_promotion"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_release_direct_publication_guard_ready"
+                    )
+                    is True
+                    and _int_or_zero(
+                        preflight.get(
+                            "github_plan_matrix_release_direct_publication_guard_lights"
+                        )
+                    )
+                    >= 200
+                    and preflight.get(
+                        "github_plan_matrix_default_promotion_release_direct_publication_guard_ready"
+                    )
+                    is True
+                    and _int_or_zero(
+                        preflight.get(
+                            "github_plan_matrix_default_promotion_release_direct_publication_guard_lights"
+                        )
+                    )
+                    >= 200
+                    and preflight.get(
+                        "matrix_release_direct_publication_guard_ready"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_release_direct_publication_guard_source_ready"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_release_direct_publication_guard_count_ready"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_release_direct_publication_guard_check_passed"
+                    )
+                    is True
+                    and _int_or_zero(
+                        preflight.get("matrix_release_direct_publication_guard_lights")
+                    )
+                    >= 200
+                    and preflight.get(
+                        "matrix_default_promotion_release_direct_publication_guard_ready"
+                    )
+                    is True
+                    and _int_or_zero(
+                        preflight.get(
+                            "matrix_default_promotion_release_direct_publication_guard_lights"
+                        )
+                    )
+                    >= 200
+                    and preflight.get(
+                        "default_promotion_release_direct_publication_guard_ready"
+                    )
+                    is True
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_release_direct_publication_guard_lights"
+                        )
+                    )
+                    >= 200
+                ),
+                "evidence": {
+                    "github_plan_matrix_ready": preflight.get(
+                        "github_plan_matrix_release_direct_publication_guard_ready"
+                    ),
+                    "github_plan_matrix_lights": preflight.get(
+                        "github_plan_matrix_release_direct_publication_guard_lights"
+                    ),
+                    "github_plan_default_promotion_ready": preflight.get(
+                        "github_plan_matrix_default_promotion_release_direct_publication_guard_ready"
+                    ),
+                    "github_plan_default_promotion_lights": preflight.get(
+                        "github_plan_matrix_default_promotion_release_direct_publication_guard_lights"
+                    ),
+                    "matrix_ready": preflight.get(
+                        "matrix_release_direct_publication_guard_ready"
+                    ),
+                    "matrix_source_ready": preflight.get(
+                        "matrix_release_direct_publication_guard_source_ready"
+                    ),
+                    "matrix_count_ready": preflight.get(
+                        "matrix_release_direct_publication_guard_count_ready"
+                    ),
+                    "matrix_check_passed": preflight.get(
+                        "matrix_release_direct_publication_guard_check_passed"
+                    ),
+                    "matrix_lights": preflight.get(
+                        "matrix_release_direct_publication_guard_lights"
+                    ),
+                    "matrix_default_promotion_ready": preflight.get(
+                        "matrix_default_promotion_release_direct_publication_guard_ready"
+                    ),
+                    "matrix_default_promotion_lights": preflight.get(
+                        "matrix_default_promotion_release_direct_publication_guard_lights"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_release_direct_publication_guard_ready"
+                    ),
+                    "default_promotion_lights": preflight.get(
+                        "default_promotion_release_direct_publication_guard_lights"
+                    ),
+                    "github_plan_matrix_check": preflight.get(
+                        "github_plan_matrix_release_decision_direct_publication_guard_passed"
+                    ),
+                    "github_plan_default_promotion_check": preflight.get(
+                        "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed"
+                    ),
+                    "github_plan_matrix_match_check": preflight.get(
+                        "github_plan_matrix_release_decision_direct_publication_guard_matches_matrix"
+                    ),
+                    "github_plan_default_promotion_match_check": preflight.get(
+                        "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix"
+                    ),
+                    "matrix_release_check": preflight.get(
+                        "matrix_release_decision_direct_runtime_publication_guard_passed"
+                    ),
+                    "matrix_default_promotion_check": preflight.get(
+                        "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed"
+                    ),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_release_decision_direct_runtime_publication_guard_passed"
+                    ),
+                    "matrix_default_match_check": preflight.get(
+                        "matrix_release_decision_direct_publication_guard_matches_default_promotion"
+                    ),
+                    "matrix_manifest_match_check": preflight.get(
+                        "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
+        checks.append(
+            {
                 "name": "windows_publish_preflight_resident_winsorized_sweep_passed",
                 "passed": (
                     preflight.get("matrix_resident_winsorized_sweep_audit_passed")
@@ -3627,6 +3896,51 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('matrix_direct_runtime_evidence_matches_default_promotion')}"
                 ),
                 (
+                    "- Release direct publication guard evidence: "
+                    "plan-matrix="
+                    f"{preflight.get('github_plan_matrix_release_direct_publication_guard_ready')}/"
+                    f"{preflight.get('github_plan_matrix_release_direct_publication_guard_lights')}, "
+                    "plan-default="
+                    f"{preflight.get('github_plan_matrix_default_promotion_release_direct_publication_guard_ready')}/"
+                    f"{preflight.get('github_plan_matrix_default_promotion_release_direct_publication_guard_lights')}, "
+                    "matrix="
+                    f"{preflight.get('matrix_release_direct_publication_guard_ready')}/"
+                    f"{preflight.get('matrix_release_direct_publication_guard_lights')} "
+                    "source="
+                    f"{preflight.get('matrix_release_direct_publication_guard_source_ready')} "
+                    "count="
+                    f"{preflight.get('matrix_release_direct_publication_guard_count_ready')} "
+                    "check="
+                    f"{preflight.get('matrix_release_direct_publication_guard_check_passed')}, "
+                    "matrix-default="
+                    f"{preflight.get('matrix_default_promotion_release_direct_publication_guard_ready')}/"
+                    f"{preflight.get('matrix_default_promotion_release_direct_publication_guard_lights')}, "
+                    "default="
+                    f"{preflight.get('default_promotion_release_direct_publication_guard_ready')}/"
+                    f"{preflight.get('default_promotion_release_direct_publication_guard_lights')}"
+                ),
+                (
+                    "- Release direct publication guard checks: "
+                    "plan-matrix="
+                    f"{preflight.get('github_plan_matrix_release_decision_direct_publication_guard_passed')}, "
+                    "plan-default="
+                    f"{preflight.get('github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed')}, "
+                    "plan-matrix-match="
+                    f"{preflight.get('github_plan_matrix_release_decision_direct_publication_guard_matches_matrix')}, "
+                    "plan-default-match="
+                    f"{preflight.get('github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix')}, "
+                    "matrix="
+                    f"{preflight.get('matrix_release_decision_direct_runtime_publication_guard_passed')}, "
+                    "matrix-default="
+                    f"{preflight.get('matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed')}, "
+                    "default="
+                    f"{preflight.get('default_promotion_release_decision_direct_runtime_publication_guard_passed')}, "
+                    "matrix-default-match="
+                    f"{preflight.get('matrix_release_decision_direct_publication_guard_matches_default_promotion')}, "
+                    "matrix-manifest-match="
+                    f"{preflight.get('matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest')}"
+                ),
+                (
                     "- Resident winsorized sweep statuses: "
                     f"matrix={preflight.get('matrix_resident_winsorized_sweep_status')}, "
                     "default-promotion="
@@ -4189,6 +4503,34 @@ _PUBLISH_PREFLIGHT_DIRECT_RUNTIME_STATUS_FIELDS = (
     "default_promotion_direct_runtime_pipeline_resident_lights",
 )
 
+_PUBLISH_PREFLIGHT_RELEASE_DIRECT_PUBLICATION_GUARD_CHECK_FIELDS = (
+    "github_plan_matrix_release_decision_direct_publication_guard_passed",
+    "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_passed",
+    "github_plan_matrix_release_decision_direct_publication_guard_matches_matrix",
+    "github_plan_matrix_default_promotion_release_decision_direct_publication_guard_matches_matrix",
+    "matrix_release_decision_direct_runtime_publication_guard_passed",
+    "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed",
+    "default_promotion_release_decision_direct_runtime_publication_guard_passed",
+    "matrix_release_decision_direct_publication_guard_matches_default_promotion",
+    "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest",
+)
+
+_PUBLISH_PREFLIGHT_RELEASE_DIRECT_PUBLICATION_GUARD_STATUS_FIELDS = (
+    "github_plan_matrix_release_direct_publication_guard_ready",
+    "github_plan_matrix_release_direct_publication_guard_lights",
+    "github_plan_matrix_default_promotion_release_direct_publication_guard_ready",
+    "github_plan_matrix_default_promotion_release_direct_publication_guard_lights",
+    "matrix_release_direct_publication_guard_ready",
+    "matrix_release_direct_publication_guard_source_ready",
+    "matrix_release_direct_publication_guard_count_ready",
+    "matrix_release_direct_publication_guard_check_passed",
+    "matrix_release_direct_publication_guard_lights",
+    "matrix_default_promotion_release_direct_publication_guard_ready",
+    "matrix_default_promotion_release_direct_publication_guard_lights",
+    "default_promotion_release_direct_publication_guard_ready",
+    "default_promotion_release_direct_publication_guard_lights",
+)
+
 _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_CHECK_FIELDS = (
     "matrix_resident_winsorized_sweep_audit_passed",
     "matrix_resident_winsorized_required_frame_passed",
@@ -4438,6 +4780,75 @@ def _publish_preflight_direct_runtime_statuses_passed(
             statuses.get(
                 "default_promotion_direct_runtime_pipeline_resident_lights"
             )
+        )
+        >= 200
+    )
+
+
+def _publish_preflight_release_direct_publication_guard_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_RELEASE_DIRECT_PUBLICATION_GUARD_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_release_direct_publication_guard_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_RELEASE_DIRECT_PUBLICATION_GUARD_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_release_direct_publication_guard_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_release_direct_publication_guard_statuses(payload)
+    return (
+        bool(statuses)
+        and statuses.get("github_plan_matrix_release_direct_publication_guard_ready")
+        is True
+        and _int_or_zero(
+            statuses.get("github_plan_matrix_release_direct_publication_guard_lights")
+        )
+        >= 200
+        and statuses.get(
+            "github_plan_matrix_default_promotion_release_direct_publication_guard_ready"
+        )
+        is True
+        and _int_or_zero(
+            statuses.get(
+                "github_plan_matrix_default_promotion_release_direct_publication_guard_lights"
+            )
+        )
+        >= 200
+        and statuses.get("matrix_release_direct_publication_guard_ready") is True
+        and statuses.get("matrix_release_direct_publication_guard_source_ready")
+        is True
+        and statuses.get("matrix_release_direct_publication_guard_count_ready") is True
+        and statuses.get("matrix_release_direct_publication_guard_check_passed")
+        is True
+        and _int_or_zero(
+            statuses.get("matrix_release_direct_publication_guard_lights")
+        )
+        >= 200
+        and statuses.get(
+            "matrix_default_promotion_release_direct_publication_guard_ready"
+        )
+        is True
+        and _int_or_zero(
+            statuses.get(
+                "matrix_default_promotion_release_direct_publication_guard_lights"
+            )
+        )
+        >= 200
+        and statuses.get("default_promotion_release_direct_publication_guard_ready")
+        is True
+        and _int_or_zero(
+            statuses.get("default_promotion_release_direct_publication_guard_lights")
         )
         >= 200
     )
@@ -5101,6 +5512,54 @@ def build_phase2_status_compare(
             or _publish_preflight_direct_runtime_statuses_passed(candidate),
             baseline=_publish_preflight_direct_runtime_statuses(baseline),
             candidate=_publish_preflight_direct_runtime_statuses(candidate),
+        ),
+        _compare_check(
+            "windows_publish_preflight_release_direct_publication_guard_preserved",
+            not _publish_preflight_release_direct_publication_guard_checks_passed(
+                baseline
+            )
+            or _publish_preflight_release_direct_publication_guard_checks_passed(
+                candidate
+            ),
+            baseline={
+                "checks_passed": (
+                    _publish_preflight_release_direct_publication_guard_checks_passed(
+                        baseline
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_direct_publication_guard_statuses(
+                        baseline
+                    )
+                ),
+            },
+            candidate={
+                "checks_passed": (
+                    _publish_preflight_release_direct_publication_guard_checks_passed(
+                        candidate
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_direct_publication_guard_statuses(
+                        candidate
+                    )
+                ),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_release_direct_publication_guard_status_preserved",
+            not _publish_preflight_release_direct_publication_guard_statuses_passed(
+                baseline
+            )
+            or _publish_preflight_release_direct_publication_guard_statuses_passed(
+                candidate
+            ),
+            baseline=_publish_preflight_release_direct_publication_guard_statuses(
+                baseline
+            ),
+            candidate=_publish_preflight_release_direct_publication_guard_statuses(
+                candidate
+            ),
         ),
         _compare_check(
             "windows_publish_preflight_resident_winsorized_sweep_preserved",
