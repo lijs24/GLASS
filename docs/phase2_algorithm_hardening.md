@@ -5022,6 +5022,29 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 295: Default Promotion StackEngine Runtime Default Guard
+
+- Carry the S2-Gate 294 Phase 2 runtime-default handoff into
+  `glass default-promotion-manifest`.
+- Require default-promotion readiness to preserve both acceptance-side and
+  direct pipeline-contract `stack_engine_runtime_default_path` evidence before
+  a resident CUDA default promotion can remain green.
+- Block stale Phase 2 status artifacts that still report green status but do
+  not contain Gate294 runtime-default summaries and checks.
+- Block acceptance-side legacy master drift, pipeline-side failed integration
+  runtime-default rows, missing runtime-default checks, and failed Phase 2
+  runtime-default handoff checks.
+- Surface acceptance and pipeline runtime-default status, check state, master
+  counts, legacy master counts, failed master/output counts, explicit CUDA
+  fast-path counts, and failed row details in default-promotion JSON and
+  Markdown.
+- Add focused default-promotion tests for ready evidence, missing stale
+  runtime-default evidence, acceptance-side legacy-master drift,
+  pipeline-side runtime-default drift, and CLI Markdown output.
+- Keep this gate default-promotion scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

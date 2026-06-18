@@ -1,0 +1,24 @@
+{
+  "artifact_type": "release_promotion_decision",
+  "default_change_ready": true,
+  "passed": true,
+  "recommendation": "promote_default_candidate",
+  "release_candidate_ready": true,
+  "runtime_repeat": {
+    "best_elapsed_s": 22.6,
+    "best_label": "repeat02",
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.053,
+    "max_elapsed_ratio_vs_best": 1.25,
+    "present": true,
+    "recommendation": "best_observed:repeat02",
+    "run_count": 3,
+    "slowest_elapsed_s": 23.8
+  },
+  "schema_version": 1,
+  "speedup": {
+    "actual": 58.1,
+    "required_min": 2.0
+  },
+  "status": "default_change_ready"
+}

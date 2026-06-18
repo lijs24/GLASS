@@ -134,6 +134,11 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         if isinstance(pipeline.get("integration_engine_policy"), dict)
         else {}
     )
+    runtime_default = (
+        pipeline.get("stack_engine_runtime_default")
+        if isinstance(pipeline.get("stack_engine_runtime_default"), dict)
+        else {}
+    )
     return {
         "present": bool(pipeline),
         "status": pipeline.get("status"),
@@ -183,6 +188,38 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         "integration_engine_policy_failed_count": pipeline.get(
             "integration_engine_policy_failed_count",
             engine_policy.get("failed_count"),
+        ),
+        "stack_engine_runtime_default": runtime_default,
+        "stack_engine_runtime_default_status": pipeline.get(
+            "stack_engine_runtime_default_status",
+            runtime_default.get("status"),
+        ),
+        "stack_engine_runtime_default_check_present": pipeline.get(
+            "stack_engine_runtime_default_check_present",
+            runtime_default.get("check_present"),
+        ),
+        "stack_engine_runtime_default_check_passed": pipeline.get(
+            "stack_engine_runtime_default_check_passed",
+            runtime_default.get("check_passed"),
+        ),
+        "stack_engine_runtime_default_master_count": runtime_default.get(
+            "master_count"
+        ),
+        "stack_engine_runtime_default_legacy_master_count": pipeline.get(
+            "stack_engine_runtime_default_legacy_master_count",
+            runtime_default.get("legacy_master_count"),
+        ),
+        "stack_engine_runtime_default_failed_master_count": pipeline.get(
+            "stack_engine_runtime_default_failed_master_count",
+            runtime_default.get("failed_master_count"),
+        ),
+        "stack_engine_runtime_default_failed_output_count": pipeline.get(
+            "stack_engine_runtime_default_failed_output_count",
+            runtime_default.get("failed_output_count"),
+        ),
+        "stack_engine_runtime_default_explicit_cuda_fast_path_count": pipeline.get(
+            "stack_engine_runtime_default_explicit_cuda_fast_path_count",
+            runtime_default.get("explicit_cuda_fast_path_count"),
         ),
         "rejection_sample_accounting": pipeline.get("rejection_sample_accounting")
         if isinstance(pipeline.get("rejection_sample_accounting"), dict)
@@ -533,6 +570,149 @@ def _integration_engine_policy_summary(
     }
 
 
+def _stack_engine_runtime_default_summary(
+    phase2: dict[str, Any],
+    pipeline: dict[str, Any],
+) -> dict[str, Any]:
+    acceptance = (
+        phase2.get("acceptance_audit")
+        if isinstance(phase2.get("acceptance_audit"), dict)
+        else {}
+    )
+    acceptance_runtime = (
+        acceptance.get("pipeline_stack_engine_runtime_default")
+        if isinstance(acceptance.get("pipeline_stack_engine_runtime_default"), dict)
+        else {}
+    )
+    pipeline_runtime = (
+        pipeline.get("stack_engine_runtime_default")
+        if isinstance(pipeline.get("stack_engine_runtime_default"), dict)
+        else {}
+    )
+    acceptance_status = acceptance.get(
+        "pipeline_stack_engine_runtime_default_status",
+        acceptance_runtime.get("status"),
+    )
+    acceptance_check_present = acceptance.get(
+        "pipeline_stack_engine_runtime_default_check_present",
+        acceptance_runtime.get("check_present"),
+    )
+    acceptance_check_passed = acceptance.get(
+        "pipeline_stack_engine_runtime_default_check_passed",
+        acceptance_runtime.get("check_passed"),
+    )
+    acceptance_phase2_check = _phase2_check_passed(
+        phase2,
+        "acceptance_pipeline_stack_engine_runtime_default_passed",
+    )
+    pipeline_status = pipeline.get(
+        "stack_engine_runtime_default_status",
+        pipeline_runtime.get("status"),
+    )
+    pipeline_check_present = pipeline.get(
+        "stack_engine_runtime_default_check_present",
+        pipeline_runtime.get("check_present"),
+    )
+    pipeline_check_passed = pipeline.get(
+        "stack_engine_runtime_default_check_passed",
+        pipeline_runtime.get("check_passed"),
+    )
+    pipeline_phase2_check = _phase2_check_passed(
+        phase2,
+        "pipeline_stack_engine_runtime_default_passed",
+    )
+    acceptance_legacy_master_count = _int_value(
+        acceptance.get(
+            "pipeline_stack_engine_runtime_default_legacy_master_count",
+            acceptance_runtime.get("legacy_master_count"),
+        )
+    )
+    acceptance_failed_master_count = _int_value(
+        acceptance.get(
+            "pipeline_stack_engine_runtime_default_failed_master_count",
+            acceptance_runtime.get("failed_master_count"),
+        )
+    )
+    acceptance_failed_output_count = _int_value(
+        acceptance.get(
+            "pipeline_stack_engine_runtime_default_failed_output_count",
+            acceptance_runtime.get("failed_output_count"),
+        )
+    )
+    pipeline_legacy_master_count = _int_value(
+        pipeline.get(
+            "stack_engine_runtime_default_legacy_master_count",
+            pipeline_runtime.get("legacy_master_count"),
+        )
+    )
+    pipeline_failed_master_count = _int_value(
+        pipeline.get(
+            "stack_engine_runtime_default_failed_master_count",
+            pipeline_runtime.get("failed_master_count"),
+        )
+    )
+    pipeline_failed_output_count = _int_value(
+        pipeline.get(
+            "stack_engine_runtime_default_failed_output_count",
+            pipeline_runtime.get("failed_output_count"),
+        )
+    )
+    ready = (
+        acceptance_status == "passed"
+        and acceptance_check_present is True
+        and acceptance_check_passed is True
+        and acceptance_phase2_check is True
+        and acceptance_legacy_master_count == 0
+        and acceptance_failed_master_count == 0
+        and acceptance_failed_output_count == 0
+        and pipeline_status == "passed"
+        and pipeline_check_present is True
+        and pipeline_check_passed is True
+        and pipeline_phase2_check is True
+        and pipeline_legacy_master_count == 0
+        and pipeline_failed_master_count == 0
+        and pipeline_failed_output_count == 0
+    )
+    return {
+        "present": bool(acceptance_runtime or pipeline_runtime),
+        "ready": ready,
+        "acceptance_status": acceptance_status,
+        "acceptance_check_present": acceptance_check_present,
+        "acceptance_check_passed": acceptance_check_passed,
+        "acceptance_phase2_check_passed": acceptance_phase2_check,
+        "acceptance_master_count": acceptance.get(
+            "pipeline_stack_engine_runtime_default_master_count",
+            acceptance_runtime.get("master_count"),
+        ),
+        "acceptance_legacy_master_count": acceptance_legacy_master_count,
+        "acceptance_failed_master_count": acceptance_failed_master_count,
+        "acceptance_failed_output_count": acceptance_failed_output_count,
+        "acceptance_explicit_cuda_fast_path_count": acceptance.get(
+            "pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count",
+            acceptance_runtime.get("explicit_cuda_fast_path_count"),
+        ),
+        "acceptance_failed_masters": acceptance_runtime.get("failed_masters") or [],
+        "acceptance_failed_outputs": acceptance_runtime.get("failed_outputs") or [],
+        "pipeline_status": pipeline_status,
+        "pipeline_check_present": pipeline_check_present,
+        "pipeline_check_passed": pipeline_check_passed,
+        "pipeline_phase2_check_passed": pipeline_phase2_check,
+        "pipeline_master_count": pipeline.get(
+            "stack_engine_runtime_default_master_count",
+            pipeline_runtime.get("master_count"),
+        ),
+        "pipeline_legacy_master_count": pipeline_legacy_master_count,
+        "pipeline_failed_master_count": pipeline_failed_master_count,
+        "pipeline_failed_output_count": pipeline_failed_output_count,
+        "pipeline_explicit_cuda_fast_path_count": pipeline.get(
+            "stack_engine_runtime_default_explicit_cuda_fast_path_count",
+            pipeline_runtime.get("explicit_cuda_fast_path_count"),
+        ),
+        "pipeline_failed_masters": pipeline_runtime.get("failed_masters") or [],
+        "pipeline_failed_outputs": pipeline_runtime.get("failed_outputs") or [],
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -559,6 +739,10 @@ def build_default_promotion_manifest(
     resident_winsorized_sweep = _resident_winsorized_sweep_summary(phase2)
     publication_audit = _publication_audit_summary(phase2)
     integration_engine_policy = _integration_engine_policy_summary(phase2, pipeline)
+    stack_engine_runtime_default = _stack_engine_runtime_default_summary(
+        phase2,
+        pipeline,
+    )
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
         phase2.get("release_decision") if isinstance(phase2.get("release_decision"), dict) else {}
@@ -794,6 +978,97 @@ def build_default_promotion_manifest(
                 ),
                 "failed_items": integration_engine_policy.get(
                     "pipeline_failed_items"
+                ),
+            },
+        ),
+        _check(
+            "acceptance_stack_engine_runtime_default_handoff_passed",
+            stack_engine_runtime_default.get("acceptance_status") == "passed"
+            and stack_engine_runtime_default.get("acceptance_check_present") is True
+            and stack_engine_runtime_default.get("acceptance_check_passed") is True
+            and stack_engine_runtime_default.get("acceptance_phase2_check_passed")
+            is True
+            and stack_engine_runtime_default.get("acceptance_legacy_master_count")
+            == 0
+            and stack_engine_runtime_default.get("acceptance_failed_master_count")
+            == 0
+            and stack_engine_runtime_default.get("acceptance_failed_output_count")
+            == 0,
+            {
+                "status": stack_engine_runtime_default.get("acceptance_status"),
+                "check_present": stack_engine_runtime_default.get(
+                    "acceptance_check_present"
+                ),
+                "check_passed": stack_engine_runtime_default.get(
+                    "acceptance_check_passed"
+                ),
+                "phase2_check_passed": stack_engine_runtime_default.get(
+                    "acceptance_phase2_check_passed"
+                ),
+                "master_count": stack_engine_runtime_default.get(
+                    "acceptance_master_count"
+                ),
+                "legacy_master_count": stack_engine_runtime_default.get(
+                    "acceptance_legacy_master_count"
+                ),
+                "failed_master_count": stack_engine_runtime_default.get(
+                    "acceptance_failed_master_count"
+                ),
+                "failed_output_count": stack_engine_runtime_default.get(
+                    "acceptance_failed_output_count"
+                ),
+                "explicit_cuda_fast_path_count": stack_engine_runtime_default.get(
+                    "acceptance_explicit_cuda_fast_path_count"
+                ),
+                "failed_masters": stack_engine_runtime_default.get(
+                    "acceptance_failed_masters"
+                ),
+                "failed_outputs": stack_engine_runtime_default.get(
+                    "acceptance_failed_outputs"
+                ),
+            },
+        ),
+        _check(
+            "pipeline_stack_engine_runtime_default_handoff_passed",
+            stack_engine_runtime_default.get("pipeline_status") == "passed"
+            and stack_engine_runtime_default.get("pipeline_check_present") is True
+            and stack_engine_runtime_default.get("pipeline_check_passed") is True
+            and stack_engine_runtime_default.get("pipeline_phase2_check_passed")
+            is True
+            and stack_engine_runtime_default.get("pipeline_legacy_master_count") == 0
+            and stack_engine_runtime_default.get("pipeline_failed_master_count") == 0
+            and stack_engine_runtime_default.get("pipeline_failed_output_count") == 0,
+            {
+                "status": stack_engine_runtime_default.get("pipeline_status"),
+                "check_present": stack_engine_runtime_default.get(
+                    "pipeline_check_present"
+                ),
+                "check_passed": stack_engine_runtime_default.get(
+                    "pipeline_check_passed"
+                ),
+                "phase2_check_passed": stack_engine_runtime_default.get(
+                    "pipeline_phase2_check_passed"
+                ),
+                "master_count": stack_engine_runtime_default.get(
+                    "pipeline_master_count"
+                ),
+                "legacy_master_count": stack_engine_runtime_default.get(
+                    "pipeline_legacy_master_count"
+                ),
+                "failed_master_count": stack_engine_runtime_default.get(
+                    "pipeline_failed_master_count"
+                ),
+                "failed_output_count": stack_engine_runtime_default.get(
+                    "pipeline_failed_output_count"
+                ),
+                "explicit_cuda_fast_path_count": stack_engine_runtime_default.get(
+                    "pipeline_explicit_cuda_fast_path_count"
+                ),
+                "failed_masters": stack_engine_runtime_default.get(
+                    "pipeline_failed_masters"
+                ),
+                "failed_outputs": stack_engine_runtime_default.get(
+                    "pipeline_failed_outputs"
                 ),
             },
         ),
@@ -1054,6 +1329,7 @@ def build_default_promotion_manifest(
         "default_route_acceptance": default_route,
         "pipeline_contract": pipeline,
         "integration_engine_policy": integration_engine_policy,
+        "stack_engine_runtime_default": stack_engine_runtime_default,
         "stack_engine_contract": stack_engine,
         "resident_winsorized_sweep_audit": resident_winsorized_sweep,
         "stack_engine_publication_audit": publication_audit,
@@ -1074,6 +1350,7 @@ def _markdown(payload: dict[str, Any]) -> str:
     default_route = payload.get("default_route_acceptance") or {}
     pipeline = payload.get("pipeline_contract") or {}
     integration_engine_policy = payload.get("integration_engine_policy") or {}
+    stack_engine_runtime_default = payload.get("stack_engine_runtime_default") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
     resident_winsorized_sweep = payload.get("resident_winsorized_sweep_audit") or {}
     publication_audit = payload.get("stack_engine_publication_audit") or {}
@@ -1113,6 +1390,30 @@ def _markdown(payload: dict[str, Any]) -> str:
         (
             "- Integration engine policy ready: "
             f"`{integration_engine_policy.get('ready')}`"
+        ),
+        (
+            "- Acceptance StackEngine runtime default: "
+            f"`{stack_engine_runtime_default.get('acceptance_status')}` "
+            f"check=`{stack_engine_runtime_default.get('acceptance_check_passed')}` "
+            f"legacy=`{stack_engine_runtime_default.get('acceptance_legacy_master_count')}` "
+            "failed-masters="
+            f"`{stack_engine_runtime_default.get('acceptance_failed_master_count')}` "
+            "failed-outputs="
+            f"`{stack_engine_runtime_default.get('acceptance_failed_output_count')}`"
+        ),
+        (
+            "- Pipeline StackEngine runtime default: "
+            f"`{stack_engine_runtime_default.get('pipeline_status')}` "
+            f"check=`{stack_engine_runtime_default.get('pipeline_check_passed')}` "
+            f"legacy=`{stack_engine_runtime_default.get('pipeline_legacy_master_count')}` "
+            "failed-masters="
+            f"`{stack_engine_runtime_default.get('pipeline_failed_master_count')}` "
+            "failed-outputs="
+            f"`{stack_engine_runtime_default.get('pipeline_failed_output_count')}`"
+        ),
+        (
+            "- StackEngine runtime default ready: "
+            f"`{stack_engine_runtime_default.get('ready')}`"
         ),
         "",
         "## StackEngine Default Contract",
