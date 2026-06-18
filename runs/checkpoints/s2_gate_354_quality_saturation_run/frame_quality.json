@@ -1,0 +1,140 @@
+{
+  "frame_quality": [
+    {
+      "background_mad": 1.2797553044048251e-34,
+      "background_mean": 93.60316948474448,
+      "background_median": 1.2797553044048251e-34,
+      "background_rms": 934.2728037573411,
+      "eccentricity": 0.0,
+      "filter": null,
+      "frame_id": "bad",
+      "fwhm_px": 3.276134967803955,
+      "median_method": "median_scratch_memmap",
+      "metric_source": "streaming_tile_reader",
+      "noise_mad": 1.8973652143105937e-34,
+      "pixel_count": 4096,
+      "quality_gate_adaptive_min_stars": true,
+      "quality_gate_min_stars_configured": 2,
+      "quality_gate_min_stars_effective": 2,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "saturation_fraction 0.00878906 exceeds max_saturation_fraction=0.005"
+      ],
+      "quality_score": 2029493.4341579978,
+      "reference_candidate": false,
+      "saturated_pixel_count": 36,
+      "saturation_fraction": 0.0087890625,
+      "saturation_level": 5000.0,
+      "saturation_source": "threshold",
+      "snr": 12289708032.0,
+      "star_count": 3,
+      "star_detector": "robust_local_maximum_moments_v1",
+      "star_metrics": {
+        "eccentricity_median": 0.0,
+        "fwhm_iqr_px": 0.3727428913116455,
+        "fwhm_median_px": 3.276134967803955,
+        "star_flux_median": 12289.7080078125,
+        "star_snr_median": 12289708032.0
+      },
+      "tile_count": 16,
+      "tile_size": 16,
+      "warnings": [],
+      "weight": 2029493.4341579978,
+      "weight_components": {
+        "eccentricity_penalty": 1.0,
+        "fwhm_penalty": 0.09317007167652408,
+        "noise_penalty": 0.0010703511822010932,
+        "saturation_penalty": 0.9560546875,
+        "sqrt_star_count": 1.7320508075688772,
+        "star_snr": 12289708032.0
+      },
+      "weight_source": "combined_psf_snr_v1"
+    },
+    {
+      "background_mad": 3.574208524890543e-35,
+      "background_mean": 5.712544484744487,
+      "background_median": 3.574208524890543e-35,
+      "background_rms": 51.84922384860603,
+      "eccentricity": 0.0,
+      "filter": null,
+      "frame_id": "good",
+      "fwhm_px": 3.276134967803955,
+      "median_method": "median_scratch_memmap",
+      "metric_source": "streaming_tile_reader",
+      "noise_mad": 5.299121559002719e-35,
+      "pixel_count": 4096,
+      "quality_gate_adaptive_min_stars": true,
+      "quality_gate_min_stars_configured": 2,
+      "quality_gate_min_stars_effective": 2,
+      "quality_gate_status": "accepted",
+      "quality_gate_warnings": [],
+      "quality_score": 29669779.2882831,
+      "reference_candidate": true,
+      "saturated_pixel_count": 0,
+      "saturation_fraction": 0.0,
+      "saturation_level": 5000.0,
+      "saturation_source": "threshold",
+      "snr": 11675222016.0,
+      "star_count": 2,
+      "star_detector": "robust_local_maximum_moments_v1",
+      "star_metrics": {
+        "eccentricity_median": 0.0,
+        "fwhm_iqr_px": 0.0,
+        "fwhm_median_px": 3.276134967803955,
+        "star_flux_median": 11675.22265625,
+        "star_snr_median": 11675222016.0
+      },
+      "tile_count": 16,
+      "tile_size": 16,
+      "warnings": [],
+      "weight": 29669779.2882831,
+      "weight_components": {
+        "eccentricity_penalty": 1.0,
+        "fwhm_penalty": 0.09317007167652408,
+        "noise_penalty": 0.019286691791566425,
+        "saturation_penalty": 1.0,
+        "sqrt_star_count": 1.4142135623730951,
+        "star_snr": 11675222016.0
+      },
+      "weight_source": "combined_psf_snr_v1"
+    }
+  ],
+  "metric_source": "streaming_tile_reader",
+  "quality_gate_policy": {
+    "adaptive_min_stars_enabled": true,
+    "adaptive_min_stars_reference_side_px": 64.0,
+    "max_saturation_fraction": 0.005,
+    "min_quality_score": 0.0,
+    "min_stars": 2,
+    "require_fwhm": true,
+    "saturation_level": 5000.0
+  },
+  "quality_gate_summary": {
+    "accepted_count": 1,
+    "effective_min_stars": [
+      2
+    ],
+    "fallback_used": false,
+    "policy": {
+      "adaptive_min_stars_enabled": true,
+      "adaptive_min_stars_reference_side_px": 64.0,
+      "max_saturation_fraction": 0.005,
+      "min_quality_score": 0.0,
+      "min_stars": 2,
+      "require_fwhm": true,
+      "saturation_level": 5000.0
+    },
+    "reference_candidate_count": 1,
+    "rejected_count": 1,
+    "rejection_reason_counts": {
+      "saturation_fraction": 1
+    }
+  },
+  "reference_frame_id": "good",
+  "reference_selection": "quality_gate accepted frames, then max star_count, max combined quality, min FWHM/eccentricity/background_rms",
+  "reference_selection_fallback": false,
+  "schema_version": 1,
+  "star_detector": "robust_local_maximum_moments_v1",
+  "tile_size": 16,
+  "weight_source": "combined_psf_snr_v1"
+}

@@ -22,6 +22,7 @@ class _QualityScan:
     mad: float
     noise_mad: float
     pixel_count: int
+    saturated_pixel_count: int
     tile_count: int
     median_method: str
 
@@ -41,6 +42,10 @@ def _quality_gate_policy(run: Path) -> dict[str, Any]:
                 "quality_max_saturation_fraction",
                 registration_policy.get("max_saturation_fraction", 0.02),
             )
+        ),
+        "saturation_level": registration_policy.get(
+            "quality_saturation_level",
+            registration_policy.get("saturation_level"),
         ),
         "min_quality_score": float(registration_policy.get("quality_min_score") or 0.0),
         "require_fwhm": bool(registration_policy.get("quality_require_fwhm", True)),
@@ -118,7 +123,12 @@ def _quality_gate_summary(qualities: list[dict[str, Any]], policy: dict[str, Any
     }
 
 
-def _scan_quality_stats(path: str | Path, tile_size: int, scratch_path: Path) -> _QualityScan:
+def _scan_quality_stats(
+    path: str | Path,
+    tile_size: int,
+    scratch_path: Path,
+    saturation_level: float | None = None,
+) -> _QualityScan:
     import gc
 
     scratch_path.parent.mkdir(parents=True, exist_ok=True)
@@ -136,11 +146,14 @@ def _scan_quality_stats(path: str | Path, tile_size: int, scratch_path: Path) ->
             tile_count = 0
             total = 0.0
             total_sq = 0.0
+            saturated_pixel_count = 0
             for tile in iter_tiles(width=reader.width, height=reader.height, tile_size=tile_size):
                 values = reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1).ravel()
                 finite = values[np.isfinite(values)]
                 n = int(finite.size)
                 if n:
+                    if saturation_level is not None:
+                        saturated_pixel_count += int(np.count_nonzero(finite >= float(saturation_level)))
                     scratch[count : count + n] = finite
                     count += n
                     finite64 = finite.astype(np.float64, copy=False)
@@ -174,6 +187,7 @@ def _scan_quality_stats(path: str | Path, tile_size: int, scratch_path: Path) ->
             mad=mad,
             noise_mad=noise_mad,
             pixel_count=count,
+            saturated_pixel_count=saturated_pixel_count,
             tile_count=tile_count,
             median_method="median_scratch_memmap",
         )
@@ -254,15 +268,24 @@ def measure_quality_streaming(
     tile_size: int = 512,
     scratch_dir: str | Path | None = None,
     saturated_pixels: int = 0,
+    saturation_level: float | None = None,
 ) -> dict[str, Any]:
     scratch_root = Path(scratch_dir) if scratch_dir is not None else Path(path).parent
     scratch_root.mkdir(parents=True, exist_ok=True)
     scratch_path = scratch_root / f".quality_{frame_id}.median_scratch.bin"
-    stats = _scan_quality_stats(path, tile_size, scratch_path)
+    stats = _scan_quality_stats(path, tile_size, scratch_path, saturation_level=saturation_level)
     stars = _detect_stars_streaming(path, stats.median, stats.noise_mad or stats.rms, tile_size)
     star_metrics = summarize_stars(stars)
     snr = float(star_metrics["star_snr_median"] or 0.0)
-    saturation_fraction = 0.0 if stats.pixel_count == 0 else float(max(saturated_pixels, 0) / stats.pixel_count)
+    dq_saturated_pixels = max(int(saturated_pixels), 0)
+    saturated_pixel_count = max(dq_saturated_pixels, int(stats.saturated_pixel_count))
+    if saturation_level is not None and int(stats.saturated_pixel_count) >= dq_saturated_pixels:
+        saturation_source = "threshold"
+    elif dq_saturated_pixels > 0:
+        saturation_source = "dq_summary"
+    else:
+        saturation_source = "none"
+    saturation_fraction = 0.0 if stats.pixel_count == 0 else float(saturated_pixel_count / stats.pixel_count)
     weight, components = combined_quality_weight(
         star_count=len(stars),
         star_snr=snr,
@@ -298,6 +321,9 @@ def measure_quality_streaming(
             "tile_size": tile_size,
             "tile_count": stats.tile_count,
             "pixel_count": stats.pixel_count,
+            "saturated_pixel_count": saturated_pixel_count,
+            "saturation_level": saturation_level,
+            "saturation_source": saturation_source,
             "median_method": stats.median_method,
             "star_detector": "robust_local_maximum_moments_v1",
         }
@@ -325,6 +351,7 @@ def measure_calibrated_quality(
                 tile_size=tile_size,
                 scratch_dir=scratch_dir,
                 saturated_pixels=int(dq_summary.get("saturated") or 0),
+                saturation_level=gate_policy.get("saturation_level"),
             ),
             gate_policy,
         )

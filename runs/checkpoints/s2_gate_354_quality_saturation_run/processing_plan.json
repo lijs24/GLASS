@@ -1,0 +1,7 @@
+{
+  "registration_policy": {
+    "min_stars": 2,
+    "quality_max_saturation_fraction": 0.005,
+    "quality_saturation_level": 5000.0
+  }
+}

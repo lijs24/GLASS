@@ -1,0 +1,14 @@
+{
+  "calibrated_lights": [
+    {
+      "dq_summary": {},
+      "frame_id": "bad",
+      "path": "runs\\checkpoints\\s2_gate_354_quality_saturation_run\\bad_threshold.fits"
+    },
+    {
+      "dq_summary": {},
+      "frame_id": "good",
+      "path": "runs\\checkpoints\\s2_gate_354_quality_saturation_run\\good_threshold.fits"
+    }
+  ]
+}

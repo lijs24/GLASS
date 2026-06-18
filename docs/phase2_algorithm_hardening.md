@@ -6290,6 +6290,27 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 354: Streaming Saturation Quality Metric
+
+- Extend streaming quality measurement with optional tile-scanned saturation
+  counting via `quality_saturation_level` / `saturation_level`.
+- Keep the metric out-of-core: saturation counting happens while
+  `_scan_quality_stats()` already streams tiles for robust background
+  statistics.
+- Preserve existing DQ-driven saturation accounting and combine DQ/threshold
+  counts conservatively by using the larger count.
+- Record `saturated_pixel_count`, `saturation_level`, and `saturation_source`
+  in each frame-quality row.
+- Wire `registration_policy.quality_saturation_level` into
+  `measure_calibrated_quality()` so quality gates can reject saturated frames
+  even when no upstream DQ saturated count is present.
+- Add focused tests for direct streaming threshold counting and calibrated
+  quality-gate rejection by saturation threshold.
+- Keep this gate quality-metric scoped: no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

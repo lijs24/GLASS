@@ -88,6 +88,28 @@ def test_streaming_quality_uses_saturation_fraction(tmp_path: Path):
     assert streaming["weight_components"]["saturation_penalty"] < 1.0
 
 
+def test_streaming_quality_counts_saturation_threshold_by_tile(tmp_path: Path):
+    image = np.zeros((16, 16), dtype=np.float32)
+    image[2:4, 3:7] = 250.0
+    path = tmp_path / "quality_threshold_sat.fits"
+    write_fits_data(path, image)
+
+    streaming = measure_quality_streaming(
+        "F1",
+        "H",
+        path,
+        tile_size=5,
+        scratch_dir=tmp_path,
+        saturation_level=200.0,
+    )
+
+    assert streaming["saturated_pixel_count"] == 8
+    assert streaming["saturation_fraction"] == 8 / 256
+    assert streaming["saturation_level"] == 200.0
+    assert streaming["saturation_source"] == "threshold"
+    assert streaming["weight_components"]["saturation_penalty"] < 1.0
+
+
 def test_calibrated_quality_gate_excludes_saturated_reference(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
@@ -126,6 +148,50 @@ def test_calibrated_quality_gate_excludes_saturated_reference(tmp_path: Path):
     assert by_id["bad"]["quality_gate_status"] == "rejected"
     assert by_id["bad"]["reference_candidate"] is False
     assert any("saturation_fraction" in warning for warning in by_id["bad"]["quality_gate_warnings"])
+
+
+def test_calibrated_quality_gate_uses_saturation_threshold_policy(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    stars = np.array([[18.0, 18.0, 1000.0], [42.0, 38.0, 900.0]], dtype=np.float32)
+    good = render_star_field(64, 64, stars)
+    bad = good.copy()
+    bad[2:8, 2:8] = 10000.0
+    bad_path = run / "bad_threshold.fits"
+    good_path = run / "good_threshold.fits"
+    write_fits_data(bad_path, bad)
+    write_fits_data(good_path, good)
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "calibrated_lights": [
+                {"frame_id": "bad", "path": str(bad_path), "dq_summary": {}},
+                {"frame_id": "good", "path": str(good_path), "dq_summary": {}},
+            ]
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {
+            "registration_policy": {
+                "min_stars": 2,
+                "quality_saturation_level": 5000.0,
+                "quality_max_saturation_fraction": 0.005,
+            }
+        },
+    )
+
+    result = measure_calibrated_quality(run, tile_size=16)
+    by_id = {item["frame_id"]: item for item in result["frame_quality"]}
+
+    assert by_id["bad"]["saturated_pixel_count"] == 36
+    assert by_id["bad"]["saturation_source"] == "threshold"
+    assert by_id["bad"]["saturation_fraction"] == 36 / 4096
+    assert by_id["bad"]["quality_gate_status"] == "rejected"
+    assert any("saturation_fraction" in warning for warning in by_id["bad"]["quality_gate_warnings"])
+    assert by_id["good"]["saturated_pixel_count"] == 0
+    assert by_id["good"]["quality_gate_status"] == "accepted"
+    assert result["reference_frame_id"] == "good"
 
 
 def test_calibrated_quality_gate_scales_min_stars_for_tiny_synthetic_frames(tmp_path: Path):
