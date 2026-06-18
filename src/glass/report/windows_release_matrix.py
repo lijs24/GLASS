@@ -200,6 +200,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         )
         else {}
     )
+    quality_metrics_compare = (
+        payload.get("quality_metrics_compare")
+        if isinstance(payload.get("quality_metrics_compare"), dict)
+        else {}
+    )
     resident_fastpath_handoff = (
         payload.get("resident_registration_fastpath_release_handoff")
         if isinstance(
@@ -224,6 +229,26 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "default_route_route_contract_passed": default_route.get("route_contract_passed"),
         "default_route_route_check_count": default_route.get("route_check_count"),
         "default_route_speedup_vs_reference": default_route.get("speedup_vs_reference"),
+        "quality_metrics_compare": quality_metrics_compare,
+        "quality_metrics_compare_present": quality_metrics_compare.get("present"),
+        "quality_metrics_compare_ready": quality_metrics_compare.get("ready"),
+        "quality_metrics_compare_status": quality_metrics_compare.get("status"),
+        "quality_metrics_compare_passed": quality_metrics_compare.get("passed"),
+        "quality_metrics_compare_phase2_check_passed": quality_metrics_compare.get(
+            "phase2_check_passed"
+        ),
+        "quality_metrics_compare_failed_check_count": _int_value(
+            quality_metrics_compare.get("failed_check_count")
+        ),
+        "quality_metrics_compare_failed_checks": (
+            quality_metrics_compare.get("failed_checks") or []
+        ),
+        "quality_metrics_compare_threshold_failure_count": _int_value(
+            quality_metrics_compare.get("threshold_failure_count")
+        ),
+        "quality_metrics_compare_threshold_failures": (
+            quality_metrics_compare.get("threshold_failures") or []
+        ),
         "pipeline_contract_status": pipeline.get("status"),
         "pipeline_contract_passed": pipeline.get("passed"),
         "integration_rejection_sample_counts_match_maps": pipeline.get(
@@ -811,6 +836,37 @@ def build_windows_release_matrix(
                 ),
                 "route_check_count": default_promotion.get("default_route_route_check_count"),
             },
+        ),
+        _check(
+            "default_promotion_quality_metrics_compare_handoff_passed",
+            (
+                default_promotion.get("quality_metrics_compare_present") is not True
+                or default_promotion.get("quality_metrics_compare_ready") is True
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "present": default_promotion.get("quality_metrics_compare_present"),
+                "ready": default_promotion.get("quality_metrics_compare_ready"),
+                "status": default_promotion.get("quality_metrics_compare_status"),
+                "passed": default_promotion.get("quality_metrics_compare_passed"),
+                "phase2_check_passed": default_promotion.get(
+                    "quality_metrics_compare_phase2_check_passed"
+                ),
+                "failed_check_count": default_promotion.get(
+                    "quality_metrics_compare_failed_check_count"
+                ),
+                "failed_checks": default_promotion.get(
+                    "quality_metrics_compare_failed_checks"
+                ),
+                "threshold_failure_count": default_promotion.get(
+                    "quality_metrics_compare_threshold_failure_count"
+                ),
+                "threshold_failures": default_promotion.get(
+                    "quality_metrics_compare_threshold_failures"
+                ),
+            },
+            note="Required only when default-promotion supplies quality-metrics-compare evidence.",
         ),
         _check(
             "default_promotion_rejection_sample_accounting_passed",
@@ -1867,6 +1923,14 @@ def _markdown(payload: dict[str, Any]) -> str:
                 "- Rejection sample accounting: "
                 f"`{default_promotion.get('rejection_sample_accounting_status')}` "
                 f"failed=`{default_promotion.get('rejection_sample_accounting_failed_count')}`"
+            ),
+            (
+                "- Quality metrics compare: "
+                f"present=`{default_promotion.get('quality_metrics_compare_present')}` "
+                f"ready=`{default_promotion.get('quality_metrics_compare_ready')}` "
+                f"status=`{default_promotion.get('quality_metrics_compare_status')}` "
+                "failed-checks="
+                f"`{default_promotion.get('quality_metrics_compare_failed_checks')}`"
             ),
             (
                 "- Sample accounting closure: "

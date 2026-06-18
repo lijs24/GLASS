@@ -170,6 +170,8 @@ def _default_promotion(
     release_direct_publication_calibration_source: str = "resident_artifacts_json_fallback",
     release_direct_publication_resident_lights: int = 200,
     resident_fastpath_release_handoff_ready: bool = True,
+    include_quality_metrics_compare: bool = True,
+    quality_metrics_compare_ready: bool = True,
 ) -> None:
     acceptance_policy_chain_ready = (
         acceptance_integration_engine_policy_ready
@@ -221,6 +223,11 @@ def _default_promotion(
             resident_winsorized_sweep_ready
             and resident_winsorized_sweep_required_frame_ready
             if include_resident_winsorized_sweep
+            else True
+        )
+        and (
+            quality_metrics_compare_ready
+            if include_quality_metrics_compare
             else True
         )
     )
@@ -337,6 +344,27 @@ def _default_promotion(
                 else 1,
             },
             "resident_result_contract": resident_result_contract,
+        }
+    if include_quality_metrics_compare:
+        payload["quality_metrics_compare"] = {
+            "present": True,
+            "ready": quality_metrics_compare_ready,
+            "status": "passed" if quality_metrics_compare_ready else "failed",
+            "passed": quality_metrics_compare_ready,
+            "phase2_check_passed": quality_metrics_compare_ready,
+            "check_count": 3 if quality_metrics_compare_ready else 4,
+            "failed_check_count": 0 if quality_metrics_compare_ready else 1,
+            "failed_checks": []
+            if quality_metrics_compare_ready
+            else ["bad_median_ratio_within_limit"],
+            "baseline_metric_count": 7,
+            "candidate_metric_count": 7,
+            "metric_row_count": 7,
+            "threshold_failure_count": 0 if quality_metrics_compare_ready else 1,
+            "threshold_failures": []
+            if quality_metrics_compare_ready
+            else [{"metric": "fwhm_px", "bad_median_ratio": 1.4}],
+            "path": "runs/checkpoints/quality_metrics_compare.json",
         }
     if include_integration_engine_policy:
         acceptance_policy_status = (
@@ -716,6 +744,9 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["default_promotion_manifest_present"] is True
     assert checks["default_promotion_manifest_ready"] is True
     assert checks["default_promotion_default_route_passed"] is True
+    assert checks["default_promotion_quality_metrics_compare_handoff_passed"] is True
+    assert payload["default_promotion_manifest"]["quality_metrics_compare_present"] is True
+    assert payload["default_promotion_manifest"]["quality_metrics_compare_ready"] is True
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
     assert checks["default_promotion_sample_accounting_closure_passed"] is True
     assert checks["default_promotion_resident_result_contract_handoff_passed"] is True
@@ -949,6 +980,90 @@ def test_windows_release_matrix_blocks_rejection_sample_accounting_drift(tmp_pat
                 ],
             }
         ],
+    }
+
+
+def test_windows_release_matrix_blocks_failed_quality_metrics_compare(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, quality_metrics_compare_ready=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_present"]["passed"] is True
+    assert checks["default_promotion_manifest_ready"]["passed"] is False
+    assert (
+        checks["default_promotion_quality_metrics_compare_handoff_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert checks["default_promotion_quality_metrics_compare_handoff_passed"][
+        "evidence"
+    ] == {
+        "present": True,
+        "ready": False,
+        "status": "failed",
+        "passed": False,
+        "phase2_check_passed": False,
+        "failed_check_count": 1,
+        "failed_checks": ["bad_median_ratio_within_limit"],
+        "threshold_failure_count": 1,
+        "threshold_failures": [{"metric": "fwhm_px", "bad_median_ratio": 1.4}],
+    }
+
+
+def test_windows_release_matrix_allows_missing_quality_metrics_compare(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, include_quality_metrics_compare=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is True
+    assert (
+        "default_promotion_quality_metrics_compare_handoff_passed"
+        not in payload["failed_checks"]
+    )
+    assert checks["default_promotion_quality_metrics_compare_handoff_passed"][
+        "passed"
+    ] is True
+    assert checks["default_promotion_quality_metrics_compare_handoff_passed"][
+        "evidence"
+    ] == {
+        "present": None,
+        "ready": None,
+        "status": None,
+        "passed": None,
+        "phase2_check_passed": None,
+        "failed_check_count": None,
+        "failed_checks": [],
+        "threshold_failure_count": None,
+        "threshold_failures": [],
     }
 
 
@@ -1718,6 +1833,7 @@ def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     assert "Default Promotion Manifest" in markdown_text
     assert "Default route contract/checks: `True`/`4`" in markdown_text
     assert "Rejection sample accounting: `passed` failed=`0`" in markdown_text
+    assert "Quality metrics compare: present=`True` ready=`True`" in markdown_text
     assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text
     assert (
         "Integration engine policy: ready=`True` acceptance=`passed` pipeline=`passed`"

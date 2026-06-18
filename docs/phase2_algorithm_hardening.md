@@ -6446,6 +6446,23 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 362: Windows Release Matrix Quality Metric Compare Guard
+
+- Carry default-promotion `quality_metrics_compare` evidence into
+  `glass windows-release-matrix`.
+- Add `default_promotion_quality_metrics_compare_handoff_passed` so Windows
+  release readiness preserves a passing quality-regression compare handoff when
+  default-promotion supplies one.
+- Treat missing `quality_metrics_compare` as non-blocking for older
+  default-promotion artifacts; once present, the handoff must be ready.
+- Surface the quality compare handoff in the Windows release matrix Markdown.
+- Add focused matrix and CLI Markdown tests.
+- Keep this gate release-matrix guard scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
