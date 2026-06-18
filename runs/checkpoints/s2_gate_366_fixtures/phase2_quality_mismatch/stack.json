@@ -1,0 +1,11 @@
+{
+  "audit_type": "stack_engine_default_contract",
+  "default_promotion": {
+    "blocker_count": 0,
+    "ready": true,
+    "status": "ready"
+  },
+  "passed": true,
+  "scope": "all",
+  "status": "passed"
+}

@@ -6524,6 +6524,24 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 366: Release Promotion Decision Quality Metric Compare Guard
+
+- Carry StackEngine publication-audit quality-metrics-compare evidence into
+  `glass release-promotion-decision`.
+- Add `stack_engine_publication_quality_metrics_compare_passed` so final
+  release-candidate readiness blocks failed or mismatched publication-audit
+  quality compare handoffs.
+- Keep older StackEngine publication-audit artifacts without optional quality
+  compare layers/checks non-blocking; once the evidence appears, raw
+  publish-preflight and Phase2 layers must both be ready.
+- Surface the publication quality compare handoff in release-promotion Markdown.
+- Add focused ready, compatibility, failure, mismatch, and CLI Markdown tests.
+- Keep this gate release-decision scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

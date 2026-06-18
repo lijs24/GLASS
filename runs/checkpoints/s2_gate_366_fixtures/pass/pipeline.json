@@ -1,0 +1,110 @@
+{
+  "audit_type": "pipeline_invariant_contract",
+  "checks": [
+    {
+      "name": "integration_dq_contract",
+      "passed": true
+    },
+    {
+      "name": "integration_stack_result_contract",
+      "passed": true
+    },
+    {
+      "name": "integration_resident_result_contract",
+      "passed": true
+    },
+    {
+      "name": "integration_dq_map_pixels_match_summary",
+      "passed": true
+    },
+    {
+      "name": "integration_coverage_map_pixels_match_dq",
+      "passed": true
+    },
+    {
+      "name": "integration_rejection_map_pixels_match_dq",
+      "passed": true
+    },
+    {
+      "name": "integration_rejection_sample_counts_match_maps",
+      "passed": true
+    },
+    {
+      "name": "integration_sample_accounting_closure",
+      "passed": true
+    }
+  ],
+  "integration": {
+    "maps": [
+      {
+        "item": "H",
+        "map": "master"
+      },
+      {
+        "item": "H",
+        "map": "coverage"
+      },
+      {
+        "item": "H",
+        "map": "dq"
+      }
+    ],
+    "outputs": [
+      {
+        "item": "H",
+        "sample_accounting_closure": {
+          "input_valid_samples_before_rejection": 9,
+          "passed": true,
+          "present": true,
+          "rejected_samples": 3,
+          "required": true,
+          "status": "passed",
+          "valid_rejection_match": true,
+          "valid_samples_after_rejection": 6
+        }
+      }
+    ]
+  },
+  "passed": true,
+  "pixel_verification": {
+    "enabled": true,
+    "integration_outputs": [
+      {
+        "item": "H",
+        "rejection_sample_accounting": {
+          "map_rejected_sample_sum": 6,
+          "ok": true,
+          "required": true,
+          "source_counts": [
+            {
+              "count": 6,
+              "name": "dq_coverage_provenance.rejected_sample_count"
+            }
+          ],
+          "status": "verified",
+          "verified": true
+        }
+      }
+    ],
+    "tile_size": 2048
+  },
+  "rejection_sample_accounting": {
+    "accounted_output_count": 1,
+    "check_name": "integration_rejection_sample_counts_match_maps",
+    "check_passed": true,
+    "check_present": true,
+    "failed_count": 0,
+    "failed_items": [],
+    "status": "passed"
+  },
+  "sample_accounting_closure": {
+    "check_name": "integration_sample_accounting_closure",
+    "check_passed": true,
+    "check_present": true,
+    "failed_count": 0,
+    "failed_items": [],
+    "present_count": 1,
+    "status": "passed"
+  },
+  "status": "passed"
+}

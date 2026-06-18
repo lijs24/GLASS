@@ -1,0 +1,94 @@
+{
+  "artifact_type": "stack_engine_publication_audit",
+  "checks": [
+    {
+      "name": "publish_preflight_stack_engine_runtime_default_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_stack_engine_runtime_default_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight",
+      "passed": true
+    },
+    {
+      "name": "publish_preflight_direct_runtime_evidence_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_direct_runtime_evidence_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
+      "passed": true
+    }
+  ],
+  "failed_checks": [],
+  "layers": {
+    "phase2_publish_preflight_direct_runtime_evidence": {
+      "artifact_type": "glass_phase2_status",
+      "default_promotion_acceptance_check_count": 24,
+      "default_promotion_acceptance_passed": true,
+      "default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "default_promotion_pipeline_passed": true,
+      "default_promotion_pipeline_resident_lights": 200,
+      "default_promotion_ready": true,
+      "matches_default_promotion": true,
+      "matrix_acceptance_check_count": 24,
+      "matrix_acceptance_passed": true,
+      "matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "matrix_pipeline_passed": true,
+      "matrix_pipeline_resident_lights": 200,
+      "matrix_ready": true,
+      "phase2_check_passed": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_publish_preflight_stack_engine_runtime_default": {
+      "matrix_acceptance_legacy_master_count": 0,
+      "matrix_acceptance_status": "passed",
+      "matrix_pipeline_failed_output_count": 0,
+      "matrix_pipeline_status": "passed",
+      "phase2_check_passed": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_direct_runtime_evidence": {
+      "artifact_type": "windows_publish_preflight",
+      "default_promotion_acceptance_check_count": 24,
+      "default_promotion_acceptance_passed": true,
+      "default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "default_promotion_pipeline_passed": true,
+      "default_promotion_pipeline_resident_lights": 200,
+      "default_promotion_ready": true,
+      "matches_default_promotion": true,
+      "matrix_acceptance_check_count": 24,
+      "matrix_acceptance_passed": true,
+      "matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "matrix_pipeline_passed": true,
+      "matrix_pipeline_resident_lights": 200,
+      "matrix_ready": true,
+      "passed": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_stack_engine_runtime_default": {
+      "matrix_acceptance_legacy_master_count": 0,
+      "matrix_acceptance_status": "passed",
+      "matrix_pipeline_failed_output_count": 0,
+      "matrix_pipeline_status": "passed",
+      "ready": true,
+      "status": "publish_preflight_ready"
+    }
+  },
+  "passed": true,
+  "recommendation": "publication_chain_ready",
+  "status": "passed"
+}

@@ -636,15 +636,35 @@ def _write_publication_audit(
     direct_acceptance_source: str = "explicit_resident_artifacts_json",
     direct_pipeline_source: str = "resident_artifacts_json_fallback",
     direct_resident_lights: int = 200,
+    include_quality_compare: bool = True,
+    quality_compare_ready: bool = True,
+    phase2_quality_compare_ready: bool | None = None,
 ) -> None:
-    artifact_passed = passed and (raw_ready and phase2_ready if include_runtime_default else True)
     phase2_direct_runtime_ready = (
         direct_runtime_ready
         if phase2_direct_runtime_ready is None
         else phase2_direct_runtime_ready
     )
+    phase2_quality_compare_ready = (
+        quality_compare_ready
+        if phase2_quality_compare_ready is None
+        else phase2_quality_compare_ready
+    )
+    artifact_passed = (
+        passed
+        and (raw_ready and phase2_ready if include_runtime_default else True)
+        and (
+            quality_compare_ready and phase2_quality_compare_ready
+            if include_quality_compare
+            else True
+        )
+    )
     runtime_status = "passed" if raw_ready else "failed"
     phase2_status = "passed" if phase2_ready else "failed"
+    quality_compare_status = "passed" if quality_compare_ready else "failed"
+    phase2_quality_compare_status = (
+        "passed" if phase2_quality_compare_ready else "failed"
+    )
     layers = {}
     checks = []
     if include_runtime_default:
@@ -761,6 +781,77 @@ def _write_publication_audit(
                         "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight"
                     ),
                     "passed": direct_runtime_ready and phase2_direct_runtime_ready,
+                },
+            ]
+        )
+    if include_quality_compare:
+        quality_failed_count = 0 if quality_compare_ready else 1
+        phase2_quality_failed_count = 0 if phase2_quality_compare_ready else 1
+        layers.update(
+            {
+                "publish_preflight_quality_metrics_compare": {
+                    "artifact_type": "windows_publish_preflight",
+                    "status": "publish_preflight_ready"
+                    if quality_compare_ready
+                    else "blocked",
+                    "passed": quality_compare_ready,
+                    "present": True,
+                    "ready": quality_compare_ready,
+                    "matrix_present": True,
+                    "matrix_ready": quality_compare_ready,
+                    "matrix_status": quality_compare_status,
+                    "matrix_failed_check_count": quality_failed_count,
+                    "default_promotion_present": True,
+                    "default_promotion_ready": quality_compare_ready,
+                    "default_promotion_status": quality_compare_status,
+                    "default_promotion_failed_check_count": quality_failed_count,
+                    "matrix_handoff_passed": quality_compare_ready,
+                    "default_promotion_handoff_passed": quality_compare_ready,
+                    "matches_default_promotion": quality_compare_ready,
+                },
+                "phase2_publish_preflight_quality_metrics_compare": {
+                    "artifact_type": "glass_phase2_status",
+                    "status": "publish_preflight_ready"
+                    if phase2_quality_compare_ready
+                    else "blocked",
+                    "present": True,
+                    "ready": phase2_quality_compare_ready,
+                    "phase2_check_passed": phase2_quality_compare_ready,
+                    "matrix_present": True,
+                    "matrix_ready": phase2_quality_compare_ready,
+                    "matrix_status": phase2_quality_compare_status,
+                    "matrix_failed_check_count": phase2_quality_failed_count,
+                    "default_promotion_present": True,
+                    "default_promotion_ready": phase2_quality_compare_ready,
+                    "default_promotion_status": phase2_quality_compare_status,
+                    "default_promotion_failed_check_count": (
+                        phase2_quality_failed_count
+                    ),
+                    "matrix_handoff_passed": phase2_quality_compare_ready,
+                    "default_promotion_handoff_passed": (
+                        phase2_quality_compare_ready
+                    ),
+                    "matches_default_promotion": phase2_quality_compare_ready,
+                },
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "publish_preflight_quality_metrics_compare_ready",
+                    "passed": quality_compare_ready,
+                },
+                {
+                    "name": "phase2_publish_preflight_quality_metrics_compare_ready",
+                    "passed": phase2_quality_compare_ready,
+                },
+                {
+                    "name": (
+                        "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight"
+                    ),
+                    "passed": (
+                        quality_compare_ready and phase2_quality_compare_ready
+                    ),
                 },
             ]
         )
@@ -983,6 +1074,15 @@ def test_release_promotion_decision_accepts_publication_runtime_default(
         "resident_artifacts_json_fallback"
     )
     assert direct["raw_matrix_pipeline_resident_lights"] == 200
+    quality = payload["stack_engine_publication_quality_metrics_compare"]
+    assert checks["stack_engine_publication_quality_metrics_compare_passed"][
+        "passed"
+    ] is True
+    assert quality["ready"] is True
+    assert quality["checks_passed"] is True
+    assert quality["quality_compare_present"] is True
+    assert quality["raw_matrix_status"] == "passed"
+    assert quality["phase2_matrix_status"] == "passed"
 
 
 def test_release_promotion_decision_blocks_failed_publication_runtime_default(
@@ -1043,6 +1143,106 @@ def test_release_promotion_decision_blocks_stale_publication_runtime_default(
         "phase2_publish_preflight_stack_engine_runtime_default_ready": None,
         "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight": None,
     }
+
+
+def test_release_promotion_decision_allows_missing_publication_quality_compare(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication, include_quality_compare=False)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    quality = payload["stack_engine_publication_quality_metrics_compare"]
+    assert payload["release_candidate_ready"] is True
+    assert payload["default_change_ready"] is True
+    assert checks["stack_engine_publication_quality_metrics_compare_passed"][
+        "passed"
+    ] is True
+    assert quality["ready"] is True
+    assert quality["compatible_missing"] is True
+    assert quality["quality_compare_present"] is False
+    assert quality["checks"] == {
+        "publish_preflight_quality_metrics_compare_ready": None,
+        "phase2_publish_preflight_quality_metrics_compare_ready": None,
+        "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight": None,
+    }
+
+
+def test_release_promotion_decision_blocks_failed_publication_quality_compare(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication, quality_compare_ready=False)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    quality = payload["stack_engine_publication_quality_metrics_compare"]
+    assert payload["release_candidate_ready"] is False
+    assert payload["default_change_ready"] is False
+    assert payload["recommendation"] == "fix_release_blockers"
+    assert checks["stack_engine_publication_quality_metrics_compare_passed"][
+        "passed"
+    ] is False
+    assert quality["ready"] is False
+    assert quality["checks"]["publish_preflight_quality_metrics_compare_ready"] is False
+    assert quality["raw_matrix_status"] == "failed"
+    assert quality["raw_matrix_failed_check_count"] == 1
+
+
+def test_release_promotion_decision_blocks_phase2_publication_quality_mismatch(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(
+        publication,
+        quality_compare_ready=True,
+        phase2_quality_compare_ready=False,
+    )
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    quality = payload["stack_engine_publication_quality_metrics_compare"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_quality_metrics_compare_passed"][
+        "passed"
+    ] is False
+    assert quality["checks"]["publish_preflight_quality_metrics_compare_ready"] is True
+    assert (
+        quality["checks"]["phase2_publish_preflight_quality_metrics_compare_ready"]
+        is False
+    )
+    assert quality["phase2_matrix_status"] == "failed"
 
 
 def test_release_promotion_decision_blocks_missing_publication_direct_runtime(
@@ -1422,6 +1622,7 @@ def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_pat
     assert "Warp Quality Handoff" in markdown_text
     assert "Resident Registration Fastpath Handoff" in markdown_text
     assert "StackEngine Publication Runtime Default" in markdown_text
+    assert "Quality compare ready" in markdown_text
 
     strict = tmp_path / "strict.json"
     assert (

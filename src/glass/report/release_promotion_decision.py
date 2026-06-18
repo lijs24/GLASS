@@ -802,6 +802,12 @@ _PUBLICATION_DIRECT_RUNTIME_CHECKS = (
     "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
 )
 
+_PUBLICATION_QUALITY_COMPARE_CHECKS = (
+    "publish_preflight_quality_metrics_compare_ready",
+    "phase2_publish_preflight_quality_metrics_compare_ready",
+    "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight",
+)
+
 _DIRECT_RUNTIME_ACCEPTANCE_SOURCE = "explicit_resident_artifacts_json"
 _DIRECT_RUNTIME_PIPELINE_CALIBRATION_SOURCE = "resident_artifacts_json_fallback"
 _DIRECT_RUNTIME_MIN_RESIDENT_LIGHTS = 200
@@ -1023,6 +1029,121 @@ def _publication_audit_direct_runtime_evidence(
     }
 
 
+def _publication_audit_quality_compare_evidence(
+    publication_audit: dict[str, Any],
+) -> dict[str, Any]:
+    if not publication_audit:
+        return {
+            "present": False,
+            "status": None,
+            "passed": None,
+            "ready": None,
+            "quality_compare_present": False,
+        }
+    checks = {
+        name: _pipeline_contract_check_state(publication_audit, name)
+        for name in _PUBLICATION_QUALITY_COMPARE_CHECKS
+    }
+    layers = (
+        publication_audit.get("layers")
+        if isinstance(publication_audit.get("layers"), dict)
+        else {}
+    )
+    raw_layer = (
+        layers.get("publish_preflight_quality_metrics_compare")
+        if isinstance(layers.get("publish_preflight_quality_metrics_compare"), dict)
+        else {}
+    )
+    phase2_layer = (
+        layers.get("phase2_publish_preflight_quality_metrics_compare")
+        if isinstance(
+            layers.get("phase2_publish_preflight_quality_metrics_compare"),
+            dict,
+        )
+        else {}
+    )
+    checks_seen = any(value is not None for value in checks.values())
+    compatible_missing = not raw_layer and not phase2_layer and not checks_seen
+    checks_passed = compatible_missing or all(value is True for value in checks.values())
+    raw_present = raw_layer.get("present")
+    phase2_present = phase2_layer.get("present")
+    quality_compare_present = raw_present is True or phase2_present is True
+    quality_compare_absent = raw_present is False and phase2_present is False
+    raw_ready = raw_layer.get("ready") is True
+    phase2_ready = phase2_layer.get("ready") is True
+    layers_ready = (
+        compatible_missing
+        or (quality_compare_absent and raw_ready and phase2_ready)
+        or (raw_present is True and phase2_present is True and raw_ready and phase2_ready)
+    )
+    ready = compatible_missing or (
+        publication_audit.get("status") == "passed"
+        and publication_audit.get("passed") is True
+        and checks_passed
+        and layers_ready
+    )
+    return {
+        "present": True,
+        "artifact_type": publication_audit.get("artifact_type"),
+        "status": publication_audit.get("status"),
+        "passed": publication_audit.get("passed"),
+        "recommendation": publication_audit.get("recommendation"),
+        "failed_checks": publication_audit.get("failed_checks") or [],
+        "checks": checks,
+        "checks_passed": checks_passed,
+        "ready": ready,
+        "compatible_missing": compatible_missing,
+        "quality_compare_present": quality_compare_present,
+        "raw_present": raw_present,
+        "raw_ready": raw_layer.get("ready"),
+        "raw_matrix_present": raw_layer.get("matrix_present"),
+        "raw_matrix_ready": raw_layer.get("matrix_ready"),
+        "raw_matrix_status": raw_layer.get("matrix_status"),
+        "raw_matrix_failed_check_count": raw_layer.get("matrix_failed_check_count"),
+        "raw_default_promotion_present": raw_layer.get(
+            "default_promotion_present"
+        ),
+        "raw_default_promotion_ready": raw_layer.get("default_promotion_ready"),
+        "raw_default_promotion_status": raw_layer.get("default_promotion_status"),
+        "raw_default_promotion_failed_check_count": raw_layer.get(
+            "default_promotion_failed_check_count"
+        ),
+        "raw_matrix_handoff_passed": raw_layer.get("matrix_handoff_passed"),
+        "raw_default_promotion_handoff_passed": raw_layer.get(
+            "default_promotion_handoff_passed"
+        ),
+        "raw_matches_default_promotion": raw_layer.get("matches_default_promotion"),
+        "phase2_present": phase2_present,
+        "phase2_ready": phase2_layer.get("ready"),
+        "phase2_check_passed": phase2_layer.get("phase2_check_passed"),
+        "phase2_matrix_present": phase2_layer.get("matrix_present"),
+        "phase2_matrix_ready": phase2_layer.get("matrix_ready"),
+        "phase2_matrix_status": phase2_layer.get("matrix_status"),
+        "phase2_matrix_failed_check_count": phase2_layer.get(
+            "matrix_failed_check_count"
+        ),
+        "phase2_default_promotion_present": phase2_layer.get(
+            "default_promotion_present"
+        ),
+        "phase2_default_promotion_ready": phase2_layer.get(
+            "default_promotion_ready"
+        ),
+        "phase2_default_promotion_status": phase2_layer.get(
+            "default_promotion_status"
+        ),
+        "phase2_default_promotion_failed_check_count": phase2_layer.get(
+            "default_promotion_failed_check_count"
+        ),
+        "phase2_matrix_handoff_passed": phase2_layer.get("matrix_handoff_passed"),
+        "phase2_default_promotion_handoff_passed": phase2_layer.get(
+            "default_promotion_handoff_passed"
+        ),
+        "phase2_matches_default_promotion": phase2_layer.get(
+            "matches_default_promotion"
+        ),
+    }
+
+
 def build_release_promotion_decision(
     *,
     acceptance_audit: str | Path,
@@ -1059,6 +1180,9 @@ def build_release_promotion_decision(
         publication_audit
     )
     publication_direct_runtime = _publication_audit_direct_runtime_evidence(
+        publication_audit
+    )
+    publication_quality_compare = _publication_audit_quality_compare_evidence(
         publication_audit
     )
     rejection_sample_release = _rejection_sample_release_evidence(pipeline_handoff)
@@ -1232,6 +1356,13 @@ def build_release_promotion_decision(
                 publication_direct_runtime,
             )
         )
+        checks.append(
+            _check(
+                "stack_engine_publication_quality_metrics_compare_passed",
+                publication_quality_compare.get("ready") is True,
+                publication_quality_compare,
+            )
+        )
     release_blocking_names = {
         "acceptance_audit_passed",
         "speedup_threshold",
@@ -1254,6 +1385,9 @@ def build_release_promotion_decision(
         release_blocking_names.add("stack_engine_publication_runtime_default_passed")
         release_blocking_names.add(
             "stack_engine_publication_direct_runtime_evidence_passed"
+        )
+        release_blocking_names.add(
+            "stack_engine_publication_quality_metrics_compare_passed"
         )
     release_candidate_ready = all(
         item["passed"] for item in checks if str(item.get("name")) in release_blocking_names
@@ -1303,6 +1437,7 @@ def build_release_promotion_decision(
         "resident_registration_fastpath_handoff": resident_fastpath_handoff,
         "stack_engine_publication_runtime_default": publication_runtime_default,
         "stack_engine_publication_direct_runtime_evidence": publication_direct_runtime,
+        "stack_engine_publication_quality_metrics_compare": publication_quality_compare,
         "runtime_repeat": runtime_evidence,
         "repeat_preflight": preflight_evidence,
         "checks": checks,
@@ -1366,6 +1501,14 @@ def _markdown(payload: dict[str, Any]) -> str:
         payload.get("stack_engine_publication_direct_runtime_evidence")
         if isinstance(
             payload.get("stack_engine_publication_direct_runtime_evidence"),
+            dict,
+        )
+        else {}
+    )
+    publication_quality = (
+        payload.get("stack_engine_publication_quality_metrics_compare")
+        if isinstance(
+            payload.get("stack_engine_publication_quality_metrics_compare"),
             dict,
         )
         else {}
@@ -1448,6 +1591,11 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Direct runtime checks passed: `{publication_direct.get('checks_passed')}`",
             f"- Direct runtime raw source: acceptance=`{publication_direct.get('raw_matrix_acceptance_source')}` calibration=`{publication_direct.get('raw_matrix_pipeline_calibration_source')}` lights=`{publication_direct.get('raw_matrix_pipeline_resident_lights')}`",
             f"- Direct runtime Phase2 source: acceptance=`{publication_direct.get('phase2_matrix_acceptance_source')}` calibration=`{publication_direct.get('phase2_matrix_pipeline_calibration_source')}` lights=`{publication_direct.get('phase2_matrix_pipeline_resident_lights')}`",
+            f"- Quality compare ready: `{publication_quality.get('ready')}`",
+            f"- Quality compare present: `{publication_quality.get('quality_compare_present')}`",
+            f"- Quality compare checks passed: `{publication_quality.get('checks_passed')}`",
+            f"- Quality compare raw: present=`{publication_quality.get('raw_present')}` status=`{publication_quality.get('raw_matrix_status')}` failed_checks=`{publication_quality.get('raw_matrix_failed_check_count')}`",
+            f"- Quality compare Phase2: present=`{publication_quality.get('phase2_present')}` status=`{publication_quality.get('phase2_matrix_status')}` failed_checks=`{publication_quality.get('phase2_matrix_failed_check_count')}`",
             "",
         ]
     )
