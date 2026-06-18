@@ -4298,6 +4298,26 @@ integration where applicable.
   upload, package release, GitHub release creation, or real-data benchmark
   rerun.
 
+### S2-Gate 256: Phase 2 Publish-Preflight StackEngine Status Handoff
+
+- Carry final publish-preflight StackEngine default-contract evidence into
+  `glass phase2-status`.
+- Add `windows_publish_preflight_stack_engine_default_contract_ready` so Phase
+  2 status cannot stay green when final publish-preflight StackEngine evidence
+  is missing, failed, stale, or disagreeing across GitHub release plan, Windows
+  release matrix, and default-promotion artifacts.
+- Extend Phase 2 Markdown with publish-preflight StackEngine contract statuses,
+  readiness checks, and default-gap summaries.
+- Extend `glass phase2-status-compare` so candidates cannot lose a previously
+  passing final publish-preflight StackEngine contract chain.
+- Add focused tests for green handoff, failed publish-preflight StackEngine
+  evidence, CLI Markdown output, preserved compare checks, and publish-preflight
+  StackEngine regression detection.
+- Keep this gate Phase2-status scoped: no image math, CUDA kernel,
+  StackEngine audit behavior change, runtime default change, package build,
+  upload, package release, GitHub release creation, or real-data benchmark
+  rerun.
+
 ## Gate Rules
 
 Each gate requires:

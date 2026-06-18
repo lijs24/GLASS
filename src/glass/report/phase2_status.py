@@ -487,6 +487,24 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_promotion_sample_accounting_closure_status": summary.get(
             "default_promotion_sample_accounting_closure_status"
         ),
+        "github_plan_phase2_stack_engine_contract_status": summary.get(
+            "github_plan_phase2_stack_engine_contract_status"
+        ),
+        "github_plan_matrix_stack_engine_contract_status": summary.get(
+            "github_plan_matrix_stack_engine_contract_status"
+        ),
+        "matrix_stack_engine_contract_status": summary.get(
+            "matrix_stack_engine_contract_status"
+        ),
+        "default_promotion_stack_engine_contract_status": summary.get(
+            "default_promotion_stack_engine_contract_status"
+        ),
+        "matrix_stack_engine_contract_default_gap_count": summary.get(
+            "matrix_stack_engine_contract_default_gap_count"
+        ),
+        "default_promotion_stack_engine_contract_default_gap_count": summary.get(
+            "default_promotion_stack_engine_contract_default_gap_count"
+        ),
         "github_plan_phase2_rejection_sample_accounting_passed": _check_passed(
             payload,
             "github_plan_phase2_rejection_sample_accounting_passed",
@@ -526,6 +544,34 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "github_plan_matrix_sample_closure_matches_matrix": _check_passed(
             payload,
             "github_plan_matrix_sample_closure_matches_matrix",
+        ),
+        "github_plan_phase2_stack_engine_default_contract_ready": _check_passed(
+            payload,
+            "github_plan_phase2_stack_engine_default_contract_ready",
+        ),
+        "github_plan_matrix_stack_engine_contract_ready": _check_passed(
+            payload,
+            "github_plan_matrix_stack_engine_contract_ready",
+        ),
+        "github_plan_stack_engine_contract_agreement_passed": _check_passed(
+            payload,
+            "github_plan_stack_engine_contract_agreement_passed",
+        ),
+        "matrix_stack_engine_contract_ready": _check_passed(
+            payload,
+            "matrix_stack_engine_contract_ready",
+        ),
+        "default_promotion_stack_engine_contract_ready": _check_passed(
+            payload,
+            "default_promotion_stack_engine_contract_ready",
+        ),
+        "github_plan_matrix_stack_engine_contract_matches_matrix": _check_passed(
+            payload,
+            "github_plan_matrix_stack_engine_contract_matches_matrix",
+        ),
+        "matrix_stack_engine_contract_matches_default_promotion": _check_passed(
+            payload,
+            "matrix_stack_engine_contract_matches_default_promotion",
         ),
         "failed_checks": payload.get("failed_checks"),
     }
@@ -1152,6 +1198,76 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "windows_publish_preflight_stack_engine_default_contract_ready",
+                "passed": (
+                    preflight.get(
+                        "github_plan_phase2_stack_engine_default_contract_ready"
+                    )
+                    is True
+                    and preflight.get("github_plan_matrix_stack_engine_contract_ready")
+                    is True
+                    and preflight.get(
+                        "github_plan_stack_engine_contract_agreement_passed"
+                    )
+                    is True
+                    and preflight.get("matrix_stack_engine_contract_ready") is True
+                    and preflight.get("default_promotion_stack_engine_contract_ready")
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_stack_engine_contract_matches_matrix"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_stack_engine_contract_matches_default_promotion"
+                    )
+                    is True
+                ),
+                "evidence": {
+                    "phase2_status": preflight.get(
+                        "github_plan_phase2_stack_engine_contract_status"
+                    ),
+                    "plan_matrix_status": preflight.get(
+                        "github_plan_matrix_stack_engine_contract_status"
+                    ),
+                    "matrix_status": preflight.get(
+                        "matrix_stack_engine_contract_status"
+                    ),
+                    "default_promotion_status": preflight.get(
+                        "default_promotion_stack_engine_contract_status"
+                    ),
+                    "matrix_default_gap_count": preflight.get(
+                        "matrix_stack_engine_contract_default_gap_count"
+                    ),
+                    "default_promotion_default_gap_count": preflight.get(
+                        "default_promotion_stack_engine_contract_default_gap_count"
+                    ),
+                    "phase2_check": preflight.get(
+                        "github_plan_phase2_stack_engine_default_contract_ready"
+                    ),
+                    "plan_matrix_check": preflight.get(
+                        "github_plan_matrix_stack_engine_contract_ready"
+                    ),
+                    "agreement_check": preflight.get(
+                        "github_plan_stack_engine_contract_agreement_passed"
+                    ),
+                    "matrix_check": preflight.get(
+                        "matrix_stack_engine_contract_ready"
+                    ),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_stack_engine_contract_ready"
+                    ),
+                    "plan_matrix_match_check": preflight.get(
+                        "github_plan_matrix_stack_engine_contract_matches_matrix"
+                    ),
+                    "default_promotion_match_check": preflight.get(
+                        "matrix_stack_engine_contract_matches_default_promotion"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
     if pipeline is not None:
         checks.append(
             {
@@ -1480,6 +1596,36 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     "matrix-match="
                     f"{preflight.get('github_plan_matrix_sample_closure_matches_matrix')}"
                 ),
+                (
+                    "- StackEngine default contract statuses: "
+                    f"phase2={preflight.get('github_plan_phase2_stack_engine_contract_status')}, "
+                    f"plan-matrix={preflight.get('github_plan_matrix_stack_engine_contract_status')}, "
+                    f"matrix={preflight.get('matrix_stack_engine_contract_status')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_stack_engine_contract_status')}"
+                ),
+                (
+                    "- StackEngine default contract checks: "
+                    "phase2="
+                    f"{preflight.get('github_plan_phase2_stack_engine_default_contract_ready')}, "
+                    "plan-matrix="
+                    f"{preflight.get('github_plan_matrix_stack_engine_contract_ready')}, "
+                    "agreement="
+                    f"{preflight.get('github_plan_stack_engine_contract_agreement_passed')}, "
+                    f"matrix={preflight.get('matrix_stack_engine_contract_ready')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_stack_engine_contract_ready')}, "
+                    "plan-matrix-match="
+                    f"{preflight.get('github_plan_matrix_stack_engine_contract_matches_matrix')}, "
+                    "default-promotion-match="
+                    f"{preflight.get('matrix_stack_engine_contract_matches_default_promotion')}"
+                ),
+                (
+                    "- StackEngine default gaps: "
+                    f"matrix={preflight.get('matrix_stack_engine_contract_default_gap_count')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_stack_engine_contract_default_gap_count')}"
+                ),
             ]
         )
     if pipeline:
@@ -1732,6 +1878,24 @@ _PUBLISH_PREFLIGHT_SAMPLE_CLOSURE_STATUS_FIELDS = (
 )
 
 
+_PUBLISH_PREFLIGHT_STACK_ENGINE_CHECK_FIELDS = (
+    "github_plan_phase2_stack_engine_default_contract_ready",
+    "github_plan_matrix_stack_engine_contract_ready",
+    "github_plan_stack_engine_contract_agreement_passed",
+    "matrix_stack_engine_contract_ready",
+    "default_promotion_stack_engine_contract_ready",
+    "github_plan_matrix_stack_engine_contract_matches_matrix",
+    "matrix_stack_engine_contract_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_STACK_ENGINE_STATUS_FIELDS = (
+    "github_plan_phase2_stack_engine_contract_status",
+    "github_plan_matrix_stack_engine_contract_status",
+    "matrix_stack_engine_contract_status",
+    "default_promotion_stack_engine_contract_status",
+)
+
+
 def _publish_preflight_rejection_checks_passed(payload: dict[str, Any]) -> bool:
     return all(
         _status_value(payload, "publish_preflight", field) is True
@@ -1767,6 +1931,25 @@ def _publish_preflight_sample_closure_statuses(payload: dict[str, Any]) -> dict[
 
 def _publish_preflight_sample_closure_statuses_passed(payload: dict[str, Any]) -> bool:
     statuses = _publish_preflight_sample_closure_statuses(payload)
+    return bool(statuses) and all(value == "passed" for value in statuses.values())
+
+
+def _publish_preflight_stack_engine_checks_passed(payload: dict[str, Any]) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_STACK_ENGINE_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_stack_engine_statuses(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_STACK_ENGINE_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_stack_engine_statuses_passed(payload: dict[str, Any]) -> bool:
+    statuses = _publish_preflight_stack_engine_statuses(payload)
     return bool(statuses) and all(value == "passed" for value in statuses.values())
 
 
@@ -2027,6 +2210,30 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_sample_closure_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_stack_engine_contract_preserved",
+            not _publish_preflight_stack_engine_checks_passed(baseline)
+            or _publish_preflight_stack_engine_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_stack_engine_checks_passed(
+                    baseline
+                ),
+                "statuses": _publish_preflight_stack_engine_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_stack_engine_checks_passed(
+                    candidate
+                ),
+                "statuses": _publish_preflight_stack_engine_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_stack_engine_status_preserved",
+            not _publish_preflight_stack_engine_statuses_passed(baseline)
+            or _publish_preflight_stack_engine_statuses_passed(candidate),
+            baseline=_publish_preflight_stack_engine_statuses(baseline),
+            candidate=_publish_preflight_stack_engine_statuses(candidate),
+        ),
+        _compare_check(
             "pipeline_contract_passed_preserved",
             _status_value(baseline, "pipeline_contract", "passed") is not True
             or _status_value(candidate, "pipeline_contract", "passed") is True,
@@ -2229,6 +2436,9 @@ def build_phase2_status_compare(
             "publish_preflight_sample_accounting_closure": (
                 _publish_preflight_sample_closure_statuses(baseline)
             ),
+            "publish_preflight_stack_engine_contract": (
+                _publish_preflight_stack_engine_statuses(baseline)
+            ),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "pipeline_sample_accounting_closure": _status_value(
@@ -2268,6 +2478,9 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_sample_accounting_closure": (
                 _publish_preflight_sample_closure_statuses(candidate)
+            ),
+            "publish_preflight_stack_engine_contract": (
+                _publish_preflight_stack_engine_statuses(candidate)
             ),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),

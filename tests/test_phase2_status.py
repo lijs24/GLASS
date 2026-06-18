@@ -406,11 +406,15 @@ def _write_publish_preflight(
     include_rejection_sample_accounting: bool = True,
     sample_accounting_closure_ready: bool = True,
     include_sample_accounting_closure: bool = True,
+    stack_engine_ready: bool = True,
+    include_stack_engine_contract: bool = True,
 ) -> None:
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
     ) and (
         sample_accounting_closure_ready or not include_sample_accounting_closure
+    ) and (
+        stack_engine_ready or not include_stack_engine_contract
     )
     summary = {
         "release_tag": "v0.1.0-test",
@@ -506,6 +510,63 @@ def _write_publish_preflight(
                 "matrix_sample_accounting_closure_passed",
                 "default_promotion_sample_accounting_closure_passed",
             ]
+    if include_stack_engine_contract:
+        status = "passed" if stack_engine_ready else "failed"
+        summary.update(
+            {
+                "github_plan_phase2_stack_engine_contract_status": status,
+                "github_plan_matrix_stack_engine_contract_status": status,
+                "matrix_stack_engine_contract_status": status,
+                "default_promotion_stack_engine_contract_status": status,
+                "matrix_stack_engine_contract_default_gap_count": (
+                    0 if stack_engine_ready else 1
+                ),
+                "default_promotion_stack_engine_contract_default_gap_count": (
+                    0 if stack_engine_ready else 1
+                ),
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "github_plan_phase2_stack_engine_default_contract_ready",
+                    "passed": stack_engine_ready,
+                },
+                {
+                    "name": "github_plan_matrix_stack_engine_contract_ready",
+                    "passed": stack_engine_ready,
+                },
+                {
+                    "name": "github_plan_stack_engine_contract_agreement_passed",
+                    "passed": stack_engine_ready,
+                },
+                {
+                    "name": "matrix_stack_engine_contract_ready",
+                    "passed": stack_engine_ready,
+                },
+                {
+                    "name": "default_promotion_stack_engine_contract_ready",
+                    "passed": stack_engine_ready,
+                },
+                {
+                    "name": "github_plan_matrix_stack_engine_contract_matches_matrix",
+                    "passed": stack_engine_ready,
+                },
+                {
+                    "name": "matrix_stack_engine_contract_matches_default_promotion",
+                    "passed": stack_engine_ready,
+                },
+            ]
+        )
+        if not stack_engine_ready:
+            failed_checks = [
+                *failed_checks,
+                "github_plan_phase2_stack_engine_default_contract_ready",
+                "github_plan_matrix_stack_engine_contract_ready",
+                "github_plan_stack_engine_contract_agreement_passed",
+                "matrix_stack_engine_contract_ready",
+                "default_promotion_stack_engine_contract_ready",
+            ]
     write_json(
         path,
         {
@@ -561,6 +622,7 @@ def _status_payload(
     publish_preflight_status: str = "publish_preflight_ready",
     publish_preflight_rejection_sample_status: str = "passed",
     publish_preflight_sample_closure_status: str = "passed",
+    publish_preflight_stack_engine_status: str = "passed",
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -629,6 +691,24 @@ def _status_payload(
             "default_promotion_sample_accounting_closure_status": (
                 publish_preflight_sample_closure_status
             ),
+            "github_plan_phase2_stack_engine_contract_status": (
+                publish_preflight_stack_engine_status
+            ),
+            "github_plan_matrix_stack_engine_contract_status": (
+                publish_preflight_stack_engine_status
+            ),
+            "matrix_stack_engine_contract_status": (
+                publish_preflight_stack_engine_status
+            ),
+            "default_promotion_stack_engine_contract_status": (
+                publish_preflight_stack_engine_status
+            ),
+            "matrix_stack_engine_contract_default_gap_count": (
+                0 if publish_preflight_stack_engine_status == "passed" else 1
+            ),
+            "default_promotion_stack_engine_contract_default_gap_count": (
+                0 if publish_preflight_stack_engine_status == "passed" else 1
+            ),
             "github_plan_phase2_rejection_sample_accounting_passed": (
                 publish_preflight_rejection_sample_status == "passed"
             ),
@@ -658,6 +738,27 @@ def _status_payload(
             ),
             "github_plan_matrix_sample_closure_matches_matrix": (
                 publish_preflight_sample_closure_status == "passed"
+            ),
+            "github_plan_phase2_stack_engine_default_contract_ready": (
+                publish_preflight_stack_engine_status == "passed"
+            ),
+            "github_plan_matrix_stack_engine_contract_ready": (
+                publish_preflight_stack_engine_status == "passed"
+            ),
+            "github_plan_stack_engine_contract_agreement_passed": (
+                publish_preflight_stack_engine_status == "passed"
+            ),
+            "matrix_stack_engine_contract_ready": (
+                publish_preflight_stack_engine_status == "passed"
+            ),
+            "default_promotion_stack_engine_contract_ready": (
+                publish_preflight_stack_engine_status == "passed"
+            ),
+            "github_plan_matrix_stack_engine_contract_matches_matrix": (
+                publish_preflight_stack_engine_status == "passed"
+            ),
+            "matrix_stack_engine_contract_matches_default_promotion": (
+                publish_preflight_stack_engine_status == "passed"
             ),
         },
         "pipeline_contract": {
@@ -810,6 +911,15 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         payload["publish_preflight"]["github_plan_matrix_sample_closure_matches_matrix"]
         is True
     )
+    assert (
+        payload["publish_preflight"]["github_plan_phase2_stack_engine_contract_status"]
+        == "passed"
+    )
+    assert payload["publish_preflight"]["matrix_stack_engine_contract_ready"] is True
+    assert (
+        payload["publish_preflight"]["matrix_stack_engine_contract_default_gap_count"]
+        == 0
+    )
     assert payload["pipeline_contract"]["status"] == "passed"
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["pipeline_contract"]["integration_stack_result_contract"] is True
@@ -840,6 +950,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["windows_publish_preflight_ready"] is True
     assert checks["windows_publish_preflight_rejection_sample_accounting_passed"] is True
     assert checks["windows_publish_preflight_sample_accounting_closure_passed"] is True
+    assert checks["windows_publish_preflight_stack_engine_default_contract_ready"] is True
 
 
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
@@ -922,6 +1033,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Preflight status: publish_preflight_ready" in text
     assert "Default route checks: 4" in text
     assert "Rejection sample accounting statuses: phase2=passed" in text
+    assert "StackEngine default contract statuses: phase2=passed" in text
+    assert "StackEngine default gaps: matrix=0, default-promotion=0" in text
 
 
 def test_phase2_status_blocks_stack_engine_default_contract_gap(tmp_path: Path):
@@ -1215,6 +1328,52 @@ def test_phase2_status_blocks_failed_publish_preflight_sample_closure(
     ]["matrix_check"] is False
 
 
+def test_phase2_status_blocks_failed_publish_preflight_stack_engine_contract(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=256)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        stack_engine_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert status["publish_preflight"]["matrix_stack_engine_contract_status"] == "failed"
+    assert (
+        status["publish_preflight"]["matrix_stack_engine_contract_default_gap_count"]
+        == 1
+    )
+    assert checks["windows_publish_preflight_stack_engine_default_contract_ready"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_stack_engine_default_contract_ready"][
+        "evidence"
+    ]["matrix_check"] is False
+    assert checks["windows_publish_preflight_stack_engine_default_contract_ready"][
+        "evidence"
+    ]["default_promotion_default_gap_count"] == 1
+
+
 def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -1316,6 +1475,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is True
     assert checks["windows_publish_preflight_sample_accounting_closure_preserved"] is True
     assert checks["windows_publish_preflight_sample_closure_status_preserved"] is True
+    assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is True
+    assert checks["windows_publish_preflight_stack_engine_status_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
     assert checks["pipeline_pixel_verification_preserved"] is True
@@ -1347,6 +1508,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             publish_preflight_status="blocked",
             publish_preflight_rejection_sample_status="failed",
             publish_preflight_sample_closure_status="failed",
+            publish_preflight_stack_engine_status="failed",
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
@@ -1381,6 +1543,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is False
     assert checks["windows_publish_preflight_sample_accounting_closure_preserved"] is False
     assert checks["windows_publish_preflight_sample_closure_status_preserved"] is False
+    assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is False
+    assert checks["windows_publish_preflight_stack_engine_status_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["pipeline_integration_dq_contract_preserved"] is False
     assert checks["pipeline_pixel_verification_preserved"] is False
@@ -1589,6 +1753,41 @@ def test_phase2_status_compare_flags_publish_preflight_sample_closure_regression
     assert checks["windows_publish_preflight_sample_closure_status_preserved"][
         "evidence"
     ]["candidate"]["matrix_sample_accounting_closure_status"] == "failed"
+
+
+def test_phase2_status_compare_flags_publish_preflight_stack_engine_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=255))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=256,
+            publish_preflight_stack_engine_status="failed",
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["windows_publish_preflight_stack_engine_contract_preserved"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_stack_engine_contract_preserved"][
+        "evidence"
+    ]["candidate"]["checks_passed"] is False
+    assert checks["windows_publish_preflight_stack_engine_status_preserved"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_stack_engine_status_preserved"][
+        "evidence"
+    ]["candidate"]["matrix_stack_engine_contract_status"] == "failed"
 
 
 def test_cli_phase2_status_compare_writes_outputs_and_returns_failure(tmp_path: Path):
