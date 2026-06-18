@@ -6428,6 +6428,24 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 361: Default Promotion Quality Metric Compare Guard
+
+- Carry Phase2 `quality_metrics_compare` evidence into
+  `glass default-promotion-manifest`.
+- Add `quality_metrics_compare_handoff_passed` so default-promotion readiness
+  preserves a passing quality-regression compare artifact whenever Phase2 status
+  supplies one.
+- Treat missing `quality_metrics_compare` as non-blocking for older Phase2
+  artifacts; once present, both the artifact pass flag and Phase2 check must be
+  green.
+- Surface the quality compare handoff in the default-promotion Markdown report.
+- Add focused manifest and CLI Markdown tests.
+- Keep this gate default-promotion guard scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

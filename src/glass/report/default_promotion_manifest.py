@@ -536,6 +536,37 @@ def _publication_audit_summary(phase2: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _quality_metrics_compare_summary(phase2: dict[str, Any]) -> dict[str, Any]:
+    compare = (
+        phase2.get("quality_metrics_compare")
+        if isinstance(phase2.get("quality_metrics_compare"), dict)
+        else {}
+    )
+    phase2_check = _phase2_check_passed(phase2, "quality_metrics_compare_passed")
+    present = bool(compare)
+    ready = (
+        True
+        if not present
+        else compare.get("passed") is True and phase2_check is True
+    )
+    return {
+        "present": present,
+        "ready": ready,
+        "status": compare.get("status"),
+        "passed": compare.get("passed"),
+        "phase2_check_passed": phase2_check,
+        "check_count": compare.get("check_count"),
+        "failed_check_count": compare.get("failed_check_count"),
+        "failed_checks": compare.get("failed_checks") or [],
+        "baseline_metric_count": compare.get("baseline_metric_count"),
+        "candidate_metric_count": compare.get("candidate_metric_count"),
+        "metric_row_count": compare.get("metric_row_count"),
+        "threshold_failure_count": compare.get("threshold_failure_count"),
+        "threshold_failures": compare.get("threshold_failures") or [],
+        "path": compare.get("path"),
+    }
+
+
 def _integration_engine_policy_summary(
     phase2: dict[str, Any],
     pipeline: dict[str, Any],
@@ -1262,6 +1293,7 @@ def build_default_promotion_manifest(
     )
     stack_engine = _stack_engine_summary(phase2)
     default_route = _default_route_acceptance_summary(phase2)
+    quality_metrics_compare = _quality_metrics_compare_summary(phase2)
     resident_winsorized_sweep = _resident_winsorized_sweep_summary(phase2)
     publication_audit = _publication_audit_summary(phase2)
     integration_engine_policy = _integration_engine_policy_summary(phase2, pipeline)
@@ -1409,6 +1441,12 @@ def build_default_promotion_manifest(
             "runtime_repeat_ratio_within_bound",
             runtime_ratio is not None and runtime_ratio <= float(max_runtime_ratio),
             {"actual": runtime_ratio, "required_max": float(max_runtime_ratio)},
+        ),
+        _check(
+            "quality_metrics_compare_handoff_passed",
+            quality_metrics_compare.get("ready") is True,
+            quality_metrics_compare,
+            note="Required only when Phase2 status supplies quality-metrics-compare evidence.",
         ),
         _check(
             "pipeline_contract_passed",
@@ -1887,6 +1925,7 @@ def build_default_promotion_manifest(
         },
         "runtime_repeat": runtime,
         "default_route_acceptance": default_route,
+        "quality_metrics_compare": quality_metrics_compare,
         "pipeline_contract": pipeline,
         "integration_engine_policy": integration_engine_policy,
         "resident_result_contract": resident_result_contract,
@@ -1916,6 +1955,7 @@ def _markdown(payload: dict[str, Any]) -> str:
     default_candidate = payload.get("default_candidate") or {}
     runtime = payload.get("runtime_repeat") or {}
     default_route = payload.get("default_route_acceptance") or {}
+    quality_metrics_compare = payload.get("quality_metrics_compare") or {}
     pipeline = payload.get("pipeline_contract") or {}
     integration_engine_policy = payload.get("integration_engine_policy") or {}
     resident_result_contract = payload.get("resident_result_contract") or {}
@@ -1967,6 +2007,14 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Route check count: `{default_route.get('route_check_count')}`",
         f"- Route failed checks: `{default_route.get('route_failed_checks')}`",
         f"- Speedup vs reference: `{default_route.get('speedup_vs_reference')}`",
+        (
+            "- Quality metrics compare: "
+            f"present=`{quality_metrics_compare.get('present')}` "
+            f"ready=`{quality_metrics_compare.get('ready')}` "
+            f"status=`{quality_metrics_compare.get('status')}` "
+            f"phase2=`{quality_metrics_compare.get('phase2_check_passed')}` "
+            f"failed-checks=`{quality_metrics_compare.get('failed_checks')}`"
+        ),
         f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
         f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
         (

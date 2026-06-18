@@ -204,6 +204,8 @@ def _write_phase2_status(
     pipeline_stack_engine_runtime_default_check_present: bool = True,
     include_resident_fastpath_handoff: bool = True,
     resident_fastpath_ready: bool = True,
+    include_quality_metrics_compare: bool = True,
+    quality_metrics_compare_ready: bool = True,
 ) -> None:
     acceptance_policy_chain_ready = (
         acceptance_integration_engine_policy_ready
@@ -252,6 +254,11 @@ def _write_phase2_status(
             resident_winsorized_sweep_ready
             and resident_winsorized_sweep_required_frame_ready
             if include_resident_winsorized_sweep
+            else True
+        )
+        and (
+            quality_metrics_compare_ready
+            if include_quality_metrics_compare
             else True
         )
     )
@@ -727,6 +734,30 @@ def _write_phase2_status(
                 },
             ]
         )
+    if include_quality_metrics_compare:
+        payload["quality_metrics_compare"] = {
+            "status": "passed" if quality_metrics_compare_ready else "failed",
+            "passed": quality_metrics_compare_ready,
+            "check_count": 3 if quality_metrics_compare_ready else 4,
+            "failed_check_count": 0 if quality_metrics_compare_ready else 1,
+            "failed_checks": []
+            if quality_metrics_compare_ready
+            else ["bad_median_ratio_within_limit"],
+            "baseline_metric_count": 7,
+            "candidate_metric_count": 7,
+            "metric_row_count": 7,
+            "threshold_failure_count": 0 if quality_metrics_compare_ready else 1,
+            "threshold_failures": []
+            if quality_metrics_compare_ready
+            else [{"metric": "fwhm_px", "bad_median_ratio": 1.4}],
+            "path": "runs/checkpoints/quality_metrics_compare.json",
+        }
+        payload["checks"].append(
+            {
+                "name": "quality_metrics_compare_passed",
+                "passed": quality_metrics_compare_ready,
+            }
+        )
     if include_resident_winsorized_sweep:
         payload["resident_winsorized_sweep_audit"] = {
             "schema_version": 1,
@@ -952,6 +983,10 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["default_route_acceptance_passed"] is True
     assert checks["default_route_acceptance_route_contract_passed"] is True
     assert checks["default_route_acceptance_route_check_count"] is True
+    assert checks["quality_metrics_compare_handoff_passed"] is True
+    assert payload["quality_metrics_compare"]["present"] is True
+    assert payload["quality_metrics_compare"]["ready"] is True
+    assert payload["quality_metrics_compare"]["phase2_check_passed"] is True
     assert checks["pipeline_pixel_maps_match_dq"] is True
     assert checks["pipeline_resident_result_contract_handoff_passed"] is True
     assert payload["resident_result_contract"]["ready"] is True
@@ -1237,6 +1272,85 @@ def test_default_promotion_manifest_blocks_failed_default_route_evidence(tmp_pat
     assert "default_route_acceptance_passed" in payload["failed_checks"]
     assert "default_route_acceptance_route_contract_passed" in payload["failed_checks"]
     assert "default_route_acceptance_route_check_count" in payload["failed_checks"]
+
+
+def test_default_promotion_manifest_blocks_failed_quality_metrics_compare(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        quality_metrics_compare_ready=False,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "quality_metrics_compare_handoff_passed" in payload["failed_checks"]
+    assert checks["quality_metrics_compare_handoff_passed"]["evidence"] == {
+        "present": True,
+        "ready": False,
+        "status": "failed",
+        "passed": False,
+        "phase2_check_passed": False,
+        "check_count": 4,
+        "failed_check_count": 1,
+        "failed_checks": ["bad_median_ratio_within_limit"],
+        "baseline_metric_count": 7,
+        "candidate_metric_count": 7,
+        "metric_row_count": 7,
+        "threshold_failure_count": 1,
+        "threshold_failures": [{"metric": "fwhm_px", "bad_median_ratio": 1.4}],
+        "path": "runs/checkpoints/quality_metrics_compare.json",
+    }
+
+
+def test_default_promotion_manifest_allows_missing_quality_metrics_compare(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        include_quality_metrics_compare=False,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is True
+    assert "quality_metrics_compare_handoff_passed" not in payload["failed_checks"]
+    assert payload["quality_metrics_compare"] == {
+        "present": False,
+        "ready": True,
+        "status": None,
+        "passed": None,
+        "phase2_check_passed": None,
+        "check_count": None,
+        "failed_check_count": None,
+        "failed_checks": [],
+        "baseline_metric_count": None,
+        "candidate_metric_count": None,
+        "metric_row_count": None,
+        "threshold_failure_count": None,
+        "threshold_failures": [],
+        "path": None,
+    }
+    assert checks["quality_metrics_compare_handoff_passed"]["passed"] is True
 
 
 def test_default_promotion_manifest_blocks_rejection_sample_accounting_drift(
@@ -1798,6 +1912,7 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "Default Route Evidence" in markdown_text
     assert "Rejection sample accounting: `passed`" in markdown_text
     assert "Sample accounting closure: `passed`" in markdown_text
+    assert "Quality metrics compare: present=`True` ready=`True`" in markdown_text
     assert (
         "Release resident winsorized semantics: `passed` "
         "required=`1` legacy-completions=`1`"
