@@ -192,6 +192,50 @@ def test_cpu_stack_engine_rejects_high_outlier(method):
     assert result.dq_mask.count(DQFlag.HIGH_REJECTED) == 30
 
 
+def test_cpu_stack_engine_winsorized_sigma_is_distinct_for_low_sample_outlier():
+    frames = [np.ones((2, 2), dtype=np.float32) for _ in range(3)]
+    frames.append(np.ones((2, 2), dtype=np.float32) * 12.0)
+    rejection = RejectionPolicy(
+        method="sigma",
+        low_sigma=2.4,
+        high_sigma=2.4,
+        min_samples=3,
+        max_reject_fraction=0.5,
+    )
+    winsorized_rejection = RejectionPolicy(
+        method="winsorized_sigma",
+        low_sigma=2.4,
+        high_sigma=2.4,
+        min_samples=3,
+        max_reject_fraction=0.5,
+    )
+
+    sigma = CPUStackEngine(tile_size=1).stack(
+        _request(len(frames), rejection=rejection), _sources(frames)
+    )
+    winsorized = CPUStackEngine(tile_size=1).stack(
+        _request(len(frames), rejection=winsorized_rejection), _sources(frames)
+    )
+
+    assert np.allclose(sigma.master, 3.75)
+    assert np.sum(sigma.high_rejection_map) == 0
+    assert sigma.metrics["rejection_scale_estimator"] == "median_center_standard_deviation_scale"
+    assert np.allclose(winsorized.master, 1.0)
+    assert np.all(winsorized.coverage_map == 3)
+    assert np.sum(winsorized.high_rejection_map) == 4
+    assert winsorized.metrics["high_rejected"] == 4
+    assert (
+        winsorized.metrics["rejection_scale_estimator"]
+        == "median_iqr_winsorized_standard_deviation_scale"
+    )
+    assert winsorized.dq_provenance["rejection_policy"]["method"] == "winsorized_sigma"
+    assert winsorized.dq_provenance["rejection_policy"]["winsorized"] is True
+    assert (
+        winsorized.dq_provenance["rejection_policy"]["winsorization_scale"]
+        == "iqr_sigma_with_standard_deviation_fallback"
+    )
+
+
 def test_cpu_stack_engine_invalid_input_samples_are_not_rejections():
     frames = [np.ones((2, 2), dtype=np.float32) for _ in range(5)]
     frames[-1] = np.ones((2, 2), dtype=np.float32) * 100.0

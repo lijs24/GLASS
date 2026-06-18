@@ -123,6 +123,7 @@ class CPUStackEngine:
             "height": height,
             "combine": request.combine.method,
             "rejection": request.rejection.method,
+            "rejection_scale_estimator": _rejection_scale_estimator(request.rejection),
             "valid_samples": valid_total,
             "input_valid_samples": input_valid_sample_total,
             "input_invalid_samples": input_invalid_sample_total,
@@ -142,6 +143,7 @@ class CPUStackEngine:
             "low_rejected_samples": rejected_low_total,
             "high_rejected_samples": rejected_high_total,
             "rejected_samples": rejected_low_total + rejected_high_total,
+            "rejection_policy": _rejection_policy_provenance(request.rejection),
             "output_coverage_zero_pixels": coverage_zero_pixel_total,
             "output_low_rejected_pixels": low_rejected_pixel_total,
             "output_high_rejected_pixels": high_rejected_pixel_total,
@@ -275,16 +277,60 @@ def _center_and_scale(
         deviation = np.abs(masked - center[None, :, :])
         scale = np.float32(1.4826) * np.nanmedian(deviation, axis=0)
     else:
-        first_center = np.nanmean(masked, axis=0)
-        first_scale = np.nanstd(masked, axis=0)
+        first_center = np.nanmedian(masked, axis=0)
+        first_scale = _iqr_scale(masked)
+        fallback_scale = np.nanstd(masked, axis=0)
+        first_scale = np.where(first_scale > 0, first_scale, fallback_scale)
         low = first_center - np.float32(policy.low_sigma) * first_scale
         high = first_center + np.float32(policy.high_sigma) * first_scale
         winsorized = np.where(valid, np.clip(stack, low[None, :, :], high[None, :, :]), np.nan)
         center = np.nanmean(winsorized, axis=0)
         scale = np.nanstd(winsorized, axis=0)
+        scale = np.where(scale > 0, scale, first_scale)
     return np.nan_to_num(center, nan=0.0).astype(np.float32), np.nan_to_num(
         scale, nan=0.0
     ).astype(np.float32)
+
+
+def _iqr_scale(masked: np.ndarray) -> np.ndarray:
+    q25 = np.nanpercentile(masked, 25.0, axis=0)
+    q75 = np.nanpercentile(masked, 75.0, axis=0)
+    return ((q75 - q25) / np.float32(1.349)).astype(np.float32)
+
+
+def _rejection_scale_estimator(policy: RejectionPolicy) -> str:
+    if policy.method == "none":
+        return "none"
+    if policy.method == "sigma":
+        return "median_center_standard_deviation_scale"
+    if policy.method in {"mad", "median_sigma"}:
+        return "median_center_mad_scale"
+    if policy.method == "winsorized_sigma":
+        return "median_iqr_winsorized_standard_deviation_scale"
+    if policy.method == "percentile":
+        return "percentile_thresholds"
+    if policy.method == "minmax":
+        return "minmax_extrema"
+    return "unknown"
+
+
+def _rejection_policy_provenance(policy: RejectionPolicy) -> dict[str, float | int | str | bool]:
+    provenance: dict[str, float | int | str | bool] = {
+        "method": policy.method,
+        "iterations": int(policy.iterations),
+        "low_sigma": float(policy.low_sigma),
+        "high_sigma": float(policy.high_sigma),
+        "min_samples": int(policy.min_samples),
+        "max_reject_fraction": float(policy.max_reject_fraction),
+        "scale_estimator": _rejection_scale_estimator(policy),
+    }
+    if policy.method == "winsorized_sigma":
+        provenance["winsorized"] = True
+        provenance["winsorization_center"] = "nanmedian"
+        provenance["winsorization_scale"] = "iqr_sigma_with_standard_deviation_fallback"
+        provenance["final_center"] = "nanmean_after_winsorization"
+        provenance["final_scale"] = "nanstd_after_winsorization"
+    return provenance
 
 
 def _minmax_rejection(stack: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

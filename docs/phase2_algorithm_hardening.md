@@ -4335,6 +4335,23 @@ integration where applicable.
   behavior change, default change, package build, upload, GitHub release
   creation, or real-data benchmark rerun.
 
+### S2-Gate 258: Winsorized Sigma Stack Rejection Semantics
+
+- Harden CPU StackEngine `winsorized_sigma` so it is a distinct rejection
+  baseline, not a generic sigma alias.
+- Use a median/IQR-derived sigma estimate to choose the first winsorization
+  bounds, fall back to standard deviation only when the robust scale is zero,
+  then compute final mean/std on the winsorized samples for rejection.
+- Record the rejection scale estimator and full rejection-policy provenance in
+  StackEngine metrics and DQ provenance so report/audit layers can distinguish
+  sigma, MAD, percentile, minmax, and winsorized paths.
+- Add a low-sample outlier regression test where ordinary sigma keeps the
+  sample but `winsorized_sigma` rejects it while preserving sample-accounting
+  and result-contract checks.
+- Keep this gate CPU StackEngine scoped: no CUDA kernel, resident runtime
+  behavior change, runtime default change, package build, upload, GitHub
+  release creation, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
