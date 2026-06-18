@@ -149,6 +149,9 @@ def test_local_norm_contract_passes_for_continuous_field_artifact(tmp_path: Path
     assert payload["passed"] is True
     assert payload["enabled"] is True
     assert payload["summary"]["output_count"] == 1
+    assert payload["summary"]["residual_quality"]["output_count"] == 1
+    assert payload["summary"]["residual_quality"]["max_rms"] == 0.01
+    assert payload["summary"]["residual_quality"]["max_abs"] == 0.02
     assert payload["outputs"][0]["coefficient_grid_contract"]["passed"] is True
 
 
@@ -160,6 +163,7 @@ def test_local_norm_contract_passes_for_disabled_passthrough(tmp_path: Path) -> 
 
     assert payload["passed"] is True
     assert payload["enabled"] is False
+    assert payload["summary"]["residual_quality"]["output_count"] == 0
     assert payload["outputs"][0]["status"] == "disabled_passthrough"
 
 

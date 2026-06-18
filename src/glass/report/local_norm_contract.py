@@ -400,6 +400,50 @@ def _disabled_row_contract(item: dict[str, Any], *, index: int, run_root: Path) 
     }
 
 
+def _residual_quality_summary(output_contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    rms_values: list[float] = []
+    max_abs_values: list[float] = []
+    total_valid_pixels = 0
+    zero_valid_output_count = 0
+    for item in output_contracts:
+        if not item.get("enabled"):
+            continue
+        summary = item.get("residual_summary") if isinstance(item.get("residual_summary"), dict) else {}
+        residual_contract = _residual_summary_contract(summary)
+        valid_pixels = int(residual_contract.get("valid_pixels") or 0)
+        rms = _finite_float(residual_contract.get("rms"))
+        max_abs = _finite_float(residual_contract.get("max_abs"))
+        if valid_pixels == 0:
+            zero_valid_output_count += 1
+        if valid_pixels > 0:
+            total_valid_pixels += valid_pixels
+        if rms is not None:
+            rms_values.append(rms)
+        if max_abs is not None:
+            max_abs_values.append(max_abs)
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "valid_pixels": valid_pixels,
+                "rms": rms,
+                "max_abs": max_abs,
+                "passed": bool(residual_contract.get("passed")),
+                "failed_checks": residual_contract.get("failed_checks") or [],
+            }
+        )
+    return {
+        "output_count": len(rows),
+        "valid_output_count": sum(1 for row in rows if row["valid_pixels"] > 0),
+        "failed_output_count": sum(1 for row in rows if not row["passed"]),
+        "zero_valid_output_count": zero_valid_output_count,
+        "total_valid_pixels": total_valid_pixels,
+        "max_rms": max(rms_values) if rms_values else None,
+        "max_abs": max(max_abs_values) if max_abs_values else None,
+        "outputs": rows,
+    }
+
+
 def build_local_norm_contract(run_dir: str | Path) -> dict[str, Any]:
     run_root = Path(run_dir)
     local_norm_path = run_root / "local_norm_results.json"
@@ -511,6 +555,7 @@ def build_local_norm_contract(run_dir: str | Path) -> dict[str, Any]:
     )
     passed = all(item["passed"] for item in top_checks)
     failed_outputs = [item for item in output_contracts if not item["passed"]]
+    residual_quality = _residual_quality_summary(output_contracts)
     return {
         "schema_version": 1,
         "artifact_type": "local_norm_contract",
@@ -530,7 +575,9 @@ def build_local_norm_contract(run_dir: str | Path) -> dict[str, Any]:
             "coefficient_field_model": local_norm.get("coefficient_field_model"),
             "enabled": enabled,
             "reference_frame_id": local_norm.get("reference_frame_id"),
+            "residual_quality": residual_quality,
         },
+        "residual_quality": residual_quality,
         "checks": top_checks,
         "outputs": output_contracts,
         "failed_checks": [item["name"] for item in top_checks if not item["passed"]],
@@ -561,6 +608,8 @@ def write_local_norm_contract(
         f"- Coefficient field model: {payload.get('coefficient_field_model')}",
         f"- Output count: {(payload.get('summary') or {}).get('output_count')}",
         f"- Failed output count: {(payload.get('summary') or {}).get('failed_output_count')}",
+        f"- Residual max RMS: {((payload.get('summary') or {}).get('residual_quality') or {}).get('max_rms')}",
+        f"- Residual max abs: {((payload.get('summary') or {}).get('residual_quality') or {}).get('max_abs')}",
         "",
         "## Checks",
         "",

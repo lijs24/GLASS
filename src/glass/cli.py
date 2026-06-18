@@ -2782,6 +2782,41 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             and local_norm_contract_condition
         )
     )
+    local_norm_summary = local_norm_contract.get("summary") if isinstance(local_norm_contract, dict) else {}
+    local_norm_residual_quality = (
+        local_norm_summary.get("residual_quality") if isinstance(local_norm_summary, dict) else {}
+    )
+    if not isinstance(local_norm_residual_quality, dict):
+        local_norm_residual_quality = {}
+    max_local_norm_rms = getattr(args, "max_local_normalization_rms", None)
+    max_local_norm_max_abs = getattr(args, "max_local_normalization_max_abs", None)
+    local_norm_residual_required = max_local_norm_rms is not None or max_local_norm_max_abs is not None
+    local_norm_residual_rms = local_norm_residual_quality.get("max_rms")
+    local_norm_residual_max_abs = local_norm_residual_quality.get("max_abs")
+    local_norm_residual_failed_count = int(local_norm_residual_quality.get("failed_output_count") or 0)
+    local_norm_residual_output_count = int(local_norm_residual_quality.get("output_count") or 0)
+    local_norm_residual_rms_condition = (
+        max_local_norm_rms is None
+        or (local_norm_residual_rms is not None and float(local_norm_residual_rms) <= float(max_local_norm_rms))
+    )
+    local_norm_residual_max_abs_condition = (
+        max_local_norm_max_abs is None
+        or (
+            local_norm_residual_max_abs is not None
+            and float(local_norm_residual_max_abs) <= float(max_local_norm_max_abs)
+        )
+    )
+    local_norm_residual_condition = (
+        not local_norm_residual_required
+        or (
+            local_norm_contract_condition
+            and local_norm_contract_enabled is True
+            and local_norm_residual_output_count > 0
+            and local_norm_residual_failed_count == 0
+            and local_norm_residual_rms_condition
+            and local_norm_residual_max_abs_condition
+        )
+    )
     pipeline_calibration = (
         pipeline_audit.get("calibration") if isinstance(pipeline_audit.get("calibration"), dict) else {}
     )
@@ -2799,6 +2834,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         and stack_default_condition
         and local_norm_contract_condition
         and local_norm_enabled_condition
+        and local_norm_residual_condition
     )
     summary = {
         "schema_version": 1,
@@ -2813,6 +2849,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
         "require_local_normalization_enabled": local_norm_enabled_required,
+        "max_local_normalization_rms": max_local_norm_rms,
+        "max_local_normalization_max_abs": max_local_norm_max_abs,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -2822,6 +2860,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "local_norm_contract_attached": isinstance(local_norm_contract, dict),
         "local_norm_contract_status": local_norm_contract_status,
         "local_norm_contract_enabled": local_norm_contract_enabled,
+        "local_norm_residual_quality": local_norm_residual_quality,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2896,6 +2935,20 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "status": "passed" if local_norm_enabled_condition else "missing_or_disabled",
         }
     )
+    summary["checks"].append(
+        {
+            "name": "local_norm_residual_quality",
+            "passed": local_norm_residual_condition,
+            "required": local_norm_residual_required,
+            "max_rms": local_norm_residual_rms,
+            "max_abs": local_norm_residual_max_abs,
+            "max_rms_threshold": max_local_norm_rms,
+            "max_abs_threshold": max_local_norm_max_abs,
+            "output_count": local_norm_residual_output_count,
+            "failed_output_count": local_norm_residual_failed_count,
+            "status": "passed" if local_norm_residual_condition else "threshold_failed_or_missing",
+        }
+    )
     bundle = {
         "schema_version": 1,
         "created_at": now_iso(),
@@ -2910,6 +2963,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
         "require_local_normalization_enabled": local_norm_enabled_required,
+        "max_local_normalization_rms": max_local_norm_rms,
+        "max_local_normalization_max_abs": max_local_norm_max_abs,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -2919,6 +2974,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "local_norm_contract_attached": isinstance(local_norm_contract, dict),
         "local_norm_contract_status": local_norm_contract_status,
         "local_norm_contract_enabled": local_norm_contract_enabled,
+        "local_norm_residual_quality": local_norm_residual_quality,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2959,6 +3015,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "stack_default_promotion_ready": stack_default_ready,
             "require_stack_default_ready": stack_default_required,
             "require_local_normalization_enabled": local_norm_enabled_required,
+            "max_local_normalization_rms": max_local_norm_rms,
+            "max_local_normalization_max_abs": max_local_norm_max_abs,
             "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
@@ -2966,6 +3024,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "local_norm_contract_status": local_norm_contract_status,
             "local_norm_contract_required": local_norm_results_present,
             "local_norm_contract_enabled": local_norm_contract_enabled,
+            "local_norm_residual_quality": local_norm_residual_quality,
             "resident_native_calibration": resident_native_calibration,
         }
     )
@@ -5909,6 +5968,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-local-normalization-enabled",
         action="store_true",
         help="fail guardrails unless local normalization is present, enabled, and passes its contract",
+    )
+    guardrails.add_argument(
+        "--max-local-normalization-rms",
+        type=float,
+        help="fail guardrails when enabled local-normalization residual max RMS exceeds this threshold",
+    )
+    guardrails.add_argument(
+        "--max-local-normalization-max-abs",
+        type=float,
+        help="fail guardrails when enabled local-normalization residual max absolute error exceeds this threshold",
     )
     guardrails.add_argument(
         "--pixel-verify",

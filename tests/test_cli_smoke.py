@@ -590,6 +590,95 @@ def test_cli_guardrails_require_enabled_local_normalization(small_fits_dataset, 
     assert "bilinear_tile_center_v1" in html
 
 
+def test_cli_guardrails_local_norm_residual_thresholds(small_fits_dataset, tmp_path: Path):
+    run = tmp_path / "enabled_run"
+    passing_out = tmp_path / "passing_guardrails"
+    failing_out = tmp_path / "failing_guardrails"
+
+    assert (
+        main(
+            [
+                "audit",
+                "--root",
+                str(small_fits_dataset),
+                "--out",
+                str(run),
+                "--backend",
+                "cpu",
+                "--tile-size",
+                "8",
+                "--local-normalization",
+                "on",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(passing_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--require-local-normalization-enabled",
+                "--max-local-normalization-rms",
+                "100",
+                "--max-local-normalization-max-abs",
+                "100",
+            ]
+        )
+        == 0
+    )
+    passing_summary = read_json(passing_out / "guardrails_summary.json")
+    passing_checks = {item["name"]: item for item in passing_summary["checks"]}
+    assert passing_summary["passed"] is True
+    assert passing_summary["local_norm_residual_quality"]["output_count"] > 0
+    assert passing_checks["local_norm_residual_quality"]["passed"] is True
+    assert passing_checks["local_norm_residual_quality"]["required"] is True
+
+    local_norm = read_json(run / "local_norm_results.json")
+    for item in local_norm["local_norm_results"]:
+        item["residual_summary"] = {
+            "valid_pixels": 4,
+            "mean": 0.0,
+            "rms": 0.5,
+            "max_abs": 2.0,
+        }
+    write_json(run / "local_norm_results.json", local_norm)
+
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(failing_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--require-local-normalization-enabled",
+                "--max-local-normalization-rms",
+                "0.1",
+                "--max-local-normalization-max-abs",
+                "1.0",
+            ]
+        )
+        == 2
+    )
+    failing_summary = read_json(failing_out / "guardrails_summary.json")
+    failing_bundle = read_json(failing_out / "acceptance_contract_bundle.json")
+    failing_checks = {item["name"]: item for item in failing_summary["checks"]}
+    assert failing_summary["passed"] is False
+    assert failing_bundle["passed"] is False
+    assert failing_checks["local_norm_residual_quality"]["passed"] is False
+    assert failing_checks["local_norm_residual_quality"]["max_rms"] == 0.5
+    assert failing_checks["local_norm_residual_quality"]["max_abs"] == 2.0
+    assert failing_checks["local_norm_residual_quality"]["status"] == "threshold_failed_or_missing"
+
+
 def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):
     run = tmp_path / "run"
     out_dir = tmp_path / "guardrails"
@@ -1599,6 +1688,13 @@ def test_cli_report_summarizes_local_norm_contract(tmp_path: Path):
             "summary": {
                 "output_count": 1,
                 "failed_output_count": 1,
+                "residual_quality": {
+                    "output_count": 1,
+                    "failed_output_count": 0,
+                    "total_valid_pixels": 4,
+                    "max_rms": 0.5,
+                    "max_abs": 2.0,
+                },
             },
             "checks": [
                 {
@@ -1622,6 +1718,7 @@ def test_cli_report_summarizes_local_norm_contract(tmp_path: Path):
                         "grid_cols": 3,
                         "full_field_map_status": "omitted_due_to_size",
                     },
+                    "residual_summary": {"valid_pixels": 4, "rms": 0.5, "max_abs": 2.0},
                     "failed_checks": ["coefficient_grid_contract"],
                 }
             ],
@@ -1659,6 +1756,9 @@ def test_cli_report_summarizes_local_norm_contract(tmp_path: Path):
     assert "F000002" in html
     assert "coefficient_grid_contract" in html
     assert "omitted_due_to_size" in html
+    assert "residual_max_rms" in html
+    assert "residual_rms" in html
+    assert "0.5" in html
 
 
 def test_cli_report_limits_large_audit_tables(tmp_path: Path):

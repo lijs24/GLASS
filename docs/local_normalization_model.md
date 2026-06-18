@@ -228,3 +228,33 @@ old or intentionally LN-off runs compatible while giving LN-required validation
 runs a hard acceptance switch. The guardrail records
 `require_local_normalization_enabled`, `local_norm_contract_enabled`, and a
 `local_norm_enabled_requirement` check in the summary and acceptance bundle.
+
+## S2-Gate 317 Residual Quality Guardrail
+
+S2-Gate 317 promotes the existing residual summaries into aggregate quality
+evidence. `local_norm_contract.json` now summarizes:
+
+- enabled output count with residual diagnostics
+- failed residual-output count
+- zero-valid-pixel output count
+- total residual valid pixels
+- maximum residual RMS
+- maximum absolute residual
+
+`glass guardrails` accepts two opt-in thresholds:
+
+```text
+--max-local-normalization-rms VALUE
+--max-local-normalization-max-abs VALUE
+```
+
+If either threshold is supplied, guardrails require LN to be enabled, the LN
+contract to pass, residual diagnostics to exist, and the aggregate residual
+metric to stay at or below the configured threshold. Without these threshold
+flags, residual metrics are reported but do not block old or intentionally
+LN-off runs.
+
+The thresholds are deliberately explicit because acceptable residual scale
+depends on calibrated image units, normalization policy, and validation data.
+This gate adds auditable diagnostics and optional acceptance limits; it does not
+change local-normalization math or read FITS pixels.

@@ -5545,6 +5545,31 @@ integration where applicable.
   no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 317: Local Normalization Residual Quality Guardrail
+
+- Extend `local-norm-contract` with residual-quality aggregation from existing
+  per-frame residual summaries: output count, failed residual count, zero-valid
+  count, total valid pixels, maximum residual RMS, and maximum absolute
+  residual.
+- Extend `glass guardrails` with optional
+  `--max-local-normalization-rms` and
+  `--max-local-normalization-max-abs` thresholds.
+- Treat either threshold as an opt-in LN residual requirement: guardrails fail
+  if LN is missing/disabled, the LN contract fails, residual diagnostics are
+  missing, or the aggregate residual metric exceeds the supplied threshold.
+- Preserve default compatibility: no residual threshold is enforced unless a
+  threshold flag is supplied.
+- Surface residual quality and threshold settings in
+  `guardrails_summary.json`, `acceptance_contract_bundle.json`, console output,
+  `local_norm_contract.json`, Markdown, and the HTML report.
+- Add focused tests for contract residual aggregation, passing residual
+  thresholds, and threshold failure after an injected residual-drift fixture.
+- Generate Gate317 guardrail artifacts from a small CPU validation run with
+  enabled continuous LN and residual thresholds.
+- Keep this gate diagnostic/guardrail scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

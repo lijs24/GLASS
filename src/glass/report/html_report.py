@@ -1362,6 +1362,7 @@ def _local_norm_contract_summary_rows(contract: dict[str, Any] | None) -> list[d
     if not contract:
         return []
     summary = contract.get("summary") if isinstance(contract.get("summary"), dict) else {}
+    residual = summary.get("residual_quality") if isinstance(summary.get("residual_quality"), dict) else {}
     return [
         {
             "status": contract.get("status"),
@@ -1373,6 +1374,10 @@ def _local_norm_contract_summary_rows(contract: dict[str, Any] | None) -> list[d
             "crop_box": contract.get("crop_box"),
             "output_count": summary.get("output_count"),
             "failed_output_count": summary.get("failed_output_count"),
+            "residual_outputs": residual.get("output_count"),
+            "residual_max_rms": residual.get("max_rms"),
+            "residual_max_abs": residual.get("max_abs"),
+            "residual_total_valid_pixels": residual.get("total_valid_pixels"),
             "source": contract.get("_report_source_path"),
         }
     ]
@@ -1416,6 +1421,7 @@ def _local_norm_contract_output_rows(contract: dict[str, Any] | None) -> list[di
             if isinstance(item.get("coefficient_grid_contract"), dict)
             else {}
         )
+        residual = item.get("residual_summary") if isinstance(item.get("residual_summary"), dict) else {}
         rows.append(
             {
                 "frame_id": item.get("frame_id"),
@@ -1429,6 +1435,8 @@ def _local_norm_contract_output_rows(contract: dict[str, Any] | None) -> list[di
                 "grid_cols": coefficient.get("grid_cols") or item.get("grid_cols"),
                 "full_field_map_status": coefficient.get("full_field_map_status")
                 or item.get("full_field_map_status"),
+                "residual_rms": residual.get("rms"),
+                "residual_max_abs": residual.get("max_abs"),
                 "failed_checks": item.get("failed_checks"),
             }
         )
