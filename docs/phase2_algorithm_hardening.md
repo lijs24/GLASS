@@ -4582,6 +4582,22 @@ integration where applicable.
   default, package build/upload, release update, release-promotion decision
   change, or real-data benchmark rerun.
 
+### S2-Gate 273: Windows Release Matrix Resident Winsorized Sweep Guard
+
+- Carry the S2-Gate 272 resident winsorized sweep default-promotion evidence
+  into `glass windows-release-matrix`.
+- Add release-matrix blockers so Windows release readiness requires a passing
+  resident winsorized sweep audit, a passing required 200-frame row, and the
+  expected sweep-audit check count from the default-promotion manifest.
+- Surface the resident winsorized sweep evidence in Windows release matrix JSON
+  and Markdown so release packaging cannot ignore hardened winsorized
+  200-frame parity blockers.
+- Add focused matrix and CLI tests for ready, missing, and failed sweep
+  evidence.
+- Keep this gate release-matrix scoped: no image math, CUDA kernel, runtime
+  default, package build/upload, GitHub release update, publish-preflight
+  change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

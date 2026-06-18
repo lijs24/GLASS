@@ -95,12 +95,22 @@ def _default_promotion(
     include_stack_engine_contract: bool = True,
     stack_engine_ready: bool = True,
     stack_engine_gap_count: int = 0,
+    include_resident_winsorized_sweep: bool = True,
+    resident_winsorized_sweep_ready: bool = True,
+    resident_winsorized_sweep_required_frame_ready: bool = True,
+    resident_winsorized_sweep_check_count: int = 27,
 ) -> None:
     manifest_ready = (
         ready
         and rejection_sample_accounting_ready
         and sample_accounting_closure_ready
         and (stack_engine_ready if include_stack_engine_contract else True)
+        and (
+            resident_winsorized_sweep_ready
+            and resident_winsorized_sweep_required_frame_ready
+            if include_resident_winsorized_sweep
+            else True
+        )
     )
     stack_recommendation = (
         "stack_engine_default_ready"
@@ -209,6 +219,28 @@ def _default_promotion(
                 }
             ],
         }
+    if include_resident_winsorized_sweep:
+        payload["resident_winsorized_sweep_audit"] = {
+            "present": True,
+            "path": "runs/checkpoints/s2_gate_269_resident_winsorized_sweep_audit.json",
+            "status": "passed" if resident_winsorized_sweep_ready else "failed",
+            "passed": resident_winsorized_sweep_ready,
+            "phase2_check_passed": resident_winsorized_sweep_ready,
+            "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+            "sweep_path": "runs/checkpoints/s2_gate_268_resident_winsorized_sweep.json",
+            "check_count": resident_winsorized_sweep_check_count,
+            "failed_check_count": 0 if resident_winsorized_sweep_ready else 1,
+            "failed_checks": []
+            if resident_winsorized_sweep_ready
+            else ["frame_200_hardened_master_rms_within_contract"],
+            "frame_counts": [8, 32, 128, 200],
+            "run_count": 4,
+            "required_frame_count": 200,
+            "required_frame_count_passed": resident_winsorized_sweep_required_frame_ready,
+            "required_frame_master_rms": 2.3e-5,
+            "required_frame_master_max_abs": 6.1e-5,
+            "required_frame_cuda_hardened_s": 0.0012,
+        }
     write_json(path, payload)
 
 
@@ -242,6 +274,12 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
     assert checks["default_promotion_sample_accounting_closure_passed"] is True
     assert checks["default_promotion_stack_engine_contract_ready"] is True
+    assert checks["default_promotion_resident_winsorized_sweep_audit_passed"] is True
+    assert checks["default_promotion_resident_winsorized_required_frame_passed"] is True
+    assert checks["default_promotion_resident_winsorized_sweep_check_count"] is True
+    assert payload["default_promotion_manifest"][
+        "resident_winsorized_sweep_required_frame_count"
+    ] == 200
     assert checks["required_cuda_package_compatible:cuda13"] is True
     assert checks["required_cuda_package_compatible:cuda12"] is True
     assert checks["required_cuda_package_compatible:cuda11"] is True
@@ -457,6 +495,89 @@ def test_windows_release_matrix_blocks_stack_engine_contract_gap(tmp_path: Path)
     ] == 1
 
 
+def test_windows_release_matrix_blocks_missing_resident_winsorized_sweep(tmp_path: Path):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, include_resident_winsorized_sweep=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_ready"]["passed"] is True
+    assert checks["default_promotion_resident_winsorized_sweep_audit_passed"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_resident_winsorized_required_frame_passed"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_resident_winsorized_sweep_check_count"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_resident_winsorized_sweep_audit_passed"][
+        "evidence"
+    ] == {
+        "present": None,
+        "status": None,
+        "passed": None,
+        "phase2_check_passed": None,
+        "failed_checks": [],
+    }
+
+
+def test_windows_release_matrix_blocks_failed_resident_winsorized_sweep(tmp_path: Path):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        resident_winsorized_sweep_ready=False,
+        resident_winsorized_sweep_required_frame_ready=False,
+        resident_winsorized_sweep_check_count=26,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_ready"]["passed"] is False
+    assert checks["default_promotion_resident_winsorized_sweep_audit_passed"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_resident_winsorized_required_frame_passed"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_resident_winsorized_sweep_check_count"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_resident_winsorized_required_frame_passed"][
+        "evidence"
+    ] == {
+        "actual_frame_count": 200,
+        "required_frame_count": 200,
+        "required_frame_count_passed": False,
+        "required_frame_master_rms": 2.3e-05,
+        "required_frame_master_max_abs": 6.1e-05,
+    }
+
+
 def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     doctor = tmp_path / "doctor.json"
     decision = tmp_path / "decision.json"
@@ -499,3 +620,7 @@ def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
         "StackEngine default contract: ready=`True` phase2-check=`True` gaps=`0` blockers=`0`"
         in markdown_text
     )
+    assert (
+        "Resident winsorized sweep: passed=`True` phase2-check=`True` "
+        "required-frame=`200` required-pass=`True` checks=`27`"
+    ) in markdown_text

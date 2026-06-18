@@ -1967,6 +1967,10 @@ def cmd_windows_release_matrix(args: argparse.Namespace) -> int:
         require_default_promotion_ready=not args.allow_missing_default_promotion,
         expected_primary_package=args.expected_primary_package,
         max_runtime_ratio=args.max_runtime_ratio,
+        min_resident_winsorized_sweep_checks=args.min_resident_winsorized_sweep_checks,
+        required_resident_winsorized_sweep_frame_count=(
+            args.required_resident_winsorized_sweep_frame_count
+        ),
     )
     write_windows_release_matrix(args.out, payload, markdown=args.markdown)
     console.print(
@@ -4906,6 +4910,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.25,
         help="maximum accepted slowest/best runtime repeat ratio from release decision evidence",
+    )
+    windows_release_matrix.add_argument(
+        "--min-resident-winsorized-sweep-checks",
+        type=int,
+        default=27,
+        help="minimum resident winsorized sweep audit check count required in default-promotion evidence",
+    )
+    windows_release_matrix.add_argument(
+        "--required-resident-winsorized-sweep-frame-count",
+        type=int,
+        default=200,
+        help="required resident winsorized sweep frame-count row in default-promotion evidence",
     )
     windows_release_matrix.add_argument(
         "--allow-cpu-only",
