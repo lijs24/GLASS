@@ -35,6 +35,7 @@ _REPORT_SECTIONS = [
     ("frame-quality-table", "Frame quality table"),
     ("registration-table", "Registration table"),
     ("registration-quality-contract", "Registration quality contract"),
+    ("warp-quality-contract", "Warp quality contract"),
     ("local-normalization-summary", "Local normalization summary"),
     ("local-normalization-contract", "Local normalization contract"),
     ("integration-summary", "Integration summary"),
@@ -1419,6 +1420,105 @@ def _registration_quality_output_rows(contract: dict[str, Any] | None) -> list[d
     return rows
 
 
+def _warp_quality_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not contract:
+        return []
+    summary = contract.get("summary") if isinstance(contract.get("summary"), dict) else {}
+    thresholds = contract.get("thresholds") if isinstance(contract.get("thresholds"), dict) else {}
+    return [
+        {
+            "status": contract.get("status"),
+            "passed": contract.get("passed"),
+            "required": contract.get("required"),
+            "output_count": summary.get("output_count"),
+            "skipped_count": summary.get("skipped_count"),
+            "artifact_ready_count": summary.get("artifact_ready_count"),
+            "min_valid_fraction": summary.get("min_valid_fraction"),
+            "max_valid_fraction": summary.get("max_valid_fraction"),
+            "missing_registered": summary.get("missing_warp_for_accepted_registration_count"),
+            "threshold_min_valid_fraction": thresholds.get("min_valid_fraction"),
+            "threshold_max_skipped_frames": thresholds.get("max_skipped_frames"),
+            "require_artifacts": thresholds.get("require_artifacts"),
+            "require_all_registered": thresholds.get("require_all_registered"),
+        }
+    ]
+
+
+def _warp_quality_failure_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("checks") or []:
+        if isinstance(item, dict) and not item.get("passed"):
+            rows.append(
+                {
+                    "scope": "check",
+                    "item": item.get("name"),
+                    "note": item.get("note"),
+                    "evidence": item.get("evidence"),
+                }
+            )
+    for item in (contract or {}).get("failed_outputs") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "scope": "output",
+                "item": item.get("frame_id"),
+                "note": "failed warp output contract",
+                "evidence": item.get("failed_checks"),
+            }
+        )
+    for frame_id in (contract or {}).get("missing_warp_for_accepted_registration") or []:
+        rows.append(
+            {
+                "scope": "registration",
+                "item": frame_id,
+                "note": "accepted registration frame has no warp output",
+                "evidence": "",
+            }
+        )
+    return rows
+
+
+def _warp_quality_output_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("outputs") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "passed": item.get("passed"),
+                "registration_status": item.get("registration_status"),
+                "interpolation": item.get("interpolation"),
+                "warp_model": item.get("warp_model"),
+                "tile_count": item.get("tile_count"),
+                "valid_pixels": item.get("valid_pixels"),
+                "pixel_count": item.get("pixel_count"),
+                "valid_fraction": item.get("valid_fraction"),
+                "artifact_ready": item.get("artifact_ready"),
+                "registered_path_exists": item.get("registered_path_exists"),
+                "coverage_path_exists": item.get("coverage_path_exists"),
+                "dq_mask_path_exists": item.get("dq_mask_path_exists"),
+                "dq_summary_has_valid": item.get("dq_summary_has_valid"),
+                "failed_checks": item.get("failed_checks"),
+            }
+        )
+    for item in (contract or {}).get("skipped_frames") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "passed": item.get("passed"),
+                "registration_status": item.get("status"),
+                "interpolation": "skipped",
+                "warp_model": item.get("reason"),
+                "failed_checks": item.get("failed_checks"),
+            }
+        )
+    return rows
+
+
 def _local_norm_contract_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not contract:
         return []
@@ -1691,6 +1791,7 @@ def write_html_report(
     pipeline_contract: dict[str, Any] | None = None,
     local_norm_contract: dict[str, Any] | None = None,
     registration_quality: dict[str, Any] | None = None,
+    warp_quality: dict[str, Any] | None = None,
     title: str = "GLASS Report",
     run_root: str | Path | None = None,
 ) -> None:
@@ -1824,6 +1925,9 @@ def write_html_report(
     registration_quality_summary_rows = _registration_quality_summary_rows(registration_quality)
     registration_quality_failure_rows = _registration_quality_failure_rows(registration_quality)
     registration_quality_output_rows = _registration_quality_output_rows(registration_quality)
+    warp_quality_summary_rows = _warp_quality_summary_rows(warp_quality)
+    warp_quality_failure_rows = _warp_quality_failure_rows(warp_quality)
+    warp_quality_output_rows = _warp_quality_output_rows(warp_quality)
     local_norm_contract_summary_rows = _local_norm_contract_summary_rows(local_norm_contract)
     local_norm_contract_failure_rows = _local_norm_contract_failure_rows(local_norm_contract)
     local_norm_contract_output_rows = _local_norm_contract_output_rows(local_norm_contract)
@@ -1919,6 +2023,14 @@ def write_html_report(
   {_table(registration_quality_summary_rows)}
   {_table(registration_quality_failure_rows)}
   {_limited_table(registration_quality_output_rows, label="registration quality rows", artifact="registration_quality_contract.json")}
+  {_h2("warp-quality-contract", "Warp quality contract")}
+  <p>The warp quality contract checks registered image, coverage, and DQ
+  artifact readiness, valid-pixel fraction, skipped-frame accounting, and
+  whether accepted registration outputs reached the warp stage. Full evidence
+  is recorded in <code>warp_quality_contract.json</code>.</p>
+  {_table(warp_quality_summary_rows)}
+  {_table(warp_quality_failure_rows)}
+  {_limited_table(warp_quality_output_rows, label="warp quality rows", artifact="warp_quality_contract.json")}
   {_h2("local-normalization-summary", "Local normalization summary")}
   <p>Enabled: <code>{escape(str((local_norm or {}).get("enabled", "pending")))}</code>.
   Reference frame: <code>{escape(str((local_norm or {}).get("reference_frame_id", "pending")))}</code>.</p>

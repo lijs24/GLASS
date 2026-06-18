@@ -1,0 +1,790 @@
+{
+  "artifact_type": "local_norm_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_results.json"
+      },
+      "name": "local_norm_results_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "schema_version": 1
+      },
+      "name": "schema_version_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": true
+      },
+      "name": "enabled_state_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "crop_box": null
+      },
+      "name": "crop_box_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "output_count": 1
+      },
+      "name": "outputs_list_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "reference_frame_id": "F000010"
+      },
+      "name": "reference_frame_id_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "model": "continuous_grid_mean_std_v1"
+      },
+      "name": "model_is_continuous",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "coefficient_field_model": "bilinear_tile_center_v1"
+      },
+      "name": "coefficient_field_model_is_bilinear",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "output_count": 1
+      },
+      "name": "enabled_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "object_output_count": 1,
+        "output_count": 1
+      },
+      "name": "all_outputs_are_objects",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "output_contracts_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "coefficient_field_model": "bilinear_tile_center_v1",
+  "created_at": "2026-06-18T14:21:07+00:00",
+  "crop_box": null,
+  "enabled": true,
+  "failed_checks": [],
+  "failed_outputs": [],
+  "local_norm_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_results.json",
+  "model": "continuous_grid_mean_std_v1",
+  "outputs": [
+    {
+      "checks": [
+        {
+          "evidence": {
+            "frame_id": "F000010"
+          },
+          "name": "frame_id_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "normalized_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010.fits"
+          },
+          "name": "normalized_path_exists",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "coverage_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\coverage_cache\\coverage_F000010.fits"
+          },
+          "name": "coverage_path_exists",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\dq_cache\\dq_local_norm_F000010.fits"
+          },
+          "name": "dq_mask_path_exists",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "dq_summary": {
+              "valid": 576
+            }
+          },
+          "name": "dq_summary_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "crop_box": null
+          },
+          "name": "crop_box_recorded",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "model": "continuous_grid_mean_std_v1"
+          },
+          "name": "model_is_continuous",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "coefficient_field_model": "bilinear_tile_center_v1"
+          },
+          "name": "coefficient_field_model_is_bilinear",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "interpolation": "bilinear_tile_center"
+          },
+          "name": "interpolation_recorded",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "tile_size": 8
+          },
+          "name": "tile_size_positive",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "grid_rows": 3
+          },
+          "name": "grid_rows_positive",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "grid_cols": 3
+          },
+          "name": "grid_cols_positive",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "valid_pixels": 576
+          },
+          "name": "valid_pixels_recorded",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "empty_tiles_filled": 0
+          },
+          "name": "empty_tile_repair_recorded",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "full_field_map_status": "written"
+          },
+          "name": "full_field_map_status_recorded",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "checks": [
+              {
+                "evidence": {
+                  "valid_pixels": 576
+                },
+                "name": "valid_pixels_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "rms": 0.0
+                },
+                "name": "rms_finite",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "max_abs": 0.0
+                },
+                "name": "max_abs_finite",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "max_abs": 0.0,
+            "passed": true,
+            "rms": 0.0,
+            "valid_pixels": 576
+          },
+          "name": "residual_summary_contract",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "checks": [
+              {
+                "evidence": {
+                  "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_coefficients.json"
+                },
+                "name": "coefficient_grid_exists",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "coefficient_frame_id": "F000010",
+                  "row_frame_id": "F000010"
+                },
+                "name": "frame_id_matches",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "coefficient_reference_frame_id": "F000010",
+                  "reference_frame_id": "F000010"
+                },
+                "name": "reference_frame_id_matches",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "model": "continuous_grid_mean_std_v1"
+                },
+                "name": "model_is_continuous",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "coefficient_field_model": "bilinear_tile_center_v1"
+                },
+                "name": "coefficient_field_model_is_bilinear",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "interpolation": "bilinear_tile_center"
+                },
+                "name": "interpolation_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 8
+                },
+                "name": "tile_size_positive",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_rows": 3
+                },
+                "name": "grid_rows_positive",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_cols": 3
+                },
+                "name": "grid_cols_positive",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_cols": 3,
+                  "grid_rows": 3
+                },
+                "name": "raw_scale_grid_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_cols": 3,
+                  "grid_rows": 3
+                },
+                "name": "raw_offset_grid_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_cols": 3,
+                  "grid_rows": 3
+                },
+                "name": "repaired_scale_grid_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_cols": 3,
+                  "grid_rows": 3
+                },
+                "name": "repaired_offset_grid_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_cols": 3,
+                  "grid_rows": 3
+                },
+                "name": "valid_pixel_grid_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "grid_cols": 3,
+                  "grid_rows": 3
+                },
+                "name": "status_grid_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "empty_tiles_filled": 0
+                },
+                "name": "empty_tile_repair_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "crop_box": null
+                },
+                "name": "crop_box_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "allowed": [
+                    "omitted_due_to_size",
+                    "written"
+                  ],
+                  "full_field_map_status": "written"
+                },
+                "name": "full_field_map_status_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "full_field_map_status": "written",
+                  "offset_field_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_offset_field.fits",
+                  "residual_map_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_residual.fits",
+                  "scale_field_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_scale_field.fits"
+                },
+                "name": "full_field_maps_exist_when_written",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "checks": [
+                    {
+                      "evidence": {
+                        "valid_pixels": 576
+                      },
+                      "name": "valid_pixels_recorded",
+                      "note": "",
+                      "passed": true
+                    },
+                    {
+                      "evidence": {
+                        "rms": 0.0
+                      },
+                      "name": "rms_finite",
+                      "note": "",
+                      "passed": true
+                    },
+                    {
+                      "evidence": {
+                        "max_abs": 0.0
+                      },
+                      "name": "max_abs_finite",
+                      "note": "",
+                      "passed": true
+                    }
+                  ],
+                  "failed_checks": [],
+                  "max_abs": 0.0,
+                  "passed": true,
+                  "rms": 0.0,
+                  "valid_pixels": 576
+                },
+                "name": "residual_summary_contract",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "coefficient_field_model": "bilinear_tile_center_v1",
+            "failed_checks": [],
+            "frame_id": "F000010",
+            "full_field_map_status": "written",
+            "grid_cols": 3,
+            "grid_rows": 3,
+            "model": "continuous_grid_mean_std_v1",
+            "passed": true,
+            "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_coefficients.json",
+            "present": true,
+            "residual_summary": {
+              "max_abs": 0.0,
+              "mean": 0.0,
+              "rms": 0.0,
+              "valid_pixels": 576
+            }
+          },
+          "name": "coefficient_grid_contract",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "coefficient_field_model": "bilinear_tile_center_v1",
+      "coefficient_grid_contract": {
+        "checks": [
+          {
+            "evidence": {
+              "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_coefficients.json"
+            },
+            "name": "coefficient_grid_exists",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "coefficient_frame_id": "F000010",
+              "row_frame_id": "F000010"
+            },
+            "name": "frame_id_matches",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "coefficient_reference_frame_id": "F000010",
+              "reference_frame_id": "F000010"
+            },
+            "name": "reference_frame_id_matches",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "model": "continuous_grid_mean_std_v1"
+            },
+            "name": "model_is_continuous",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "coefficient_field_model": "bilinear_tile_center_v1"
+            },
+            "name": "coefficient_field_model_is_bilinear",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "interpolation": "bilinear_tile_center"
+            },
+            "name": "interpolation_recorded",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "tile_size": 8
+            },
+            "name": "tile_size_positive",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_rows": 3
+            },
+            "name": "grid_rows_positive",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_cols": 3
+            },
+            "name": "grid_cols_positive",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_cols": 3,
+              "grid_rows": 3
+            },
+            "name": "raw_scale_grid_shape",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_cols": 3,
+              "grid_rows": 3
+            },
+            "name": "raw_offset_grid_shape",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_cols": 3,
+              "grid_rows": 3
+            },
+            "name": "repaired_scale_grid_shape",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_cols": 3,
+              "grid_rows": 3
+            },
+            "name": "repaired_offset_grid_shape",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_cols": 3,
+              "grid_rows": 3
+            },
+            "name": "valid_pixel_grid_shape",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "grid_cols": 3,
+              "grid_rows": 3
+            },
+            "name": "status_grid_shape",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "empty_tiles_filled": 0
+            },
+            "name": "empty_tile_repair_recorded",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "crop_box": null
+            },
+            "name": "crop_box_recorded",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "allowed": [
+                "omitted_due_to_size",
+                "written"
+              ],
+              "full_field_map_status": "written"
+            },
+            "name": "full_field_map_status_recorded",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "full_field_map_status": "written",
+              "offset_field_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_offset_field.fits",
+              "residual_map_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_residual.fits",
+              "scale_field_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_scale_field.fits"
+            },
+            "name": "full_field_maps_exist_when_written",
+            "note": "",
+            "passed": true
+          },
+          {
+            "evidence": {
+              "checks": [
+                {
+                  "evidence": {
+                    "valid_pixels": 576
+                  },
+                  "name": "valid_pixels_recorded",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "rms": 0.0
+                  },
+                  "name": "rms_finite",
+                  "note": "",
+                  "passed": true
+                },
+                {
+                  "evidence": {
+                    "max_abs": 0.0
+                  },
+                  "name": "max_abs_finite",
+                  "note": "",
+                  "passed": true
+                }
+              ],
+              "failed_checks": [],
+              "max_abs": 0.0,
+              "passed": true,
+              "rms": 0.0,
+              "valid_pixels": 576
+            },
+            "name": "residual_summary_contract",
+            "note": "",
+            "passed": true
+          }
+        ],
+        "coefficient_field_model": "bilinear_tile_center_v1",
+        "failed_checks": [],
+        "frame_id": "F000010",
+        "full_field_map_status": "written",
+        "grid_cols": 3,
+        "grid_rows": 3,
+        "model": "continuous_grid_mean_std_v1",
+        "passed": true,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_coefficients.json",
+        "present": true,
+        "residual_summary": {
+          "max_abs": 0.0,
+          "mean": 0.0,
+          "rms": 0.0,
+          "valid_pixels": 576
+        }
+      },
+      "coefficient_grid_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_coefficients.json",
+      "enabled": true,
+      "failed_checks": [],
+      "frame_id": "F000010",
+      "full_field_map_status": "written",
+      "index": 0,
+      "model": "continuous_grid_mean_std_v1",
+      "passed": true,
+      "residual_summary": {
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0,
+        "valid_pixels": 576
+      },
+      "status": "reference"
+    }
+  ],
+  "passed": true,
+  "reference_frame_id": "F000010",
+  "residual_quality": {
+    "failed_output_count": 0,
+    "max_abs": 0.0,
+    "max_rms": 0.0,
+    "output_count": 1,
+    "outputs": [
+      {
+        "failed_checks": [],
+        "frame_id": "F000010",
+        "max_abs": 0.0,
+        "passed": true,
+        "rms": 0.0,
+        "valid_pixels": 576
+      }
+    ],
+    "total_valid_pixels": 576,
+    "valid_output_count": 1,
+    "zero_valid_output_count": 0
+  },
+  "run_dir": "runs\\checkpoints\\s2_gate_316_enabled_run",
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "coefficient_field_model": "bilinear_tile_center_v1",
+    "enabled": true,
+    "failed_output_count": 0,
+    "output_count": 1,
+    "reference_frame_id": "F000010",
+    "residual_quality": {
+      "failed_output_count": 0,
+      "max_abs": 0.0,
+      "max_rms": 0.0,
+      "output_count": 1,
+      "outputs": [
+        {
+          "failed_checks": [],
+          "frame_id": "F000010",
+          "max_abs": 0.0,
+          "passed": true,
+          "rms": 0.0,
+          "valid_pixels": 576
+        }
+      ],
+      "total_valid_pixels": 576,
+      "valid_output_count": 1,
+      "zero_valid_output_count": 0
+    }
+  }
+}

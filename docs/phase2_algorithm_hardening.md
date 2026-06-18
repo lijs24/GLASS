@@ -5596,6 +5596,34 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 319: Warp Quality Guardrail
+
+- Add a `warp_quality_contract.json` artifact generated from
+  `warp_results.json`.
+- Summarize warp output count, skipped count, artifact-ready count, valid-pixel
+  fraction range, accepted-registration coverage, interpolation, and
+  interpolator registry.
+- Add `glass guardrails --min-warp-valid-fraction`,
+  `--max-warp-skipped-frames`, `--require-warp-artifacts`, and
+  `--require-warp-all-registered`.
+- Treat warp thresholds as opt-in acceptance checks: guardrails fail when
+  required warp evidence is missing, output artifacts are absent, valid-pixel
+  fractions fall below the threshold, skipped-frame count exceeds the supplied
+  ceiling, or an accepted registration row has no warp output.
+- Preserve default compatibility: warp quality is reported when warp artifacts
+  exist, but it does not block unless a warp threshold or requirement is
+  supplied.
+- Surface warp quality paths, status, thresholds, and summaries in
+  `guardrails_summary.json`, `acceptance_contract_bundle.json`, Markdown, and
+  the HTML report.
+- Add focused tests for standalone warp quality contract aggregation, passing
+  guardrail thresholds, threshold failure, artifact readiness, and skipped-row
+  accounting.
+- Generate Gate319 guardrail artifacts from a small CPU validation run.
+- Keep this gate diagnostic/guardrail scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

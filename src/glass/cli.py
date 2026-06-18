@@ -172,6 +172,7 @@ from glass.report.registration_quality import (
     build_registration_quality_contract,
     write_registration_quality_contract,
 )
+from glass.report.warp_quality import build_warp_quality_contract, write_warp_quality_contract
 from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
 from glass.report.tile_local_frame_family_search import (
     build_tile_local_frame_family_search,
@@ -318,6 +319,12 @@ def _report_registration_quality_path(run: Path, explicit: str | Path | None = N
         run,
         ["*registration_quality_contract*.json", "*registration-quality-contract*.json"],
     )
+
+
+def _report_warp_quality_path(run: Path, explicit: str | Path | None = None) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    return _newest_matching_json(run, ["*warp_quality_contract*.json", "*warp-quality-contract*.json"])
 
 
 def _local_norm_override_from_arg(value: str) -> bool | None:
@@ -519,6 +526,7 @@ def _write_run_report(
     pipeline_contract: str | Path | None = None,
     local_norm_contract: str | Path | None = None,
     registration_quality: str | Path | None = None,
+    warp_quality: str | Path | None = None,
 ) -> None:
     write_html_report(
         report_path,
@@ -544,6 +552,7 @@ def _write_run_report(
         registration_quality=_read_report_json_if_exists(
             _report_registration_quality_path(run, registration_quality)
         ),
+        warp_quality=_read_report_json_if_exists(_report_warp_quality_path(run, warp_quality)),
         run_root=run,
     )
 
@@ -752,6 +761,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     registration_quality_payload = _read_report_json_if_exists(
         _report_registration_quality_path(run, args.registration_quality)
     )
+    warp_quality_payload = _read_report_json_if_exists(_report_warp_quality_path(run, args.warp_quality))
     write_html_report(
         args.out,
         manifest=manifest,
@@ -770,6 +780,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         pipeline_contract=pipeline_contract_payload,
         local_norm_contract=local_norm_contract_payload,
         registration_quality=registration_quality_payload,
+        warp_quality=warp_quality_payload,
         run_root=run,
     )
     console.print(f"Wrote report: {args.out}")
@@ -2723,6 +2734,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     local_norm_contract_markdown = out_dir / "local_norm_contract.md"
     registration_quality_path = out_dir / "registration_quality_contract.json"
     registration_quality_markdown = out_dir / "registration_quality_contract.md"
+    warp_quality_path = out_dir / "warp_quality_contract.json"
+    warp_quality_markdown = out_dir / "warp_quality_contract.md"
     report_path = Path(args.report) if args.report else out_dir / "report.html"
     bundle_path = out_dir / "acceptance_contract_bundle.json"
     summary_path = out_dir / "guardrails_summary.json"
@@ -2769,6 +2782,31 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             registration_quality_contract,
             markdown=registration_quality_markdown,
         )
+    min_warp_valid_fraction = getattr(args, "min_warp_valid_fraction", None)
+    max_warp_skipped_frames = getattr(args, "max_warp_skipped_frames", None)
+    require_warp_artifacts = bool(getattr(args, "require_warp_artifacts", False))
+    require_warp_all_registered = bool(getattr(args, "require_warp_all_registered", False))
+    warp_quality_required = (
+        min_warp_valid_fraction is not None
+        or max_warp_skipped_frames is not None
+        or require_warp_artifacts
+        or require_warp_all_registered
+    )
+    warp_quality_present = (run / "warp_results.json").exists() or warp_quality_required
+    warp_quality_contract = None
+    if warp_quality_present:
+        warp_quality_contract = build_warp_quality_contract(
+            run,
+            min_valid_fraction=min_warp_valid_fraction,
+            max_skipped_frames=max_warp_skipped_frames,
+            require_artifacts=require_warp_artifacts,
+            require_all_registered=require_warp_all_registered,
+        )
+        write_warp_quality_contract(
+            warp_quality_path,
+            warp_quality_contract,
+            markdown=warp_quality_markdown,
+        )
 
     stack_audit = build_stack_engine_contract_audit(
         run,
@@ -2802,6 +2840,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         pipeline_contract=pipeline_path,
         local_norm_contract=local_norm_contract_path if local_norm_results_present else None,
         registration_quality=registration_quality_path if registration_quality_present else None,
+        warp_quality=warp_quality_path if warp_quality_present else None,
     )
     stack_default_promotion = (
         stack_audit.get("default_promotion") if isinstance(stack_audit.get("default_promotion"), dict) else {}
@@ -2880,6 +2919,19 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         if isinstance(registration_quality_contract, dict)
         else "not_present"
     )
+    warp_quality_condition = (
+        not warp_quality_required
+        or (
+            isinstance(warp_quality_contract, dict)
+            and bool(warp_quality_contract.get("passed"))
+        )
+    )
+    warp_quality_summary = (
+        warp_quality_contract.get("summary") if isinstance(warp_quality_contract, dict) else {}
+    )
+    warp_quality_status = (
+        warp_quality_contract.get("status") if isinstance(warp_quality_contract, dict) else "not_present"
+    )
     pipeline_calibration = (
         pipeline_audit.get("calibration") if isinstance(pipeline_audit.get("calibration"), dict) else {}
     )
@@ -2899,6 +2951,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         and local_norm_enabled_condition
         and local_norm_residual_condition
         and registration_quality_condition
+        and warp_quality_condition
     )
     summary = {
         "schema_version": 1,
@@ -2918,6 +2971,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "max_registration_rms_px": max_registration_rms_px,
         "min_registration_inliers": min_registration_inliers,
         "require_registration_all_accepted": require_registration_all_accepted,
+        "min_warp_valid_fraction": min_warp_valid_fraction,
+        "max_warp_skipped_frames": max_warp_skipped_frames,
+        "require_warp_artifacts": require_warp_artifacts,
+        "require_warp_all_registered": require_warp_all_registered,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -2931,6 +2988,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "registration_quality_required": registration_quality_required,
         "registration_quality_status": registration_quality_status,
         "registration_quality": registration_quality_summary,
+        "warp_quality_required": warp_quality_required,
+        "warp_quality_status": warp_quality_status,
+        "warp_quality": warp_quality_summary,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2947,6 +3007,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             else None,
             "registration_quality_contract_markdown": str(registration_quality_markdown)
             if registration_quality_present
+            else None,
+            "warp_quality_contract": str(warp_quality_path) if warp_quality_present else None,
+            "warp_quality_contract_markdown": str(warp_quality_markdown)
+            if warp_quality_present
             else None,
             "acceptance_contract_bundle": str(bundle_path),
             "report": str(report_path),
@@ -3051,6 +3115,34 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             else [],
         }
     )
+    summary["checks"].append(
+        {
+            "name": "warp_quality",
+            "passed": warp_quality_condition,
+            "required": warp_quality_required,
+            "status": warp_quality_status,
+            "output_count": warp_quality_summary.get("output_count")
+            if isinstance(warp_quality_summary, dict)
+            else None,
+            "skipped_count": warp_quality_summary.get("skipped_count")
+            if isinstance(warp_quality_summary, dict)
+            else None,
+            "artifact_ready_count": warp_quality_summary.get("artifact_ready_count")
+            if isinstance(warp_quality_summary, dict)
+            else None,
+            "min_valid_fraction": warp_quality_summary.get("min_valid_fraction")
+            if isinstance(warp_quality_summary, dict)
+            else None,
+            "missing_warp_for_accepted_registration_count": warp_quality_summary.get(
+                "missing_warp_for_accepted_registration_count"
+            )
+            if isinstance(warp_quality_summary, dict)
+            else None,
+            "failed": (warp_quality_contract or {}).get("failed_checks", [])
+            if isinstance(warp_quality_contract, dict)
+            else [],
+        }
+    )
     bundle = {
         "schema_version": 1,
         "created_at": now_iso(),
@@ -3070,6 +3162,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "max_registration_rms_px": max_registration_rms_px,
         "min_registration_inliers": min_registration_inliers,
         "require_registration_all_accepted": require_registration_all_accepted,
+        "min_warp_valid_fraction": min_warp_valid_fraction,
+        "max_warp_skipped_frames": max_warp_skipped_frames,
+        "require_warp_artifacts": require_warp_artifacts,
+        "require_warp_all_registered": require_warp_all_registered,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -3083,6 +3179,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "registration_quality_required": registration_quality_required,
         "registration_quality_status": registration_quality_status,
         "registration_quality": registration_quality_summary,
+        "warp_quality_required": warp_quality_required,
+        "warp_quality_status": warp_quality_status,
+        "warp_quality": warp_quality_summary,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -3100,6 +3199,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             else None,
             "registration_quality_contract_markdown": str(registration_quality_markdown)
             if registration_quality_present
+            else None,
+            "warp_quality_contract": str(warp_quality_path) if warp_quality_present else None,
+            "warp_quality_contract_markdown": str(warp_quality_markdown)
+            if warp_quality_present
             else None,
             "report": str(report_path),
             "resident_calibration_contract": args.resident_calibration_contract_json,
@@ -3134,6 +3237,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "max_registration_rms_px": max_registration_rms_px,
             "min_registration_inliers": min_registration_inliers,
             "require_registration_all_accepted": require_registration_all_accepted,
+            "min_warp_valid_fraction": min_warp_valid_fraction,
+            "max_warp_skipped_frames": max_warp_skipped_frames,
+            "require_warp_artifacts": require_warp_artifacts,
+            "require_warp_all_registered": require_warp_all_registered,
             "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
@@ -3144,6 +3251,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "local_norm_residual_quality": local_norm_residual_quality,
             "registration_quality_status": registration_quality_status,
             "registration_quality_required": registration_quality_required,
+            "warp_quality_status": warp_quality_status,
+            "warp_quality_required": warp_quality_required,
             "resident_native_calibration": resident_native_calibration,
         }
     )
@@ -3852,6 +3961,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--pipeline-contract", help="optional pipeline invariant contract audit JSON to summarize")
     report.add_argument("--local-norm-contract", help="optional local-normalization contract JSON to summarize")
     report.add_argument("--registration-quality", help="optional registration quality contract JSON to summarize")
+    report.add_argument("--warp-quality", help="optional warp quality contract JSON to summarize")
     report.set_defaults(func=cmd_report)
 
     audit = sub.add_parser("audit", help="scan, plan, and report in one command")
@@ -6113,6 +6223,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-registration-all-accepted",
         action="store_true",
         help="fail guardrails when any registration output is rejected or skipped",
+    )
+    guardrails.add_argument(
+        "--min-warp-valid-fraction",
+        type=float,
+        help="fail guardrails when accepted warp outputs have a lower valid-pixel fraction",
+    )
+    guardrails.add_argument(
+        "--max-warp-skipped-frames",
+        type=int,
+        help="fail guardrails when warp skipped-frame count exceeds this threshold",
+    )
+    guardrails.add_argument(
+        "--require-warp-artifacts",
+        action="store_true",
+        help="fail guardrails unless warp registered, coverage, and DQ artifacts are present",
+    )
+    guardrails.add_argument(
+        "--require-warp-all-registered",
+        action="store_true",
+        help="fail guardrails unless every accepted registration frame has a warp output",
     )
     guardrails.add_argument(
         "--pixel-verify",

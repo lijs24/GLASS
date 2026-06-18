@@ -528,3 +528,40 @@ This gate does not change registration math. It promotes existing alignment
 diagnostics into a reusable acceptance contract so future 200-light benchmark
 runs can set explicit registration tolerances instead of relying on visual
 inspection or scattered JSON fields.
+
+## S2-Gate 319 Warp Quality Contract
+
+S2-Gate 319 adds a metadata/header-level warp quality contract derived from
+`warp_results.json`. The contract records:
+
+- warp output count
+- skipped warp frame count
+- artifact-ready output count
+- minimum and maximum valid-pixel fraction across warped outputs
+- registered, coverage, and DQ artifact existence
+- DQ summary readiness
+- accepted registration frame count and any accepted frames missing a warp
+  output
+- interpolation mode, interpolator registry, warp model, tile count, and valid
+  pixel count per frame
+
+`glass guardrails` can enforce the contract with:
+
+```text
+--min-warp-valid-fraction VALUE
+--max-warp-skipped-frames VALUE
+--require-warp-artifacts
+--require-warp-all-registered
+```
+
+The thresholds are opt-in. If no warp threshold is supplied, warp quality is
+reported when `warp_results.json` exists, but it does not block guardrails. When
+a warp threshold or requirement is supplied, guardrails fail if warp evidence is
+missing, output artifacts are absent, a warped output falls below the valid
+coverage threshold, skipped-frame count exceeds the supplied ceiling, or an
+accepted registration row has no warp output.
+
+This gate does not change warp math or interpolation behavior. It turns the
+existing registered image, coverage, and DQ outputs into a reusable acceptance
+surface so registration failures or missing warp artifacts cannot hide until
+local normalization or integration.

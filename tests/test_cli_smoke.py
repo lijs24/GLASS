@@ -433,6 +433,7 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     pipeline_contract = read_json(out_dir / "pipeline_contract.json")
     local_norm_contract = read_json(out_dir / "local_norm_contract.json")
     registration_quality = read_json(out_dir / "registration_quality_contract.json")
+    warp_quality = read_json(out_dir / "warp_quality_contract.json")
     assert summary["passed"] is True
     assert summary["pixel_verify"] is True
     assert summary["require_stack_default_ready"] is True
@@ -443,6 +444,8 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["local_norm_contract_enabled"] is False
     assert summary["registration_quality_required"] is False
     assert summary["registration_quality_status"] == "passed"
+    assert summary["warp_quality_required"] is False
+    assert summary["warp_quality_status"] == "passed"
     assert summary["resident_calibration_contract_json"] == str(resident_calibration)
     assert summary["resident_result_contract_json"] == str(resident_result)
     assert summary["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
@@ -450,6 +453,7 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["artifacts"]["local_norm_contract"] == str(out_dir / "local_norm_contract.json")
     assert summary["artifacts"]["local_norm_contract_markdown"] == str(out_dir / "local_norm_contract.md")
     assert summary["artifacts"]["registration_quality_contract"] == str(out_dir / "registration_quality_contract.json")
+    assert summary["artifacts"]["warp_quality_contract"] == str(out_dir / "warp_quality_contract.json")
     assert summary["artifacts"]["acceptance_contract_bundle"] == str(out_dir / "acceptance_contract_bundle.json")
     assert bundle["artifact_type"] == "glass_acceptance_contract_bundle"
     assert bundle["passed"] is True
@@ -461,6 +465,8 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert bundle["local_norm_contract_enabled"] is False
     assert bundle["registration_quality_required"] is False
     assert bundle["registration_quality_status"] == "passed"
+    assert bundle["warp_quality_required"] is False
+    assert bundle["warp_quality_status"] == "passed"
     assert bundle["resident_calibration_contract_json"] == str(resident_calibration)
     assert bundle["resident_result_contract_json"] == str(resident_result)
     assert bundle["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
@@ -468,6 +474,7 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert bundle["artifacts"]["local_norm_contract"] == str(out_dir / "local_norm_contract.json")
     assert bundle["artifacts"]["local_norm_contract_markdown"] == str(out_dir / "local_norm_contract.md")
     assert bundle["artifacts"]["registration_quality_contract"] == str(out_dir / "registration_quality_contract.json")
+    assert bundle["artifacts"]["warp_quality_contract"] == str(out_dir / "warp_quality_contract.json")
     assert bundle["acceptance_audit_arguments"] == [
         "--pipeline-contract-json",
         str(out_dir / "pipeline_contract.json"),
@@ -487,7 +494,7 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["checks"][4]["name"] == "local_norm_enabled_requirement"
     assert summary["checks"][4]["passed"] is True
     assert summary["checks"][4]["required"] is False
-    assert {item["name"] for item in summary["checks"]} >= {"registration_quality"}
+    assert {item["name"] for item in summary["checks"]} >= {"registration_quality", "warp_quality"}
     assert stack_contract["passed"] is True
     assert stack_contract["default_promotion"]["ready"] is True
     assert pipeline_contract["passed"] is True
@@ -499,10 +506,14 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert local_norm_contract["passed"] is True
     assert registration_quality["artifact_type"] == "registration_quality_contract"
     assert registration_quality["passed"] is True
+    assert warp_quality["artifact_type"] == "warp_quality_contract"
+    assert warp_quality["passed"] is True
+    assert warp_quality["summary"]["output_count"] >= 1
     assert (out_dir / "stack_engine_contract.md").exists()
     assert (out_dir / "pipeline_contract.md").exists()
     assert (out_dir / "local_norm_contract.md").exists()
     assert (out_dir / "registration_quality_contract.md").exists()
+    assert (out_dir / "warp_quality_contract.md").exists()
     assert (out_dir / "report.html").exists()
     html = (out_dir / "report.html").read_text(encoding="utf-8")
     assert "StackEngine contract audit" in html
@@ -517,6 +528,8 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert "disabled_passthrough" in html
     assert "Registration quality contract" in html
     assert "registration_quality_contract.json" in html
+    assert "Warp quality contract" in html
+    assert "warp_quality_contract.json" in html
 
 
 def test_cli_guardrails_require_enabled_local_normalization(small_fits_dataset, tmp_path: Path):
@@ -774,6 +787,79 @@ def test_cli_guardrails_registration_quality_thresholds(small_fits_dataset, tmp_
     assert contract_checks["accepted_registration_inliers_meet_threshold"]["passed"] is False
     assert contract_checks["all_registration_outputs_accepted"]["passed"] is False
     assert failing_contract["summary"]["failed_count"] >= 1
+
+
+def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Path):
+    run = tmp_path / "run"
+    passing_out = tmp_path / "passing_guardrails"
+    failing_out = tmp_path / "failing_guardrails"
+
+    assert main(["audit", "--root", str(small_fits_dataset), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(passing_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--min-warp-valid-fraction",
+                "1.0",
+                "--max-warp-skipped-frames",
+                "2",
+                "--require-warp-artifacts",
+                "--require-warp-all-registered",
+            ]
+        )
+        == 0
+    )
+    passing_summary = read_json(passing_out / "guardrails_summary.json")
+    passing_contract = read_json(passing_out / "warp_quality_contract.json")
+    passing_checks = {item["name"]: item for item in passing_summary["checks"]}
+    html = (passing_out / "report.html").read_text(encoding="utf-8")
+    assert passing_summary["passed"] is True
+    assert passing_summary["warp_quality_required"] is True
+    assert passing_checks["warp_quality"]["passed"] is True
+    assert passing_contract["required"] is True
+    assert passing_contract["summary"]["output_count"] >= 1
+    assert passing_contract["summary"]["min_valid_fraction"] == 1.0
+    assert "Warp quality contract" in html
+    assert "warp_quality_contract.json" in html
+
+    warp_results = read_json(run / "warp_results.json")
+    warp_results["warp_results"][0]["valid_pixels"] = 0
+    write_json(run / "warp_results.json", warp_results)
+
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(failing_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--min-warp-valid-fraction",
+                "1.0",
+                "--max-warp-skipped-frames",
+                "99",
+                "--require-warp-artifacts",
+                "--require-warp-all-registered",
+            ]
+        )
+        == 2
+    )
+    failing_summary = read_json(failing_out / "guardrails_summary.json")
+    failing_bundle = read_json(failing_out / "acceptance_contract_bundle.json")
+    failing_contract = read_json(failing_out / "warp_quality_contract.json")
+    failing_checks = {item["name"]: item for item in failing_summary["checks"]}
+    assert failing_summary["passed"] is False
+    assert failing_bundle["passed"] is False
+    assert failing_checks["warp_quality"]["passed"] is False
+    assert "warp_valid_fraction_meets_threshold" in failing_contract["failed_checks"]
 
 
 def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):
