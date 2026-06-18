@@ -699,11 +699,26 @@ def _write_publish_preflight(
     include_resident_winsorized_sweep: bool = True,
     integration_engine_policy_ready: bool = True,
     include_integration_engine_policy: bool = True,
+    stack_runtime_default_ready: bool = True,
+    matrix_stack_runtime_default_ready: bool | None = None,
+    default_promotion_stack_runtime_default_ready: bool | None = None,
+    include_stack_runtime_default: bool = True,
     stack_publication_audit_ready: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
     include_stack_publication_audit: bool = True,
 ) -> None:
+    matrix_runtime_ready = (
+        stack_runtime_default_ready
+        if matrix_stack_runtime_default_ready is None
+        else matrix_stack_runtime_default_ready
+    )
+    default_runtime_ready = (
+        stack_runtime_default_ready
+        if default_promotion_stack_runtime_default_ready is None
+        else default_promotion_stack_runtime_default_ready
+    )
+    runtime_defaults_ready = matrix_runtime_ready and default_runtime_ready
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
     ) and (
@@ -714,6 +729,8 @@ def _write_publish_preflight(
         resident_winsorized_sweep_ready or not include_resident_winsorized_sweep
     ) and (
         integration_engine_policy_ready or not include_integration_engine_policy
+    ) and (
+        runtime_defaults_ready or not include_stack_runtime_default
     ) and (
         (
             stack_publication_audit_ready
@@ -919,6 +936,79 @@ def _write_publish_preflight(
                 "github_plan_stack_engine_contract_agreement_passed",
                 "matrix_stack_engine_contract_ready",
                 "default_promotion_stack_engine_contract_ready",
+            ]
+    if include_stack_runtime_default:
+        matrix_status = "passed" if matrix_runtime_ready else "failed"
+        default_status = "passed" if default_runtime_ready else "failed"
+        runtime_match = runtime_defaults_ready
+        summary.update(
+            {
+                "matrix_stack_engine_runtime_default_ready": matrix_runtime_ready,
+                "matrix_acceptance_stack_engine_runtime_default_status": matrix_status,
+                "matrix_pipeline_stack_engine_runtime_default_status": matrix_status,
+                "matrix_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                    0 if matrix_runtime_ready else 1
+                ),
+                "matrix_stack_engine_runtime_default_pipeline_failed_output_count": (
+                    0 if matrix_runtime_ready else 1
+                ),
+                "default_promotion_stack_engine_runtime_default_ready": (
+                    default_runtime_ready
+                ),
+                "default_promotion_acceptance_stack_engine_runtime_default_status": (
+                    default_status
+                ),
+                "default_promotion_pipeline_stack_engine_runtime_default_status": (
+                    default_status
+                ),
+                "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                    0 if default_runtime_ready else 1
+                ),
+                "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count": (
+                    0 if default_runtime_ready else 1
+                ),
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "windows_release_matrix_acceptance_stack_engine_runtime_default_passed",
+                    "passed": matrix_runtime_ready,
+                },
+                {
+                    "name": "windows_release_matrix_pipeline_stack_engine_runtime_default_passed",
+                    "passed": matrix_runtime_ready,
+                },
+                {
+                    "name": "default_promotion_acceptance_stack_engine_runtime_default_passed",
+                    "passed": default_runtime_ready,
+                },
+                {
+                    "name": "default_promotion_pipeline_stack_engine_runtime_default_passed",
+                    "passed": default_runtime_ready,
+                },
+                {
+                    "name": "matrix_stack_engine_runtime_default_matches_default_promotion",
+                    "passed": runtime_match,
+                },
+            ]
+        )
+        if not matrix_runtime_ready:
+            failed_checks = [
+                *failed_checks,
+                "windows_release_matrix_acceptance_stack_engine_runtime_default_passed",
+                "windows_release_matrix_pipeline_stack_engine_runtime_default_passed",
+            ]
+        if not default_runtime_ready:
+            failed_checks = [
+                *failed_checks,
+                "default_promotion_acceptance_stack_engine_runtime_default_passed",
+                "default_promotion_pipeline_stack_engine_runtime_default_passed",
+            ]
+        if not runtime_match:
+            failed_checks = [
+                *failed_checks,
+                "matrix_stack_engine_runtime_default_matches_default_promotion",
             ]
     if include_resident_winsorized_sweep:
         status = "passed" if resident_winsorized_sweep_ready else "failed"
@@ -1236,6 +1326,10 @@ def _status_payload(
     publish_preflight_integration_engine_policy_status: str = "passed",
     publish_preflight_integration_engine_policy_ready: bool = True,
     publish_preflight_stack_engine_status: str = "passed",
+    publish_preflight_stack_runtime_default_status: str = "passed",
+    publish_preflight_stack_runtime_default_ready: bool = True,
+    publish_preflight_stack_runtime_default_legacy_master_count: int = 0,
+    publish_preflight_stack_runtime_default_failed_output_count: int = 0,
     publish_preflight_resident_winsorized_status: str = "passed",
     publish_preflight_resident_winsorized_required_frame_passed: bool = True,
     publish_preflight_resident_winsorized_check_count: int = 27,
@@ -1386,6 +1480,36 @@ def _status_payload(
             "default_promotion_stack_engine_contract_default_gap_count": (
                 0 if publish_preflight_stack_engine_status == "passed" else 1
             ),
+            "matrix_stack_engine_runtime_default_ready": (
+                publish_preflight_stack_runtime_default_ready
+            ),
+            "matrix_acceptance_stack_engine_runtime_default_status": (
+                publish_preflight_stack_runtime_default_status
+            ),
+            "matrix_pipeline_stack_engine_runtime_default_status": (
+                publish_preflight_stack_runtime_default_status
+            ),
+            "matrix_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                publish_preflight_stack_runtime_default_legacy_master_count
+            ),
+            "matrix_stack_engine_runtime_default_pipeline_failed_output_count": (
+                publish_preflight_stack_runtime_default_failed_output_count
+            ),
+            "default_promotion_stack_engine_runtime_default_ready": (
+                publish_preflight_stack_runtime_default_ready
+            ),
+            "default_promotion_acceptance_stack_engine_runtime_default_status": (
+                publish_preflight_stack_runtime_default_status
+            ),
+            "default_promotion_pipeline_stack_engine_runtime_default_status": (
+                publish_preflight_stack_runtime_default_status
+            ),
+            "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                publish_preflight_stack_runtime_default_legacy_master_count
+            ),
+            "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count": (
+                publish_preflight_stack_runtime_default_failed_output_count
+            ),
             "matrix_resident_winsorized_sweep_status": (
                 publish_preflight_resident_winsorized_status
             ),
@@ -1476,6 +1600,32 @@ def _status_payload(
             ),
             "matrix_stack_engine_contract_matches_default_promotion": (
                 publish_preflight_stack_engine_status == "passed"
+            ),
+            "windows_release_matrix_acceptance_stack_engine_runtime_default_passed": (
+                publish_preflight_stack_runtime_default_status == "passed"
+                and publish_preflight_stack_runtime_default_ready
+                and publish_preflight_stack_runtime_default_legacy_master_count == 0
+            ),
+            "windows_release_matrix_pipeline_stack_engine_runtime_default_passed": (
+                publish_preflight_stack_runtime_default_status == "passed"
+                and publish_preflight_stack_runtime_default_ready
+                and publish_preflight_stack_runtime_default_failed_output_count == 0
+            ),
+            "default_promotion_acceptance_stack_engine_runtime_default_passed": (
+                publish_preflight_stack_runtime_default_status == "passed"
+                and publish_preflight_stack_runtime_default_ready
+                and publish_preflight_stack_runtime_default_legacy_master_count == 0
+            ),
+            "default_promotion_pipeline_stack_engine_runtime_default_passed": (
+                publish_preflight_stack_runtime_default_status == "passed"
+                and publish_preflight_stack_runtime_default_ready
+                and publish_preflight_stack_runtime_default_failed_output_count == 0
+            ),
+            "matrix_stack_engine_runtime_default_matches_default_promotion": (
+                publish_preflight_stack_runtime_default_status == "passed"
+                and publish_preflight_stack_runtime_default_ready
+                and publish_preflight_stack_runtime_default_legacy_master_count == 0
+                and publish_preflight_stack_runtime_default_failed_output_count == 0
             ),
             "matrix_resident_winsorized_sweep_audit_passed": (
                 publish_preflight_resident_winsorized_status == "passed"
@@ -1911,6 +2061,46 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         == 0
     )
     assert (
+        payload["publish_preflight"]["matrix_stack_engine_runtime_default_ready"]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_acceptance_stack_engine_runtime_default_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_pipeline_stack_engine_runtime_default_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_stack_engine_runtime_default_acceptance_legacy_master_count"
+        ]
+        == 0
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_stack_engine_runtime_default_pipeline_failed_output_count"
+        ]
+        == 0
+    )
+    assert (
+        payload["publish_preflight"][
+            "windows_release_matrix_acceptance_stack_engine_runtime_default_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_stack_engine_runtime_default_matches_default_promotion"
+        ]
+        is True
+    )
+    assert (
         payload["publish_preflight"]["matrix_resident_winsorized_sweep_status"]
         == "passed"
     )
@@ -2038,6 +2228,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["windows_publish_preflight_sample_accounting_closure_passed"] is True
     assert checks["windows_publish_preflight_integration_engine_policy_passed"] is True
     assert checks["windows_publish_preflight_stack_engine_default_contract_ready"] is True
+    assert checks["windows_publish_preflight_stack_engine_runtime_default_passed"] is True
     assert checks["windows_publish_preflight_resident_winsorized_sweep_passed"] is True
     assert (
         checks["windows_publish_preflight_stack_engine_publication_audit_passed"]
@@ -2303,6 +2494,9 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Integration engine policy checks: matrix-acceptance=True" in text
     assert "StackEngine default contract statuses: phase2=passed" in text
     assert "StackEngine default gaps: matrix=0, default-promotion=0" in text
+    assert "StackEngine runtime default statuses: matrix-ready=True" in text
+    assert "StackEngine runtime default checks: matrix-acceptance=True" in text
+    assert "StackEngine runtime default drift counters: matrix-legacy=0" in text
     assert "Resident winsorized sweep statuses: matrix=passed" in text
     assert "Resident winsorized sweep required frame: matrix=200/True" in text
     assert "Resident winsorized sweep checks: matrix-count=27" in text
@@ -2835,6 +3029,138 @@ def test_phase2_status_blocks_failed_publish_preflight_stack_engine_contract(
     ]["default_promotion_default_gap_count"] == 1
 
 
+def test_phase2_status_blocks_missing_publish_preflight_runtime_default_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=298)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        include_stack_runtime_default=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    runtime_check = checks[
+        "windows_publish_preflight_stack_engine_runtime_default_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert runtime_check["passed"] is False
+    assert runtime_check["evidence"]["matrix_ready"] is None
+    assert runtime_check["evidence"]["matrix_acceptance_check"] is None
+    assert runtime_check["evidence"]["agreement_check"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_matrix_runtime_default(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=298)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        matrix_stack_runtime_default_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    runtime_check = checks[
+        "windows_publish_preflight_stack_engine_runtime_default_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert runtime_check["passed"] is False
+    assert runtime_check["evidence"]["matrix_ready"] is False
+    assert runtime_check["evidence"]["matrix_acceptance_status"] == "failed"
+    assert runtime_check["evidence"]["matrix_pipeline_failed_output_count"] == 1
+    assert runtime_check["evidence"]["default_promotion_ready"] is True
+    assert runtime_check["evidence"]["matrix_acceptance_check"] is False
+    assert runtime_check["evidence"]["agreement_check"] is False
+
+
+def test_phase2_status_blocks_failed_publish_preflight_default_runtime_default(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=298)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        default_promotion_stack_runtime_default_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    runtime_check = checks[
+        "windows_publish_preflight_stack_engine_runtime_default_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert runtime_check["passed"] is False
+    assert runtime_check["evidence"]["matrix_ready"] is True
+    assert runtime_check["evidence"]["default_promotion_ready"] is False
+    assert (
+        runtime_check["evidence"]["default_promotion_acceptance_status"]
+        == "failed"
+    )
+    assert (
+        runtime_check["evidence"][
+            "default_promotion_pipeline_failed_output_count"
+        ]
+        == 1
+    )
+    assert runtime_check["evidence"]["default_promotion_pipeline_check"] is False
+    assert runtime_check["evidence"]["agreement_check"] is False
+
+
 def test_phase2_status_blocks_missing_publish_preflight_resident_winsorized_sweep(
     tmp_path: Path,
 ):
@@ -3090,6 +3416,18 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     )
     assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is True
     assert checks["windows_publish_preflight_stack_engine_status_preserved"] is True
+    assert (
+        checks[
+            "windows_publish_preflight_stack_engine_runtime_default_preserved"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "windows_publish_preflight_stack_engine_runtime_default_status_preserved"
+        ]
+        is True
+    )
     assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_status_preserved"] is True
     assert checks["stack_engine_publication_audit_passed_preserved"] is True
@@ -3151,6 +3489,10 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             publish_preflight_integration_engine_policy_status="failed",
             publish_preflight_integration_engine_policy_ready=False,
             publish_preflight_stack_engine_status="failed",
+            publish_preflight_stack_runtime_default_status="failed",
+            publish_preflight_stack_runtime_default_ready=False,
+            publish_preflight_stack_runtime_default_legacy_master_count=1,
+            publish_preflight_stack_runtime_default_failed_output_count=1,
             stack_publication_passed=False,
             stack_publication_policy_ready=False,
             stack_publication_resident_winsorized_ready=False,
@@ -3200,6 +3542,18 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     )
     assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is False
     assert checks["windows_publish_preflight_stack_engine_status_preserved"] is False
+    assert (
+        checks[
+            "windows_publish_preflight_stack_engine_runtime_default_preserved"
+        ]
+        is False
+    )
+    assert (
+        checks[
+            "windows_publish_preflight_stack_engine_runtime_default_status_preserved"
+        ]
+        is False
+    )
     assert checks["stack_engine_publication_audit_passed_preserved"] is False
     assert checks["stack_engine_publication_policy_chain_preserved"] is False
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is False
@@ -3737,6 +4091,61 @@ def test_phase2_status_compare_flags_publish_preflight_stack_engine_regression(
     assert checks["windows_publish_preflight_stack_engine_status_preserved"][
         "evidence"
     ]["candidate"]["matrix_stack_engine_contract_status"] == "failed"
+
+
+def test_phase2_status_compare_flags_publish_preflight_runtime_default_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=297))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=298,
+            publish_preflight_stack_runtime_default_status="failed",
+            publish_preflight_stack_runtime_default_ready=False,
+            publish_preflight_stack_runtime_default_legacy_master_count=1,
+            publish_preflight_stack_runtime_default_failed_output_count=1,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks[
+        "windows_publish_preflight_stack_engine_runtime_default_preserved"
+    ]["passed"] is False
+    assert checks[
+        "windows_publish_preflight_stack_engine_runtime_default_preserved"
+    ]["evidence"]["candidate"]["checks_passed"] is False
+    assert checks[
+        "windows_publish_preflight_stack_engine_runtime_default_status_preserved"
+    ]["passed"] is False
+    candidate_statuses = checks[
+        "windows_publish_preflight_stack_engine_runtime_default_status_preserved"
+    ]["evidence"]["candidate"]
+    assert candidate_statuses["matrix_stack_engine_runtime_default_ready"] is False
+    assert (
+        candidate_statuses["matrix_acceptance_stack_engine_runtime_default_status"]
+        == "failed"
+    )
+    assert (
+        candidate_statuses[
+            "matrix_stack_engine_runtime_default_acceptance_legacy_master_count"
+        ]
+        == 1
+    )
+    assert (
+        payload["candidate"]["publish_preflight_stack_engine_runtime_default"][
+            "matrix_pipeline_stack_engine_runtime_default_status"
+        ]
+        == "failed"
+    )
 
 
 def test_phase2_status_compare_flags_publish_preflight_resident_winsorized_regression(

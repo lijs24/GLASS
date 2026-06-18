@@ -576,6 +576,16 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
             "passed": False,
         }
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    matrix_runtime_default = _publish_preflight_runtime_default_layer(
+        payload,
+        "windows_release_matrix",
+        "matrix",
+    )
+    default_runtime_default = _publish_preflight_runtime_default_layer(
+        payload,
+        "default_promotion_manifest",
+        "default_promotion",
+    )
     return {
         "path": payload.get("_path"),
         "exists": True,
@@ -862,7 +872,310 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 "matrix_stack_engine_publication_audit_matches_default_promotion",
             )
         ),
+        "matrix_stack_engine_runtime_default_ready": summary.get(
+            "matrix_stack_engine_runtime_default_ready",
+            matrix_runtime_default.get("matrix_stack_engine_runtime_default_ready"),
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_status": summary.get(
+            "matrix_acceptance_stack_engine_runtime_default_status",
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_status"
+            ),
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_status": summary.get(
+            "matrix_pipeline_stack_engine_runtime_default_status",
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_status"
+            ),
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_check_present": (
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_check_present"
+            )
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_check_passed": (
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_check_passed"
+            )
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_phase2_check_passed": (
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_phase2_check_passed"
+            )
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_master_count": (
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_master_count"
+            )
+        ),
+        "matrix_stack_engine_runtime_default_acceptance_legacy_master_count": (
+            summary.get(
+                "matrix_stack_engine_runtime_default_acceptance_legacy_master_count",
+                matrix_runtime_default.get(
+                    "matrix_acceptance_stack_engine_runtime_default_legacy_master_count"
+                ),
+            )
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_failed_master_count": (
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_failed_master_count"
+            )
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_failed_output_count": (
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_failed_output_count"
+            )
+        ),
+        "matrix_acceptance_stack_engine_runtime_default_explicit_cuda_fast_path_count": (
+            matrix_runtime_default.get(
+                "matrix_acceptance_stack_engine_runtime_default_explicit_cuda_fast_path_count"
+            )
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_check_present": (
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_check_present"
+            )
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_check_passed": (
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_check_passed"
+            )
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_phase2_check_passed": (
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_phase2_check_passed"
+            )
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_master_count": (
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_master_count"
+            )
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_legacy_master_count": (
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_legacy_master_count"
+            )
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_failed_master_count": (
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_failed_master_count"
+            )
+        ),
+        "matrix_stack_engine_runtime_default_pipeline_failed_output_count": (
+            summary.get(
+                "matrix_stack_engine_runtime_default_pipeline_failed_output_count",
+                matrix_runtime_default.get(
+                    "matrix_pipeline_stack_engine_runtime_default_failed_output_count"
+                ),
+            )
+        ),
+        "matrix_pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count": (
+            matrix_runtime_default.get(
+                "matrix_pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count"
+            )
+        ),
+        "default_promotion_stack_engine_runtime_default_ready": summary.get(
+            "default_promotion_stack_engine_runtime_default_ready",
+            default_runtime_default.get(
+                "default_promotion_stack_engine_runtime_default_ready"
+            ),
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_status": summary.get(
+            "default_promotion_acceptance_stack_engine_runtime_default_status",
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_status"
+            ),
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_status": summary.get(
+            "default_promotion_pipeline_stack_engine_runtime_default_status",
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_status"
+            ),
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_check_present": (
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_check_present"
+            )
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_check_passed": (
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_check_passed"
+            )
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_phase2_check_passed": (
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_phase2_check_passed"
+            )
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_master_count": (
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_master_count"
+            )
+        ),
+        "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count": (
+            summary.get(
+                "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count",
+                default_runtime_default.get(
+                    "default_promotion_acceptance_stack_engine_runtime_default_legacy_master_count"
+                ),
+            )
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_failed_master_count": (
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_failed_master_count"
+            )
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_failed_output_count": (
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_failed_output_count"
+            )
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_explicit_cuda_fast_path_count": (
+            default_runtime_default.get(
+                "default_promotion_acceptance_stack_engine_runtime_default_explicit_cuda_fast_path_count"
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_check_present": (
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_check_present"
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_check_passed": (
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_check_passed"
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_phase2_check_passed": (
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_phase2_check_passed"
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_master_count": (
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_master_count"
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_legacy_master_count": (
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_legacy_master_count"
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_failed_master_count": (
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_failed_master_count"
+            )
+        ),
+        "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count": (
+            summary.get(
+                "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count",
+                default_runtime_default.get(
+                    "default_promotion_pipeline_stack_engine_runtime_default_failed_output_count"
+                ),
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count": (
+            default_runtime_default.get(
+                "default_promotion_pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count"
+            )
+        ),
+        "windows_release_matrix_acceptance_stack_engine_runtime_default_passed": (
+            _check_passed(
+                payload,
+                "windows_release_matrix_acceptance_stack_engine_runtime_default_passed",
+            )
+        ),
+        "windows_release_matrix_pipeline_stack_engine_runtime_default_passed": (
+            _check_passed(
+                payload,
+                "windows_release_matrix_pipeline_stack_engine_runtime_default_passed",
+            )
+        ),
+        "default_promotion_acceptance_stack_engine_runtime_default_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_acceptance_stack_engine_runtime_default_passed",
+            )
+        ),
+        "default_promotion_pipeline_stack_engine_runtime_default_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_pipeline_stack_engine_runtime_default_passed",
+            )
+        ),
+        "matrix_stack_engine_runtime_default_matches_default_promotion": (
+            _check_passed(
+                payload,
+                "matrix_stack_engine_runtime_default_matches_default_promotion",
+            )
+        ),
         "failed_checks": payload.get("failed_checks"),
+    }
+
+
+def _publish_preflight_runtime_default_layer(
+    payload: dict[str, Any],
+    layer_name: str,
+    prefix: str,
+) -> dict[str, Any]:
+    layer = payload.get(layer_name) if isinstance(payload.get(layer_name), dict) else {}
+    return {
+        f"{prefix}_stack_engine_runtime_default_ready": layer.get(
+            "stack_engine_runtime_default_ready"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_status": layer.get(
+            "acceptance_stack_engine_runtime_default_status"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_check_present": layer.get(
+            "acceptance_stack_engine_runtime_default_check_present"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_check_passed": layer.get(
+            "acceptance_stack_engine_runtime_default_check_passed"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_phase2_check_passed": layer.get(
+            "acceptance_stack_engine_runtime_default_phase2_check_passed"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_master_count": layer.get(
+            "acceptance_stack_engine_runtime_default_master_count"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_legacy_master_count": layer.get(
+            "acceptance_stack_engine_runtime_default_legacy_master_count"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_failed_master_count": layer.get(
+            "acceptance_stack_engine_runtime_default_failed_master_count"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_failed_output_count": layer.get(
+            "acceptance_stack_engine_runtime_default_failed_output_count"
+        ),
+        f"{prefix}_acceptance_stack_engine_runtime_default_explicit_cuda_fast_path_count": layer.get(
+            "acceptance_stack_engine_runtime_default_explicit_cuda_fast_path_count"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_status": layer.get(
+            "pipeline_stack_engine_runtime_default_status"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_check_present": layer.get(
+            "pipeline_stack_engine_runtime_default_check_present"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_check_passed": layer.get(
+            "pipeline_stack_engine_runtime_default_check_passed"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_phase2_check_passed": layer.get(
+            "pipeline_stack_engine_runtime_default_phase2_check_passed"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_master_count": layer.get(
+            "pipeline_stack_engine_runtime_default_master_count"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_legacy_master_count": layer.get(
+            "pipeline_stack_engine_runtime_default_legacy_master_count"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_failed_master_count": layer.get(
+            "pipeline_stack_engine_runtime_default_failed_master_count"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_failed_output_count": layer.get(
+            "pipeline_stack_engine_runtime_default_failed_output_count"
+        ),
+        f"{prefix}_pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count": layer.get(
+            "pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count"
+        ),
     }
 
 
@@ -2122,6 +2435,131 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "windows_publish_preflight_stack_engine_runtime_default_passed",
+                "passed": (
+                    preflight.get(
+                        "windows_release_matrix_acceptance_stack_engine_runtime_default_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "windows_release_matrix_pipeline_stack_engine_runtime_default_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_acceptance_stack_engine_runtime_default_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_pipeline_stack_engine_runtime_default_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_stack_engine_runtime_default_matches_default_promotion"
+                    )
+                    is True
+                    and preflight.get("matrix_stack_engine_runtime_default_ready")
+                    is True
+                    and preflight.get(
+                        "default_promotion_stack_engine_runtime_default_ready"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_acceptance_stack_engine_runtime_default_status"
+                    )
+                    == "passed"
+                    and preflight.get(
+                        "matrix_pipeline_stack_engine_runtime_default_status"
+                    )
+                    == "passed"
+                    and preflight.get(
+                        "default_promotion_acceptance_stack_engine_runtime_default_status"
+                    )
+                    == "passed"
+                    and preflight.get(
+                        "default_promotion_pipeline_stack_engine_runtime_default_status"
+                    )
+                    == "passed"
+                    and _int_or_zero(
+                        preflight.get(
+                            "matrix_stack_engine_runtime_default_acceptance_legacy_master_count"
+                        )
+                    )
+                    == 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "matrix_stack_engine_runtime_default_pipeline_failed_output_count"
+                        )
+                    )
+                    == 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count"
+                        )
+                    )
+                    == 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count"
+                        )
+                    )
+                    == 0
+                ),
+                "evidence": {
+                    "matrix_ready": preflight.get(
+                        "matrix_stack_engine_runtime_default_ready"
+                    ),
+                    "matrix_acceptance_status": preflight.get(
+                        "matrix_acceptance_stack_engine_runtime_default_status"
+                    ),
+                    "matrix_pipeline_status": preflight.get(
+                        "matrix_pipeline_stack_engine_runtime_default_status"
+                    ),
+                    "matrix_acceptance_legacy_master_count": preflight.get(
+                        "matrix_stack_engine_runtime_default_acceptance_legacy_master_count"
+                    ),
+                    "matrix_pipeline_failed_output_count": preflight.get(
+                        "matrix_stack_engine_runtime_default_pipeline_failed_output_count"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_stack_engine_runtime_default_ready"
+                    ),
+                    "default_promotion_acceptance_status": preflight.get(
+                        "default_promotion_acceptance_stack_engine_runtime_default_status"
+                    ),
+                    "default_promotion_pipeline_status": preflight.get(
+                        "default_promotion_pipeline_stack_engine_runtime_default_status"
+                    ),
+                    "default_promotion_acceptance_legacy_master_count": (
+                        preflight.get(
+                            "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count"
+                        )
+                    ),
+                    "default_promotion_pipeline_failed_output_count": (
+                        preflight.get(
+                            "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count"
+                        )
+                    ),
+                    "matrix_acceptance_check": preflight.get(
+                        "windows_release_matrix_acceptance_stack_engine_runtime_default_passed"
+                    ),
+                    "matrix_pipeline_check": preflight.get(
+                        "windows_release_matrix_pipeline_stack_engine_runtime_default_passed"
+                    ),
+                    "default_promotion_acceptance_check": preflight.get(
+                        "default_promotion_acceptance_stack_engine_runtime_default_passed"
+                    ),
+                    "default_promotion_pipeline_check": preflight.get(
+                        "default_promotion_pipeline_stack_engine_runtime_default_passed"
+                    ),
+                    "agreement_check": preflight.get(
+                        "matrix_stack_engine_runtime_default_matches_default_promotion"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
+        checks.append(
+            {
                 "name": "windows_publish_preflight_resident_winsorized_sweep_passed",
                 "passed": (
                     preflight.get("matrix_resident_winsorized_sweep_audit_passed")
@@ -2906,6 +3344,44 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('default_promotion_stack_engine_contract_default_gap_count')}"
                 ),
                 (
+                    "- StackEngine runtime default statuses: "
+                    f"matrix-ready={preflight.get('matrix_stack_engine_runtime_default_ready')}, "
+                    "matrix-acceptance="
+                    f"{preflight.get('matrix_acceptance_stack_engine_runtime_default_status')}, "
+                    "matrix-pipeline="
+                    f"{preflight.get('matrix_pipeline_stack_engine_runtime_default_status')}, "
+                    "default-promotion-ready="
+                    f"{preflight.get('default_promotion_stack_engine_runtime_default_ready')}, "
+                    "default-promotion-acceptance="
+                    f"{preflight.get('default_promotion_acceptance_stack_engine_runtime_default_status')}, "
+                    "default-promotion-pipeline="
+                    f"{preflight.get('default_promotion_pipeline_stack_engine_runtime_default_status')}"
+                ),
+                (
+                    "- StackEngine runtime default checks: "
+                    "matrix-acceptance="
+                    f"{preflight.get('windows_release_matrix_acceptance_stack_engine_runtime_default_passed')}, "
+                    "matrix-pipeline="
+                    f"{preflight.get('windows_release_matrix_pipeline_stack_engine_runtime_default_passed')}, "
+                    "default-promotion-acceptance="
+                    f"{preflight.get('default_promotion_acceptance_stack_engine_runtime_default_passed')}, "
+                    "default-promotion-pipeline="
+                    f"{preflight.get('default_promotion_pipeline_stack_engine_runtime_default_passed')}, "
+                    "agreement="
+                    f"{preflight.get('matrix_stack_engine_runtime_default_matches_default_promotion')}"
+                ),
+                (
+                    "- StackEngine runtime default drift counters: "
+                    "matrix-legacy="
+                    f"{preflight.get('matrix_stack_engine_runtime_default_acceptance_legacy_master_count')}, "
+                    "matrix-failed-outputs="
+                    f"{preflight.get('matrix_stack_engine_runtime_default_pipeline_failed_output_count')}, "
+                    "default-legacy="
+                    f"{preflight.get('default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count')}, "
+                    "default-failed-outputs="
+                    f"{preflight.get('default_promotion_stack_engine_runtime_default_pipeline_failed_output_count')}"
+                ),
+                (
                     "- Resident winsorized sweep statuses: "
                     f"matrix={preflight.get('matrix_resident_winsorized_sweep_status')}, "
                     "default-promotion="
@@ -3413,6 +3889,27 @@ _PUBLISH_PREFLIGHT_STACK_ENGINE_STATUS_FIELDS = (
     "default_promotion_stack_engine_contract_status",
 )
 
+_PUBLISH_PREFLIGHT_RUNTIME_DEFAULT_CHECK_FIELDS = (
+    "windows_release_matrix_acceptance_stack_engine_runtime_default_passed",
+    "windows_release_matrix_pipeline_stack_engine_runtime_default_passed",
+    "default_promotion_acceptance_stack_engine_runtime_default_passed",
+    "default_promotion_pipeline_stack_engine_runtime_default_passed",
+    "matrix_stack_engine_runtime_default_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_RUNTIME_DEFAULT_STATUS_FIELDS = (
+    "matrix_stack_engine_runtime_default_ready",
+    "matrix_acceptance_stack_engine_runtime_default_status",
+    "matrix_pipeline_stack_engine_runtime_default_status",
+    "matrix_stack_engine_runtime_default_acceptance_legacy_master_count",
+    "matrix_stack_engine_runtime_default_pipeline_failed_output_count",
+    "default_promotion_stack_engine_runtime_default_ready",
+    "default_promotion_acceptance_stack_engine_runtime_default_status",
+    "default_promotion_pipeline_stack_engine_runtime_default_status",
+    "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count",
+    "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count",
+)
+
 _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_CHECK_FIELDS = (
     "matrix_resident_winsorized_sweep_audit_passed",
     "matrix_resident_winsorized_required_frame_passed",
@@ -3548,6 +4045,70 @@ def _publish_preflight_stack_engine_statuses(payload: dict[str, Any]) -> dict[st
 def _publish_preflight_stack_engine_statuses_passed(payload: dict[str, Any]) -> bool:
     statuses = _publish_preflight_stack_engine_statuses(payload)
     return bool(statuses) and all(value == "passed" for value in statuses.values())
+
+
+def _publish_preflight_runtime_default_checks_passed(payload: dict[str, Any]) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_RUNTIME_DEFAULT_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_runtime_default_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_RUNTIME_DEFAULT_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_runtime_default_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_runtime_default_statuses(payload)
+    return (
+        bool(statuses)
+        and statuses.get("matrix_stack_engine_runtime_default_ready") is True
+        and statuses.get("default_promotion_stack_engine_runtime_default_ready")
+        is True
+        and statuses.get("matrix_acceptance_stack_engine_runtime_default_status")
+        == "passed"
+        and statuses.get("matrix_pipeline_stack_engine_runtime_default_status")
+        == "passed"
+        and statuses.get(
+            "default_promotion_acceptance_stack_engine_runtime_default_status"
+        )
+        == "passed"
+        and statuses.get(
+            "default_promotion_pipeline_stack_engine_runtime_default_status"
+        )
+        == "passed"
+        and _int_or_zero(
+            statuses.get(
+                "matrix_stack_engine_runtime_default_acceptance_legacy_master_count"
+            )
+        )
+        == 0
+        and _int_or_zero(
+            statuses.get(
+                "matrix_stack_engine_runtime_default_pipeline_failed_output_count"
+            )
+        )
+        == 0
+        and _int_or_zero(
+            statuses.get(
+                "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count"
+            )
+        )
+        == 0
+        and _int_or_zero(
+            statuses.get(
+                "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count"
+            )
+        )
+        == 0
+    )
 
 
 def _publish_preflight_resident_winsorized_checks_passed(payload: dict[str, Any]) -> bool:
@@ -4147,6 +4708,30 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_stack_engine_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_stack_engine_runtime_default_preserved",
+            not _publish_preflight_runtime_default_checks_passed(baseline)
+            or _publish_preflight_runtime_default_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_runtime_default_checks_passed(
+                    baseline
+                ),
+                "statuses": _publish_preflight_runtime_default_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_runtime_default_checks_passed(
+                    candidate
+                ),
+                "statuses": _publish_preflight_runtime_default_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_stack_engine_runtime_default_status_preserved",
+            not _publish_preflight_runtime_default_statuses_passed(baseline)
+            or _publish_preflight_runtime_default_statuses_passed(candidate),
+            baseline=_publish_preflight_runtime_default_statuses(baseline),
+            candidate=_publish_preflight_runtime_default_statuses(candidate),
+        ),
+        _compare_check(
             "windows_publish_preflight_resident_winsorized_sweep_preserved",
             not _publish_preflight_resident_winsorized_checks_passed(baseline)
             or _publish_preflight_resident_winsorized_checks_passed(candidate),
@@ -4618,6 +5203,9 @@ def build_phase2_status_compare(
             "publish_preflight_stack_engine_contract": (
                 _publish_preflight_stack_engine_statuses(baseline)
             ),
+            "publish_preflight_stack_engine_runtime_default": (
+                _publish_preflight_runtime_default_statuses(baseline)
+            ),
             "publish_preflight_resident_winsorized_sweep": (
                 _publish_preflight_resident_winsorized_statuses(baseline)
             ),
@@ -4685,6 +5273,9 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_stack_engine_contract": (
                 _publish_preflight_stack_engine_statuses(candidate)
+            ),
+            "publish_preflight_stack_engine_runtime_default": (
+                _publish_preflight_runtime_default_statuses(candidate)
             ),
             "publish_preflight_resident_winsorized_sweep": (
                 _publish_preflight_resident_winsorized_statuses(candidate)

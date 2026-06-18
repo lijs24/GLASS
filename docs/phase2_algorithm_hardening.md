@@ -5092,6 +5092,30 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 298: Phase 2 Publish Preflight Runtime Default Handoff
+
+- Carry the S2-Gate 297 final Windows publish-preflight StackEngine
+  runtime-default evidence back into `glass phase2-status`.
+- Require Phase 2 green status to preserve matrix-side and default-promotion
+  runtime-default readiness, acceptance/pipeline statuses, zero legacy master
+  drift, zero failed runtime-default output drift, and matrix/default-promotion
+  agreement checks.
+- Block stale publish-preflight artifacts that still report
+  `publish_preflight_ready` but do not contain the Gate297 runtime-default
+  summary and checks.
+- Extend `glass phase2-status-compare` so candidate status artifacts cannot
+  drop or fail a previously passing final publish-preflight runtime-default
+  chain.
+- Surface runtime-default readiness, side statuses, check results, legacy
+  master counts, and failed output counts in JSON and Markdown.
+- Add focused Phase 2 tests for passing evidence, missing stale
+  runtime-default evidence, matrix-side runtime-default failure,
+  default-promotion runtime-default failure, CLI Markdown output, and compare
+  regression.
+- Keep this gate status/compare scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
