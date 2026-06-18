@@ -1,0 +1,162 @@
+{
+  "artifact_type": "local_norm_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_314_cpu_run\\local_norm_results.json"
+      },
+      "name": "local_norm_results_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "schema_version": 1
+      },
+      "name": "schema_version_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": false
+      },
+      "name": "enabled_state_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "crop_box": null
+      },
+      "name": "crop_box_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "output_count": 1
+      },
+      "name": "outputs_list_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "coefficient_field_model": "disabled_passthrough"
+      },
+      "name": "disabled_model_recorded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "object_output_count": 1,
+        "output_count": 1
+      },
+      "name": "all_outputs_are_objects",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "output_contracts_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "coefficient_field_model": "disabled_passthrough",
+  "created_at": "2026-06-18T13:21:13+00:00",
+  "crop_box": null,
+  "enabled": false,
+  "failed_checks": [],
+  "failed_outputs": [],
+  "local_norm_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\local_norm_results.json",
+  "model": null,
+  "outputs": [
+    {
+      "checks": [
+        {
+          "evidence": {
+            "frame_id": "F000010"
+          },
+          "name": "frame_id_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "expected": "disabled_passthrough",
+            "status": "disabled_passthrough"
+          },
+          "name": "passthrough_status_recorded",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "crop_box": null
+          },
+          "name": "crop_box_recorded",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "normalized_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\registered_cache\\registered_F000010.fits"
+          },
+          "name": "normalized_path_exists",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "coverage_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\coverage_cache\\coverage_F000010.fits"
+          },
+          "name": "coverage_path_exists",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "dq_mask_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\dq_cache\\dq_warp_F000010.fits"
+          },
+          "name": "dq_mask_path_optional_exists",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "dq_summary": {
+              "valid": 576
+            }
+          },
+          "name": "dq_summary_present",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "enabled": false,
+      "failed_checks": [],
+      "frame_id": "F000010",
+      "index": 0,
+      "passed": true,
+      "status": "disabled_passthrough"
+    }
+  ],
+  "passed": true,
+  "reference_frame_id": "F000010",
+  "run_dir": "runs\\checkpoints\\s2_gate_314_cpu_run",
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "coefficient_field_model": "disabled_passthrough",
+    "enabled": false,
+    "failed_output_count": 0,
+    "output_count": 1,
+    "reference_frame_id": "F000010"
+  }
+}

@@ -5504,6 +5504,25 @@ integration where applicable.
   no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 315: Local Normalization Contract Report Handoff
+
+- Carry `local_norm_contract.json` into the user-facing HTML report as a
+  first-class local-normalization contract section.
+- Extend `glass report` with `--local-norm-contract` while preserving automatic
+  discovery of run-local `local_norm_contract*.json` artifacts.
+- Extend guardrails report generation so the auto-generated LN contract from
+  S2-Gate 314 is passed directly into `report.html`.
+- Surface LN contract status, pass/fail state, enabled state, reference frame,
+  coefficient-field model, crop box, output counts, failed checks, failed
+  outputs, and per-output coefficient-grid contract summaries in HTML.
+- Add focused tests for guardrails report visibility and explicit
+  `glass report --local-norm-contract` usage with a failing contract.
+- Generate Gate315 report handoff artifacts from the small Gate314 CPU
+  validation run.
+- Keep this gate report/audit scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

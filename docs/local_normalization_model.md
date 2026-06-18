@@ -190,3 +190,23 @@ This handoff does not change local-normalization math or read additional FITS
 pixels. It only promotes existing LN metadata into the acceptance contract path
 so continuous coefficient-field regressions cannot disappear between a manual
 LN audit and final guardrail evidence.
+
+## S2-Gate 315 Report Handoff
+
+S2-Gate 315 carries the local-normalization contract into the HTML report.
+`glass report` accepts `--local-norm-contract`, and guardrails pass the
+auto-generated `local_norm_contract.json` into `report.html` directly.
+
+The report now includes a "Local normalization contract" section with:
+
+- contract status and pass/fail state
+- enabled state, reference frame, model, coefficient-field model, and crop box
+- output count and failed-output count
+- failed top-level checks and failed output contracts
+- per-output coefficient-grid status, grid shape, full-field map policy, and
+  failed checks
+
+This is a reporting handoff only. It does not change local-normalization math,
+read FITS pixels, or alter CUDA/CPU execution. Its purpose is to keep the
+continuous coefficient-field contract visible in the same report used for
+acceptance review.

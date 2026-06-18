@@ -301,6 +301,12 @@ def _report_pipeline_contract_path(run: Path, explicit: str | Path | None = None
     return _newest_matching_json(run, ["*pipeline_contract*.json", "*pipeline-contract*.json"])
 
 
+def _report_local_norm_contract_path(run: Path, explicit: str | Path | None = None) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    return _newest_matching_json(run, ["*local_norm_contract*.json", "*local-norm-contract*.json"])
+
+
 def _local_norm_override_from_arg(value: str) -> bool | None:
     if value == "on":
         return True
@@ -498,6 +504,7 @@ def _write_run_report(
     acceptance_audit: str | Path | None = None,
     stack_engine_contract: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
+    local_norm_contract: str | Path | None = None,
 ) -> None:
     write_html_report(
         report_path,
@@ -517,6 +524,9 @@ def _write_run_report(
             _report_stack_engine_contract_path(run, stack_engine_contract)
         ),
         pipeline_contract=_read_report_json_if_exists(_report_pipeline_contract_path(run, pipeline_contract)),
+        local_norm_contract=_read_report_json_if_exists(
+            _report_local_norm_contract_path(run, local_norm_contract)
+        ),
         run_root=run,
     )
 
@@ -719,6 +729,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     pipeline_contract_payload = _read_report_json_if_exists(
         _report_pipeline_contract_path(run, args.pipeline_contract)
     )
+    local_norm_contract_payload = _read_report_json_if_exists(
+        _report_local_norm_contract_path(run, args.local_norm_contract)
+    )
     write_html_report(
         args.out,
         manifest=manifest,
@@ -735,6 +748,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         acceptance_audit=acceptance_payload,
         stack_engine_contract=stack_contract_payload,
         pipeline_contract=pipeline_contract_payload,
+        local_norm_contract=local_norm_contract_payload,
         run_root=run,
     )
     console.print(f"Wrote report: {args.out}")
@@ -2741,6 +2755,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         run / "processing_plan.json",
         stack_engine_contract=stack_path,
         pipeline_contract=pipeline_path,
+        local_norm_contract=local_norm_contract_path if local_norm_results_present else None,
     )
     stack_default_promotion = (
         stack_audit.get("default_promotion") if isinstance(stack_audit.get("default_promotion"), dict) else {}
@@ -3627,6 +3642,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--acceptance-audit", help="optional acceptance-audit JSON to summarize in the report")
     report.add_argument("--stack-engine-contract", help="optional StackEngine contract audit JSON to summarize")
     report.add_argument("--pipeline-contract", help="optional pipeline invariant contract audit JSON to summarize")
+    report.add_argument("--local-norm-contract", help="optional local-normalization contract JSON to summarize")
     report.set_defaults(func=cmd_report)
 
     audit = sub.add_parser("audit", help="scan, plan, and report in one command")

@@ -494,6 +494,9 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert "stats_ok" in html
     assert "science_ok" in html
     assert "dq_summary_has_valid" in html
+    assert "Local normalization contract" in html
+    assert "local_norm_contract.json" in html
+    assert "disabled_passthrough" in html
 
 
 def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):
@@ -1484,6 +1487,87 @@ def test_cli_report_summarizes_pipeline_contract(tmp_path: Path):
     assert "local-normalization" in html
     assert "bilinear" in html
     assert "integration_artifact_exists" not in html
+
+
+def test_cli_report_summarizes_local_norm_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    contract = tmp_path / "custom_local_norm_contract.json"
+    write_json(
+        contract,
+        {
+            "schema_version": 1,
+            "artifact_type": "local_norm_contract",
+            "status": "failed",
+            "passed": False,
+            "enabled": True,
+            "reference_frame_id": "F000001",
+            "model": "continuous_grid_mean_std_v1",
+            "coefficient_field_model": "bilinear_tile_center_v1",
+            "crop_box": None,
+            "summary": {
+                "output_count": 1,
+                "failed_output_count": 1,
+            },
+            "checks": [
+                {
+                    "name": "output_contracts_passed",
+                    "passed": False,
+                    "note": "fixture failed row",
+                    "evidence": {"failed": ["F000002"]},
+                }
+            ],
+            "outputs": [
+                {
+                    "frame_id": "F000002",
+                    "enabled": True,
+                    "status": "normalized",
+                    "passed": False,
+                    "model": "continuous_grid_mean_std_v1",
+                    "coefficient_field_model": "bilinear_tile_center_v1",
+                    "coefficient_grid_contract": {
+                        "passed": False,
+                        "grid_rows": 2,
+                        "grid_cols": 3,
+                        "full_field_map_status": "omitted_due_to_size",
+                    },
+                    "failed_checks": ["coefficient_grid_contract"],
+                }
+            ],
+            "failed_outputs": [
+                {
+                    "frame_id": "F000002",
+                    "index": 0,
+                    "failed_checks": ["coefficient_grid_contract"],
+                }
+            ],
+        },
+    )
+
+    report = tmp_path / "local_norm_contract_report.html"
+    assert (
+        main(
+            [
+                "report",
+                "--run",
+                str(run),
+                "--out",
+                str(report),
+                "--local-norm-contract",
+                str(contract),
+            ]
+        )
+        == 0
+    )
+    html = report.read_text(encoding="utf-8")
+
+    assert "Local normalization contract" in html
+    assert "custom_local_norm_contract.json" in html
+    assert "output_contracts_passed" in html
+    assert "fixture failed row" in html
+    assert "F000002" in html
+    assert "coefficient_grid_contract" in html
+    assert "omitted_due_to_size" in html
 
 
 def test_cli_report_limits_large_audit_tables(tmp_path: Path):

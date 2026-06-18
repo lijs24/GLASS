@@ -35,6 +35,7 @@ _REPORT_SECTIONS = [
     ("frame-quality-table", "Frame quality table"),
     ("registration-table", "Registration table"),
     ("local-normalization-summary", "Local normalization summary"),
+    ("local-normalization-contract", "Local normalization contract"),
     ("integration-summary", "Integration summary"),
     ("frame-accounting", "Frame accounting"),
     ("rejected-zero-weight-frames", "Rejected/zero-weight frames"),
@@ -1357,6 +1358,83 @@ def _pipeline_contract_local_norm_rows(contract: dict[str, Any] | None) -> list[
     return rows
 
 
+def _local_norm_contract_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not contract:
+        return []
+    summary = contract.get("summary") if isinstance(contract.get("summary"), dict) else {}
+    return [
+        {
+            "status": contract.get("status"),
+            "passed": contract.get("passed"),
+            "enabled": contract.get("enabled"),
+            "reference_frame_id": contract.get("reference_frame_id"),
+            "model": contract.get("model"),
+            "coefficient_field_model": contract.get("coefficient_field_model"),
+            "crop_box": contract.get("crop_box"),
+            "output_count": summary.get("output_count"),
+            "failed_output_count": summary.get("failed_output_count"),
+            "source": contract.get("_report_source_path"),
+        }
+    ]
+
+
+def _local_norm_contract_failure_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("checks") or []:
+        if not isinstance(item, dict) or item.get("passed"):
+            continue
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        rows.append(
+            {
+                "scope": "top_level",
+                "item": item.get("name"),
+                "note": item.get("note"),
+                "evidence": ", ".join(f"{key}={value}" for key, value in evidence.items()),
+            }
+        )
+    for item in (contract or {}).get("failed_outputs") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "scope": "output",
+                "item": item.get("frame_id") or item.get("index"),
+                "note": "failed output contract",
+                "evidence": item.get("failed_checks"),
+            }
+        )
+    return rows
+
+
+def _local_norm_contract_output_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("outputs") or []:
+        if not isinstance(item, dict):
+            continue
+        coefficient = (
+            item.get("coefficient_grid_contract")
+            if isinstance(item.get("coefficient_grid_contract"), dict)
+            else {}
+        )
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "enabled": item.get("enabled"),
+                "status": item.get("status"),
+                "passed": item.get("passed"),
+                "model": item.get("model"),
+                "coefficient_field_model": item.get("coefficient_field_model"),
+                "coefficient_grid_passed": coefficient.get("passed"),
+                "grid_rows": coefficient.get("grid_rows") or item.get("grid_rows"),
+                "grid_cols": coefficient.get("grid_cols") or item.get("grid_cols"),
+                "full_field_map_status": coefficient.get("full_field_map_status")
+                or item.get("full_field_map_status"),
+                "failed_checks": item.get("failed_checks"),
+            }
+        )
+    return rows
+
+
 def _pipeline_contract_warp_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     warp = (contract or {}).get("warp") or {}
@@ -1542,6 +1620,7 @@ def write_html_report(
     acceptance_audit: dict[str, Any] | None = None,
     stack_engine_contract: dict[str, Any] | None = None,
     pipeline_contract: dict[str, Any] | None = None,
+    local_norm_contract: dict[str, Any] | None = None,
     title: str = "GLASS Report",
     run_root: str | Path | None = None,
 ) -> None:
@@ -1672,6 +1751,9 @@ def write_html_report(
     pipeline_contract_calibrated_light_rows = _pipeline_contract_calibrated_light_rows(pipeline_contract)
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
     pipeline_contract_local_norm_rows = _pipeline_contract_local_norm_rows(pipeline_contract)
+    local_norm_contract_summary_rows = _local_norm_contract_summary_rows(local_norm_contract)
+    local_norm_contract_failure_rows = _local_norm_contract_failure_rows(local_norm_contract)
+    local_norm_contract_output_rows = _local_norm_contract_output_rows(local_norm_contract)
     pipeline_contract_warp_rows = _pipeline_contract_warp_rows(pipeline_contract)
     pipeline_contract_pixel_rows = _pipeline_contract_pixel_rows(pipeline_contract)
     pipeline_contract_pixel_delta_rows = _pipeline_contract_pixel_delta_rows(pipeline_contract)
@@ -1762,6 +1844,13 @@ def write_html_report(
   <p>Enabled: <code>{escape(str((local_norm or {}).get("enabled", "pending")))}</code>.
   Reference frame: <code>{escape(str((local_norm or {}).get("reference_frame_id", "pending")))}</code>.</p>
   {_limited_table(local_norm_results, label="local normalization rows", artifact="local_norm_results.json")}
+  {_h2("local-normalization-contract", "Local normalization contract")}
+  <p>The local-normalization contract proves whether the stage emitted an
+  explicit disabled passthrough artifact or a continuous coefficient-field
+  artifact with audited coefficient grids.</p>
+  {_table(local_norm_contract_summary_rows)}
+  {_table(local_norm_contract_failure_rows)}
+  {_limited_table(local_norm_contract_output_rows, label="local-normalization contract outputs", artifact="local_norm_contract.json")}
   {_h2("integration-summary", "Integration summary")}
   <p>Combine: <code>{escape(str((integration or {}).get("combine", "pending")))}</code>.
   Weighting: <code>{escape(str((integration or {}).get("weighting", "pending")))}</code>.
