@@ -236,6 +236,78 @@ def _publish_preflight_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resident_winsorized_summary_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("matrix_status") == "passed"
+        and summary.get("default_promotion_status") == "passed"
+        and _all_true(
+            [
+                summary.get("matrix_audit_passed"),
+                summary.get("matrix_required_frame_passed"),
+                summary.get("matrix_check_count_passed"),
+                summary.get("default_promotion_audit_passed"),
+                summary.get("default_promotion_required_frame_passed"),
+                summary.get("default_promotion_matches_matrix"),
+            ]
+        )
+        and _int_or_zero(summary.get("matrix_required_frame_count")) >= 200
+        and _int_or_zero(summary.get("default_promotion_required_frame_count")) >= 200
+        and _int_or_zero(summary.get("matrix_check_count")) > 0
+        and _int_or_zero(summary.get("default_promotion_check_count")) > 0
+    )
+
+
+def _publish_preflight_resident_winsorized_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "matrix_status": summary.get("matrix_resident_winsorized_sweep_status"),
+        "matrix_required_frame_count": summary.get(
+            "matrix_resident_winsorized_sweep_required_frame_count"
+        ),
+        "matrix_required_frame_count_passed": summary.get(
+            "matrix_resident_winsorized_sweep_required_frame_count_passed"
+        ),
+        "matrix_check_count": summary.get("matrix_resident_winsorized_sweep_check_count"),
+        "default_promotion_status": summary.get(
+            "default_promotion_resident_winsorized_sweep_status"
+        ),
+        "default_promotion_required_frame_count": summary.get(
+            "default_promotion_resident_winsorized_sweep_required_frame_count"
+        ),
+        "default_promotion_required_frame_count_passed": summary.get(
+            "default_promotion_resident_winsorized_sweep_required_frame_count_passed"
+        ),
+        "default_promotion_check_count": summary.get(
+            "default_promotion_resident_winsorized_sweep_check_count"
+        ),
+        "matrix_audit_passed": _check_passed(
+            payload, "matrix_resident_winsorized_sweep_audit_passed"
+        ),
+        "matrix_required_frame_passed": _check_passed(
+            payload, "matrix_resident_winsorized_required_frame_passed"
+        ),
+        "matrix_check_count_passed": _check_passed(
+            payload, "matrix_resident_winsorized_sweep_check_count"
+        ),
+        "default_promotion_audit_passed": _check_passed(
+            payload, "default_promotion_resident_winsorized_sweep_audit_passed"
+        ),
+        "default_promotion_required_frame_passed": _check_passed(
+            payload, "default_promotion_resident_winsorized_required_frame_passed"
+        ),
+        "default_promotion_matches_matrix": _check_passed(
+            payload, "default_promotion_resident_winsorized_sweep_matches_matrix"
+        ),
+    }
+    result["ready"] = _resident_winsorized_summary_ready(result)
+    return result
+
+
 def _phase2_publish_preflight_summary(payload: dict[str, Any]) -> dict[str, Any]:
     preflight = (
         payload.get("publish_preflight")
@@ -283,6 +355,91 @@ def _phase2_publish_preflight_summary(payload: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _phase2_publish_preflight_resident_winsorized_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "matrix_status": preflight.get("matrix_resident_winsorized_sweep_status"),
+        "matrix_required_frame_count": preflight.get(
+            "matrix_resident_winsorized_sweep_required_frame_count"
+        ),
+        "matrix_required_frame_count_passed": preflight.get(
+            "matrix_resident_winsorized_sweep_required_frame_count_passed"
+        ),
+        "matrix_check_count": preflight.get("matrix_resident_winsorized_sweep_check_count"),
+        "default_promotion_status": preflight.get(
+            "default_promotion_resident_winsorized_sweep_status"
+        ),
+        "default_promotion_required_frame_count": preflight.get(
+            "default_promotion_resident_winsorized_sweep_required_frame_count"
+        ),
+        "default_promotion_required_frame_count_passed": preflight.get(
+            "default_promotion_resident_winsorized_sweep_required_frame_count_passed"
+        ),
+        "default_promotion_check_count": preflight.get(
+            "default_promotion_resident_winsorized_sweep_check_count"
+        ),
+        "matrix_audit_passed": preflight.get(
+            "matrix_resident_winsorized_sweep_audit_passed"
+        ),
+        "matrix_required_frame_passed": preflight.get(
+            "matrix_resident_winsorized_required_frame_passed"
+        ),
+        "matrix_check_count_passed": preflight.get(
+            "matrix_resident_winsorized_sweep_check_count_passed"
+        ),
+        "default_promotion_audit_passed": preflight.get(
+            "default_promotion_resident_winsorized_sweep_audit_passed"
+        ),
+        "default_promotion_required_frame_passed": preflight.get(
+            "default_promotion_resident_winsorized_required_frame_passed"
+        ),
+        "default_promotion_matches_matrix": preflight.get(
+            "default_promotion_resident_winsorized_sweep_matches_matrix"
+        ),
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_resident_winsorized_sweep_passed",
+        ),
+    }
+    result["ready"] = (
+        _resident_winsorized_summary_ready(result)
+        and result.get("phase2_check_passed") is True
+    )
+    return result
+
+
+def _resident_winsorized_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "matrix_status",
+        "matrix_required_frame_count",
+        "matrix_required_frame_count_passed",
+        "matrix_check_count",
+        "default_promotion_status",
+        "default_promotion_required_frame_count",
+        "default_promotion_required_frame_count_passed",
+        "default_promotion_check_count",
+        "matrix_audit_passed",
+        "matrix_required_frame_passed",
+        "matrix_check_count_passed",
+        "default_promotion_audit_passed",
+        "default_promotion_required_frame_passed",
+        "default_promotion_matches_matrix",
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
 def _all_true(values: list[Any]) -> bool:
     return all(value is True for value in values)
 
@@ -314,8 +471,16 @@ def build_stack_engine_publication_audit(
     )
     release_matrix = _contract_summary_from_release_matrix(_read_json_object(matrix_path))
     github_plan = _github_plan_summary(_read_json_object(github_path))
-    preflight = _publish_preflight_summary(_read_json_object(preflight_path))
-    phase2_publish = _phase2_publish_preflight_summary(_read_json_object(phase2_path))
+    preflight_payload = _read_json_object(preflight_path)
+    phase2_payload = _read_json_object(phase2_path)
+    preflight = _publish_preflight_summary(preflight_payload)
+    phase2_publish = _phase2_publish_preflight_summary(phase2_payload)
+    preflight_winsorized = _publish_preflight_resident_winsorized_summary(
+        preflight_payload
+    )
+    phase2_preflight_winsorized = (
+        _phase2_publish_preflight_resident_winsorized_summary(phase2_payload)
+    )
 
     layers = {
         "source_contract": source,
@@ -325,6 +490,10 @@ def build_stack_engine_publication_audit(
         "github_release_plan": github_plan,
         "publish_preflight": preflight,
         "phase2_publish_preflight": phase2_publish,
+        "publish_preflight_resident_winsorized_sweep": preflight_winsorized,
+        "phase2_publish_preflight_resident_winsorized_sweep": (
+            phase2_preflight_winsorized
+        ),
     }
     direct_gap_counts = [
         source.get("gap_count"),
@@ -402,6 +571,27 @@ def build_stack_engine_publication_audit(
                 ]
             ),
             phase2_publish,
+        ),
+        _check(
+            "publish_preflight_resident_winsorized_sweep_ready",
+            preflight_winsorized.get("ready") is True,
+            preflight_winsorized,
+        ),
+        _check(
+            "phase2_publish_preflight_resident_winsorized_sweep_ready",
+            phase2_preflight_winsorized.get("ready") is True,
+            phase2_preflight_winsorized,
+        ),
+        _check(
+            "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
+            _resident_winsorized_summaries_match(
+                phase2_preflight_winsorized,
+                preflight_winsorized,
+            ),
+            {
+                "phase2_publish_preflight": phase2_preflight_winsorized,
+                "publish_preflight": preflight_winsorized,
+            },
         ),
         _check(
             "stack_engine_gap_counts_zero",

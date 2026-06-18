@@ -4636,6 +4636,26 @@ integration where applicable.
   default, package build/upload, GitHub release creation, publish-preflight
   behavior change, or real-data benchmark rerun.
 
+### S2-Gate 276: StackEngine Publication Audit Resident Winsorized Sweep Guard
+
+- Carry the S2-Gate 275 Phase 2 publish-preflight resident winsorized sweep
+  evidence into `glass stack-engine-publication-audit`.
+- Add publication-audit blockers so StackEngine default publication readiness
+  requires both the raw publish-preflight artifact and the Phase 2 status
+  handoff to preserve a passing resident winsorized sweep audit, required
+  200-frame row pass, and non-empty sweep check count.
+- Cross-check resident winsorized sweep statuses, required-frame counts, pass
+  flags, check counts, and matrix/default-promotion agreement between the raw
+  publish-preflight artifact and the Phase 2 status handoff.
+- Surface the resident winsorized sweep publication layers in audit JSON and
+  Markdown beside the source StackEngine contract, default-promotion manifest,
+  release matrix, GitHub release plan, and publish-preflight StackEngine layers.
+- Add focused publication-audit tests for ready evidence, failed resident
+  winsorized evidence, and Phase 2/raw publish-preflight mismatch detection.
+- Keep this gate publication-audit scoped: no image math, CUDA kernel, runtime
+  default, package build/upload, GitHub release creation, publish-preflight
+  behavior change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

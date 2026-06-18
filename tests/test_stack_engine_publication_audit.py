@@ -35,9 +35,18 @@ def _write_chain(
     source_ready: bool = True,
     matrix_ready: bool = True,
     matrix_gap_count: int = 0,
+    resident_winsorized_ready: bool = True,
+    phase2_resident_winsorized_ready: bool | None = None,
 ) -> dict[str, Path]:
     source_fields = _stack_fields(ready=source_ready)
     matrix_fields = _stack_fields(ready=matrix_ready, gap_count=matrix_gap_count)
+    phase2_winsorized_ready = (
+        resident_winsorized_ready
+        if phase2_resident_winsorized_ready is None
+        else phase2_resident_winsorized_ready
+    )
+    resident_status = "passed" if resident_winsorized_ready else "failed"
+    phase2_resident_status = "passed" if phase2_winsorized_ready else "failed"
     paths = {
         "stack": tmp_path / "stack_engine_contract.json",
         "phase2": tmp_path / "phase2_status.json",
@@ -132,6 +141,40 @@ def _write_chain(
                 "matrix_stack_engine_contract_matches_default_promotion": (
                     source_fields["ready"] and matrix_fields["ready"]
                 ),
+                "matrix_resident_winsorized_sweep_status": phase2_resident_status,
+                "matrix_resident_winsorized_sweep_required_frame_count": 200,
+                "matrix_resident_winsorized_sweep_required_frame_count_passed": (
+                    phase2_winsorized_ready
+                ),
+                "matrix_resident_winsorized_sweep_check_count": 27,
+                "default_promotion_resident_winsorized_sweep_status": (
+                    phase2_resident_status
+                ),
+                "default_promotion_resident_winsorized_sweep_required_frame_count": (
+                    200
+                ),
+                "default_promotion_resident_winsorized_sweep_required_frame_count_passed": (
+                    phase2_winsorized_ready
+                ),
+                "default_promotion_resident_winsorized_sweep_check_count": 27,
+                "matrix_resident_winsorized_sweep_audit_passed": (
+                    phase2_winsorized_ready
+                ),
+                "matrix_resident_winsorized_required_frame_passed": (
+                    phase2_winsorized_ready
+                ),
+                "matrix_resident_winsorized_sweep_check_count_passed": (
+                    phase2_winsorized_ready
+                ),
+                "default_promotion_resident_winsorized_sweep_audit_passed": (
+                    phase2_winsorized_ready
+                ),
+                "default_promotion_resident_winsorized_required_frame_passed": (
+                    phase2_winsorized_ready
+                ),
+                "default_promotion_resident_winsorized_sweep_matches_matrix": (
+                    phase2_winsorized_ready
+                ),
             },
             "checks": [
                 {
@@ -141,6 +184,10 @@ def _write_chain(
                 {
                     "name": "windows_publish_preflight_stack_engine_default_contract_ready",
                     "passed": source_fields["ready"] and matrix_fields["ready"],
+                },
+                {
+                    "name": "windows_publish_preflight_resident_winsorized_sweep_passed",
+                    "passed": phase2_winsorized_ready,
                 },
             ],
         },
@@ -229,8 +276,10 @@ def _write_chain(
         paths["preflight"],
         {
             "artifact_type": "windows_publish_preflight",
-            "status": "publish_preflight_ready" if matrix_fields["ready"] else "blocked",
-            "passed": matrix_fields["ready"],
+            "status": "publish_preflight_ready"
+            if matrix_fields["ready"] and resident_winsorized_ready
+            else "blocked",
+            "passed": matrix_fields["ready"] and resident_winsorized_ready,
             "summary": {
                 "github_plan_phase2_stack_engine_contract_status": source_fields[
                     "status"
@@ -248,6 +297,18 @@ def _write_chain(
                 "default_promotion_stack_engine_contract_default_gap_count": (
                     source_fields["gap_count"]
                 ),
+                "matrix_resident_winsorized_sweep_status": resident_status,
+                "matrix_resident_winsorized_sweep_required_frame_count": 200,
+                "matrix_resident_winsorized_sweep_required_frame_count_passed": (
+                    resident_winsorized_ready
+                ),
+                "matrix_resident_winsorized_sweep_check_count": 27,
+                "default_promotion_resident_winsorized_sweep_status": resident_status,
+                "default_promotion_resident_winsorized_sweep_required_frame_count": 200,
+                "default_promotion_resident_winsorized_sweep_required_frame_count_passed": (
+                    resident_winsorized_ready
+                ),
+                "default_promotion_resident_winsorized_sweep_check_count": 27,
             },
             "checks": [
                 {
@@ -278,6 +339,30 @@ def _write_chain(
                     "name": "matrix_stack_engine_contract_matches_default_promotion",
                     "passed": source_fields["ready"] and matrix_fields["ready"],
                 },
+                {
+                    "name": "matrix_resident_winsorized_sweep_audit_passed",
+                    "passed": resident_winsorized_ready,
+                },
+                {
+                    "name": "matrix_resident_winsorized_required_frame_passed",
+                    "passed": resident_winsorized_ready,
+                },
+                {
+                    "name": "matrix_resident_winsorized_sweep_check_count",
+                    "passed": resident_winsorized_ready,
+                },
+                {
+                    "name": "default_promotion_resident_winsorized_sweep_audit_passed",
+                    "passed": resident_winsorized_ready,
+                },
+                {
+                    "name": "default_promotion_resident_winsorized_required_frame_passed",
+                    "passed": resident_winsorized_ready,
+                },
+                {
+                    "name": "default_promotion_resident_winsorized_sweep_matches_matrix",
+                    "passed": resident_winsorized_ready,
+                },
             ],
         },
     )
@@ -301,6 +386,14 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     assert payload["passed"] is True
     assert checks["source_contract_ready"] is True
     assert checks["phase2_publish_preflight_stack_engine_ready"] is True
+    assert checks["publish_preflight_resident_winsorized_sweep_ready"] is True
+    assert checks["phase2_publish_preflight_resident_winsorized_sweep_ready"] is True
+    assert (
+        checks[
+            "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
+        ]
+        is True
+    )
     assert checks["phase2_publish_preflight_matches_publish_preflight"] is True
     assert checks["stack_engine_gap_counts_zero"] is True
 
@@ -323,6 +416,64 @@ def test_stack_engine_publication_audit_blocks_matrix_gap(tmp_path: Path):
     assert checks["windows_release_matrix_stack_engine_ready"]["passed"] is False
     assert checks["stack_engine_gap_counts_zero"]["passed"] is False
     assert checks["stack_engine_gap_counts_zero"]["evidence"]["gap_counts"][3] == 1
+
+
+def test_stack_engine_publication_audit_blocks_resident_winsorized_failure(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, resident_winsorized_ready=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert payload["passed"] is False
+    assert checks["publish_preflight_resident_winsorized_sweep_ready"]["passed"] is False
+    assert checks["phase2_publish_preflight_resident_winsorized_sweep_ready"][
+        "passed"
+    ] is False
+    assert checks["publish_preflight_resident_winsorized_sweep_ready"]["evidence"][
+        "matrix_status"
+    ] == "failed"
+
+
+def test_stack_engine_publication_audit_blocks_phase2_resident_winsorized_mismatch(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        resident_winsorized_ready=True,
+        phase2_resident_winsorized_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_resident_winsorized_sweep_ready"]["passed"] is True
+    assert checks["phase2_publish_preflight_resident_winsorized_sweep_ready"][
+        "passed"
+    ] is False
+    assert checks[
+        "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
+    ]["passed"] is False
+    assert checks[
+        "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
+    ]["evidence"]["phase2_publish_preflight"]["matrix_status"] == "failed"
 
 
 def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
@@ -360,3 +511,4 @@ def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS StackEngine Publication Audit" in text
     assert "phase2_publish_preflight_stack_engine_ready" in text
+    assert "publish_preflight_resident_winsorized_sweep_ready" in text
