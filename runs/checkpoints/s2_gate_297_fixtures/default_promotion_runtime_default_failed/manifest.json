@@ -1,0 +1,30 @@
+{
+  "artifact_type": "windows_release_manifest",
+  "packages": [
+    {
+      "label": "cuda13",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "size_bytes": 101,
+      "source_stamp": "abc1234",
+      "zip_path": "runs\\checkpoints\\s2_gate_297_fixtures\\default_promotion_runtime_default_failed\\cuda13.zip"
+    },
+    {
+      "label": "cpu",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "size_bytes": 102,
+      "source_stamp": "abc1234",
+      "zip_path": "runs\\checkpoints\\s2_gate_297_fixtures\\default_promotion_runtime_default_failed\\cpu.zip"
+    }
+  ],
+  "passed": true,
+  "schema_version": 1,
+  "source_stamps": [
+    "abc1234"
+  ],
+  "status": "release_manifest_ready",
+  "windows_release_matrix": {
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_297_fixtures\\default_promotion_runtime_default_failed\\windows_release_matrix.json",
+    "status": "release_matrix_ready"
+  }
+}

@@ -5068,6 +5068,30 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 297: Windows Publish Preflight StackEngine Runtime Default Guard
+
+- Carry the S2-Gate 296 Windows release-matrix StackEngine runtime-default
+  evidence and S2-Gate 295 default-promotion runtime-default evidence into
+  `glass windows-publish-preflight`.
+- Require final Windows publish-preflight readiness to preserve both
+  release-matrix and default-promotion runtime-default evidence for
+  acceptance-side master calibration and pipeline-side light integration
+  surfaces.
+- Block stale release-matrix or default-promotion manifests that still report
+  ready status but do not contain runtime-default summaries and checks.
+- Block release-matrix or default-promotion legacy master drift, failed
+  runtime-default output rows, missing runtime-default checks, and
+  matrix/default-promotion runtime-default mismatches.
+- Surface matrix/default-promotion runtime-default readiness, side status,
+  legacy master counts, failed output counts, and drift counters in
+  publish-preflight JSON and Markdown.
+- Add focused publish-preflight tests for ready evidence, missing matrix
+  runtime-default evidence, failed matrix runtime-default evidence, failed
+  default-promotion runtime-default evidence, and CLI Markdown output.
+- Keep this gate publish-preflight scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
