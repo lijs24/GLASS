@@ -1,0 +1,91 @@
+{
+  "outputs": [
+    {
+      "backend": "cuda_resident_stack",
+      "coverage_map_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_348_controlled_admission_conflict_run\\integration\\coverage_H.fits",
+      "dq_coverage_provenance": {
+        "active_frame_count": 3,
+        "available": true,
+        "geometric_frame_count_matches_active": true,
+        "rejected_sample_count": 3.0,
+        "rejected_sample_count_source": "low_high_rejection_maps",
+        "source_terms": [
+          "post_rejection_coverage",
+          "low_rejection",
+          "high_rejection",
+          "geometric_warp_coverage"
+        ]
+      },
+      "dq_map_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_348_controlled_admission_conflict_run\\integration\\dq_H.fits",
+      "dq_provenance_summary": {
+        "active_frame_count": 3,
+        "engine": "cuda_resident_stack",
+        "output_dq_summary": {
+          "high_rejected": 1,
+          "low_rejected": 1,
+          "no_data": 1,
+          "valid": 1
+        },
+        "rejected_samples": 3,
+        "source_schema": "resident_dq_coverage_provenance",
+        "source_terms": [
+          "post_rejection_coverage",
+          "low_rejection",
+          "high_rejection",
+          "geometric_warp_coverage"
+        ],
+        "stage": "integration"
+      },
+      "dq_summary": {
+        "high_rejected": 1,
+        "low_rejected": 1,
+        "no_data": 1,
+        "valid": 1
+      },
+      "filter": "H",
+      "frame_count": 3,
+      "geometric_warp_coverage": {
+        "available": true,
+        "frame_count": 3,
+        "frame_count_matches_active": true
+      },
+      "high_rejection_map_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_348_controlled_admission_conflict_run\\integration\\high_H.fits",
+      "integration_rejection": {
+        "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+        "approximation": true,
+        "cpu_baseline_parity": false,
+        "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+        "high_sigma": 3.0,
+        "low_sigma": 3.0,
+        "mode": "winsorized_sigma",
+        "parity_status": "known_non_parity_pending_cuda_update",
+        "resident_winsorized_mode": "fast_approx",
+        "scale_estimator": "mean_std_two_stage_winsorized"
+      },
+      "low_rejection_map_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_348_controlled_admission_conflict_run\\integration\\low_H.fits",
+      "master_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_348_controlled_admission_conflict_run\\integration\\master_H.fits",
+      "memory_mode": "resident",
+      "output_map_policy": {
+        "available": [
+          "master",
+          "weight",
+          "coverage",
+          "dq",
+          "low_rejection",
+          "high_rejection"
+        ],
+        "skipped": [],
+        "written": [
+          "master",
+          "weight",
+          "coverage",
+          "dq",
+          "low_rejection",
+          "high_rejection"
+        ]
+      },
+      "weight_map_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_348_controlled_admission_conflict_run\\integration\\weight_H.fits"
+    }
+  ],
+  "rejection": "winsorized_sigma"
+}

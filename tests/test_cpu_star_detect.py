@@ -9,7 +9,7 @@ from glass.cpu.metrics import measure_quality
 from glass.engine.quality import measure_calibrated_quality, measure_quality_streaming
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import write_json
-from glass.synthetic.generator import render_star_field
+from glass.synthetic.generator import generate_synthetic_dataset, render_star_field
 
 
 def test_cpu_star_detection_finds_synthetic_stars():
@@ -126,3 +126,24 @@ def test_calibrated_quality_gate_excludes_saturated_reference(tmp_path: Path):
     assert by_id["bad"]["quality_gate_status"] == "rejected"
     assert by_id["bad"]["reference_candidate"] is False
     assert any("saturation_fraction" in warning for warning in by_id["bad"]["quality_gate_warnings"])
+
+
+def test_calibrated_quality_gate_scales_min_stars_for_tiny_synthetic_frames(tmp_path: Path):
+    data = tmp_path / "data"
+    run = tmp_path / "run"
+    run.mkdir()
+    generate_synthetic_dataset(data, frames=1, width=24, height=24)
+    light_path = sorted((data / "light").glob("*.fits"))[0]
+    write_json(
+        run / "calibration_artifacts.json",
+        {"calibrated_lights": [{"frame_id": "tiny", "path": str(light_path), "dq_summary": {}}]},
+    )
+
+    result = measure_calibrated_quality(run, tile_size=8)
+    quality = result["frame_quality"][0]
+
+    assert quality["quality_gate_min_stars_configured"] == 8
+    assert quality["quality_gate_min_stars_effective"] < quality["quality_gate_min_stars_configured"]
+    assert quality["star_count"] >= quality["quality_gate_min_stars_effective"]
+    assert quality["quality_gate_status"] == "accepted"
+    assert result["quality_gate_summary"]["fallback_used"] is False

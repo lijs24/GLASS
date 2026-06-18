@@ -785,7 +785,7 @@ def test_cli_guardrails_registration_quality_thresholds(small_fits_dataset, tmp_
     assert failing_summary["passed"] is False
     assert failing_bundle["passed"] is False
     assert failing_checks["registration_quality"]["passed"] is False
-    assert contract_checks["accepted_registration_inliers_meet_threshold"]["passed"] is False
+    assert contract_checks["accepted_registration_inliers_meet_threshold"]["passed"] is True
     assert contract_checks["all_registration_outputs_accepted"]["passed"] is False
     assert failing_contract["summary"]["failed_count"] >= 1
 

@@ -150,6 +150,115 @@ def _write_resident_pipeline_run(
         )
 
 
+def _write_frame_accounting_fixture(path: Path, *, conflict: bool = False) -> None:
+    if conflict:
+        frames = [
+            {
+                "frame_id": "L0000",
+                "filter": "H",
+                "quality_gate_status": "rejected",
+                "registration_status": "quality_rejected",
+                "warp_status": "skipped",
+                "local_norm_status": "not_run",
+                "integration_status": "used",
+                "integration_weight": 1.0,
+                "integration_conflict_count": 3,
+                "integration_conflicts": [
+                    {
+                        "stage": "quality",
+                        "status": "rejected",
+                        "reason": "positive integration weight for quality-rejected frame",
+                    },
+                    {
+                        "stage": "registration",
+                        "status": "quality_rejected",
+                        "reason": "positive integration weight for non-accepted registration frame",
+                    },
+                    {
+                        "stage": "warp",
+                        "status": "skipped",
+                        "reason": "positive integration weight for non-warped frame",
+                    },
+                ],
+                "final_status": "integration_conflict",
+            },
+            {
+                "frame_id": "L0001",
+                "filter": "H",
+                "quality_gate_status": "accepted",
+                "registration_status": "ok",
+                "warp_status": "accepted",
+                "local_norm_status": "not_run",
+                "integration_status": "used",
+                "integration_weight": 1.0,
+                "integration_conflict_count": 0,
+                "integration_conflicts": [],
+                "final_status": "integrated",
+            },
+            {
+                "frame_id": "L0002",
+                "filter": "H",
+                "quality_gate_status": "accepted",
+                "registration_status": "ok",
+                "warp_status": "accepted",
+                "local_norm_status": "not_run",
+                "integration_status": "used",
+                "integration_weight": 1.0,
+                "integration_conflict_count": 0,
+                "integration_conflicts": [],
+                "final_status": "integrated",
+            },
+        ]
+        final_counts = {"integration_conflict": 1, "integrated": 2}
+        integrated = 2
+        conflict_count = 1
+        exception_frames = 1
+    else:
+        frames = [
+            {
+                "frame_id": f"L{index:04d}",
+                "filter": "H",
+                "quality_gate_status": "accepted",
+                "registration_status": "ok" if index else "reference",
+                "warp_status": "accepted",
+                "local_norm_status": "not_run",
+                "integration_status": "used",
+                "integration_weight": 1.0,
+                "integration_conflict_count": 0,
+                "integration_conflicts": [],
+                "final_status": "integrated",
+            }
+            for index in range(3)
+        ]
+        final_counts = {"integrated": 3}
+        integrated = 3
+        conflict_count = 0
+        exception_frames = 0
+
+    write_json(
+        path / "frame_accounting.json",
+        {
+            "schema_version": 1,
+            "artifact": "frame_accounting",
+            "summary": {
+                "input_light_frames": 3,
+                "integrated_frames": integrated,
+                "zero_weight_frames": 0,
+                "integration_conflict_frames": conflict_count,
+                "exception_frames": exception_frames,
+                "final_status_counts": final_counts,
+            },
+            "exception_summary": {
+                "count": exception_frames,
+                "final_status_counts": {"integration_conflict": 1} if conflict else {},
+                "primary_stage_counts": {"quality": 1} if conflict else {},
+            },
+            "exception_frames": [frames[0]] if conflict else [],
+            "frames": frames,
+        },
+    )
+
+
 def _write_nonresident_cuda_fast_path_pipeline_run(path: Path, *, explicit: bool) -> None:
     integration_dir = path / "integration"
     integration_dir.mkdir(parents=True)
@@ -387,6 +496,58 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+
+
+def test_pipeline_contract_passes_frame_accounting_admission_consistency(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_frame_accounting_fixture(run)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert audit["passed"] is True
+    assert checks["frame_accounting_no_integration_conflicts"]["passed"] is True
+    assert audit["artifacts"]["frame_accounting"]["exists"] is True
+    assert audit["frame_accounting"]["present"] is True
+    assert audit["frame_accounting"]["status"] == "passed"
+    assert audit["frame_accounting"]["integration_conflict_frames"] == 0
+    assert audit["frame_accounting"]["integrated_frames"] == 3
+
+
+def test_pipeline_contract_blocks_frame_accounting_integration_conflicts(tmp_path: Path):
+    run = tmp_path / "run"
+    out = tmp_path / "pipeline_contract.json"
+    markdown = tmp_path / "pipeline_contract.md"
+    _write_resident_pipeline_run(run)
+    _write_frame_accounting_fixture(run, conflict=True)
+
+    result = main(
+        [
+            "pipeline-contract",
+            "--run",
+            str(run),
+            "--out",
+            str(out),
+            "--markdown",
+            str(markdown),
+        ]
+    )
+
+    audit = read_json(out)
+    checks = {item["name"]: item for item in audit["checks"]}
+    htmlish_markdown = markdown.read_text(encoding="utf-8")
+
+    assert result == 2
+    assert audit["passed"] is False
+    assert checks["frame_accounting_no_integration_conflicts"]["passed"] is False
+    assert checks["frame_accounting_no_integration_conflicts"]["evidence"]["integration_conflict_frames"] == 1
+    assert checks["frame_accounting_no_integration_conflicts"]["evidence"]["conflicts"][0]["frame_id"] == "L0000"
+    assert audit["frame_accounting"]["status"] == "failed"
+    assert audit["frame_accounting"]["integration_conflicts"][0]["integration_conflict_count"] == 3
+    assert "Frame Admission Accounting" in htmlish_markdown
+    assert "integration conflicts `1`" in htmlish_markdown
+    assert "positive integration weight for non-warped frame" in htmlish_markdown
 
 
 def test_pipeline_contract_uses_resident_artifact_winsorized_semantics_handoff(

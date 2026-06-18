@@ -1,0 +1,112 @@
+{
+  "artifact": "frame_accounting",
+  "exception_frames": [
+    {
+      "filter": "H",
+      "final_status": "integration_conflict",
+      "frame_id": "L0000",
+      "integration_conflict_count": 3,
+      "integration_conflicts": [
+        {
+          "reason": "positive integration weight for quality-rejected frame",
+          "stage": "quality",
+          "status": "rejected"
+        },
+        {
+          "reason": "positive integration weight for non-accepted registration frame",
+          "stage": "registration",
+          "status": "quality_rejected"
+        },
+        {
+          "reason": "positive integration weight for non-warped frame",
+          "stage": "warp",
+          "status": "skipped"
+        }
+      ],
+      "integration_status": "used",
+      "integration_weight": 1.0,
+      "local_norm_status": "not_run",
+      "quality_gate_status": "rejected",
+      "registration_status": "quality_rejected",
+      "warp_status": "skipped"
+    }
+  ],
+  "exception_summary": {
+    "count": 1,
+    "final_status_counts": {
+      "integration_conflict": 1
+    },
+    "primary_stage_counts": {
+      "quality": 1
+    }
+  },
+  "frames": [
+    {
+      "filter": "H",
+      "final_status": "integration_conflict",
+      "frame_id": "L0000",
+      "integration_conflict_count": 3,
+      "integration_conflicts": [
+        {
+          "reason": "positive integration weight for quality-rejected frame",
+          "stage": "quality",
+          "status": "rejected"
+        },
+        {
+          "reason": "positive integration weight for non-accepted registration frame",
+          "stage": "registration",
+          "status": "quality_rejected"
+        },
+        {
+          "reason": "positive integration weight for non-warped frame",
+          "stage": "warp",
+          "status": "skipped"
+        }
+      ],
+      "integration_status": "used",
+      "integration_weight": 1.0,
+      "local_norm_status": "not_run",
+      "quality_gate_status": "rejected",
+      "registration_status": "quality_rejected",
+      "warp_status": "skipped"
+    },
+    {
+      "filter": "H",
+      "final_status": "integrated",
+      "frame_id": "L0001",
+      "integration_conflict_count": 0,
+      "integration_conflicts": [],
+      "integration_status": "used",
+      "integration_weight": 1.0,
+      "local_norm_status": "not_run",
+      "quality_gate_status": "accepted",
+      "registration_status": "ok",
+      "warp_status": "accepted"
+    },
+    {
+      "filter": "H",
+      "final_status": "integrated",
+      "frame_id": "L0002",
+      "integration_conflict_count": 0,
+      "integration_conflicts": [],
+      "integration_status": "used",
+      "integration_weight": 1.0,
+      "local_norm_status": "not_run",
+      "quality_gate_status": "accepted",
+      "registration_status": "ok",
+      "warp_status": "accepted"
+    }
+  ],
+  "schema_version": 1,
+  "summary": {
+    "exception_frames": 1,
+    "final_status_counts": {
+      "integrated": 2,
+      "integration_conflict": 1
+    },
+    "input_light_frames": 3,
+    "integrated_frames": 2,
+    "integration_conflict_frames": 1,
+    "zero_weight_frames": 0
+  }
+}

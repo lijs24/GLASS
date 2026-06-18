@@ -36,9 +36,15 @@ def small_fits_dataset(tmp_path: Path) -> Path:
         if frame_type == "light":
             header["PIERSIDE"] = "West"
             header["OBJCTROT"] = 92.0
+        data = np.ones(shape, dtype=np.float32) * value
+        if frame_type == "light":
+            yy, xx = np.indices(shape, dtype=np.float32)
+            for x, y, flux in [(3.0, 13.0, 5000.0), (11.0, 13.0, 4200.0), (17.0, 13.0, 4600.0)]:
+                data += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 0.8**2)))
+            data[2:6, 3:8] = value
         path = root / frame_type / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        fits.PrimaryHDU(np.ones(shape, dtype=np.float32) * value, header=header).writeto(path)
+        fits.PrimaryHDU(data, header=header).writeto(path)
     return root
 
 

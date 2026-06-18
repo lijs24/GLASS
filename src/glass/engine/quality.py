@@ -30,8 +30,12 @@ def _quality_gate_policy(run: Path) -> dict[str, Any]:
     plan_path = run / "processing_plan.json"
     plan = read_json(plan_path) if plan_path.exists() else {}
     registration_policy = plan.get("registration_policy", {}) if isinstance(plan, dict) else {}
+    adaptive_min_stars_enabled = bool(registration_policy.get("quality_adaptive_min_stars", True))
+    adaptive_reference_side = float(registration_policy.get("quality_adaptive_min_stars_reference_side_px") or 64.0)
     return {
         "min_stars": int(registration_policy.get("min_stars") or 8),
+        "adaptive_min_stars_enabled": adaptive_min_stars_enabled,
+        "adaptive_min_stars_reference_side_px": max(adaptive_reference_side, 1.0),
         "max_saturation_fraction": float(
             registration_policy.get(
                 "quality_max_saturation_fraction",
@@ -43,12 +47,34 @@ def _quality_gate_policy(run: Path) -> dict[str, Any]:
     }
 
 
+def _effective_min_stars(quality: dict[str, Any], policy: dict[str, Any]) -> int:
+    configured = int(policy["min_stars"])
+    if not bool(policy.get("adaptive_min_stars_enabled", True)):
+        return configured
+    pixel_count = int(quality.get("pixel_count") or 0)
+    if pixel_count <= 0:
+        return configured
+    reference_side = float(policy.get("adaptive_min_stars_reference_side_px") or 64.0)
+    scaled = int(round(configured * (float(np.sqrt(pixel_count)) / max(reference_side, 1.0))))
+    return max(1, min(configured, scaled))
+
+
 def _apply_quality_gate(quality: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     warnings: list[str] = []
     star_count = int(quality.get("star_count") or 0)
-    min_stars = int(policy["min_stars"])
+    configured_min_stars = int(policy["min_stars"])
+    min_stars = _effective_min_stars(quality, policy)
+    quality["quality_gate_min_stars_configured"] = configured_min_stars
+    quality["quality_gate_min_stars_effective"] = min_stars
+    quality["quality_gate_adaptive_min_stars"] = bool(policy.get("adaptive_min_stars_enabled", True))
     if star_count < min_stars:
-        warnings.append(f"star_count {star_count} below min_stars={min_stars}")
+        if min_stars == configured_min_stars:
+            warnings.append(f"star_count {star_count} below min_stars={min_stars}")
+        else:
+            warnings.append(
+                f"star_count {star_count} below min_stars={min_stars} "
+                f"(configured_min_stars={configured_min_stars})"
+            )
     if bool(policy["require_fwhm"]) and quality.get("fwhm_px") is None:
         warnings.append("fwhm_px is unavailable")
     saturation_fraction = float(quality.get("saturation_fraction") or 0.0)
@@ -82,6 +108,13 @@ def _quality_gate_summary(qualities: list[dict[str, Any]], policy: dict[str, Any
         "reference_candidate_count": len(accepted),
         "fallback_used": fallback_used,
         "rejection_reason_counts": reason_counts,
+        "effective_min_stars": sorted(
+            {
+                int(item.get("quality_gate_min_stars_effective"))
+                for item in qualities
+                if item.get("quality_gate_min_stars_effective") is not None
+            }
+        ),
     }
 
 

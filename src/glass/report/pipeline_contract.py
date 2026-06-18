@@ -1249,6 +1249,48 @@ def _skipped_warp_rows(warp: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _frame_accounting_admission_state(frame_accounting: dict[str, Any]) -> dict[str, Any]:
+    summary = frame_accounting.get("summary") if isinstance(frame_accounting.get("summary"), dict) else {}
+    frames = frame_accounting.get("frames") if isinstance(frame_accounting.get("frames"), list) else []
+    conflicts: list[dict[str, Any]] = []
+    for row in frames:
+        if not isinstance(row, dict):
+            continue
+        conflict_count = _optional_rounded_int(row.get("integration_conflict_count")) or 0
+        if row.get("final_status") == "integration_conflict" or conflict_count > 0:
+            conflicts.append(
+                {
+                    "frame_id": row.get("frame_id"),
+                    "final_status": row.get("final_status"),
+                    "integration_status": row.get("integration_status"),
+                    "integration_weight": row.get("integration_weight"),
+                    "quality_gate_status": row.get("quality_gate_status"),
+                    "registration_status": row.get("registration_status"),
+                    "warp_status": row.get("warp_status"),
+                    "local_norm_status": row.get("local_norm_status"),
+                    "integration_conflict_count": conflict_count,
+                    "integration_conflicts": row.get("integration_conflicts")
+                    if isinstance(row.get("integration_conflicts"), list)
+                    else [],
+                }
+            )
+    summary_conflicts = _summary_count(summary, "integration_conflict_frames")
+    conflict_count = max(len(conflicts), int(summary_conflicts or 0))
+    return {
+        "present": bool(frame_accounting),
+        "status": "not_present" if not frame_accounting else ("failed" if conflict_count else "passed"),
+        "frame_count": len(frames),
+        "input_light_frames": _summary_count(summary, "input_light_frames"),
+        "integrated_frames": _summary_count(summary, "integrated_frames"),
+        "zero_weight_frames": _summary_count(summary, "zero_weight_frames"),
+        "exception_frames": _summary_count(summary, "exception_frames"),
+        "integration_conflict_frames": conflict_count,
+        "final_status_counts": summary.get("final_status_counts") if isinstance(summary.get("final_status_counts"), dict) else {},
+        "integration_conflicts": conflicts,
+        "passed": not frame_accounting or conflict_count == 0,
+    }
+
+
 def build_pipeline_contract_audit(
     run_dir: str | Path,
     *,
@@ -1263,6 +1305,7 @@ def build_pipeline_contract_audit(
     warp_path = run_root / "warp_results.json"
     local_norm_path = run_root / "local_norm_results.json"
     integration_path = run_root / "integration_results.json"
+    frame_accounting_path = run_root / "frame_accounting.json"
     calibration = _load_json_object(calibration_path)
     calibration_path_exists = calibration_path.exists()
     if not calibration:
@@ -1271,6 +1314,7 @@ def build_pipeline_contract_audit(
     warp = _load_json_object(warp_path)
     local_norm = _load_json_object(local_norm_path)
     integration = _load_json_object(integration_path)
+    frame_accounting = _load_json_object(frame_accounting_path)
 
     local_calibration_master_rows = _calibration_master_rows(calibration, run_root)
     resident_calibration_rows = _resident_calibration_rows(resident_calibration_contract)
@@ -1293,6 +1337,7 @@ def build_pipeline_contract_audit(
     integration_rows = _integration_rows(integration, run_root)
     integration_map_rows = _integration_map_rows(integration, run_root)
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
+    frame_accounting_admission = _frame_accounting_admission_state(frame_accounting)
     stack_engine_runtime_default = _stack_engine_runtime_default_state(
         calibration_master_rows=calibration_master_rows,
         integration_rows=integration_rows,
@@ -1448,6 +1493,20 @@ def build_pipeline_contract_audit(
                 ],
             },
             "Sample-closure evidence is optional for old artifacts, but explicit failed closure blocks the pipeline contract.",
+        ),
+        _check(
+            "frame_accounting_no_integration_conflicts",
+            bool(frame_accounting_admission["passed"]),
+            {
+                "present": frame_accounting_admission["present"],
+                "status": frame_accounting_admission["status"],
+                "frame_count": frame_accounting_admission["frame_count"],
+                "integration_conflict_frames": frame_accounting_admission[
+                    "integration_conflict_frames"
+                ],
+                "conflicts": frame_accounting_admission["integration_conflicts"],
+            },
+            "When frame_accounting.json is present, positive-weight integration rows must not conflict with upstream quality, registration, warp, or LN rejection state.",
         ),
     ]
     if calibration_artifact_present or resident_calibration_rows:
@@ -1721,6 +1780,10 @@ def build_pipeline_contract_audit(
             "warp": {"path": str(warp_path), "exists": warp_path.exists()},
             "local_norm": {"path": str(local_norm_path), "exists": local_norm_path.exists()},
             "integration": {"path": str(integration_path), "exists": integration_path.exists()},
+            "frame_accounting": {
+                "path": str(frame_accounting_path),
+                "exists": frame_accounting_path.exists(),
+            },
         },
         "calibration": {
             "artifact_path": str(calibration_path),
@@ -1761,6 +1824,7 @@ def build_pipeline_contract_audit(
             "maps": integration_map_rows,
             "engine_policy": integration_engine_policy,
         },
+        "frame_accounting": frame_accounting_admission,
         "stack_engine_runtime_default": stack_engine_runtime_default,
         "pixel_verification": {
             "enabled": bool(pixel_verify),
@@ -1835,6 +1899,26 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
             f"final-valid `{closure.get('valid_samples_after_rejection')}`, "
             f"rejected `{closure.get('rejected_samples')}`, "
             f"passed `{closure.get('passed')}`"
+        )
+    frame_accounting = audit.get("frame_accounting") or {}
+    lines.extend(["", "## Frame Admission Accounting", ""])
+    lines.append(
+        "- "
+        f"present `{frame_accounting.get('present')}`, "
+        f"status `{frame_accounting.get('status')}`, "
+        f"frames `{frame_accounting.get('frame_count')}`, "
+        f"integrated `{frame_accounting.get('integrated_frames')}`, "
+        f"zero-weight `{frame_accounting.get('zero_weight_frames')}`, "
+        f"integration conflicts `{frame_accounting.get('integration_conflict_frames')}`"
+    )
+    for conflict in frame_accounting.get("integration_conflicts") or []:
+        if not isinstance(conflict, dict):
+            continue
+        lines.append(
+            "- "
+            f"{conflict.get('frame_id')}: status `{conflict.get('final_status')}`, "
+            f"weight `{conflict.get('integration_weight')}`, "
+            f"conflicts `{conflict.get('integration_conflicts')}`"
         )
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)

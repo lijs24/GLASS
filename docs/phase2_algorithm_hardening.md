@@ -6173,6 +6173,29 @@ integration where applicable.
   CUDA kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 348: Pipeline Contract Frame Admission Guard
+
+- Carry `frame_accounting.json` admission consistency into
+  `glass pipeline-contract`.
+- Add `frame_accounting_no_integration_conflicts` as a pipeline invariant:
+  when frame accounting is present, no frame with positive integration weight
+  may conflict with quality, registration, warp, or LN rejection state.
+- Surface frame admission summary and conflict-frame details in the pipeline
+  contract JSON and Markdown.
+- Add focused tests proving a clean frame ledger passes and a conflicting
+  ledger fails the pipeline contract with frame id and upstream conflict
+  reasons preserved.
+- Record an adaptive effective `min_stars` threshold for tiny synthetic
+  quality-gate fixtures so CPU audit smoke runs do not falsely enter the
+  all-quality-rejected fallback path while full-size frames keep the configured
+  threshold.
+- Generate Gate348 controlled pipeline-contract artifacts from a resident
+  pipeline fixture with an intentionally invalid admission ledger.
+- Keep this gate pipeline-contract and quality-admission scoped: no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
