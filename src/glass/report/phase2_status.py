@@ -729,6 +729,55 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 "default_promotion_stack_engine_publication_resident_winsorized_agreement"
             )
         ),
+        "github_plan_matrix_resident_result_contract_ready": summary.get(
+            "github_plan_matrix_resident_result_contract_ready"
+        ),
+        "github_plan_matrix_resident_result_contract_status": summary.get(
+            "github_plan_matrix_resident_result_contract_status"
+        ),
+        "github_plan_matrix_resident_result_contract_phase2_check_passed": (
+            summary.get(
+                "github_plan_matrix_resident_result_contract_phase2_check_passed"
+            )
+        ),
+        "github_plan_matrix_resident_result_contract_required_count": summary.get(
+            "github_plan_matrix_resident_result_contract_required_count"
+        ),
+        "github_plan_matrix_resident_result_contract_failed_count": summary.get(
+            "github_plan_matrix_resident_result_contract_failed_count"
+        ),
+        "matrix_resident_result_contract_ready": summary.get(
+            "matrix_resident_result_contract_ready"
+        ),
+        "matrix_resident_result_contract_status": summary.get(
+            "matrix_resident_result_contract_status"
+        ),
+        "matrix_resident_result_contract_phase2_check_passed": summary.get(
+            "matrix_resident_result_contract_phase2_check_passed"
+        ),
+        "matrix_resident_result_contract_required_count": summary.get(
+            "matrix_resident_result_contract_required_count"
+        ),
+        "matrix_resident_result_contract_failed_count": summary.get(
+            "matrix_resident_result_contract_failed_count"
+        ),
+        "default_promotion_resident_result_contract_ready": summary.get(
+            "default_promotion_resident_result_contract_ready"
+        ),
+        "default_promotion_resident_result_contract_status": summary.get(
+            "default_promotion_resident_result_contract_status"
+        ),
+        "default_promotion_resident_result_contract_phase2_check_passed": (
+            summary.get(
+                "default_promotion_resident_result_contract_phase2_check_passed"
+            )
+        ),
+        "default_promotion_resident_result_contract_required_count": summary.get(
+            "default_promotion_resident_result_contract_required_count"
+        ),
+        "default_promotion_resident_result_contract_failed_count": summary.get(
+            "default_promotion_resident_result_contract_failed_count"
+        ),
         "github_plan_phase2_rejection_sample_accounting_passed": _check_passed(
             payload,
             "github_plan_phase2_rejection_sample_accounting_passed",
@@ -884,6 +933,26 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 payload,
                 "matrix_stack_engine_publication_audit_matches_default_promotion",
             )
+        ),
+        "github_plan_matrix_resident_result_contract_handoff_passed": _check_passed(
+            payload,
+            "github_plan_matrix_resident_result_contract_handoff_passed",
+        ),
+        "matrix_resident_result_contract_handoff_passed": _check_passed(
+            payload,
+            "matrix_resident_result_contract_handoff_passed",
+        ),
+        "default_promotion_resident_result_contract_handoff_passed": _check_passed(
+            payload,
+            "default_promotion_resident_result_contract_handoff_passed",
+        ),
+        "github_plan_matrix_resident_result_contract_matches_matrix": _check_passed(
+            payload,
+            "github_plan_matrix_resident_result_contract_matches_matrix",
+        ),
+        "matrix_resident_result_contract_matches_default_promotion": _check_passed(
+            payload,
+            "matrix_resident_result_contract_matches_default_promotion",
         ),
         "matrix_stack_engine_runtime_default_ready": summary.get(
             "matrix_stack_engine_runtime_default_ready",
@@ -3650,6 +3719,159 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "windows_publish_preflight_resident_result_contract_handoff_passed",
+                "passed": (
+                    preflight.get(
+                        "github_plan_matrix_resident_result_contract_handoff_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_resident_result_contract_handoff_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_resident_result_contract_handoff_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_resident_result_contract_matches_matrix"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_resident_result_contract_matches_default_promotion"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_resident_result_contract_ready"
+                    )
+                    is True
+                    and preflight.get("matrix_resident_result_contract_ready") is True
+                    and preflight.get(
+                        "default_promotion_resident_result_contract_ready"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_resident_result_contract_status"
+                    )
+                    == "passed"
+                    and preflight.get("matrix_resident_result_contract_status")
+                    == "passed"
+                    and preflight.get(
+                        "default_promotion_resident_result_contract_status"
+                    )
+                    == "passed"
+                    and preflight.get(
+                        "github_plan_matrix_resident_result_contract_phase2_check_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_resident_result_contract_phase2_check_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_resident_result_contract_phase2_check_passed"
+                    )
+                    is True
+                    and _int_or_zero(
+                        preflight.get(
+                            "github_plan_matrix_resident_result_contract_required_count"
+                        )
+                    )
+                    > 0
+                    and _int_or_zero(
+                        preflight.get("matrix_resident_result_contract_required_count")
+                    )
+                    > 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_resident_result_contract_required_count"
+                        )
+                    )
+                    > 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "github_plan_matrix_resident_result_contract_failed_count"
+                        )
+                    )
+                    == 0
+                    and _int_or_zero(
+                        preflight.get("matrix_resident_result_contract_failed_count")
+                    )
+                    == 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_resident_result_contract_failed_count"
+                        )
+                    )
+                    == 0
+                ),
+                "evidence": {
+                    "github_plan_matrix_ready": preflight.get(
+                        "github_plan_matrix_resident_result_contract_ready"
+                    ),
+                    "github_plan_matrix_status": preflight.get(
+                        "github_plan_matrix_resident_result_contract_status"
+                    ),
+                    "github_plan_matrix_phase2_check": preflight.get(
+                        "github_plan_matrix_resident_result_contract_phase2_check_passed"
+                    ),
+                    "github_plan_matrix_required_count": preflight.get(
+                        "github_plan_matrix_resident_result_contract_required_count"
+                    ),
+                    "github_plan_matrix_failed_count": preflight.get(
+                        "github_plan_matrix_resident_result_contract_failed_count"
+                    ),
+                    "matrix_ready": preflight.get(
+                        "matrix_resident_result_contract_ready"
+                    ),
+                    "matrix_status": preflight.get(
+                        "matrix_resident_result_contract_status"
+                    ),
+                    "matrix_phase2_check": preflight.get(
+                        "matrix_resident_result_contract_phase2_check_passed"
+                    ),
+                    "matrix_required_count": preflight.get(
+                        "matrix_resident_result_contract_required_count"
+                    ),
+                    "matrix_failed_count": preflight.get(
+                        "matrix_resident_result_contract_failed_count"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_resident_result_contract_ready"
+                    ),
+                    "default_promotion_status": preflight.get(
+                        "default_promotion_resident_result_contract_status"
+                    ),
+                    "default_promotion_phase2_check": preflight.get(
+                        "default_promotion_resident_result_contract_phase2_check_passed"
+                    ),
+                    "default_promotion_required_count": preflight.get(
+                        "default_promotion_resident_result_contract_required_count"
+                    ),
+                    "default_promotion_failed_count": preflight.get(
+                        "default_promotion_resident_result_contract_failed_count"
+                    ),
+                    "github_plan_matrix_check": preflight.get(
+                        "github_plan_matrix_resident_result_contract_handoff_passed"
+                    ),
+                    "matrix_check": preflight.get(
+                        "matrix_resident_result_contract_handoff_passed"
+                    ),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_resident_result_contract_handoff_passed"
+                    ),
+                    "github_plan_matrix_match_check": preflight.get(
+                        "github_plan_matrix_resident_result_contract_matches_matrix"
+                    ),
+                    "matrix_default_promotion_match_check": preflight.get(
+                        "matrix_resident_result_contract_matches_default_promotion"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
     if publication_audit is not None:
         checks.append(
             {
@@ -5234,6 +5456,33 @@ _PUBLISH_PREFLIGHT_RESIDENT_FASTPATH_HANDOFF_STATUS_FIELDS = (
 )
 
 
+_PUBLISH_PREFLIGHT_RESIDENT_RESULT_CONTRACT_HANDOFF_CHECK_FIELDS = (
+    "github_plan_matrix_resident_result_contract_handoff_passed",
+    "matrix_resident_result_contract_handoff_passed",
+    "default_promotion_resident_result_contract_handoff_passed",
+    "github_plan_matrix_resident_result_contract_matches_matrix",
+    "matrix_resident_result_contract_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_RESIDENT_RESULT_CONTRACT_STATUS_FIELDS = (
+    "github_plan_matrix_resident_result_contract_ready",
+    "github_plan_matrix_resident_result_contract_status",
+    "github_plan_matrix_resident_result_contract_phase2_check_passed",
+    "github_plan_matrix_resident_result_contract_required_count",
+    "github_plan_matrix_resident_result_contract_failed_count",
+    "matrix_resident_result_contract_ready",
+    "matrix_resident_result_contract_status",
+    "matrix_resident_result_contract_phase2_check_passed",
+    "matrix_resident_result_contract_required_count",
+    "matrix_resident_result_contract_failed_count",
+    "default_promotion_resident_result_contract_ready",
+    "default_promotion_resident_result_contract_status",
+    "default_promotion_resident_result_contract_phase2_check_passed",
+    "default_promotion_resident_result_contract_required_count",
+    "default_promotion_resident_result_contract_failed_count",
+)
+
+
 _PUBLISH_PREFLIGHT_STACK_PUBLICATION_CHECK_FIELDS = (
     "matrix_stack_engine_publication_audit_passed",
     "matrix_stack_engine_publication_policy_chain_passed",
@@ -5653,6 +5902,73 @@ def _publish_preflight_resident_fastpath_handoff_statuses_passed(
             )
         )
         > 0
+    )
+
+
+def _publish_preflight_resident_result_contract_handoff_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_RESIDENT_RESULT_CONTRACT_HANDOFF_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_resident_result_contract_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_RESIDENT_RESULT_CONTRACT_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_resident_result_contract_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_resident_result_contract_statuses(payload)
+    return (
+        bool(statuses)
+        and statuses.get("github_plan_matrix_resident_result_contract_ready") is True
+        and statuses.get("matrix_resident_result_contract_ready") is True
+        and statuses.get("default_promotion_resident_result_contract_ready") is True
+        and statuses.get("github_plan_matrix_resident_result_contract_status")
+        == "passed"
+        and statuses.get("matrix_resident_result_contract_status") == "passed"
+        and statuses.get("default_promotion_resident_result_contract_status")
+        == "passed"
+        and statuses.get(
+            "github_plan_matrix_resident_result_contract_phase2_check_passed"
+        )
+        is True
+        and statuses.get("matrix_resident_result_contract_phase2_check_passed")
+        is True
+        and statuses.get(
+            "default_promotion_resident_result_contract_phase2_check_passed"
+        )
+        is True
+        and _int_or_zero(
+            statuses.get("github_plan_matrix_resident_result_contract_required_count")
+        )
+        > 0
+        and _int_or_zero(
+            statuses.get("matrix_resident_result_contract_required_count")
+        )
+        > 0
+        and _int_or_zero(
+            statuses.get("default_promotion_resident_result_contract_required_count")
+        )
+        > 0
+        and _int_or_zero(
+            statuses.get("github_plan_matrix_resident_result_contract_failed_count")
+        )
+        == 0
+        and _int_or_zero(statuses.get("matrix_resident_result_contract_failed_count"))
+        == 0
+        and _int_or_zero(
+            statuses.get("default_promotion_resident_result_contract_failed_count")
+        )
+        == 0
     )
 
 
@@ -6422,6 +6738,42 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_resident_fastpath_handoff_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_resident_result_contract_handoff_preserved",
+            not _publish_preflight_resident_result_contract_handoff_checks_passed(
+                baseline
+            )
+            or _publish_preflight_resident_result_contract_handoff_checks_passed(
+                candidate
+            ),
+            baseline={
+                "checks_passed": (
+                    _publish_preflight_resident_result_contract_handoff_checks_passed(
+                        baseline
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_resident_result_contract_statuses(baseline)
+                ),
+            },
+            candidate={
+                "checks_passed": (
+                    _publish_preflight_resident_result_contract_handoff_checks_passed(
+                        candidate
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_resident_result_contract_statuses(candidate)
+                ),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_resident_result_contract_status_preserved",
+            not _publish_preflight_resident_result_contract_statuses_passed(baseline)
+            or _publish_preflight_resident_result_contract_statuses_passed(candidate),
+            baseline=_publish_preflight_resident_result_contract_statuses(baseline),
+            candidate=_publish_preflight_resident_result_contract_statuses(candidate),
+        ),
+        _compare_check(
             "windows_publish_preflight_stack_publication_audit_preserved",
             not _publish_preflight_stack_publication_checks_passed(baseline)
             or _publish_preflight_stack_publication_checks_passed(candidate),
@@ -6929,6 +7281,9 @@ def build_phase2_status_compare(
             "publish_preflight_resident_fastpath_handoff": (
                 _publish_preflight_resident_fastpath_handoff_statuses(baseline)
             ),
+            "publish_preflight_resident_result_contract": (
+                _publish_preflight_resident_result_contract_statuses(baseline)
+            ),
             "publish_preflight_stack_publication_audit": (
                 _publish_preflight_stack_publication_statuses(baseline)
             ),
@@ -7002,6 +7357,9 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_resident_fastpath_handoff": (
                 _publish_preflight_resident_fastpath_handoff_statuses(candidate)
+            ),
+            "publish_preflight_resident_result_contract": (
+                _publish_preflight_resident_result_contract_statuses(candidate)
             ),
             "publish_preflight_stack_publication_audit": (
                 _publish_preflight_stack_publication_statuses(candidate)

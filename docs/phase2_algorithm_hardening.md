@@ -6088,6 +6088,24 @@ integration where applicable.
   change, no CUDA kernel change, no runtime default change, no package upload,
   no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 343: Phase2 Publish-Preflight Resident Result-Contract Handoff
+
+- Carry final publish-preflight resident result-contract evidence into
+  `glass phase2-status` and `glass phase2-status-compare`.
+- Add `windows_publish_preflight_resident_result_contract_handoff_passed` as a
+  Phase2 status blocker requiring plan, matrix, and default-promotion
+  resident result-contract evidence to be present, ready, passed,
+  Phase2-checked, required by at least one resident output, and free of failed
+  output rows.
+- Add compare checks that flag a regression when a candidate loses a
+  previously passing publish-preflight resident result-contract handoff or its
+  status fields.
+- Generate Gate343 status and compare artifacts from controlled Gate342
+  publish-preflight artifacts.
+- Keep this gate status/compare scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
