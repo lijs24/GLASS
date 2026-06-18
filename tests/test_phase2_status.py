@@ -243,6 +243,45 @@ def _write_default_route_acceptance(path: Path, *, route_passed: bool = True) ->
     )
 
 
+def _write_registration_results(path: Path, *, admission_status: str = "accepted") -> None:
+    blocked = admission_status == "blocked"
+    allow_rejected = admission_status == "allowed_quality_rejected_reference"
+    quality_gate_status = "rejected" if blocked or allow_rejected else "accepted"
+    reason = None
+    if blocked:
+        reason = "reference frame failed the quality gate"
+    elif allow_rejected:
+        reason = "quality-rejected reference explicitly allowed by registration policy"
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "reference_frame_id": "F000001",
+            "quality_reference_frame_id": "F000001",
+            "requested_reference_frame_id": None,
+            "reference_admission": {
+                "status": admission_status,
+                "reference_frame_id": "F000001",
+                "quality_gate_status": quality_gate_status,
+                "quality_gate_enforced": True,
+                "reference_selection_fallback": blocked or allow_rejected,
+                "allow_quality_rejected_reference": allow_rejected,
+                "reason": reason,
+            },
+            "registration_results": [
+                {
+                    "frame_id": "F000001",
+                    "status": "quality_rejected" if blocked else "reference",
+                    "quality_gate_status": quality_gate_status,
+                    "registration_solution_source": (
+                        "quality_reference_admission" if blocked else "streaming_star_detector"
+                    ),
+                }
+            ],
+        },
+    )
+
+
 def _write_resident_winsorized_benchmark_audit(path: Path, *, passed: bool = True) -> None:
     write_json(
         path,
@@ -3194,6 +3233,58 @@ def test_phase2_status_surfaces_release_warp_quality_handoff(tmp_path: Path):
     assert "Warp quality handoff: passed ready=True outputs=1 failed=[]" in text
 
 
+def test_phase2_status_surfaces_accepted_registration_admission(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=353)
+    registration = tmp_path / "registration_results.json"
+    out_md = tmp_path / "phase2.md"
+    _write_registration_results(registration, admission_status="accepted")
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        registration_results=registration,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "green"
+    assert payload["registration_admission"]["status"] == "accepted"
+    assert payload["registration_admission"]["passed"] is True
+    assert checks["registration_reference_admission_not_blocked"]["passed"] is True
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert "Registration admission: accepted passed=True blocked=False" in text
+
+
+def test_phase2_status_blocks_registration_admission_failure(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=353)
+    registration = tmp_path / "registration_results.json"
+    out_md = tmp_path / "phase2.md"
+    _write_registration_results(registration, admission_status="blocked")
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        registration_results=registration,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "attention_required"
+    assert payload["registration_admission"]["status"] == "blocked"
+    assert payload["registration_admission"]["blocked"] is True
+    check = checks["registration_reference_admission_not_blocked"]
+    assert check["passed"] is False
+    assert check["evidence"]["reason"] == "reference frame failed the quality gate"
+    assert check["evidence"]["quality_reference_admission_row_count"] == 1
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert "Registration admission: blocked passed=False blocked=True" in text
+    assert "reference frame failed the quality gate" in text
+
+
 def test_phase2_status_blocks_default_change_without_runtime_repeat(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -3475,6 +3566,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     release_decision = tmp_path / "release_decision.json"
     publish_preflight = tmp_path / "publish_preflight.json"
     publication_audit = tmp_path / "stack_engine_publication_audit.json"
+    registration_results = tmp_path / "registration_results.json"
     winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
     winsorized_sweep_audit = tmp_path / "resident_winsorized_sweep_audit.json"
     _write_acceptance(acceptance)
@@ -3484,6 +3576,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     _write_release_decision(release_decision)
     _write_publish_preflight(publish_preflight)
     _write_stack_engine_publication_audit(publication_audit)
+    _write_registration_results(registration_results)
     _write_resident_winsorized_benchmark_audit(winsorized_audit)
     _write_resident_winsorized_sweep_audit(winsorized_sweep_audit)
 
@@ -3506,6 +3599,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(publish_preflight),
             "--stack-engine-publication-audit",
             str(publication_audit),
+            "--registration-results",
+            str(registration_results),
             "--resident-winsorized-benchmark-audit",
             str(winsorized_audit),
             "--resident-winsorized-sweep-audit",
@@ -3532,6 +3627,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
     assert payload["stack_engine_publication_audit"]["status"] == "passed"
+    assert payload["registration_admission"]["status"] == "accepted"
+    assert payload["registration_admission"]["passed"] is True
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -3539,6 +3636,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Native calibrated lights: 200" in text
     assert "Registration fast path: present" in text
     assert "Registration fast path contract: passed" in text
+    assert "Registration admission: accepted passed=True blocked=False" in text
     assert "Triangle warp batch frames: 188" in text
     assert "Default Route Acceptance" in text
     assert "Route contract passed: True" in text
@@ -5644,6 +5742,44 @@ def test_phase2_status_compare_flags_stack_publication_policy_regression(
         ]
         is False
     )
+
+
+def test_phase2_status_compare_flags_registration_admission_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    baseline_payload = _status_payload(gate=352)
+    baseline_payload["registration_admission"] = {
+        "status": "accepted",
+        "passed": True,
+        "blocked": False,
+        "reference_frame_id": "F000001",
+        "reason": None,
+    }
+    candidate_payload = _status_payload(gate=353, status="attention_required")
+    candidate_payload["registration_admission"] = {
+        "status": "blocked",
+        "passed": False,
+        "blocked": True,
+        "reference_frame_id": "F000001",
+        "reason": "reference frame failed the quality gate",
+    }
+    write_json(baseline, baseline_payload)
+    write_json(candidate, candidate_payload)
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    check = checks["registration_reference_admission_not_blocked_preserved"]
+    assert payload["status"] == "regressed"
+    assert check["passed"] is False
+    assert check["evidence"]["baseline"]["status"] == "accepted"
+    assert check["evidence"]["candidate"]["status"] == "blocked"
+    assert payload["candidate"]["registration_admission"]["blocked"] is True
 
 
 def test_phase2_status_compare_flags_stack_publication_resident_result_regression(

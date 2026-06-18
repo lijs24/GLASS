@@ -6270,6 +6270,26 @@ integration where applicable.
   no runtime default change, no package upload, no GitHub release creation, and
   no real-data benchmark rerun.
 
+### S2-Gate 353: Phase2 Registration Admission Handoff
+
+- Add optional `registration_results.json` ingestion to `glass phase2-status`
+  via `--registration-results`.
+- Summarize `reference_admission` status, pass/block state, reference id,
+  quality-gate state, fallback/override flags, reason, and affected admission
+  rows in Phase2 status JSON and Markdown.
+- Add a Phase2 status check,
+  `registration_reference_admission_not_blocked`, so explicitly supplied
+  registration artifacts with blocked admission require attention.
+- Extend `glass phase2-status-compare` with
+  `registration_reference_admission_not_blocked_preserved`, preventing a
+  candidate status from regressing from accepted admission to blocked/missing
+  admission evidence.
+- Add focused build, CLI, Markdown, and compare tests.
+- Keep this gate Phase2 status handoff scoped: no registration transform math
+  change, no quality metric change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

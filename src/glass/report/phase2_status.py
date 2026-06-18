@@ -257,6 +257,62 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
     }
 
 
+def _registration_admission_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+            "blocked": False,
+        }
+    admission = payload.get("reference_admission")
+    results = payload.get("registration_results") if isinstance(payload.get("registration_results"), list) else []
+    if not isinstance(admission, dict):
+        return {
+            "path": payload.get("_path"),
+            "exists": True,
+            "status": "not_available",
+            "passed": False,
+            "blocked": False,
+            "reason": "reference_admission missing",
+            "registration_row_count": len(results),
+        }
+    status = str(admission.get("status") or "unknown")
+    blocked = status == "blocked"
+    passed = status in {"accepted", "allowed_quality_rejected_reference"}
+    return {
+        "path": payload.get("_path"),
+        "exists": True,
+        "status": status,
+        "passed": passed,
+        "blocked": blocked,
+        "reference_frame_id": admission.get("reference_frame_id"),
+        "quality_gate_status": admission.get("quality_gate_status"),
+        "quality_gate_enforced": admission.get("quality_gate_enforced"),
+        "reference_selection_fallback": admission.get("reference_selection_fallback"),
+        "allow_quality_rejected_reference": admission.get("allow_quality_rejected_reference"),
+        "reason": admission.get("reason"),
+        "quality_reference_frame_id": payload.get("quality_reference_frame_id"),
+        "requested_reference_frame_id": payload.get("requested_reference_frame_id"),
+        "registration_row_count": len(results),
+        "quality_reference_admission_row_count": sum(
+            1
+            for item in results
+            if isinstance(item, dict)
+            and item.get("registration_solution_source") == "quality_reference_admission"
+        ),
+        "quality_rejected_row_count": sum(
+            1
+            for item in results
+            if isinstance(item, dict) and item.get("quality_gate_status") == "rejected"
+        ),
+    }
+
+
 def _resident_registration_fastpath_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
     fastpath = (
         payload.get("resident_registration_fastpath")
@@ -2564,6 +2620,7 @@ def build_phase2_status(
     stack_engine_publication_audit: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
     stack_engine_contract: str | Path | None = None,
+    registration_results: str | Path | None = None,
     resident_winsorized_benchmark_audit: str | Path | None = None,
     resident_winsorized_sweep_audit: str | Path | None = None,
     release_decision: str | Path | None = None,
@@ -2581,6 +2638,7 @@ def build_phase2_status(
     )
     pipeline = _pipeline_contract_summary(pipeline_contract)
     stack_engine = _stack_engine_contract_summary(stack_engine_contract)
+    registration_admission = _registration_admission_summary(registration_results)
     winsorized_audit = _resident_winsorized_benchmark_audit_summary(
         resident_winsorized_benchmark_audit
     )
@@ -2744,6 +2802,31 @@ def build_phase2_status(
                 "evidence": {
                     "cuda_available": doctor.get("cuda_available"),
                     "primary_gpu": doctor.get("primary_gpu"),
+                },
+            }
+        )
+    if registration_admission is not None:
+        checks.append(
+            {
+                "name": "registration_reference_admission_not_blocked",
+                "passed": registration_admission.get("passed") is True,
+                "evidence": {
+                    "status": registration_admission.get("status"),
+                    "blocked": registration_admission.get("blocked"),
+                    "reference_frame_id": registration_admission.get("reference_frame_id"),
+                    "quality_gate_status": registration_admission.get("quality_gate_status"),
+                    "quality_gate_enforced": registration_admission.get("quality_gate_enforced"),
+                    "reference_selection_fallback": registration_admission.get(
+                        "reference_selection_fallback"
+                    ),
+                    "allow_quality_rejected_reference": registration_admission.get(
+                        "allow_quality_rejected_reference"
+                    ),
+                    "reason": registration_admission.get("reason"),
+                    "quality_reference_admission_row_count": registration_admission.get(
+                        "quality_reference_admission_row_count"
+                    ),
+                    "path": registration_admission.get("path"),
                 },
             }
         )
@@ -4446,6 +4529,7 @@ def build_phase2_status(
         "stack_engine_publication_audit": publication_audit,
         "pipeline_contract": pipeline,
         "stack_engine_contract": stack_engine,
+        "registration_admission": registration_admission,
         "resident_winsorized_benchmark_audit": winsorized_audit,
         "resident_winsorized_sweep_audit": winsorized_sweep_audit,
         "release_decision": decision,
@@ -4465,6 +4549,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     publication_audit = payload.get("stack_engine_publication_audit") or {}
     pipeline = payload.get("pipeline_contract") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
+    registration_admission = payload.get("registration_admission") or {}
     winsorized_audit = payload.get("resident_winsorized_benchmark_audit") or {}
     winsorized_sweep_audit = payload.get("resident_winsorized_sweep_audit") or {}
     decision = payload.get("release_decision") or {}
@@ -4556,6 +4641,37 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Active frames: {default_route_acceptance.get('active_frames')}",
                 f"- Route check count: {default_route_acceptance.get('route_check_count')}",
                 f"- Route failed checks: {default_route_acceptance.get('route_failed_checks')}",
+            ]
+        )
+    if registration_admission:
+        lines.extend(
+            [
+                "",
+                "## Registration Admission",
+                "",
+                (
+                    "- Registration admission: "
+                    f"{registration_admission.get('status')} "
+                    f"passed={registration_admission.get('passed')} "
+                    f"blocked={registration_admission.get('blocked')}"
+                ),
+                f"- Reference frame: {registration_admission.get('reference_frame_id')}",
+                f"- Quality gate status: {registration_admission.get('quality_gate_status')}",
+                f"- Quality gate enforced: {registration_admission.get('quality_gate_enforced')}",
+                (
+                    "- Fallback/override: "
+                    f"fallback={registration_admission.get('reference_selection_fallback')} "
+                    "allow_quality_rejected_reference="
+                    f"{registration_admission.get('allow_quality_rejected_reference')}"
+                ),
+                f"- Reason: {registration_admission.get('reason')}",
+                (
+                    "- Admission rows: "
+                    f"total={registration_admission.get('registration_row_count')} "
+                    "quality_reference_admission="
+                    f"{registration_admission.get('quality_reference_admission_row_count')} "
+                    f"quality_rejected={registration_admission.get('quality_rejected_row_count')}"
+                ),
             ]
         )
     if doctor:
@@ -6562,6 +6678,33 @@ def build_phase2_status_compare(
             ),
         ),
         _compare_check(
+            "registration_reference_admission_not_blocked_preserved",
+            _status_value(baseline, "registration_admission", "passed") is not True
+            or _status_value(candidate, "registration_admission", "passed") is True,
+            baseline={
+                "status": _status_value(baseline, "registration_admission", "status"),
+                "passed": _status_value(baseline, "registration_admission", "passed"),
+                "blocked": _status_value(baseline, "registration_admission", "blocked"),
+                "reference_frame_id": _status_value(
+                    baseline,
+                    "registration_admission",
+                    "reference_frame_id",
+                ),
+                "reason": _status_value(baseline, "registration_admission", "reason"),
+            },
+            candidate={
+                "status": _status_value(candidate, "registration_admission", "status"),
+                "passed": _status_value(candidate, "registration_admission", "passed"),
+                "blocked": _status_value(candidate, "registration_admission", "blocked"),
+                "reference_frame_id": _status_value(
+                    candidate,
+                    "registration_admission",
+                    "reference_frame_id",
+                ),
+                "reason": _status_value(candidate, "registration_admission", "reason"),
+            },
+        ),
+        _compare_check(
             "cuda_available_preserved",
             _status_value(baseline, "doctor", "cuda_available") is not True
             or _status_value(candidate, "doctor", "cuda_available") is True,
@@ -7391,6 +7534,7 @@ def build_phase2_status_compare(
                 _publish_preflight_stack_publication_statuses(baseline)
             ),
             "stack_engine_publication_audit": baseline_publication,
+            "registration_admission": _status_value(baseline, "registration_admission"),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "acceptance_pipeline_integration_engine_policy": _status_value(
@@ -7468,6 +7612,7 @@ def build_phase2_status_compare(
                 _publish_preflight_stack_publication_statuses(candidate)
             ),
             "stack_engine_publication_audit": candidate_publication,
+            "registration_admission": _status_value(candidate, "registration_admission"),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
             "acceptance_pipeline_integration_engine_policy": _status_value(

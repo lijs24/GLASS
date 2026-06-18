@@ -1,0 +1,173 @@
+{
+  "acceptance_audit": null,
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 353,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      },
+      "name": "cuda_doctor_available",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "allow_quality_rejected_reference": false,
+        "blocked": true,
+        "path": "runs\\checkpoints\\s2_gate_351_resume_admission_run\\registration_results.json",
+        "quality_gate_enforced": true,
+        "quality_gate_status": "rejected",
+        "quality_reference_admission_row_count": 1,
+        "reason": "reference frame failed the quality gate",
+        "reference_frame_id": "F000004",
+        "reference_selection_fallback": true,
+        "status": "blocked"
+      },
+      "name": "registration_reference_admission_not_blocked",
+      "passed": false
+    }
+  ],
+  "created_at": "2026-06-18T20:37:39+00:00",
+  "default_route_acceptance": null,
+  "doctor": {
+    "compute_capability": "12.0",
+    "cuda_available": true,
+    "device_count": 1,
+    "driver_version": "596.21",
+    "native_extension_loaded": true,
+    "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "recommendation": "cuda",
+    "vram_mib": 97886,
+    "windows_cuda_packages": {
+      "fallbacks": [
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+      "ordered_try_list": [
+        "cuda13",
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "packages": [
+        {
+          "architectures": [
+            "5.0",
+            "5.2",
+            "6.0",
+            "6.1",
+            "7.0",
+            "7.5",
+            "8.0",
+            "8.6"
+          ],
+          "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+          "label": "cuda11",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "11.8"
+        },
+        {
+          "architectures": [
+            "7.5",
+            "8.0",
+            "8.6",
+            "8.9",
+            "9.0"
+          ],
+          "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+          "label": "cuda12",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "12.4"
+        },
+        {
+          "architectures": [
+            "8.6",
+            "8.9",
+            "9.0",
+            "10.0",
+            "12.0"
+          ],
+          "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+          "label": "cuda13",
+          "match": "native_cubin",
+          "note": "This package contains native GPU code for this compute capability.",
+          "toolkit": "13.0"
+        }
+      ],
+      "primary": "cuda13",
+      "ptx_forward_compatibility": true,
+      "selected_device": {
+        "compute_capability": "12.0",
+        "compute_capability_code": 120,
+        "device_id": 0,
+        "driver_version": "596.21",
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      }
+    },
+    "wrapper_importable": true
+  },
+  "github_release_plan": null,
+  "latest_checkpoint": {
+    "checkpoint_dir": "runs\\checkpoints",
+    "date": "2026-06-19",
+    "exists": true,
+    "gate": 353,
+    "green": true,
+    "path": "runs\\checkpoints\\s2_gate_353_status.md",
+    "scope": "Phase2 registration admission handoff",
+    "status": "green"
+  },
+  "passed": false,
+  "pipeline_contract": null,
+  "publish_preflight": null,
+  "registration_admission": {
+    "allow_quality_rejected_reference": false,
+    "blocked": true,
+    "exists": true,
+    "passed": false,
+    "path": "runs\\checkpoints\\s2_gate_351_resume_admission_run\\registration_results.json",
+    "quality_gate_enforced": true,
+    "quality_gate_status": "rejected",
+    "quality_reference_admission_row_count": 1,
+    "quality_reference_frame_id": "F000004",
+    "quality_rejected_row_count": 1,
+    "reason": "reference frame failed the quality gate",
+    "reference_frame_id": "F000004",
+    "reference_selection_fallback": true,
+    "registration_row_count": 1,
+    "requested_reference_frame_id": null,
+    "status": "blocked"
+  },
+  "release_decision": null,
+  "release_decision_runtime_repeat_closure": {
+    "ready": true,
+    "reason": "release decision was not supplied",
+    "required": false,
+    "status": "not_supplied"
+  },
+  "release_manifest": null,
+  "resident_winsorized_benchmark_audit": null,
+  "resident_winsorized_sweep_audit": null,
+  "schema_version": 1,
+  "stack_engine_contract": null,
+  "stack_engine_publication_audit": null,
+  "status": "attention_required"
+}

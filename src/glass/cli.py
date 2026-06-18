@@ -3564,6 +3564,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         stack_engine_publication_audit=args.stack_engine_publication_audit,
         pipeline_contract=args.pipeline_contract,
         stack_engine_contract=args.stack_engine_contract,
+        registration_results=args.registration_results,
         resident_winsorized_benchmark_audit=args.resident_winsorized_benchmark_audit,
         resident_winsorized_sweep_audit=args.resident_winsorized_sweep_audit,
         release_decision=args.release_decision,
@@ -3578,6 +3579,11 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         else {}
     )
     pipeline = payload.get("pipeline_contract") if isinstance(payload.get("pipeline_contract"), dict) else {}
+    registration_admission = (
+        payload.get("registration_admission")
+        if isinstance(payload.get("registration_admission"), dict)
+        else {}
+    )
     winsorized_audit = (
         payload.get("resident_winsorized_benchmark_audit")
         if isinstance(payload.get("resident_winsorized_benchmark_audit"), dict)
@@ -3602,6 +3608,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             "publish_preflight_status": preflight.get("status"),
             "publish_preflight_passed": preflight.get("passed"),
             "pipeline_contract_status": pipeline.get("status"),
+            "registration_admission_status": registration_admission.get("status"),
             "resident_winsorized_benchmark_audit_status": winsorized_audit.get("status"),
             "resident_winsorized_benchmark_audit_passed": winsorized_audit.get("passed"),
             "resident_winsorized_sweep_audit_status": winsorized_sweep_audit.get("status"),
@@ -3669,6 +3676,10 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_status.add_argument(
         "--stack-engine-contract",
         help="optional StackEngine default-contract JSON artifact",
+    )
+    phase2_status.add_argument(
+        "--registration-results",
+        help="optional registration_results.json artifact used to summarize reference admission",
     )
     phase2_status.add_argument(
         "--resident-winsorized-benchmark-audit",
