@@ -2965,6 +2965,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         release_manifest=args.release_manifest,
         github_release_plan=args.github_release_plan,
         publish_preflight=args.publish_preflight,
+        stack_engine_publication_audit=args.stack_engine_publication_audit,
         pipeline_contract=args.pipeline_contract,
         stack_engine_contract=args.stack_engine_contract,
         resident_winsorized_benchmark_audit=args.resident_winsorized_benchmark_audit,
@@ -3064,6 +3065,10 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_status.add_argument("--release-manifest", help="optional Windows release-manifest JSON artifact")
     phase2_status.add_argument("--github-release-plan", help="optional Windows GitHub release-plan JSON artifact")
     phase2_status.add_argument("--publish-preflight", help="optional Windows publish-preflight JSON artifact")
+    phase2_status.add_argument(
+        "--stack-engine-publication-audit",
+        help="optional StackEngine publication-audit JSON artifact",
+    )
     phase2_status.add_argument("--pipeline-contract", help="optional pipeline-contract JSON artifact")
     phase2_status.add_argument(
         "--stack-engine-contract",

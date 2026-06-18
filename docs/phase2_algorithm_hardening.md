@@ -4852,6 +4852,26 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 287: Phase 2 StackEngine Publication Audit Handoff
+
+- Carry the S2-Gate 286 StackEngine publication-audit artifact back into
+  `glass phase2-status`.
+- Add Phase 2 green-status blockers for missing or failed StackEngine
+  publication-audit evidence when that artifact is supplied.
+- Require the publication-audit handoff to preserve both the integration
+  engine-policy chain and resident winsorized sweep chain before Phase 2 status
+  can remain green.
+- Surface publication-audit status, failed checks, policy-chain checks, and
+  resident winsorized chain checks in Phase 2 JSON and Markdown.
+- Extend `glass phase2-status-compare` so a candidate cannot drop a previously
+  passing StackEngine publication-audit, policy chain, or resident winsorized
+  chain.
+- Add focused Phase 2 status, CLI Markdown, and status-compare tests for ready
+  evidence and publication-audit regressions.
+- Keep this gate status/compare scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

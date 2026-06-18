@@ -880,6 +880,120 @@ def _write_publish_preflight(
     )
 
 
+def _write_stack_engine_publication_audit(
+    path: Path,
+    *,
+    passed: bool = True,
+    integration_engine_policy_ready: bool = True,
+    resident_winsorized_ready: bool = True,
+) -> None:
+    artifact_ready = passed and integration_engine_policy_ready and resident_winsorized_ready
+    status = "passed" if artifact_ready else "blocked"
+    policy_status = (
+        "publish_preflight_ready" if integration_engine_policy_ready else "blocked"
+    )
+    winsorized_status = (
+        "publish_preflight_ready" if resident_winsorized_ready else "blocked"
+    )
+    failed_checks = []
+    if not passed:
+        failed_checks.append("stack_engine_publication_audit_passed")
+    if not integration_engine_policy_ready:
+        failed_checks.extend(
+            [
+                "publish_preflight_integration_engine_policy_ready",
+                "phase2_publish_preflight_integration_engine_policy_ready",
+                "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight",
+            ]
+        )
+    if not resident_winsorized_ready:
+        failed_checks.extend(
+            [
+                "publish_preflight_resident_winsorized_sweep_ready",
+                "phase2_publish_preflight_resident_winsorized_sweep_ready",
+                "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
+            ]
+        )
+    checks = [
+        {"name": "source_contract_ready", "passed": passed},
+        {"name": "phase2_direct_contract_ready", "passed": passed},
+        {"name": "publish_preflight_stack_engine_ready", "passed": passed},
+        {"name": "phase2_publish_preflight_stack_engine_ready", "passed": passed},
+        {
+            "name": "publish_preflight_resident_winsorized_sweep_ready",
+            "passed": resident_winsorized_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_resident_winsorized_sweep_ready",
+            "passed": resident_winsorized_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
+            "passed": resident_winsorized_ready,
+        },
+        {
+            "name": "publish_preflight_integration_engine_policy_ready",
+            "passed": integration_engine_policy_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_integration_engine_policy_ready",
+            "passed": integration_engine_policy_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight",
+            "passed": integration_engine_policy_ready,
+        },
+    ]
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "glass_stack_engine_publication_audit",
+            "status": status,
+            "passed": artifact_ready,
+            "recommendation": "publication_chain_ready"
+            if artifact_ready
+            else "fix_stack_engine_publication_chain",
+            "failed_checks": failed_checks,
+            "layers": {
+                "source_contract": {"status": "passed", "ready": passed, "gap_count": 0},
+                "phase2_direct_contract": {
+                    "status": "passed",
+                    "ready": passed,
+                    "gap_count": 0,
+                },
+                "publish_preflight": {
+                    "status": "publish_preflight_ready",
+                    "ready": passed,
+                    "gap_count": 0,
+                },
+                "phase2_publish_preflight": {
+                    "status": "publish_preflight_ready",
+                    "ready": passed,
+                    "gap_count": 0,
+                },
+                "publish_preflight_resident_winsorized_sweep": {
+                    "status": winsorized_status,
+                    "ready": resident_winsorized_ready,
+                },
+                "phase2_publish_preflight_resident_winsorized_sweep": {
+                    "status": winsorized_status,
+                    "ready": resident_winsorized_ready,
+                },
+                "publish_preflight_integration_engine_policy": {
+                    "status": policy_status,
+                    "ready": integration_engine_policy_ready,
+                },
+                "phase2_publish_preflight_integration_engine_policy": {
+                    "status": policy_status,
+                    "ready": integration_engine_policy_ready,
+                },
+            },
+            "checks": checks,
+        },
+    )
+
+
 def _doctor_payload() -> dict:
     return {
         "recommendation": "cuda",
@@ -927,6 +1041,9 @@ def _status_payload(
     publish_preflight_resident_winsorized_status: str = "passed",
     publish_preflight_resident_winsorized_required_frame_passed: bool = True,
     publish_preflight_resident_winsorized_check_count: int = 27,
+    stack_publication_passed: bool = True,
+    stack_publication_policy_ready: bool = True,
+    stack_publication_resident_winsorized_ready: bool = True,
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -1156,6 +1273,33 @@ def _status_payload(
                 publish_preflight_resident_winsorized_status == "passed"
             ),
         },
+        "stack_engine_publication_audit": {
+            "status": "passed" if stack_publication_passed else "blocked",
+            "passed": stack_publication_passed,
+            "recommendation": "publication_chain_ready"
+            if stack_publication_passed
+            else "fix_stack_engine_publication_chain",
+            "check_count": 21,
+            "failed_check_count": 0 if stack_publication_passed else 1,
+            "publish_preflight_integration_engine_policy_ready": (
+                stack_publication_policy_ready
+            ),
+            "phase2_publish_preflight_integration_engine_policy_ready": (
+                stack_publication_policy_ready
+            ),
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight": (
+                stack_publication_policy_ready
+            ),
+            "publish_preflight_resident_winsorized_sweep_ready": (
+                stack_publication_resident_winsorized_ready
+            ),
+            "phase2_publish_preflight_resident_winsorized_sweep_ready": (
+                stack_publication_resident_winsorized_ready
+            ),
+            "phase2_publish_preflight_resident_winsorized_matches_publish_preflight": (
+                stack_publication_resident_winsorized_ready
+            ),
+        },
         "pipeline_contract": {
             "status": "passed" if pipeline_passed else "failed",
             "passed": pipeline_passed,
@@ -1270,6 +1414,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     release = tmp_path / "release_manifest.json"
     github_plan = tmp_path / "github_release_plan.json"
     publish_preflight = tmp_path / "publish_preflight.json"
+    publication_audit = tmp_path / "stack_engine_publication_audit.json"
     pipeline_contract = tmp_path / "pipeline_contract.json"
     stack_engine_contract = tmp_path / "stack_engine_contract.json"
     release_decision = tmp_path / "release_decision.json"
@@ -1279,6 +1424,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     _write_stack_engine_contract(stack_engine_contract)
     _write_release_decision(release_decision)
     _write_publish_preflight(publish_preflight)
+    _write_stack_engine_publication_audit(publication_audit)
     write_json(
         release,
         {
@@ -1309,6 +1455,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         release_manifest=release,
         github_release_plan=github_plan,
         publish_preflight=publish_preflight,
+        stack_engine_publication_audit=publication_audit,
         pipeline_contract=pipeline_contract,
         stack_engine_contract=stack_engine_contract,
         release_decision=release_decision,
@@ -1339,6 +1486,20 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["release_manifest"]["package_count"] == 4
     assert payload["github_release_plan"]["status"] == "release_plan_ready"
     assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert payload["stack_engine_publication_audit"]["status"] == "passed"
+    assert payload["stack_engine_publication_audit"]["passed"] is True
+    assert (
+        payload["stack_engine_publication_audit"][
+            "publish_preflight_integration_engine_policy_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["stack_engine_publication_audit"][
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
+        ]
+        is True
+    )
     assert payload["publish_preflight"]["asset_count"] == 4
     assert payload["publish_preflight"]["primary_package"] == "cuda13"
     assert (
@@ -1501,6 +1662,12 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["windows_publish_preflight_integration_engine_policy_passed"] is True
     assert checks["windows_publish_preflight_stack_engine_default_contract_ready"] is True
     assert checks["windows_publish_preflight_resident_winsorized_sweep_passed"] is True
+    assert checks["stack_engine_publication_audit_passed"] is True
+    assert checks["stack_engine_publication_audit_policy_chain_passed"] is True
+    assert (
+        checks["stack_engine_publication_audit_resident_winsorized_chain_passed"]
+        is True
+    )
 
 
 def test_phase2_status_summarizes_resident_winsorized_benchmark_audit(tmp_path: Path):
@@ -1603,6 +1770,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     stack_engine_contract = tmp_path / "stack_engine_contract.json"
     release_decision = tmp_path / "release_decision.json"
     publish_preflight = tmp_path / "publish_preflight.json"
+    publication_audit = tmp_path / "stack_engine_publication_audit.json"
     winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
     winsorized_sweep_audit = tmp_path / "resident_winsorized_sweep_audit.json"
     _write_acceptance(acceptance)
@@ -1611,6 +1779,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     _write_stack_engine_contract(stack_engine_contract)
     _write_release_decision(release_decision)
     _write_publish_preflight(publish_preflight)
+    _write_stack_engine_publication_audit(publication_audit)
     _write_resident_winsorized_benchmark_audit(winsorized_audit)
     _write_resident_winsorized_sweep_audit(winsorized_sweep_audit)
 
@@ -1631,6 +1800,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(release_decision),
             "--publish-preflight",
             str(publish_preflight),
+            "--stack-engine-publication-audit",
+            str(publication_audit),
             "--resident-winsorized-benchmark-audit",
             str(winsorized_audit),
             "--resident-winsorized-sweep-audit",
@@ -1656,6 +1827,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["resident_winsorized_sweep_audit"]["passed"] is True
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert payload["stack_engine_publication_audit"]["status"] == "passed"
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -1692,6 +1864,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Resident winsorized sweep statuses: matrix=passed" in text
     assert "Resident winsorized sweep required frame: matrix=200/True" in text
     assert "Resident winsorized sweep checks: matrix-count=27" in text
+    assert "StackEngine Publication Audit" in text
+    assert "Policy checks: raw=True, phase2=True, agreement=True" in text
 
 
 def test_phase2_status_blocks_missing_publish_preflight_engine_policy_handoff(
@@ -1764,6 +1938,46 @@ def test_phase2_status_blocks_failed_publish_preflight_engine_policy_handoff(
     assert evidence["matrix_ready"] is False
     assert evidence["matrix_acceptance_status"] == "failed"
     assert evidence["default_promotion_pipeline_check"] is False
+
+
+def test_phase2_status_blocks_failed_stack_publication_policy_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=287)
+    publication_audit = tmp_path / "stack_engine_publication_audit.json"
+    _write_stack_engine_publication_audit(
+        publication_audit,
+        integration_engine_policy_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        stack_engine_publication_audit=publication_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["stack_engine_publication_audit"]["status"] == "blocked"
+    assert checks["stack_engine_publication_audit_passed"]["passed"] is False
+    assert (
+        checks["stack_engine_publication_audit_policy_chain_passed"]["passed"]
+        is False
+    )
+    assert (
+        checks["stack_engine_publication_audit_policy_chain_passed"]["evidence"][
+            "phase2_ready_check"
+        ]
+        is False
+    )
+    assert (
+        checks[
+            "stack_engine_publication_audit_resident_winsorized_chain_passed"
+        ]["passed"]
+        is True
+    )
 
 
 def test_phase2_status_blocks_stack_engine_default_contract_gap(tmp_path: Path):
@@ -2360,6 +2574,9 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["windows_publish_preflight_stack_engine_status_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_status_preserved"] is True
+    assert checks["stack_engine_publication_audit_passed_preserved"] is True
+    assert checks["stack_engine_publication_policy_chain_preserved"] is True
+    assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is True
     assert checks["pipeline_integration_dq_contract_preserved"] is True
@@ -2399,6 +2616,9 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             publish_preflight_integration_engine_policy_status="failed",
             publish_preflight_integration_engine_policy_ready=False,
             publish_preflight_stack_engine_status="failed",
+            stack_publication_passed=False,
+            stack_publication_policy_ready=False,
+            stack_publication_resident_winsorized_ready=False,
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
@@ -2443,6 +2663,9 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     )
     assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is False
     assert checks["windows_publish_preflight_stack_engine_status_preserved"] is False
+    assert checks["stack_engine_publication_audit_passed_preserved"] is False
+    assert checks["stack_engine_publication_policy_chain_preserved"] is False
+    assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is False
     assert checks["pipeline_integration_dq_contract_preserved"] is False
@@ -2787,6 +3010,54 @@ def test_phase2_status_compare_flags_publish_preflight_engine_policy_regression(
             "default_promotion_pipeline_integration_engine_policy_status"
         ]
         == "failed"
+    )
+
+
+def test_phase2_status_compare_flags_stack_publication_policy_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=286))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=287,
+            status="attention_required",
+            stack_publication_passed=False,
+            stack_publication_policy_ready=False,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["stack_engine_publication_audit_passed_preserved"]["passed"] is False
+    assert checks["stack_engine_publication_policy_chain_preserved"]["passed"] is False
+    assert (
+        checks["stack_engine_publication_resident_winsorized_chain_preserved"][
+            "passed"
+        ]
+        is True
+    )
+    candidate_policy = checks["stack_engine_publication_policy_chain_preserved"][
+        "evidence"
+    ]["candidate"]
+    assert (
+        candidate_policy[
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
+        ]
+        is False
+    )
+    assert (
+        payload["candidate"]["stack_engine_publication_audit"][
+            "policy_checks_passed"
+        ]
+        is False
     )
 
 
