@@ -1,0 +1,100 @@
+{
+  "method": "auto",
+  "quality_gate_enforced": true,
+  "quality_gate_rejected_frames": 1,
+  "quality_gate_summary": {
+    "accepted_count": 0,
+    "effective_min_stars": [
+      2
+    ],
+    "fallback_used": true,
+    "policy": {
+      "adaptive_min_stars_enabled": true,
+      "adaptive_min_stars_reference_side_px": 64.0,
+      "max_saturation_fraction": 0.02,
+      "min_quality_score": 0.0,
+      "min_stars": 8,
+      "require_fwhm": true
+    },
+    "reference_candidate_count": 0,
+    "rejected_count": 1,
+    "rejection_reason_counts": {
+      "fwhm_px": 1,
+      "star_count": 1
+    }
+  },
+  "quality_reference_frame_id": "F000004",
+  "reference_admission": {
+    "allow_quality_rejected_reference": false,
+    "quality_gate_enforced": true,
+    "quality_gate_status": "rejected",
+    "reason": "reference frame failed the quality gate",
+    "reference_frame_id": "F000004",
+    "reference_selection_fallback": true,
+    "status": "blocked"
+  },
+  "reference_frame_id": "F000004",
+  "registration_image_source": "quality_reference_admission",
+  "registration_results": [
+    {
+      "frame_id": "F000004",
+      "inliers": 0,
+      "matched_stars": 0,
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "preview_scale": null,
+      "preview_shape": null,
+      "quality_gate_enforced": true,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 0 below min_stars=2 (configured_min_stars=8)",
+        "fwhm_px is unavailable"
+      ],
+      "reference_frame_id": "F000004",
+      "registration_image_source": "quality_reference_admission",
+      "registration_solution_source": "quality_reference_admission",
+      "registration_validation": {
+        "accepted": false,
+        "inliers": 0,
+        "max_rms_px": 2.0,
+        "min_inliers": 6,
+        "model": "translation",
+        "requires_star_inliers": false,
+        "rms_px": null,
+        "solution_source": "quality_reference_admission",
+        "warnings": [
+          "reference frame failed the quality gate"
+        ]
+      },
+      "rms_px": NaN,
+      "status": "quality_rejected",
+      "tile_count": 0,
+      "tile_size": 8,
+      "transform_model": "translation",
+      "warnings": [
+        "registration blocked because the selected reference frame failed quality admission",
+        "star_count 0 below min_stars=2 (configured_min_stars=8)",
+        "fwhm_px is unavailable"
+      ]
+    }
+  ],
+  "requested_reference_frame_id": null,
+  "schema_version": 1,
+  "tile_size": 8,
+  "transform_model": "translation"
+}

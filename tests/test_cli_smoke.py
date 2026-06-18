@@ -272,6 +272,14 @@ def test_cli_audit_and_run_write_state_for_registration_admission_block(tmp_path
     assert not (audit / "integration_results.json").exists()
     timing_by_stage = {item["stage"]: item for item in audit_timing["stages"]}
     assert timing_by_stage["registration"]["status"] == "failed"
+    assert main(["resume", "--run", str(audit)]) == 2
+    resume_state = read_json(audit / "run_state.json")
+    resume_timing = read_json(audit / "run_timing.json")
+    assert resume_state["failed_stage"] == "registration"
+    assert any("registration reference admission blocked" in error for error in resume_state["errors"])
+    resume_timing_by_stage = {item["stage"]: item for item in resume_timing["stages"]}
+    assert resume_timing_by_stage["registration"]["status"] == "failed"
+    assert resume_timing_by_stage["registration"]["resume_existing_artifact"] is True
 
     assert main(["scan", "--root", str(data), "--out", str(manifest)]) == 0
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0

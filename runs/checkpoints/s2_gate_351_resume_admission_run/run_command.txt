@@ -1,0 +1,1 @@
+glass audit --root C:\Users\ljs\WORK\astro\gpuwbpp\runs\checkpoints\s2_gate_351_resume_admission_data --out C:\Users\ljs\WORK\astro\gpuwbpp\runs\checkpoints\s2_gate_351_resume_admission_run --backend cpu --tile-size 8

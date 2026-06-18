@@ -1,0 +1,314 @@
+{
+  "calibration_plan": {
+    "bias_dark_semantics_warning": "Default policy treats master dark frames as including bias; override in later gates when darks are bias-subtracted.",
+    "calibration_policy": {
+      "allow_legacy_stack_fallback": false,
+      "cosmetic_cold_sigma": 8.0,
+      "cosmetic_correction_enabled": false,
+      "cosmetic_hot_sigma": 8.0,
+      "dark_scaling_enabled": true,
+      "flat_floor": 1e-06,
+      "flat_normalization": "median",
+      "master_dark_includes_bias": true,
+      "master_rejection": "winsorized_sigma",
+      "master_rejection_high_sigma": 3.0,
+      "master_rejection_iterations": 1,
+      "master_rejection_low_sigma": 3.0,
+      "master_rejection_max_fraction": 0.5,
+      "master_rejection_min_samples": 3,
+      "overscan_columns": 0,
+      "overscan_enabled": false,
+      "overscan_rows": 0,
+      "pedestal": 0.0,
+      "saturation_level": null,
+      "trim_overscan": true
+    },
+    "dark_scaling_policy": "scale_by_exposure_when_enabled",
+    "master_bias_groups": [
+      "Gee09a3bb19"
+    ],
+    "master_dark_groups": [
+      "G9e16b44220"
+    ],
+    "master_flat_groups": [
+      "G0fb3b62987"
+    ]
+  },
+  "created_at": "2026-06-18T20:18:31+00:00",
+  "executable": true,
+  "frames": [
+    {
+      "binning_x": 1,
+      "binning_y": 1,
+      "camera": null,
+      "checksum_optional": null,
+      "date_obs": null,
+      "dec": null,
+      "exposure_s": 0.0,
+      "file_format": "fits",
+      "filter": "H",
+      "frame_type": "bias",
+      "gain": 100.0,
+      "header_summary": {
+        "CCD-TEMP": -10.0,
+        "EXPTIME": 0.0,
+        "FILTER": "H",
+        "GAIN": 100.0,
+        "IMAGETYP": "bias",
+        "NAXIS1": 20,
+        "NAXIS2": 16,
+        "OFFSET": 20.0,
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "height": 16,
+      "id": "F000001",
+      "object_name": null,
+      "offset": 20.0,
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_351_resume_admission_data\\bias\\bias_001.fits",
+      "ra": null,
+      "temperature_c": -10.0,
+      "warnings": [],
+      "width": 20
+    },
+    {
+      "binning_x": 1,
+      "binning_y": 1,
+      "camera": null,
+      "checksum_optional": null,
+      "date_obs": null,
+      "dec": null,
+      "exposure_s": 60.0,
+      "file_format": "fits",
+      "filter": "H",
+      "frame_type": "dark",
+      "gain": 100.0,
+      "header_summary": {
+        "CCD-TEMP": -10.0,
+        "EXPTIME": 60.0,
+        "FILTER": "H",
+        "GAIN": 100.0,
+        "IMAGETYP": "dark",
+        "NAXIS1": 20,
+        "NAXIS2": 16,
+        "OFFSET": 20.0,
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "height": 16,
+      "id": "F000002",
+      "object_name": null,
+      "offset": 20.0,
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_351_resume_admission_data\\dark\\dark_001.fits",
+      "ra": null,
+      "temperature_c": -10.0,
+      "warnings": [],
+      "width": 20
+    },
+    {
+      "binning_x": 1,
+      "binning_y": 1,
+      "camera": null,
+      "checksum_optional": null,
+      "date_obs": null,
+      "dec": null,
+      "exposure_s": 60.0,
+      "file_format": "fits",
+      "filter": "H",
+      "frame_type": "flat",
+      "gain": 100.0,
+      "header_summary": {
+        "CCD-TEMP": -10.0,
+        "EXPTIME": 60.0,
+        "FILTER": "H",
+        "GAIN": 100.0,
+        "IMAGETYP": "flat",
+        "NAXIS1": 20,
+        "NAXIS2": 16,
+        "OFFSET": 20.0,
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "height": 16,
+      "id": "F000003",
+      "object_name": null,
+      "offset": 20.0,
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_351_resume_admission_data\\flat\\flat_001.fits",
+      "ra": null,
+      "temperature_c": -10.0,
+      "warnings": [],
+      "width": 20
+    },
+    {
+      "binning_x": 1,
+      "binning_y": 1,
+      "camera": null,
+      "checksum_optional": null,
+      "date_obs": null,
+      "dec": null,
+      "exposure_s": 60.0,
+      "file_format": "fits",
+      "filter": "H",
+      "frame_type": "light",
+      "gain": 100.0,
+      "header_summary": {
+        "CCD-TEMP": -10.0,
+        "EXPTIME": 60.0,
+        "FILTER": "H",
+        "GAIN": 100.0,
+        "IMAGETYP": "light",
+        "NAXIS1": 20,
+        "NAXIS2": 16,
+        "OFFSET": 20.0,
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "height": 16,
+      "id": "F000004",
+      "object_name": null,
+      "offset": 20.0,
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_351_resume_admission_data\\light\\light_001.fits",
+      "ra": null,
+      "temperature_c": -10.0,
+      "warnings": [],
+      "width": 20
+    }
+  ],
+  "global_warnings": [],
+  "groups": [
+    {
+      "binning": [
+        1,
+        1
+      ],
+      "exposure_s": null,
+      "filter": null,
+      "frames": [
+        "F000001"
+      ],
+      "gain": 100.0,
+      "group_id": "Gee09a3bb19",
+      "group_type": "bias",
+      "offset": 20.0,
+      "shape": [
+        20,
+        16
+      ],
+      "temperature_c": -10.0,
+      "warnings": []
+    },
+    {
+      "binning": [
+        1,
+        1
+      ],
+      "exposure_s": 60.0,
+      "filter": null,
+      "frames": [
+        "F000002"
+      ],
+      "gain": 100.0,
+      "group_id": "G9e16b44220",
+      "group_type": "dark",
+      "offset": 20.0,
+      "shape": [
+        20,
+        16
+      ],
+      "temperature_c": -10.0,
+      "warnings": []
+    },
+    {
+      "binning": [
+        1,
+        1
+      ],
+      "exposure_s": null,
+      "filter": "H",
+      "frames": [
+        "F000003"
+      ],
+      "gain": 100.0,
+      "group_id": "G0fb3b62987",
+      "group_type": "flat",
+      "offset": 20.0,
+      "shape": [
+        20,
+        16
+      ],
+      "temperature_c": -10.0,
+      "warnings": []
+    },
+    {
+      "binning": [
+        1,
+        1
+      ],
+      "exposure_s": 60.0,
+      "filter": "H",
+      "frames": [
+        "F000004"
+      ],
+      "gain": 100.0,
+      "group_id": "Geb3df5456f",
+      "group_type": "light",
+      "offset": 20.0,
+      "shape": [
+        20,
+        16
+      ],
+      "temperature_c": -10.0,
+      "warnings": []
+    }
+  ],
+  "integration_policy": {
+    "allow_cuda_streaming_accumulator_fast_path": false,
+    "combine": "mean",
+    "high_sigma": 3.0,
+    "iterations": 1,
+    "low_sigma": 3.0,
+    "output_coverage_map": true,
+    "output_rejection_maps": true,
+    "output_variance_map": true,
+    "output_weight_map": true,
+    "rejection": "none",
+    "weighting": "none"
+  },
+  "light_plans": [
+    {
+      "calibration_status": "ready",
+      "filter": "H",
+      "frames": [
+        "F000004"
+      ],
+      "integration_status": "pending",
+      "local_normalization_status": "pending",
+      "matching_bias_group": "Gee09a3bb19",
+      "matching_dark_group": "G9e16b44220",
+      "matching_flat_group": "G0fb3b62987",
+      "registration_status": "pending",
+      "warnings": []
+    }
+  ],
+  "local_normalization_policy": {
+    "background_mask_policy": "sigma",
+    "enabled": false,
+    "outlier_policy": "clip",
+    "reference_mode": "registration_reference",
+    "tile_radius": 64
+  },
+  "manifest_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_351_resume_admission_run\\manifest.json",
+  "next_steps": [
+    "run calibration"
+  ],
+  "project_id": "glass-project",
+  "registration_policy": {
+    "max_rms_px": 2.0,
+    "min_inliers": 6,
+    "min_stars": 8,
+    "reference_mode": "auto",
+    "reject_failed_frames": true,
+    "save_registered": false,
+    "transform_model": "translation"
+  }
+}

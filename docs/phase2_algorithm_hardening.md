@@ -6239,6 +6239,22 @@ integration where applicable.
   no runtime default change, no package upload, no GitHub release creation, and
   no real-data benchmark rerun.
 
+### S2-Gate 351: Resume Registration Admission Guard
+
+- Extend the registration admission run-state guard to `glass resume`.
+- If `registration_results.json` already contains
+  `reference_admission.status=blocked`, resume now stops immediately at
+  registration instead of falling through to warp.
+- Write `run_state.json` with `failed_stage=registration` and append a resume
+  timing record with `resume_existing_artifact=true`.
+- Return exit code 2 for the blocked-admission resume case.
+- Add CLI smoke coverage by resuming the controlled no-star registration
+  admission failure from Gate350.
+- Keep this gate resume-control scoped: no registration transform math change,
+  no quality metric change, no integration math change, no CUDA kernel change,
+  no runtime default change, no package upload, no GitHub release creation, and
+  no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -681,46 +681,75 @@ def _run_full_pipeline(
 def _resume_pipeline(plan_path: Path, out: Path, backend: str = "auto", tile_size: int = 512, timing: dict | None = None):
     timing = timing or _new_timing("resume", backend, tile_size)
     state = initialize_run(out)
-    if (out / "calibration_artifacts.json").exists():
-        state.completed_stages.extend(["master_calibration", "light_calibration"])
-        state.current_stage = "calibration"
-    else:
-        return _run_full_pipeline(plan_path, out, backend, tile_size, "auto", "auto", "auto", "auto", "bilinear", timing)
+    try:
+        if (out / "calibration_artifacts.json").exists():
+            state.completed_stages.extend(["master_calibration", "light_calibration"])
+            state.current_stage = "calibration"
+        else:
+            return _run_full_pipeline(plan_path, out, backend, tile_size, "auto", "auto", "auto", "auto", "bilinear", timing)
 
-    if not (out / "frame_quality.json").exists():
-        _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(out, tile_size=tile_size))
-    state.completed_stages.append("quality")
-    state.current_stage = "quality"
+        if not (out / "frame_quality.json").exists():
+            state.current_stage = "quality"
+            _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(out, tile_size=tile_size))
+        state.completed_stages.append("quality")
+        state.current_stage = "quality"
 
-    if not (out / "registration_results.json").exists():
-        _timed_stage(out, timing, "registration", lambda: register_calibrated_frames(out, tile_size=tile_size))
-    state.completed_stages.append("registration")
-    state.current_stage = "registration"
+        if not (out / "registration_results.json").exists():
+            state.current_stage = "registration"
+            _timed_stage(
+                out,
+                timing,
+                "registration",
+                lambda: _register_calibrated_frames_or_fail(out, tile_size=tile_size),
+            )
+        else:
+            message = _registration_admission_blocked_message(read_json(out / "registration_results.json"))
+            if message is not None:
+                timing["stages"].append(
+                    {
+                        "stage": "registration",
+                        "started_at": now_iso(),
+                        "status": "failed",
+                        "elapsed_s": 0.0,
+                        "error": message,
+                        "resume_existing_artifact": True,
+                    }
+                )
+                _write_timing(out, timing)
+                raise RegistrationAdmissionBlocked(message)
+        state.completed_stages.append("registration")
+        state.current_stage = "registration"
 
-    if not (out / "warp_results.json").exists():
-        _timed_stage(out, timing, "warp", lambda: warp_registered_frames(out, tile_size=tile_size))
-    state.completed_stages.append("warp")
-    state.current_stage = "warp"
+        if not (out / "warp_results.json").exists():
+            state.current_stage = "warp"
+            _timed_stage(out, timing, "warp", lambda: warp_registered_frames(out, tile_size=tile_size))
+        state.completed_stages.append("warp")
+        state.current_stage = "warp"
 
-    if not (out / "local_norm_results.json").exists():
-        _timed_stage(
-            out,
-            timing,
-            "local_normalization",
-            lambda: local_normalize_registered_frames(out, plan_path=plan_path, backend=backend, tile_size=tile_size),
-        )
-    state.completed_stages.append("local_normalization")
-    state.current_stage = "local_normalization"
+        if not (out / "local_norm_results.json").exists():
+            state.current_stage = "local_normalization"
+            _timed_stage(
+                out,
+                timing,
+                "local_normalization",
+                lambda: local_normalize_registered_frames(out, plan_path=plan_path, backend=backend, tile_size=tile_size),
+            )
+        state.completed_stages.append("local_normalization")
+        state.current_stage = "local_normalization"
 
-    if not (out / "integration_results.json").exists():
-        _timed_stage(
-            out,
-            timing,
-            "integration",
-            lambda: integrate_registered_frames(out, plan_path=plan_path, backend=backend, tile_size=tile_size),
-        )
-    state.completed_stages.append("integration")
-    state.current_stage = "integration"
+        if not (out / "integration_results.json").exists():
+            state.current_stage = "integration"
+            _timed_stage(
+                out,
+                timing,
+                "integration",
+                lambda: integrate_registered_frames(out, plan_path=plan_path, backend=backend, tile_size=tile_size),
+            )
+        state.completed_stages.append("integration")
+        state.current_stage = "integration"
+    except RegistrationAdmissionBlocked as exc:
+        _write_failed_run_state(out, state, "registration", exc)
+        raise
     return state
 
 
@@ -1178,7 +1207,11 @@ def cmd_resume(args: argparse.Namespace) -> int:
             console.print("Processing plan is not executable; nothing to resume.")
             return 0
         timing = _new_timing("resume", "auto", 512)
-        state = _resume_pipeline(plan_path, run, "auto", 512, timing)
+        try:
+            state = _resume_pipeline(plan_path, run, "auto", 512, timing)
+        except RegistrationAdmissionBlocked as exc:
+            console.print({"status": "failed", "stage": "registration", "error": str(exc), "run": str(run)})
+            return 2
         state.completed_stages.insert(0, "plan")
         if manifest_path.exists():
             state.completed_stages.insert(0, "scan")

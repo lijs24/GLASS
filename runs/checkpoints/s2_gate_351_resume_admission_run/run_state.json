@@ -1,0 +1,18 @@
+{
+  "artifacts": [],
+  "checksums": {},
+  "completed_stages": [
+    "master_calibration",
+    "light_calibration",
+    "quality"
+  ],
+  "created_at": "2026-06-18T20:18:31+00:00",
+  "current_stage": "registration",
+  "errors": [
+    "registration reference admission blocked: reference=F000004, quality_gate_status=rejected, reason=reference frame failed the quality gate"
+  ],
+  "failed_stage": "registration",
+  "resume_supported": true,
+  "run_id": "s2_gate_351_resume_admission_run",
+  "warnings": []
+}
