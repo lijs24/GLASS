@@ -1,0 +1,311 @@
+{
+  "artifact_type": "windows_github_release_plan",
+  "assets": [
+    {
+      "label": "cuda13",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "size_bytes": 101,
+      "source_stamp": "abc1234",
+      "zip_path": "runs\\checkpoints\\s2_gate_369_fixtures\\ready\\cuda13.zip"
+    },
+    {
+      "label": "cpu",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "size_bytes": 102,
+      "source_stamp": "abc1234",
+      "zip_path": "runs\\checkpoints\\s2_gate_369_fixtures\\ready\\cpu.zip"
+    }
+  ],
+  "checks": [
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "status": "passed"
+      },
+      "name": "phase2_pipeline_rejection_sample_accounting_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "status": "passed"
+      },
+      "name": "windows_release_matrix_rejection_sample_accounting_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "present_count": 1,
+        "status": "passed"
+      },
+      "name": "phase2_pipeline_sample_accounting_closure_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "present_count": 1,
+        "status": "passed"
+      },
+      "name": "windows_release_matrix_sample_accounting_closure_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "blocker_count": 0,
+        "default_gap_count": 0,
+        "status": "passed"
+      },
+      "name": "phase2_stack_engine_default_contract_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "blocker_count": 0,
+        "default_gap_count": 0,
+        "status": "passed"
+      },
+      "name": "windows_release_matrix_stack_engine_contract_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "matrix_blocker_count": 0,
+        "matrix_gap_count": 0,
+        "phase2_blocker_count": 0,
+        "phase2_gap_count": 0
+      },
+      "name": "phase2_release_matrix_stack_engine_contract_agree",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ready": true,
+        "resident_lights": 200
+      },
+      "name": "windows_release_matrix_release_decision_direct_runtime_publication_guard_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ready": true,
+        "resident_lights": 200
+      },
+      "name": "windows_release_matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "phase2_failed_check_count": 0,
+        "phase2_status": "passed",
+        "raw_failed_check_count": 0,
+        "raw_status": "passed",
+        "ready": true
+      },
+      "name": "windows_release_matrix_resident_fastpath_release_handoff_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_check_count": 0,
+        "failed_count": 0,
+        "phase2_check_passed": true,
+        "present": true,
+        "ready": true,
+        "required_count": 1,
+        "status": "passed"
+      },
+      "name": "windows_release_matrix_resident_result_contract_handoff_passed",
+      "passed": true
+    }
+  ],
+  "manifest_artifact": "runs\\checkpoints\\s2_gate_369_fixtures\\ready\\manifest.json",
+  "passed": true,
+  "phase2": {
+    "status": {
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_369_fixtures\\ready\\phase2_status.json",
+      "pipeline_integration_rejection_sample_counts_match_maps": true,
+      "pipeline_integration_sample_accounting_closure": true,
+      "pipeline_rejection_sample_accounting_failed_count": 0,
+      "pipeline_rejection_sample_accounting_status": "passed",
+      "pipeline_sample_accounting_closure_failed_count": 0,
+      "pipeline_sample_accounting_closure_present_count": 1,
+      "pipeline_sample_accounting_closure_status": "passed",
+      "stack_engine_default_contract_adoption_recommendation": "stack_engine_default_ready",
+      "stack_engine_default_contract_blocker_count": 0,
+      "stack_engine_default_contract_blockers": [],
+      "stack_engine_default_contract_default_gap_count": 0,
+      "stack_engine_default_contract_default_promotion_recommendation": "stack_engine_default_ready",
+      "stack_engine_default_contract_passed": true,
+      "stack_engine_default_contract_phase2_check_passed": true,
+      "stack_engine_default_contract_scope": "all",
+      "stack_engine_default_contract_status": "passed",
+      "status": "green"
+    }
+  },
+  "publication_ready": true,
+  "release": {
+    "tag": "v0.1.0-test"
+  },
+  "release_matrix": {
+    "default_promotion_release_decision_direct_runtime_publication_guard": {
+      "checks_passed": true,
+      "count_ready": true,
+      "decision_check_passed": true,
+      "leaf_checks_ready": true,
+      "phase2_check_passed": true,
+      "phase2_default_promotion_acceptance_check_count": 24,
+      "phase2_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "phase2_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "phase2_default_promotion_pipeline_resident_lights": 200,
+      "phase2_matrix_acceptance_check_count": 24,
+      "phase2_matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "phase2_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "phase2_matrix_pipeline_resident_lights": 200,
+      "phase2_ready": true,
+      "present": true,
+      "raw_default_promotion_acceptance_check_count": 24,
+      "raw_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "raw_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "raw_default_promotion_pipeline_resident_lights": 200,
+      "raw_matrix_acceptance_check_count": 24,
+      "raw_matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "raw_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "raw_matrix_pipeline_resident_lights": 200,
+      "raw_ready": true,
+      "ready": true,
+      "required_min_resident_lights": 200,
+      "source_ready": true
+    },
+    "default_promotion_release_decision_direct_runtime_publication_guard_check_passed": true,
+    "default_promotion_release_decision_direct_runtime_publication_guard_count_ready": true,
+    "default_promotion_release_decision_direct_runtime_publication_guard_leaf_checks_ready": true,
+    "default_promotion_release_decision_direct_runtime_publication_guard_present": true,
+    "default_promotion_release_decision_direct_runtime_publication_guard_raw_acceptance_source": "explicit_resident_artifacts_json",
+    "default_promotion_release_decision_direct_runtime_publication_guard_raw_calibration_source": "resident_artifacts_json_fallback",
+    "default_promotion_release_decision_direct_runtime_publication_guard_raw_resident_lights": 200,
+    "default_promotion_release_decision_direct_runtime_publication_guard_ready": true,
+    "default_promotion_release_decision_direct_runtime_publication_guard_source_ready": true,
+    "integration_rejection_sample_counts_match_maps": true,
+    "integration_sample_accounting_closure": true,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_369_fixtures\\ready\\windows_matrix.json",
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_status": "passed",
+    "release_decision_direct_runtime_publication_guard": {
+      "checks_passed": true,
+      "count_ready": true,
+      "decision_check_passed": true,
+      "phase2_acceptance_source": "explicit_resident_artifacts_json",
+      "phase2_calibration_source": "resident_artifacts_json_fallback",
+      "phase2_default_promotion_resident_lights": 200,
+      "phase2_leaf_checks_ready": true,
+      "phase2_resident_lights": 200,
+      "present": true,
+      "raw_acceptance_source": "explicit_resident_artifacts_json",
+      "raw_calibration_source": "resident_artifacts_json_fallback",
+      "raw_default_promotion_resident_lights": 200,
+      "raw_leaf_checks_ready": true,
+      "raw_resident_lights": 200,
+      "ready": true,
+      "required_min_resident_lights": 200,
+      "source_ready": true
+    },
+    "release_decision_direct_runtime_publication_guard_check_passed": true,
+    "release_decision_direct_runtime_publication_guard_count_ready": true,
+    "release_decision_direct_runtime_publication_guard_leaf_checks_ready": true,
+    "release_decision_direct_runtime_publication_guard_present": true,
+    "release_decision_direct_runtime_publication_guard_raw_acceptance_source": "explicit_resident_artifacts_json",
+    "release_decision_direct_runtime_publication_guard_raw_calibration_source": "resident_artifacts_json_fallback",
+    "release_decision_direct_runtime_publication_guard_raw_resident_lights": 200,
+    "release_decision_direct_runtime_publication_guard_ready": true,
+    "release_decision_direct_runtime_publication_guard_source_ready": true,
+    "resident_registration_fastpath_release_handoff": {
+      "agreement": true,
+      "decision_check_passed": true,
+      "phase2_check_passed": true,
+      "phase2_failed_check_count": 0,
+      "phase2_failed_checks": [],
+      "phase2_mode": "similarity_cuda_triangle",
+      "phase2_passed_check_count": 23,
+      "phase2_ready": true,
+      "phase2_required": true,
+      "phase2_status": "passed",
+      "present": true,
+      "raw_failed_check_count": 0,
+      "raw_failed_checks": [],
+      "raw_mode": "similarity_cuda_triangle",
+      "raw_passed_check_count": 23,
+      "raw_ready": true,
+      "raw_required": true,
+      "raw_status": "passed",
+      "ready": true
+    },
+    "resident_registration_fastpath_release_handoff_agreement": true,
+    "resident_registration_fastpath_release_handoff_decision_check_passed": true,
+    "resident_registration_fastpath_release_handoff_phase2_check_passed": true,
+    "resident_registration_fastpath_release_handoff_phase2_failed_check_count": 0,
+    "resident_registration_fastpath_release_handoff_phase2_failed_checks": [],
+    "resident_registration_fastpath_release_handoff_phase2_mode": "similarity_cuda_triangle",
+    "resident_registration_fastpath_release_handoff_phase2_passed_check_count": 23,
+    "resident_registration_fastpath_release_handoff_phase2_ready": true,
+    "resident_registration_fastpath_release_handoff_phase2_required": true,
+    "resident_registration_fastpath_release_handoff_phase2_status": "passed",
+    "resident_registration_fastpath_release_handoff_present": true,
+    "resident_registration_fastpath_release_handoff_raw_failed_check_count": 0,
+    "resident_registration_fastpath_release_handoff_raw_failed_checks": [],
+    "resident_registration_fastpath_release_handoff_raw_mode": "similarity_cuda_triangle",
+    "resident_registration_fastpath_release_handoff_raw_passed_check_count": 23,
+    "resident_registration_fastpath_release_handoff_raw_ready": true,
+    "resident_registration_fastpath_release_handoff_raw_required": true,
+    "resident_registration_fastpath_release_handoff_raw_status": "passed",
+    "resident_registration_fastpath_release_handoff_ready": true,
+    "resident_result_contract": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "failed_count": 0,
+      "failed_items": [],
+      "phase2_check_passed": true,
+      "present": true,
+      "ready": true,
+      "required_count": 1,
+      "status": "passed",
+      "top_level_check": true
+    },
+    "resident_result_contract_check_passed": true,
+    "resident_result_contract_check_present": true,
+    "resident_result_contract_failed_check_count": 0,
+    "resident_result_contract_failed_checks": [],
+    "resident_result_contract_failed_count": 0,
+    "resident_result_contract_failed_items": [],
+    "resident_result_contract_phase2_check_passed": true,
+    "resident_result_contract_present": true,
+    "resident_result_contract_ready": true,
+    "resident_result_contract_required_count": 1,
+    "resident_result_contract_status": "passed",
+    "resident_result_contract_top_level_check": true,
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 1,
+    "sample_accounting_closure_status": "passed",
+    "stack_engine_contract_adoption_recommendation": "stack_engine_default_ready",
+    "stack_engine_contract_blocker_count": 0,
+    "stack_engine_contract_blockers": [],
+    "stack_engine_contract_default_gap_count": 0,
+    "stack_engine_contract_passed": true,
+    "stack_engine_contract_phase2_check_passed": true,
+    "stack_engine_contract_ready": true,
+    "stack_engine_contract_scope": "all",
+    "stack_engine_contract_status": "passed",
+    "status": "release_matrix_ready"
+  },
+  "schema_version": 1,
+  "status": "release_plan_ready"
+}

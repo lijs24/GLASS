@@ -816,6 +816,28 @@ def _quality_metrics_compare(*, ready: bool = True) -> dict[str, object]:
     }
 
 
+def _release_quality_publication_guard(
+    *,
+    ready: bool = True,
+    phase2_ready: bool | None = None,
+    quality_compare_present: bool = True,
+) -> dict[str, object]:
+    phase2_ready = ready if phase2_ready is None else phase2_ready
+    guard_ready = ready and phase2_ready
+    return {
+        "present": True,
+        "ready": guard_ready,
+        "decision_check_passed": guard_ready,
+        "quality_compare_present": quality_compare_present,
+        "compatible_missing": not quality_compare_present,
+        "layers_ready": guard_ready,
+        "raw_matrix_status": "passed" if ready else "blocked",
+        "raw_matrix_failed_check_count": 0 if ready else 1,
+        "phase2_matrix_status": "passed" if phase2_ready else "blocked",
+        "phase2_matrix_failed_check_count": 0 if phase2_ready else 1,
+    }
+
+
 def _matrix(
     path: Path,
     *,
@@ -858,6 +880,12 @@ def _matrix(
     release_direct_publication_guard_ready: bool = True,
     default_release_direct_publication_guard_ready: bool = True,
     release_direct_publication_guard_acceptance_source: str = "explicit_resident_artifacts_json",
+    include_release_quality_publication_guard: bool = True,
+    release_quality_publication_guard_ready: bool = True,
+    phase2_release_quality_publication_guard_ready: bool | None = None,
+    release_quality_publication_compare_present: bool = True,
+    default_release_quality_publication_guard_ready: bool = True,
+    default_phase2_release_quality_publication_guard_ready: bool | None = None,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -927,6 +955,16 @@ def _matrix(
         ready=default_release_direct_publication_guard_ready,
         acceptance_source=release_direct_publication_guard_acceptance_source,
     )
+    release_quality_guard = _release_quality_publication_guard(
+        ready=release_quality_publication_guard_ready,
+        phase2_ready=phase2_release_quality_publication_guard_ready,
+        quality_compare_present=release_quality_publication_compare_present,
+    )
+    default_release_quality_guard = _release_quality_publication_guard(
+        ready=default_release_quality_publication_guard_ready,
+        phase2_ready=default_phase2_release_quality_publication_guard_ready,
+        quality_compare_present=release_quality_publication_compare_present,
+    )
     matrix_ready = (
         ready
         and rejection_sample_accounting_ready
@@ -956,6 +994,12 @@ def _matrix(
         and (
             resident_result_contract_ready
             if include_resident_result_contract
+            else True
+        )
+        and (
+            bool(release_quality_guard["ready"])
+            and bool(default_release_quality_guard["ready"])
+            if include_release_quality_publication_guard
             else True
         )
         and (quality_compare_ready if include_quality_metrics_compare else True)
@@ -1039,6 +1083,10 @@ def _matrix(
                 default_release_direct_guard
             )
         )
+    if include_release_quality_publication_guard:
+        promotion["release_decision_quality_compare_publication_guard"] = (
+            default_release_quality_guard
+        )
     if include_stack_publication_audit:
         promotion.update(publication_audit)
     if include_quality_metrics_compare:
@@ -1058,6 +1106,10 @@ def _matrix(
     if include_release_direct_publication_guard:
         payload["release_decision_direct_runtime_publication_guard"] = (
             release_direct_guard
+        )
+    if include_release_quality_publication_guard:
+        payload["release_decision_quality_compare_publication_guard"] = (
+            release_quality_guard
         )
     write_json(path, payload)
 
@@ -1102,6 +1154,10 @@ def _default_promotion(
     include_release_direct_publication_guard: bool = True,
     release_direct_publication_guard_ready: bool = True,
     release_direct_publication_guard_acceptance_source: str = "explicit_resident_artifacts_json",
+    include_release_quality_publication_guard: bool = True,
+    release_quality_publication_guard_ready: bool = True,
+    phase2_release_quality_publication_guard_ready: bool | None = None,
+    release_quality_publication_compare_present: bool = True,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -1163,6 +1219,11 @@ def _default_promotion(
         ready=release_direct_publication_guard_ready,
         acceptance_source=release_direct_publication_guard_acceptance_source,
     )
+    release_quality_guard = _release_quality_publication_guard(
+        ready=release_quality_publication_guard_ready,
+        phase2_ready=phase2_release_quality_publication_guard_ready,
+        quality_compare_present=release_quality_publication_compare_present,
+    )
     manifest_ready = (
         ready
         and rejection_sample_accounting_ready
@@ -1192,6 +1253,11 @@ def _default_promotion(
         and (
             resident_result_contract_ready
             if include_resident_result_contract
+            else True
+        )
+        and (
+            bool(release_quality_guard["ready"])
+            if include_release_quality_publication_guard
             else True
         )
         and (quality_compare_ready if include_quality_metrics_compare else True)
@@ -1271,6 +1337,10 @@ def _default_promotion(
     if include_release_direct_publication_guard:
         payload["release_decision_direct_runtime_publication_guard"] = (
             release_direct_guard
+        )
+    if include_release_quality_publication_guard:
+        payload["release_decision_quality_compare_publication_guard"] = (
+            release_quality_guard
         )
     if include_stack_publication_audit:
         payload.update(publication_audit)
@@ -1956,6 +2026,48 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         == 200
     )
     assert (
+        payload["summary"]["matrix_release_quality_publication_guard_present"]
+        is True
+    )
+    assert (
+        payload["summary"]["matrix_release_quality_publication_guard_ready"]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "matrix_release_quality_publication_guard_check_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["summary"]["matrix_release_quality_publication_guard_raw_status"]
+        == "passed"
+    )
+    assert (
+        payload["summary"][
+            "matrix_default_promotion_release_quality_publication_guard_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_release_quality_publication_guard_present"
+        ]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_release_quality_publication_guard_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_release_quality_publication_guard_phase2_status"
+        ]
+        == "passed"
+    )
+    assert (
         payload["summary"]["github_plan_matrix_resident_fastpath_handoff_ready"]
         is True
     )
@@ -2103,6 +2215,36 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert (
         checks[
             "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "matrix_release_decision_quality_compare_publication_guard_passed"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "matrix_release_decision_quality_publication_guard_matches_default_promotion"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
         ]
         is True
     )
@@ -3004,6 +3146,196 @@ def test_windows_publish_preflight_blocks_matrix_default_release_direct_guard_mi
     )
 
 
+def test_windows_publish_preflight_allows_missing_release_quality_publication_guard(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, include_release_quality_publication_guard=False)
+    _default_promotion(
+        promotion,
+        include_release_quality_publication_guard=False,
+    )
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is True
+    assert (
+        payload["summary"]["matrix_release_quality_publication_guard_present"]
+        is None
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_release_quality_publication_guard_present"
+        ]
+        is None
+    )
+    assert (
+        checks[
+            "matrix_release_decision_quality_compare_publication_guard_passed"
+        ]["passed"]
+        is True
+    )
+    assert (
+        checks[
+            "default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ]["passed"]
+        is True
+    )
+    assert (
+        checks[
+            "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
+        ]["passed"]
+        is True
+    )
+
+
+def test_windows_publish_preflight_blocks_failed_matrix_release_quality_guard(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, release_quality_publication_guard_ready=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is False
+    assert (
+        checks[
+            "matrix_release_decision_quality_compare_publication_guard_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "matrix_release_decision_quality_compare_publication_guard_passed"
+        ]["evidence"]["raw_status"]
+        == "blocked"
+    )
+    assert (
+        checks[
+            "matrix_release_decision_quality_publication_guard_matches_default_promotion"
+        ]["passed"]
+        is False
+    )
+
+
+def test_windows_publish_preflight_blocks_failed_default_release_quality_guard(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(
+        matrix,
+        labels=labels,
+        default_release_quality_publication_guard_ready=False,
+    )
+    _default_promotion(promotion, release_quality_publication_guard_ready=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert (
+        checks[
+            "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
+        ]["passed"]
+        is True
+    )
+
+
+def test_windows_publish_preflight_blocks_matrix_default_release_quality_guard_mismatch(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(
+        matrix,
+        labels=labels,
+        default_release_quality_publication_guard_ready=False,
+    )
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert (
+        checks[
+            "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ]["passed"]
+        is True
+    )
+    assert (
+        checks[
+            "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
+        ]["passed"]
+        is False
+    )
+
+
 def test_windows_publish_preflight_blocks_plan_matrix_resident_fastpath_handoff(
     tmp_path: Path,
 ):
@@ -3850,6 +4182,11 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     ) in markdown_text
     assert "Release direct publication guard: plan-matrix `True`/`200`" in markdown_text
     assert (
+        "Release quality publication guard: matrix `True`/`True`/`True`/`True`/`passed`/`passed`, "
+        "matrix-default `True`/`passed`/`passed`, "
+        "default-promotion `True`/`True`/`True`/`True`/`passed`/`passed`"
+    ) in markdown_text
+    assert (
         "Resident result contract: plan-matrix `True`/`passed`/`True`/`1`/`0`, "
         "matrix `True`/`passed`/`True`/`1`/`0`, "
         "default-promotion `True`/`passed`/`True`/`1`/`0`"
@@ -3875,6 +4212,10 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
         in markdown_text
     )
     assert "matrix_stack_engine_runtime_default_matches_default_promotion" in markdown_text
+    assert (
+        "matrix_release_decision_quality_compare_publication_guard_passed"
+        in markdown_text
+    )
     assert "matrix_resident_winsorized_sweep_audit_passed" in markdown_text
     assert "matrix_stack_engine_publication_audit_passed" in markdown_text
     assert "matrix_resident_result_contract_handoff_passed" in markdown_text

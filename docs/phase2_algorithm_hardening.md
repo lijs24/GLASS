@@ -6584,6 +6584,26 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 369: Windows Publish Preflight Quality Publication Guard
+
+- Carry Windows release-matrix and default-promotion quality publication guard
+  evidence into `glass windows-publish-preflight`.
+- Add preflight checks for matrix release-decision quality publication guard,
+  matrix-embedded default-promotion quality guard, standalone default-promotion
+  quality guard, and both cross-artifact agreement paths.
+- Keep older release/default-promotion artifacts without the optional quality
+  publication guard non-blocking; once present, the guard must preserve ready,
+  decision-check, layer, raw-status, and Phase2-status evidence.
+- Surface the release quality publication guard in publish-preflight JSON
+  summary and Markdown.
+- Add focused ready, compatibility, matrix-failure, default-failure, mismatch,
+  and CLI Markdown tests.
+- Keep this gate Windows publish-preflight scoped: no quality metric math
+  change, no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
