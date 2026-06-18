@@ -6604,6 +6604,28 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 370: Phase2 Publish Preflight Quality Publication Guard Handoff
+
+- Carry Windows publish-preflight quality publication guard evidence into
+  `glass phase2-status`.
+- Add `windows_publish_preflight_release_quality_publication_guard_passed` so
+  Phase2 green status blocks failed quality publication guards once the optional
+  guard is present.
+- Keep older publish-preflight artifacts without this optional guard
+  non-blocking, while preserving matrix/default-promotion ready, decision-check,
+  layer, raw-status, and Phase2-status evidence when present.
+- Extend `glass phase2-status-compare` with release-quality publication guard
+  preservation checks so a candidate cannot lose a previously passing guard
+  chain.
+- Surface release quality publication guard evidence and checks in Phase2
+  status Markdown and compare JSON.
+- Add focused ready, compatibility, failed-guard, and compare-regression tests.
+- Keep this gate Phase2 status/compare scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

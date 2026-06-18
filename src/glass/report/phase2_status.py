@@ -1650,6 +1650,95 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_promotion_release_direct_publication_guard_lights": summary.get(
             "default_promotion_release_direct_publication_guard_lights"
         ),
+        "matrix_release_quality_publication_guard_present": summary.get(
+            "matrix_release_quality_publication_guard_present"
+        ),
+        "matrix_release_quality_publication_guard_ready": summary.get(
+            "matrix_release_quality_publication_guard_ready"
+        ),
+        "matrix_release_quality_publication_guard_check_passed": summary.get(
+            "matrix_release_quality_publication_guard_check_passed"
+        ),
+        "matrix_release_quality_publication_guard_layers_ready": summary.get(
+            "matrix_release_quality_publication_guard_layers_ready"
+        ),
+        "matrix_release_quality_publication_guard_raw_status": summary.get(
+            "matrix_release_quality_publication_guard_raw_status"
+        ),
+        "matrix_release_quality_publication_guard_phase2_status": summary.get(
+            "matrix_release_quality_publication_guard_phase2_status"
+        ),
+        "matrix_default_promotion_release_quality_publication_guard_ready": (
+            summary.get(
+                "matrix_default_promotion_release_quality_publication_guard_ready"
+            )
+        ),
+        "matrix_default_promotion_release_quality_publication_guard_raw_status": (
+            summary.get(
+                "matrix_default_promotion_release_quality_publication_guard_raw_status"
+            )
+        ),
+        "matrix_default_promotion_release_quality_publication_guard_phase2_status": (
+            summary.get(
+                "matrix_default_promotion_release_quality_publication_guard_phase2_status"
+            )
+        ),
+        "default_promotion_release_quality_publication_guard_present": summary.get(
+            "default_promotion_release_quality_publication_guard_present"
+        ),
+        "default_promotion_release_quality_publication_guard_ready": summary.get(
+            "default_promotion_release_quality_publication_guard_ready"
+        ),
+        "default_promotion_release_quality_publication_guard_check_passed": (
+            summary.get(
+                "default_promotion_release_quality_publication_guard_check_passed"
+            )
+        ),
+        "default_promotion_release_quality_publication_guard_layers_ready": (
+            summary.get(
+                "default_promotion_release_quality_publication_guard_layers_ready"
+            )
+        ),
+        "default_promotion_release_quality_publication_guard_raw_status": (
+            summary.get(
+                "default_promotion_release_quality_publication_guard_raw_status"
+            )
+        ),
+        "default_promotion_release_quality_publication_guard_phase2_status": (
+            summary.get(
+                "default_promotion_release_quality_publication_guard_phase2_status"
+            )
+        ),
+        "matrix_release_decision_quality_compare_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_quality_compare_publication_guard_passed",
+            )
+        ),
+        "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed",
+            )
+        ),
+        "default_promotion_release_decision_quality_compare_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_release_decision_quality_compare_publication_guard_passed",
+            )
+        ),
+        "matrix_release_decision_quality_publication_guard_matches_default_promotion": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_quality_publication_guard_matches_default_promotion",
+            )
+        ),
+        "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest": (
+            _check_passed(
+                payload,
+                "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest",
+            )
+        ),
         "github_plan_matrix_resident_fastpath_handoff_ready": summary.get(
             "github_plan_matrix_resident_fastpath_handoff_ready"
         ),
@@ -3889,6 +3978,172 @@ def build_phase2_status(
                 },
             }
         )
+        release_quality_guard_present = (
+            preflight.get("matrix_release_quality_publication_guard_present")
+            is not None
+            or preflight.get(
+                "default_promotion_release_quality_publication_guard_present"
+            )
+            is not None
+            or preflight.get(
+                "matrix_default_promotion_release_quality_publication_guard_ready"
+            )
+            is not None
+        )
+        checks.append(
+            {
+                "name": "windows_publish_preflight_release_quality_publication_guard_passed",
+                "passed": (
+                    not release_quality_guard_present
+                    or (
+                        preflight.get(
+                            "matrix_release_decision_quality_compare_publication_guard_passed"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_release_decision_quality_compare_publication_guard_passed"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_release_decision_quality_publication_guard_matches_default_promotion"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_release_quality_publication_guard_present"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_release_quality_publication_guard_ready"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_release_quality_publication_guard_check_passed"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_release_quality_publication_guard_layers_ready"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_release_quality_publication_guard_raw_status"
+                        )
+                        == "passed"
+                        and preflight.get(
+                            "matrix_release_quality_publication_guard_phase2_status"
+                        )
+                        == "passed"
+                        and preflight.get(
+                            "matrix_default_promotion_release_quality_publication_guard_ready"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_default_promotion_release_quality_publication_guard_raw_status"
+                        )
+                        == "passed"
+                        and preflight.get(
+                            "matrix_default_promotion_release_quality_publication_guard_phase2_status"
+                        )
+                        == "passed"
+                        and preflight.get(
+                            "default_promotion_release_quality_publication_guard_present"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_release_quality_publication_guard_ready"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_release_quality_publication_guard_check_passed"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_release_quality_publication_guard_layers_ready"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_release_quality_publication_guard_raw_status"
+                        )
+                        == "passed"
+                        and preflight.get(
+                            "default_promotion_release_quality_publication_guard_phase2_status"
+                        )
+                        == "passed"
+                    )
+                ),
+                "evidence": {
+                    "present": release_quality_guard_present,
+                    "matrix_present": preflight.get(
+                        "matrix_release_quality_publication_guard_present"
+                    ),
+                    "matrix_ready": preflight.get(
+                        "matrix_release_quality_publication_guard_ready"
+                    ),
+                    "matrix_check_passed": preflight.get(
+                        "matrix_release_quality_publication_guard_check_passed"
+                    ),
+                    "matrix_layers_ready": preflight.get(
+                        "matrix_release_quality_publication_guard_layers_ready"
+                    ),
+                    "matrix_raw_status": preflight.get(
+                        "matrix_release_quality_publication_guard_raw_status"
+                    ),
+                    "matrix_phase2_status": preflight.get(
+                        "matrix_release_quality_publication_guard_phase2_status"
+                    ),
+                    "matrix_default_ready": preflight.get(
+                        "matrix_default_promotion_release_quality_publication_guard_ready"
+                    ),
+                    "matrix_default_raw_status": preflight.get(
+                        "matrix_default_promotion_release_quality_publication_guard_raw_status"
+                    ),
+                    "matrix_default_phase2_status": preflight.get(
+                        "matrix_default_promotion_release_quality_publication_guard_phase2_status"
+                    ),
+                    "default_promotion_present": preflight.get(
+                        "default_promotion_release_quality_publication_guard_present"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_release_quality_publication_guard_ready"
+                    ),
+                    "default_promotion_check_passed": preflight.get(
+                        "default_promotion_release_quality_publication_guard_check_passed"
+                    ),
+                    "default_promotion_layers_ready": preflight.get(
+                        "default_promotion_release_quality_publication_guard_layers_ready"
+                    ),
+                    "default_promotion_raw_status": preflight.get(
+                        "default_promotion_release_quality_publication_guard_raw_status"
+                    ),
+                    "default_promotion_phase2_status": preflight.get(
+                        "default_promotion_release_quality_publication_guard_phase2_status"
+                    ),
+                    "matrix_check": preflight.get(
+                        "matrix_release_decision_quality_compare_publication_guard_passed"
+                    ),
+                    "matrix_default_check": preflight.get(
+                        "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed"
+                    ),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_release_decision_quality_compare_publication_guard_passed"
+                    ),
+                    "matrix_default_match_check": preflight.get(
+                        "matrix_release_decision_quality_publication_guard_matches_default_promotion"
+                    ),
+                    "matrix_manifest_match_check": preflight.get(
+                        "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
         checks.append(
             {
                 "name": "windows_publish_preflight_resident_winsorized_sweep_passed",
@@ -5501,6 +5756,36 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest')}"
                 ),
                 (
+                    "- Release quality publication guard evidence: "
+                    "matrix="
+                    f"{preflight.get('matrix_release_quality_publication_guard_present')}/"
+                    f"{preflight.get('matrix_release_quality_publication_guard_ready')}/"
+                    f"{preflight.get('matrix_release_quality_publication_guard_raw_status')}/"
+                    f"{preflight.get('matrix_release_quality_publication_guard_phase2_status')}, "
+                    "matrix-default="
+                    f"{preflight.get('matrix_default_promotion_release_quality_publication_guard_ready')}/"
+                    f"{preflight.get('matrix_default_promotion_release_quality_publication_guard_raw_status')}/"
+                    f"{preflight.get('matrix_default_promotion_release_quality_publication_guard_phase2_status')}, "
+                    "default="
+                    f"{preflight.get('default_promotion_release_quality_publication_guard_present')}/"
+                    f"{preflight.get('default_promotion_release_quality_publication_guard_ready')}/"
+                    f"{preflight.get('default_promotion_release_quality_publication_guard_raw_status')}/"
+                    f"{preflight.get('default_promotion_release_quality_publication_guard_phase2_status')}"
+                ),
+                (
+                    "- Release quality publication guard checks: "
+                    "matrix="
+                    f"{preflight.get('matrix_release_decision_quality_compare_publication_guard_passed')}, "
+                    "matrix-default="
+                    f"{preflight.get('matrix_default_promotion_release_decision_quality_compare_publication_guard_passed')}, "
+                    "default="
+                    f"{preflight.get('default_promotion_release_decision_quality_compare_publication_guard_passed')}, "
+                    "matrix-default-match="
+                    f"{preflight.get('matrix_release_decision_quality_publication_guard_matches_default_promotion')}, "
+                    "matrix-manifest-match="
+                    f"{preflight.get('matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest')}"
+                ),
+                (
                     "- Resident winsorized sweep statuses: "
                     f"matrix={preflight.get('matrix_resident_winsorized_sweep_status')}, "
                     "default-promotion="
@@ -6190,6 +6475,32 @@ _PUBLISH_PREFLIGHT_RELEASE_DIRECT_PUBLICATION_GUARD_STATUS_FIELDS = (
     "default_promotion_release_direct_publication_guard_lights",
 )
 
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_CHECK_FIELDS = (
+    "matrix_release_decision_quality_compare_publication_guard_passed",
+    "matrix_default_promotion_release_decision_quality_compare_publication_guard_passed",
+    "default_promotion_release_decision_quality_compare_publication_guard_passed",
+    "matrix_release_decision_quality_publication_guard_matches_default_promotion",
+    "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest",
+)
+
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_STATUS_FIELDS = (
+    "matrix_release_quality_publication_guard_present",
+    "matrix_release_quality_publication_guard_ready",
+    "matrix_release_quality_publication_guard_check_passed",
+    "matrix_release_quality_publication_guard_layers_ready",
+    "matrix_release_quality_publication_guard_raw_status",
+    "matrix_release_quality_publication_guard_phase2_status",
+    "matrix_default_promotion_release_quality_publication_guard_ready",
+    "matrix_default_promotion_release_quality_publication_guard_raw_status",
+    "matrix_default_promotion_release_quality_publication_guard_phase2_status",
+    "default_promotion_release_quality_publication_guard_present",
+    "default_promotion_release_quality_publication_guard_ready",
+    "default_promotion_release_quality_publication_guard_check_passed",
+    "default_promotion_release_quality_publication_guard_layers_ready",
+    "default_promotion_release_quality_publication_guard_raw_status",
+    "default_promotion_release_quality_publication_guard_phase2_status",
+)
+
 _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_CHECK_FIELDS = (
     "matrix_resident_winsorized_sweep_audit_passed",
     "matrix_resident_winsorized_required_frame_passed",
@@ -6579,6 +6890,86 @@ def _publish_preflight_release_direct_publication_guard_statuses_passed(
             statuses.get("default_promotion_release_direct_publication_guard_lights")
         )
         >= 200
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_release_quality_publication_guard_present(
+    payload: dict[str, Any],
+) -> bool:
+    return any(
+        _status_value(payload, "publish_preflight", field) is not None
+        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_STATUS_FIELDS
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return _publish_preflight_release_quality_publication_guard_present(
+        payload
+    ) and all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_release_quality_publication_guard_statuses(payload)
+    return (
+        _publish_preflight_release_quality_publication_guard_present(payload)
+        and statuses.get("matrix_release_quality_publication_guard_present") is True
+        and statuses.get("matrix_release_quality_publication_guard_ready") is True
+        and statuses.get("matrix_release_quality_publication_guard_check_passed")
+        is True
+        and statuses.get("matrix_release_quality_publication_guard_layers_ready")
+        is True
+        and statuses.get("matrix_release_quality_publication_guard_raw_status")
+        == "passed"
+        and statuses.get("matrix_release_quality_publication_guard_phase2_status")
+        == "passed"
+        and statuses.get(
+            "matrix_default_promotion_release_quality_publication_guard_ready"
+        )
+        is True
+        and statuses.get(
+            "matrix_default_promotion_release_quality_publication_guard_raw_status"
+        )
+        == "passed"
+        and statuses.get(
+            "matrix_default_promotion_release_quality_publication_guard_phase2_status"
+        )
+        == "passed"
+        and statuses.get("default_promotion_release_quality_publication_guard_present")
+        is True
+        and statuses.get("default_promotion_release_quality_publication_guard_ready")
+        is True
+        and statuses.get(
+            "default_promotion_release_quality_publication_guard_check_passed"
+        )
+        is True
+        and statuses.get(
+            "default_promotion_release_quality_publication_guard_layers_ready"
+        )
+        is True
+        and statuses.get(
+            "default_promotion_release_quality_publication_guard_raw_status"
+        )
+        == "passed"
+        and statuses.get(
+            "default_promotion_release_quality_publication_guard_phase2_status"
+        )
+        == "passed"
     )
 
 
@@ -7693,6 +8084,58 @@ def build_phase2_status_compare(
             ),
         ),
         _compare_check(
+            "windows_publish_preflight_release_quality_publication_guard_preserved",
+            not _publish_preflight_release_quality_publication_guard_checks_passed(
+                baseline
+            )
+            or _publish_preflight_release_quality_publication_guard_checks_passed(
+                candidate
+            ),
+            baseline={
+                "checks_passed": (
+                    _publish_preflight_release_quality_publication_guard_checks_passed(
+                        baseline
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_quality_publication_guard_statuses(
+                        baseline
+                    )
+                ),
+            },
+            candidate={
+                "checks_passed": (
+                    _publish_preflight_release_quality_publication_guard_checks_passed(
+                        candidate
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_quality_publication_guard_statuses(
+                        candidate
+                    )
+                ),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_release_quality_publication_guard_status_preserved",
+            not _publish_preflight_release_quality_publication_guard_statuses_passed(
+                baseline
+            )
+            or _publish_preflight_release_quality_publication_guard_statuses_passed(
+                candidate
+            ),
+            baseline=(
+                _publish_preflight_release_quality_publication_guard_statuses(
+                    baseline
+                )
+            ),
+            candidate=(
+                _publish_preflight_release_quality_publication_guard_statuses(
+                    candidate
+                )
+            ),
+        ),
+        _compare_check(
             "windows_publish_preflight_resident_winsorized_sweep_preserved",
             not _publish_preflight_resident_winsorized_checks_passed(baseline)
             or _publish_preflight_resident_winsorized_checks_passed(candidate),
@@ -8334,6 +8777,11 @@ def build_phase2_status_compare(
             "publish_preflight_quality_metrics_compare": (
                 _publish_preflight_quality_compare_statuses(baseline)
             ),
+            "publish_preflight_release_quality_publication_guard": (
+                _publish_preflight_release_quality_publication_guard_statuses(
+                    baseline
+                )
+            ),
             "stack_engine_publication_audit": baseline_publication,
             "registration_admission": _status_value(baseline, "registration_admission"),
             "quality_saturation": _status_value(baseline, "quality_saturation"),
@@ -8420,6 +8868,11 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_quality_metrics_compare": (
                 _publish_preflight_quality_compare_statuses(candidate)
+            ),
+            "publish_preflight_release_quality_publication_guard": (
+                _publish_preflight_release_quality_publication_guard_statuses(
+                    candidate
+                )
             ),
             "stack_engine_publication_audit": candidate_publication,
             "registration_admission": _status_value(candidate, "registration_admission"),
