@@ -6065,6 +6065,29 @@ integration where applicable.
   CUDA kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 342: Publish Preflight Resident Result-Contract Guard
+
+- Carry GitHub release-plan, Windows release-matrix, and default-promotion
+  resident result-contract evidence into `glass windows-publish-preflight`.
+- Add final publish-preflight blockers for:
+  - GitHub release-plan matrix resident result-contract handoff readiness.
+  - Direct Windows release-matrix resident result-contract readiness.
+  - Direct default-promotion resident result-contract readiness.
+  - GitHub plan versus matrix resident result-contract agreement.
+  - Matrix versus default-promotion resident result-contract agreement.
+- Require the chain to remain present, ready, passed, Phase2-checked, required
+  by at least one resident output, and free of failed output rows or nested
+  failed checks before the final local publication preflight passes.
+- Surface plan, matrix, and default-promotion resident result-contract state in
+  publish-preflight summary and Markdown.
+- Add focused tests for passing evidence and failed plan/matrix/default
+  resident result-contract states.
+- Generate Gate342 publish-preflight artifacts from controlled release-chain
+  fixtures.
+- Keep this gate final-publication-preflight scoped: no registration math
+  change, no CUDA kernel change, no runtime default change, no package upload,
+  no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

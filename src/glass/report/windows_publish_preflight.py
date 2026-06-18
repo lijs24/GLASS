@@ -687,6 +687,132 @@ def _resident_fastpath_release_handoff_matches(
     )
 
 
+def _resident_result_contract_fields(
+    source: dict[str, Any],
+    *,
+    output_prefix: str,
+) -> dict[str, Any]:
+    contract = (
+        source.get("resident_result_contract")
+        if isinstance(source.get("resident_result_contract"), dict)
+        else {}
+    )
+
+    def field(flat_name: str, *contract_names: str) -> Any:
+        flattened = source.get(f"resident_result_contract_{flat_name}")
+        if flattened is not None:
+            return flattened
+        for contract_name in contract_names:
+            value = contract.get(contract_name)
+            if value is not None:
+                return value
+        return None
+
+    return {
+        output_prefix: contract,
+        f"{output_prefix}_present": field("present", "present"),
+        f"{output_prefix}_ready": field("ready", "ready"),
+        f"{output_prefix}_status": field("status", "status"),
+        f"{output_prefix}_top_level_check": field(
+            "top_level_check",
+            "top_level_check",
+        ),
+        f"{output_prefix}_check_present": field("check_present", "check_present"),
+        f"{output_prefix}_check_passed": field("check_passed", "check_passed"),
+        f"{output_prefix}_phase2_check_passed": field(
+            "phase2_check_passed",
+            "phase2_check_passed",
+        ),
+        f"{output_prefix}_required_count": _int_or_zero(
+            field("required_count", "required_count")
+        ),
+        f"{output_prefix}_failed_count": _int_or_zero(
+            field("failed_count", "failed_count")
+        ),
+        f"{output_prefix}_failed_check_count": _int_or_zero(
+            field("failed_check_count", "failed_check_count")
+        ),
+        f"{output_prefix}_failed_checks": field("failed_checks", "failed_checks")
+        or [],
+        f"{output_prefix}_failed_items": field("failed_items", "failed_items")
+        or [],
+    }
+
+
+def _resident_result_contract_evidence(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> dict[str, Any]:
+    return {
+        "present": summary.get(f"{prefix}_present"),
+        "ready": summary.get(f"{prefix}_ready"),
+        "status": summary.get(f"{prefix}_status"),
+        "top_level_check": summary.get(f"{prefix}_top_level_check"),
+        "check_present": summary.get(f"{prefix}_check_present"),
+        "check_passed": summary.get(f"{prefix}_check_passed"),
+        "phase2_check_passed": summary.get(f"{prefix}_phase2_check_passed"),
+        "required_count": summary.get(f"{prefix}_required_count"),
+        "failed_count": summary.get(f"{prefix}_failed_count"),
+        "failed_check_count": summary.get(f"{prefix}_failed_check_count"),
+        "failed_checks": summary.get(f"{prefix}_failed_checks") or [],
+        "failed_items": summary.get(f"{prefix}_failed_items") or [],
+    }
+
+
+def _resident_result_contract_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    evidence = _resident_result_contract_evidence(summary, prefix=prefix)
+    return (
+        evidence.get("present") is True
+        and evidence.get("ready") is True
+        and evidence.get("status") == "passed"
+        and evidence.get("top_level_check") is True
+        and evidence.get("check_present") is True
+        and evidence.get("check_passed") is True
+        and evidence.get("phase2_check_passed") is True
+        and _int_or_zero(evidence.get("required_count")) > 0
+        and _int_or_zero(evidence.get("failed_count")) == 0
+        and _int_or_zero(evidence.get("failed_check_count")) == 0
+        and not evidence.get("failed_checks")
+        and not evidence.get("failed_items")
+    )
+
+
+_RESIDENT_RESULT_CONTRACT_MATCH_FIELDS = (
+    "present",
+    "ready",
+    "status",
+    "top_level_check",
+    "check_present",
+    "check_passed",
+    "phase2_check_passed",
+    "required_count",
+    "failed_count",
+    "failed_check_count",
+    "failed_checks",
+    "failed_items",
+)
+
+
+def _resident_result_contract_matches(
+    left: dict[str, Any],
+    *,
+    left_prefix: str,
+    right: dict[str, Any],
+    right_prefix: str,
+) -> bool:
+    left_evidence = _resident_result_contract_evidence(left, prefix=left_prefix)
+    right_evidence = _resident_result_contract_evidence(right, prefix=right_prefix)
+    return all(
+        left_evidence.get(field) == right_evidence.get(field)
+        for field in _RESIDENT_RESULT_CONTRACT_MATCH_FIELDS
+    )
+
+
 def _stack_engine_runtime_default_evidence(
     summary: dict[str, Any],
     prefix: str,
@@ -908,6 +1034,10 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "sample_accounting_closure_failed_count": promotion.get(
             "sample_accounting_closure_failed_count"
+        ),
+        **_resident_result_contract_fields(
+            promotion,
+            output_prefix="resident_result_contract",
         ),
         "integration_engine_policy": promotion.get("integration_engine_policy"),
         "integration_engine_policy_ready": promotion.get(
@@ -1143,6 +1273,10 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "sample_accounting_closure_failed_count": pipeline.get(
             "sample_accounting_closure_failed_count"
+        ),
+        **_resident_result_contract_fields(
+            payload,
+            output_prefix="resident_result_contract",
         ),
         "integration_engine_policy": integration_engine_policy,
         "integration_engine_policy_ready": integration_engine_policy.get("ready"),
@@ -1561,6 +1695,41 @@ def _plan_resident_fastpath_release_handoff_summary(
     }
 
 
+def _plan_resident_result_contract_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    matrix = (
+        payload.get("release_matrix")
+        if isinstance(payload.get("release_matrix"), dict)
+        else {}
+    )
+    checks = _checks_by_name(payload.get("checks") or [])
+    matrix_check = checks.get(
+        "windows_release_matrix_resident_result_contract_handoff_passed"
+    ) or {}
+    prefix = "resident_result_contract"
+    return {
+        "release_matrix_handoff_check_passed": matrix_check.get("passed"),
+        "release_matrix_handoff_check_evidence": matrix_check.get("evidence"),
+        "release_matrix_present": matrix.get(f"{prefix}_present"),
+        "release_matrix_ready": matrix.get(f"{prefix}_ready"),
+        "release_matrix_status": matrix.get(f"{prefix}_status"),
+        "release_matrix_top_level_check": matrix.get(f"{prefix}_top_level_check"),
+        "release_matrix_check_present": matrix.get(f"{prefix}_check_present"),
+        "release_matrix_check_passed": matrix.get(f"{prefix}_check_passed"),
+        "release_matrix_phase2_check_passed": matrix.get(
+            f"{prefix}_phase2_check_passed"
+        ),
+        "release_matrix_required_count": matrix.get(f"{prefix}_required_count"),
+        "release_matrix_failed_count": matrix.get(f"{prefix}_failed_count"),
+        "release_matrix_failed_check_count": matrix.get(
+            f"{prefix}_failed_check_count"
+        ),
+        "release_matrix_failed_checks": matrix.get(f"{prefix}_failed_checks") or [],
+        "release_matrix_failed_items": matrix.get(f"{prefix}_failed_items") or [],
+    }
+
+
 def _stack_engine_plan_phase2_ready(summary: dict[str, Any]) -> bool:
     return (
         summary.get("phase2_check_passed") is True
@@ -1829,6 +1998,7 @@ def build_windows_publish_preflight(
     plan_resident_fastpath_handoff = (
         _plan_resident_fastpath_release_handoff_summary(plan)
     )
+    plan_resident_result_contract = _plan_resident_result_contract_summary(plan)
     manifest_matrix = (
         manifest.get("windows_release_matrix")
         if isinstance(manifest.get("windows_release_matrix"), dict)
@@ -2820,6 +2990,87 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "github_plan_matrix_resident_result_contract_handoff_passed",
+            plan_resident_result_contract.get("release_matrix_handoff_check_passed")
+            is True
+            and _resident_result_contract_ready(
+                plan_resident_result_contract,
+                prefix="release_matrix",
+            ),
+            {
+                "plan_check_passed": plan_resident_result_contract.get(
+                    "release_matrix_handoff_check_passed"
+                ),
+                "plan_check_evidence": plan_resident_result_contract.get(
+                    "release_matrix_handoff_check_evidence"
+                ),
+                **_resident_result_contract_evidence(
+                    plan_resident_result_contract,
+                    prefix="release_matrix",
+                ),
+            },
+        ),
+        _check(
+            "matrix_resident_result_contract_handoff_passed",
+            _resident_result_contract_ready(
+                matrix_info,
+                prefix="resident_result_contract",
+            ),
+            _resident_result_contract_evidence(
+                matrix_info,
+                prefix="resident_result_contract",
+            ),
+        ),
+        _check(
+            "default_promotion_resident_result_contract_handoff_passed",
+            _resident_result_contract_ready(
+                promotion_info,
+                prefix="resident_result_contract",
+            ),
+            _resident_result_contract_evidence(
+                promotion_info,
+                prefix="resident_result_contract",
+            ),
+        ),
+        _check(
+            "github_plan_matrix_resident_result_contract_matches_matrix",
+            _resident_result_contract_matches(
+                plan_resident_result_contract,
+                left_prefix="release_matrix",
+                right=matrix_info,
+                right_prefix="resident_result_contract",
+            ),
+            {
+                "github_release_plan": _resident_result_contract_evidence(
+                    plan_resident_result_contract,
+                    prefix="release_matrix",
+                ),
+                "windows_release_matrix": _resident_result_contract_evidence(
+                    matrix_info,
+                    prefix="resident_result_contract",
+                ),
+            },
+        ),
+        _check(
+            "matrix_resident_result_contract_matches_default_promotion",
+            _resident_result_contract_matches(
+                matrix_info,
+                left_prefix="resident_result_contract",
+                right=promotion_info,
+                right_prefix="resident_result_contract",
+            ),
+            {
+                "windows_release_matrix": _resident_result_contract_evidence(
+                    matrix_info,
+                    prefix="resident_result_contract",
+                ),
+                "default_promotion_manifest": _resident_result_contract_evidence(
+                    promotion_info,
+                    prefix="resident_result_contract",
+                ),
+            },
+        ),
+        _check(
             "github_plan_phase2_stack_engine_default_contract_ready",
             _stack_engine_plan_phase2_ready(plan_stack_engine),
             {
@@ -3453,6 +3704,53 @@ def build_windows_publish_preflight(
                     "resident_registration_fastpath_release_handoff_raw_passed_check_count"
                 )
             ),
+            "github_plan_matrix_resident_result_contract_ready": (
+                plan_resident_result_contract.get("release_matrix_ready")
+            ),
+            "github_plan_matrix_resident_result_contract_status": (
+                plan_resident_result_contract.get("release_matrix_status")
+            ),
+            "github_plan_matrix_resident_result_contract_phase2_check_passed": (
+                plan_resident_result_contract.get(
+                    "release_matrix_phase2_check_passed"
+                )
+            ),
+            "github_plan_matrix_resident_result_contract_required_count": (
+                plan_resident_result_contract.get("release_matrix_required_count")
+            ),
+            "github_plan_matrix_resident_result_contract_failed_count": (
+                plan_resident_result_contract.get("release_matrix_failed_count")
+            ),
+            "matrix_resident_result_contract_ready": matrix_info.get(
+                "resident_result_contract_ready"
+            ),
+            "matrix_resident_result_contract_status": matrix_info.get(
+                "resident_result_contract_status"
+            ),
+            "matrix_resident_result_contract_phase2_check_passed": matrix_info.get(
+                "resident_result_contract_phase2_check_passed"
+            ),
+            "matrix_resident_result_contract_required_count": matrix_info.get(
+                "resident_result_contract_required_count"
+            ),
+            "matrix_resident_result_contract_failed_count": matrix_info.get(
+                "resident_result_contract_failed_count"
+            ),
+            "default_promotion_resident_result_contract_ready": promotion_info.get(
+                "resident_result_contract_ready"
+            ),
+            "default_promotion_resident_result_contract_status": promotion_info.get(
+                "resident_result_contract_status"
+            ),
+            "default_promotion_resident_result_contract_phase2_check_passed": (
+                promotion_info.get("resident_result_contract_phase2_check_passed")
+            ),
+            "default_promotion_resident_result_contract_required_count": (
+                promotion_info.get("resident_result_contract_required_count")
+            ),
+            "default_promotion_resident_result_contract_failed_count": (
+                promotion_info.get("resident_result_contract_failed_count")
+            ),
             "github_plan_phase2_stack_engine_contract_status": (
                 plan_stack_engine.get("phase2_status")
             ),
@@ -3545,6 +3843,7 @@ def build_windows_publish_preflight(
                 plan_release_direct_publication_guard
             ),
             "resident_fastpath_release_handoff": plan_resident_fastpath_handoff,
+            "resident_result_contract": plan_resident_result_contract,
         },
         "windows_release_matrix": matrix_info,
         "default_promotion_manifest": promotion_info,
@@ -3665,6 +3964,26 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{summary.get('default_promotion_resident_fastpath_handoff_raw_status')}`/"
             f"`{summary.get('default_promotion_resident_fastpath_handoff_phase2_status')}`/"
             f"`{summary.get('default_promotion_resident_fastpath_handoff_raw_check_count')}`"
+        ),
+        (
+            "- Resident result contract: "
+            f"plan-matrix `{summary.get('github_plan_matrix_resident_result_contract_ready')}`/"
+            f"`{summary.get('github_plan_matrix_resident_result_contract_status')}`/"
+            f"`{summary.get('github_plan_matrix_resident_result_contract_phase2_check_passed')}`/"
+            f"`{summary.get('github_plan_matrix_resident_result_contract_required_count')}`/"
+            f"`{summary.get('github_plan_matrix_resident_result_contract_failed_count')}`, "
+            "matrix "
+            f"`{summary.get('matrix_resident_result_contract_ready')}`/"
+            f"`{summary.get('matrix_resident_result_contract_status')}`/"
+            f"`{summary.get('matrix_resident_result_contract_phase2_check_passed')}`/"
+            f"`{summary.get('matrix_resident_result_contract_required_count')}`/"
+            f"`{summary.get('matrix_resident_result_contract_failed_count')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_resident_result_contract_ready')}`/"
+            f"`{summary.get('default_promotion_resident_result_contract_status')}`/"
+            f"`{summary.get('default_promotion_resident_result_contract_phase2_check_passed')}`/"
+            f"`{summary.get('default_promotion_resident_result_contract_required_count')}`/"
+            f"`{summary.get('default_promotion_resident_result_contract_failed_count')}`"
         ),
         (
             "- StackEngine default contract: "

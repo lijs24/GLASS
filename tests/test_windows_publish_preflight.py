@@ -153,6 +153,44 @@ def _resident_fastpath_release_handoff(
     }
 
 
+def _resident_result_contract(*, ready: bool = True) -> dict[str, object]:
+    contract = {
+        "present": True,
+        "ready": ready,
+        "status": "passed" if ready else "failed",
+        "top_level_check": ready,
+        "check_present": True,
+        "check_passed": ready,
+        "phase2_check_passed": ready,
+        "required_count": 1,
+        "failed_count": 0 if ready else 1,
+        "failed_check_count": 0 if ready else 1,
+        "failed_checks": [] if ready else ["source_terms_present"],
+        "failed_items": []
+        if ready
+        else [{"output_id": "master_H", "reason": "source_terms_missing"}],
+    }
+    return {
+        "resident_result_contract": contract,
+        "resident_result_contract_present": True,
+        "resident_result_contract_ready": ready,
+        "resident_result_contract_status": contract["status"],
+        "resident_result_contract_top_level_check": contract["top_level_check"],
+        "resident_result_contract_check_present": contract["check_present"],
+        "resident_result_contract_check_passed": contract["check_passed"],
+        "resident_result_contract_phase2_check_passed": contract[
+            "phase2_check_passed"
+        ],
+        "resident_result_contract_required_count": contract["required_count"],
+        "resident_result_contract_failed_count": contract["failed_count"],
+        "resident_result_contract_failed_check_count": contract[
+            "failed_check_count"
+        ],
+        "resident_result_contract_failed_checks": contract["failed_checks"],
+        "resident_result_contract_failed_items": contract["failed_items"],
+    }
+
+
 def _integration_engine_policy_flattened(
     *,
     acceptance_ready: bool = True,
@@ -734,6 +772,8 @@ def _matrix(
     resident_winsorized_check_count: int = 27,
     include_resident_fastpath_handoff: bool = True,
     resident_fastpath_handoff_ready: bool = True,
+    include_resident_result_contract: bool = True,
+    resident_result_contract_ready: bool = True,
     include_integration_engine_policy: bool = True,
     acceptance_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_ready: bool = True,
@@ -774,6 +814,9 @@ def _matrix(
     )
     resident_fastpath_handoff = _resident_fastpath_release_handoff(
         ready=resident_fastpath_handoff_ready
+    )
+    resident_result_contract = _resident_result_contract(
+        ready=resident_result_contract_ready
     )
     integration_engine_policy = _integration_engine_policy_flattened(
         acceptance_ready=acceptance_integration_engine_policy_ready,
@@ -846,6 +889,11 @@ def _matrix(
             if include_resident_fastpath_handoff
             else True
         )
+        and (
+            resident_result_contract_ready
+            if include_resident_result_contract
+            else True
+        )
     )
     promotion = {
         "status": "default_promotion_ready" if matrix_ready else "blocked",
@@ -912,6 +960,8 @@ def _matrix(
         promotion.update(resident_sweep)
     if include_resident_fastpath_handoff:
         promotion.update(resident_fastpath_handoff)
+    if include_resident_result_contract:
+        promotion.update(resident_result_contract)
     if include_integration_engine_policy:
         promotion.update(integration_engine_policy)
     if include_stack_engine_runtime_default:
@@ -960,6 +1010,8 @@ def _default_promotion(
     resident_winsorized_check_count: int = 27,
     include_resident_fastpath_handoff: bool = True,
     resident_fastpath_handoff_ready: bool = True,
+    include_resident_result_contract: bool = True,
+    resident_result_contract_ready: bool = True,
     include_integration_engine_policy: bool = True,
     acceptance_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_ready: bool = True,
@@ -999,6 +1051,9 @@ def _default_promotion(
     )
     resident_fastpath_handoff = _resident_fastpath_release_handoff(
         ready=resident_fastpath_handoff_ready
+    )
+    resident_result_contract = _resident_result_contract(
+        ready=resident_result_contract_ready
     )
     integration_engine_policy = _integration_engine_policy_manifest(
         acceptance_ready=acceptance_integration_engine_policy_ready,
@@ -1061,6 +1116,11 @@ def _default_promotion(
         and (
             resident_fastpath_handoff_ready
             if include_resident_fastpath_handoff
+            else True
+        )
+        and (
+            resident_result_contract_ready
+            if include_resident_result_contract
             else True
         )
     )
@@ -1128,6 +1188,8 @@ def _default_promotion(
         payload.update(resident_sweep)
     if include_resident_fastpath_handoff:
         payload.update(resident_fastpath_handoff)
+    if include_resident_result_contract:
+        payload.update(resident_result_contract)
     if include_integration_engine_policy:
         payload["integration_engine_policy"] = integration_engine_policy
     if include_stack_engine_runtime_default:
@@ -1190,11 +1252,15 @@ def _github_plan(
     matrix_stack_engine_ready: bool = True,
     matrix_stack_engine_gap_count: int = 0,
     matrix_resident_fastpath_handoff_ready: bool = True,
+    matrix_resident_result_contract_ready: bool = True,
 ) -> None:
     phase2_stack_ready = phase2_stack_engine_ready and phase2_stack_engine_gap_count == 0
     matrix_stack_ready = matrix_stack_engine_ready and matrix_stack_engine_gap_count == 0
     matrix_fastpath_handoff = _resident_fastpath_release_handoff(
         ready=matrix_resident_fastpath_handoff_ready
+    )
+    matrix_result_contract = _resident_result_contract(
+        ready=matrix_resident_result_contract_ready
     )
     release_direct_guard = _release_direct_publication_guard(
         ready=True,
@@ -1212,6 +1278,7 @@ def _github_plan(
         and phase2_stack_ready
         and matrix_stack_ready
         and matrix_resident_fastpath_handoff_ready
+        and matrix_resident_result_contract_ready
     )
     phase2_stack_recommendation = (
         "stack_engine_default_ready"
@@ -1305,6 +1372,7 @@ def _github_plan(
                     and matrix_sample_accounting_closure_ready
                     and matrix_stack_ready
                     and matrix_resident_fastpath_handoff_ready
+                    and matrix_resident_result_contract_ready
                 )
                 else "blocked",
                 "passed": (
@@ -1312,6 +1380,7 @@ def _github_plan(
                     and matrix_sample_accounting_closure_ready
                     and matrix_stack_ready
                     and matrix_resident_fastpath_handoff_ready
+                    and matrix_resident_result_contract_ready
                 ),
                 "integration_rejection_sample_counts_match_maps": (
                     matrix_rejection_sample_accounting_ready
@@ -1432,6 +1501,7 @@ def _github_plan(
                     ]
                 ),
                 **matrix_fastpath_handoff,
+                **matrix_result_contract,
             },
             "assets": [
                 {
@@ -1554,6 +1624,25 @@ def _github_plan(
                         else 1,
                         "phase2_failed_check_count": 0
                         if matrix_resident_fastpath_handoff_ready
+                        else 1,
+                    },
+                },
+                {
+                    "name": "windows_release_matrix_resident_result_contract_handoff_passed",
+                    "passed": matrix_resident_result_contract_ready,
+                    "evidence": {
+                        "present": True,
+                        "ready": matrix_resident_result_contract_ready,
+                        "status": "passed"
+                        if matrix_resident_result_contract_ready
+                        else "failed",
+                        "phase2_check_passed": matrix_resident_result_contract_ready,
+                        "required_count": 1,
+                        "failed_count": 0
+                        if matrix_resident_result_contract_ready
+                        else 1,
+                        "failed_check_count": 0
+                        if matrix_resident_result_contract_ready
                         else 1,
                     },
                 },
@@ -1792,6 +1881,24 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         ]
         == "passed"
     )
+    assert (
+        payload["summary"]["github_plan_matrix_resident_result_contract_ready"]
+        is True
+    )
+    assert (
+        payload["summary"]["github_plan_matrix_resident_result_contract_status"]
+        == "passed"
+    )
+    assert payload["summary"]["matrix_resident_result_contract_ready"] is True
+    assert payload["summary"]["matrix_resident_result_contract_required_count"] == 1
+    assert (
+        payload["summary"]["default_promotion_resident_result_contract_ready"]
+        is True
+    )
+    assert (
+        payload["summary"]["default_promotion_resident_result_contract_status"]
+        == "passed"
+    )
     assert checks["github_plan_phase2_rejection_sample_accounting_passed"] is True
     assert checks["github_plan_matrix_rejection_sample_accounting_passed"] is True
     assert checks["matrix_rejection_sample_accounting_passed"] is True
@@ -1907,6 +2014,11 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert checks["default_promotion_resident_fastpath_release_handoff_ready"] is True
     assert checks["github_plan_matrix_resident_fastpath_handoff_matches_matrix"] is True
     assert checks["matrix_resident_fastpath_handoff_matches_default_promotion"] is True
+    assert checks["github_plan_matrix_resident_result_contract_handoff_passed"] is True
+    assert checks["matrix_resident_result_contract_handoff_passed"] is True
+    assert checks["default_promotion_resident_result_contract_handoff_passed"] is True
+    assert checks["github_plan_matrix_resident_result_contract_matches_matrix"] is True
+    assert checks["matrix_resident_result_contract_matches_default_promotion"] is True
     assert checks["github_plan_phase2_stack_engine_default_contract_ready"] is True
     assert checks["github_plan_matrix_stack_engine_contract_ready"] is True
     assert checks["github_plan_stack_engine_contract_agreement_passed"] is True
@@ -2906,6 +3018,133 @@ def test_windows_publish_preflight_blocks_default_promotion_resident_fastpath_ha
     )
 
 
+def test_windows_publish_preflight_blocks_plan_matrix_resident_result_contract(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(
+        plan,
+        manifest=manifest,
+        matrix=matrix,
+        labels=labels,
+        matrix_resident_result_contract_ready=False,
+    )
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert (
+        payload["summary"]["github_plan_matrix_resident_result_contract_ready"]
+        is False
+    )
+    assert (
+        checks["github_plan_matrix_resident_result_contract_handoff_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert checks["matrix_resident_result_contract_handoff_passed"]["passed"] is True
+    assert (
+        checks["github_plan_matrix_resident_result_contract_matches_matrix"][
+            "passed"
+        ]
+        is False
+    )
+
+
+def test_windows_publish_preflight_blocks_matrix_resident_result_contract(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, resident_result_contract_ready=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["summary"]["matrix_resident_result_contract_ready"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is False
+    assert checks["matrix_resident_result_contract_handoff_passed"]["passed"] is False
+    assert (
+        checks["github_plan_matrix_resident_result_contract_matches_matrix"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["matrix_resident_result_contract_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+
+
+def test_windows_publish_preflight_blocks_default_promotion_resident_result_contract(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion, resident_result_contract_ready=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert (
+        payload["summary"]["default_promotion_resident_result_contract_ready"]
+        is False
+    )
+    assert checks["default_promotion_ready"]["passed"] is False
+    assert (
+        checks["default_promotion_resident_result_contract_handoff_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["matrix_resident_result_contract_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+
+
 def test_windows_publish_preflight_blocks_phase2_stack_engine_contract_gap(
     tmp_path: Path,
 ):
@@ -3410,6 +3649,11 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
         "default-promotion pipeline-failed-output `0`"
     ) in markdown_text
     assert "Release direct publication guard: plan-matrix `True`/`200`" in markdown_text
+    assert (
+        "Resident result contract: plan-matrix `True`/`passed`/`True`/`1`/`0`, "
+        "matrix `True`/`passed`/`True`/`1`/`0`, "
+        "default-promotion `True`/`passed`/`True`/`1`/`0`"
+    ) in markdown_text
     assert "StackEngine default contract: phase2 `passed`" in markdown_text
     assert "StackEngine default gaps: matrix `0`, default-promotion `0`" in markdown_text
     assert (
@@ -3429,3 +3673,4 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     assert "matrix_stack_engine_runtime_default_matches_default_promotion" in markdown_text
     assert "matrix_resident_winsorized_sweep_audit_passed" in markdown_text
     assert "matrix_stack_engine_publication_audit_passed" in markdown_text
+    assert "matrix_resident_result_contract_handoff_passed" in markdown_text
