@@ -756,6 +756,66 @@ def _stack_publication_audit(
     return payload
 
 
+def _quality_metrics_compare(*, ready: bool = True) -> dict[str, object]:
+    failed_checks = [] if ready else ["bad_median_ratio_within_limit"]
+    threshold_failures: list[dict[str, object]] = (
+        []
+        if ready
+        else [
+            {
+                "metric": "fwhm_px",
+                "bad_median_ratio": 1.42,
+                "limit": 1.25,
+            }
+        ]
+    )
+    compare = {
+        "baseline_metric_count": 7,
+        "candidate_metric_count": 7,
+        "check_count": 3,
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "metric_row_count": 7,
+        "passed": ready,
+        "path": "runs/checkpoints/s2_gate_360_quality_metrics_compare.json",
+        "phase2_check_passed": ready,
+        "present": True,
+        "ready": ready,
+        "status": "passed" if ready else "failed",
+        "threshold_failure_count": len(threshold_failures),
+        "threshold_failures": threshold_failures,
+    }
+    return {
+        "quality_metrics_compare": compare,
+        "quality_metrics_compare_baseline_metric_count": compare[
+            "baseline_metric_count"
+        ],
+        "quality_metrics_compare_candidate_metric_count": compare[
+            "candidate_metric_count"
+        ],
+        "quality_metrics_compare_check_count": compare["check_count"],
+        "quality_metrics_compare_failed_check_count": compare[
+            "failed_check_count"
+        ],
+        "quality_metrics_compare_failed_checks": compare["failed_checks"],
+        "quality_metrics_compare_metric_row_count": compare["metric_row_count"],
+        "quality_metrics_compare_passed": compare["passed"],
+        "quality_metrics_compare_path": compare["path"],
+        "quality_metrics_compare_phase2_check_passed": compare[
+            "phase2_check_passed"
+        ],
+        "quality_metrics_compare_present": compare["present"],
+        "quality_metrics_compare_ready": compare["ready"],
+        "quality_metrics_compare_status": compare["status"],
+        "quality_metrics_compare_threshold_failure_count": compare[
+            "threshold_failure_count"
+        ],
+        "quality_metrics_compare_threshold_failures": compare[
+            "threshold_failures"
+        ],
+    }
+
+
 def _matrix(
     path: Path,
     *,
@@ -782,6 +842,8 @@ def _matrix(
     stack_publication_audit_ready: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
+    include_quality_metrics_compare: bool = True,
+    quality_metrics_compare_ready: bool = True,
     include_stack_engine_runtime_default: bool = True,
     acceptance_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_ready: bool = True,
@@ -847,6 +909,8 @@ def _matrix(
             else {}
         ).get("ready")
     )
+    quality_compare = _quality_metrics_compare(ready=quality_metrics_compare_ready)
+    quality_compare_ready = bool(quality_compare["quality_metrics_compare_ready"])
     direct_evidence = _direct_runtime_evidence_flattened(
         ready=direct_runtime_evidence_ready,
         acceptance_ready=direct_acceptance_fastpath_ready,
@@ -894,6 +958,7 @@ def _matrix(
             if include_resident_result_contract
             else True
         )
+        and (quality_compare_ready if include_quality_metrics_compare else True)
     )
     promotion = {
         "status": "default_promotion_ready" if matrix_ready else "blocked",
@@ -976,6 +1041,8 @@ def _matrix(
         )
     if include_stack_publication_audit:
         promotion.update(publication_audit)
+    if include_quality_metrics_compare:
+        promotion.update(quality_compare)
     payload = {
             "schema_version": 1,
             "artifact_type": "windows_release_matrix",
@@ -1020,6 +1087,8 @@ def _default_promotion(
     stack_publication_audit_ready: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
+    include_quality_metrics_compare: bool = True,
+    quality_metrics_compare_ready: bool = True,
     include_stack_engine_runtime_default: bool = True,
     acceptance_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_ready: bool = True,
@@ -1081,6 +1150,8 @@ def _default_promotion(
             else {}
         ).get("ready")
     )
+    quality_compare = _quality_metrics_compare(ready=quality_metrics_compare_ready)
+    quality_compare_ready = bool(quality_compare["quality_metrics_compare_ready"])
     direct_evidence = _direct_runtime_evidence_manifest(
         ready=direct_runtime_evidence_ready,
         acceptance_ready=direct_acceptance_fastpath_ready,
@@ -1123,6 +1194,7 @@ def _default_promotion(
             if include_resident_result_contract
             else True
         )
+        and (quality_compare_ready if include_quality_metrics_compare else True)
     )
     payload = {
         "schema_version": 1,
@@ -1202,6 +1274,8 @@ def _default_promotion(
         )
     if include_stack_publication_audit:
         payload.update(publication_audit)
+    if include_quality_metrics_compare:
+        payload.update(quality_compare)
     write_json(
         path,
         payload,
@@ -1783,6 +1857,29 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         ]
         is True
     )
+    assert payload["summary"]["matrix_quality_metrics_compare_present"] is True
+    assert payload["summary"]["matrix_quality_metrics_compare_ready"] is True
+    assert payload["summary"]["matrix_quality_metrics_compare_status"] == "passed"
+    assert (
+        payload["summary"]["matrix_quality_metrics_compare_failed_check_count"] == 0
+    )
+    assert (
+        payload["summary"]["default_promotion_quality_metrics_compare_present"]
+        is True
+    )
+    assert (
+        payload["summary"]["default_promotion_quality_metrics_compare_ready"] is True
+    )
+    assert (
+        payload["summary"]["default_promotion_quality_metrics_compare_status"]
+        == "passed"
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_quality_metrics_compare_failed_check_count"
+        ]
+        == 0
+    )
     assert payload["summary"]["matrix_stack_engine_runtime_default_ready"] is True
     assert (
         payload["summary"]["matrix_acceptance_stack_engine_runtime_default_status"]
@@ -2054,6 +2151,16 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert (
         checks["matrix_stack_engine_publication_audit_matches_default_promotion"]
         is True
+    )
+    assert (
+        checks["windows_release_matrix_quality_metrics_compare_handoff_passed"]
+        is True
+    )
+    assert (
+        checks["default_promotion_quality_metrics_compare_handoff_passed"] is True
+    )
+    assert (
+        checks["matrix_quality_metrics_compare_matches_default_promotion"] is True
     )
     assert checks["manifest_assets_match_github_plan"] is True
     assert checks["matrix_packages_match_manifest"] is True
@@ -3603,6 +3710,99 @@ def test_windows_publish_preflight_blocks_stack_publication_winsorized_mismatch(
     }
 
 
+def test_windows_publish_preflight_blocks_failed_quality_metrics_compare(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, quality_metrics_compare_ready=False)
+    _default_promotion(promotion, quality_metrics_compare_ready=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert payload["summary"]["matrix_quality_metrics_compare_status"] == "failed"
+    assert (
+        payload["summary"]["default_promotion_quality_metrics_compare_status"]
+        == "failed"
+    )
+    assert (
+        checks["windows_release_matrix_quality_metrics_compare_handoff_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["default_promotion_quality_metrics_compare_handoff_passed"]["passed"]
+        is False
+    )
+    assert (
+        checks["matrix_quality_metrics_compare_matches_default_promotion"]["passed"]
+        is True
+    )
+    assert checks[
+        "windows_release_matrix_quality_metrics_compare_handoff_passed"
+    ]["evidence"]["failed_checks"] == ["bad_median_ratio_within_limit"]
+    assert checks[
+        "windows_release_matrix_quality_metrics_compare_handoff_passed"
+    ]["evidence"]["threshold_failure_count"] == 1
+
+
+def test_windows_publish_preflight_allows_missing_quality_metrics_compare(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, include_quality_metrics_compare=False)
+    _default_promotion(promotion, include_quality_metrics_compare=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is True
+    assert payload["summary"]["matrix_quality_metrics_compare_present"] is None
+    assert (
+        payload["summary"]["default_promotion_quality_metrics_compare_present"]
+        is None
+    )
+    assert (
+        checks["windows_release_matrix_quality_metrics_compare_handoff_passed"][
+            "passed"
+        ]
+        is True
+    )
+    assert (
+        checks["default_promotion_quality_metrics_compare_handoff_passed"]["passed"]
+        is True
+    )
+    assert (
+        checks["matrix_quality_metrics_compare_matches_default_promotion"]["passed"]
+        is True
+    )
+
+
 def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     manifest, plan, matrix, promotion = _bundle(tmp_path)
     out = tmp_path / "publish_preflight.json"
@@ -3663,6 +3863,10 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     assert (
         "StackEngine publication audit: matrix `passed`/`True`/`True`/`True`, "
         "default-promotion `passed`/`True`/`True`/`True`"
+    ) in markdown_text
+    assert (
+        "Quality metrics compare: matrix `True`/`True`/`passed`/`0`, "
+        "default-promotion `True`/`True`/`passed`/`0`"
     ) in markdown_text
     assert "manifest_assets_match_github_plan" in markdown_text
     assert "github_plan_phase2_stack_engine_default_contract_ready" in markdown_text

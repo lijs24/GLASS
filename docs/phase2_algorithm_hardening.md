@@ -6463,6 +6463,25 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 363: Windows Publish Preflight Quality Metric Compare Guard
+
+- Carry release-matrix and default-promotion `quality_metrics_compare` evidence
+  into `glass windows-publish-preflight`.
+- Add `windows_release_matrix_quality_metrics_compare_handoff_passed`,
+  `default_promotion_quality_metrics_compare_handoff_passed`, and
+  `matrix_quality_metrics_compare_matches_default_promotion` so the final local
+  publication preflight preserves the quality-regression handoff.
+- Treat missing `quality_metrics_compare` as non-blocking for older release
+  artifacts; once present, the handoff must be ready, passed, and free of failed
+  metric or threshold checks.
+- Surface the quality compare handoff in the Windows publish-preflight Markdown.
+- Add focused preflight, failure, compatibility, and CLI Markdown tests.
+- Keep this gate publish-preflight guard scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

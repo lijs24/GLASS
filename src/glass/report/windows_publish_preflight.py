@@ -188,6 +188,45 @@ def _stack_engine_publication_audit_summary(source: dict[str, Any]) -> dict[str,
     }
 
 
+def _quality_metrics_compare_summary(source: dict[str, Any]) -> dict[str, Any]:
+    compare = (
+        source.get("quality_metrics_compare")
+        if isinstance(source.get("quality_metrics_compare"), dict)
+        else {}
+    )
+
+    def field(name: str) -> Any:
+        flattened = source.get(f"quality_metrics_compare_{name}")
+        return flattened if flattened is not None else compare.get(name)
+
+    return {
+        "quality_metrics_compare": compare,
+        "quality_metrics_compare_present": field("present"),
+        "quality_metrics_compare_ready": field("ready"),
+        "quality_metrics_compare_status": field("status"),
+        "quality_metrics_compare_passed": field("passed"),
+        "quality_metrics_compare_phase2_check_passed": field(
+            "phase2_check_passed"
+        ),
+        "quality_metrics_compare_check_count": field("check_count"),
+        "quality_metrics_compare_failed_check_count": field("failed_check_count"),
+        "quality_metrics_compare_failed_checks": field("failed_checks") or [],
+        "quality_metrics_compare_threshold_failure_count": field(
+            "threshold_failure_count"
+        ),
+        "quality_metrics_compare_threshold_failures": field("threshold_failures")
+        or [],
+        "quality_metrics_compare_metric_row_count": field("metric_row_count"),
+        "quality_metrics_compare_baseline_metric_count": field(
+            "baseline_metric_count"
+        ),
+        "quality_metrics_compare_candidate_metric_count": field(
+            "candidate_metric_count"
+        ),
+        "quality_metrics_compare_path": field("path"),
+    }
+
+
 def _runtime_default_direct_evidence_summary(source: dict[str, Any]) -> dict[str, Any]:
     direct = (
         source.get("runtime_default_direct_evidence")
@@ -1201,6 +1240,7 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         **_runtime_default_direct_evidence_summary(promotion),
         **_resident_winsorized_sweep_summary(promotion),
         **_stack_engine_publication_audit_summary(promotion),
+        **_quality_metrics_compare_summary(promotion),
     }
 
 
@@ -1426,6 +1466,7 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         **_runtime_default_direct_evidence_summary(payload),
         **_resident_winsorized_sweep_summary(payload),
         **_stack_engine_publication_audit_summary(payload),
+        **_quality_metrics_compare_summary(payload),
     }
 
 
@@ -1964,6 +2005,90 @@ def _stack_engine_publication_audit_matches(
         for field in _STACK_ENGINE_PUBLICATION_AUDIT_MATCH_FIELDS
     ) and left.get("stack_engine_publication_audit_failed_checks") == right.get(
         "stack_engine_publication_audit_failed_checks"
+    )
+
+
+def _quality_metrics_compare_evidence(summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "present": summary.get("quality_metrics_compare_present"),
+        "ready": summary.get("quality_metrics_compare_ready"),
+        "status": summary.get("quality_metrics_compare_status"),
+        "passed": summary.get("quality_metrics_compare_passed"),
+        "phase2_check_passed": summary.get(
+            "quality_metrics_compare_phase2_check_passed"
+        ),
+        "check_count": summary.get("quality_metrics_compare_check_count"),
+        "failed_check_count": summary.get(
+            "quality_metrics_compare_failed_check_count"
+        ),
+        "failed_checks": summary.get("quality_metrics_compare_failed_checks")
+        or [],
+        "threshold_failure_count": summary.get(
+            "quality_metrics_compare_threshold_failure_count"
+        ),
+        "threshold_failures": summary.get(
+            "quality_metrics_compare_threshold_failures"
+        )
+        or [],
+        "metric_row_count": summary.get("quality_metrics_compare_metric_row_count"),
+        "baseline_metric_count": summary.get(
+            "quality_metrics_compare_baseline_metric_count"
+        ),
+        "candidate_metric_count": summary.get(
+            "quality_metrics_compare_candidate_metric_count"
+        ),
+        "path": summary.get("quality_metrics_compare_path"),
+    }
+
+
+def _quality_metrics_compare_optional_ready(summary: dict[str, Any]) -> bool:
+    if summary.get("quality_metrics_compare_present") is not True:
+        return True
+    return (
+        summary.get("quality_metrics_compare_ready") is True
+        and summary.get("quality_metrics_compare_status") == "passed"
+        and summary.get("quality_metrics_compare_passed") is True
+        and summary.get("quality_metrics_compare_phase2_check_passed") is True
+        and _int_or_zero(summary.get("quality_metrics_compare_check_count")) > 0
+        and _int_or_zero(
+            summary.get("quality_metrics_compare_failed_check_count")
+        )
+        == 0
+        and not summary.get("quality_metrics_compare_failed_checks")
+        and _int_or_zero(
+            summary.get("quality_metrics_compare_threshold_failure_count")
+        )
+        == 0
+        and not summary.get("quality_metrics_compare_threshold_failures")
+    )
+
+
+_QUALITY_METRICS_COMPARE_MATCH_FIELDS = (
+    "present",
+    "ready",
+    "status",
+    "passed",
+    "phase2_check_passed",
+    "check_count",
+    "failed_check_count",
+    "failed_checks",
+    "threshold_failure_count",
+    "threshold_failures",
+    "metric_row_count",
+    "baseline_metric_count",
+    "candidate_metric_count",
+)
+
+
+def _quality_metrics_compare_matches(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> bool:
+    left_evidence = _quality_metrics_compare_evidence(left)
+    right_evidence = _quality_metrics_compare_evidence(right)
+    return all(
+        left_evidence.get(field) == right_evidence.get(field)
+        for field in _QUALITY_METRICS_COMPARE_MATCH_FIELDS
     )
 
 
@@ -3432,6 +3557,28 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "windows_release_matrix_quality_metrics_compare_handoff_passed",
+            _quality_metrics_compare_optional_ready(matrix_info),
+            _quality_metrics_compare_evidence(matrix_info),
+        ),
+        _check(
+            "default_promotion_quality_metrics_compare_handoff_passed",
+            _quality_metrics_compare_optional_ready(promotion_info),
+            _quality_metrics_compare_evidence(promotion_info),
+        ),
+        _check(
+            "matrix_quality_metrics_compare_matches_default_promotion",
+            _quality_metrics_compare_matches(matrix_info, promotion_info),
+            {
+                "windows_release_matrix": _quality_metrics_compare_evidence(
+                    matrix_info
+                ),
+                "default_promotion": _quality_metrics_compare_evidence(
+                    promotion_info
+                ),
+            },
+        ),
+        _check(
             "manifest_assets_match_github_plan",
             not missing_assets and not mismatched_assets,
             {
@@ -3825,6 +3972,30 @@ def build_windows_publish_preflight(
                     "stack_engine_publication_resident_winsorized_agreement"
                 )
             ),
+            "matrix_quality_metrics_compare_present": matrix_info.get(
+                "quality_metrics_compare_present"
+            ),
+            "matrix_quality_metrics_compare_ready": matrix_info.get(
+                "quality_metrics_compare_ready"
+            ),
+            "matrix_quality_metrics_compare_status": matrix_info.get(
+                "quality_metrics_compare_status"
+            ),
+            "matrix_quality_metrics_compare_failed_check_count": matrix_info.get(
+                "quality_metrics_compare_failed_check_count"
+            ),
+            "default_promotion_quality_metrics_compare_present": (
+                promotion_info.get("quality_metrics_compare_present")
+            ),
+            "default_promotion_quality_metrics_compare_ready": promotion_info.get(
+                "quality_metrics_compare_ready"
+            ),
+            "default_promotion_quality_metrics_compare_status": promotion_info.get(
+                "quality_metrics_compare_status"
+            ),
+            "default_promotion_quality_metrics_compare_failed_check_count": (
+                promotion_info.get("quality_metrics_compare_failed_check_count")
+            ),
         },
         "release_manifest": {
             "status": manifest.get("status"),
@@ -4021,6 +4192,18 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{summary.get('default_promotion_stack_engine_publication_audit_ready')}`/"
             f"`{summary.get('default_promotion_stack_engine_publication_policy_agreement')}`/"
             f"`{summary.get('default_promotion_stack_engine_publication_resident_winsorized_agreement')}`"
+        ),
+        (
+            "- Quality metrics compare: "
+            f"matrix `{summary.get('matrix_quality_metrics_compare_present')}`/"
+            f"`{summary.get('matrix_quality_metrics_compare_ready')}`/"
+            f"`{summary.get('matrix_quality_metrics_compare_status')}`/"
+            f"`{summary.get('matrix_quality_metrics_compare_failed_check_count')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_quality_metrics_compare_present')}`/"
+            f"`{summary.get('default_promotion_quality_metrics_compare_ready')}`/"
+            f"`{summary.get('default_promotion_quality_metrics_compare_status')}`/"
+            f"`{summary.get('default_promotion_quality_metrics_compare_failed_check_count')}`"
         ),
         "",
         "## Inputs",
