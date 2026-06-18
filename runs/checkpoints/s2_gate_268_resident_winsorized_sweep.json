@@ -1,0 +1,874 @@
+{
+  "artifact_type": "resident_winsorized_frame_count_sweep",
+  "checks": [
+    {
+      "evidence": {
+        "frame_counts": [
+          8,
+          32,
+          128,
+          200
+        ]
+      },
+      "name": "frame_counts_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "frame_counts": [
+          8,
+          32,
+          128,
+          200
+        ],
+        "limit": 256
+      },
+      "name": "all_frame_counts_within_hardened_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "required_frame_count": 200
+      },
+      "name": "required_frame_count_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "required_frame_count": 200,
+        "target_runs": [
+          {
+            "checks": [
+              {
+                "evidence": {
+                  "cuda_available": true
+                },
+                "name": "cuda_available",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "frame_count": 200,
+                  "limit": 256
+                },
+                "name": "hardened_frame_limit_ok",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "actual": 2.3066304440398834e-05,
+                  "required_max": 5e-05
+                },
+                "name": "hardened_master_rms_within_tolerance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "actual": 6.103515625e-05,
+                  "required_max": 0.0002
+                },
+                "name": "hardened_master_max_abs_within_tolerance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "max_abs": 1.52587890625e-05,
+                  "p99_abs": 1.52587890625e-05,
+                  "rms": 1.4557206652139423e-05
+                },
+                "name": "hardened_weight_map_matches_cpu",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "max_abs": 0.0,
+                  "p99_abs": 0.0,
+                  "rms": 0.0
+                },
+                "name": "hardened_coverage_map_matches_cpu",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "max_abs": 0.0,
+                  "p99_abs": 0.0,
+                  "rms": 0.0
+                },
+                "name": "hardened_low_rejection_map_matches_cpu",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "max_abs": 0.0,
+                  "p99_abs": 0.0,
+                  "rms": 0.0
+                },
+                "name": "hardened_high_rejection_map_matches_cpu",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "comparisons": {
+              "fast_approx_vs_cpu": {
+                "master": {
+                  "max_abs": 6.103515625e-05,
+                  "p99_abs": 4.920959472656241e-05,
+                  "rms": 2.3066304440398834e-05
+                }
+              },
+              "hardened_vs_cpu": {
+                "coverage": {
+                  "max_abs": 0.0,
+                  "p99_abs": 0.0,
+                  "rms": 0.0
+                },
+                "high_rejection": {
+                  "max_abs": 0.0,
+                  "p99_abs": 0.0,
+                  "rms": 0.0
+                },
+                "low_rejection": {
+                  "max_abs": 0.0,
+                  "p99_abs": 0.0,
+                  "rms": 0.0
+                },
+                "master": {
+                  "max_abs": 6.103515625e-05,
+                  "p99_abs": 4.920959472656241e-05,
+                  "rms": 2.3066304440398834e-05
+                },
+                "weight": {
+                  "max_abs": 1.52587890625e-05,
+                  "p99_abs": 1.52587890625e-05,
+                  "rms": 1.4557206652139423e-05
+                }
+              }
+            },
+            "cuda_fast_approx_timing": {
+              "frame_count": 200,
+              "height": 16,
+              "high_sigma": 3.0,
+              "includes_device_sync_and_download": true,
+              "low_sigma": 3.0,
+              "native_method": "ResidentCalibratedStack.integrate_sigma_clip",
+              "pixel_count": 256,
+              "rejection": "winsorized_sigma",
+              "resident_winsorized_mode": "fast_approx",
+              "schema_version": 1,
+              "timing_model": "python_native_resident_fast_winsorized_sigma_one_sync",
+              "total_s": 0.0002525999952922575,
+              "width": 16
+            },
+            "cuda_hardened_timing": {
+              "frame_count": 200,
+              "height": 16,
+              "high_sigma": 3.0,
+              "includes_device_sync_and_download": true,
+              "low_sigma": 3.0,
+              "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+              "pixel_count": 256,
+              "rejection": "winsorized_sigma",
+              "resident_winsorized_mode": "hardened_cpu_parity",
+              "schema_version": 1,
+              "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+              "total_s": 0.0012743999977828935,
+              "width": 16
+            },
+            "failed_checks": [],
+            "frame_count": 200,
+            "passed": true,
+            "seed": 271,
+            "status": "passed",
+            "timing_s": {
+              "cpu_baseline": 0.01229839999723481,
+              "cuda_fast_approx": 0.0002525999952922575,
+              "cuda_hardened": 0.0012743999977828935
+            }
+          }
+        ]
+      },
+      "name": "required_frame_count_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "run_count": 4
+      },
+      "name": "all_runs_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "config": {
+    "frame_counts": [
+      8,
+      32,
+      128,
+      200
+    ],
+    "hardened_frame_limit": 256,
+    "height": 16,
+    "high_sigma": 3.0,
+    "low_sigma": 3.0,
+    "required_frame_count": 200,
+    "seed_base": 268,
+    "tolerance_max_abs": 0.0002,
+    "tolerance_rms": 5e-05,
+    "width": 16
+  },
+  "created_at": "2026-06-18T03:23:41+00:00",
+  "failed_checks": [],
+  "limitations": [
+    "Synthetic frame-count sweep only; it does not replace the 200-light real-data benchmark.",
+    "The 200-frame row validates prototype frame-count scale on a small image, not end-to-end I/O or registration.",
+    "Timing is recorded for attribution but is not a hardware-independent performance contract."
+  ],
+  "passed": true,
+  "runs": [
+    {
+      "checks": [
+        {
+          "evidence": {
+            "cuda_available": true
+          },
+          "name": "cuda_available",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "frame_count": 8,
+            "limit": 256
+          },
+          "name": "hardened_frame_limit_ok",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 5.662127536314925e-06,
+            "required_max": 5e-05
+          },
+          "name": "hardened_master_rms_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 1.52587890625e-05,
+            "required_max": 0.0002
+          },
+          "name": "hardened_master_max_abs_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_weight_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_coverage_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_low_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_high_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "comparisons": {
+        "fast_approx_vs_cpu": {
+          "master": {
+            "max_abs": 5.271369934082031,
+            "p99_abs": 4.165975952148435,
+            "rms": 0.5711955511420799
+          }
+        },
+        "hardened_vs_cpu": {
+          "coverage": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "high_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "low_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "master": {
+            "max_abs": 1.52587890625e-05,
+            "p99_abs": 1.52587890625e-05,
+            "rms": 5.662127536314925e-06
+          },
+          "weight": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          }
+        }
+      },
+      "cuda_fast_approx_timing": {
+        "frame_count": 8,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_sigma_clip",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "fast_approx",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_fast_winsorized_sigma_one_sync",
+        "total_s": 0.000815400002466049,
+        "width": 16
+      },
+      "cuda_hardened_timing": {
+        "frame_count": 8,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "hardened_cpu_parity",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+        "total_s": 0.00019880000036209822,
+        "width": 16
+      },
+      "failed_checks": [],
+      "frame_count": 8,
+      "passed": true,
+      "seed": 268,
+      "status": "passed",
+      "timing_s": {
+        "cpu_baseline": 0.014404100002138875,
+        "cuda_fast_approx": 0.000815400002466049,
+        "cuda_hardened": 0.00019880000036209822
+      }
+    },
+    {
+      "checks": [
+        {
+          "evidence": {
+            "cuda_available": true
+          },
+          "name": "cuda_available",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "frame_count": 32,
+            "limit": 256
+          },
+          "name": "hardened_frame_limit_ok",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 1.7841612752790173e-05,
+            "required_max": 5e-05
+          },
+          "name": "hardened_master_rms_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 3.814697265625e-05,
+            "required_max": 0.0002
+          },
+          "name": "hardened_master_max_abs_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 5.7220458984375e-06,
+            "p99_abs": 3.814697265625e-06,
+            "rms": 3.83327846308077e-06
+          },
+          "name": "hardened_weight_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_coverage_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_low_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_high_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "comparisons": {
+        "fast_approx_vs_cpu": {
+          "master": {
+            "max_abs": 3.814697265625e-05,
+            "p99_abs": 3.0517578125e-05,
+            "rms": 1.7841612752790173e-05
+          }
+        },
+        "hardened_vs_cpu": {
+          "coverage": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "high_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "low_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "master": {
+            "max_abs": 3.814697265625e-05,
+            "p99_abs": 3.0517578125e-05,
+            "rms": 1.7841612752790173e-05
+          },
+          "weight": {
+            "max_abs": 5.7220458984375e-06,
+            "p99_abs": 3.814697265625e-06,
+            "rms": 3.83327846308077e-06
+          }
+        }
+      },
+      "cuda_fast_approx_timing": {
+        "frame_count": 32,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_sigma_clip",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "fast_approx",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_fast_winsorized_sigma_one_sync",
+        "total_s": 0.0001720000000204891,
+        "width": 16
+      },
+      "cuda_hardened_timing": {
+        "frame_count": 32,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "hardened_cpu_parity",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+        "total_s": 0.0001469000053475611,
+        "width": 16
+      },
+      "failed_checks": [],
+      "frame_count": 32,
+      "passed": true,
+      "seed": 269,
+      "status": "passed",
+      "timing_s": {
+        "cpu_baseline": 0.010201700002653524,
+        "cuda_fast_approx": 0.0001720000000204891,
+        "cuda_hardened": 0.0001469000053475611
+      }
+    },
+    {
+      "checks": [
+        {
+          "evidence": {
+            "cuda_available": true
+          },
+          "name": "cuda_available",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "frame_count": 128,
+            "limit": 256
+          },
+          "name": "hardened_frame_limit_ok",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 1.784798361989298e-05,
+            "required_max": 5e-05
+          },
+          "name": "hardened_master_rms_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 5.340576171875e-05,
+            "required_max": 0.0002
+          },
+          "name": "hardened_master_max_abs_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 7.62939453125e-06,
+            "p99_abs": 7.62939453125e-06,
+            "rms": 2.4777185548337135e-06
+          },
+          "name": "hardened_weight_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_coverage_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_low_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_high_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "comparisons": {
+        "fast_approx_vs_cpu": {
+          "master": {
+            "max_abs": 5.340576171875e-05,
+            "p99_abs": 3.814697265625e-05,
+            "rms": 1.784798361989298e-05
+          }
+        },
+        "hardened_vs_cpu": {
+          "coverage": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "high_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "low_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "master": {
+            "max_abs": 5.340576171875e-05,
+            "p99_abs": 3.814697265625e-05,
+            "rms": 1.784798361989298e-05
+          },
+          "weight": {
+            "max_abs": 7.62939453125e-06,
+            "p99_abs": 7.62939453125e-06,
+            "rms": 2.4777185548337135e-06
+          }
+        }
+      },
+      "cuda_fast_approx_timing": {
+        "frame_count": 128,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_sigma_clip",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "fast_approx",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_fast_winsorized_sigma_one_sync",
+        "total_s": 0.00022709999757353216,
+        "width": 16
+      },
+      "cuda_hardened_timing": {
+        "frame_count": 128,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "hardened_cpu_parity",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+        "total_s": 0.0004313000026741065,
+        "width": 16
+      },
+      "failed_checks": [],
+      "frame_count": 128,
+      "passed": true,
+      "seed": 270,
+      "status": "passed",
+      "timing_s": {
+        "cpu_baseline": 0.011198399995919317,
+        "cuda_fast_approx": 0.00022709999757353216,
+        "cuda_hardened": 0.0004313000026741065
+      }
+    },
+    {
+      "checks": [
+        {
+          "evidence": {
+            "cuda_available": true
+          },
+          "name": "cuda_available",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "frame_count": 200,
+            "limit": 256
+          },
+          "name": "hardened_frame_limit_ok",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 2.3066304440398834e-05,
+            "required_max": 5e-05
+          },
+          "name": "hardened_master_rms_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 6.103515625e-05,
+            "required_max": 0.0002
+          },
+          "name": "hardened_master_max_abs_within_tolerance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 1.52587890625e-05,
+            "p99_abs": 1.52587890625e-05,
+            "rms": 1.4557206652139423e-05
+          },
+          "name": "hardened_weight_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_coverage_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_low_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "name": "hardened_high_rejection_map_matches_cpu",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "comparisons": {
+        "fast_approx_vs_cpu": {
+          "master": {
+            "max_abs": 6.103515625e-05,
+            "p99_abs": 4.920959472656241e-05,
+            "rms": 2.3066304440398834e-05
+          }
+        },
+        "hardened_vs_cpu": {
+          "coverage": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "high_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "low_rejection": {
+            "max_abs": 0.0,
+            "p99_abs": 0.0,
+            "rms": 0.0
+          },
+          "master": {
+            "max_abs": 6.103515625e-05,
+            "p99_abs": 4.920959472656241e-05,
+            "rms": 2.3066304440398834e-05
+          },
+          "weight": {
+            "max_abs": 1.52587890625e-05,
+            "p99_abs": 1.52587890625e-05,
+            "rms": 1.4557206652139423e-05
+          }
+        }
+      },
+      "cuda_fast_approx_timing": {
+        "frame_count": 200,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_sigma_clip",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "fast_approx",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_fast_winsorized_sigma_one_sync",
+        "total_s": 0.0002525999952922575,
+        "width": 16
+      },
+      "cuda_hardened_timing": {
+        "frame_count": 200,
+        "height": 16,
+        "high_sigma": 3.0,
+        "includes_device_sync_and_download": true,
+        "low_sigma": 3.0,
+        "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+        "pixel_count": 256,
+        "rejection": "winsorized_sigma",
+        "resident_winsorized_mode": "hardened_cpu_parity",
+        "schema_version": 1,
+        "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+        "total_s": 0.0012743999977828935,
+        "width": 16
+      },
+      "failed_checks": [],
+      "frame_count": 200,
+      "passed": true,
+      "seed": 271,
+      "status": "passed",
+      "timing_s": {
+        "cpu_baseline": 0.01229839999723481,
+        "cuda_fast_approx": 0.0002525999952922575,
+        "cuda_hardened": 0.0012743999977828935
+      }
+    }
+  ],
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "max_hardened_master_rms": 2.3066304440398834e-05,
+    "passed_run_count": 4,
+    "required_frame_count_passed": true,
+    "required_frame_count_present": true,
+    "required_frame_count_timing_s": {
+      "cpu_baseline": 0.01229839999723481,
+      "cuda_fast_approx": 0.0002525999952922575,
+      "cuda_hardened": 0.0012743999977828935
+    },
+    "run_count": 4
+  }
+}

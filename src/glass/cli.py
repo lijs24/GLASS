@@ -73,6 +73,14 @@ from glass.report.resident_winsorized_benchmark_contract import (
     build_resident_winsorized_benchmark_audit,
     write_resident_winsorized_benchmark_audit,
 )
+from glass.report.resident_winsorized_sweep import (
+    DEFAULT_FRAME_COUNTS as DEFAULT_RESIDENT_WINSORIZED_SWEEP_FRAME_COUNTS,
+)
+from glass.report.resident_winsorized_sweep import (
+    build_resident_winsorized_frame_count_sweep,
+    parse_frame_counts,
+    write_resident_winsorized_frame_count_sweep,
+)
 from glass.report.resident_runtime_repeat_plan import (
     build_resident_runtime_repeat_plan,
     write_resident_runtime_repeat_plan,
@@ -2306,6 +2314,40 @@ def cmd_resident_winsorized_benchmark_audit(args: argparse.Namespace) -> int:
             "contract": payload.get("contract_path"),
             "benchmark": payload.get("benchmark_path"),
             "failed_checks": payload.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_resident_winsorized_sweep(args: argparse.Namespace) -> int:
+    payload = build_resident_winsorized_frame_count_sweep(
+        frame_counts=parse_frame_counts(args.frame_counts),
+        height=args.height,
+        width=args.width,
+        seed_base=args.seed_base,
+        low_sigma=args.low_sigma,
+        high_sigma=args.high_sigma,
+        tolerance_rms=args.tolerance_rms,
+        tolerance_max_abs=args.tolerance_max_abs,
+        required_frame_count=args.required_frame_count,
+    )
+    write_resident_winsorized_frame_count_sweep(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "frame_counts": payload.get("config", {}).get("frame_counts"),
+            "required_frame_count_passed": payload.get("summary", {}).get(
+                "required_frame_count_passed"
+            ),
+            "max_hardened_master_rms": payload.get("summary", {}).get(
+                "max_hardened_master_rms"
+            ),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -5248,6 +5290,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when the benchmark artifact fails the contract",
     )
     resident_winsorized_benchmark_audit.set_defaults(func=cmd_resident_winsorized_benchmark_audit)
+
+    resident_winsorized_sweep = sub.add_parser(
+        "resident-winsorized-sweep",
+        help="run resident CUDA winsorized parity microbenchmarks across frame counts",
+    )
+    resident_winsorized_sweep.add_argument("--out", required=True, help="output sweep JSON")
+    resident_winsorized_sweep.add_argument("--markdown", help="optional output Markdown summary")
+    resident_winsorized_sweep.add_argument(
+        "--frame-counts",
+        default=",".join(str(item) for item in DEFAULT_RESIDENT_WINSORIZED_SWEEP_FRAME_COUNTS),
+        help="comma-separated synthetic frame counts; default includes 200",
+    )
+    resident_winsorized_sweep.add_argument(
+        "--required-frame-count",
+        type=int,
+        default=200,
+        help="frame count that must be present and pass, matching the 200-light scale target",
+    )
+    resident_winsorized_sweep.add_argument("--height", type=int, default=16, help="synthetic image height")
+    resident_winsorized_sweep.add_argument("--width", type=int, default=16, help="synthetic image width")
+    resident_winsorized_sweep.add_argument("--seed-base", type=int, default=268, help="deterministic RNG seed base")
+    resident_winsorized_sweep.add_argument("--low-sigma", type=float, default=3.0)
+    resident_winsorized_sweep.add_argument("--high-sigma", type=float, default=3.0)
+    resident_winsorized_sweep.add_argument("--tolerance-rms", type=float, default=5.0e-5)
+    resident_winsorized_sweep.add_argument("--tolerance-max-abs", type=float, default=2.0e-4)
+    resident_winsorized_sweep.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless every frame-count row passes",
+    )
+    resident_winsorized_sweep.set_defaults(func=cmd_resident_winsorized_sweep)
 
     resident_runtime_repeat_plan = sub.add_parser(
         "resident-runtime-repeat-plan",

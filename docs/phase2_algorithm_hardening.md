@@ -4502,6 +4502,25 @@ integration where applicable.
   default, package build/upload, release update, status-compare change, or
   real-data benchmark rerun.
 
+### S2-Gate 268: Resident Winsorized Frame-Count Sweep
+
+- Add `glass resident-winsorized-sweep`, a deterministic synthetic frame-count
+  sweep for resident CUDA winsorized integration.
+- Reuse the Gate265 single-benchmark path across multiple frame counts,
+  including a required 200-frame row by default, so the hardened prototype is
+  checked at the Phase 1 200-light sample-count scale on a small in-memory
+  image.
+- Emit JSON and optional Markdown with per-frame-count timing, hardened-vs-CPU
+  differences, fast-approximation context, required-frame-count checks, and
+  CUDA-unavailable diagnostics. Use a sweep-scale RMS tolerance that remains
+  tighter than `1e-4` while allowing small float32 accumulation differences at
+  the required 200-frame row.
+- Add focused tests for parsing, CUDA-unavailable behavior, CUDA parity, CLI
+  artifact writing, and help-list coverage.
+- Keep this gate sweep scoped: it does not replace the 200-light real-data
+  benchmark, change image math, optimize kernels, raise the 256-frame prototype
+  limit, build/upload packages, change defaults, or rerun real data.
+
 ## Gate Rules
 
 Each gate requires:
