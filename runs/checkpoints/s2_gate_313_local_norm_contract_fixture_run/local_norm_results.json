@@ -1,0 +1,43 @@
+{
+  "coefficient_field_model": "bilinear_tile_center_v1",
+  "crop_box": null,
+  "enabled": true,
+  "local_norm_results": [
+    {
+      "coefficient_field_model": "bilinear_tile_center_v1",
+      "coefficient_grid_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1_coefficients.json",
+      "coverage_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\registered_cache\\coverage_L1.fits",
+      "crop_box": null,
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\dq_cache\\dq_local_norm_L1.fits",
+      "dq_summary": {
+        "valid": 4
+      },
+      "empty_tiles_filled": 0,
+      "frame_id": "L1",
+      "full_field_map_status": "written",
+      "grid_cols": 1,
+      "grid_rows": 1,
+      "input_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1.fits",
+      "interpolation": "bilinear_tile_center",
+      "model": "continuous_grid_mean_std_v1",
+      "normalized_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1.fits",
+      "offset_field_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1_offset_field.fits",
+      "residual_map_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1_residual.fits",
+      "residual_summary": {
+        "max_abs": 0.02,
+        "mean": 0.0,
+        "rms": 0.01,
+        "valid_pixels": 4
+      },
+      "scale_field_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1_scale_field.fits",
+      "status": "reference",
+      "tile_size": 4,
+      "valid_pixels": 4,
+      "warnings": []
+    }
+  ],
+  "model": "continuous_grid_mean_std_v1",
+  "reference_frame_id": "L1",
+  "reference_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1.fits",
+  "schema_version": 1
+}

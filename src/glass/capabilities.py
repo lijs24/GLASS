@@ -55,9 +55,10 @@ def capability_report(*, probe_cuda: bool = True) -> dict[str, object]:
             "status": "partial WBPP-like registration; not PixInsight-equivalent",
         },
         "local_normalization": {
-            "cpu": "tile median/std baseline with coefficient artifacts",
+            "cpu": "continuous grid mean/std coefficient-field baseline with coefficient artifacts and diagnostics",
             "cuda": "tile mean/std primitive, resident global/grid mean/std, resident grid apply",
-            "status": "partial; full interpolated/windowed LN is not complete",
+            "contract_audit": True,
+            "status": "partial; CPU continuous field is audited, fully resident continuous/windowed LN is not complete",
         },
         "weighted_integration": {
             "cpu": "mean, simple_snr, sigma/winsorized rejection maps",

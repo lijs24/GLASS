@@ -1,0 +1,54 @@
+{
+  "coefficient_field_model": "bilinear_tile_center_v1",
+  "crop_box": null,
+  "empty_tiles_filled": 0,
+  "formula": "output = scale_field * source + offset_field",
+  "frame_id": "L1",
+  "full_field_map_status": "written",
+  "grid_cols": 1,
+  "grid_rows": 1,
+  "interpolation": "bilinear_tile_center",
+  "model": "continuous_grid_mean_std_v1",
+  "offset_field_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1_offset_field.fits",
+  "offsets": [
+    [
+      0.0
+    ]
+  ],
+  "raw_offsets": [
+    [
+      0.0
+    ]
+  ],
+  "raw_scales": [
+    [
+      1.0
+    ]
+  ],
+  "reference_frame_id": "L1",
+  "residual_map_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1_residual.fits",
+  "residual_summary": {
+    "max_abs": 0.02,
+    "mean": 0.0,
+    "rms": 0.01,
+    "valid_pixels": 4
+  },
+  "scale_field_path": "runs\\checkpoints\\s2_gate_313_local_norm_contract_fixture_run\\local_norm_cache\\local_norm_L1_scale_field.fits",
+  "scales": [
+    [
+      1.0
+    ]
+  ],
+  "schema_version": 1,
+  "statuses": [
+    [
+      "ok"
+    ]
+  ],
+  "tile_size": 4,
+  "valid_pixels": [
+    [
+      4
+    ]
+  ]
+}

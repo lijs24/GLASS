@@ -167,6 +167,7 @@ from glass.report.resident_tile_contribution import (
     write_resident_tile_contribution,
 )
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
+from glass.report.local_norm_contract import build_local_norm_contract, write_local_norm_contract
 from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
 from glass.report.tile_local_frame_family_search import (
     build_tile_local_frame_family_search,
@@ -2647,6 +2648,23 @@ def cmd_pipeline_contract(args: argparse.Namespace) -> int:
         }
     )
     return 0 if audit["passed"] else 2
+
+
+def cmd_local_norm_contract(args: argparse.Namespace) -> int:
+    audit = build_local_norm_contract(args.run)
+    write_local_norm_contract(args.out, audit, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": audit.get("artifact_type"),
+            "status": audit.get("status"),
+            "enabled": audit.get("enabled"),
+            "output_count": (audit.get("summary") or {}).get("output_count"),
+            "failed_output_count": (audit.get("summary") or {}).get("failed_output_count"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if audit.get("passed") or not args.fail_on_failed else 2
 
 
 def cmd_guardrails(args: argparse.Namespace) -> int:
@@ -5725,6 +5743,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="optional resident CUDA calibration contract JSON used to prove resident calibration surface invariants",
     )
     pipeline_contract.set_defaults(func=cmd_pipeline_contract)
+
+    local_norm_contract = sub.add_parser(
+        "local-norm-contract",
+        help="audit continuous local-normalization coefficient-field artifacts from a GLASS run",
+    )
+    local_norm_contract.add_argument("--run", required=True, help="GLASS run directory to audit")
+    local_norm_contract.add_argument("--out", required=True, help="output audit JSON")
+    local_norm_contract.add_argument("--markdown", help="optional output Markdown summary")
+    local_norm_contract.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when the local-normalization contract fails",
+    )
+    local_norm_contract.set_defaults(func=cmd_local_norm_contract)
 
     guardrails = sub.add_parser(
         "guardrails",

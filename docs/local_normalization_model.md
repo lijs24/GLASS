@@ -145,3 +145,25 @@ Full-resolution diagnostic maps are intentionally bounded because one
 `GLASS_LN_FULL_FIELD_MAP_MAX_PIXELS` controls the threshold; the default writes
 full maps for small validation runs and records `omitted_due_to_size` for larger
 runs while retaining coefficient grids and summaries.
+
+## S2-Gate 313 Contract Audit
+
+S2-Gate 313 adds a dedicated `glass local-norm-contract` audit. The command is
+metadata-only: it reads `local_norm_results.json` plus per-frame coefficient
+JSON artifacts and checks paths, schema, model names, crop-box recording, DQ
+summary presence, coefficient grid dimensions, residual summaries, and optional
+full-field diagnostic map paths. It does not read image pixels.
+
+For enabled local normalization, the contract requires:
+
+- top-level `model = continuous_grid_mean_std_v1`
+- top-level and per-frame `coefficient_field_model = bilinear_tile_center_v1`
+- per-frame `interpolation = bilinear_tile_center`
+- per-frame coefficient JSON with raw/repaired scale and offset grids
+- per-frame valid-pixel/status grids matching `grid_rows` and `grid_cols`
+- recorded residual summaries
+- explicit `crop_box`, currently `null`
+
+For disabled local normalization, the contract requires an explicit
+`disabled_passthrough` artifact so downstream integration and report stages can
+distinguish "LN deliberately off" from "LN silently skipped".

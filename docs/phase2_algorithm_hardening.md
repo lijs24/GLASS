@@ -5457,6 +5457,30 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 313: Local Normalization Continuous Contract Audit
+
+- Add a dedicated `local-norm-contract` audit command for
+  `local_norm_results.json` and per-frame coefficient-grid JSON artifacts.
+- Require enabled local normalization to preserve the continuous coefficient
+  field contract: `continuous_grid_mean_std_v1`,
+  `bilinear_tile_center_v1`, `bilinear_tile_center`, recorded crop box,
+  coefficient grids, valid-pixel grids, status grids, residual summaries, DQ
+  summaries, and diagnostic map path policy.
+- Require disabled local normalization to emit an explicit
+  `disabled_passthrough` contract rather than looking like a missing stage.
+- Keep the audit metadata-only; it does not read large FITS pixel data and does
+  not change LN math, CUDA kernels, registration, integration, output pixels, or
+  benchmark timings.
+- Update the capability report to advertise the audited CPU continuous
+  coefficient-field baseline while keeping fully resident/windowed continuous LN
+  marked incomplete.
+- Add focused tests for passing enabled artifacts, disabled passthrough,
+  piecewise-model regression, CLI Markdown output, and CLI failure status.
+- Generate Gate313 local-normalization contract artifacts from a small
+  checkpoint fixture run.
+- Keep this gate LN-contract scoped: no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
