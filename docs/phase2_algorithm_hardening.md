@@ -5203,6 +5203,27 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 303: Release/Default Promotion Resident Winsorized Visibility
+
+- Surface the Gate302 resident winsorized semantics handoff in
+  `release-promotion-decision` as first-class release evidence instead of
+  relying only on the aggregate `pipeline_result_contracts_passed` flag.
+- Preserve descriptor source, integration-results descriptor presence,
+  resident-artifacts descriptor presence, legacy completion count,
+  `resident_winsorized_mode`, algorithm, scale estimator, parity status, and
+  approximation flags in JSON and Markdown outputs.
+- Treat failed required resident winsorized semantics as release blockers while
+  keeping sparse historical fixtures compatible when no resident semantics are
+  supplied.
+- Copy the same release-level resident winsorized summary into
+  `default-promotion-manifest` so Windows/default-route publication evidence can
+  explain why the resident winsorized path is promotion-ready.
+- Generate Gate303 release-decision, Phase2 status, default-promotion manifest,
+  and checkpoint artifacts from existing 200-light run evidence.
+- Keep this gate visibility/audit scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

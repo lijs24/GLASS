@@ -734,6 +734,11 @@ def build_default_promotion_manifest(
     doctor = _read_json_object_optional(doctor_json)
     runtime = _runtime_repeat_summary(decision)
     pipeline = _pipeline_summary(phase2)
+    release_resident_winsorized = (
+        decision.get("pipeline_resident_winsorized_semantics_release")
+        if isinstance(decision.get("pipeline_resident_winsorized_semantics_release"), dict)
+        else {}
+    )
     stack_engine = _stack_engine_summary(phase2)
     default_route = _default_route_acceptance_summary(phase2)
     resident_winsorized_sweep = _resident_winsorized_sweep_summary(phase2)
@@ -1318,6 +1323,7 @@ def build_default_promotion_manifest(
             "default_change_ready": decision.get("default_change_ready"),
             "recommendation": decision.get("recommendation"),
             "speedup": decision.get("speedup"),
+            "resident_winsorized_semantics": release_resident_winsorized,
         },
         "phase2_status": {
             "status": phase2.get("status"),
@@ -1353,6 +1359,12 @@ def _markdown(payload: dict[str, Any]) -> str:
     stack_engine_runtime_default = payload.get("stack_engine_runtime_default") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
     resident_winsorized_sweep = payload.get("resident_winsorized_sweep_audit") or {}
+    release_decision = payload.get("release_decision") or {}
+    release_resident_winsorized = (
+        release_decision.get("resident_winsorized_semantics")
+        if isinstance(release_decision.get("resident_winsorized_semantics"), dict)
+        else {}
+    )
     publication_audit = payload.get("stack_engine_publication_audit") or {}
     doctor = payload.get("doctor") or {}
     device = doctor.get("device") if isinstance(doctor, dict) else {}
@@ -1385,6 +1397,12 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Speedup vs reference: `{default_route.get('speedup_vs_reference')}`",
         f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
         f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
+        (
+            "- Release resident winsorized semantics: "
+            f"`{release_resident_winsorized.get('status')}` "
+            f"required=`{release_resident_winsorized.get('required_count')}` "
+            f"legacy-completions=`{release_resident_winsorized.get('legacy_completion_count')}`"
+        ),
         f"- Acceptance integration engine policy: `{integration_engine_policy.get('acceptance_status')}`",
         f"- Pipeline integration engine policy: `{integration_engine_policy.get('pipeline_status')}`",
         (

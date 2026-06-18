@@ -298,6 +298,38 @@ def _write_pipeline_contract(
     )
 
 
+def _write_pipeline_contract_with_resident_winsorized_semantics(path: Path) -> None:
+    _write_pipeline_contract(path)
+    payload = read_json(path)
+    payload["integration"]["outputs"][0]["resident_result_contract"] = {
+        "required": True,
+        "passed": True,
+        "contract": {
+            "rejection_semantics": {
+                "required": True,
+                "present": True,
+                "passed": True,
+                "status": "passed",
+                "rejection": "winsorized_sigma",
+                "descriptor_source": "resident_artifacts.integration_rejection",
+                "integration_results_descriptor_present": False,
+                "resident_artifacts_descriptor_present": True,
+                "legacy_completion_applied": True,
+                "legacy_completion_source": "fast_approx_algorithm",
+                "descriptor": {
+                    "resident_winsorized_mode": "fast_approx",
+                    "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+                    "scale_estimator": "mean_std_two_stage_winsorized",
+                    "cpu_baseline_parity": False,
+                    "parity_status": "known_non_parity_pending_cuda_update",
+                    "approximation": True,
+                },
+            }
+        },
+    }
+    write_json(path, payload)
+
+
 def _write_pipeline_contract_not_required_sample_scopes(path: Path) -> None:
     write_json(
         path,
@@ -879,6 +911,44 @@ def test_release_promotion_decision_accepts_not_required_sample_scopes(
     assert payload["pipeline_sample_closure_release"]["scope"] == "not_required"
     assert checks["pipeline_rejection_sample_accounting_passed"]["passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"]["passed"] is True
+
+
+def test_release_promotion_decision_surfaces_resident_winsorized_semantics(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    stack = tmp_path / "stack.json"
+    pipeline = tmp_path / "pipeline.json"
+    runtime = tmp_path / "runtime_compare.json"
+    _write_acceptance(acceptance)
+    _write_stack_contract(stack)
+    _write_pipeline_contract_with_resident_winsorized_semantics(pipeline)
+    _write_runtime_compare(runtime)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        stack_engine_contract=stack,
+        pipeline_contract=pipeline,
+        runtime_compare=runtime,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = payload["pipeline_resident_winsorized_semantics_release"]
+    assert payload["default_change_ready"] is True
+    assert checks["pipeline_resident_winsorized_semantics_handoff"]["passed"] is True
+    assert evidence["status"] == "passed"
+    assert evidence["ready"] is True
+    assert evidence["required_count"] == 1
+    assert evidence["legacy_completion_count"] == 1
+    assert evidence["descriptor_sources"] == [
+        "resident_artifacts.integration_rejection"
+    ]
+    row = evidence["rows"][0]
+    assert row["resident_winsorized_mode"] == "fast_approx"
+    assert row["legacy_completion_source"] == "fast_approx_algorithm"
+    assert row["parity_status"] == "known_non_parity_pending_cuda_update"
+    assert row["resident_artifacts_descriptor_present"] is True
 
 
 def test_release_promotion_decision_blocks_missing_required_rejection_sample_scope(

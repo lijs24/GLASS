@@ -388,6 +388,7 @@ def _pipeline_handoff_evidence(
     }
     rejection_sample_accounting = _pipeline_rejection_sample_accounting(pipeline)
     sample_accounting_closure = _pipeline_sample_accounting_closure(pipeline)
+    resident_winsorized_semantics = _resident_winsorized_semantics_evidence(pipeline)
     return {
         "source": source,
         "present": bool(pipeline),
@@ -422,7 +423,104 @@ def _pipeline_handoff_evidence(
         "sample_accounting_closure_required_count": sample_accounting_closure.get(
             "required_count"
         ),
+        "resident_winsorized_semantics": resident_winsorized_semantics,
+        "resident_winsorized_semantics_status": resident_winsorized_semantics.get(
+            "status"
+        ),
+        "resident_winsorized_semantics_required_count": (
+            resident_winsorized_semantics.get("required_count")
+        ),
+        "resident_winsorized_semantics_legacy_completion_count": (
+            resident_winsorized_semantics.get("legacy_completion_count")
+        ),
         "checks": checks,
+    }
+
+
+def _resident_winsorized_semantics_evidence(pipeline: dict[str, Any]) -> dict[str, Any]:
+    integration = pipeline.get("integration") if isinstance(pipeline.get("integration"), dict) else {}
+    outputs = integration.get("outputs")
+    if not isinstance(outputs, list):
+        outputs = []
+    rows: list[dict[str, Any]] = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        resident_contract = (
+            output.get("resident_result_contract")
+            if isinstance(output.get("resident_result_contract"), dict)
+            else {}
+        )
+        contract = (
+            resident_contract.get("contract")
+            if isinstance(resident_contract.get("contract"), dict)
+            else {}
+        )
+        semantics = (
+            contract.get("rejection_semantics")
+            if isinstance(contract.get("rejection_semantics"), dict)
+            else {}
+        )
+        if not semantics:
+            continue
+        descriptor = (
+            semantics.get("descriptor")
+            if isinstance(semantics.get("descriptor"), dict)
+            else {}
+        )
+        rows.append(
+            {
+                "item": output.get("item"),
+                "required": bool(semantics.get("required")),
+                "present": bool(semantics.get("present")),
+                "passed": bool(semantics.get("passed")),
+                "status": semantics.get("status"),
+                "rejection": semantics.get("rejection"),
+                "descriptor_source": semantics.get("descriptor_source"),
+                "integration_results_descriptor_present": semantics.get(
+                    "integration_results_descriptor_present"
+                ),
+                "resident_artifacts_descriptor_present": semantics.get(
+                    "resident_artifacts_descriptor_present"
+                ),
+                "legacy_completion_applied": semantics.get("legacy_completion_applied"),
+                "legacy_completion_source": semantics.get("legacy_completion_source"),
+                "resident_winsorized_mode": descriptor.get("resident_winsorized_mode"),
+                "algorithm": descriptor.get("algorithm"),
+                "scale_estimator": descriptor.get("scale_estimator"),
+                "cpu_baseline_parity": descriptor.get("cpu_baseline_parity"),
+                "parity_status": descriptor.get("parity_status"),
+                "approximation": descriptor.get("approximation"),
+            }
+        )
+
+    required_rows = [row for row in rows if row.get("required")]
+    failed_rows = [row for row in required_rows if row.get("passed") is not True]
+    legacy_completed = [row for row in required_rows if row.get("legacy_completion_applied") is True]
+    if required_rows:
+        status = "passed" if not failed_rows else "failed"
+    elif rows:
+        status = "not_required"
+    else:
+        status = "not_available"
+    return {
+        "schema_version": 1,
+        "status": status,
+        "ready": status in {"passed", "not_required", "not_available"},
+        "scope": "sparse_or_not_supplied" if status == "not_available" else status,
+        "output_count": len(rows),
+        "required_count": len(required_rows),
+        "failed_count": len(failed_rows),
+        "legacy_completion_count": len(legacy_completed),
+        "descriptor_sources": sorted(
+            {
+                str(row.get("descriptor_source"))
+                for row in rows
+                if row.get("descriptor_source") is not None
+            }
+        ),
+        "failed_items": failed_rows,
+        "rows": rows,
     }
 
 
@@ -610,6 +708,11 @@ def build_release_promotion_decision(
     )
     rejection_sample_release = _rejection_sample_release_evidence(pipeline_handoff)
     sample_closure_release = _sample_closure_release_evidence(pipeline_handoff)
+    resident_winsorized_semantics = (
+        pipeline_handoff.get("resident_winsorized_semantics")
+        if isinstance(pipeline_handoff.get("resident_winsorized_semantics"), dict)
+        else {}
+    )
 
     checks = [
         _check(
@@ -663,6 +766,12 @@ def build_release_promotion_decision(
                     "integration_resident_result_contract"
                 ),
             },
+        ),
+        _check(
+            "pipeline_resident_winsorized_semantics_handoff",
+            resident_winsorized_semantics.get("ready") is True,
+            resident_winsorized_semantics,
+            "Resident winsorized outputs must preserve explicit or same-run backfilled semantics in the pipeline contract.",
         ),
         _check(
             "pipeline_pixel_verification_enabled",
@@ -752,6 +861,7 @@ def build_release_promotion_decision(
         "pipeline_handoff_evidence_present",
         "pipeline_integration_dq_contract_passed",
         "pipeline_result_contracts_passed",
+        "pipeline_resident_winsorized_semantics_handoff",
         "pipeline_pixel_verification_enabled",
         "pipeline_pixel_verification_passed",
         "pipeline_rejection_sample_accounting_passed",
@@ -805,6 +915,7 @@ def build_release_promotion_decision(
         "pipeline_handoff": pipeline_handoff,
         "pipeline_rejection_sample_release": rejection_sample_release,
         "pipeline_sample_closure_release": sample_closure_release,
+        "pipeline_resident_winsorized_semantics_release": resident_winsorized_semantics,
         "stack_engine_publication_runtime_default": publication_runtime_default,
         "runtime_repeat": runtime_evidence,
         "repeat_preflight": preflight_evidence,
@@ -845,6 +956,11 @@ def _markdown(payload: dict[str, Any]) -> str:
         if isinstance(payload.get("pipeline_sample_closure_release"), dict)
         else {}
     )
+    resident_winsorized = (
+        payload.get("pipeline_resident_winsorized_semantics_release")
+        if isinstance(payload.get("pipeline_resident_winsorized_semantics_release"), dict)
+        else {}
+    )
     publication = (
         payload.get("stack_engine_publication_runtime_default")
         if isinstance(payload.get("stack_engine_publication_runtime_default"), dict)
@@ -865,6 +981,8 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Rejection sample release scope: `{rejection_sample.get('scope')}`, ready `{rejection_sample.get('ready')}`, required `{rejection_sample.get('required_count')}`, verified `{rejection_sample.get('verified_count')}`",
             f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
             f"- Sample closure release scope: `{sample_closure.get('scope')}`, ready `{sample_closure.get('ready')}`, required `{sample_closure.get('required_count')}`, present `{sample_closure.get('present_count')}`",
+            f"- Resident winsorized semantics: `{resident_winsorized.get('status')}`, ready `{resident_winsorized.get('ready')}`, required `{resident_winsorized.get('required_count')}`, legacy completions `{resident_winsorized.get('legacy_completion_count')}`",
+            f"- Resident winsorized descriptor sources: `{resident_winsorized.get('descriptor_sources')}`",
             "",
         ]
     )

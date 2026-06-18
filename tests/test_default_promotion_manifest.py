@@ -33,6 +33,45 @@ def _write_release_decision(path: Path, *, ready: bool = True) -> None:
                 "max_elapsed_ratio_vs_best": 1.25,
                 "recommendation": "best_observed:repeat02",
             },
+            "pipeline_resident_winsorized_semantics_release": {
+                "schema_version": 1,
+                "status": "passed",
+                "ready": True,
+                "scope": "passed",
+                "output_count": 1,
+                "required_count": 1,
+                "failed_count": 0,
+                "legacy_completion_count": 1,
+                "descriptor_sources": [
+                    "resident_artifacts.integration_rejection"
+                ],
+                "failed_items": [],
+                "rows": [
+                    {
+                        "item": "H",
+                        "required": True,
+                        "present": True,
+                        "passed": True,
+                        "status": "passed",
+                        "rejection": "winsorized_sigma",
+                        "descriptor_source": (
+                            "resident_artifacts.integration_rejection"
+                        ),
+                        "integration_results_descriptor_present": False,
+                        "resident_artifacts_descriptor_present": True,
+                        "legacy_completion_applied": True,
+                        "legacy_completion_source": "fast_approx_algorithm",
+                        "resident_winsorized_mode": "fast_approx",
+                        "algorithm": (
+                            "two_stage_winsorized_mean_std_rejection_approximation"
+                        ),
+                        "scale_estimator": "mean_std_two_stage_winsorized",
+                        "cpu_baseline_parity": False,
+                        "parity_status": "known_non_parity_pending_cuda_update",
+                        "approximation": True,
+                    }
+                ],
+            },
         },
     )
 
@@ -736,6 +775,15 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
         payload["stack_engine_publication_audit"]["publish_preflight_policy_ready"]
         is True
     )
+    release_winsorized = payload["release_decision"][
+        "resident_winsorized_semantics"
+    ]
+    assert release_winsorized["status"] == "passed"
+    assert release_winsorized["required_count"] == 1
+    assert release_winsorized["legacy_completion_count"] == 1
+    assert release_winsorized["descriptor_sources"] == [
+        "resident_artifacts.integration_rejection"
+    ]
     assert payload["resident_winsorized_sweep_audit"]["required_frame_count"] == 200
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
 
@@ -1311,6 +1359,10 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "Default Route Evidence" in markdown_text
     assert "Rejection sample accounting: `passed`" in markdown_text
     assert "Sample accounting closure: `passed`" in markdown_text
+    assert (
+        "Release resident winsorized semantics: `passed` "
+        "required=`1` legacy-completions=`1`"
+    ) in markdown_text
     assert "Acceptance integration engine policy: `passed`" in markdown_text
     assert "Pipeline integration engine policy: `passed`" in markdown_text
     assert "Integration engine policy ready: `True`" in markdown_text
