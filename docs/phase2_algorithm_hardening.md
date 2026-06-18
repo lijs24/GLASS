@@ -6348,6 +6348,23 @@ integration where applicable.
   integration math change, no CUDA kernel change, no runtime default change, no
   package upload, no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 357: Quality Metric Distribution Report Surface
+
+- Surface core `frame_quality.json` distributions in the main HTML report.
+- Add a dedicated Quality metrics section summarizing `star_count`, `fwhm_px`,
+  `eccentricity`, `background_rms`, `snr`, `quality_score`, and `weight`.
+- For each metric, report valid frame count, min/median/mean/max, bad
+  direction, worst frame id, and worst value.
+- Add a compact worst-frame table listing up to three worst rows per metric so
+  real-data reports can quickly identify soft, eccentric, noisy, low-SNR, or
+  low-weight frames without scanning the full frame-quality table.
+- Add CLI report smoke coverage using a controlled `frame_quality.json`
+  artifact with sharp, soft, and noisy frames.
+- Keep this gate report-surface scoped: no quality metric math change, no star
+  detector algorithm change, no registration transform math change, no
+  integration math change, no CUDA kernel change, no runtime default change, no
+  package upload, no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

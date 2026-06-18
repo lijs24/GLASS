@@ -300,6 +300,62 @@ def test_cli_report_surfaces_quality_saturation_summary(tmp_path: Path):
     assert "threshold" in html
 
 
+def test_cli_report_surfaces_quality_metric_summary(tmp_path: Path):
+    run = tmp_path / "run"
+    report = tmp_path / "report.html"
+    run.mkdir()
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "frame_quality": [
+                {
+                    "frame_id": "sharp_high_snr",
+                    "star_count": 120,
+                    "fwhm_px": 2.1,
+                    "eccentricity": 0.31,
+                    "background_rms": 18.0,
+                    "snr": 55.0,
+                    "quality_score": 1000.0,
+                    "weight": 1.0,
+                    "quality_gate_status": "accepted",
+                },
+                {
+                    "frame_id": "soft_frame",
+                    "star_count": 90,
+                    "fwhm_px": 5.8,
+                    "eccentricity": 0.44,
+                    "background_rms": 24.0,
+                    "snr": 33.0,
+                    "quality_score": 420.0,
+                    "weight": 0.42,
+                    "quality_gate_status": "accepted",
+                },
+                {
+                    "frame_id": "noisy_low_snr",
+                    "star_count": 20,
+                    "fwhm_px": 3.2,
+                    "eccentricity": 0.72,
+                    "background_rms": 88.0,
+                    "snr": 7.0,
+                    "quality_score": 80.0,
+                    "weight": 0.08,
+                    "quality_gate_status": "rejected",
+                },
+            ],
+        },
+    )
+
+    assert main(["report", "--run", str(run), "--out", str(report)]) == 0
+    html = report.read_text(encoding="utf-8")
+
+    assert "Quality metrics" in html
+    assert "fwhm_px" in html
+    assert "worst_frame_id" in html
+    assert "soft_frame" in html
+    assert "noisy_low_snr" in html
+
+
 def test_cli_audit_and_run_write_state_for_registration_admission_block(tmp_path: Path):
     data = tmp_path / "uniform"
     audit = tmp_path / "audit"

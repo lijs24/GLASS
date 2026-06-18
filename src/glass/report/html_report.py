@@ -16,6 +16,16 @@ _RESIDENT_OUTPUT_MAP_FIELDS = [
     ("dq", "dq_map_path"),
 ]
 
+_QUALITY_METRIC_FIELDS = [
+    ("star_count", "low"),
+    ("fwhm_px", "high"),
+    ("eccentricity", "high"),
+    ("background_rms", "high"),
+    ("snr", "low"),
+    ("quality_score", "low"),
+    ("weight", "low"),
+]
+
 _REPORT_TABLE_ROW_LIMIT = 200
 
 _REPORT_SECTIONS = [
@@ -34,6 +44,7 @@ _REPORT_SECTIONS = [
     ("xisf-input-cache", "XISF input cache"),
     ("frame-quality-table", "Frame quality table"),
     ("quality-saturation", "Quality saturation"),
+    ("quality-metrics", "Quality metrics"),
     ("registration-table", "Registration table"),
     ("registration-admission", "Registration admission"),
     ("registration-quality-contract", "Registration quality contract"),
@@ -316,6 +327,93 @@ def _quality_saturation_frame_rows(quality: dict[str, Any] | None) -> list[dict[
         ),
         reverse=True,
     )
+
+
+def _round_metric_value(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(value, 6)
+
+
+def _median_sorted(values: list[float]) -> float | None:
+    if not values:
+        return None
+    midpoint = len(values) // 2
+    if len(values) % 2:
+        return values[midpoint]
+    return (values[midpoint - 1] + values[midpoint]) / 2.0
+
+
+def _quality_metric_pairs(
+    frame_quality: list[Any],
+    metric: str,
+) -> list[tuple[dict[str, Any], float]]:
+    pairs: list[tuple[dict[str, Any], float]] = []
+    for item in frame_quality:
+        if not isinstance(item, dict):
+            continue
+        value = _float_or_none(item.get(metric))
+        if value is None:
+            continue
+        pairs.append((item, value))
+    return pairs
+
+
+def _quality_metric_summary_rows(quality: dict[str, Any] | None) -> list[dict[str, Any]]:
+    frame_quality = (quality or {}).get("frame_quality")
+    if not isinstance(frame_quality, list) or not frame_quality:
+        return []
+    rows: list[dict[str, Any]] = []
+    for metric, bad_direction in _QUALITY_METRIC_FIELDS:
+        pairs = _quality_metric_pairs(frame_quality, metric)
+        if not pairs:
+            continue
+        values = sorted(value for _, value in pairs)
+        worst_item, worst_value = (
+            min(pairs, key=lambda pair: pair[1])
+            if bad_direction == "low"
+            else max(pairs, key=lambda pair: pair[1])
+        )
+        rows.append(
+            {
+                "metric": metric,
+                "bad_direction": bad_direction,
+                "valid_frames": len(values),
+                "min": _round_metric_value(values[0]),
+                "median": _round_metric_value(_median_sorted(values)),
+                "mean": _round_metric_value(sum(values) / len(values)),
+                "max": _round_metric_value(values[-1]),
+                "worst_frame_id": worst_item.get("frame_id"),
+                "worst_value": _round_metric_value(worst_value),
+            }
+        )
+    return rows
+
+
+def _quality_metric_outlier_rows(quality: dict[str, Any] | None) -> list[dict[str, Any]]:
+    frame_quality = (quality or {}).get("frame_quality")
+    if not isinstance(frame_quality, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for metric, bad_direction in _QUALITY_METRIC_FIELDS:
+        pairs = _quality_metric_pairs(frame_quality, metric)
+        reverse = bad_direction == "high"
+        for item, value in sorted(pairs, key=lambda pair: pair[1], reverse=reverse)[:3]:
+            rows.append(
+                {
+                    "metric": metric,
+                    "bad_direction": bad_direction,
+                    "frame_id": item.get("frame_id"),
+                    "value": _round_metric_value(value),
+                    "quality_gate_status": item.get("quality_gate_status"),
+                    "star_count": item.get("star_count"),
+                    "fwhm_px": item.get("fwhm_px"),
+                    "eccentricity": item.get("eccentricity"),
+                    "background_rms": item.get("background_rms"),
+                    "snr": item.get("snr"),
+                }
+            )
+    return rows
 
 
 def _frame_accounting_summary_rows(frame_accounting: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -2179,6 +2277,8 @@ def write_html_report(
     quality_gate_rows = _quality_gate_rows(quality)
     quality_saturation_rows = _quality_saturation_summary_rows(quality)
     quality_saturation_frame_rows = _quality_saturation_frame_rows(quality)
+    quality_metric_summary_rows = _quality_metric_summary_rows(quality)
+    quality_metric_outlier_rows = _quality_metric_outlier_rows(quality)
     registration_results = (registration or {}).get("registration_results", [])
     registration_admission_rows = _registration_admission_rows(registration)
     registration_admission_frame_rows = _registration_admission_frame_rows(registration)
@@ -2371,6 +2471,13 @@ def write_html_report(
   quality gate for saturation.</p>
   {_table(quality_saturation_rows)}
   {_limited_table(quality_saturation_frame_rows, label="quality saturation rows", artifact="frame_quality.json")}
+  {_h2("quality-metrics", "Quality metrics")}
+  <p>Core frame-quality distributions summarize existing
+  <code>frame_quality.json</code> values and list the worst frames for quick
+  inspection. Metrics marked <code>high</code> are worse at larger values;
+  metrics marked <code>low</code> are worse at smaller values.</p>
+  {_table(quality_metric_summary_rows)}
+  {_limited_table(quality_metric_outlier_rows, label="quality metric outlier rows", artifact="frame_quality.json")}
   {_h2("registration-table", "Registration table")}
   {_limited_table(registration_results, label="registration rows", artifact="registration_results.json")}
   {_h2("registration-admission", "Registration admission")}
