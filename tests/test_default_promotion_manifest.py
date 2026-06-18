@@ -19,7 +19,16 @@ def _write_release_decision(
     direct_acceptance_source: str = "explicit_resident_artifacts_json",
     direct_calibration_source: str = "resident_artifacts_json_fallback",
     direct_resident_lights: int = 200,
+    include_quality_publication_guard: bool = True,
+    quality_publication_guard_ready: bool = True,
+    quality_publication_compare_present: bool = True,
+    phase2_quality_publication_guard_ready: bool | None = None,
 ) -> None:
+    phase2_quality_publication_guard_ready = (
+        quality_publication_guard_ready
+        if phase2_quality_publication_guard_ready is None
+        else phase2_quality_publication_guard_ready
+    )
     direct_guard = {
         "present": True,
         "ready": direct_publication_guard_ready,
@@ -62,6 +71,69 @@ def _write_release_decision(
             {
                 "name": "stack_engine_publication_direct_runtime_evidence_passed",
                 "passed": direct_publication_guard_ready,
+            }
+        )
+    quality_status = "passed" if quality_publication_guard_ready else "blocked"
+    phase2_quality_status = (
+        "passed" if phase2_quality_publication_guard_ready else "blocked"
+    )
+    quality_guard = (
+        {
+            "present": True,
+            "ready": (
+                quality_publication_guard_ready
+                and phase2_quality_publication_guard_ready
+            ),
+            "status": quality_status
+            if quality_publication_guard_ready
+            else "blocked",
+            "passed": (
+                quality_publication_guard_ready
+                and phase2_quality_publication_guard_ready
+            ),
+            "checks_passed": (
+                quality_publication_guard_ready
+                and phase2_quality_publication_guard_ready
+            ),
+            "compatible_missing": not quality_publication_compare_present,
+            "quality_compare_present": quality_publication_compare_present,
+            "raw_present": quality_publication_compare_present,
+            "raw_ready": quality_publication_guard_ready,
+            "raw_matrix_status": quality_status,
+            "raw_matrix_failed_check_count": (
+                0 if quality_publication_guard_ready else 1
+            ),
+            "raw_default_promotion_status": quality_status,
+            "raw_default_promotion_failed_check_count": (
+                0 if quality_publication_guard_ready else 1
+            ),
+            "phase2_present": quality_publication_compare_present,
+            "phase2_ready": phase2_quality_publication_guard_ready,
+            "phase2_check_passed": phase2_quality_publication_guard_ready,
+            "phase2_matrix_status": phase2_quality_status,
+            "phase2_matrix_failed_check_count": (
+                0 if phase2_quality_publication_guard_ready else 1
+            ),
+            "phase2_default_promotion_status": phase2_quality_status,
+            "phase2_default_promotion_failed_check_count": (
+                0 if phase2_quality_publication_guard_ready else 1
+            ),
+            "failed_checks": []
+            if quality_publication_guard_ready
+            and phase2_quality_publication_guard_ready
+            else ["stack_engine_publication_quality_metrics_compare_passed"],
+        }
+        if include_quality_publication_guard
+        else {}
+    )
+    if include_quality_publication_guard:
+        checks.append(
+            {
+                "name": "stack_engine_publication_quality_metrics_compare_passed",
+                "passed": (
+                    quality_publication_guard_ready
+                    and phase2_quality_publication_guard_ready
+                ),
             }
         )
     if include_resident_fastpath_handoff:
@@ -166,6 +238,7 @@ def _write_release_decision(
             "stack_engine_publication_direct_runtime_evidence": direct_guard
             if include_direct_publication_guard
             else {},
+            "stack_engine_publication_quality_metrics_compare": quality_guard,
             "resident_registration_fastpath_handoff": resident_fastpath_handoff,
             "checks": checks,
         },
@@ -995,6 +1068,7 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["release_decision_direct_runtime_publication_guard_passed"] is True
+    assert checks["release_decision_quality_compare_publication_guard_passed"] is True
     assert checks["resident_registration_fastpath_release_handoff_ready"] is True
     assert payload["resident_registration_fastpath_release_handoff"]["ready"] is True
     assert payload["resident_registration_fastpath_release_handoff"][
@@ -1013,6 +1087,18 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert payload["release_decision_direct_runtime_publication_guard"][
         "raw_matrix_pipeline_resident_lights"
     ] == 200
+    assert payload["release_decision_quality_compare_publication_guard"][
+        "ready"
+    ] is True
+    assert payload["release_decision_quality_compare_publication_guard"][
+        "quality_compare_present"
+    ] is True
+    assert payload["release_decision_quality_compare_publication_guard"][
+        "raw_matrix_status"
+    ] == "passed"
+    assert payload["release_decision_quality_compare_publication_guard"][
+        "phase2_matrix_status"
+    ] == "passed"
     assert checks["acceptance_integration_engine_policy_handoff_passed"] is True
     assert checks["pipeline_integration_engine_policy_default_passed"] is True
     assert payload["integration_engine_policy"]["ready"] is True
@@ -1045,6 +1131,90 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     ]
     assert payload["resident_winsorized_sweep_audit"]["required_frame_count"] == 200
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
+
+
+def test_default_promotion_manifest_allows_missing_release_quality_guard(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision, include_quality_publication_guard=False)
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_quality_compare_publication_guard"]
+    assert payload["passed"] is True
+    assert checks["release_decision_quality_compare_publication_guard_passed"][
+        "passed"
+    ] is True
+    assert guard["present"] is False
+    assert guard["ready"] is True
+    assert guard["compatible_missing"] is True
+
+
+def test_default_promotion_manifest_blocks_failed_release_quality_guard(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision, quality_publication_guard_ready=False)
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_quality_compare_publication_guard"]
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "release_decision_quality_compare_publication_guard_passed" in payload[
+        "failed_checks"
+    ]
+    assert checks["release_decision_quality_compare_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert guard["ready"] is False
+    assert guard["decision_check_passed"] is False
+    assert guard["raw_matrix_status"] == "blocked"
+    assert guard["raw_matrix_failed_check_count"] == 1
+
+
+def test_default_promotion_manifest_blocks_phase2_release_quality_mismatch(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(
+        decision,
+        quality_publication_guard_ready=True,
+        phase2_quality_publication_guard_ready=False,
+    )
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    guard = payload["release_decision_quality_compare_publication_guard"]
+    assert payload["passed"] is False
+    assert "release_decision_quality_compare_publication_guard_passed" in payload[
+        "failed_checks"
+    ]
+    assert guard["ready"] is False
+    assert guard["raw_matrix_status"] == "passed"
+    assert guard["phase2_matrix_status"] == "blocked"
+    assert guard["phase2_matrix_failed_check_count"] == 1
 
 
 def test_default_promotion_manifest_blocks_failed_resident_fastpath_handoff(
@@ -1931,6 +2101,8 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "StackEngine Publication Audit" in markdown_text
     assert "Release direct publication guard: ready=`True`" in markdown_text
     assert "Release direct publication sources: raw-acceptance=`explicit_resident_artifacts_json`" in markdown_text
+    assert "Release quality compare publication guard: ready=`True`" in markdown_text
+    assert "Release quality compare sources: raw=`passed` phase2=`passed`" in markdown_text
     assert "Policy chain: raw=`True` phase2=`True` agreement=`True`" in markdown_text
     assert "Resident winsorized chain: raw=`True` phase2=`True` agreement=`True`" in markdown_text
     assert "Route contract passed: `True`" in markdown_text

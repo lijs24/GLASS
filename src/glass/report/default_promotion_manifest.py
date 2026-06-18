@@ -1265,6 +1265,86 @@ def _release_decision_direct_runtime_publication_guard(
     }
 
 
+def _release_decision_quality_compare_publication_guard(
+    decision: dict[str, Any],
+) -> dict[str, Any]:
+    quality = (
+        decision.get("stack_engine_publication_quality_metrics_compare")
+        if isinstance(
+            decision.get("stack_engine_publication_quality_metrics_compare"),
+            dict,
+        )
+        else {}
+    )
+    check_passed = _decision_check_passed(
+        decision,
+        "stack_engine_publication_quality_metrics_compare_passed",
+    )
+    present = bool(quality)
+    compatible_missing = not present or quality.get("compatible_missing") is True
+    quality_compare_present = quality.get("quality_compare_present") is True
+    raw_ready = quality.get("raw_ready") is True
+    phase2_ready = quality.get("phase2_ready") is True
+    decision_check_ready = check_passed is True or (
+        check_passed is None and compatible_missing and not quality_compare_present
+    )
+    checks_ready = quality.get("checks_passed") is True or compatible_missing
+    layers_ready = (
+        not quality_compare_present
+        or (
+            quality.get("raw_present") is True
+            and quality.get("phase2_present") is True
+            and raw_ready
+            and phase2_ready
+        )
+    )
+    ready = not present or (
+        quality.get("ready") is True
+        and decision_check_ready
+        and checks_ready
+        and layers_ready
+    )
+    return {
+        "present": present,
+        "ready": ready,
+        "decision_check_passed": check_passed,
+        "status": quality.get("status"),
+        "passed": quality.get("passed"),
+        "checks_passed": quality.get("checks_passed"),
+        "compatible_missing": compatible_missing,
+        "quality_compare_present": quality_compare_present,
+        "decision_check_ready": decision_check_ready,
+        "checks_ready": checks_ready,
+        "layers_ready": layers_ready,
+        "raw_present": quality.get("raw_present"),
+        "raw_ready": quality.get("raw_ready"),
+        "raw_matrix_status": quality.get("raw_matrix_status"),
+        "raw_matrix_failed_check_count": quality.get(
+            "raw_matrix_failed_check_count"
+        ),
+        "raw_default_promotion_status": quality.get(
+            "raw_default_promotion_status"
+        ),
+        "raw_default_promotion_failed_check_count": quality.get(
+            "raw_default_promotion_failed_check_count"
+        ),
+        "phase2_present": quality.get("phase2_present"),
+        "phase2_ready": quality.get("phase2_ready"),
+        "phase2_check_passed": quality.get("phase2_check_passed"),
+        "phase2_matrix_status": quality.get("phase2_matrix_status"),
+        "phase2_matrix_failed_check_count": quality.get(
+            "phase2_matrix_failed_check_count"
+        ),
+        "phase2_default_promotion_status": quality.get(
+            "phase2_default_promotion_status"
+        ),
+        "phase2_default_promotion_failed_check_count": quality.get(
+            "phase2_default_promotion_failed_check_count"
+        ),
+        "failed_checks": quality.get("failed_checks") or [],
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -1317,6 +1397,9 @@ def build_default_promotion_manifest(
             decision,
             min_resident_lights=min_resident_lights,
         )
+    )
+    release_quality_publication_guard = (
+        _release_decision_quality_compare_publication_guard(decision)
     )
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
@@ -1394,6 +1477,12 @@ def build_default_promotion_manifest(
             "release_decision_direct_runtime_publication_guard_passed",
             release_direct_publication_guard.get("ready") is True,
             release_direct_publication_guard,
+        ),
+        _check(
+            "release_decision_quality_compare_publication_guard_passed",
+            release_quality_publication_guard.get("ready") is True,
+            release_quality_publication_guard,
+            note="Required when the release decision supplies StackEngine publication quality compare evidence.",
         ),
         _check(
             "resident_registration_fastpath_release_handoff_ready",
@@ -1916,6 +2005,7 @@ def build_default_promotion_manifest(
             "speedup": decision.get("speedup"),
             "resident_winsorized_semantics": release_resident_winsorized,
             "direct_runtime_publication_guard": release_direct_publication_guard,
+            "quality_compare_publication_guard": release_quality_publication_guard,
         },
         "phase2_status": {
             "status": phase2.get("status"),
@@ -1936,6 +2026,9 @@ def build_default_promotion_manifest(
         ),
         "release_decision_direct_runtime_publication_guard": (
             release_direct_publication_guard
+        ),
+        "release_decision_quality_compare_publication_guard": (
+            release_quality_publication_guard
         ),
         "stack_engine_contract": stack_engine,
         "resident_winsorized_sweep_audit": resident_winsorized_sweep,
@@ -1965,6 +2058,9 @@ def _markdown(payload: dict[str, Any]) -> str:
     )
     release_direct_publication_guard = (
         payload.get("release_decision_direct_runtime_publication_guard") or {}
+    )
+    release_quality_publication_guard = (
+        payload.get("release_decision_quality_compare_publication_guard") or {}
     )
     resident_fastpath_release_handoff = (
         payload.get("resident_registration_fastpath_release_handoff") or {}
@@ -2085,6 +2181,22 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{release_direct_publication_guard.get('raw_matrix_pipeline_calibration_source')}` "
             "raw-lights="
             f"`{release_direct_publication_guard.get('raw_matrix_pipeline_resident_lights')}`"
+        ),
+        (
+            "- Release quality compare publication guard: "
+            f"ready=`{release_quality_publication_guard.get('ready')}` "
+            f"check=`{release_quality_publication_guard.get('decision_check_passed')}` "
+            f"quality-present=`{release_quality_publication_guard.get('quality_compare_present')}` "
+            f"compatible-missing=`{release_quality_publication_guard.get('compatible_missing')}`"
+        ),
+        (
+            "- Release quality compare sources: "
+            f"raw=`{release_quality_publication_guard.get('raw_matrix_status')}` "
+            f"phase2=`{release_quality_publication_guard.get('phase2_matrix_status')}` "
+            "raw-failed="
+            f"`{release_quality_publication_guard.get('raw_matrix_failed_check_count')}` "
+            "phase2-failed="
+            f"`{release_quality_publication_guard.get('phase2_matrix_failed_check_count')}`"
         ),
         (
             "- Resident fastpath release handoff: "

@@ -6542,6 +6542,25 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 367: Default Promotion Release Quality Compare Guard
+
+- Carry release-decision StackEngine publication quality-metrics-compare
+  evidence into `glass default-promotion-manifest`.
+- Add `release_decision_quality_compare_publication_guard_passed` so default
+  promotion blocks when the final release decision carries failed or mismatched
+  publication quality compare evidence.
+- Keep older release-decision artifacts without the optional quality compare
+  guard non-blocking; once the guard appears, its decision check, raw layer, and
+  Phase2 layer must be ready.
+- Surface the release quality compare publication guard in default-promotion
+  Markdown.
+- Add focused ready, compatibility, failure, mismatch, and CLI Markdown tests.
+- Keep this gate default-promotion scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
