@@ -101,6 +101,65 @@ def _pipeline_contract_check_state(pipeline: dict[str, Any], name: str) -> bool 
     return None
 
 
+def _acceptance_check_state(acceptance: dict[str, Any], name: str) -> bool | None:
+    checks = acceptance.get("checks") if isinstance(acceptance.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return bool(item.get("passed"))
+    return None
+
+
+def _warp_quality_handoff_evidence(acceptance: dict[str, Any]) -> dict[str, Any]:
+    contract = (
+        acceptance.get("warp_quality_contract")
+        if isinstance(acceptance.get("warp_quality_contract"), dict)
+        else {}
+    )
+    acceptance_checks = {
+        name: _acceptance_check_state(acceptance, name)
+        for name in (
+            "warp_quality_contract_present",
+            "warp_quality_contract_type",
+            "warp_quality_contract_passed",
+        )
+    }
+    present = bool(contract) or any(value is not None for value in acceptance_checks.values())
+    failed_acceptance_checks = [
+        name for name, value in acceptance_checks.items() if value is False
+    ]
+    if not present:
+        status = "not_available"
+        ready = True
+    elif (
+        contract.get("exists") is not False
+        and contract.get("artifact_type") == "warp_quality_contract"
+        and contract.get("passed") is True
+        and not failed_acceptance_checks
+    ):
+        status = "passed"
+        ready = True
+    else:
+        status = "failed"
+        ready = False
+    return {
+        "schema_version": 1,
+        "source": "acceptance_audit",
+        "present": present,
+        "status": status,
+        "ready": ready,
+        "path": contract.get("path"),
+        "exists": contract.get("exists"),
+        "artifact_type": contract.get("artifact_type"),
+        "contract_status": contract.get("status"),
+        "contract_passed": contract.get("passed"),
+        "check_count": contract.get("check_count"),
+        "output_count": contract.get("output_count"),
+        "failed_checks": contract.get("failed_checks") or [],
+        "acceptance_checks": acceptance_checks,
+        "failed_acceptance_checks": failed_acceptance_checks,
+    }
+
+
 def _pipeline_rejection_sample_accounting(pipeline: dict[str, Any]) -> dict[str, Any]:
     embedded = pipeline.get("rejection_sample_accounting")
     if isinstance(embedded, dict) and embedded:
@@ -888,6 +947,7 @@ def build_release_promotion_decision(
         if isinstance(pipeline_handoff.get("resident_winsorized_semantics"), dict)
         else {}
     )
+    warp_quality_handoff = _warp_quality_handoff_evidence(acceptance)
 
     checks = [
         _check(
@@ -986,6 +1046,12 @@ def build_release_promotion_decision(
             "Release requires the pipeline contract to prove sample-closure evidence passed, or explicitly prove it was not required.",
         ),
         _check(
+            "warp_quality_contract_handoff",
+            bool(warp_quality_handoff["ready"]),
+            warp_quality_handoff,
+            "Release requires attached warp-quality acceptance evidence to be present, typed, and passing.",
+        ),
+        _check(
             "stack_engine_release_evidence_passed",
             stack_release_status == "passed" or stack_contract.get("passed") is True,
             {
@@ -1048,6 +1114,7 @@ def build_release_promotion_decision(
         "pipeline_pixel_verification_passed",
         "pipeline_rejection_sample_accounting_passed",
         "pipeline_sample_accounting_closure_passed",
+        "warp_quality_contract_handoff",
         "stack_engine_release_evidence_passed",
         "stack_engine_default_ready",
         "stack_engine_scope_all",
@@ -1101,6 +1168,7 @@ def build_release_promotion_decision(
         "pipeline_rejection_sample_release": rejection_sample_release,
         "pipeline_sample_closure_release": sample_closure_release,
         "pipeline_resident_winsorized_semantics_release": resident_winsorized_semantics,
+        "warp_quality_handoff": warp_quality_handoff,
         "stack_engine_publication_runtime_default": publication_runtime_default,
         "stack_engine_publication_direct_runtime_evidence": publication_direct_runtime,
         "runtime_repeat": runtime_evidence,
@@ -1147,6 +1215,11 @@ def _markdown(payload: dict[str, Any]) -> str:
         if isinstance(payload.get("pipeline_resident_winsorized_semantics_release"), dict)
         else {}
     )
+    warp_quality = (
+        payload.get("warp_quality_handoff")
+        if isinstance(payload.get("warp_quality_handoff"), dict)
+        else {}
+    )
     publication = (
         payload.get("stack_engine_publication_runtime_default")
         if isinstance(payload.get("stack_engine_publication_runtime_default"), dict)
@@ -1177,6 +1250,22 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Sample closure release scope: `{sample_closure.get('scope')}`, ready `{sample_closure.get('ready')}`, required `{sample_closure.get('required_count')}`, present `{sample_closure.get('present_count')}`",
             f"- Resident winsorized semantics: `{resident_winsorized.get('status')}`, ready `{resident_winsorized.get('ready')}`, required `{resident_winsorized.get('required_count')}`, legacy completions `{resident_winsorized.get('legacy_completion_count')}`",
             f"- Resident winsorized descriptor sources: `{resident_winsorized.get('descriptor_sources')}`",
+            "",
+        ]
+    )
+    lines.extend(
+        [
+            "",
+            "## Warp Quality Handoff",
+            "",
+            f"- Present: `{warp_quality.get('present')}`",
+            f"- Status: `{warp_quality.get('status')}`",
+            f"- Ready: `{warp_quality.get('ready')}`",
+            f"- Contract passed: `{warp_quality.get('contract_passed')}`",
+            f"- Output count: `{warp_quality.get('output_count')}`",
+            f"- Failed checks: `{warp_quality.get('failed_checks')}`",
+            f"- Failed acceptance checks: `{warp_quality.get('failed_acceptance_checks')}`",
+            f"- Path: `{warp_quality.get('path')}`",
             "",
         ]
     )

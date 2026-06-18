@@ -5711,6 +5711,26 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 324: Release Decision Warp Quality Handoff
+
+- Carry acceptance-level warp-quality evidence into
+  `glass release-promotion-decision`.
+- Add a `warp_quality_handoff` release artifact section with source, presence,
+  readiness, contract status, output count, failed contract checks, failed
+  acceptance checks, and path.
+- Add a release-blocking `warp_quality_contract_handoff` check when acceptance
+  provides warp-quality evidence.
+- Preserve default compatibility: older acceptance audits without warp evidence
+  remain non-blocking and are recorded as `not_available`.
+- Surface warp-quality handoff status in release-promotion Markdown.
+- Add focused tests for passing warp evidence, failed warp evidence, and CLI
+  Markdown handoff visibility.
+- Generate Gate324 release-promotion artifacts from the Gate323 acceptance
+  audit.
+- Keep this gate audit-surface scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

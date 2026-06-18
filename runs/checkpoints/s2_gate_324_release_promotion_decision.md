@@ -1,0 +1,78 @@
+# GLASS Release Promotion Decision
+
+- Status: `release_candidate_ready`
+- Recommendation: `repeat_benchmark_before_default_change`
+- Release candidate ready: `True`
+- Default change ready: `False`
+- Speedup: `10.0`
+
+## Checks
+
+- PASS: `acceptance_audit_passed` - {'status': 'passed', 'path': 'runs\\checkpoints\\s2_gate_323_acceptance_audit.json'}
+- PASS: `speedup_threshold` - {'actual': 10.0, 'required_min': 2.0}
+- PASS: `pipeline_release_evidence_passed` - {'release_evidence_status': 'passed', 'pipeline_contract_passed': None, 'pipeline_contract_status': None}
+- PASS: `pipeline_handoff_evidence_present` - {'source': 'acceptance_pipeline_contract', 'audit_type': 'pipeline_invariant_contract', 'status': 'passed'}
+- PASS: `pipeline_integration_dq_contract_passed` - {'source': 'acceptance_pipeline_contract', 'check': True, 'integration_output_count': 1, 'integration_map_count': 6}
+- PASS: `pipeline_result_contracts_passed` - {'stack_result_contract': True, 'resident_result_contract': True}
+- PASS: `pipeline_resident_winsorized_semantics_handoff` - {'schema_version': 1, 'status': 'not_available', 'ready': True, 'scope': 'sparse_or_not_supplied', 'output_count': 0, 'required_count': 0, 'failed_count': 0, 'legacy_completion_count': 0, 'descriptor_sources': [], 'failed_items': [], 'rows': []}
+- PASS: `pipeline_pixel_verification_enabled` - {'enabled': True, 'tile_size': 8}
+- PASS: `pipeline_pixel_verification_passed` - {'dq_pixels': True, 'coverage_pixels': True, 'rejection_pixels': True}
+- PASS: `pipeline_rejection_sample_accounting_passed` - {'ready': True, 'check': True, 'status': 'passed', 'check_present': True, 'required_count': 0, 'verified_count': 1, 'accounted_output_count': 1, 'failed_count': 0, 'failed_items': [], 'scope': 'not_required'}
+- PASS: `pipeline_sample_accounting_closure_passed` - {'ready': True, 'check': True, 'status': 'passed', 'check_present': True, 'present_count': 1, 'required_count': 1, 'failed_count': 0, 'failed_items': [], 'scope': 'required'}
+- PASS: `warp_quality_contract_handoff` - {'schema_version': 1, 'source': 'acceptance_audit', 'present': True, 'status': 'passed', 'ready': True, 'path': 'runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json', 'exists': True, 'artifact_type': 'warp_quality_contract', 'contract_status': 'passed', 'contract_passed': True, 'check_count': 9, 'output_count': 1, 'failed_checks': [], 'acceptance_checks': {'warp_quality_contract_present': True, 'warp_quality_contract_type': True, 'warp_quality_contract_passed': True}, 'failed_acceptance_checks': []}
+- PASS: `stack_engine_release_evidence_passed` - {'release_evidence_status': 'passed', 'stack_engine_contract_passed': None, 'stack_engine_contract_status': None}
+- PASS: `stack_engine_default_ready` - {'acceptance_release_status': 'passed', 'contract_default_ready': None}
+- PASS: `stack_engine_scope_all` - {'actual': 'all', 'required': 'all'}
+- FAIL: `runtime_repeat_evidence_ready` - {'present': False}
+
+## Pipeline DQ Handoff
+
+- Source: `acceptance_pipeline_contract`
+- Status: `passed`
+- Passed: `True`
+- Integration outputs: `1`
+- Integration maps: `6`
+- Pixel verification enabled: `True`
+- Rejection sample accounting: `passed`
+- Rejection sample release scope: `not_required`, ready `True`, required `0`, verified `1`
+- Sample accounting closure: `passed`
+- Sample closure release scope: `required`, ready `True`, required `1`, present `1`
+- Resident winsorized semantics: `not_available`, ready `True`, required `0`, legacy completions `0`
+- Resident winsorized descriptor sources: `[]`
+
+
+## Warp Quality Handoff
+
+- Present: `True`
+- Status: `passed`
+- Ready: `True`
+- Contract passed: `True`
+- Output count: `1`
+- Failed checks: `[]`
+- Failed acceptance checks: `[]`
+- Path: `runs\checkpoints\s2_gate_321_guardrails\warp_quality_contract.json`
+
+
+## StackEngine Publication Runtime Default
+
+- Present: `False`
+- Status: `None`
+- Passed: `None`
+- Checks passed: `None`
+- Raw ready: `None`
+- Phase2 ready: `None`
+- Phase2 check: `None`
+- Raw drift: legacy=`None` failed_outputs=`None`
+- Phase2 drift: legacy=`None` failed_outputs=`None`
+- Direct runtime ready: `None`
+- Direct runtime checks passed: `None`
+- Direct runtime raw source: acceptance=`None` calibration=`None` lights=`None`
+- Direct runtime Phase2 source: acceptance=`None` calibration=`None` lights=`None`
+
+
+## Runtime Repeat Evidence
+
+- Present: `False`
+- Run count: `None`
+- Recommendation: `None`
+- Ratio vs best: `None`
