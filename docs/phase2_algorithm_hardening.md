@@ -4598,6 +4598,26 @@ integration where applicable.
   default, package build/upload, GitHub release update, publish-preflight
   change, or real-data benchmark rerun.
 
+### S2-Gate 274: Windows Publish Preflight Resident Winsorized Sweep Guard
+
+- Carry the S2-Gate 273 release-matrix/default-promotion resident winsorized
+  sweep evidence into `glass windows-publish-preflight`.
+- Add publish-preflight blockers so final Windows publication readiness requires
+  the supplied matrix to retain a passing resident winsorized sweep audit, a
+  passing required 200-frame row, and a non-empty sweep-audit check count.
+- Cross-check resident winsorized sweep status, pass flags, required frame
+  count, required row pass, and check count between the supplied Windows release
+  matrix and default-promotion manifest so stale publication bundles cannot mask
+  hardened winsorized parity drift.
+- Surface the resident winsorized sweep evidence in publish-preflight JSON and
+  Markdown beside release tag, package count, sample accounting, and
+  StackEngine contract evidence.
+- Add focused publish-preflight tests for ready, missing, failed, and mismatched
+  resident winsorized sweep evidence.
+- Keep this gate publication-preflight scoped: no image math, CUDA kernel,
+  runtime default, package build/upload, GitHub release creation, or real-data
+  benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

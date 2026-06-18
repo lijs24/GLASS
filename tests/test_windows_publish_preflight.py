@@ -33,6 +33,53 @@ def _stack_engine_contract(*, ready: bool = True, gap_count: int = 0) -> dict[st
     }
 
 
+def _resident_winsorized_sweep(
+    *,
+    ready: bool = True,
+    required_frame_count: int = 200,
+    check_count: int = 27,
+) -> dict[str, object]:
+    required_row_ready = ready and required_frame_count >= 200
+    sweep_ready = ready and required_row_ready and check_count > 0
+    failed_checks = [] if sweep_ready else [{"name": "resident_winsorized_sweep"}]
+    failed_check_count = 0 if sweep_ready else 1
+    audit = {
+        "check_count": check_count,
+        "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+        "failed_check_count": failed_check_count,
+        "failed_checks": failed_checks,
+        "frame_counts": [8, 32, 128, required_frame_count],
+        "max_hardened_master_rms": 2.3e-5,
+        "passed": sweep_ready,
+        "path": "runs/checkpoints/s2_gate_269_resident_winsorized_sweep_audit.json",
+        "phase2_check_passed": sweep_ready,
+        "present": True,
+        "required_frame_count": required_frame_count,
+        "required_frame_count_passed": required_row_ready,
+        "required_frame_cuda_hardened_s": 0.0012,
+        "required_frame_master_max_abs": 6.1e-5,
+        "required_frame_master_rms": 2.3e-5,
+        "run_count": 4,
+        "status": "passed" if sweep_ready else "failed",
+        "sweep_path": "runs/checkpoints/s2_gate_268_resident_winsorized_sweep.json",
+    }
+    return {
+        "resident_winsorized_sweep_audit": audit,
+        "resident_winsorized_sweep_check_count": check_count,
+        "resident_winsorized_sweep_failed_check_count": failed_check_count,
+        "resident_winsorized_sweep_failed_checks": failed_checks,
+        "resident_winsorized_sweep_passed": sweep_ready,
+        "resident_winsorized_sweep_phase2_check_passed": sweep_ready,
+        "resident_winsorized_sweep_present": True,
+        "resident_winsorized_sweep_required_frame_count": required_frame_count,
+        "resident_winsorized_sweep_required_frame_count_passed": required_row_ready,
+        "resident_winsorized_sweep_required_frame_cuda_hardened_s": 0.0012,
+        "resident_winsorized_sweep_required_frame_master_max_abs": 6.1e-5,
+        "resident_winsorized_sweep_required_frame_master_rms": 2.3e-5,
+        "resident_winsorized_sweep_status": "passed" if sweep_ready else "failed",
+    }
+
+
 def _matrix(
     path: Path,
     *,
@@ -43,10 +90,25 @@ def _matrix(
     include_stack_engine_contract: bool = True,
     stack_engine_ready: bool = True,
     stack_engine_gap_count: int = 0,
+    include_resident_winsorized_sweep: bool = True,
+    resident_winsorized_sweep_ready: bool = True,
+    resident_winsorized_required_frame_count: int = 200,
+    resident_winsorized_check_count: int = 27,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
         gap_count=stack_engine_gap_count,
+    )
+    resident_sweep = _resident_winsorized_sweep(
+        ready=resident_winsorized_sweep_ready,
+        required_frame_count=resident_winsorized_required_frame_count,
+        check_count=resident_winsorized_check_count,
+    )
+    resident_sweep_ready = (
+        bool(resident_sweep["resident_winsorized_sweep_passed"])
+        and bool(resident_sweep["resident_winsorized_sweep_required_frame_count_passed"])
+        and int(resident_sweep["resident_winsorized_sweep_check_count"]) > 0
+        and int(resident_sweep["resident_winsorized_sweep_failed_check_count"]) == 0
     )
     matrix_ready = (
         ready
@@ -57,6 +119,7 @@ def _matrix(
             if include_stack_engine_contract
             else True
         )
+        and (resident_sweep_ready if include_resident_winsorized_sweep else True)
     )
     promotion = {
         "status": "default_promotion_ready" if matrix_ready else "blocked",
@@ -119,6 +182,8 @@ def _matrix(
                 ],
             }
         )
+    if include_resident_winsorized_sweep:
+        promotion.update(resident_sweep)
     write_json(
         path,
         {
@@ -145,10 +210,25 @@ def _default_promotion(
     include_stack_engine_contract: bool = True,
     stack_engine_ready: bool = True,
     stack_engine_gap_count: int = 0,
+    include_resident_winsorized_sweep: bool = True,
+    resident_winsorized_sweep_ready: bool = True,
+    resident_winsorized_required_frame_count: int = 200,
+    resident_winsorized_check_count: int = 27,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
         gap_count=stack_engine_gap_count,
+    )
+    resident_sweep = _resident_winsorized_sweep(
+        ready=resident_winsorized_sweep_ready,
+        required_frame_count=resident_winsorized_required_frame_count,
+        check_count=resident_winsorized_check_count,
+    )
+    resident_sweep_ready = (
+        bool(resident_sweep["resident_winsorized_sweep_passed"])
+        and bool(resident_sweep["resident_winsorized_sweep_required_frame_count_passed"])
+        and int(resident_sweep["resident_winsorized_sweep_check_count"]) > 0
+        and int(resident_sweep["resident_winsorized_sweep_failed_check_count"]) == 0
     )
     manifest_ready = (
         ready
@@ -159,6 +239,7 @@ def _default_promotion(
             if include_stack_engine_contract
             else True
         )
+        and (resident_sweep_ready if include_resident_winsorized_sweep else True)
     )
     payload = {
         "schema_version": 1,
@@ -220,6 +301,8 @@ def _default_promotion(
     }
     if include_stack_engine_contract:
         payload["stack_engine_contract"] = stack_contract
+    if include_resident_winsorized_sweep:
+        payload.update(resident_sweep)
     write_json(
         path,
         payload,
@@ -550,6 +633,38 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert payload["summary"]["github_plan_matrix_stack_engine_contract_status"] == "passed"
     assert payload["summary"]["matrix_stack_engine_contract_status"] == "passed"
     assert payload["summary"]["default_promotion_stack_engine_contract_status"] == "passed"
+    assert payload["summary"]["matrix_resident_winsorized_sweep_status"] == "passed"
+    assert (
+        payload["summary"]["matrix_resident_winsorized_sweep_required_frame_count"]
+        == 200
+    )
+    assert (
+        payload["summary"][
+            "matrix_resident_winsorized_sweep_required_frame_count_passed"
+        ]
+        is True
+    )
+    assert payload["summary"]["matrix_resident_winsorized_sweep_check_count"] == 27
+    assert (
+        payload["summary"]["default_promotion_resident_winsorized_sweep_status"]
+        == "passed"
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_resident_winsorized_sweep_required_frame_count"
+        ]
+        == 200
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_resident_winsorized_sweep_required_frame_count_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["summary"]["default_promotion_resident_winsorized_sweep_check_count"]
+        == 27
+    )
     assert checks["github_plan_phase2_rejection_sample_accounting_passed"] is True
     assert checks["github_plan_matrix_rejection_sample_accounting_passed"] is True
     assert checks["matrix_rejection_sample_accounting_passed"] is True
@@ -567,6 +682,14 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert checks["default_promotion_stack_engine_contract_ready"] is True
     assert checks["github_plan_matrix_stack_engine_contract_matches_matrix"] is True
     assert checks["matrix_stack_engine_contract_matches_default_promotion"] is True
+    assert checks["matrix_resident_winsorized_sweep_audit_passed"] is True
+    assert checks["matrix_resident_winsorized_required_frame_passed"] is True
+    assert checks["matrix_resident_winsorized_sweep_check_count"] is True
+    assert checks["default_promotion_resident_winsorized_sweep_audit_passed"] is True
+    assert checks["default_promotion_resident_winsorized_required_frame_passed"] is True
+    assert (
+        checks["default_promotion_resident_winsorized_sweep_matches_matrix"] is True
+    )
     assert checks["manifest_assets_match_github_plan"] is True
     assert checks["matrix_packages_match_manifest"] is True
     assert checks["cpu_fallback_preserved"] is True
@@ -985,6 +1108,140 @@ def test_windows_publish_preflight_blocks_default_promotion_stack_engine_contrac
     ] == 1
 
 
+def test_windows_publish_preflight_blocks_missing_matrix_resident_winsorized_sweep(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, include_resident_winsorized_sweep=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is True
+    assert checks["matrix_resident_winsorized_sweep_audit_passed"]["passed"] is False
+    assert checks["matrix_resident_winsorized_required_frame_passed"]["passed"] is False
+    assert checks["matrix_resident_winsorized_sweep_check_count"]["passed"] is False
+    assert (
+        checks["default_promotion_resident_winsorized_sweep_matches_matrix"][
+            "passed"
+        ]
+        is False
+    )
+
+
+def test_windows_publish_preflight_blocks_failed_matrix_resident_winsorized_sweep(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, resident_winsorized_sweep_ready=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["summary"]["matrix_resident_winsorized_sweep_status"] == "failed"
+    assert checks["windows_release_matrix_ready"]["passed"] is False
+    assert checks["matrix_resident_winsorized_sweep_audit_passed"]["passed"] is False
+    assert checks["matrix_resident_winsorized_required_frame_passed"]["passed"] is False
+    assert checks["matrix_resident_winsorized_sweep_check_count"]["passed"] is True
+
+
+def test_windows_publish_preflight_blocks_default_promotion_resident_winsorized_drift(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion, resident_winsorized_sweep_ready=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert (
+        payload["summary"]["default_promotion_resident_winsorized_sweep_status"]
+        == "failed"
+    )
+    assert checks["default_promotion_ready"]["passed"] is False
+    assert (
+        checks["default_promotion_resident_winsorized_sweep_audit_passed"]["passed"]
+        is False
+    )
+    assert (
+        checks["default_promotion_resident_winsorized_sweep_matches_matrix"][
+            "passed"
+        ]
+        is False
+    )
+
+
+def test_windows_publish_preflight_blocks_resident_winsorized_check_count_mismatch(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, resident_winsorized_check_count=26)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["matrix_resident_winsorized_sweep_audit_passed"]["passed"] is True
+    assert checks["matrix_resident_winsorized_sweep_check_count"]["passed"] is True
+    assert (
+        checks["default_promotion_resident_winsorized_sweep_matches_matrix"][
+            "passed"
+        ]
+        is False
+    )
+
+
 def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     manifest, plan, matrix, promotion = _bundle(tmp_path)
     out = tmp_path / "publish_preflight.json"
@@ -1019,5 +1276,10 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     assert "Sample accounting closure: phase2 `passed`" in markdown_text
     assert "StackEngine default contract: phase2 `passed`" in markdown_text
     assert "StackEngine default gaps: matrix `0`, default-promotion `0`" in markdown_text
+    assert (
+        "Resident winsorized sweep: matrix `passed`/`200`/`True`/`27`, "
+        "default-promotion `passed`/`200`/`True`/`27`"
+    ) in markdown_text
     assert "manifest_assets_match_github_plan" in markdown_text
     assert "github_plan_phase2_stack_engine_default_contract_ready" in markdown_text
+    assert "matrix_resident_winsorized_sweep_audit_passed" in markdown_text

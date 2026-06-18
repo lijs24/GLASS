@@ -59,6 +59,48 @@ def _checks_by_name(rows: list[Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _resident_winsorized_sweep_summary(source: dict[str, Any]) -> dict[str, Any]:
+    audit = (
+        source.get("resident_winsorized_sweep_audit")
+        if isinstance(source.get("resident_winsorized_sweep_audit"), dict)
+        else {}
+    )
+
+    def field(name: str) -> Any:
+        flattened = source.get(f"resident_winsorized_sweep_{name}")
+        return flattened if flattened is not None else audit.get(name)
+
+    return {
+        "resident_winsorized_sweep_audit": audit,
+        "resident_winsorized_sweep_present": field("present"),
+        "resident_winsorized_sweep_status": field("status"),
+        "resident_winsorized_sweep_passed": field("passed"),
+        "resident_winsorized_sweep_phase2_check_passed": field(
+            "phase2_check_passed"
+        ),
+        "resident_winsorized_sweep_check_count": field("check_count"),
+        "resident_winsorized_sweep_failed_check_count": field("failed_check_count"),
+        "resident_winsorized_sweep_failed_checks": field("failed_checks") or [],
+        "resident_winsorized_sweep_required_frame_count": field(
+            "required_frame_count"
+        ),
+        "resident_winsorized_sweep_required_frame_count_passed": field(
+            "required_frame_count_passed"
+        ),
+        "resident_winsorized_sweep_required_frame_master_rms": field(
+            "required_frame_master_rms"
+        ),
+        "resident_winsorized_sweep_required_frame_master_max_abs": field(
+            "required_frame_master_max_abs"
+        ),
+        "resident_winsorized_sweep_required_frame_cuda_hardened_s": field(
+            "required_frame_cuda_hardened_s"
+        ),
+        "resident_winsorized_sweep_path": audit.get("path"),
+        "resident_winsorized_sweep_sweep_path": audit.get("sweep_path"),
+    }
+
+
 def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
     machine = payload.get("current_machine") if isinstance(payload.get("current_machine"), dict) else {}
     promotion = (
@@ -131,6 +173,7 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "stack_engine_contract_blockers": promotion.get("stack_engine_contract_blockers")
         or [],
+        **_resident_winsorized_sweep_summary(promotion),
     }
 
 
@@ -214,6 +257,7 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "stack_engine_contract_blockers": stack_engine.get("default_promotion_blockers")
         or [],
+        **_resident_winsorized_sweep_summary(payload),
     }
 
 
@@ -397,6 +441,65 @@ def _stack_engine_plan_matrix_ready(summary: dict[str, Any]) -> bool:
         and _int_or_zero(summary.get("release_matrix_default_gap_count")) == 0
         and _int_or_zero(summary.get("release_matrix_blocker_count")) == 0
     )
+
+
+def _resident_winsorized_sweep_audit_passed(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("resident_winsorized_sweep_present") is True
+        and summary.get("resident_winsorized_sweep_status") == "passed"
+        and summary.get("resident_winsorized_sweep_passed") is True
+        and summary.get("resident_winsorized_sweep_phase2_check_passed") is True
+        and _int_or_zero(summary.get("resident_winsorized_sweep_failed_check_count"))
+        == 0
+        and not summary.get("resident_winsorized_sweep_failed_checks")
+    )
+
+
+def _resident_winsorized_required_frame_passed(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("resident_winsorized_sweep_required_frame_count_passed") is True
+        and _int_or_zero(
+            summary.get("resident_winsorized_sweep_required_frame_count")
+        )
+        >= 200
+    )
+
+
+def _resident_winsorized_check_count_ready(summary: dict[str, Any]) -> bool:
+    return _int_or_zero(summary.get("resident_winsorized_sweep_check_count")) > 0
+
+
+def _resident_winsorized_sweep_evidence(summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "present": summary.get("resident_winsorized_sweep_present"),
+        "status": summary.get("resident_winsorized_sweep_status"),
+        "passed": summary.get("resident_winsorized_sweep_passed"),
+        "phase2_check_passed": summary.get(
+            "resident_winsorized_sweep_phase2_check_passed"
+        ),
+        "check_count": summary.get("resident_winsorized_sweep_check_count"),
+        "failed_check_count": summary.get(
+            "resident_winsorized_sweep_failed_check_count"
+        ),
+        "failed_checks": summary.get("resident_winsorized_sweep_failed_checks"),
+        "required_frame_count": summary.get(
+            "resident_winsorized_sweep_required_frame_count"
+        ),
+        "required_frame_count_passed": summary.get(
+            "resident_winsorized_sweep_required_frame_count_passed"
+        ),
+        "required_frame_master_rms": summary.get(
+            "resident_winsorized_sweep_required_frame_master_rms"
+        ),
+        "required_frame_master_max_abs": summary.get(
+            "resident_winsorized_sweep_required_frame_master_max_abs"
+        ),
+        "required_frame_cuda_hardened_s": summary.get(
+            "resident_winsorized_sweep_required_frame_cuda_hardened_s"
+        ),
+        "path": summary.get("resident_winsorized_sweep_path"),
+        "sweep_path": summary.get("resident_winsorized_sweep_sweep_path"),
+    }
 
 
 def build_windows_publish_preflight(
@@ -1000,6 +1103,101 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "matrix_resident_winsorized_sweep_audit_passed",
+            _resident_winsorized_sweep_audit_passed(matrix_info),
+            _resident_winsorized_sweep_evidence(matrix_info),
+        ),
+        _check(
+            "matrix_resident_winsorized_required_frame_passed",
+            _resident_winsorized_required_frame_passed(matrix_info),
+            {
+                "required_frame_count": matrix_info.get(
+                    "resident_winsorized_sweep_required_frame_count"
+                ),
+                "required_frame_count_passed": matrix_info.get(
+                    "resident_winsorized_sweep_required_frame_count_passed"
+                ),
+                "required_frame_master_rms": matrix_info.get(
+                    "resident_winsorized_sweep_required_frame_master_rms"
+                ),
+                "required_frame_master_max_abs": matrix_info.get(
+                    "resident_winsorized_sweep_required_frame_master_max_abs"
+                ),
+                "required_frame_cuda_hardened_s": matrix_info.get(
+                    "resident_winsorized_sweep_required_frame_cuda_hardened_s"
+                ),
+            },
+        ),
+        _check(
+            "matrix_resident_winsorized_sweep_check_count",
+            _resident_winsorized_check_count_ready(matrix_info),
+            {
+                "check_count": matrix_info.get(
+                    "resident_winsorized_sweep_check_count"
+                ),
+                "failed_check_count": matrix_info.get(
+                    "resident_winsorized_sweep_failed_check_count"
+                ),
+            },
+        ),
+        _check(
+            "default_promotion_resident_winsorized_sweep_audit_passed",
+            _resident_winsorized_sweep_audit_passed(promotion_info),
+            _resident_winsorized_sweep_evidence(promotion_info),
+        ),
+        _check(
+            "default_promotion_resident_winsorized_required_frame_passed",
+            _resident_winsorized_required_frame_passed(promotion_info),
+            {
+                "required_frame_count": promotion_info.get(
+                    "resident_winsorized_sweep_required_frame_count"
+                ),
+                "required_frame_count_passed": promotion_info.get(
+                    "resident_winsorized_sweep_required_frame_count_passed"
+                ),
+                "required_frame_master_rms": promotion_info.get(
+                    "resident_winsorized_sweep_required_frame_master_rms"
+                ),
+                "required_frame_master_max_abs": promotion_info.get(
+                    "resident_winsorized_sweep_required_frame_master_max_abs"
+                ),
+                "required_frame_cuda_hardened_s": promotion_info.get(
+                    "resident_winsorized_sweep_required_frame_cuda_hardened_s"
+                ),
+            },
+        ),
+        _check(
+            "default_promotion_resident_winsorized_sweep_matches_matrix",
+            matrix_info.get("resident_winsorized_sweep_present")
+            == promotion_info.get("resident_winsorized_sweep_present")
+            and matrix_info.get("resident_winsorized_sweep_status")
+            == promotion_info.get("resident_winsorized_sweep_status")
+            and matrix_info.get("resident_winsorized_sweep_passed")
+            == promotion_info.get("resident_winsorized_sweep_passed")
+            and matrix_info.get("resident_winsorized_sweep_phase2_check_passed")
+            == promotion_info.get("resident_winsorized_sweep_phase2_check_passed")
+            and matrix_info.get("resident_winsorized_sweep_check_count")
+            == promotion_info.get("resident_winsorized_sweep_check_count")
+            and matrix_info.get("resident_winsorized_sweep_failed_check_count")
+            == promotion_info.get("resident_winsorized_sweep_failed_check_count")
+            and matrix_info.get("resident_winsorized_sweep_required_frame_count")
+            == promotion_info.get("resident_winsorized_sweep_required_frame_count")
+            and matrix_info.get(
+                "resident_winsorized_sweep_required_frame_count_passed"
+            )
+            == promotion_info.get(
+                "resident_winsorized_sweep_required_frame_count_passed"
+            ),
+            {
+                "windows_release_matrix": _resident_winsorized_sweep_evidence(
+                    matrix_info
+                ),
+                "default_promotion": _resident_winsorized_sweep_evidence(
+                    promotion_info
+                ),
+            },
+        ),
+        _check(
             "manifest_assets_match_github_plan",
             not missing_assets and not mismatched_assets,
             {
@@ -1103,6 +1301,34 @@ def build_windows_publish_preflight(
             "default_promotion_stack_engine_contract_default_gap_count": (
                 promotion_info.get("stack_engine_contract_default_gap_count")
             ),
+            "matrix_resident_winsorized_sweep_status": matrix_info.get(
+                "resident_winsorized_sweep_status"
+            ),
+            "matrix_resident_winsorized_sweep_required_frame_count": matrix_info.get(
+                "resident_winsorized_sweep_required_frame_count"
+            ),
+            "matrix_resident_winsorized_sweep_required_frame_count_passed": (
+                matrix_info.get(
+                    "resident_winsorized_sweep_required_frame_count_passed"
+                )
+            ),
+            "matrix_resident_winsorized_sweep_check_count": matrix_info.get(
+                "resident_winsorized_sweep_check_count"
+            ),
+            "default_promotion_resident_winsorized_sweep_status": promotion_info.get(
+                "resident_winsorized_sweep_status"
+            ),
+            "default_promotion_resident_winsorized_sweep_required_frame_count": (
+                promotion_info.get("resident_winsorized_sweep_required_frame_count")
+            ),
+            "default_promotion_resident_winsorized_sweep_required_frame_count_passed": (
+                promotion_info.get(
+                    "resident_winsorized_sweep_required_frame_count_passed"
+                )
+            ),
+            "default_promotion_resident_winsorized_sweep_check_count": (
+                promotion_info.get("resident_winsorized_sweep_check_count")
+            ),
         },
         "release_manifest": {
             "status": manifest.get("status"),
@@ -1174,6 +1400,18 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"matrix `{summary.get('matrix_stack_engine_contract_default_gap_count')}`, "
             "default-promotion "
             f"`{summary.get('default_promotion_stack_engine_contract_default_gap_count')}`"
+        ),
+        (
+            "- Resident winsorized sweep: "
+            f"matrix `{summary.get('matrix_resident_winsorized_sweep_status')}`/"
+            f"`{summary.get('matrix_resident_winsorized_sweep_required_frame_count')}`/"
+            f"`{summary.get('matrix_resident_winsorized_sweep_required_frame_count_passed')}`/"
+            f"`{summary.get('matrix_resident_winsorized_sweep_check_count')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_resident_winsorized_sweep_status')}`/"
+            f"`{summary.get('default_promotion_resident_winsorized_sweep_required_frame_count')}`/"
+            f"`{summary.get('default_promotion_resident_winsorized_sweep_required_frame_count_passed')}`/"
+            f"`{summary.get('default_promotion_resident_winsorized_sweep_check_count')}`"
         ),
         "",
         "## Inputs",
