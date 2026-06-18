@@ -38,6 +38,107 @@ def _int_or_zero(value: Any) -> int:
         return 0
 
 
+def _release_direct_publication_guard_fields(
+    source: dict[str, Any],
+    *,
+    output_prefix: str,
+) -> dict[str, Any]:
+    guard = (
+        source.get("release_decision_direct_runtime_publication_guard")
+        if isinstance(
+            source.get("release_decision_direct_runtime_publication_guard"),
+            dict,
+        )
+        else {}
+    )
+
+    def field(flat_name: str, *guard_names: str) -> Any:
+        flattened = source.get(
+            f"release_decision_direct_runtime_publication_guard_{flat_name}"
+        )
+        if flattened is not None:
+            return flattened
+        for guard_name in guard_names:
+            value = guard.get(guard_name)
+            if value is not None:
+                return value
+        return None
+
+    raw_leaf = guard.get("raw_leaf_checks_ready")
+    phase2_leaf = guard.get("phase2_leaf_checks_ready")
+    leaf_checks_ready = field("leaf_checks_ready", "leaf_checks_ready")
+    if leaf_checks_ready is None and (raw_leaf is not None or phase2_leaf is not None):
+        leaf_checks_ready = raw_leaf is True and phase2_leaf is True
+
+    return {
+        output_prefix: guard,
+        f"{output_prefix}_present": field("present", "present"),
+        f"{output_prefix}_ready": field("ready", "ready"),
+        f"{output_prefix}_check_passed": field(
+            "check_passed",
+            "decision_check_passed",
+        ),
+        f"{output_prefix}_source_ready": field("source_ready", "source_ready"),
+        f"{output_prefix}_count_ready": field("count_ready", "count_ready"),
+        f"{output_prefix}_leaf_checks_ready": leaf_checks_ready,
+        f"{output_prefix}_raw_acceptance_source": field(
+            "raw_acceptance_source",
+            "raw_acceptance_source",
+            "raw_matrix_acceptance_source",
+        ),
+        f"{output_prefix}_raw_calibration_source": field(
+            "raw_calibration_source",
+            "raw_calibration_source",
+            "raw_matrix_pipeline_calibration_source",
+        ),
+        f"{output_prefix}_raw_resident_lights": _int_or_zero(
+            field(
+                "raw_resident_lights",
+                "raw_resident_lights",
+                "raw_matrix_pipeline_resident_lights",
+            )
+        ),
+    }
+
+
+def _release_direct_publication_guard_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    return (
+        summary.get(f"{prefix}_present") is True
+        and summary.get(f"{prefix}_ready") is True
+        and summary.get(f"{prefix}_check_passed") is True
+        and summary.get(f"{prefix}_source_ready") is True
+        and summary.get(f"{prefix}_count_ready") is True
+        and summary.get(f"{prefix}_leaf_checks_ready") is True
+        and summary.get(f"{prefix}_raw_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and summary.get(f"{prefix}_raw_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and _int_or_zero(summary.get(f"{prefix}_raw_resident_lights")) >= 200
+    )
+
+
+def _release_direct_publication_guard_evidence(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> dict[str, Any]:
+    return {
+        "present": summary.get(f"{prefix}_present"),
+        "ready": summary.get(f"{prefix}_ready"),
+        "decision_check_passed": summary.get(f"{prefix}_check_passed"),
+        "source_ready": summary.get(f"{prefix}_source_ready"),
+        "count_ready": summary.get(f"{prefix}_count_ready"),
+        "leaf_checks_ready": summary.get(f"{prefix}_leaf_checks_ready"),
+        "acceptance_source": summary.get(f"{prefix}_raw_acceptance_source"),
+        "calibration_source": summary.get(f"{prefix}_raw_calibration_source"),
+        "resident_lights": summary.get(f"{prefix}_raw_resident_lights"),
+    }
+
+
 def _asset_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in manifest.get("packages") or []:
@@ -386,6 +487,16 @@ def _windows_release_matrix_summary(path: str | Path | None) -> dict[str, Any] |
             "stack_engine_contract_blockers"
         )
         or [],
+        **_release_direct_publication_guard_fields(
+            payload,
+            output_prefix="release_decision_direct_runtime_publication_guard",
+        ),
+        **_release_direct_publication_guard_fields(
+            default_promotion,
+            output_prefix=(
+                "default_promotion_release_decision_direct_runtime_publication_guard"
+            ),
+        ),
     }
 
 
@@ -600,6 +711,25 @@ def _release_notes(payload: dict[str, Any]) -> str:
                     f"`{release_matrix.get('default_route_route_contract_passed')}` "
                     f"checks `{release_matrix.get('default_route_route_check_count')}` "
                     f"speedup `{release_matrix.get('default_route_speedup_vs_reference')}`"
+                ),
+                (
+                    "- Release direct publication guard: "
+                    f"ready `{release_matrix.get('release_decision_direct_runtime_publication_guard_ready')}` "
+                    "check "
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_check_passed')}` "
+                    "source "
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_raw_acceptance_source')}`/"
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_raw_calibration_source')}` "
+                    "lights "
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_raw_resident_lights')}`"
+                ),
+                (
+                    "- Default-promotion release direct guard: "
+                    f"ready `{release_matrix.get('default_promotion_release_decision_direct_runtime_publication_guard_ready')}` "
+                    "check "
+                    f"`{release_matrix.get('default_promotion_release_decision_direct_runtime_publication_guard_check_passed')}` "
+                    "lights "
+                    f"`{release_matrix.get('default_promotion_release_decision_direct_runtime_publication_guard_raw_resident_lights')}`"
                 ),
                 (
                     "- StackEngine default contract: "
@@ -840,6 +970,14 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "    }",
             "    if ($matrix.default_promotion_manifest.stack_engine_contract_present -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_ready -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_phase2_check_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_status -ne 'passed' -or $matrix.default_promotion_manifest.stack_engine_contract_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_scope -ne 'all' -or $matrix.default_promotion_manifest.stack_engine_contract_adoption_recommendation -ne 'stack_engine_default_ready' -or [int]$matrix.default_promotion_manifest.stack_engine_contract_default_gap_count -ne 0 -or [int]$matrix.default_promotion_manifest.stack_engine_contract_blocker_count -ne 0) {",
             "        throw \"Windows release matrix StackEngine default contract failed: $WindowsReleaseMatrixFile\"",
+            "    }",
+            "    $releaseGuard = $matrix.release_decision_direct_runtime_publication_guard",
+            "    if (-not $releaseGuard -or $releaseGuard.present -ne $true -or $releaseGuard.ready -ne $true -or $releaseGuard.decision_check_passed -ne $true -or $releaseGuard.source_ready -ne $true -or $releaseGuard.count_ready -ne $true -or $releaseGuard.raw_leaf_checks_ready -ne $true -or $releaseGuard.phase2_leaf_checks_ready -ne $true -or $releaseGuard.raw_acceptance_source -ne 'explicit_resident_artifacts_json' -or $releaseGuard.raw_calibration_source -ne 'resident_artifacts_json_fallback' -or [int]$releaseGuard.raw_resident_lights -lt 200) {",
+            "        throw \"Windows release matrix release-decision direct publication guard failed: $WindowsReleaseMatrixFile\"",
+            "    }",
+            "    $defaultPromotionReleaseGuard = $matrix.default_promotion_manifest.release_decision_direct_runtime_publication_guard",
+            "    if (-not $defaultPromotionReleaseGuard -or $defaultPromotionReleaseGuard.present -ne $true -or $defaultPromotionReleaseGuard.ready -ne $true -or $defaultPromotionReleaseGuard.decision_check_passed -ne $true -or $defaultPromotionReleaseGuard.source_ready -ne $true -or $defaultPromotionReleaseGuard.count_ready -ne $true -or $defaultPromotionReleaseGuard.leaf_checks_ready -ne $true -or $defaultPromotionReleaseGuard.raw_matrix_acceptance_source -ne 'explicit_resident_artifacts_json' -or $defaultPromotionReleaseGuard.raw_matrix_pipeline_calibration_source -ne 'resident_artifacts_json_fallback' -or [int]$defaultPromotionReleaseGuard.raw_matrix_pipeline_resident_lights -lt 200) {",
+            "        throw \"Windows release matrix default-promotion direct publication guard failed: $WindowsReleaseMatrixFile\"",
             "    }",
             "}",
             "if ($Phase2StatusFile) {",
@@ -1285,6 +1423,32 @@ def build_windows_github_release_plan(
                     },
                 ),
                 _check(
+                    "windows_release_matrix_release_decision_direct_runtime_publication_guard_passed",
+                    _release_direct_publication_guard_ready(
+                        release_matrix_for_checks,
+                        prefix="release_decision_direct_runtime_publication_guard",
+                    ),
+                    _release_direct_publication_guard_evidence(
+                        release_matrix_for_checks,
+                        prefix="release_decision_direct_runtime_publication_guard",
+                    ),
+                ),
+                _check(
+                    "windows_release_matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed",
+                    _release_direct_publication_guard_ready(
+                        release_matrix_for_checks,
+                        prefix=(
+                            "default_promotion_release_decision_direct_runtime_publication_guard"
+                        ),
+                    ),
+                    _release_direct_publication_guard_evidence(
+                        release_matrix_for_checks,
+                        prefix=(
+                            "default_promotion_release_decision_direct_runtime_publication_guard"
+                        ),
+                    ),
+                ),
+                _check(
                     "windows_release_matrix_assets_present",
                     bool(matrix_labels) and not missing_matrix_assets,
                     {
@@ -1482,6 +1646,25 @@ def _markdown(payload: dict[str, Any]) -> str:
                     "- Default route contract/checks: "
                     f"`{release_matrix.get('default_route_route_contract_passed')}`/"
                     f"`{release_matrix.get('default_route_route_check_count')}`"
+                ),
+                (
+                    "- Release direct publication guard: "
+                    f"ready=`{release_matrix.get('release_decision_direct_runtime_publication_guard_ready')}` "
+                    "check="
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_check_passed')}` "
+                    "source="
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_raw_acceptance_source')}`/"
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_raw_calibration_source')}` "
+                    "lights="
+                    f"`{release_matrix.get('release_decision_direct_runtime_publication_guard_raw_resident_lights')}`"
+                ),
+                (
+                    "- Default-promotion release direct guard: "
+                    f"ready=`{release_matrix.get('default_promotion_release_decision_direct_runtime_publication_guard_ready')}` "
+                    "check="
+                    f"`{release_matrix.get('default_promotion_release_decision_direct_runtime_publication_guard_check_passed')}` "
+                    "lights="
+                    f"`{release_matrix.get('default_promotion_release_decision_direct_runtime_publication_guard_raw_resident_lights')}`"
                 ),
                 (
                     "- StackEngine default contract: "

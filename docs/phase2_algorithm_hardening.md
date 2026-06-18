@@ -5401,6 +5401,36 @@ integration where applicable.
   change, no CUDA kernel change, no runtime default change, no package
   build/upload, no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 311: Windows Publish Preflight Direct Publication Guard
+
+- Carry the S2-Gate 310 direct publication guard through
+  `windows-github-release-plan` and `windows-publish-preflight`.
+- Require GitHub release handoff plans to block a Windows release matrix that
+  reports `release_matrix_ready` but omits the release-decision direct runtime
+  publication guard or the embedded default-promotion preservation guard.
+- Require publish preflight to validate the release-decision direct guard from
+  the GitHub plan, the Windows release matrix, the matrix-embedded
+  default-promotion summary, and the standalone default-promotion manifest.
+- Treat the guard as ready only when it preserves explicit
+  `resident_artifacts.json` fastpath provenance, resident-artifacts calibration
+  fallback provenance, source/count readiness, leaf-check readiness, and at
+  least 200 resident calibrated lights.
+- Add drift checks so stale release plans, release matrices, or
+  default-promotion manifests cannot disagree while still reporting ready
+  status.
+- Surface direct publication guard readiness and resident-light counts in
+  GitHub release notes, handoff Markdown, publish-preflight JSON, and
+  publish-preflight Markdown.
+- Extend the generated PowerShell release script with dry-run checks for the
+  release-decision direct publication guard before any GitHub upload command is
+  allowed.
+- Generate Gate311 release-manifest, GitHub release-plan, publish-preflight,
+  and Phase2 status artifacts from the existing Gate304-Gate310 200-light
+  evidence.
+- Keep this gate final-publication-handoff scoped: no image math change, no
+  CUDA kernel change, no runtime default change, no package build/upload, no
+  GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

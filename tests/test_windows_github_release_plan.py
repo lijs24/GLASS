@@ -213,6 +213,77 @@ def _phase2_compare(path: Path, *, passed: bool = True, baseline_gate: int = 203
     )
 
 
+def _release_direct_publication_guard(
+    *,
+    ready: bool = True,
+    top_level: bool = False,
+    acceptance_source: str = "explicit_resident_artifacts_json",
+    calibration_source: str = "resident_artifacts_json_fallback",
+    resident_lights: int = 200,
+) -> dict[str, object]:
+    source_ready = (
+        ready
+        and acceptance_source == "explicit_resident_artifacts_json"
+        and calibration_source == "resident_artifacts_json_fallback"
+    )
+    count_ready = ready and resident_lights >= 200
+    if top_level:
+        return {
+            "present": True,
+            "ready": ready and source_ready and count_ready,
+            "decision_check_passed": ready,
+            "checks_passed": ready,
+            "source_ready": source_ready,
+            "count_ready": count_ready,
+            "raw_leaf_checks_ready": ready,
+            "phase2_leaf_checks_ready": ready,
+            "raw_acceptance_source": acceptance_source,
+            "phase2_acceptance_source": acceptance_source,
+            "raw_calibration_source": calibration_source,
+            "phase2_calibration_source": calibration_source,
+            "raw_resident_lights": resident_lights if ready else 0,
+            "raw_default_promotion_resident_lights": resident_lights if ready else 0,
+            "phase2_resident_lights": resident_lights if ready else 0,
+            "phase2_default_promotion_resident_lights": resident_lights
+            if ready
+            else 0,
+            "required_min_resident_lights": 200,
+        }
+    return {
+        "present": True,
+        "ready": ready and source_ready and count_ready,
+        "decision_check_passed": ready,
+        "checks_passed": ready,
+        "source_ready": source_ready,
+        "count_ready": count_ready,
+        "leaf_checks_ready": ready,
+        "raw_ready": ready,
+        "phase2_ready": ready,
+        "phase2_check_passed": ready,
+        "raw_matrix_acceptance_source": acceptance_source,
+        "raw_default_promotion_acceptance_source": acceptance_source,
+        "phase2_matrix_acceptance_source": acceptance_source,
+        "phase2_default_promotion_acceptance_source": acceptance_source,
+        "raw_matrix_acceptance_check_count": 24 if ready else 0,
+        "raw_default_promotion_acceptance_check_count": 24 if ready else 0,
+        "phase2_matrix_acceptance_check_count": 24 if ready else 0,
+        "phase2_default_promotion_acceptance_check_count": 24 if ready else 0,
+        "raw_matrix_pipeline_calibration_source": calibration_source,
+        "raw_default_promotion_pipeline_calibration_source": calibration_source,
+        "phase2_matrix_pipeline_calibration_source": calibration_source,
+        "phase2_default_promotion_pipeline_calibration_source": calibration_source,
+        "raw_matrix_pipeline_resident_lights": resident_lights if ready else 0,
+        "raw_default_promotion_pipeline_resident_lights": resident_lights
+        if ready
+        else 0,
+        "phase2_matrix_pipeline_resident_lights": resident_lights if ready else 0,
+        "phase2_default_promotion_pipeline_resident_lights": resident_lights
+        if ready
+        else 0,
+        "required_min_resident_lights": 200,
+    }
+
+
 def _release_matrix(
     path: Path,
     *,
@@ -223,6 +294,10 @@ def _release_matrix(
     include_stack_engine_contract: bool = True,
     stack_engine_ready: bool = True,
     stack_engine_gap_count: int = 0,
+    include_release_direct_guard: bool = True,
+    release_direct_guard_ready: bool = True,
+    default_release_direct_guard_ready: bool = True,
+    release_direct_acceptance_source: str = "explicit_resident_artifacts_json",
 ) -> None:
     ordered_try_list = labels if "cpu" in labels else [*labels, "cpu"]
     stack_ready = stack_engine_ready and stack_engine_gap_count == 0
@@ -291,6 +366,54 @@ def _release_matrix(
         if sample_accounting_closure_ready
         else 1,
     }
+    release_direct_guard = _release_direct_publication_guard(
+        ready=release_direct_guard_ready,
+        top_level=True,
+        acceptance_source=release_direct_acceptance_source,
+    )
+    default_release_direct_guard = _release_direct_publication_guard(
+        ready=default_release_direct_guard_ready,
+        acceptance_source=release_direct_acceptance_source,
+    )
+    if include_release_direct_guard:
+        default_promotion.update(
+            {
+                "release_decision_direct_runtime_publication_guard": (
+                    default_release_direct_guard
+                ),
+                "release_decision_direct_runtime_publication_guard_present": (
+                    default_release_direct_guard["present"]
+                ),
+                "release_decision_direct_runtime_publication_guard_ready": (
+                    default_release_direct_guard["ready"]
+                ),
+                "release_decision_direct_runtime_publication_guard_check_passed": (
+                    default_release_direct_guard["decision_check_passed"]
+                ),
+                "release_decision_direct_runtime_publication_guard_source_ready": (
+                    default_release_direct_guard["source_ready"]
+                ),
+                "release_decision_direct_runtime_publication_guard_count_ready": (
+                    default_release_direct_guard["count_ready"]
+                ),
+                "release_decision_direct_runtime_publication_guard_leaf_checks_ready": (
+                    default_release_direct_guard["leaf_checks_ready"]
+                ),
+                "release_decision_direct_runtime_publication_guard_raw_acceptance_source": (
+                    default_release_direct_guard["raw_matrix_acceptance_source"]
+                ),
+                "release_decision_direct_runtime_publication_guard_raw_calibration_source": (
+                    default_release_direct_guard[
+                        "raw_matrix_pipeline_calibration_source"
+                    ]
+                ),
+                "release_decision_direct_runtime_publication_guard_raw_resident_lights": (
+                    default_release_direct_guard[
+                        "raw_matrix_pipeline_resident_lights"
+                    ]
+                ),
+            }
+        )
     if include_stack_engine_contract:
         default_promotion.update(
             {
@@ -309,9 +432,7 @@ def _release_matrix(
                 ],
             }
         )
-    write_json(
-        path,
-        {
+    payload = {
             "schema_version": 1,
             "artifact_type": "windows_release_matrix",
             "status": "release_matrix_ready" if matrix_ready else "blocked",
@@ -337,8 +458,12 @@ def _release_matrix(
             "failed_checks": []
             if matrix_ready
             else ["default_promotion_manifest_ready"],
-        },
-    )
+        }
+    if include_release_direct_guard:
+        payload["release_decision_direct_runtime_publication_guard"] = (
+            release_direct_guard
+        )
+    write_json(path, payload)
 
 
 def test_windows_github_release_plan_records_assets(tmp_path: Path):
@@ -362,6 +487,18 @@ def test_windows_github_release_plan_records_assets(tmp_path: Path):
     assert payload["publication_ready"] is True
     assert payload["assets"][0]["label"] == "cuda13"
     assert payload["release_matrix"]["status"] == "release_matrix_ready"
+    assert (
+        payload["release_matrix"][
+            "release_decision_direct_runtime_publication_guard_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["release_matrix"][
+            "default_promotion_release_decision_direct_runtime_publication_guard_ready"
+        ]
+        is True
+    )
     assert "gh release create v0.1.0-test" in payload["release"]["command"]
     assert "--draft" in payload["release"]["command"]
 
@@ -430,6 +567,18 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert checks["windows_release_matrix_rejection_sample_accounting_passed"] is True
     assert checks["windows_release_matrix_sample_accounting_closure_passed"] is True
     assert checks["windows_release_matrix_stack_engine_contract_ready"] is True
+    assert (
+        checks[
+            "windows_release_matrix_release_decision_direct_runtime_publication_guard_passed"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "windows_release_matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed"
+        ]
+        is True
+    )
     assert checks["phase2_release_matrix_stack_engine_contract_agree"] is True
 
 
@@ -712,6 +861,83 @@ def test_windows_github_release_plan_blocks_release_matrix_stack_engine_contract
     ] == 1
 
 
+def test_windows_github_release_plan_blocks_missing_release_matrix_direct_publication_guard(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(matrix, labels=["cuda13"], include_release_direct_guard=False)
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is True
+    assert (
+        checks[
+            "windows_release_matrix_release_decision_direct_runtime_publication_guard_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "windows_release_matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed"
+        ]["passed"]
+        is False
+    )
+
+
+def test_windows_github_release_plan_blocks_stale_default_promotion_direct_publication_guard(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(
+        matrix,
+        labels=["cuda13"],
+        default_release_direct_guard_ready=False,
+    )
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert (
+        checks[
+            "windows_release_matrix_release_decision_direct_runtime_publication_guard_passed"
+        ]["passed"]
+        is True
+    )
+    assert (
+        checks[
+            "windows_release_matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "windows_release_matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed"
+        ]["evidence"]["resident_lights"]
+        == 0
+    )
+
+
 def test_windows_github_release_plan_blocks_mixed_sources(tmp_path: Path):
     zip_a = tmp_path / "a.zip"
     zip_b = tmp_path / "b.zip"
@@ -799,6 +1025,8 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Windows Release Matrix Handoff" in markdown_text
     assert "Matrix status: `release_matrix_ready`" in markdown_text
     assert "Default route contract/checks: `True`/`4`" in markdown_text
+    assert "Release direct publication guard: ready=`True` check=`True`" in markdown_text
+    assert "Default-promotion release direct guard: ready=`True` check=`True`" in markdown_text
     assert "StackEngine default contract: ready=`True` phase2-check=`True` gaps=`0` blockers=`0`" in markdown_text
     assert "Rejection sample accounting: `passed` failed `0`" in markdown_text
     assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text
@@ -818,6 +1046,8 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     notes_text = notes.read_text(encoding="utf-8")
     assert "Windows Release Matrix Evidence" in notes_text
     assert "Default route contract: `True` checks `4`" in notes_text
+    assert "Release direct publication guard: ready `True` check `True`" in notes_text
+    assert "Default-promotion release direct guard: ready `True` check `True`" in notes_text
     assert "StackEngine default contract: ready `True` phase2-check `True` gaps `0` blockers `0`" in notes_text
     assert "Rejection sample accounting: `passed` failed `0`" in notes_text
     assert "Sample accounting closure: `passed` present `1` failed `0`" in notes_text
@@ -840,6 +1070,8 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Windows release matrix rejection sample accounting failed" in script_text
     assert "Windows release matrix sample accounting closure failed" in script_text
     assert "Windows release matrix StackEngine default contract failed" in script_text
+    assert "Windows release matrix release-decision direct publication guard failed" in script_text
+    assert "Windows release matrix default-promotion direct publication guard failed" in script_text
     assert "$Phase2StatusFile =" in script_text
     assert "$Phase2StatusCompareFile =" in script_text
     assert "Phase 2 status check failed" in script_text

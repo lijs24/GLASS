@@ -1,0 +1,392 @@
+{
+  "artifact_type": "windows_release_manifest",
+  "checks": [
+    {
+      "evidence": {
+        "suite_failed_checks": [],
+        "suite_status": "package_suite_ready"
+      },
+      "name": "suite_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "package_count": 4
+      },
+      "name": "suite_has_packages",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+      },
+      "name": "zip_exists:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 341358345,
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+      },
+      "name": "zip_nonempty:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "manifest_size_bytes": 341358345,
+        "smoke_zip_size_bytes": 341358345
+      },
+      "name": "zip_size_matches_smoke:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "suite_row_passed": true
+      },
+      "name": "suite_row_passed:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "bc5ebaf5247f7a7a513d1ff2ba3f4445d30c373c1e5e955cbfe7f01a9f0de273"
+      },
+      "name": "sha256_recorded:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+      },
+      "name": "zip_exists:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 341223006,
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+      },
+      "name": "zip_nonempty:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "manifest_size_bytes": 341223006,
+        "smoke_zip_size_bytes": 341223006
+      },
+      "name": "zip_size_matches_smoke:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "suite_row_passed": true
+      },
+      "name": "suite_row_passed:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "72f674ac5613d1618db5aebdbcab99711acefc887ff25b884db85c825e6ccf31"
+      },
+      "name": "sha256_recorded:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+      },
+      "name": "zip_exists:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 342200540,
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+      },
+      "name": "zip_nonempty:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "manifest_size_bytes": 342200540,
+        "smoke_zip_size_bytes": 342200540
+      },
+      "name": "zip_size_matches_smoke:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "suite_row_passed": true
+      },
+      "name": "suite_row_passed:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "2d0a68b53ffc92dadfc48e4404a81facbcb5d49f7bad1b89b79ce9337a42f681"
+      },
+      "name": "sha256_recorded:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+      },
+      "name": "zip_exists:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "size_bytes": 296231852,
+        "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+      },
+      "name": "zip_nonempty:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "manifest_size_bytes": 296231852,
+        "smoke_zip_size_bytes": 296231852
+      },
+      "name": "zip_size_matches_smoke:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "suite_row_passed": true
+      },
+      "name": "suite_row_passed:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "sha256": "32c7743c4ec2ed73ff1dd990c120ac7d8b0234a80db8b1e446627fd82ef5991d"
+      },
+      "name": "sha256_recorded:cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_310_windows_release_matrix_direct_publication_guard.json",
+        "required": true
+      },
+      "name": "windows_release_matrix_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "windows_release_matrix",
+        "required": "windows_release_matrix"
+      },
+      "name": "windows_release_matrix_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "passed": true,
+        "status": "release_matrix_ready"
+      },
+      "name": "windows_release_matrix_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_change_ready": true,
+        "passed": true,
+        "status": "default_promotion_ready"
+      },
+      "name": "windows_release_matrix_default_promotion_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_route_passed": true,
+        "route_check_count": 4,
+        "route_contract_passed": true
+      },
+      "name": "windows_release_matrix_default_route_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "manifest_labels": [
+          "cpu",
+          "cuda11",
+          "cuda12",
+          "cuda13"
+        ],
+        "matrix_labels": [
+          "cuda11",
+          "cuda12",
+          "cuda13",
+          "cpu"
+        ],
+        "missing": []
+      },
+      "name": "windows_release_matrix_assets_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ]
+      },
+      "name": "windows_release_matrix_try_order_has_cpu_fallback",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "source_stamps": [
+          "aa63510"
+        ]
+      },
+      "name": "same_source_stamp",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T12:13:47+00:00",
+  "failed_checks": [],
+  "limitations": [
+    "This manifest records release files and SHA256 checksums; it does not rebuild, sign, or upload packages.",
+    "ZIP checksums describe the local files at manifest time.",
+    "Formal releases should publish the manifest together with signed or otherwise trusted binaries."
+  ],
+  "packages": [
+    {
+      "cuda_available_at_smoke": true,
+      "cuda_required": true,
+      "exists": true,
+      "label": "cuda13",
+      "native_extension_loaded_at_smoke": true,
+      "package_label": "cuda13",
+      "sha256": "bc5ebaf5247f7a7a513d1ff2ba3f4445d30c373c1e5e955cbfe7f01a9f0de273",
+      "size_bytes": 341358345,
+      "smoke_artifact": "runs\\checkpoints\\s2_gate_194_cuda13_portable_smoke.json",
+      "smoke_zip_size_bytes": 341358345,
+      "source_stamp": "aa63510",
+      "suite_row_passed": true,
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda13.zip"
+    },
+    {
+      "cuda_available_at_smoke": true,
+      "cuda_required": true,
+      "exists": true,
+      "label": "cuda12",
+      "native_extension_loaded_at_smoke": true,
+      "package_label": "cuda12",
+      "sha256": "72f674ac5613d1618db5aebdbcab99711acefc887ff25b884db85c825e6ccf31",
+      "size_bytes": 341223006,
+      "smoke_artifact": "runs\\checkpoints\\s2_gate_194_cuda12_portable_smoke.json",
+      "smoke_zip_size_bytes": 341223006,
+      "source_stamp": "aa63510",
+      "suite_row_passed": true,
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda12.zip"
+    },
+    {
+      "cuda_available_at_smoke": true,
+      "cuda_required": true,
+      "exists": true,
+      "label": "cuda11",
+      "native_extension_loaded_at_smoke": true,
+      "package_label": "cuda11",
+      "sha256": "2d0a68b53ffc92dadfc48e4404a81facbcb5d49f7bad1b89b79ce9337a42f681",
+      "size_bytes": 342200540,
+      "smoke_artifact": "runs\\checkpoints\\s2_gate_194_cuda11_portable_smoke.json",
+      "smoke_zip_size_bytes": 342200540,
+      "source_stamp": "aa63510",
+      "suite_row_passed": true,
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cuda11.zip"
+    },
+    {
+      "cuda_available_at_smoke": false,
+      "cuda_required": false,
+      "exists": true,
+      "label": "cpu",
+      "native_extension_loaded_at_smoke": false,
+      "package_label": "cpu",
+      "sha256": "32c7743c4ec2ed73ff1dd990c120ac7d8b0234a80db8b1e446627fd82ef5991d",
+      "size_bytes": 296231852,
+      "smoke_artifact": "runs\\checkpoints\\s2_gate_194_cpu_portable_smoke.json",
+      "smoke_zip_size_bytes": 296231852,
+      "source_stamp": "aa63510",
+      "suite_row_passed": true,
+      "zip_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\.release\\windows\\GLASS-Portable-win64-cpu.zip"
+    }
+  ],
+  "passed": true,
+  "recommendation": "ready_for_upload",
+  "requirements": {
+    "require_same_source_stamp": true,
+    "require_windows_release_matrix": true
+  },
+  "schema_version": 1,
+  "source_stamps": [
+    "aa63510"
+  ],
+  "status": "release_manifest_ready",
+  "suite_artifact": "runs\\checkpoints\\s2_gate_194_strict_windows_package_suite.json",
+  "suite_recommendation": "publish_package_suite",
+  "suite_status": "package_suite_ready",
+  "windows_release_matrix": {
+    "artifact_type": "windows_release_matrix",
+    "default_promotion_default_change_ready": true,
+    "default_promotion_passed": true,
+    "default_promotion_status": "default_promotion_ready",
+    "default_route_passed": true,
+    "default_route_route_check_count": 4,
+    "default_route_route_contract_passed": true,
+    "default_route_speedup_vs_reference": 28.75107894736842,
+    "exists": true,
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "package_count": 4,
+    "package_labels": [
+      "cuda11",
+      "cuda12",
+      "cuda13",
+      "cpu"
+    ],
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_310_windows_release_matrix_direct_publication_guard.json",
+    "primary_package": "cuda13",
+    "recommendation": "publish_windows_cuda_matrix",
+    "status": "release_matrix_ready"
+  }
+}
