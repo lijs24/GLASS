@@ -3,6 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from glass.engine.rejection import (
+    CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+    RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+    RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
+    RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+)
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 from glass.report.dq_map_verify import summarize_count_map_pixels, summarize_dq_map_pixels
@@ -146,6 +152,55 @@ def _sample_accounting_closure_state(provenance_summary: dict[str, Any]) -> dict
         "rejected_samples": closure.get("rejected_samples"),
         "valid_rejection_match": closure.get("valid_rejection_match"),
         "input_total_match": closure.get("input_total_match"),
+    }
+
+
+def _resident_rejection_semantics_state(output: dict[str, Any], rejection: str) -> dict[str, Any]:
+    descriptor = (
+        output.get("integration_rejection")
+        if isinstance(output.get("integration_rejection"), dict)
+        else {}
+    )
+    required = rejection == "winsorized_sigma"
+    expected = {
+        "mode": "winsorized_sigma",
+        "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+        "scale_estimator": RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+        "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+        "cpu_baseline_parity": False,
+        "parity_status": RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
+        "approximation": True,
+    }
+    if not required:
+        return {
+            "required": False,
+            "present": bool(descriptor),
+            "passed": True,
+            "status": "not_required",
+            "rejection": rejection,
+            "descriptor": descriptor,
+            "expected": None,
+        }
+    mismatches = {
+        key: {"actual": descriptor.get(key), "expected": expected_value}
+        for key, expected_value in expected.items()
+        if descriptor.get(key) != expected_value
+    }
+    present = bool(descriptor)
+    return {
+        "required": True,
+        "present": present,
+        "passed": present and not mismatches,
+        "status": "passed" if present and not mismatches else "failed",
+        "rejection": rejection,
+        "descriptor": descriptor,
+        "expected": expected,
+        "mismatches": mismatches,
+        "semantics": (
+            "Resident CUDA winsorized_sigma currently uses an explicit mean/std "
+            "two-stage approximation and must not be reported as parity with the "
+            "hardened CPU median/IQR winsorized baseline until the CUDA kernels are updated."
+        ),
     }
 
 
@@ -310,6 +365,7 @@ def _resident_output_contract(
         0,
     )
     sample_closure = _sample_accounting_closure_state(provenance_summary)
+    rejection_semantics = _resident_rejection_semantics_state(output, rejection)
     checks = [
         _check(
             "resident_identity",
@@ -397,6 +453,12 @@ def _resident_output_contract(
             rejection_sample_count_match,
         ),
         _check(
+            "resident_winsorized_rejection_semantics_disclosed",
+            bool(rejection_semantics["passed"]),
+            rejection_semantics,
+            "Resident winsorized rejection must disclose approximation and CPU-baseline parity status.",
+        ),
+        _check(
             "sample_accounting_closure_valid",
             bool(sample_closure["passed"]),
             sample_closure,
@@ -436,6 +498,7 @@ def _resident_output_contract(
         "backend": output.get("backend"),
         "memory_mode": output.get("memory_mode"),
         "rejection": rejection,
+        "rejection_semantics": rejection_semantics,
         "active_frame_count": active_frame_count,
         "frame_count": frame_count,
         "sample_accounting_closure": sample_closure,

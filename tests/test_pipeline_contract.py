@@ -6,6 +6,7 @@ import numpy as np
 
 from glass.cli import main
 from glass.engine.contracts import DQFlag
+from glass.engine.rejection import resident_rejection_descriptor
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
@@ -83,6 +84,7 @@ def _write_resident_pipeline_run(
                     "dq_map_path": str(integration_dir / "dq_H.fits"),
                     "low_rejection_map_path": str(integration_dir / "low_H.fits"),
                     "high_rejection_map_path": str(integration_dir / "high_H.fits"),
+                    "integration_rejection": resident_rejection_descriptor("winsorized_sigma", 3.0, 3.0),
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": {
                         "available": True,

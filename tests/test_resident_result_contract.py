@@ -6,6 +6,7 @@ import numpy as np
 
 from glass.cli import main
 from glass.engine.contracts import DQFlag
+from glass.engine.rejection import resident_rejection_descriptor
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.dq_map_verify import summarize_count_map_pixels
@@ -18,6 +19,7 @@ def _write_resident_run(
     mismatch_summary: bool = False,
     mismatch_sample_count: bool = False,
     sample_closure_status: str | None = None,
+    omit_rejection_semantics: bool = False,
 ) -> None:
     integration = path / "integration"
     integration.mkdir(parents=True)
@@ -71,49 +73,51 @@ def _write_resident_run(
             "rejected_samples": 3,
             "valid_rejection_match": sample_closure_status == "passed",
         }
+    output = {
+        "filter": "H",
+        "backend": "cuda_resident_stack",
+        "memory_mode": "resident",
+        "frame_count": 3,
+        "master_path": str(integration / "master_H.fits"),
+        "weight_map_path": str(integration / "weight_H.fits"),
+        "coverage_map_path": str(integration / "coverage_H.fits"),
+        "dq_map_path": str(integration / "dq_H.fits"),
+        "low_rejection_map_path": str(integration / "low_H.fits"),
+        "high_rejection_map_path": str(integration / "high_H.fits"),
+        "dq_summary": dq_summary,
+        "dq_coverage_provenance": {
+            "available": True,
+            "active_frame_count": 3,
+            "geometric_frame_count_matches_active": True,
+            "rejected_sample_count": 2.0 if mismatch_sample_count else 3.0,
+            "rejected_sample_count_source": "low_high_rejection_maps",
+            "source_terms": [
+                "post_rejection_coverage",
+                "low_rejection",
+                "high_rejection",
+                "geometric_warp_coverage",
+            ],
+        },
+        "dq_provenance_summary": provenance_summary,
+        "geometric_warp_coverage": {
+            "available": True,
+            "frame_count": 3,
+            "frame_count_matches_active": True,
+        },
+        "output_map_policy": {
+            "available": ["master", "weight", "coverage", "dq", "low_rejection", "high_rejection"],
+            "written": ["master", "weight", "coverage", "dq", "low_rejection", "high_rejection"],
+            "skipped": [],
+        },
+    }
+    if not omit_rejection_semantics:
+        output["integration_rejection"] = resident_rejection_descriptor("winsorized_sigma", 3.0, 3.0)
     write_json(
         path / "integration_results.json",
         {
             "rejection": "winsorized_sigma",
-            "outputs": [
-                {
-                    "filter": "H",
-                    "backend": "cuda_resident_stack",
-                    "memory_mode": "resident",
-                    "frame_count": 3,
-                    "master_path": str(integration / "master_H.fits"),
-                    "weight_map_path": str(integration / "weight_H.fits"),
-                    "coverage_map_path": str(integration / "coverage_H.fits"),
-                    "dq_map_path": str(integration / "dq_H.fits"),
-                    "low_rejection_map_path": str(integration / "low_H.fits"),
-                    "high_rejection_map_path": str(integration / "high_H.fits"),
-                    "dq_summary": dq_summary,
-                    "dq_coverage_provenance": {
-                        "available": True,
-                        "active_frame_count": 3,
-                        "geometric_frame_count_matches_active": True,
-                        "rejected_sample_count": 2.0 if mismatch_sample_count else 3.0,
-                        "rejected_sample_count_source": "low_high_rejection_maps",
-                        "source_terms": [
-                            "post_rejection_coverage",
-                            "low_rejection",
-                            "high_rejection",
-                            "geometric_warp_coverage",
-                        ],
-                    },
-                    "dq_provenance_summary": provenance_summary,
-                    "geometric_warp_coverage": {
-                        "available": True,
-                        "frame_count": 3,
-                        "frame_count_matches_active": True,
-                    },
-                    "output_map_policy": {
-                        "available": ["master", "weight", "coverage", "dq", "low_rejection", "high_rejection"],
-                        "written": ["master", "weight", "coverage", "dq", "low_rejection", "high_rejection"],
-                        "skipped": [],
-                    },
-                }
-            ],
+            "rejection_semantics": resident_rejection_descriptor("winsorized_sigma", 3.0, 3.0),
+            "outputs": [output],
         },
     )
 
@@ -135,6 +139,23 @@ def test_resident_result_contract_passes_with_pixel_verify(tmp_path: Path) -> No
     assert accounting["coverage_provenance_rejected_samples"] == 3
     assert accounting["provenance_summary_rejected_samples"] == 3
     assert payload["outputs"][0]["sample_accounting_closure"]["status"] == "missing"
+    semantics = checks["resident_winsorized_rejection_semantics_disclosed"]
+    assert semantics["passed"] is True
+    assert payload["outputs"][0]["rejection_semantics"]["passed"] is True
+    assert payload["outputs"][0]["rejection_semantics"]["descriptor"]["cpu_baseline_parity"] is False
+
+
+def test_resident_result_contract_requires_winsorized_semantics_disclosure(tmp_path: Path) -> None:
+    _write_resident_run(tmp_path, omit_rejection_semantics=True)
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    assert payload["passed"] is False
+    assert checks["resident_winsorized_rejection_semantics_disclosed"]["passed"] is False
+    semantics = payload["outputs"][0]["rejection_semantics"]
+    assert semantics["required"] is True
+    assert semantics["present"] is False
 
 
 def test_resident_result_contract_accepts_sample_accounting_closure(tmp_path: Path) -> None:

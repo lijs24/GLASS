@@ -17,6 +17,7 @@ from glass.cpu.registration import estimate_translation_phase_correlation, trans
 from glass.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
 from glass.engine.contracts import DQFlag, DQMask
 from glass.engine.dq import dq_provenance_summary_from_resident
+from glass.engine.rejection import resident_rejection_descriptor
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
@@ -6137,6 +6138,9 @@ def run_resident_calibration_integration(
                 if resident_registration == "similarity_cuda_triangle"
                 else {}
             )
+            integration_rejection_descriptor = resident_rejection_descriptor(
+                rejection_mode, low_sigma, high_sigma
+            )
             resident_artifacts.append(
                 {
                     "filter": filter_name,
@@ -6956,18 +6960,7 @@ def run_resident_calibration_integration(
                             else "stack dispatch integrates frames already present in the resident stack"
                         ),
                     },
-                    "integration_rejection": {
-                        "mode": rejection_mode,
-                        "low_sigma": low_sigma,
-                        "high_sigma": high_sigma,
-                        "algorithm": (
-                            "two_stage_winsorized_mean_std_rejection_approximation"
-                            if rejection_mode == "winsorized_sigma"
-                            else "two_pass_mean_std_clip"
-                            if rejection_mode == "sigma_clip"
-                            else "none"
-                        ),
-                    },
+                    "integration_rejection": integration_rejection_descriptor,
                     "notes": [
                         "Raw light frames are uploaded one at a time into a reusable device buffer.",
                         "Calibrated frames remain resident in VRAM until integration completes.",
@@ -7022,6 +7015,7 @@ def run_resident_calibration_integration(
                     "backend": "cuda_resident_stack",
                     "memory_mode": "resident",
                     "rejection": rejection_mode,
+                    "integration_rejection": integration_rejection_descriptor,
                     "weighting": weighting_mode,
                     "resident_registration": resident_registration,
                     "resident_integration_dispatch": resident_integration_dispatch,
@@ -7154,6 +7148,7 @@ def run_resident_calibration_integration(
                 "rejection": rejection_mode,
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
+                "rejection_semantics": resident_rejection_descriptor(rejection_mode, low_sigma, high_sigma),
                 "frame_weights": frame_weights,
                 "outputs": outputs,
                 "excluded_frame_tokens": sorted(excluded_tokens),

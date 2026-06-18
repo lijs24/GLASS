@@ -4367,6 +4367,22 @@ integration where applicable.
   change, runtime default change, package build, upload, GitHub release
   creation, or real-data benchmark rerun.
 
+### S2-Gate 260: Resident Winsorized Rejection Semantics Disclosure
+
+- Add shared rejection descriptor constants for CPU winsorized sigma and the
+  current resident CUDA winsorized approximation.
+- Record resident rejection descriptors in `resident_artifacts.json`,
+  `integration_results.json` output rows, and top-level integration semantics.
+- Extend resident result contracts so resident `winsorized_sigma` outputs must
+  explicitly disclose the current mean/std two-stage approximation, the CPU
+  median/IQR baseline estimator, `cpu_baseline_parity=false`, and a pending CUDA
+  parity status.
+- Add contract tests for passing disclosed semantics and failing legacy/missing
+  winsorized semantics.
+- Keep this gate artifact/contract scoped: no CUDA kernel change, resident
+  runtime behavior change, runtime default change, package build, upload,
+  GitHub release creation, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

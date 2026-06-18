@@ -7,6 +7,12 @@ import numpy as np
 from glass.engine.contracts import RejectionPolicy
 
 
+CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "median_iqr_winsorized_standard_deviation_scale"
+RESIDENT_WINSORIZED_SIGMA_ALGORITHM = "two_stage_winsorized_mean_std_rejection_approximation"
+RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "mean_std_two_stage_winsorized"
+RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS = "known_non_parity_pending_cuda_update"
+
+
 def center_and_scale(
     stack: np.ndarray,
     valid: np.ndarray,
@@ -62,12 +68,54 @@ def rejection_scale_estimator(method: str | RejectionPolicy) -> str:
     if method_name in {"mad", "median_sigma"}:
         return "median_center_mad_scale"
     if method_name == "winsorized_sigma":
-        return "median_iqr_winsorized_standard_deviation_scale"
+        return CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR
     if method_name == "percentile":
         return "percentile_thresholds"
     if method_name == "minmax":
         return "minmax_extrema"
     return "unknown"
+
+
+def resident_rejection_descriptor(method: str, low_sigma: float, high_sigma: float) -> dict[str, Any]:
+    descriptor: dict[str, Any] = {
+        "mode": str(method),
+        "low_sigma": float(low_sigma),
+        "high_sigma": float(high_sigma),
+    }
+    if method == "winsorized_sigma":
+        descriptor.update(
+            {
+                "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+                "scale_estimator": RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+                "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+                "cpu_baseline_parity": False,
+                "parity_status": RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
+                "approximation": True,
+            }
+        )
+    elif method == "sigma_clip":
+        descriptor.update(
+            {
+                "algorithm": "two_pass_mean_std_clip",
+                "scale_estimator": "mean_std_two_pass",
+                "cpu_baseline_scale_estimator": rejection_scale_estimator("sigma_clip"),
+                "cpu_baseline_parity": False,
+                "parity_status": "known_non_parity_pending_cuda_update",
+                "approximation": True,
+            }
+        )
+    else:
+        descriptor.update(
+            {
+                "algorithm": "none",
+                "scale_estimator": "none",
+                "cpu_baseline_scale_estimator": rejection_scale_estimator(method),
+                "cpu_baseline_parity": method == "none",
+                "parity_status": "not_applicable" if method == "none" else "unknown",
+                "approximation": False,
+            }
+        )
+    return descriptor
 
 
 def rejection_policy_provenance(policy: RejectionPolicy) -> dict[str, Any]:
