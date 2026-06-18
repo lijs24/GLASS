@@ -43,6 +43,98 @@ def _read_json_object_optional(path: str | Path | None) -> dict[str, Any]:
     return _read_json_object(path)
 
 
+def _check_passed(payload: dict[str, Any], name: str) -> bool | None:
+    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return item.get("passed") is True
+    return None
+
+
+def _direct_publication_guard_from_decision(
+    decision: dict[str, Any],
+    *,
+    min_resident_lights: int = 200,
+) -> dict[str, Any]:
+    direct = (
+        decision.get("stack_engine_publication_direct_runtime_evidence")
+        if isinstance(
+            decision.get("stack_engine_publication_direct_runtime_evidence"),
+            dict,
+        )
+        else {}
+    )
+    raw_lights = _int_value(direct.get("raw_matrix_pipeline_resident_lights"))
+    default_lights = _int_value(
+        direct.get("raw_default_promotion_pipeline_resident_lights")
+    )
+    phase2_lights = _int_value(direct.get("phase2_matrix_pipeline_resident_lights"))
+    phase2_default_lights = _int_value(
+        direct.get("phase2_default_promotion_pipeline_resident_lights")
+    )
+    check_passed = _check_passed(
+        decision,
+        "stack_engine_publication_direct_runtime_evidence_passed",
+    )
+    source_ready = (
+        direct.get("raw_source_ready") is True
+        and direct.get("phase2_source_ready") is True
+        and direct.get("raw_matrix_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and direct.get("phase2_matrix_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and direct.get("raw_matrix_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and direct.get("phase2_matrix_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+    )
+    count_ready = (
+        direct.get("raw_count_ready") is True
+        and direct.get("phase2_count_ready") is True
+        and raw_lights is not None
+        and raw_lights >= int(min_resident_lights)
+        and default_lights is not None
+        and default_lights >= int(min_resident_lights)
+        and phase2_lights is not None
+        and phase2_lights >= int(min_resident_lights)
+        and phase2_default_lights is not None
+        and phase2_default_lights >= int(min_resident_lights)
+    )
+    ready = (
+        bool(direct)
+        and check_passed is True
+        and direct.get("ready") is True
+        and direct.get("checks_passed") is True
+        and source_ready
+        and count_ready
+        and direct.get("raw_leaf_checks_ready") is True
+        and direct.get("phase2_leaf_checks_ready") is True
+    )
+    return {
+        "present": bool(direct),
+        "ready": ready,
+        "decision_check_passed": check_passed,
+        "checks_passed": direct.get("checks_passed"),
+        "source_ready": source_ready,
+        "count_ready": count_ready,
+        "raw_leaf_checks_ready": direct.get("raw_leaf_checks_ready"),
+        "phase2_leaf_checks_ready": direct.get("phase2_leaf_checks_ready"),
+        "raw_acceptance_source": direct.get("raw_matrix_acceptance_source"),
+        "phase2_acceptance_source": direct.get("phase2_matrix_acceptance_source"),
+        "raw_calibration_source": direct.get(
+            "raw_matrix_pipeline_calibration_source"
+        ),
+        "phase2_calibration_source": direct.get(
+            "phase2_matrix_pipeline_calibration_source"
+        ),
+        "raw_resident_lights": raw_lights,
+        "raw_default_promotion_resident_lights": default_lights,
+        "phase2_resident_lights": phase2_lights,
+        "phase2_default_promotion_resident_lights": phase2_default_lights,
+        "required_min_resident_lights": int(min_resident_lights),
+    }
+
+
 def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
     if not payload:
         return {"present": False}
@@ -93,6 +185,14 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
     direct_evidence = (
         payload.get("runtime_default_direct_evidence")
         if isinstance(payload.get("runtime_default_direct_evidence"), dict)
+        else {}
+    )
+    release_direct_publication_guard = (
+        payload.get("release_decision_direct_runtime_publication_guard")
+        if isinstance(
+            payload.get("release_decision_direct_runtime_publication_guard"),
+            dict,
+        )
         else {}
     )
     return {
@@ -273,6 +373,42 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "runtime_default_direct_pipeline_resident_calibrated_light_count": (
             _int_value(direct_evidence.get("pipeline_resident_calibrated_light_count"))
+        ),
+        "release_decision_direct_runtime_publication_guard": (
+            release_direct_publication_guard
+        ),
+        "release_decision_direct_runtime_publication_guard_present": (
+            release_direct_publication_guard.get("present")
+        ),
+        "release_decision_direct_runtime_publication_guard_ready": (
+            release_direct_publication_guard.get("ready")
+        ),
+        "release_decision_direct_runtime_publication_guard_check_passed": (
+            release_direct_publication_guard.get("decision_check_passed")
+        ),
+        "release_decision_direct_runtime_publication_guard_source_ready": (
+            release_direct_publication_guard.get("source_ready")
+        ),
+        "release_decision_direct_runtime_publication_guard_count_ready": (
+            release_direct_publication_guard.get("count_ready")
+        ),
+        "release_decision_direct_runtime_publication_guard_leaf_checks_ready": (
+            release_direct_publication_guard.get("leaf_checks_ready")
+        ),
+        "release_decision_direct_runtime_publication_guard_raw_acceptance_source": (
+            release_direct_publication_guard.get("raw_matrix_acceptance_source")
+        ),
+        "release_decision_direct_runtime_publication_guard_raw_calibration_source": (
+            release_direct_publication_guard.get(
+                "raw_matrix_pipeline_calibration_source"
+            )
+        ),
+        "release_decision_direct_runtime_publication_guard_raw_resident_lights": (
+            _int_value(
+                release_direct_publication_guard.get(
+                    "raw_matrix_pipeline_resident_lights"
+                )
+            )
         ),
         "rejection_sample_accounting": rejection_sample_accounting,
         "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
@@ -468,6 +604,10 @@ def build_windows_release_matrix(
     expected_primary = expected_primary_package or primary
     runtime_repeat = decision.get("runtime_repeat") if isinstance(decision.get("runtime_repeat"), dict) else {}
     runtime_ratio = _number(runtime_repeat.get("elapsed_ratio_vs_best"))
+    release_direct_publication_guard = _direct_publication_guard_from_decision(
+        decision,
+        min_resident_lights=200,
+    )
 
     checks = [
         _check(
@@ -522,6 +662,11 @@ def build_windows_release_matrix(
             "release_decision_recommends_promotion",
             decision.get("recommendation") == "promote_default_candidate",
             {"actual": decision.get("recommendation"), "required": "promote_default_candidate"},
+        ),
+        _check(
+            "release_decision_direct_runtime_publication_guard_passed",
+            release_direct_publication_guard.get("ready") is True,
+            release_direct_publication_guard,
         ),
         _check(
             "default_promotion_manifest_present",
@@ -953,6 +1098,82 @@ def build_windows_release_matrix(
             },
         ),
         _check(
+            "default_promotion_release_decision_direct_runtime_publication_guard_passed",
+            (
+                default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_present"
+                )
+                is True
+                and default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_ready"
+                )
+                is True
+                and default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_check_passed"
+                )
+                is True
+                and default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_source_ready"
+                )
+                is True
+                and default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_count_ready"
+                )
+                is True
+                and default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_leaf_checks_ready"
+                )
+                is True
+                and default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_raw_acceptance_source"
+                )
+                == "explicit_resident_artifacts_json"
+                and default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_raw_calibration_source"
+                )
+                == "resident_artifacts_json_fallback"
+                and int(
+                    default_promotion.get(
+                        "release_decision_direct_runtime_publication_guard_raw_resident_lights"
+                    )
+                    or 0
+                )
+                >= 200
+            )
+            if require_default_promotion_ready and require_direct_runtime_evidence
+            else True,
+            {
+                "present": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_present"
+                ),
+                "ready": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_ready"
+                ),
+                "decision_check_passed": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_check_passed"
+                ),
+                "source_ready": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_source_ready"
+                ),
+                "count_ready": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_count_ready"
+                ),
+                "leaf_checks_ready": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_leaf_checks_ready"
+                ),
+                "acceptance_source": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_raw_acceptance_source"
+                ),
+                "calibration_source": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_raw_calibration_source"
+                ),
+                "resident_lights": default_promotion.get(
+                    "release_decision_direct_runtime_publication_guard_raw_resident_lights"
+                ),
+                "required": bool(require_direct_runtime_evidence),
+            },
+        ),
+        _check(
             "default_promotion_stack_engine_contract_ready",
             (
                 default_promotion.get("stack_engine_contract_present") is True
@@ -1260,6 +1481,9 @@ def build_windows_release_matrix(
             "release_decision_status": decision.get("status"),
             "default_change_ready": decision.get("default_change_ready"),
         },
+        "release_decision_direct_runtime_publication_guard": (
+            release_direct_publication_guard
+        ),
         "default_promotion_manifest": default_promotion,
         "current_machine": {
             "cuda_available": cuda.get("cuda_available"),
@@ -1298,6 +1522,14 @@ def _markdown(payload: dict[str, Any]) -> str:
     default_promotion = (
         payload.get("default_promotion_manifest")
         if isinstance(payload.get("default_promotion_manifest"), dict)
+        else {}
+    )
+    release_guard = (
+        payload.get("release_decision_direct_runtime_publication_guard")
+        if isinstance(
+            payload.get("release_decision_direct_runtime_publication_guard"),
+            dict,
+        )
         else {}
     )
     lines.extend(
@@ -1366,6 +1598,27 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"`{default_promotion.get('runtime_default_direct_pipeline_calibration_source')}` "
                 "resident-lights="
                 f"`{default_promotion.get('runtime_default_direct_pipeline_resident_calibrated_light_count')}`"
+            ),
+            (
+                "- Release decision direct publication guard: "
+                f"ready=`{release_guard.get('ready')}` "
+                f"check=`{release_guard.get('decision_check_passed')}` "
+                f"source-ready=`{release_guard.get('source_ready')}` "
+                f"count-ready=`{release_guard.get('count_ready')}` "
+                f"lights=`{release_guard.get('raw_resident_lights')}`"
+            ),
+            (
+                "- Default promotion direct publication guard: "
+                "ready="
+                f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_ready')}` "
+                "check="
+                f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_check_passed')}` "
+                "source-ready="
+                f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_source_ready')}` "
+                "count-ready="
+                f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_count_ready')}` "
+                "lights="
+                f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_raw_resident_lights')}`"
             ),
             (
                 "- StackEngine default contract: "

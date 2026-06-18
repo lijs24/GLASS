@@ -5373,6 +5373,34 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 310: Default Promotion Direct Publication Guard Handoff
+
+- Carry the S2-Gate 309 release-decision direct runtime publication guard into
+  `default-promotion-manifest`.
+- Add a default-promotion blocking check named
+  `release_decision_direct_runtime_publication_guard_passed` so a
+  default-change-ready decision cannot become a promotion manifest if it omits
+  Gate308/Gate309 direct runtime publication evidence.
+- Preserve raw and Phase2 publish-preflight direct evidence provenance in the
+  default-promotion JSON and Markdown: explicit resident-artifacts fastpath
+  source, resident-artifacts calibration fallback source, leaf-check readiness,
+  and at least 200 resident calibrated lights.
+- Extend `windows-release-matrix` with a direct release-decision guard check
+  and a default-promotion preservation check named
+  `default_promotion_release_decision_direct_runtime_publication_guard_passed`.
+- Block stale release decisions or default-promotion manifests that still report
+  ready/default-change-ready status but do not contain the Gate309 direct
+  publication guard, use stale source provenance, or carry too few resident
+  lights.
+- Add focused tests for passing handoff, missing release-decision guard,
+  missing default-promotion guard, stale source provenance, and too-small light
+  counts.
+- Generate Gate310 default-promotion, Windows release-matrix, and Phase2 status
+  artifacts from the existing Gate304-Gate309 200-light evidence.
+- Keep this gate default-promotion/release-matrix/status scoped: no image math
+  change, no CUDA kernel change, no runtime default change, no package
+  build/upload, no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

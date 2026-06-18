@@ -61,7 +61,50 @@ def _cpu_only_doctor(path: Path) -> None:
     )
 
 
-def _release_decision(path: Path, *, ready: bool = True) -> None:
+def _release_decision(
+    path: Path,
+    *,
+    ready: bool = True,
+    include_direct_publication_guard: bool = True,
+    direct_publication_guard_ready: bool = True,
+    direct_acceptance_source: str = "explicit_resident_artifacts_json",
+    direct_calibration_source: str = "resident_artifacts_json_fallback",
+    direct_resident_lights: int = 200,
+) -> None:
+    direct_guard = {
+        "ready": direct_publication_guard_ready,
+        "checks_passed": direct_publication_guard_ready,
+        "raw_source_ready": direct_publication_guard_ready,
+        "phase2_source_ready": direct_publication_guard_ready,
+        "raw_count_ready": direct_publication_guard_ready,
+        "phase2_count_ready": direct_publication_guard_ready,
+        "raw_leaf_checks_ready": direct_publication_guard_ready,
+        "phase2_leaf_checks_ready": direct_publication_guard_ready,
+        "raw_matrix_acceptance_source": direct_acceptance_source,
+        "raw_default_promotion_acceptance_source": direct_acceptance_source,
+        "phase2_matrix_acceptance_source": direct_acceptance_source,
+        "phase2_default_promotion_acceptance_source": direct_acceptance_source,
+        "raw_matrix_acceptance_check_count": 24,
+        "raw_default_promotion_acceptance_check_count": 24,
+        "phase2_matrix_acceptance_check_count": 24,
+        "phase2_default_promotion_acceptance_check_count": 24,
+        "raw_matrix_pipeline_calibration_source": direct_calibration_source,
+        "raw_default_promotion_pipeline_calibration_source": direct_calibration_source,
+        "phase2_matrix_pipeline_calibration_source": direct_calibration_source,
+        "phase2_default_promotion_pipeline_calibration_source": direct_calibration_source,
+        "raw_matrix_pipeline_resident_lights": direct_resident_lights,
+        "raw_default_promotion_pipeline_resident_lights": direct_resident_lights,
+        "phase2_matrix_pipeline_resident_lights": direct_resident_lights,
+        "phase2_default_promotion_pipeline_resident_lights": direct_resident_lights,
+    }
+    checks = []
+    if include_direct_publication_guard:
+        checks.append(
+            {
+                "name": "stack_engine_publication_direct_runtime_evidence_passed",
+                "passed": direct_publication_guard_ready,
+            }
+        )
     write_json(
         path,
         {
@@ -78,6 +121,10 @@ def _release_decision(path: Path, *, ready: bool = True) -> None:
                 "elapsed_ratio_vs_best": 1.0140343433372492,
                 "recommendation": "best_observed:repeat02",
             },
+            "stack_engine_publication_direct_runtime_evidence": direct_guard
+            if include_direct_publication_guard
+            else {},
+            "checks": checks,
         },
     )
 
@@ -116,6 +163,11 @@ def _default_promotion(
     direct_acceptance_fastpath_source: str = "explicit_resident_artifacts_json",
     direct_pipeline_calibration_ready: bool = True,
     direct_pipeline_calibration_source: str = "resident_artifacts_json_fallback",
+    include_release_direct_publication_guard: bool = True,
+    release_direct_publication_guard_ready: bool = True,
+    release_direct_publication_acceptance_source: str = "explicit_resident_artifacts_json",
+    release_direct_publication_calibration_source: str = "resident_artifacts_json_fallback",
+    release_direct_publication_resident_lights: int = 200,
 ) -> None:
     acceptance_policy_chain_ready = (
         acceptance_integration_engine_policy_ready
@@ -150,6 +202,11 @@ def _default_promotion(
         ready
         and rejection_sample_accounting_ready
         and sample_accounting_closure_ready
+        and (
+            release_direct_publication_guard_ready
+            if include_release_direct_publication_guard
+            else True
+        )
         and acceptance_policy_chain_ready
         and pipeline_policy_chain_ready
         and acceptance_runtime_default_chain_ready
@@ -526,6 +583,24 @@ def _default_promotion(
             else 0,
             "pipeline_direct_resident_calibration": direct_pipeline_calibration_ready,
         }
+    if include_release_direct_publication_guard:
+        payload["release_decision_direct_runtime_publication_guard"] = {
+            "present": True,
+            "ready": release_direct_publication_guard_ready,
+            "decision_check_passed": release_direct_publication_guard_ready,
+            "source_ready": release_direct_publication_guard_ready,
+            "count_ready": release_direct_publication_guard_ready,
+            "leaf_checks_ready": release_direct_publication_guard_ready,
+            "raw_matrix_acceptance_source": (
+                release_direct_publication_acceptance_source
+            ),
+            "raw_matrix_pipeline_calibration_source": (
+                release_direct_publication_calibration_source
+            ),
+            "raw_matrix_pipeline_resident_lights": (
+                release_direct_publication_resident_lights
+            ),
+        }
     write_json(path, payload)
 
 
@@ -590,12 +665,23 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     )
     assert checks["default_promotion_direct_acceptance_fastpath_evidence"] is True
     assert checks["default_promotion_direct_pipeline_calibration_evidence"] is True
+    assert checks["release_decision_direct_runtime_publication_guard_passed"] is True
+    assert (
+        checks[
+            "default_promotion_release_decision_direct_runtime_publication_guard_passed"
+        ]
+        is True
+    )
+    assert payload["release_decision_direct_runtime_publication_guard"]["ready"] is True
     assert payload["default_promotion_manifest"][
         "runtime_default_direct_acceptance_fastpath_source"
     ] == "explicit_resident_artifacts_json"
     assert payload["default_promotion_manifest"][
         "runtime_default_direct_pipeline_calibration_source"
     ] == "resident_artifacts_json_fallback"
+    assert payload["default_promotion_manifest"][
+        "release_decision_direct_runtime_publication_guard_ready"
+    ] is True
     assert checks["default_promotion_stack_engine_contract_ready"] is True
     assert checks["default_promotion_resident_winsorized_sweep_audit_passed"] is True
     assert checks["default_promotion_resident_winsorized_required_frame_passed"] is True
@@ -1040,6 +1126,100 @@ def test_windows_release_matrix_blocks_stale_direct_fastpath_source(tmp_path: Pa
     assert evidence["source"] == "gate303_handoff_bundle"
 
 
+def test_windows_release_matrix_blocks_missing_release_direct_publication_guard(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision, include_direct_publication_guard=False)
+    _default_promotion(default_promotion)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["release_decision_direct_runtime_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert "release_decision_direct_runtime_publication_guard_passed" in payload[
+        "failed_checks"
+    ]
+    assert checks["release_decision_direct_runtime_publication_guard_passed"][
+        "evidence"
+    ]["present"] is False
+
+
+def test_windows_release_matrix_blocks_missing_default_promotion_direct_publication_guard(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, include_release_direct_publication_guard=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["release_decision_direct_runtime_publication_guard_passed"][
+        "passed"
+    ] is True
+    assert checks[
+        "default_promotion_release_decision_direct_runtime_publication_guard_passed"
+    ]["passed"] is False
+    assert "default_promotion_release_decision_direct_runtime_publication_guard_passed" in payload[
+        "failed_checks"
+    ]
+    assert checks[
+        "default_promotion_release_decision_direct_runtime_publication_guard_passed"
+    ]["evidence"]["present"] is None
+
+
+def test_windows_release_matrix_blocks_stale_default_promotion_direct_publication_source(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        release_direct_publication_acceptance_source="glass_run_discovery",
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = checks[
+        "default_promotion_release_decision_direct_runtime_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is False
+    assert checks[
+        "default_promotion_release_decision_direct_runtime_publication_guard_passed"
+    ]["passed"] is False
+    assert evidence["acceptance_source"] == "glass_run_discovery"
+
+
 def test_windows_release_matrix_blocks_missing_stack_engine_contract(tmp_path: Path):
     doctor = tmp_path / "doctor.json"
     decision = tmp_path / "decision.json"
@@ -1362,6 +1542,14 @@ def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
         "Runtime default counts: acceptance-legacy=`0` "
         "acceptance-failed-masters=`0` pipeline-failed-outputs=`0` "
         "explicit-cuda=`1`"
+    ) in markdown_text
+    assert (
+        "Release decision direct publication guard: ready=`True` check=`True` "
+        "source-ready=`True` count-ready=`True` lights=`200`"
+    ) in markdown_text
+    assert (
+        "Default promotion direct publication guard: ready=`True` check=`True` "
+        "source-ready=`True` count-ready=`True` lights=`200`"
     ) in markdown_text
     assert (
         "StackEngine default contract: ready=`True` phase2-check=`True` gaps=`0` blockers=`0`"

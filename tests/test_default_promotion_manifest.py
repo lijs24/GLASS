@@ -8,7 +8,60 @@ from glass.io.json_io import read_json, write_json
 from glass.report.default_promotion_manifest import build_default_promotion_manifest
 
 
-def _write_release_decision(path: Path, *, ready: bool = True) -> None:
+def _write_release_decision(
+    path: Path,
+    *,
+    ready: bool = True,
+    include_direct_publication_guard: bool = True,
+    direct_publication_guard_ready: bool = True,
+    direct_acceptance_source: str = "explicit_resident_artifacts_json",
+    direct_calibration_source: str = "resident_artifacts_json_fallback",
+    direct_resident_lights: int = 200,
+) -> None:
+    direct_guard = {
+        "present": True,
+        "ready": direct_publication_guard_ready,
+        "decision_check_passed": direct_publication_guard_ready,
+        "status": "passed" if direct_publication_guard_ready else "blocked",
+        "passed": direct_publication_guard_ready,
+        "checks_passed": direct_publication_guard_ready,
+        "source_ready": direct_publication_guard_ready,
+        "count_ready": direct_publication_guard_ready,
+        "leaf_checks_ready": direct_publication_guard_ready,
+        "raw_ready": direct_publication_guard_ready,
+        "phase2_ready": direct_publication_guard_ready,
+        "phase2_check_passed": direct_publication_guard_ready,
+        "raw_source_ready": direct_publication_guard_ready,
+        "phase2_source_ready": direct_publication_guard_ready,
+        "raw_count_ready": direct_publication_guard_ready,
+        "phase2_count_ready": direct_publication_guard_ready,
+        "raw_leaf_checks_ready": direct_publication_guard_ready,
+        "phase2_leaf_checks_ready": direct_publication_guard_ready,
+        "raw_matrix_acceptance_source": direct_acceptance_source,
+        "raw_default_promotion_acceptance_source": direct_acceptance_source,
+        "phase2_matrix_acceptance_source": direct_acceptance_source,
+        "phase2_default_promotion_acceptance_source": direct_acceptance_source,
+        "raw_matrix_acceptance_check_count": 24,
+        "raw_default_promotion_acceptance_check_count": 24,
+        "phase2_matrix_acceptance_check_count": 24,
+        "phase2_default_promotion_acceptance_check_count": 24,
+        "raw_matrix_pipeline_calibration_source": direct_calibration_source,
+        "raw_default_promotion_pipeline_calibration_source": direct_calibration_source,
+        "phase2_matrix_pipeline_calibration_source": direct_calibration_source,
+        "phase2_default_promotion_pipeline_calibration_source": direct_calibration_source,
+        "raw_matrix_pipeline_resident_lights": direct_resident_lights,
+        "raw_default_promotion_pipeline_resident_lights": direct_resident_lights,
+        "phase2_matrix_pipeline_resident_lights": direct_resident_lights,
+        "phase2_default_promotion_pipeline_resident_lights": direct_resident_lights,
+    }
+    checks = []
+    if include_direct_publication_guard:
+        checks.append(
+            {
+                "name": "stack_engine_publication_direct_runtime_evidence_passed",
+                "passed": direct_publication_guard_ready,
+            }
+        )
     write_json(
         path,
         {
@@ -72,6 +125,10 @@ def _write_release_decision(path: Path, *, ready: bool = True) -> None:
                     }
                 ],
             },
+            "stack_engine_publication_direct_runtime_evidence": direct_guard
+            if include_direct_publication_guard
+            else {},
+            "checks": checks,
         },
     )
 
@@ -754,6 +811,17 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["pipeline_pixel_maps_match_dq"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
+    assert checks["release_decision_direct_runtime_publication_guard_passed"] is True
+    assert payload["release_decision_direct_runtime_publication_guard"]["ready"] is True
+    assert payload["release_decision_direct_runtime_publication_guard"][
+        "raw_matrix_acceptance_source"
+    ] == "explicit_resident_artifacts_json"
+    assert payload["release_decision_direct_runtime_publication_guard"][
+        "raw_matrix_pipeline_calibration_source"
+    ] == "resident_artifacts_json_fallback"
+    assert payload["release_decision_direct_runtime_publication_guard"][
+        "raw_matrix_pipeline_resident_lights"
+    ] == 200
     assert checks["acceptance_integration_engine_policy_handoff_passed"] is True
     assert checks["pipeline_integration_engine_policy_default_passed"] is True
     assert payload["integration_engine_policy"]["ready"] is True
@@ -872,6 +940,79 @@ def test_default_promotion_manifest_blocks_unready_release_decision(tmp_path: Pa
     assert payload["status"] == "blocked"
     assert "release_decision_default_change_ready" in payload["failed_checks"]
     assert "phase2_status_green" in payload["failed_checks"]
+
+
+def test_default_promotion_manifest_blocks_missing_release_direct_publication_guard(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision, include_direct_publication_guard=False)
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_direct_runtime_publication_guard"]
+    assert payload["passed"] is False
+    assert "release_decision_direct_runtime_publication_guard_passed" in payload[
+        "failed_checks"
+    ]
+    assert checks["release_decision_direct_runtime_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert guard["present"] is False
+    assert guard["decision_check_passed"] is None
+
+
+def test_default_promotion_manifest_blocks_stale_release_direct_publication_source(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(
+        decision,
+        direct_acceptance_source="glass_run_discovery",
+    )
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    guard = payload["release_decision_direct_runtime_publication_guard"]
+    assert payload["passed"] is False
+    assert "release_decision_direct_runtime_publication_guard_passed" in payload[
+        "failed_checks"
+    ]
+    assert guard["source_ready"] is False
+    assert guard["raw_matrix_acceptance_source"] == "glass_run_discovery"
+
+
+def test_default_promotion_manifest_blocks_short_release_direct_publication_count(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision, direct_resident_lights=199)
+    _write_phase2_status(phase2, decision)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    guard = payload["release_decision_direct_runtime_publication_guard"]
+    assert payload["passed"] is False
+    assert "release_decision_direct_runtime_publication_guard_passed" in payload[
+        "failed_checks"
+    ]
+    assert guard["count_ready"] is False
+    assert guard["raw_matrix_pipeline_resident_lights"] == 199
 
 
 def test_default_promotion_manifest_blocks_missing_default_route_evidence(tmp_path: Path) -> None:
@@ -1444,6 +1585,8 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "Resident Winsorized Sweep" in markdown_text
     assert "Required frame count: `200`" in markdown_text
     assert "StackEngine Publication Audit" in markdown_text
+    assert "Release direct publication guard: ready=`True`" in markdown_text
+    assert "Release direct publication sources: raw-acceptance=`explicit_resident_artifacts_json`" in markdown_text
     assert "Policy chain: raw=`True` phase2=`True` agreement=`True`" in markdown_text
     assert "Resident winsorized chain: raw=`True` phase2=`True` agreement=`True`" in markdown_text
     assert "Route contract passed: `True`" in markdown_text

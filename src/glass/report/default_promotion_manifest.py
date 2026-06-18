@@ -270,6 +270,14 @@ def _phase2_check_passed(phase2: dict[str, Any], name: str) -> bool | None:
     return None
 
 
+def _decision_check_passed(decision: dict[str, Any], name: str) -> bool | None:
+    checks = decision.get("checks") if isinstance(decision.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return item.get("passed") is True
+    return None
+
+
 def _stack_engine_summary(phase2: dict[str, Any]) -> dict[str, Any]:
     contract = (
         phase2.get("stack_engine_contract")
@@ -856,6 +864,146 @@ def _runtime_default_direct_evidence_summary(
     }
 
 
+def _release_decision_direct_runtime_publication_guard(
+    decision: dict[str, Any],
+    *,
+    min_resident_lights: int,
+) -> dict[str, Any]:
+    direct = (
+        decision.get("stack_engine_publication_direct_runtime_evidence")
+        if isinstance(
+            decision.get("stack_engine_publication_direct_runtime_evidence"),
+            dict,
+        )
+        else {}
+    )
+    check_passed = _decision_check_passed(
+        decision,
+        "stack_engine_publication_direct_runtime_evidence_passed",
+    )
+    raw_matrix_lights = _int_value(direct.get("raw_matrix_pipeline_resident_lights"))
+    raw_default_lights = _int_value(
+        direct.get("raw_default_promotion_pipeline_resident_lights")
+    )
+    phase2_matrix_lights = _int_value(
+        direct.get("phase2_matrix_pipeline_resident_lights")
+    )
+    phase2_default_lights = _int_value(
+        direct.get("phase2_default_promotion_pipeline_resident_lights")
+    )
+    source_ready = (
+        direct.get("raw_source_ready") is True
+        and direct.get("phase2_source_ready") is True
+        and direct.get("raw_matrix_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and direct.get("raw_default_promotion_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and direct.get("phase2_matrix_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and direct.get("phase2_default_promotion_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and direct.get("raw_matrix_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and direct.get("raw_default_promotion_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and direct.get("phase2_matrix_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and direct.get("phase2_default_promotion_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+    )
+    count_ready = (
+        direct.get("raw_count_ready") is True
+        and direct.get("phase2_count_ready") is True
+        and _int_value(direct.get("raw_matrix_acceptance_check_count")) is not None
+        and _int_value(direct.get("raw_matrix_acceptance_check_count")) > 0
+        and _int_value(direct.get("raw_default_promotion_acceptance_check_count"))
+        is not None
+        and _int_value(direct.get("raw_default_promotion_acceptance_check_count"))
+        > 0
+        and _int_value(direct.get("phase2_matrix_acceptance_check_count"))
+        is not None
+        and _int_value(direct.get("phase2_matrix_acceptance_check_count")) > 0
+        and _int_value(direct.get("phase2_default_promotion_acceptance_check_count"))
+        is not None
+        and _int_value(direct.get("phase2_default_promotion_acceptance_check_count"))
+        > 0
+        and raw_matrix_lights is not None
+        and raw_matrix_lights >= int(min_resident_lights)
+        and raw_default_lights is not None
+        and raw_default_lights >= int(min_resident_lights)
+        and phase2_matrix_lights is not None
+        and phase2_matrix_lights >= int(min_resident_lights)
+        and phase2_default_lights is not None
+        and phase2_default_lights >= int(min_resident_lights)
+    )
+    leaf_ready = (
+        direct.get("raw_leaf_checks_ready") is True
+        and direct.get("phase2_leaf_checks_ready") is True
+    )
+    ready = (
+        bool(direct)
+        and check_passed is True
+        and direct.get("ready") is True
+        and direct.get("checks_passed") is True
+        and source_ready
+        and count_ready
+        and leaf_ready
+    )
+    return {
+        "present": bool(direct),
+        "ready": ready,
+        "decision_check_passed": check_passed,
+        "status": direct.get("status"),
+        "passed": direct.get("passed"),
+        "checks_passed": direct.get("checks_passed"),
+        "source_ready": source_ready,
+        "count_ready": count_ready,
+        "leaf_checks_ready": leaf_ready,
+        "raw_ready": direct.get("raw_ready"),
+        "phase2_ready": direct.get("phase2_ready"),
+        "phase2_check_passed": direct.get("phase2_check_passed"),
+        "raw_matrix_acceptance_source": direct.get("raw_matrix_acceptance_source"),
+        "raw_default_promotion_acceptance_source": direct.get(
+            "raw_default_promotion_acceptance_source"
+        ),
+        "phase2_matrix_acceptance_source": direct.get(
+            "phase2_matrix_acceptance_source"
+        ),
+        "phase2_default_promotion_acceptance_source": direct.get(
+            "phase2_default_promotion_acceptance_source"
+        ),
+        "raw_matrix_acceptance_check_count": _int_value(
+            direct.get("raw_matrix_acceptance_check_count")
+        ),
+        "raw_default_promotion_acceptance_check_count": _int_value(
+            direct.get("raw_default_promotion_acceptance_check_count")
+        ),
+        "phase2_matrix_acceptance_check_count": _int_value(
+            direct.get("phase2_matrix_acceptance_check_count")
+        ),
+        "phase2_default_promotion_acceptance_check_count": _int_value(
+            direct.get("phase2_default_promotion_acceptance_check_count")
+        ),
+        "raw_matrix_pipeline_calibration_source": direct.get(
+            "raw_matrix_pipeline_calibration_source"
+        ),
+        "raw_default_promotion_pipeline_calibration_source": direct.get(
+            "raw_default_promotion_pipeline_calibration_source"
+        ),
+        "phase2_matrix_pipeline_calibration_source": direct.get(
+            "phase2_matrix_pipeline_calibration_source"
+        ),
+        "phase2_default_promotion_pipeline_calibration_source": direct.get(
+            "phase2_default_promotion_pipeline_calibration_source"
+        ),
+        "raw_matrix_pipeline_resident_lights": raw_matrix_lights,
+        "raw_default_promotion_pipeline_resident_lights": raw_default_lights,
+        "phase2_matrix_pipeline_resident_lights": phase2_matrix_lights,
+        "phase2_default_promotion_pipeline_resident_lights": phase2_default_lights,
+        "required_min_resident_lights": int(min_resident_lights),
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -894,6 +1042,12 @@ def build_default_promotion_manifest(
     runtime_default_direct_evidence = _runtime_default_direct_evidence_summary(
         decision,
         phase2,
+    )
+    release_direct_publication_guard = (
+        _release_decision_direct_runtime_publication_guard(
+            decision,
+            min_resident_lights=min_resident_lights,
+        )
     )
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
@@ -966,6 +1120,11 @@ def build_default_promotion_manifest(
                 "actual": phase2_decision.get("recommendation"),
                 "required": "promote_default_candidate",
             },
+        ),
+        _check(
+            "release_decision_direct_runtime_publication_guard_passed",
+            release_direct_publication_guard.get("ready") is True,
+            release_direct_publication_guard,
         ),
         _check(
             "default_route_acceptance_present",
@@ -1471,6 +1630,7 @@ def build_default_promotion_manifest(
             "recommendation": decision.get("recommendation"),
             "speedup": decision.get("speedup"),
             "resident_winsorized_semantics": release_resident_winsorized,
+            "direct_runtime_publication_guard": release_direct_publication_guard,
         },
         "phase2_status": {
             "status": phase2.get("status"),
@@ -1484,6 +1644,9 @@ def build_default_promotion_manifest(
         "integration_engine_policy": integration_engine_policy,
         "stack_engine_runtime_default": stack_engine_runtime_default,
         "runtime_default_direct_evidence": runtime_default_direct_evidence,
+        "release_decision_direct_runtime_publication_guard": (
+            release_direct_publication_guard
+        ),
         "stack_engine_contract": stack_engine,
         "resident_winsorized_sweep_audit": resident_winsorized_sweep,
         "stack_engine_publication_audit": publication_audit,
@@ -1507,6 +1670,9 @@ def _markdown(payload: dict[str, Any]) -> str:
     stack_engine_runtime_default = payload.get("stack_engine_runtime_default") or {}
     runtime_default_direct_evidence = (
         payload.get("runtime_default_direct_evidence") or {}
+    )
+    release_direct_publication_guard = (
+        payload.get("release_decision_direct_runtime_publication_guard") or {}
     )
     stack_engine = payload.get("stack_engine_contract") or {}
     resident_winsorized_sweep = payload.get("resident_winsorized_sweep_audit") or {}
@@ -1590,6 +1756,22 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"acceptance-source=`{runtime_default_direct_evidence.get('acceptance_fastpath_source')}` "
             "pipeline-calibration-source="
             f"`{runtime_default_direct_evidence.get('pipeline_calibration_artifact_source')}`"
+        ),
+        (
+            "- Release direct publication guard: "
+            f"ready=`{release_direct_publication_guard.get('ready')}` "
+            f"check=`{release_direct_publication_guard.get('decision_check_passed')}` "
+            f"source-ready=`{release_direct_publication_guard.get('source_ready')}` "
+            f"count-ready=`{release_direct_publication_guard.get('count_ready')}`"
+        ),
+        (
+            "- Release direct publication sources: "
+            "raw-acceptance="
+            f"`{release_direct_publication_guard.get('raw_matrix_acceptance_source')}` "
+            "raw-calibration="
+            f"`{release_direct_publication_guard.get('raw_matrix_pipeline_calibration_source')}` "
+            "raw-lights="
+            f"`{release_direct_publication_guard.get('raw_matrix_pipeline_resident_lights')}`"
         ),
         "",
         "## StackEngine Default Contract",
