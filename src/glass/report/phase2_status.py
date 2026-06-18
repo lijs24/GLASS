@@ -92,6 +92,7 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
     )
     native_guardrails_bundle = _native_guardrails_summary(payload)
     registration_fastpath = _resident_registration_fastpath_summary(payload)
+    integration_engine_policy = _acceptance_integration_engine_policy_summary(payload)
     return {
         "path": payload.get("_path"),
         "exists": True,
@@ -195,6 +196,20 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
         )
         if registration_fastpath
         else None,
+        "pipeline_integration_engine_policy": integration_engine_policy,
+        "pipeline_integration_engine_policy_status": integration_engine_policy.get("status"),
+        "pipeline_integration_engine_policy_check_present": integration_engine_policy.get(
+            "check_present"
+        ),
+        "pipeline_integration_engine_policy_check_passed": integration_engine_policy.get(
+            "check_passed"
+        ),
+        "pipeline_integration_engine_policy_non_resident_count": integration_engine_policy.get(
+            "non_resident_count"
+        ),
+        "pipeline_integration_engine_policy_failed_count": integration_engine_policy.get(
+            "failed_count"
+        ),
         "resident_calibration_contract_passed": (resident_contracts.get("calibration") or {}).get("passed")
         if isinstance(resident_contracts.get("calibration"), dict)
         else None,
@@ -866,6 +881,108 @@ def _sample_accounting_closure_summary(payload: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _integration_engine_policy_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    check_name = "integration_default_engine_policy"
+    checks = [item for item in payload.get("checks") or [] if isinstance(item, dict)]
+    check = next((item for item in checks if item.get("name") == check_name), None)
+    integration = payload.get("integration") if isinstance(payload.get("integration"), dict) else {}
+    engine_policy = (
+        integration.get("engine_policy")
+        if isinstance(integration.get("engine_policy"), dict)
+        else {}
+    )
+    outputs = engine_policy.get("outputs")
+    if not isinstance(outputs, list):
+        outputs = []
+
+    rows: list[dict[str, Any]] = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        failures = output.get("failures")
+        if not isinstance(failures, list):
+            failures = []
+        rows.append(
+            {
+                "item": output.get("item"),
+                "status": output.get("status"),
+                "required": bool(output.get("required")),
+                "passed": bool(output.get("passed")),
+                "backend": output.get("backend"),
+                "memory_mode": output.get("memory_mode"),
+                "tile_stack_mode": output.get("tile_stack_mode"),
+                "failures": [str(item) for item in failures],
+            }
+        )
+
+    failed_items = [row for row in rows if not row.get("passed")]
+    if check is not None:
+        check_passed = bool(check.get("passed"))
+        status = "passed" if check_passed else "failed"
+    elif engine_policy:
+        check_passed = None
+        status = "passed" if bool(engine_policy.get("passed")) and not failed_items else "failed"
+    else:
+        check_passed = None
+        status = "not_available"
+    return {
+        "status": status,
+        "check_name": check_name,
+        "check_present": check is not None,
+        "check_passed": check_passed,
+        "top_level_present": engine_policy.get("top_level_present"),
+        "top_level_default_ok": engine_policy.get("top_level_default_ok"),
+        "output_count": int(engine_policy.get("output_count") or len(rows)),
+        "non_resident_count": int(engine_policy.get("non_resident_count") or 0),
+        "resident_count": int(engine_policy.get("resident_count") or 0),
+        "failed_count": len(failed_items),
+        "failed_items": failed_items,
+        "rows": rows,
+    }
+
+
+def _acceptance_integration_engine_policy_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    release_evidence = (
+        payload.get("release_contract_evidence")
+        if isinstance(payload.get("release_contract_evidence"), dict)
+        else {}
+    )
+    pipeline_evidence = (
+        release_evidence.get("pipeline_contract")
+        if isinstance(release_evidence.get("pipeline_contract"), dict)
+        else {}
+    )
+    engine_policy = (
+        pipeline_evidence.get("integration_engine_policy")
+        if isinstance(pipeline_evidence.get("integration_engine_policy"), dict)
+        else {}
+    )
+    rows = engine_policy.get("rows")
+    if not isinstance(rows, list):
+        rows = []
+    failed_items = engine_policy.get("failed_items")
+    if not isinstance(failed_items, list):
+        failed_items = []
+    check_present = engine_policy.get("check_present")
+    check_passed = engine_policy.get("check_passed")
+    if not engine_policy:
+        status = "not_available"
+    else:
+        status = str(engine_policy.get("status") or "not_available")
+    return {
+        "status": status,
+        "check_name": engine_policy.get("check_name") or "integration_default_engine_policy",
+        "check_present": check_present,
+        "check_passed": check_passed,
+        "output_count": engine_policy.get("output_count"),
+        "non_resident_count": engine_policy.get("non_resident_count"),
+        "resident_count": engine_policy.get("resident_count"),
+        "failed_count": engine_policy.get("failed_count", len(failed_items)),
+        "failed_items": failed_items,
+        "rows": rows,
+    }
+
+
 def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None:
     payload = _read_json_optional(path)
     if payload is None:
@@ -884,6 +1001,7 @@ def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None
     )
     rejection_sample_accounting = _rejection_sample_accounting_summary(payload)
     sample_accounting_closure = _sample_accounting_closure_summary(payload)
+    integration_engine_policy = _integration_engine_policy_summary(payload)
     return {
         "path": payload.get("_path"),
         "exists": True,
@@ -927,6 +1045,21 @@ def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None
         "integration_sample_accounting_closure": _check_passed(
             payload,
             "integration_sample_accounting_closure",
+        ),
+        "integration_default_engine_policy": _check_passed(
+            payload,
+            "integration_default_engine_policy",
+        ),
+        "integration_engine_policy": integration_engine_policy,
+        "integration_engine_policy_status": integration_engine_policy.get("status"),
+        "integration_engine_policy_check_present": integration_engine_policy.get(
+            "check_present"
+        ),
+        "integration_engine_policy_failed_count": integration_engine_policy.get(
+            "failed_count"
+        ),
+        "integration_engine_policy_non_resident_count": integration_engine_policy.get(
+            "non_resident_count"
         ),
         "rejection_sample_accounting": rejection_sample_accounting,
         "rejection_sample_accounting_status": rejection_sample_accounting.get("status"),
@@ -1172,6 +1305,31 @@ def build_phase2_status(
                 "evidence": {
                     "status": acceptance.get("status"),
                     "speedup_vs_reference": acceptance.get("speedup_vs_reference"),
+                },
+            }
+        )
+        checks.append(
+            {
+                "name": "acceptance_pipeline_integration_engine_policy_passed",
+                "passed": (
+                    acceptance.get("pipeline_integration_engine_policy_status") == "passed"
+                    and acceptance.get("pipeline_integration_engine_policy_check_present") is True
+                    and acceptance.get("pipeline_integration_engine_policy_check_passed") is True
+                ),
+                "evidence": {
+                    "status": acceptance.get("pipeline_integration_engine_policy_status"),
+                    "check_present": acceptance.get(
+                        "pipeline_integration_engine_policy_check_present"
+                    ),
+                    "check_passed": acceptance.get(
+                        "pipeline_integration_engine_policy_check_passed"
+                    ),
+                    "non_resident_count": acceptance.get(
+                        "pipeline_integration_engine_policy_non_resident_count"
+                    ),
+                    "failed_count": acceptance.get(
+                        "pipeline_integration_engine_policy_failed_count"
+                    ),
                 },
             }
         )
@@ -1505,6 +1663,29 @@ def build_phase2_status(
                 },
             }
         )
+        engine_policy = (
+            pipeline.get("integration_engine_policy")
+            if isinstance(pipeline.get("integration_engine_policy"), dict)
+            else {}
+        )
+        checks.append(
+            {
+                "name": "pipeline_integration_engine_policy_passed",
+                "passed": (
+                    engine_policy.get("status") == "passed"
+                    and engine_policy.get("check_present") is True
+                    and engine_policy.get("check_passed") is True
+                ),
+                "evidence": {
+                    "status": engine_policy.get("status"),
+                    "check_present": engine_policy.get("check_present"),
+                    "check_passed": engine_policy.get("check_passed"),
+                    "non_resident_count": engine_policy.get("non_resident_count"),
+                    "failed_count": engine_policy.get("failed_count"),
+                    "failed_items": engine_policy.get("failed_items"),
+                },
+            }
+        )
         rejection_accounting = (
             pipeline.get("rejection_sample_accounting")
             if isinstance(pipeline.get("rejection_sample_accounting"), dict)
@@ -1760,6 +1941,13 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Triangle warp batch frames: {acceptance.get('triangle_warp_batch_frame_count')}",
                 f"- Resident warp copy mode: {acceptance.get('resident_warp_copy_mode')}",
                 f"- Resident warp scratch bytes: {acceptance.get('resident_warp_scratch_bytes')}",
+                (
+                    "- Pipeline integration engine policy: "
+                    f"{acceptance.get('pipeline_integration_engine_policy_status')} "
+                    f"check={acceptance.get('pipeline_integration_engine_policy_check_passed')} "
+                    f"nonresident={acceptance.get('pipeline_integration_engine_policy_non_resident_count')} "
+                    f"failed={acceptance.get('pipeline_integration_engine_policy_failed_count')}"
+                ),
             ]
         )
     if default_route_acceptance:
@@ -1955,6 +2143,13 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 (
                     "- Integration resident result contract: "
                     f"{pipeline.get('integration_resident_result_contract')}"
+                ),
+                (
+                    "- Integration engine policy: "
+                    f"{pipeline.get('integration_engine_policy_status')} "
+                    f"check={pipeline.get('integration_default_engine_policy')} "
+                    f"nonresident={pipeline.get('integration_engine_policy_non_resident_count')} "
+                    f"failed={pipeline.get('integration_engine_policy_failed_count')}"
                 ),
                 f"- Pixel verification enabled: {pipeline.get('pixel_verification_enabled')}",
                 (
@@ -2532,6 +2727,55 @@ def build_phase2_status_compare(
             candidate=_status_value(candidate, "acceptance_audit", "status"),
         ),
         _compare_check(
+            "acceptance_pipeline_integration_engine_policy_preserved",
+            _status_value(
+                baseline,
+                "acceptance_audit",
+                "pipeline_integration_engine_policy_status",
+            )
+            != "passed"
+            or _status_value(
+                candidate,
+                "acceptance_audit",
+                "pipeline_integration_engine_policy_status",
+            )
+            == "passed",
+            baseline={
+                "status": _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "pipeline_integration_engine_policy_status",
+                ),
+                "check_present": _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "pipeline_integration_engine_policy_check_present",
+                ),
+                "check_passed": _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "pipeline_integration_engine_policy_check_passed",
+                ),
+            },
+            candidate={
+                "status": _status_value(
+                    candidate,
+                    "acceptance_audit",
+                    "pipeline_integration_engine_policy_status",
+                ),
+                "check_present": _status_value(
+                    candidate,
+                    "acceptance_audit",
+                    "pipeline_integration_engine_policy_check_present",
+                ),
+                "check_passed": _status_value(
+                    candidate,
+                    "acceptance_audit",
+                    "pipeline_integration_engine_policy_check_passed",
+                ),
+            },
+        ),
+        _compare_check(
             "default_route_acceptance_passed_preserved",
             _status_value(baseline, "default_route_acceptance", "passed") is not True
             or _status_value(candidate, "default_route_acceptance", "passed") is True,
@@ -2749,6 +2993,64 @@ def build_phase2_status_compare(
             or _status_value(candidate, "pipeline_contract", "integration_dq_contract") is True,
             baseline=_status_value(baseline, "pipeline_contract", "integration_dq_contract"),
             candidate=_status_value(candidate, "pipeline_contract", "integration_dq_contract"),
+        ),
+        _compare_check(
+            "pipeline_integration_engine_policy_check_preserved",
+            _status_value(
+                baseline,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "check_present",
+            )
+            is not True
+            or _status_value(
+                candidate,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "check_present",
+            )
+            is True,
+            baseline=_status_value(
+                baseline,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "check_present",
+            ),
+            candidate=_status_value(
+                candidate,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "check_present",
+            ),
+        ),
+        _compare_check(
+            "pipeline_integration_engine_policy_passed_preserved",
+            _status_value(
+                baseline,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "status",
+            )
+            != "passed"
+            or _status_value(
+                candidate,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "status",
+            )
+            == "passed",
+            baseline=_status_value(
+                baseline,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "status",
+            ),
+            candidate=_status_value(
+                candidate,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "status",
+            ),
         ),
         _compare_check(
             "pipeline_pixel_verification_preserved",
@@ -2997,6 +3299,17 @@ def build_phase2_status_compare(
             ),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
+            "acceptance_pipeline_integration_engine_policy": _status_value(
+                baseline,
+                "acceptance_audit",
+                "pipeline_integration_engine_policy_status",
+            ),
+            "pipeline_integration_engine_policy": _status_value(
+                baseline,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "status",
+            ),
             "pipeline_sample_accounting_closure": _status_value(
                 baseline,
                 "pipeline_contract",
@@ -3047,6 +3360,17 @@ def build_phase2_status_compare(
             ),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
+            "acceptance_pipeline_integration_engine_policy": _status_value(
+                candidate,
+                "acceptance_audit",
+                "pipeline_integration_engine_policy_status",
+            ),
+            "pipeline_integration_engine_policy": _status_value(
+                candidate,
+                "pipeline_contract",
+                "integration_engine_policy",
+                "status",
+            ),
             "pipeline_sample_accounting_closure": _status_value(
                 candidate,
                 "pipeline_contract",

@@ -4735,6 +4735,25 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no publication
   handoff change beyond acceptance evidence, and no real-data benchmark rerun.
 
+### S2-Gate 281: Phase 2 Status Integration Engine Policy Handoff
+
+- Carry the S2-Gate 280 acceptance-audit integration engine-policy evidence into
+  `glass phase2-status`.
+- Summarize acceptance-side pipeline integration engine-policy status, required
+  check presence, required check result, resident/non-resident counts, and failed
+  row counts in status JSON and Markdown.
+- Carry raw `glass pipeline-contract` integration engine-policy summaries into
+  Phase 2 status so current status artifacts expose the same default-route guard
+  without relying only on the acceptance-audit handoff.
+- Add green-status blockers for missing or failed acceptance-side and
+  pipeline-contract engine-policy evidence.
+- Extend `glass phase2-status-compare` so a candidate cannot drop a previously
+  passing acceptance handoff, lose the pipeline-contract required check, or
+  regress a previously passing pipeline integration engine-policy status.
+- Keep this gate status/compare scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

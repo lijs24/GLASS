@@ -1,0 +1,289 @@
+{
+  "acceptance_audit": {
+    "abs_diff_p99": 0.002,
+    "active_frames": 193,
+    "benchmark_contract": {
+      "name": "s2_gate_281_synthetic_status_fixture"
+    },
+    "contract_bundle_schema_status": null,
+    "coverage_fraction": 0.957,
+    "exists": true,
+    "frame_type_counts": {
+      "bias": 20,
+      "dark": 20,
+      "flat": 20,
+      "light": 200
+    },
+    "native_guardrails_bundle": null,
+    "native_guardrails_bundle_status": null,
+    "passed": true,
+    "path": "synthetic://gate281/fixture/acceptance.json",
+    "pipeline_integration_engine_policy": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "resident_count": 1,
+      "rows": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": null
+        }
+      ],
+      "status": "passed"
+    },
+    "pipeline_integration_engine_policy_check_passed": true,
+    "pipeline_integration_engine_policy_check_present": true,
+    "pipeline_integration_engine_policy_failed_count": 0,
+    "pipeline_integration_engine_policy_non_resident_count": 0,
+    "pipeline_integration_engine_policy_status": "passed",
+    "resident_calibrated_light_count": null,
+    "resident_calibration_contract_passed": null,
+    "resident_calibration_master_count": null,
+    "resident_native_calibration_artifact": null,
+    "resident_registration_fastpath": null,
+    "resident_registration_fastpath_contract_check_count": null,
+    "resident_registration_fastpath_contract_failed_check_count": null,
+    "resident_registration_fastpath_contract_status": null,
+    "resident_registration_fastpath_mode": null,
+    "resident_registration_fastpath_status": null,
+    "resident_result_contract_json": null,
+    "resident_result_contract_passed": null,
+    "resident_result_contract_run_default": null,
+    "resident_result_contract_source": null,
+    "resident_warp_copy_mode": null,
+    "resident_warp_scratch_bytes": null,
+    "rms_diff": 0.001,
+    "speedup_vs_reference": 58.0,
+    "status": "passed",
+    "triangle_descriptor_fit_batch": null,
+    "triangle_descriptor_fit_batch_mode": null,
+    "triangle_descriptor_fit_device_reuse": null,
+    "triangle_pixel_refine_batch": null,
+    "triangle_pixel_refine_batch_metric_mode": null,
+    "triangle_warp_batch": null,
+    "triangle_warp_batch_frame_count": null,
+    "triangle_warp_batch_mode": null
+  },
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 281,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "speedup_vs_reference": 58.0,
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "non_resident_count": 0,
+        "status": "passed"
+      },
+      "name": "acceptance_pipeline_integration_engine_policy_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "primary_gpu": "synthetic CUDA device"
+      },
+      "name": "cuda_doctor_available",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_check_count": 0,
+        "integration_dq_contract": null,
+        "pixel_verification_enabled": false,
+        "status": "passed"
+      },
+      "name": "pipeline_contract_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "status": "passed"
+      },
+      "name": "pipeline_integration_engine_policy_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "accounted_output_count": 0,
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "pixel_verification_enabled": false,
+        "status": "not_available"
+      },
+      "name": "pipeline_rejection_sample_accounting_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "present_count": 0,
+        "required_count": 0,
+        "status": "not_available"
+      },
+      "name": "pipeline_sample_accounting_closure_passed",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T05:32:40+00:00",
+  "default_route_acceptance": null,
+  "doctor": {
+    "compute_capability": "12.0",
+    "cuda_available": true,
+    "device_count": 1,
+    "driver_version": "596.21",
+    "native_extension_loaded": true,
+    "primary_gpu": "synthetic CUDA device",
+    "recommendation": "cuda_available",
+    "vram_mib": 97886,
+    "windows_cuda_packages": null,
+    "wrapper_importable": true
+  },
+  "github_release_plan": null,
+  "latest_checkpoint": {
+    "checkpoint_dir": "synthetic://gate281/fixture/checkpoints",
+    "date": "2026-06-18",
+    "exists": true,
+    "gate": 281,
+    "green": true,
+    "path": "synthetic://gate281/fixture/checkpoints\\s2_gate_281_status.md",
+    "scope": "synthetic phase2-status engine-policy handoff fixture",
+    "status": "green"
+  },
+  "passed": true,
+  "pipeline_contract": {
+    "audit_type": "pipeline_invariant_contract",
+    "calibrated_light_count": null,
+    "calibration_master_count": null,
+    "check_count": 1,
+    "exists": true,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "integration_coverage_map_pixels_match_dq": null,
+    "integration_default_engine_policy": true,
+    "integration_dq_contract": null,
+    "integration_dq_map_pixels_match_summary": null,
+    "integration_engine_policy": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "resident_count": 1,
+      "rows": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": null
+        }
+      ],
+      "status": "passed",
+      "top_level_default_ok": true,
+      "top_level_present": false
+    },
+    "integration_engine_policy_check_present": true,
+    "integration_engine_policy_failed_count": 0,
+    "integration_engine_policy_non_resident_count": 0,
+    "integration_engine_policy_status": "passed",
+    "integration_map_count": 0,
+    "integration_output_count": 0,
+    "integration_output_maps_available": null,
+    "integration_rejection_map_pixels_match_dq": null,
+    "integration_rejection_sample_counts_match_maps": null,
+    "integration_resident_result_contract": null,
+    "integration_sample_accounting_closure": null,
+    "integration_stack_result_contract": null,
+    "passed": true,
+    "path": "synthetic://gate281/fixture/pipeline_contract.json",
+    "pixel_verification_enabled": false,
+    "pixel_verification_tile_size": null,
+    "pixel_verification_tolerance_pixels": null,
+    "rejection_sample_accounting": {
+      "accounted_output_count": 0,
+      "check_name": "integration_rejection_sample_counts_match_maps",
+      "check_passed": null,
+      "check_present": false,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 0,
+      "pixel_verification_enabled": false,
+      "required_count": 0,
+      "schema_version": 1,
+      "status": "not_available",
+      "verified_count": 0
+    },
+    "rejection_sample_accounting_check_present": false,
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_status": "not_available",
+    "resident_calibrated_light_count": null,
+    "resident_native_calibration_artifact": null,
+    "sample_accounting_closure": {
+      "check_name": "integration_sample_accounting_closure",
+      "check_passed": null,
+      "check_present": false,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 0,
+      "present_count": 0,
+      "required_count": 0,
+      "rows": [],
+      "schema_version": 1,
+      "status": "not_available"
+    },
+    "sample_accounting_closure_check_present": false,
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 0,
+    "sample_accounting_closure_status": "not_available",
+    "status": "passed"
+  },
+  "publish_preflight": null,
+  "release_decision": null,
+  "release_manifest": null,
+  "resident_winsorized_benchmark_audit": null,
+  "resident_winsorized_sweep_audit": null,
+  "schema_version": 1,
+  "stack_engine_contract": null,
+  "status": "green"
+}
