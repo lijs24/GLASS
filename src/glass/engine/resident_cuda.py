@@ -5855,6 +5855,7 @@ def run_resident_calibration_integration(
             geometric_warp_coverage_frame_count = 0
             fused_matrix_integration_used = resident_integration_dispatch == "fused_matrix"
             fused_matrix_integration_timing: dict[str, Any] = {}
+            hardened_winsorized_timing: dict[str, Any] = {}
             fused_matrix_download_mode = "master_weight" if resident_output_maps == "minimal" else "full"
             if resident_warp_coverage_supported and not fused_matrix_integration_used:
                 for index, weight in enumerate(frame_weight_values):
@@ -5978,7 +5979,8 @@ def run_resident_calibration_integration(
                     coverage_map,
                     low_rejection_map,
                     high_rejection_map,
-                ) = stack.integrate_hardened_winsorized_sigma(weights_arg, low_sigma, high_sigma)
+                    hardened_winsorized_timing,
+                ) = stack.integrate_hardened_winsorized_sigma_timed(weights_arg, low_sigma, high_sigma)
             else:
                 if not hasattr(stack, "integrate_sigma_clip"):
                     raise RuntimeError("resident CUDA backend does not expose integrate_sigma_clip")
@@ -6319,6 +6321,9 @@ def run_resident_calibration_integration(
                         "resident_weighting": weighting_elapsed,
                         "resident_local_normalization": local_norm_elapsed,
                         "resident_integration": integrate_elapsed,
+                        "resident_hardened_winsorized_native": float(
+                            hardened_winsorized_timing.get("total_s", 0.0)
+                        ),
                         "resident_fused_matrix_integration_native": float(
                             fused_matrix_integration_timing.get("total_s", 0.0)
                         ),
@@ -7056,6 +7061,7 @@ def run_resident_calibration_integration(
                         "clamping_threshold": resident_warp_clamping_threshold,
                         "resident_winsorized_mode": resident_winsorized_mode,
                         "resident_winsorized_contract": resident_winsorized_contract,
+                        "hardened_winsorized_timing_s": hardened_winsorized_timing,
                         "download_mode": fused_matrix_download_mode if fused_matrix_integration_used else "full",
                         "diagnostic_maps_downloaded": bool(
                             fused_matrix_integration_timing.get(
@@ -7133,6 +7139,7 @@ def run_resident_calibration_integration(
                     "resident_integration_dispatch_requested": resident_integration_dispatch_requested,
                     "resident_integration_dispatch_reason": resident_integration_dispatch_reason,
                     "resident_winsorized_contract": resident_winsorized_contract,
+                    "hardened_winsorized_timing_s": hardened_winsorized_timing,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,

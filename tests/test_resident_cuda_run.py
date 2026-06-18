@@ -900,6 +900,7 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     descriptor = output["integration_rejection"]
     dispatch = artifact["resident_integration_dispatch"]
     winsorized_contract = output["resident_winsorized_contract"]
+    hardened_timing = output["hardened_winsorized_timing_s"]
 
     master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
     weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
@@ -923,6 +924,12 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert winsorized_contract["frame_limit_ok"] is True
     assert winsorized_contract["dispatch_ok"] is True
     assert winsorized_contract["requires_stack_dispatch"] is True
+    assert dispatch["hardened_winsorized_timing_s"] == hardened_timing
+    assert hardened_timing["native_method"] == "ResidentCalibratedStack.integrate_hardened_winsorized_sigma"
+    assert hardened_timing["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert hardened_timing["frame_count"] == 4
+    assert hardened_timing["pixel_count"] == expected_master.size
+    assert hardened_timing["total_s"] >= 0.0
     assert contract["passed"] is True
     assert any("hardened median/IQR" in warning for warning in integration["warnings"])
     assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)

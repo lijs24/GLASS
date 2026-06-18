@@ -1362,8 +1362,8 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     for index, frame in enumerate(frames):
         resident_stack.upload_calibrated_frame(index, frame)
 
-    master, weight_map, coverage, low_reject, high_reject = (
-        resident_stack.integrate_hardened_winsorized_sigma(weights, 2.4, 2.4)
+    master, weight_map, coverage, low_reject, high_reject, timing = (
+        resident_stack.integrate_hardened_winsorized_sigma_timed(weights, 2.4, 2.4)
     )
     expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
         weighted_integrate_stack(
@@ -1380,6 +1380,11 @@ def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
     assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
     assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
     assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
+    assert timing["native_method"] == "ResidentCalibratedStack.integrate_hardened_winsorized_sigma"
+    assert timing["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert timing["frame_count"] == len(frames)
+    assert timing["pixel_count"] == 4
+    assert timing["total_s"] >= 0.0
     assert high_reject[0, 0] == 1
     assert high_reject[1, 1] == 1
 

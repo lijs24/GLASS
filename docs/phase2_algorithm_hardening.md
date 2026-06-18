@@ -4438,6 +4438,23 @@ integration where applicable.
   benchmark, no package build/upload, no default switch, and no fused-matrix or
   tile-local hardened parity migration.
 
+### S2-Gate 264: Hardened Winsorized Timing Surface
+
+- Add a timed `ResidentCalibratedStack.integrate_hardened_winsorized_sigma_timed`
+  Python wrapper around the Gate261 native method.
+- Record timing model, native method, resident winsorized mode, frame count,
+  image shape, pixel count, sigma thresholds, and total wall time for the
+  hardened prototype path.
+- Thread this timing block into resident runtime artifacts and integration
+  output rows so future 200-light hardened benchmarks can isolate the
+  correctness prototype integration cost from broader I/O, calibration,
+  registration, local normalization, and output-write timing.
+- Add focused CUDA wrapper and resident runtime tests that verify timing
+  metadata is emitted without changing output pixels or maps.
+- Keep this gate timing-surface scoped: no native CUDA kernel change, no
+  benchmark rerun, no package build/upload, no default switch, and no
+  fused-matrix or tile-local hardened parity migration.
+
 ## Gate Rules
 
 Each gate requires:

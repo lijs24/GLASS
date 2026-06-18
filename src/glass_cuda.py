@@ -13,6 +13,7 @@ from dataclasses import asdict
 import importlib
 import shutil
 import subprocess
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -3378,6 +3379,40 @@ class ResidentCalibratedStack:
             np.asarray(coverage, dtype=np.float32),
             np.asarray(low_reject, dtype=np.float32),
             np.asarray(high_reject, dtype=np.float32),
+        )
+
+    def integrate_hardened_winsorized_sigma_timed(
+        self,
+        weights: Any | None = None,
+        low_sigma: float = 3.0,
+        high_sigma: float = 3.0,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+        start = perf_counter()
+        master, weight_map, coverage, low_reject, high_reject = (
+            self.integrate_hardened_winsorized_sigma(weights, low_sigma, high_sigma)
+        )
+        total_s = perf_counter() - start
+        return (
+            master,
+            weight_map,
+            coverage,
+            low_reject,
+            high_reject,
+            {
+                "schema_version": 1,
+                "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+                "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+                "rejection": "winsorized_sigma",
+                "resident_winsorized_mode": "hardened_cpu_parity",
+                "frame_count": self.frame_count,
+                "height": self.height,
+                "width": self.width,
+                "pixel_count": self.height * self.width,
+                "low_sigma": float(low_sigma),
+                "high_sigma": float(high_sigma),
+                "includes_device_sync_and_download": True,
+                "total_s": float(total_s),
+            },
         )
 
     def integrate_tile_local_sigma_clip(
