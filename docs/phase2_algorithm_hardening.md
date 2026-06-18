@@ -6140,6 +6140,21 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 346: Phase2 Compare Failed-Check Evidence Details
+
+- Expand `glass phase2-status-compare` Markdown with a failed-check details
+  section whenever regressions are present.
+- Preserve the existing JSON schema and pass/fail logic while adding readable
+  baseline/candidate evidence rows for each failed compare check.
+- Ensure StackEngine publication-audit resident result-contract regressions
+  expose the candidate raw/Phase2 readiness and agreement fields directly in
+  the Markdown output.
+- Generate Gate346 compare artifacts from the controlled Gate345
+  publication-audit resident result-contract regression fixture.
+- Keep this gate report scoped: no registration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

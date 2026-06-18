@@ -7,6 +7,7 @@ from glass.io.json_io import read_json, write_json
 from glass.report.phase2_status import (
     build_phase2_status,
     build_phase2_status_compare,
+    write_phase2_status_compare,
     write_phase2_status_markdown,
 )
 
@@ -5694,6 +5695,40 @@ def test_phase2_status_compare_flags_stack_publication_resident_result_regressio
             "passed"
         ]
         is True
+    )
+
+
+def test_phase2_status_compare_markdown_expands_stack_publication_resident_result_failure(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    out = tmp_path / "compare.json"
+    markdown = tmp_path / "compare.md"
+    write_json(baseline, _status_payload(gate=345))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=346,
+            status="attention_required",
+            stack_publication_passed=False,
+            stack_publication_resident_result_contract_ready=False,
+        ),
+    )
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    write_phase2_status_compare(out, payload, markdown=markdown)
+
+    text = markdown.read_text(encoding="utf-8")
+    assert "## Failed Check Details" in text
+    assert "stack_engine_publication_resident_result_contract_chain_preserved" in text
+    assert "phase2_publish_preflight_resident_result_contract_ready" in text
+    assert (
+        '"phase2_publish_preflight_resident_result_contract_matches_publish_preflight": false'
+        in text
     )
 
 

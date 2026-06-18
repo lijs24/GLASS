@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -7502,6 +7503,12 @@ def build_phase2_status_compare(
     }
 
 
+def _markdown_detail_value(value: Any) -> str:
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    return str(value)
+
+
 def write_phase2_status_compare_markdown(path: str | Path, payload: dict[str, Any]) -> None:
     lines = [
         "# GLASS Phase 2 Status Compare",
@@ -7521,6 +7528,31 @@ def write_phase2_status_compare_markdown(path: str | Path, payload: dict[str, An
     for item in payload.get("checks") or []:
         marker = "PASS" if item.get("passed") else "FAIL"
         lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
+    failed = [
+        item
+        for item in payload.get("checks") or []
+        if isinstance(item, dict) and item.get("passed") is not True
+    ]
+    if failed:
+        lines.extend(["", "## Failed Check Details", ""])
+        for item in failed:
+            evidence = item.get("evidence")
+            lines.extend([f"### {item.get('name')}", ""])
+            if isinstance(evidence, dict):
+                for key in ("baseline", "candidate"):
+                    if key in evidence:
+                        value = _markdown_detail_value(evidence.get(key))
+                        lines.append(f"- {key.title()}: `{value}`")
+                extra = {
+                    key: value
+                    for key, value in evidence.items()
+                    if key not in {"baseline", "candidate"}
+                }
+                if extra:
+                    lines.append(f"- Evidence: `{_markdown_detail_value(extra)}`")
+            else:
+                lines.append(f"- Evidence: `{_markdown_detail_value(evidence)}`")
+            lines.append("")
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")
