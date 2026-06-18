@@ -5859,6 +5859,28 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 331: Windows Release Matrix Resident Fastpath Handoff
+
+- Carry `default_promotion_manifest.resident_registration_fastpath_release_handoff`
+  into `glass windows-release-matrix`.
+- Add Windows release-matrix summary fields for resident fastpath release
+  handoff readiness, raw and Phase2 readiness, agreement, release-decision and
+  Phase2 check state, raw/Phase2 status, required flags, modes, passed check
+  counts, failed check counts, and failed checks.
+- Add `default_promotion_resident_fastpath_release_handoff_ready` as a Windows
+  release-matrix blocker.
+- Require default-promotion resident fastpath handoff evidence to be present,
+  ready, raw/Phase2 agreeing, benchmark-required, and failed-check-free before
+  a CUDA Windows release matrix passes.
+- Surface resident fastpath release handoff state in Windows release-matrix
+  Markdown.
+- Add focused tests for passing and failed resident fastpath handoff.
+- Generate Gate331 Windows release-matrix artifacts from the Gate330
+  default-promotion fixture.
+- Keep this gate release-policy scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

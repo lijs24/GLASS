@@ -195,6 +195,14 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         )
         else {}
     )
+    resident_fastpath_handoff = (
+        payload.get("resident_registration_fastpath_release_handoff")
+        if isinstance(
+            payload.get("resident_registration_fastpath_release_handoff"),
+            dict,
+        )
+        else {}
+    )
     return {
         "present": True,
         "artifact_type": payload.get("artifact_type"),
@@ -409,6 +417,64 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
                     "raw_matrix_pipeline_resident_lights"
                 )
             )
+        ),
+        "resident_registration_fastpath_release_handoff": resident_fastpath_handoff,
+        "resident_registration_fastpath_release_handoff_present": (
+            resident_fastpath_handoff.get("present")
+        ),
+        "resident_registration_fastpath_release_handoff_ready": (
+            resident_fastpath_handoff.get("ready")
+        ),
+        "resident_registration_fastpath_release_handoff_raw_ready": (
+            resident_fastpath_handoff.get("raw_ready")
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_ready": (
+            resident_fastpath_handoff.get("phase2_ready")
+        ),
+        "resident_registration_fastpath_release_handoff_agreement": (
+            resident_fastpath_handoff.get("agreement")
+        ),
+        "resident_registration_fastpath_release_handoff_decision_check_passed": (
+            resident_fastpath_handoff.get("decision_check_passed")
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_check_passed": (
+            resident_fastpath_handoff.get("phase2_check_passed")
+        ),
+        "resident_registration_fastpath_release_handoff_raw_status": (
+            resident_fastpath_handoff.get("raw_status")
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_status": (
+            resident_fastpath_handoff.get("phase2_status")
+        ),
+        "resident_registration_fastpath_release_handoff_raw_required": (
+            resident_fastpath_handoff.get("raw_required")
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_required": (
+            resident_fastpath_handoff.get("phase2_required")
+        ),
+        "resident_registration_fastpath_release_handoff_raw_mode": (
+            resident_fastpath_handoff.get("raw_mode")
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_mode": (
+            resident_fastpath_handoff.get("phase2_mode")
+        ),
+        "resident_registration_fastpath_release_handoff_raw_passed_check_count": (
+            _int_value(resident_fastpath_handoff.get("raw_passed_check_count"))
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_passed_check_count": (
+            _int_value(resident_fastpath_handoff.get("phase2_passed_check_count"))
+        ),
+        "resident_registration_fastpath_release_handoff_raw_failed_check_count": (
+            _int_value(resident_fastpath_handoff.get("raw_failed_check_count"))
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_failed_check_count": (
+            _int_value(resident_fastpath_handoff.get("phase2_failed_check_count"))
+        ),
+        "resident_registration_fastpath_release_handoff_raw_failed_checks": (
+            resident_fastpath_handoff.get("raw_failed_checks") or []
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_failed_checks": (
+            resident_fastpath_handoff.get("phase2_failed_checks") or []
         ),
         "rejection_sample_accounting": rejection_sample_accounting,
         "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
@@ -1174,6 +1240,144 @@ def build_windows_release_matrix(
             },
         ),
         _check(
+            "default_promotion_resident_fastpath_release_handoff_ready",
+            (
+                default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_present"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_ready"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_ready"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_ready"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_agreement"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_decision_check_passed"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_check_passed"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_status"
+                )
+                == "passed"
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_status"
+                )
+                == "passed"
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_required"
+                )
+                is True
+                and default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_required"
+                )
+                is True
+                and int(
+                    default_promotion.get(
+                        "resident_registration_fastpath_release_handoff_raw_passed_check_count"
+                    )
+                    or 0
+                )
+                > 0
+                and int(
+                    default_promotion.get(
+                        "resident_registration_fastpath_release_handoff_phase2_passed_check_count"
+                    )
+                    or 0
+                )
+                > 0
+                and int(
+                    default_promotion.get(
+                        "resident_registration_fastpath_release_handoff_raw_failed_check_count"
+                    )
+                    or 0
+                )
+                == 0
+                and int(
+                    default_promotion.get(
+                        "resident_registration_fastpath_release_handoff_phase2_failed_check_count"
+                    )
+                    or 0
+                )
+                == 0
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "present": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_present"
+                ),
+                "ready": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_ready"
+                ),
+                "raw_ready": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_ready"
+                ),
+                "phase2_ready": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_ready"
+                ),
+                "agreement": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_agreement"
+                ),
+                "decision_check_passed": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_decision_check_passed"
+                ),
+                "phase2_check_passed": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_check_passed"
+                ),
+                "raw_status": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_status"
+                ),
+                "phase2_status": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_status"
+                ),
+                "raw_required": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_required"
+                ),
+                "phase2_required": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_required"
+                ),
+                "raw_mode": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_mode"
+                ),
+                "phase2_mode": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_mode"
+                ),
+                "raw_passed_check_count": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_passed_check_count"
+                ),
+                "phase2_passed_check_count": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_passed_check_count"
+                ),
+                "raw_failed_check_count": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_failed_check_count"
+                ),
+                "phase2_failed_check_count": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_failed_check_count"
+                ),
+                "raw_failed_checks": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_raw_failed_checks"
+                ),
+                "phase2_failed_checks": default_promotion.get(
+                    "resident_registration_fastpath_release_handoff_phase2_failed_checks"
+                ),
+            },
+        ),
+        _check(
             "default_promotion_stack_engine_contract_ready",
             (
                 default_promotion.get("stack_engine_contract_present") is True
@@ -1619,6 +1823,14 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_count_ready')}` "
                 "lights="
                 f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_raw_resident_lights')}`"
+            ),
+            (
+                "- Resident fastpath release handoff: "
+                f"ready=`{default_promotion.get('resident_registration_fastpath_release_handoff_ready')}` "
+                f"raw=`{default_promotion.get('resident_registration_fastpath_release_handoff_raw_status')}` "
+                f"phase2=`{default_promotion.get('resident_registration_fastpath_release_handoff_phase2_status')}` "
+                f"agreement=`{default_promotion.get('resident_registration_fastpath_release_handoff_agreement')}` "
+                f"checks=`{default_promotion.get('resident_registration_fastpath_release_handoff_raw_passed_check_count')}`"
             ),
             (
                 "- StackEngine default contract: "

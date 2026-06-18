@@ -168,6 +168,7 @@ def _default_promotion(
     release_direct_publication_acceptance_source: str = "explicit_resident_artifacts_json",
     release_direct_publication_calibration_source: str = "resident_artifacts_json_fallback",
     release_direct_publication_resident_lights: int = 200,
+    resident_fastpath_release_handoff_ready: bool = True,
 ) -> None:
     acceptance_policy_chain_ready = (
         acceptance_integration_engine_policy_ready
@@ -211,6 +212,7 @@ def _default_promotion(
         and pipeline_policy_chain_ready
         and acceptance_runtime_default_chain_ready
         and pipeline_runtime_default_chain_ready
+        and resident_fastpath_release_handoff_ready
         and publication_audit_chain_ready
         and (stack_engine_ready if include_stack_engine_contract else True)
         and (
@@ -601,6 +603,58 @@ def _default_promotion(
                 release_direct_publication_resident_lights
             ),
         }
+    fastpath_failed_checks = (
+        []
+        if resident_fastpath_release_handoff_ready
+        else ["contract_resident_registration_fastpath_descriptor_batch_mode"]
+    )
+    payload["resident_registration_fastpath_release_handoff"] = {
+        "present": True,
+        "ready": resident_fastpath_release_handoff_ready,
+        "raw_ready": resident_fastpath_release_handoff_ready,
+        "phase2_ready": resident_fastpath_release_handoff_ready,
+        "agreement": resident_fastpath_release_handoff_ready,
+        "decision_check_passed": resident_fastpath_release_handoff_ready,
+        "phase2_check_passed": resident_fastpath_release_handoff_ready,
+        "raw_status": "passed"
+        if resident_fastpath_release_handoff_ready
+        else "failed",
+        "phase2_status": "passed"
+        if resident_fastpath_release_handoff_ready
+        else "failed",
+        "raw_required": True,
+        "phase2_required": True,
+        "raw_source": "explicit_resident_artifacts_json",
+        "phase2_source": "explicit_resident_artifacts_json",
+        "raw_path": "resident_artifacts.json",
+        "phase2_path": "resident_artifacts.json",
+        "raw_mode": "similarity_cuda_triangle",
+        "phase2_mode": "similarity_cuda_triangle",
+        "raw_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "phase2_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "raw_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "phase2_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "raw_triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+        "phase2_triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+        "raw_triangle_warp_batch_frame_count": 3,
+        "phase2_triangle_warp_batch_frame_count": 3,
+        "raw_warp_copy_mode": "default_stream_async_device_to_device",
+        "phase2_warp_copy_mode": "default_stream_async_device_to_device",
+        "raw_passed_check_count": 23
+        if resident_fastpath_release_handoff_ready
+        else 22,
+        "phase2_passed_check_count": 23
+        if resident_fastpath_release_handoff_ready
+        else 22,
+        "raw_failed_check_count": 0
+        if resident_fastpath_release_handoff_ready
+        else 1,
+        "phase2_failed_check_count": 0
+        if resident_fastpath_release_handoff_ready
+        else 1,
+        "raw_failed_checks": fastpath_failed_checks,
+        "phase2_failed_checks": fastpath_failed_checks,
+    }
     write_json(path, payload)
 
 
@@ -672,6 +726,10 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
         ]
         is True
     )
+    assert (
+        checks["default_promotion_resident_fastpath_release_handoff_ready"]
+        is True
+    )
     assert payload["release_decision_direct_runtime_publication_guard"]["ready"] is True
     assert payload["default_promotion_manifest"][
         "runtime_default_direct_acceptance_fastpath_source"
@@ -682,6 +740,12 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert payload["default_promotion_manifest"][
         "release_decision_direct_runtime_publication_guard_ready"
     ] is True
+    assert payload["default_promotion_manifest"][
+        "resident_registration_fastpath_release_handoff_ready"
+    ] is True
+    assert payload["default_promotion_manifest"][
+        "resident_registration_fastpath_release_handoff_raw_passed_check_count"
+    ] == 23
     assert checks["default_promotion_stack_engine_contract_ready"] is True
     assert checks["default_promotion_resident_winsorized_sweep_audit_passed"] is True
     assert checks["default_promotion_resident_winsorized_required_frame_passed"] is True
@@ -707,6 +771,41 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["required_cuda_package_compatible:cuda12"] is True
     assert checks["required_cuda_package_compatible:cuda11"] is True
     assert [row["label"] for row in payload["packages"]] == ["cuda11", "cuda12", "cuda13", "cpu"]
+
+
+def test_windows_release_matrix_blocks_failed_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    acceptance = tmp_path / "acceptance.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _acceptance(acceptance)
+    _default_promotion(
+        default_promotion,
+        resident_fastpath_release_handoff_ready=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        acceptance_audit_json=acceptance,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert payload["default_promotion_manifest"]["status"] == "blocked"
+    check = checks["default_promotion_resident_fastpath_release_handoff_ready"]
+    assert check["passed"] is False
+    assert check["evidence"]["raw_ready"] is False
+    assert check["evidence"]["phase2_ready"] is False
+    assert check["evidence"]["raw_failed_check_count"] == 1
+    assert check["evidence"]["phase2_failed_check_count"] == 1
 
 
 def test_windows_release_matrix_blocks_cpu_only_cuda_release(tmp_path: Path):
