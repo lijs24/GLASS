@@ -540,10 +540,21 @@ def _write_publication_audit(
     *,
     passed: bool = True,
     include_runtime_default: bool = True,
+    include_direct_runtime: bool = True,
     raw_ready: bool = True,
     phase2_ready: bool = True,
+    direct_runtime_ready: bool = True,
+    phase2_direct_runtime_ready: bool | None = None,
+    direct_acceptance_source: str = "explicit_resident_artifacts_json",
+    direct_pipeline_source: str = "resident_artifacts_json_fallback",
+    direct_resident_lights: int = 200,
 ) -> None:
     artifact_passed = passed and (raw_ready and phase2_ready if include_runtime_default else True)
+    phase2_direct_runtime_ready = (
+        direct_runtime_ready
+        if phase2_direct_runtime_ready is None
+        else phase2_direct_runtime_ready
+    )
     runtime_status = "passed" if raw_ready else "failed"
     phase2_status = "passed" if phase2_ready else "failed"
     layers = {}
@@ -584,6 +595,87 @@ def _write_publication_audit(
                 "passed": raw_ready and phase2_ready,
             },
         ]
+    if include_direct_runtime:
+        layers.update(
+            {
+                "publish_preflight_direct_runtime_evidence": {
+                    "artifact_type": "windows_publish_preflight",
+                    "status": "publish_preflight_ready"
+                    if direct_runtime_ready
+                    else "blocked",
+                    "passed": direct_runtime_ready,
+                    "ready": direct_runtime_ready,
+                    "matrix_ready": direct_runtime_ready,
+                    "matrix_acceptance_source": direct_acceptance_source,
+                    "matrix_acceptance_check_count": 24,
+                    "matrix_pipeline_calibration_source": direct_pipeline_source,
+                    "matrix_pipeline_resident_lights": direct_resident_lights,
+                    "default_promotion_ready": direct_runtime_ready,
+                    "default_promotion_acceptance_source": direct_acceptance_source,
+                    "default_promotion_acceptance_check_count": 24,
+                    "default_promotion_pipeline_calibration_source": (
+                        direct_pipeline_source
+                    ),
+                    "default_promotion_pipeline_resident_lights": (
+                        direct_resident_lights
+                    ),
+                    "matrix_acceptance_passed": direct_runtime_ready,
+                    "matrix_pipeline_passed": direct_runtime_ready,
+                    "default_promotion_acceptance_passed": direct_runtime_ready,
+                    "default_promotion_pipeline_passed": direct_runtime_ready,
+                    "matches_default_promotion": direct_runtime_ready,
+                },
+                "phase2_publish_preflight_direct_runtime_evidence": {
+                    "artifact_type": "glass_phase2_status",
+                    "status": "publish_preflight_ready"
+                    if phase2_direct_runtime_ready
+                    else "blocked",
+                    "ready": phase2_direct_runtime_ready,
+                    "matrix_ready": phase2_direct_runtime_ready,
+                    "matrix_acceptance_source": direct_acceptance_source,
+                    "matrix_acceptance_check_count": 24,
+                    "matrix_pipeline_calibration_source": direct_pipeline_source,
+                    "matrix_pipeline_resident_lights": direct_resident_lights,
+                    "default_promotion_ready": phase2_direct_runtime_ready,
+                    "default_promotion_acceptance_source": direct_acceptance_source,
+                    "default_promotion_acceptance_check_count": 24,
+                    "default_promotion_pipeline_calibration_source": (
+                        direct_pipeline_source
+                    ),
+                    "default_promotion_pipeline_resident_lights": (
+                        direct_resident_lights
+                    ),
+                    "matrix_acceptance_passed": phase2_direct_runtime_ready,
+                    "matrix_pipeline_passed": phase2_direct_runtime_ready,
+                    "default_promotion_acceptance_passed": (
+                        phase2_direct_runtime_ready
+                    ),
+                    "default_promotion_pipeline_passed": phase2_direct_runtime_ready,
+                    "matches_default_promotion": phase2_direct_runtime_ready,
+                    "phase2_check_passed": phase2_direct_runtime_ready,
+                },
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "publish_preflight_direct_runtime_evidence_ready",
+                    "passed": direct_runtime_ready,
+                },
+                {
+                    "name": (
+                        "phase2_publish_preflight_direct_runtime_evidence_ready"
+                    ),
+                    "passed": phase2_direct_runtime_ready,
+                },
+                {
+                    "name": (
+                        "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight"
+                    ),
+                    "passed": direct_runtime_ready and phase2_direct_runtime_ready,
+                },
+            ]
+        )
     write_json(
         path,
         {
@@ -671,6 +763,16 @@ def test_release_promotion_decision_accepts_publication_runtime_default(
     assert evidence["raw_ready"] is True
     assert evidence["phase2_ready"] is True
     assert evidence["phase2_check_passed"] is True
+    direct = payload["stack_engine_publication_direct_runtime_evidence"]
+    assert checks["stack_engine_publication_direct_runtime_evidence_passed"][
+        "passed"
+    ] is True
+    assert direct["ready"] is True
+    assert direct["raw_matrix_acceptance_source"] == "explicit_resident_artifacts_json"
+    assert direct["raw_matrix_pipeline_calibration_source"] == (
+        "resident_artifacts_json_fallback"
+    )
+    assert direct["raw_matrix_pipeline_resident_lights"] == 200
 
 
 def test_release_promotion_decision_blocks_failed_publication_runtime_default(
@@ -731,6 +833,96 @@ def test_release_promotion_decision_blocks_stale_publication_runtime_default(
         "phase2_publish_preflight_stack_engine_runtime_default_ready": None,
         "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight": None,
     }
+
+
+def test_release_promotion_decision_blocks_missing_publication_direct_runtime(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication, include_direct_runtime=False)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    direct = payload["stack_engine_publication_direct_runtime_evidence"]
+    assert payload["release_candidate_ready"] is False
+    assert payload["default_change_ready"] is False
+    assert checks["stack_engine_publication_runtime_default_passed"]["passed"] is True
+    assert checks["stack_engine_publication_direct_runtime_evidence_passed"][
+        "passed"
+    ] is False
+    assert direct["checks_passed"] is False
+    assert direct["raw_ready"] is None
+    assert direct["phase2_ready"] is None
+
+
+def test_release_promotion_decision_blocks_stale_publication_direct_source(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(
+        publication,
+        direct_acceptance_source="glass_run_discovery",
+    )
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    direct = payload["stack_engine_publication_direct_runtime_evidence"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_direct_runtime_evidence_passed"][
+        "passed"
+    ] is False
+    assert direct["checks_passed"] is True
+    assert direct["raw_source_ready"] is False
+    assert direct["phase2_source_ready"] is False
+    assert direct["raw_matrix_acceptance_source"] == "glass_run_discovery"
+
+
+def test_release_promotion_decision_blocks_short_publication_direct_runtime(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication, direct_resident_lights=199)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    direct = payload["stack_engine_publication_direct_runtime_evidence"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_direct_runtime_evidence_passed"][
+        "passed"
+    ] is False
+    assert direct["raw_count_ready"] is False
+    assert direct["phase2_count_ready"] is False
+    assert direct["raw_matrix_pipeline_resident_lights"] == 199
 
 
 def test_release_promotion_decision_can_ignore_explicit_warmup_run(tmp_path: Path) -> None:

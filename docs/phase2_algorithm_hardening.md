@@ -5349,6 +5349,30 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 309: Release Decision Direct Runtime Publication Guard
+
+- Carry the S2-Gate 308 StackEngine publication-audit direct runtime evidence
+  into `release-promotion-decision`.
+- Preserve the existing publication runtime-default guard, but add a separate
+  release-blocking check named
+  `stack_engine_publication_direct_runtime_evidence_passed` whenever
+  `--stack-engine-publication-audit` is supplied.
+- Require the direct evidence to include both raw publish-preflight and Phase2
+  publish-preflight layers, explicit `resident_artifacts.json` acceptance
+  fastpath provenance, resident-artifacts calibration fallback provenance,
+  matching matrix/default-promotion summaries, passing leaf checks, and at
+  least 200 resident calibrated lights.
+- Surface the direct runtime publication readiness, source provenance, check
+  counts, resident light counts, and stale-source/count blockers in
+  release-decision JSON and Markdown.
+- Add focused tests for a passing Gate308 direct runtime chain, missing direct
+  evidence, stale fastpath source, and too-small resident light counts.
+- Generate Gate309 release-decision and Phase2 status artifacts from the
+  existing Gate304/Gate305/Gate306/Gate307/Gate308 200-light evidence.
+- Keep this gate release-decision/status scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
