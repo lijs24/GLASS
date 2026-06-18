@@ -4279,6 +4279,25 @@ integration where applicable.
   upload, package release, publish-preflight behavior change, or real-data
   benchmark rerun.
 
+### S2-Gate 255: Windows Publish Preflight StackEngine Contract Handoff
+
+- Carry GitHub release-plan, Windows release-matrix, and default-promotion
+  StackEngine default-contract evidence into `glass windows-publish-preflight`.
+- Add final publish-preflight checks for Phase2 StackEngine contract evidence
+  from the GitHub release plan, matrix StackEngine evidence from the GitHub
+  release plan, direct Windows release-matrix StackEngine evidence, direct
+  default-promotion StackEngine evidence, and cross-artifact agreement.
+- Extend publish-preflight JSON and Markdown with StackEngine contract status
+  and default-gap summaries.
+- Add focused tests for green handoff, Phase2 StackEngine gap blocking,
+  release-plan matrix StackEngine gap blocking, missing direct matrix
+  StackEngine evidence, direct default-promotion StackEngine gap blocking, and
+  CLI Markdown output.
+- Keep this gate publish-preflight scoped: no image math, CUDA kernel,
+  StackEngine audit behavior change, runtime default change, package build,
+  upload, package release, GitHub release creation, or real-data benchmark
+  rerun.
+
 ## Gate Rules
 
 Each gate requires:

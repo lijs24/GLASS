@@ -30,6 +30,13 @@ def _same_path(left: str | Path | None, right: str | Path | None) -> bool:
     return left_norm is not None and right_norm is not None and left_norm == right_norm
 
 
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _rows_by_label(rows: list[Any]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -104,6 +111,26 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "sample_accounting_closure_failed_count": promotion.get(
             "sample_accounting_closure_failed_count"
         ),
+        "stack_engine_contract": promotion.get("stack_engine_contract"),
+        "stack_engine_contract_present": promotion.get("stack_engine_contract_present"),
+        "stack_engine_contract_ready": promotion.get("stack_engine_contract_ready"),
+        "stack_engine_contract_phase2_check_passed": promotion.get(
+            "stack_engine_contract_phase2_check_passed"
+        ),
+        "stack_engine_contract_status": promotion.get("stack_engine_contract_status"),
+        "stack_engine_contract_passed": promotion.get("stack_engine_contract_passed"),
+        "stack_engine_contract_scope": promotion.get("stack_engine_contract_scope"),
+        "stack_engine_contract_adoption_recommendation": promotion.get(
+            "stack_engine_contract_adoption_recommendation"
+        ),
+        "stack_engine_contract_default_gap_count": promotion.get(
+            "stack_engine_contract_default_gap_count"
+        ),
+        "stack_engine_contract_blocker_count": promotion.get(
+            "stack_engine_contract_blocker_count"
+        ),
+        "stack_engine_contract_blockers": promotion.get("stack_engine_contract_blockers")
+        or [],
     }
 
 
@@ -124,6 +151,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
     sample_accounting_closure = (
         pipeline.get("sample_accounting_closure")
         if isinstance(pipeline.get("sample_accounting_closure"), dict)
+        else {}
+    )
+    stack_engine = (
+        payload.get("stack_engine_contract")
+        if isinstance(payload.get("stack_engine_contract"), dict)
         else {}
     )
     return {
@@ -162,6 +194,26 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "sample_accounting_closure_failed_count": pipeline.get(
             "sample_accounting_closure_failed_count"
         ),
+        "stack_engine_contract": stack_engine,
+        "stack_engine_contract_present": stack_engine.get("present"),
+        "stack_engine_contract_ready": stack_engine.get("ready"),
+        "stack_engine_contract_phase2_check_passed": stack_engine.get(
+            "phase2_check_passed"
+        ),
+        "stack_engine_contract_status": stack_engine.get("status"),
+        "stack_engine_contract_passed": stack_engine.get("passed"),
+        "stack_engine_contract_scope": stack_engine.get("scope"),
+        "stack_engine_contract_adoption_recommendation": stack_engine.get(
+            "adoption_recommendation"
+        ),
+        "stack_engine_contract_default_gap_count": stack_engine.get(
+            "default_promotion_phase2_stack_engine_default_gap_count"
+        ),
+        "stack_engine_contract_blocker_count": stack_engine.get(
+            "default_promotion_blocker_count"
+        ),
+        "stack_engine_contract_blockers": stack_engine.get("default_promotion_blockers")
+        or [],
     }
 
 
@@ -245,6 +297,108 @@ def _plan_sample_closure_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _plan_stack_engine_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    phase2 = payload.get("phase2") if isinstance(payload.get("phase2"), dict) else {}
+    phase2_status = (
+        phase2.get("status") if isinstance(phase2.get("status"), dict) else {}
+    )
+    matrix = (
+        payload.get("release_matrix") if isinstance(payload.get("release_matrix"), dict) else {}
+    )
+    checks = _checks_by_name(payload.get("checks") or [])
+    phase2_check = checks.get("phase2_stack_engine_default_contract_ready") or {}
+    matrix_check = checks.get("windows_release_matrix_stack_engine_contract_ready") or {}
+    agreement_check = checks.get("phase2_release_matrix_stack_engine_contract_agree") or {}
+    return {
+        "phase2_check_passed": phase2_check.get("passed"),
+        "phase2_check_evidence": phase2_check.get("evidence"),
+        "phase2_status": phase2_status.get("stack_engine_default_contract_status"),
+        "phase2_phase2_check_passed": phase2_status.get(
+            "stack_engine_default_contract_phase2_check_passed"
+        ),
+        "phase2_passed": phase2_status.get("stack_engine_default_contract_passed"),
+        "phase2_scope": phase2_status.get("stack_engine_default_contract_scope"),
+        "phase2_adoption_recommendation": phase2_status.get(
+            "stack_engine_default_contract_adoption_recommendation"
+        ),
+        "phase2_default_promotion_recommendation": phase2_status.get(
+            "stack_engine_default_contract_default_promotion_recommendation"
+        ),
+        "phase2_default_gap_count": phase2_status.get(
+            "stack_engine_default_contract_default_gap_count"
+        ),
+        "phase2_blocker_count": phase2_status.get(
+            "stack_engine_default_contract_blocker_count"
+        ),
+        "phase2_blockers": phase2_status.get("stack_engine_default_contract_blockers")
+        or [],
+        "release_matrix_check_passed": matrix_check.get("passed"),
+        "release_matrix_check_evidence": matrix_check.get("evidence"),
+        "release_matrix_ready": matrix.get("stack_engine_contract_ready"),
+        "release_matrix_phase2_check_passed": matrix.get(
+            "stack_engine_contract_phase2_check_passed"
+        ),
+        "release_matrix_status": matrix.get("stack_engine_contract_status"),
+        "release_matrix_passed": matrix.get("stack_engine_contract_passed"),
+        "release_matrix_scope": matrix.get("stack_engine_contract_scope"),
+        "release_matrix_adoption_recommendation": matrix.get(
+            "stack_engine_contract_adoption_recommendation"
+        ),
+        "release_matrix_default_gap_count": matrix.get(
+            "stack_engine_contract_default_gap_count"
+        ),
+        "release_matrix_blocker_count": matrix.get("stack_engine_contract_blocker_count"),
+        "release_matrix_blockers": matrix.get("stack_engine_contract_blockers") or [],
+        "agreement_check_passed": agreement_check.get("passed"),
+        "agreement_check_evidence": agreement_check.get("evidence"),
+    }
+
+
+def _stack_engine_plan_phase2_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("phase2_check_passed") is True
+        and summary.get("phase2_status") == "passed"
+        and summary.get("phase2_phase2_check_passed") is True
+        and summary.get("phase2_passed") is True
+        and summary.get("phase2_scope") == "all"
+        and summary.get("phase2_adoption_recommendation") == "stack_engine_default_ready"
+        and summary.get("phase2_default_promotion_recommendation")
+        == "stack_engine_default_ready"
+        and _int_or_zero(summary.get("phase2_default_gap_count")) == 0
+        and _int_or_zero(summary.get("phase2_blocker_count")) == 0
+    )
+
+
+def _stack_engine_matrix_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("stack_engine_contract_present") is True
+        and summary.get("stack_engine_contract_ready") is True
+        and summary.get("stack_engine_contract_phase2_check_passed") is True
+        and summary.get("stack_engine_contract_status") == "passed"
+        and summary.get("stack_engine_contract_passed") is True
+        and summary.get("stack_engine_contract_scope") == "all"
+        and summary.get("stack_engine_contract_adoption_recommendation")
+        == "stack_engine_default_ready"
+        and _int_or_zero(summary.get("stack_engine_contract_default_gap_count")) == 0
+        and _int_or_zero(summary.get("stack_engine_contract_blocker_count")) == 0
+    )
+
+
+def _stack_engine_plan_matrix_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("release_matrix_check_passed") is True
+        and summary.get("release_matrix_ready") is True
+        and summary.get("release_matrix_phase2_check_passed") is True
+        and summary.get("release_matrix_status") == "passed"
+        and summary.get("release_matrix_passed") is True
+        and summary.get("release_matrix_scope") == "all"
+        and summary.get("release_matrix_adoption_recommendation")
+        == "stack_engine_default_ready"
+        and _int_or_zero(summary.get("release_matrix_default_gap_count")) == 0
+        and _int_or_zero(summary.get("release_matrix_blocker_count")) == 0
+    )
+
+
 def build_windows_publish_preflight(
     *,
     release_manifest: str | Path,
@@ -269,6 +423,7 @@ def build_windows_publish_preflight(
     promotion_info = _default_promotion_summary(promotion)
     plan_rejection_sample = _plan_rejection_sample_summary(plan)
     plan_sample_closure = _plan_sample_closure_summary(plan)
+    plan_stack_engine = _plan_stack_engine_summary(plan)
     manifest_matrix = (
         manifest.get("windows_release_matrix")
         if isinstance(manifest.get("windows_release_matrix"), dict)
@@ -645,6 +800,206 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "github_plan_phase2_stack_engine_default_contract_ready",
+            _stack_engine_plan_phase2_ready(plan_stack_engine),
+            {
+                "check_passed": plan_stack_engine.get("phase2_check_passed"),
+                "status": plan_stack_engine.get("phase2_status"),
+                "phase2_check_passed": plan_stack_engine.get(
+                    "phase2_phase2_check_passed"
+                ),
+                "passed": plan_stack_engine.get("phase2_passed"),
+                "scope": plan_stack_engine.get("phase2_scope"),
+                "adoption_recommendation": plan_stack_engine.get(
+                    "phase2_adoption_recommendation"
+                ),
+                "default_promotion_recommendation": plan_stack_engine.get(
+                    "phase2_default_promotion_recommendation"
+                ),
+                "default_gap_count": plan_stack_engine.get("phase2_default_gap_count"),
+                "blocker_count": plan_stack_engine.get("phase2_blocker_count"),
+                "blockers": plan_stack_engine.get("phase2_blockers"),
+                "plan_check_evidence": plan_stack_engine.get("phase2_check_evidence"),
+            },
+        ),
+        _check(
+            "github_plan_matrix_stack_engine_contract_ready",
+            _stack_engine_plan_matrix_ready(plan_stack_engine),
+            {
+                "check_passed": plan_stack_engine.get("release_matrix_check_passed"),
+                "ready": plan_stack_engine.get("release_matrix_ready"),
+                "phase2_check_passed": plan_stack_engine.get(
+                    "release_matrix_phase2_check_passed"
+                ),
+                "status": plan_stack_engine.get("release_matrix_status"),
+                "passed": plan_stack_engine.get("release_matrix_passed"),
+                "scope": plan_stack_engine.get("release_matrix_scope"),
+                "adoption_recommendation": plan_stack_engine.get(
+                    "release_matrix_adoption_recommendation"
+                ),
+                "default_gap_count": plan_stack_engine.get(
+                    "release_matrix_default_gap_count"
+                ),
+                "blocker_count": plan_stack_engine.get("release_matrix_blocker_count"),
+                "blockers": plan_stack_engine.get("release_matrix_blockers"),
+                "plan_check_evidence": plan_stack_engine.get(
+                    "release_matrix_check_evidence"
+                ),
+            },
+        ),
+        _check(
+            "github_plan_stack_engine_contract_agreement_passed",
+            plan_stack_engine.get("agreement_check_passed") is True
+            and _int_or_zero(plan_stack_engine.get("phase2_default_gap_count")) == 0
+            and _int_or_zero(plan_stack_engine.get("release_matrix_default_gap_count")) == 0
+            and _int_or_zero(plan_stack_engine.get("phase2_blocker_count")) == 0
+            and _int_or_zero(plan_stack_engine.get("release_matrix_blocker_count")) == 0,
+            {
+                "agreement_check_passed": plan_stack_engine.get(
+                    "agreement_check_passed"
+                ),
+                "phase2_gap_count": plan_stack_engine.get("phase2_default_gap_count"),
+                "matrix_gap_count": plan_stack_engine.get(
+                    "release_matrix_default_gap_count"
+                ),
+                "phase2_blocker_count": plan_stack_engine.get("phase2_blocker_count"),
+                "matrix_blocker_count": plan_stack_engine.get(
+                    "release_matrix_blocker_count"
+                ),
+                "plan_check_evidence": plan_stack_engine.get(
+                    "agreement_check_evidence"
+                ),
+            },
+        ),
+        _check(
+            "matrix_stack_engine_contract_ready",
+            _stack_engine_matrix_ready(matrix_info),
+            {
+                "present": matrix_info.get("stack_engine_contract_present"),
+                "ready": matrix_info.get("stack_engine_contract_ready"),
+                "phase2_check_passed": matrix_info.get(
+                    "stack_engine_contract_phase2_check_passed"
+                ),
+                "status": matrix_info.get("stack_engine_contract_status"),
+                "passed": matrix_info.get("stack_engine_contract_passed"),
+                "scope": matrix_info.get("stack_engine_contract_scope"),
+                "adoption_recommendation": matrix_info.get(
+                    "stack_engine_contract_adoption_recommendation"
+                ),
+                "default_gap_count": matrix_info.get(
+                    "stack_engine_contract_default_gap_count"
+                ),
+                "blocker_count": matrix_info.get("stack_engine_contract_blocker_count"),
+                "blockers": matrix_info.get("stack_engine_contract_blockers"),
+            },
+        ),
+        _check(
+            "default_promotion_stack_engine_contract_ready",
+            _stack_engine_matrix_ready(promotion_info),
+            {
+                "present": promotion_info.get("stack_engine_contract_present"),
+                "ready": promotion_info.get("stack_engine_contract_ready"),
+                "phase2_check_passed": promotion_info.get(
+                    "stack_engine_contract_phase2_check_passed"
+                ),
+                "status": promotion_info.get("stack_engine_contract_status"),
+                "passed": promotion_info.get("stack_engine_contract_passed"),
+                "scope": promotion_info.get("stack_engine_contract_scope"),
+                "adoption_recommendation": promotion_info.get(
+                    "stack_engine_contract_adoption_recommendation"
+                ),
+                "default_gap_count": promotion_info.get(
+                    "stack_engine_contract_default_gap_count"
+                ),
+                "blocker_count": promotion_info.get(
+                    "stack_engine_contract_blocker_count"
+                ),
+                "blockers": promotion_info.get("stack_engine_contract_blockers"),
+            },
+        ),
+        _check(
+            "github_plan_matrix_stack_engine_contract_matches_matrix",
+            plan_stack_engine.get("release_matrix_ready")
+            == matrix_info.get("stack_engine_contract_ready")
+            and plan_stack_engine.get("release_matrix_phase2_check_passed")
+            == matrix_info.get("stack_engine_contract_phase2_check_passed")
+            and plan_stack_engine.get("release_matrix_status")
+            == matrix_info.get("stack_engine_contract_status")
+            and plan_stack_engine.get("release_matrix_default_gap_count")
+            == matrix_info.get("stack_engine_contract_default_gap_count")
+            and plan_stack_engine.get("release_matrix_blocker_count")
+            == matrix_info.get("stack_engine_contract_blocker_count"),
+            {
+                "github_release_plan": {
+                    "ready": plan_stack_engine.get("release_matrix_ready"),
+                    "phase2_check_passed": plan_stack_engine.get(
+                        "release_matrix_phase2_check_passed"
+                    ),
+                    "status": plan_stack_engine.get("release_matrix_status"),
+                    "default_gap_count": plan_stack_engine.get(
+                        "release_matrix_default_gap_count"
+                    ),
+                    "blocker_count": plan_stack_engine.get(
+                        "release_matrix_blocker_count"
+                    ),
+                },
+                "windows_release_matrix": {
+                    "ready": matrix_info.get("stack_engine_contract_ready"),
+                    "phase2_check_passed": matrix_info.get(
+                        "stack_engine_contract_phase2_check_passed"
+                    ),
+                    "status": matrix_info.get("stack_engine_contract_status"),
+                    "default_gap_count": matrix_info.get(
+                        "stack_engine_contract_default_gap_count"
+                    ),
+                    "blocker_count": matrix_info.get(
+                        "stack_engine_contract_blocker_count"
+                    ),
+                },
+            },
+        ),
+        _check(
+            "matrix_stack_engine_contract_matches_default_promotion",
+            matrix_info.get("stack_engine_contract_ready")
+            == promotion_info.get("stack_engine_contract_ready")
+            and matrix_info.get("stack_engine_contract_phase2_check_passed")
+            == promotion_info.get("stack_engine_contract_phase2_check_passed")
+            and matrix_info.get("stack_engine_contract_status")
+            == promotion_info.get("stack_engine_contract_status")
+            and matrix_info.get("stack_engine_contract_default_gap_count")
+            == promotion_info.get("stack_engine_contract_default_gap_count")
+            and matrix_info.get("stack_engine_contract_blocker_count")
+            == promotion_info.get("stack_engine_contract_blocker_count"),
+            {
+                "windows_release_matrix": {
+                    "ready": matrix_info.get("stack_engine_contract_ready"),
+                    "phase2_check_passed": matrix_info.get(
+                        "stack_engine_contract_phase2_check_passed"
+                    ),
+                    "status": matrix_info.get("stack_engine_contract_status"),
+                    "default_gap_count": matrix_info.get(
+                        "stack_engine_contract_default_gap_count"
+                    ),
+                    "blocker_count": matrix_info.get(
+                        "stack_engine_contract_blocker_count"
+                    ),
+                },
+                "default_promotion": {
+                    "ready": promotion_info.get("stack_engine_contract_ready"),
+                    "phase2_check_passed": promotion_info.get(
+                        "stack_engine_contract_phase2_check_passed"
+                    ),
+                    "status": promotion_info.get("stack_engine_contract_status"),
+                    "default_gap_count": promotion_info.get(
+                        "stack_engine_contract_default_gap_count"
+                    ),
+                    "blocker_count": promotion_info.get(
+                        "stack_engine_contract_blocker_count"
+                    ),
+                },
+            },
+        ),
+        _check(
             "manifest_assets_match_github_plan",
             not missing_assets and not mismatched_assets,
             {
@@ -730,6 +1085,24 @@ def build_windows_publish_preflight(
             "default_promotion_sample_accounting_closure_status": promotion_info.get(
                 "sample_accounting_closure_status"
             ),
+            "github_plan_phase2_stack_engine_contract_status": (
+                plan_stack_engine.get("phase2_status")
+            ),
+            "github_plan_matrix_stack_engine_contract_status": (
+                plan_stack_engine.get("release_matrix_status")
+            ),
+            "matrix_stack_engine_contract_status": matrix_info.get(
+                "stack_engine_contract_status"
+            ),
+            "default_promotion_stack_engine_contract_status": promotion_info.get(
+                "stack_engine_contract_status"
+            ),
+            "matrix_stack_engine_contract_default_gap_count": matrix_info.get(
+                "stack_engine_contract_default_gap_count"
+            ),
+            "default_promotion_stack_engine_contract_default_gap_count": (
+                promotion_info.get("stack_engine_contract_default_gap_count")
+            ),
         },
         "release_manifest": {
             "status": manifest.get("status"),
@@ -743,6 +1116,7 @@ def build_windows_publish_preflight(
             "asset_labels": asset_labels,
             "rejection_sample_accounting": plan_rejection_sample,
             "sample_accounting_closure": plan_sample_closure,
+            "stack_engine_contract": plan_stack_engine,
         },
         "windows_release_matrix": matrix_info,
         "default_promotion_manifest": promotion_info,
@@ -787,6 +1161,19 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"plan-matrix `{summary.get('github_plan_matrix_sample_accounting_closure_status')}`, "
             f"matrix `{summary.get('matrix_sample_accounting_closure_status')}`, "
             f"default-promotion `{summary.get('default_promotion_sample_accounting_closure_status')}`"
+        ),
+        (
+            "- StackEngine default contract: "
+            f"phase2 `{summary.get('github_plan_phase2_stack_engine_contract_status')}`, "
+            f"plan-matrix `{summary.get('github_plan_matrix_stack_engine_contract_status')}`, "
+            f"matrix `{summary.get('matrix_stack_engine_contract_status')}`, "
+            f"default-promotion `{summary.get('default_promotion_stack_engine_contract_status')}`"
+        ),
+        (
+            "- StackEngine default gaps: "
+            f"matrix `{summary.get('matrix_stack_engine_contract_default_gap_count')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_stack_engine_contract_default_gap_count')}`"
         ),
         "",
         "## Inputs",
