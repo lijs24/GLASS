@@ -1,0 +1,250 @@
+{
+  "acceptance_audit": null,
+  "artifact_type": "glass_phase2_status",
+  "checkpoint_case": "ready_publish_preflight_engine_policy_handoff",
+  "checkpoint_gate": "S2-Gate 285",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 285,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "primary_gpu": "Fixture GPU"
+      },
+      "name": "cuda_doctor_available",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "asset_count": 4,
+        "default_route_check_count": 4,
+        "failed_checks": [],
+        "package_count": 4,
+        "passed": true,
+        "primary_package": "cuda13",
+        "status": "publish_preflight_ready"
+      },
+      "name": "windows_publish_preflight_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_promotion_check": true,
+        "default_promotion_status": "passed",
+        "failed_checks": [],
+        "matrix_check": true,
+        "matrix_match_check": true,
+        "matrix_status": "passed",
+        "phase2_check": true,
+        "phase2_status": "passed",
+        "plan_matrix_check": true,
+        "plan_matrix_status": "passed"
+      },
+      "name": "windows_publish_preflight_rejection_sample_accounting_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_promotion_check": true,
+        "default_promotion_status": "passed",
+        "failed_checks": [],
+        "matrix_check": true,
+        "matrix_match_check": true,
+        "matrix_status": "passed",
+        "phase2_check": true,
+        "phase2_status": "passed",
+        "plan_matrix_check": true,
+        "plan_matrix_status": "passed"
+      },
+      "name": "windows_publish_preflight_sample_accounting_closure_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "agreement_check": true,
+        "default_promotion_acceptance_check": true,
+        "default_promotion_acceptance_status": "passed",
+        "default_promotion_pipeline_check": true,
+        "default_promotion_pipeline_status": "passed",
+        "default_promotion_ready": true,
+        "failed_checks": [],
+        "matrix_acceptance_check": true,
+        "matrix_acceptance_status": "passed",
+        "matrix_pipeline_check": true,
+        "matrix_pipeline_status": "passed",
+        "matrix_ready": true
+      },
+      "name": "windows_publish_preflight_integration_engine_policy_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "agreement_check": true,
+        "default_promotion_check": true,
+        "default_promotion_default_gap_count": 0,
+        "default_promotion_match_check": true,
+        "default_promotion_status": "passed",
+        "failed_checks": [],
+        "matrix_check": true,
+        "matrix_default_gap_count": 0,
+        "matrix_status": "passed",
+        "phase2_check": true,
+        "phase2_status": "passed",
+        "plan_matrix_check": true,
+        "plan_matrix_match_check": true,
+        "plan_matrix_status": "passed"
+      },
+      "name": "windows_publish_preflight_stack_engine_default_contract_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_promotion_audit_check": true,
+        "default_promotion_check_count": 27,
+        "default_promotion_match_check": true,
+        "default_promotion_required_frame_check": true,
+        "default_promotion_required_frame_count": 200,
+        "default_promotion_required_frame_count_passed": true,
+        "default_promotion_status": "passed",
+        "failed_checks": [],
+        "matrix_audit_check": true,
+        "matrix_check_count": 27,
+        "matrix_check_count_check": true,
+        "matrix_required_frame_check": true,
+        "matrix_required_frame_count": 200,
+        "matrix_required_frame_count_passed": true,
+        "matrix_status": "passed"
+      },
+      "name": "windows_publish_preflight_resident_winsorized_sweep_passed",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T06:14:30+00:00",
+  "default_route_acceptance": null,
+  "doctor": {
+    "compute_capability": "12.0",
+    "cuda_available": true,
+    "device_count": 1,
+    "driver_version": "596.21",
+    "native_extension_loaded": true,
+    "primary_gpu": "Fixture GPU",
+    "recommendation": "cuda",
+    "vram_mib": 97886,
+    "windows_cuda_packages": {
+      "ordered_try_list": [
+        "cuda13",
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ]
+    },
+    "wrapper_importable": true
+  },
+  "github_release_plan": null,
+  "latest_checkpoint": {
+    "checkpoint_dir": "GATE285_FIXTURE\\checkpoints",
+    "date": "2026-06-18",
+    "exists": true,
+    "gate": 285,
+    "green": true,
+    "path": "GATE285_FIXTURE\\checkpoints\\s2_gate_285_status.md",
+    "scope": "fixture checkpoint",
+    "status": "green"
+  },
+  "passed": true,
+  "pipeline_contract": null,
+  "publish_preflight": {
+    "artifact_type": "windows_publish_preflight",
+    "asset_count": 4,
+    "default_promotion_acceptance_integration_engine_policy_passed": true,
+    "default_promotion_acceptance_integration_engine_policy_status": "passed",
+    "default_promotion_integration_engine_policy_ready": true,
+    "default_promotion_pipeline_integration_engine_policy_passed": true,
+    "default_promotion_pipeline_integration_engine_policy_status": "passed",
+    "default_promotion_rejection_sample_accounting_passed": true,
+    "default_promotion_rejection_sample_accounting_status": "passed",
+    "default_promotion_resident_winsorized_required_frame_passed": true,
+    "default_promotion_resident_winsorized_sweep_audit_passed": true,
+    "default_promotion_resident_winsorized_sweep_check_count": 27,
+    "default_promotion_resident_winsorized_sweep_matches_matrix": true,
+    "default_promotion_resident_winsorized_sweep_required_frame_count": 200,
+    "default_promotion_resident_winsorized_sweep_required_frame_count_passed": true,
+    "default_promotion_resident_winsorized_sweep_status": "passed",
+    "default_promotion_sample_accounting_closure_passed": true,
+    "default_promotion_sample_accounting_closure_status": "passed",
+    "default_promotion_stack_engine_contract_default_gap_count": 0,
+    "default_promotion_stack_engine_contract_ready": true,
+    "default_promotion_stack_engine_contract_status": "passed",
+    "default_promotion_status": "default_promotion_ready",
+    "default_route_check_count": 4,
+    "default_route_speedup_vs_reference": 28.75,
+    "exists": true,
+    "failed_checks": [],
+    "github_plan_matrix_rejection_accounting_matches_matrix": true,
+    "github_plan_matrix_rejection_sample_accounting_passed": true,
+    "github_plan_matrix_rejection_sample_accounting_status": "passed",
+    "github_plan_matrix_sample_accounting_closure_passed": true,
+    "github_plan_matrix_sample_accounting_closure_status": "passed",
+    "github_plan_matrix_sample_closure_matches_matrix": true,
+    "github_plan_matrix_stack_engine_contract_matches_matrix": true,
+    "github_plan_matrix_stack_engine_contract_ready": true,
+    "github_plan_matrix_stack_engine_contract_status": "passed",
+    "github_plan_phase2_rejection_sample_accounting_passed": true,
+    "github_plan_phase2_rejection_sample_accounting_status": "passed",
+    "github_plan_phase2_sample_accounting_closure_passed": true,
+    "github_plan_phase2_sample_accounting_closure_status": "passed",
+    "github_plan_phase2_stack_engine_contract_status": "passed",
+    "github_plan_phase2_stack_engine_default_contract_ready": true,
+    "github_plan_stack_engine_contract_agreement_passed": true,
+    "matrix_acceptance_integration_engine_policy_status": "passed",
+    "matrix_integration_engine_policy_matches_default_promotion": true,
+    "matrix_integration_engine_policy_ready": true,
+    "matrix_pipeline_integration_engine_policy_status": "passed",
+    "matrix_rejection_sample_accounting_passed": true,
+    "matrix_rejection_sample_accounting_status": "passed",
+    "matrix_resident_winsorized_required_frame_passed": true,
+    "matrix_resident_winsorized_sweep_audit_passed": true,
+    "matrix_resident_winsorized_sweep_check_count": 27,
+    "matrix_resident_winsorized_sweep_check_count_passed": true,
+    "matrix_resident_winsorized_sweep_required_frame_count": 200,
+    "matrix_resident_winsorized_sweep_required_frame_count_passed": true,
+    "matrix_resident_winsorized_sweep_status": "passed",
+    "matrix_sample_accounting_closure_passed": true,
+    "matrix_sample_accounting_closure_status": "passed",
+    "matrix_stack_engine_contract_default_gap_count": 0,
+    "matrix_stack_engine_contract_matches_default_promotion": true,
+    "matrix_stack_engine_contract_ready": true,
+    "matrix_stack_engine_contract_status": "passed",
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "package_count": 4,
+    "passed": true,
+    "path": "GATE285_FIXTURE\\publish_preflight_ready.json",
+    "primary_package": "cuda13",
+    "recommendation": "publish_release_bundle",
+    "release_tag": "v0.1.0-test",
+    "source_stamps": [
+      "abcdef0"
+    ],
+    "status": "publish_preflight_ready",
+    "windows_release_matrix_acceptance_integration_engine_policy_passed": true,
+    "windows_release_matrix_pipeline_integration_engine_policy_passed": true
+  },
+  "release_decision": null,
+  "release_manifest": null,
+  "resident_winsorized_benchmark_audit": null,
+  "resident_winsorized_sweep_audit": null,
+  "schema_version": 1,
+  "stack_engine_contract": null,
+  "status": "green"
+}

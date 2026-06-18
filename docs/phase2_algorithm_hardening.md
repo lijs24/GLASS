@@ -4812,6 +4812,25 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 285: Phase 2 Publish Preflight Integration Engine Policy Handoff
+
+- Carry the S2-Gate 284 Windows publish-preflight integration engine-policy
+  evidence into `glass phase2-status`.
+- Require Phase 2 green status to preserve publish-preflight evidence for both
+  release-matrix and default-promotion integration engine-policy checks.
+- Block stale publish-preflight artifacts that still report ready status but do
+  not contain Gate284 policy summary/check fields.
+- Extend `glass phase2-status-compare` so candidate status artifacts cannot
+  lose a previously passing publish-preflight integration engine-policy chain.
+- Surface publish-preflight policy readiness, acceptance/pipeline statuses, and
+  check agreement in Phase 2 JSON and Markdown.
+- Add focused status and status-compare tests for ready evidence, missing stale
+  publish-preflight policy evidence, failed policy evidence, and Markdown
+  output.
+- Keep this gate status-handoff scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

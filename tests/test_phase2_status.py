@@ -596,6 +596,8 @@ def _write_publish_preflight(
     include_stack_engine_contract: bool = True,
     resident_winsorized_sweep_ready: bool = True,
     include_resident_winsorized_sweep: bool = True,
+    integration_engine_policy_ready: bool = True,
+    include_integration_engine_policy: bool = True,
 ) -> None:
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
@@ -605,6 +607,8 @@ def _write_publish_preflight(
         stack_engine_ready or not include_stack_engine_contract
     ) and (
         resident_winsorized_sweep_ready or not include_resident_winsorized_sweep
+    ) and (
+        integration_engine_policy_ready or not include_integration_engine_policy
     )
     summary = {
         "release_tag": "v0.1.0-test",
@@ -699,6 +703,53 @@ def _write_publish_preflight(
                 "github_plan_matrix_sample_accounting_closure_passed",
                 "matrix_sample_accounting_closure_passed",
                 "default_promotion_sample_accounting_closure_passed",
+            ]
+    if include_integration_engine_policy:
+        status = "passed" if integration_engine_policy_ready else "failed"
+        summary.update(
+            {
+                "matrix_integration_engine_policy_ready": integration_engine_policy_ready,
+                "matrix_acceptance_integration_engine_policy_status": status,
+                "matrix_pipeline_integration_engine_policy_status": status,
+                "default_promotion_integration_engine_policy_ready": (
+                    integration_engine_policy_ready
+                ),
+                "default_promotion_acceptance_integration_engine_policy_status": status,
+                "default_promotion_pipeline_integration_engine_policy_status": status,
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "windows_release_matrix_acceptance_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "windows_release_matrix_pipeline_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "default_promotion_acceptance_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "default_promotion_pipeline_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "matrix_integration_engine_policy_matches_default_promotion",
+                    "passed": integration_engine_policy_ready,
+                },
+            ]
+        )
+        if not integration_engine_policy_ready:
+            failed_checks = [
+                *failed_checks,
+                "windows_release_matrix_acceptance_integration_engine_policy_passed",
+                "windows_release_matrix_pipeline_integration_engine_policy_passed",
+                "default_promotion_acceptance_integration_engine_policy_passed",
+                "default_promotion_pipeline_integration_engine_policy_passed",
+                "matrix_integration_engine_policy_matches_default_promotion",
             ]
     if include_stack_engine_contract:
         status = "passed" if stack_engine_ready else "failed"
@@ -870,6 +921,8 @@ def _status_payload(
     publish_preflight_status: str = "publish_preflight_ready",
     publish_preflight_rejection_sample_status: str = "passed",
     publish_preflight_sample_closure_status: str = "passed",
+    publish_preflight_integration_engine_policy_status: str = "passed",
+    publish_preflight_integration_engine_policy_ready: bool = True,
     publish_preflight_stack_engine_status: str = "passed",
     publish_preflight_resident_winsorized_status: str = "passed",
     publish_preflight_resident_winsorized_required_frame_passed: bool = True,
@@ -957,6 +1010,24 @@ def _status_payload(
             "default_promotion_sample_accounting_closure_status": (
                 publish_preflight_sample_closure_status
             ),
+            "matrix_integration_engine_policy_ready": (
+                publish_preflight_integration_engine_policy_ready
+            ),
+            "matrix_acceptance_integration_engine_policy_status": (
+                publish_preflight_integration_engine_policy_status
+            ),
+            "matrix_pipeline_integration_engine_policy_status": (
+                publish_preflight_integration_engine_policy_status
+            ),
+            "default_promotion_integration_engine_policy_ready": (
+                publish_preflight_integration_engine_policy_ready
+            ),
+            "default_promotion_acceptance_integration_engine_policy_status": (
+                publish_preflight_integration_engine_policy_status
+            ),
+            "default_promotion_pipeline_integration_engine_policy_status": (
+                publish_preflight_integration_engine_policy_status
+            ),
             "github_plan_phase2_stack_engine_contract_status": (
                 publish_preflight_stack_engine_status
             ),
@@ -1024,6 +1095,26 @@ def _status_payload(
             ),
             "github_plan_matrix_sample_closure_matches_matrix": (
                 publish_preflight_sample_closure_status == "passed"
+            ),
+            "windows_release_matrix_acceptance_integration_engine_policy_passed": (
+                publish_preflight_integration_engine_policy_status == "passed"
+                and publish_preflight_integration_engine_policy_ready
+            ),
+            "windows_release_matrix_pipeline_integration_engine_policy_passed": (
+                publish_preflight_integration_engine_policy_status == "passed"
+                and publish_preflight_integration_engine_policy_ready
+            ),
+            "default_promotion_acceptance_integration_engine_policy_passed": (
+                publish_preflight_integration_engine_policy_status == "passed"
+                and publish_preflight_integration_engine_policy_ready
+            ),
+            "default_promotion_pipeline_integration_engine_policy_passed": (
+                publish_preflight_integration_engine_policy_status == "passed"
+                and publish_preflight_integration_engine_policy_ready
+            ),
+            "matrix_integration_engine_policy_matches_default_promotion": (
+                publish_preflight_integration_engine_policy_status == "passed"
+                and publish_preflight_integration_engine_policy_ready
             ),
             "github_plan_phase2_stack_engine_default_contract_ready": (
                 publish_preflight_stack_engine_status == "passed"
@@ -1264,6 +1355,67 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         payload["publish_preflight"]["github_plan_matrix_sample_closure_matches_matrix"]
         is True
     )
+    assert payload["publish_preflight"]["matrix_integration_engine_policy_ready"] is True
+    assert (
+        payload["publish_preflight"][
+            "matrix_acceptance_integration_engine_policy_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_pipeline_integration_engine_policy_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_integration_engine_policy_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_acceptance_integration_engine_policy_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_pipeline_integration_engine_policy_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["publish_preflight"][
+            "windows_release_matrix_acceptance_integration_engine_policy_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "windows_release_matrix_pipeline_integration_engine_policy_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_acceptance_integration_engine_policy_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_pipeline_integration_engine_policy_passed"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_integration_engine_policy_matches_default_promotion"
+        ]
+        is True
+    )
     assert (
         payload["publish_preflight"]["github_plan_phase2_stack_engine_contract_status"]
         == "passed"
@@ -1346,6 +1498,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["windows_publish_preflight_ready"] is True
     assert checks["windows_publish_preflight_rejection_sample_accounting_passed"] is True
     assert checks["windows_publish_preflight_sample_accounting_closure_passed"] is True
+    assert checks["windows_publish_preflight_integration_engine_policy_passed"] is True
     assert checks["windows_publish_preflight_stack_engine_default_contract_ready"] is True
     assert checks["windows_publish_preflight_resident_winsorized_sweep_passed"] is True
 
@@ -1532,11 +1685,85 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Preflight status: publish_preflight_ready" in text
     assert "Default route checks: 4" in text
     assert "Rejection sample accounting statuses: phase2=passed" in text
+    assert "Integration engine policy statuses: matrix-ready=True" in text
+    assert "Integration engine policy checks: matrix-acceptance=True" in text
     assert "StackEngine default contract statuses: phase2=passed" in text
     assert "StackEngine default gaps: matrix=0, default-promotion=0" in text
     assert "Resident winsorized sweep statuses: matrix=passed" in text
     assert "Resident winsorized sweep required frame: matrix=200/True" in text
     assert "Resident winsorized sweep checks: matrix-count=27" in text
+
+
+def test_phase2_status_blocks_missing_publish_preflight_engine_policy_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=285)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(
+        publish_preflight,
+        include_integration_engine_policy=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert (
+        checks["windows_publish_preflight_integration_engine_policy_passed"][
+            "passed"
+        ]
+        is False
+    )
+    evidence = checks["windows_publish_preflight_integration_engine_policy_passed"][
+        "evidence"
+    ]
+    assert evidence["matrix_ready"] is None
+    assert evidence["matrix_acceptance_check"] is None
+    assert evidence["agreement_check"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_engine_policy_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=285)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(
+        publish_preflight,
+        integration_engine_policy_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert checks["windows_publish_preflight_ready"]["passed"] is False
+    assert (
+        checks["windows_publish_preflight_integration_engine_policy_passed"][
+            "passed"
+        ]
+        is False
+    )
+    evidence = checks["windows_publish_preflight_integration_engine_policy_passed"][
+        "evidence"
+    ]
+    assert evidence["matrix_ready"] is False
+    assert evidence["matrix_acceptance_status"] == "failed"
+    assert evidence["default_promotion_pipeline_check"] is False
 
 
 def test_phase2_status_blocks_stack_engine_default_contract_gap(tmp_path: Path):
@@ -2122,6 +2349,13 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is True
     assert checks["windows_publish_preflight_sample_accounting_closure_preserved"] is True
     assert checks["windows_publish_preflight_sample_closure_status_preserved"] is True
+    assert checks["windows_publish_preflight_integration_engine_policy_preserved"] is True
+    assert (
+        checks[
+            "windows_publish_preflight_integration_engine_policy_status_preserved"
+        ]
+        is True
+    )
     assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is True
     assert checks["windows_publish_preflight_stack_engine_status_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
@@ -2162,6 +2396,8 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             publish_preflight_status="blocked",
             publish_preflight_rejection_sample_status="failed",
             publish_preflight_sample_closure_status="failed",
+            publish_preflight_integration_engine_policy_status="failed",
+            publish_preflight_integration_engine_policy_ready=False,
             publish_preflight_stack_engine_status="failed",
             pipeline_passed=False,
             pipeline_dq_contract=False,
@@ -2198,6 +2434,13 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["windows_publish_preflight_rejection_sample_status_preserved"] is False
     assert checks["windows_publish_preflight_sample_accounting_closure_preserved"] is False
     assert checks["windows_publish_preflight_sample_closure_status_preserved"] is False
+    assert checks["windows_publish_preflight_integration_engine_policy_preserved"] is False
+    assert (
+        checks[
+            "windows_publish_preflight_integration_engine_policy_status_preserved"
+        ]
+        is False
+    )
     assert checks["windows_publish_preflight_stack_engine_contract_preserved"] is False
     assert checks["windows_publish_preflight_stack_engine_status_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
@@ -2495,6 +2738,56 @@ def test_phase2_status_compare_flags_publish_preflight_sample_closure_regression
     assert checks["windows_publish_preflight_sample_closure_status_preserved"][
         "evidence"
     ]["candidate"]["matrix_sample_accounting_closure_status"] == "failed"
+
+
+def test_phase2_status_compare_flags_publish_preflight_engine_policy_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=284))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=285,
+            publish_preflight_integration_engine_policy_status="failed",
+            publish_preflight_integration_engine_policy_ready=False,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["windows_publish_preflight_integration_engine_policy_preserved"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_integration_engine_policy_preserved"][
+        "evidence"
+    ]["candidate"]["checks_passed"] is False
+    assert (
+        checks[
+            "windows_publish_preflight_integration_engine_policy_status_preserved"
+        ]["passed"]
+        is False
+    )
+    candidate_statuses = checks[
+        "windows_publish_preflight_integration_engine_policy_status_preserved"
+    ]["evidence"]["candidate"]
+    assert candidate_statuses["matrix_integration_engine_policy_ready"] is False
+    assert (
+        candidate_statuses["matrix_acceptance_integration_engine_policy_status"]
+        == "failed"
+    )
+    assert (
+        payload["candidate"]["publish_preflight_integration_engine_policy"][
+            "default_promotion_pipeline_integration_engine_policy_status"
+        ]
+        == "failed"
+    )
 
 
 def test_phase2_status_compare_flags_publish_preflight_stack_engine_regression(

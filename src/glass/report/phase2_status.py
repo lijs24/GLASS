@@ -594,6 +594,24 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_promotion_sample_accounting_closure_status": summary.get(
             "default_promotion_sample_accounting_closure_status"
         ),
+        "matrix_integration_engine_policy_ready": summary.get(
+            "matrix_integration_engine_policy_ready"
+        ),
+        "matrix_acceptance_integration_engine_policy_status": summary.get(
+            "matrix_acceptance_integration_engine_policy_status"
+        ),
+        "matrix_pipeline_integration_engine_policy_status": summary.get(
+            "matrix_pipeline_integration_engine_policy_status"
+        ),
+        "default_promotion_integration_engine_policy_ready": summary.get(
+            "default_promotion_integration_engine_policy_ready"
+        ),
+        "default_promotion_acceptance_integration_engine_policy_status": summary.get(
+            "default_promotion_acceptance_integration_engine_policy_status"
+        ),
+        "default_promotion_pipeline_integration_engine_policy_status": summary.get(
+            "default_promotion_pipeline_integration_engine_policy_status"
+        ),
         "github_plan_phase2_stack_engine_contract_status": summary.get(
             "github_plan_phase2_stack_engine_contract_status"
         ),
@@ -677,6 +695,34 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "github_plan_matrix_sample_closure_matches_matrix": _check_passed(
             payload,
             "github_plan_matrix_sample_closure_matches_matrix",
+        ),
+        "windows_release_matrix_acceptance_integration_engine_policy_passed": (
+            _check_passed(
+                payload,
+                "windows_release_matrix_acceptance_integration_engine_policy_passed",
+            )
+        ),
+        "windows_release_matrix_pipeline_integration_engine_policy_passed": (
+            _check_passed(
+                payload,
+                "windows_release_matrix_pipeline_integration_engine_policy_passed",
+            )
+        ),
+        "default_promotion_acceptance_integration_engine_policy_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_acceptance_integration_engine_policy_passed",
+            )
+        ),
+        "default_promotion_pipeline_integration_engine_policy_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_pipeline_integration_engine_policy_passed",
+            )
+        ),
+        "matrix_integration_engine_policy_matches_default_promotion": _check_passed(
+            payload,
+            "matrix_integration_engine_policy_matches_default_promotion",
         ),
         "github_plan_phase2_stack_engine_default_contract_ready": _check_passed(
             payload,
@@ -1508,6 +1554,86 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "windows_publish_preflight_integration_engine_policy_passed",
+                "passed": (
+                    preflight.get(
+                        "windows_release_matrix_acceptance_integration_engine_policy_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "windows_release_matrix_pipeline_integration_engine_policy_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_acceptance_integration_engine_policy_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "default_promotion_pipeline_integration_engine_policy_passed"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_integration_engine_policy_matches_default_promotion"
+                    )
+                    is True
+                    and preflight.get("matrix_integration_engine_policy_ready") is True
+                    and preflight.get("default_promotion_integration_engine_policy_ready")
+                    is True
+                    and preflight.get(
+                        "matrix_acceptance_integration_engine_policy_status"
+                    )
+                    == "passed"
+                    and preflight.get("matrix_pipeline_integration_engine_policy_status")
+                    == "passed"
+                    and preflight.get(
+                        "default_promotion_acceptance_integration_engine_policy_status"
+                    )
+                    == "passed"
+                    and preflight.get(
+                        "default_promotion_pipeline_integration_engine_policy_status"
+                    )
+                    == "passed"
+                ),
+                "evidence": {
+                    "matrix_ready": preflight.get(
+                        "matrix_integration_engine_policy_ready"
+                    ),
+                    "matrix_acceptance_status": preflight.get(
+                        "matrix_acceptance_integration_engine_policy_status"
+                    ),
+                    "matrix_pipeline_status": preflight.get(
+                        "matrix_pipeline_integration_engine_policy_status"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_integration_engine_policy_ready"
+                    ),
+                    "default_promotion_acceptance_status": preflight.get(
+                        "default_promotion_acceptance_integration_engine_policy_status"
+                    ),
+                    "default_promotion_pipeline_status": preflight.get(
+                        "default_promotion_pipeline_integration_engine_policy_status"
+                    ),
+                    "matrix_acceptance_check": preflight.get(
+                        "windows_release_matrix_acceptance_integration_engine_policy_passed"
+                    ),
+                    "matrix_pipeline_check": preflight.get(
+                        "windows_release_matrix_pipeline_integration_engine_policy_passed"
+                    ),
+                    "default_promotion_acceptance_check": preflight.get(
+                        "default_promotion_acceptance_integration_engine_policy_passed"
+                    ),
+                    "default_promotion_pipeline_check": preflight.get(
+                        "default_promotion_pipeline_integration_engine_policy_passed"
+                    ),
+                    "agreement_check": preflight.get(
+                        "matrix_integration_engine_policy_matches_default_promotion"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
+        checks.append(
+            {
                 "name": "windows_publish_preflight_stack_engine_default_contract_ready",
                 "passed": (
                     preflight.get(
@@ -2061,6 +2187,33 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('github_plan_matrix_sample_closure_matches_matrix')}"
                 ),
                 (
+                    "- Integration engine policy statuses: "
+                    f"matrix-ready={preflight.get('matrix_integration_engine_policy_ready')}, "
+                    "matrix-acceptance="
+                    f"{preflight.get('matrix_acceptance_integration_engine_policy_status')}, "
+                    "matrix-pipeline="
+                    f"{preflight.get('matrix_pipeline_integration_engine_policy_status')}, "
+                    "default-promotion-ready="
+                    f"{preflight.get('default_promotion_integration_engine_policy_ready')}, "
+                    "default-promotion-acceptance="
+                    f"{preflight.get('default_promotion_acceptance_integration_engine_policy_status')}, "
+                    "default-promotion-pipeline="
+                    f"{preflight.get('default_promotion_pipeline_integration_engine_policy_status')}"
+                ),
+                (
+                    "- Integration engine policy checks: "
+                    "matrix-acceptance="
+                    f"{preflight.get('windows_release_matrix_acceptance_integration_engine_policy_passed')}, "
+                    "matrix-pipeline="
+                    f"{preflight.get('windows_release_matrix_pipeline_integration_engine_policy_passed')}, "
+                    "default-promotion-acceptance="
+                    f"{preflight.get('default_promotion_acceptance_integration_engine_policy_passed')}, "
+                    "default-promotion-pipeline="
+                    f"{preflight.get('default_promotion_pipeline_integration_engine_policy_passed')}, "
+                    "agreement="
+                    f"{preflight.get('matrix_integration_engine_policy_matches_default_promotion')}"
+                ),
+                (
                     "- StackEngine default contract statuses: "
                     f"phase2={preflight.get('github_plan_phase2_stack_engine_contract_status')}, "
                     f"plan-matrix={preflight.get('github_plan_matrix_stack_engine_contract_status')}, "
@@ -2460,6 +2613,24 @@ _PUBLISH_PREFLIGHT_SAMPLE_CLOSURE_STATUS_FIELDS = (
 )
 
 
+_PUBLISH_PREFLIGHT_ENGINE_POLICY_CHECK_FIELDS = (
+    "windows_release_matrix_acceptance_integration_engine_policy_passed",
+    "windows_release_matrix_pipeline_integration_engine_policy_passed",
+    "default_promotion_acceptance_integration_engine_policy_passed",
+    "default_promotion_pipeline_integration_engine_policy_passed",
+    "matrix_integration_engine_policy_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_ENGINE_POLICY_STATUS_FIELDS = (
+    "matrix_integration_engine_policy_ready",
+    "matrix_acceptance_integration_engine_policy_status",
+    "matrix_pipeline_integration_engine_policy_status",
+    "default_promotion_integration_engine_policy_ready",
+    "default_promotion_acceptance_integration_engine_policy_status",
+    "default_promotion_pipeline_integration_engine_policy_status",
+)
+
+
 _PUBLISH_PREFLIGHT_STACK_ENGINE_CHECK_FIELDS = (
     "github_plan_phase2_stack_engine_default_contract_ready",
     "github_plan_matrix_stack_engine_contract_ready",
@@ -2534,6 +2705,43 @@ def _publish_preflight_sample_closure_statuses(payload: dict[str, Any]) -> dict[
 def _publish_preflight_sample_closure_statuses_passed(payload: dict[str, Any]) -> bool:
     statuses = _publish_preflight_sample_closure_statuses(payload)
     return bool(statuses) and all(value == "passed" for value in statuses.values())
+
+
+def _publish_preflight_engine_policy_checks_passed(payload: dict[str, Any]) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_ENGINE_POLICY_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_engine_policy_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_ENGINE_POLICY_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_engine_policy_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_engine_policy_statuses(payload)
+    return (
+        bool(statuses)
+        and statuses.get("matrix_integration_engine_policy_ready") is True
+        and statuses.get("default_promotion_integration_engine_policy_ready") is True
+        and statuses.get("matrix_acceptance_integration_engine_policy_status")
+        == "passed"
+        and statuses.get("matrix_pipeline_integration_engine_policy_status")
+        == "passed"
+        and statuses.get(
+            "default_promotion_acceptance_integration_engine_policy_status"
+        )
+        == "passed"
+        and statuses.get("default_promotion_pipeline_integration_engine_policy_status")
+        == "passed"
+    )
 
 
 def _publish_preflight_stack_engine_checks_passed(payload: dict[str, Any]) -> bool:
@@ -2933,6 +3141,30 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_sample_closure_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_integration_engine_policy_preserved",
+            not _publish_preflight_engine_policy_checks_passed(baseline)
+            or _publish_preflight_engine_policy_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_engine_policy_checks_passed(
+                    baseline
+                ),
+                "statuses": _publish_preflight_engine_policy_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_engine_policy_checks_passed(
+                    candidate
+                ),
+                "statuses": _publish_preflight_engine_policy_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_integration_engine_policy_status_preserved",
+            not _publish_preflight_engine_policy_statuses_passed(baseline)
+            or _publish_preflight_engine_policy_statuses_passed(candidate),
+            baseline=_publish_preflight_engine_policy_statuses(baseline),
+            candidate=_publish_preflight_engine_policy_statuses(candidate),
+        ),
+        _compare_check(
             "windows_publish_preflight_stack_engine_contract_preserved",
             not _publish_preflight_stack_engine_checks_passed(baseline)
             or _publish_preflight_stack_engine_checks_passed(candidate),
@@ -3291,6 +3523,9 @@ def build_phase2_status_compare(
             "publish_preflight_sample_accounting_closure": (
                 _publish_preflight_sample_closure_statuses(baseline)
             ),
+            "publish_preflight_integration_engine_policy": (
+                _publish_preflight_engine_policy_statuses(baseline)
+            ),
             "publish_preflight_stack_engine_contract": (
                 _publish_preflight_stack_engine_statuses(baseline)
             ),
@@ -3351,6 +3586,9 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_sample_accounting_closure": (
                 _publish_preflight_sample_closure_statuses(candidate)
+            ),
+            "publish_preflight_integration_engine_policy": (
+                _publish_preflight_engine_policy_statuses(candidate)
             ),
             "publish_preflight_stack_engine_contract": (
                 _publish_preflight_stack_engine_statuses(candidate)
