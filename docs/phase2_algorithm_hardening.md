@@ -4226,6 +4226,22 @@ integration where applicable.
   default change, package build, upload, package release, StackEngine audit
   behavior change, or real-data benchmark rerun.
 
+### S2-Gate 252: Default Promotion StackEngine Contract Handoff
+
+- Carry Phase 2 `stack_engine_contract` evidence into
+  `glass default-promotion-manifest`.
+- Add `phase2_stack_engine_default_contract_ready` so default-promotion
+  manifests cannot pass when Phase 2 lost StackEngine default-contract
+  evidence, when default gaps remain, or when default-promotion blockers exist.
+- Extend default-promotion Markdown with StackEngine contract presence,
+  readiness, Phase2 check state, adoption recommendation, default-gap count,
+  and blocker count.
+- Add focused tests for ready artifacts, missing StackEngine contract evidence,
+  StackEngine default-gap blocking, and CLI Markdown output.
+- Keep this gate default-promotion-manifest scoped: no image math, CUDA kernel,
+  runtime default change, package build, upload, package release, release-matrix
+  behavior change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

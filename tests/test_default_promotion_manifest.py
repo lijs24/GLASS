@@ -46,20 +46,29 @@ def _write_phase2_status(
     default_route_ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
     sample_accounting_closure_ready: bool = True,
+    include_stack_engine_contract: bool = True,
+    stack_engine_ready: bool = True,
+    stack_engine_gap_count: int = 0,
 ) -> None:
     pipeline_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
+    phase2_ready = pipeline_ready and (stack_engine_ready if include_stack_engine_contract else True)
     failed_pipeline_checks = []
     if not rejection_sample_accounting_ready:
         failed_pipeline_checks.append("integration_rejection_sample_counts_match_maps")
     if not sample_accounting_closure_ready:
         failed_pipeline_checks.append("integration_sample_accounting_closure")
+    stack_engine_recommendation = (
+        "stack_engine_default_ready"
+        if stack_engine_ready and stack_engine_gap_count == 0
+        else "stack_engine_contract_gaps_remain"
+    )
     payload = {
         "schema_version": 1,
         "artifact_type": "glass_phase2_status",
-        "status": "green" if pipeline_ready else "attention_required",
-        "passed": pipeline_ready,
+        "status": "green" if phase2_ready else "attention_required",
+        "passed": phase2_ready,
         "latest_checkpoint": {
-            "gate": 236,
+            "gate": 252,
             "status": "green" if ready else "failed",
             "green": ready,
         },
@@ -149,7 +158,53 @@ def _write_phase2_status(
             "resident_native_calibration_artifact": True,
             "resident_calibrated_light_count": 200,
         },
+        "checks": [
+            {
+                "name": "stack_engine_default_contract_ready",
+                "passed": stack_engine_ready if include_stack_engine_contract else False,
+            }
+        ],
     }
+    if include_stack_engine_contract:
+        payload["stack_engine_contract"] = {
+            "path": "C:/glass_runs/run/stack_engine_contract.json",
+            "audit_type": "stack_engine_default_contract",
+            "status": "passed",
+            "passed": True,
+            "scope": "all",
+            "expected_integration_engine": "stack_engine_cpu",
+            "adoption_recommendation": stack_engine_recommendation,
+            "adoption_surface_count": 4,
+            "adoption_contract_ready_count": 4 - stack_engine_gap_count,
+            "adoption_stack_engine_surface_count": 4 - stack_engine_gap_count,
+            "adoption_cuda_resident_surface_count": 0,
+            "adoption_phase2_stack_engine_default_gap_count": stack_engine_gap_count,
+            "adoption_gap_surfaces": [
+                {
+                    "surface": "integration",
+                    "item": "H",
+                    "engine_family": "legacy",
+                    "gap_reason": "legacy_or_unknown_engine",
+                }
+            ]
+            if stack_engine_gap_count
+            else [],
+            "default_promotion_ready": stack_engine_ready,
+            "default_promotion_status": "ready" if stack_engine_ready else "blocked",
+            "default_promotion_recommendation": stack_engine_recommendation,
+            "default_promotion_phase2_stack_engine_default_gap_count": (
+                stack_engine_gap_count
+            ),
+            "default_promotion_blocker_count": 0 if stack_engine_ready else 1,
+            "default_promotion_blockers": []
+            if stack_engine_ready
+            else [
+                {
+                    "name": "phase2_stack_engine_default_gaps",
+                    "gap_count": stack_engine_gap_count,
+                }
+            ],
+        }
     if include_default_route:
         payload["default_route_acceptance"] = {
             "path": "C:/glass_runs/run/default_route_acceptance.json",
@@ -218,6 +273,8 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert payload["default_candidate"]["memory_mode"] == "resident"
     assert payload["default_candidate"]["fallback_memory_mode"] == "tile"
     assert payload["default_route_acceptance"]["route_contract_passed"] is True
+    assert payload["stack_engine_contract"]["ready"] is True
+    assert payload["stack_engine_contract"]["adoption_recommendation"] == "stack_engine_default_ready"
     assert checks["runtime_repeat_ratio_within_bound"] is True
     assert checks["default_route_acceptance_present"] is True
     assert checks["default_route_acceptance_passed"] is True
@@ -226,6 +283,7 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["pipeline_pixel_maps_match_dq"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
+    assert checks["phase2_stack_engine_default_contract_ready"] is True
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
 
 
@@ -339,6 +397,74 @@ def test_default_promotion_manifest_blocks_sample_accounting_closure_drift(
     }
 
 
+def test_default_promotion_manifest_blocks_missing_stack_engine_contract(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(phase2, decision, include_stack_engine_contract=False)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert payload["stack_engine_contract"]["present"] is False
+    assert "phase2_status_green" not in payload["failed_checks"]
+    assert "phase2_stack_engine_default_contract_ready" in payload["failed_checks"]
+    assert checks["phase2_stack_engine_default_contract_ready"]["evidence"] == {
+        "present": False,
+        "phase2_check_passed": False,
+        "status": None,
+        "passed": None,
+        "scope": None,
+        "expected_integration_engine": None,
+        "adoption_recommendation": None,
+        "adoption_gap_count": None,
+        "default_promotion_ready": None,
+        "default_promotion_status": None,
+        "default_promotion_blocker_count": None,
+        "default_promotion_blockers": [],
+    }
+
+
+def test_default_promotion_manifest_blocks_stack_engine_default_gap(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        stack_engine_ready=False,
+        stack_engine_gap_count=1,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert payload["stack_engine_contract"]["present"] is True
+    assert payload["stack_engine_contract"]["ready"] is False
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "phase2_stack_engine_default_contract_ready" in payload["failed_checks"]
+    assert checks["phase2_stack_engine_default_contract_ready"]["evidence"][
+        "adoption_gap_count"
+    ] == 1
+    assert checks["phase2_stack_engine_default_contract_ready"]["evidence"][
+        "default_promotion_status"
+    ] == "blocked"
+
+
 def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path) -> None:
     decision = tmp_path / "decision.json"
     phase2 = tmp_path / "phase2.json"
@@ -377,4 +503,7 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "Default Route Evidence" in markdown_text
     assert "Rejection sample accounting: `passed`" in markdown_text
     assert "Sample accounting closure: `passed`" in markdown_text
+    assert "StackEngine Default Contract" in markdown_text
+    assert "Adoption recommendation: `stack_engine_default_ready`" in markdown_text
+    assert "Default promotion: `ready` ready=`True` blockers=`0`" in markdown_text
     assert "Route contract passed: `True`" in markdown_text

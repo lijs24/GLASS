@@ -181,6 +181,77 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _phase2_check_passed(phase2: dict[str, Any], name: str) -> bool | None:
+    checks = phase2.get("checks") if isinstance(phase2.get("checks"), list) else []
+    for item in checks:
+        if isinstance(item, dict) and item.get("name") == name:
+            return item.get("passed") is True
+    return None
+
+
+def _stack_engine_summary(phase2: dict[str, Any]) -> dict[str, Any]:
+    contract = (
+        phase2.get("stack_engine_contract")
+        if isinstance(phase2.get("stack_engine_contract"), dict)
+        else {}
+    )
+    phase2_check = _phase2_check_passed(phase2, "stack_engine_default_contract_ready")
+    gap_count = contract.get("default_promotion_phase2_stack_engine_default_gap_count")
+    if gap_count is None:
+        gap_count = contract.get("adoption_phase2_stack_engine_default_gap_count")
+    blocker_count = contract.get("default_promotion_blocker_count")
+    blockers = (
+        contract.get("default_promotion_blockers")
+        if isinstance(contract.get("default_promotion_blockers"), list)
+        else []
+    )
+    ready = (
+        bool(contract)
+        and contract.get("audit_type") == "stack_engine_default_contract"
+        and contract.get("status") == "passed"
+        and contract.get("passed") is True
+        and contract.get("default_promotion_ready") is True
+        and contract.get("default_promotion_status") == "ready"
+        and contract.get("adoption_recommendation") == "stack_engine_default_ready"
+        and contract.get("default_promotion_recommendation") == "stack_engine_default_ready"
+        and _int_value(gap_count) == 0
+        and _int_value(blocker_count) == 0
+        and phase2_check is True
+    )
+    return {
+        "present": bool(contract),
+        "ready": ready,
+        "phase2_check_passed": phase2_check,
+        "path": contract.get("path"),
+        "audit_type": contract.get("audit_type"),
+        "status": contract.get("status"),
+        "passed": contract.get("passed"),
+        "scope": contract.get("scope"),
+        "expected_integration_engine": contract.get("expected_integration_engine"),
+        "adoption_recommendation": contract.get("adoption_recommendation"),
+        "adoption_surface_count": contract.get("adoption_surface_count"),
+        "adoption_contract_ready_count": contract.get("adoption_contract_ready_count"),
+        "adoption_stack_engine_surface_count": contract.get(
+            "adoption_stack_engine_surface_count"
+        ),
+        "adoption_cuda_resident_surface_count": contract.get(
+            "adoption_cuda_resident_surface_count"
+        ),
+        "adoption_phase2_stack_engine_default_gap_count": contract.get(
+            "adoption_phase2_stack_engine_default_gap_count"
+        ),
+        "adoption_gap_surfaces": contract.get("adoption_gap_surfaces") or [],
+        "default_promotion_ready": contract.get("default_promotion_ready"),
+        "default_promotion_status": contract.get("default_promotion_status"),
+        "default_promotion_recommendation": contract.get(
+            "default_promotion_recommendation"
+        ),
+        "default_promotion_phase2_stack_engine_default_gap_count": gap_count,
+        "default_promotion_blocker_count": blocker_count,
+        "default_promotion_blockers": blockers,
+    }
+
+
 def _default_route_acceptance_summary(phase2: dict[str, Any]) -> dict[str, Any]:
     default_route = (
         phase2.get("default_route_acceptance")
@@ -221,6 +292,7 @@ def build_default_promotion_manifest(
     doctor = _read_json_object_optional(doctor_json)
     runtime = _runtime_repeat_summary(decision)
     pipeline = _pipeline_summary(phase2)
+    stack_engine = _stack_engine_summary(phase2)
     default_route = _default_route_acceptance_summary(phase2)
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
@@ -402,6 +474,36 @@ def build_default_promotion_manifest(
             },
         ),
         _check(
+            "phase2_stack_engine_default_contract_ready",
+            stack_engine.get("ready") is True,
+            {
+                "present": stack_engine.get("present"),
+                "phase2_check_passed": stack_engine.get("phase2_check_passed"),
+                "status": stack_engine.get("status"),
+                "passed": stack_engine.get("passed"),
+                "scope": stack_engine.get("scope"),
+                "expected_integration_engine": stack_engine.get(
+                    "expected_integration_engine"
+                ),
+                "adoption_recommendation": stack_engine.get("adoption_recommendation"),
+                "adoption_gap_count": stack_engine.get(
+                    "adoption_phase2_stack_engine_default_gap_count"
+                ),
+                "default_promotion_ready": stack_engine.get(
+                    "default_promotion_ready"
+                ),
+                "default_promotion_status": stack_engine.get(
+                    "default_promotion_status"
+                ),
+                "default_promotion_blocker_count": stack_engine.get(
+                    "default_promotion_blocker_count"
+                ),
+                "default_promotion_blockers": stack_engine.get(
+                    "default_promotion_blockers"
+                ),
+            },
+        ),
+        _check(
             "resident_calibration_artifact_present",
             pipeline.get("resident_native_calibration_artifact") is True,
             {"actual": pipeline.get("resident_native_calibration_artifact")},
@@ -507,6 +609,7 @@ def build_default_promotion_manifest(
         "runtime_repeat": runtime,
         "default_route_acceptance": default_route,
         "pipeline_contract": pipeline,
+        "stack_engine_contract": stack_engine,
         "doctor": doctor_info,
         "checks": checks,
         "failed_checks": [str(item.get("name")) for item in failed],
@@ -523,6 +626,7 @@ def _markdown(payload: dict[str, Any]) -> str:
     runtime = payload.get("runtime_repeat") or {}
     default_route = payload.get("default_route_acceptance") or {}
     pipeline = payload.get("pipeline_contract") or {}
+    stack_engine = payload.get("stack_engine_contract") or {}
     doctor = payload.get("doctor") or {}
     device = doctor.get("device") if isinstance(doctor, dict) else {}
     lines = [
@@ -554,6 +658,28 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Speedup vs reference: `{default_route.get('speedup_vs_reference')}`",
         f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
         f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
+        "",
+        "## StackEngine Default Contract",
+        "",
+        f"- Present: `{stack_engine.get('present')}`",
+        f"- Status: `{stack_engine.get('status')}`",
+        f"- Ready: `{stack_engine.get('ready')}`",
+        f"- Phase2 check passed: `{stack_engine.get('phase2_check_passed')}`",
+        f"- Scope: `{stack_engine.get('scope')}`",
+        (
+            "- Adoption recommendation: "
+            f"`{stack_engine.get('adoption_recommendation')}`"
+        ),
+        (
+            "- Default gap count: "
+            f"`{stack_engine.get('default_promotion_phase2_stack_engine_default_gap_count')}`"
+        ),
+        (
+            "- Default promotion: "
+            f"`{stack_engine.get('default_promotion_status')}` "
+            f"ready=`{stack_engine.get('default_promotion_ready')}` "
+            f"blockers=`{stack_engine.get('default_promotion_blocker_count')}`"
+        ),
         "",
         "## Release Machine",
         "",
