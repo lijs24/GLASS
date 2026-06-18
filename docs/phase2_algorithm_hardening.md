@@ -4352,6 +4352,21 @@ integration where applicable.
   behavior change, runtime default change, package build, upload, GitHub
   release creation, or real-data benchmark rerun.
 
+### S2-Gate 259: CPU Integration Rejection Baseline Unification
+
+- Extract shared rejection-statistics helpers into `glass.engine.rejection`.
+- Keep StackEngine and legacy `glass.cpu.integration.weighted_integrate_stack`
+  on the same clean-room CPU baseline for sigma, MAD/median sigma, and
+  winsorized sigma center/scale estimation.
+- Update legacy CPU `winsorized_sigma` from a mean/std first-pass
+  approximation to the S2-Gate 258 median/IQR-guided winsorized baseline.
+- Add a low-sample CPU integration regression where `sigma_clip` keeps an
+  outlier but `winsorized_sigma` rejects it, matching the hardened StackEngine
+  behavior.
+- Keep this gate CPU baseline scoped: no CUDA kernel, resident runtime behavior
+  change, runtime default change, package build, upload, GitHub release
+  creation, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

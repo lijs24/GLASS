@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from glass.engine.rejection import center_and_scale
+
 
 def mean_integrate(frames: list[np.ndarray], weights: list[float] | None = None) -> tuple[np.ndarray, np.ndarray]:
     if not frames:
@@ -62,24 +64,15 @@ def weighted_integrate_stack(
     working = frames.copy()
 
     if rejection in {"sigma_clip", "winsorized_sigma"}:
-        masked = np.where(valid, frames, np.nan)
-        if rejection == "winsorized_sigma":
-            center = np.nanmean(masked, axis=0)
-            std = np.nanstd(masked, axis=0)
-            center = np.where(np.isfinite(center), center, 0.0).astype(np.float32)
-            std = np.where(np.isfinite(std), std, 0.0).astype(np.float32)
-            first_low = center - np.float32(low_sigma) * std
-            first_high = center + np.float32(high_sigma) * std
-            winsorized = np.where(valid, np.clip(frames, first_low[None, :, :], first_high[None, :, :]), np.nan)
-            center = np.nanmean(winsorized, axis=0)
-            std = np.nanstd(winsorized, axis=0)
-        else:
-            center = np.nanmedian(masked, axis=0)
-            std = np.nanstd(masked, axis=0)
-        center = np.where(np.isfinite(center), center, 0.0).astype(np.float32)
-        std = np.where(np.isfinite(std), std, 0.0).astype(np.float32)
-        low_threshold = center - np.float32(low_sigma) * std
-        high_threshold = center + np.float32(high_sigma) * std
+        center, scale = center_and_scale(
+            frames,
+            valid,
+            method=rejection,
+            low_sigma=low_sigma,
+            high_sigma=high_sigma,
+        )
+        low_threshold = center - np.float32(low_sigma) * scale
+        high_threshold = center + np.float32(high_sigma) * scale
         low = valid & (frames < low_threshold[None, :, :])
         high = valid & (frames > high_threshold[None, :, :])
         low_reject = np.sum(low, axis=0).astype(np.float32)

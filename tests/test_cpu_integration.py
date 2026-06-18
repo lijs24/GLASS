@@ -52,6 +52,32 @@ def test_winsorized_sigma_outputs_rejection_maps():
     assert np.sum(high) > 0
 
 
+def test_weighted_integrate_stack_winsorized_sigma_uses_hardened_low_sample_baseline():
+    stack = np.stack([np.ones((2, 2), dtype=np.float32) for _ in range(3)] + [np.ones((2, 2), dtype=np.float32) * 12])
+
+    sigma_master, _, sigma_cov, _, sigma_high = weighted_integrate_stack(
+        stack,
+        rejection="sigma_clip",
+        low_sigma=2.4,
+        high_sigma=2.4,
+    )
+    winsorized_master, winsorized_weight, winsorized_cov, winsorized_low, winsorized_high = weighted_integrate_stack(
+        stack,
+        rejection="winsorized_sigma",
+        low_sigma=2.4,
+        high_sigma=2.4,
+    )
+
+    assert np.allclose(sigma_master, 3.75)
+    assert np.all(sigma_cov == 4)
+    assert np.sum(sigma_high) == 0
+    assert np.allclose(winsorized_master, 1.0)
+    assert np.all(winsorized_weight == 3)
+    assert np.all(winsorized_cov == 3)
+    assert np.sum(winsorized_low) == 0
+    assert np.sum(winsorized_high) == 4
+
+
 def test_quality_weight_modes_are_normalized(tmp_path):
     write_json(
         tmp_path / "frame_quality.json",
