@@ -944,6 +944,8 @@ def _write_publish_preflight(
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
     include_stack_publication_audit: bool = True,
+    quality_metrics_compare_ready: bool = True,
+    include_quality_metrics_compare: bool = True,
 ) -> None:
     matrix_runtime_ready = (
         stack_runtime_default_ready
@@ -996,6 +998,8 @@ def _write_publish_preflight(
             and stack_publication_resident_winsorized_ready
         )
         or not include_stack_publication_audit
+    ) and (
+        quality_metrics_compare_ready or not include_quality_metrics_compare
     )
     summary = {
         "release_tag": "v0.1.0-test",
@@ -1725,6 +1729,48 @@ def _write_publish_preflight(
                         "default_promotion_stack_engine_publication_resident_winsorized_chain_passed",
                     ]
                 )
+    if include_quality_metrics_compare:
+        status = "passed" if quality_metrics_compare_ready else "failed"
+        failed_count = 0 if quality_metrics_compare_ready else 1
+        summary.update(
+            {
+                "matrix_quality_metrics_compare_present": True,
+                "matrix_quality_metrics_compare_ready": quality_metrics_compare_ready,
+                "matrix_quality_metrics_compare_status": status,
+                "matrix_quality_metrics_compare_failed_check_count": failed_count,
+                "default_promotion_quality_metrics_compare_present": True,
+                "default_promotion_quality_metrics_compare_ready": (
+                    quality_metrics_compare_ready
+                ),
+                "default_promotion_quality_metrics_compare_status": status,
+                "default_promotion_quality_metrics_compare_failed_check_count": (
+                    failed_count
+                ),
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "windows_release_matrix_quality_metrics_compare_handoff_passed",
+                    "passed": quality_metrics_compare_ready,
+                },
+                {
+                    "name": "default_promotion_quality_metrics_compare_handoff_passed",
+                    "passed": quality_metrics_compare_ready,
+                },
+                {
+                    "name": "matrix_quality_metrics_compare_matches_default_promotion",
+                    "passed": quality_metrics_compare_ready,
+                },
+            ]
+        )
+        if not quality_metrics_compare_ready:
+            failed_checks = [
+                *failed_checks,
+                "windows_release_matrix_quality_metrics_compare_handoff_passed",
+                "default_promotion_quality_metrics_compare_handoff_passed",
+                "matrix_quality_metrics_compare_matches_default_promotion",
+            ]
     write_json(
         path,
         {
@@ -2000,6 +2046,10 @@ def _status_payload(
     publish_preflight_stack_publication_ready: bool = True,
     publish_preflight_stack_publication_policy_agreement: bool = True,
     publish_preflight_stack_publication_resident_winsorized_agreement: bool = True,
+    publish_preflight_quality_metrics_compare_present: bool = True,
+    publish_preflight_quality_metrics_compare_ready: bool = True,
+    publish_preflight_quality_metrics_compare_status: str = "passed",
+    publish_preflight_quality_metrics_compare_failed_check_count: int = 0,
     stack_publication_passed: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
@@ -2053,6 +2103,12 @@ def _status_payload(
         and publish_preflight_resident_result_contract_phase2_check_passed
         and publish_preflight_resident_result_contract_required_count > 0
         and publish_preflight_resident_result_contract_failed_count == 0
+    )
+    publish_preflight_quality_metrics_compare_passed = (
+        publish_preflight_quality_metrics_compare_present
+        and publish_preflight_quality_metrics_compare_ready
+        and publish_preflight_quality_metrics_compare_status == "passed"
+        and publish_preflight_quality_metrics_compare_failed_check_count == 0
     )
     return {
         "schema_version": 1,
@@ -2489,6 +2545,39 @@ def _status_payload(
             ),
             "matrix_resident_fastpath_handoff_matches_default_promotion": (
                 publish_preflight_resident_fastpath_handoff_passed
+            ),
+            "matrix_quality_metrics_compare_present": (
+                publish_preflight_quality_metrics_compare_present
+            ),
+            "matrix_quality_metrics_compare_ready": (
+                publish_preflight_quality_metrics_compare_ready
+            ),
+            "matrix_quality_metrics_compare_status": (
+                publish_preflight_quality_metrics_compare_status
+            ),
+            "matrix_quality_metrics_compare_failed_check_count": (
+                publish_preflight_quality_metrics_compare_failed_check_count
+            ),
+            "default_promotion_quality_metrics_compare_present": (
+                publish_preflight_quality_metrics_compare_present
+            ),
+            "default_promotion_quality_metrics_compare_ready": (
+                publish_preflight_quality_metrics_compare_ready
+            ),
+            "default_promotion_quality_metrics_compare_status": (
+                publish_preflight_quality_metrics_compare_status
+            ),
+            "default_promotion_quality_metrics_compare_failed_check_count": (
+                publish_preflight_quality_metrics_compare_failed_check_count
+            ),
+            "windows_release_matrix_quality_metrics_compare_handoff_passed": (
+                publish_preflight_quality_metrics_compare_passed
+            ),
+            "default_promotion_quality_metrics_compare_handoff_passed": (
+                publish_preflight_quality_metrics_compare_passed
+            ),
+            "matrix_quality_metrics_compare_matches_default_promotion": (
+                publish_preflight_quality_metrics_compare_passed
             ),
             "github_plan_matrix_resident_result_contract_ready": (
                 publish_preflight_resident_result_contract_ready
@@ -3878,6 +3967,13 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["quality_metrics"]["status"] == "passed"
     assert payload["quality_metrics"]["metric_count"] == 7
     assert payload["quality_metrics_compare"]["status"] == "passed"
+    assert payload["publish_preflight"]["matrix_quality_metrics_compare_status"] == "passed"
+    assert (
+        payload["publish_preflight"][
+            "windows_release_matrix_quality_metrics_compare_handoff_passed"
+        ]
+        is True
+    )
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -3924,6 +4020,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "StackEngine publication audit statuses: matrix=passed/True" in text
     assert "StackEngine publication audit chains: matrix-policy=True" in text
     assert "StackEngine publication audit checks: matrix-audit=True" in text
+    assert "Quality metrics compare handoff: matrix=passed/True/0" in text
+    assert "Quality metrics compare checks: matrix=True" in text
     assert "StackEngine Publication Audit" in text
     assert "Policy checks: raw=True, phase2=True, agreement=True" in text
 
@@ -4071,6 +4169,67 @@ def test_phase2_status_blocks_failed_publish_preflight_publication_policy_chain(
     assert evidence["matrix_policy_agreement"] is False
     assert evidence["default_promotion_policy_agreement"] is False
     assert evidence["matrix_policy_check"] is False
+
+
+def test_phase2_status_allows_missing_publish_preflight_quality_compare_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=364)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(
+        publish_preflight,
+        include_quality_metrics_compare=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    quality_check = checks[
+        "windows_publish_preflight_quality_metrics_compare_passed"
+    ]
+    assert status["status"] == "green"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert quality_check["passed"] is True
+    assert quality_check["evidence"]["present"] is False
+    assert quality_check["evidence"]["matrix_ready"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_quality_compare_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=364)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(
+        publish_preflight,
+        quality_metrics_compare_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    quality_check = checks[
+        "windows_publish_preflight_quality_metrics_compare_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert checks["windows_publish_preflight_ready"]["passed"] is False
+    assert quality_check["passed"] is False
+    assert quality_check["evidence"]["present"] is True
+    assert quality_check["evidence"]["matrix_ready"] is False
+    assert quality_check["evidence"]["matrix_failed_check_count"] == 1
+    assert quality_check["evidence"]["agreement_check"] is False
 
 
 def test_phase2_status_blocks_failed_stack_publication_policy_handoff(
@@ -6165,6 +6324,52 @@ def test_phase2_status_compare_flags_quality_metrics_compare_regression(
         "bad_median_ratio_within_limit"
     ]
     assert payload["candidate"]["quality_metrics_compare"]["status"] == "failed"
+
+
+def test_phase2_status_compare_flags_publish_preflight_quality_compare_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=363))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=364,
+            status="attention_required",
+            publish_preflight_quality_metrics_compare_ready=False,
+            publish_preflight_quality_metrics_compare_status="failed",
+            publish_preflight_quality_metrics_compare_failed_check_count=1,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    handoff_check = checks[
+        "windows_publish_preflight_quality_metrics_compare_preserved"
+    ]
+    status_check = checks[
+        "windows_publish_preflight_quality_metrics_compare_status_preserved"
+    ]
+    assert payload["status"] == "regressed"
+    assert handoff_check["passed"] is False
+    assert handoff_check["evidence"]["baseline"]["checks_passed"] is True
+    assert handoff_check["evidence"]["candidate"]["checks_passed"] is False
+    assert status_check["passed"] is False
+    candidate_statuses = status_check["evidence"]["candidate"]
+    assert candidate_statuses["matrix_quality_metrics_compare_ready"] is False
+    assert candidate_statuses["matrix_quality_metrics_compare_status"] == "failed"
+    assert candidate_statuses["matrix_quality_metrics_compare_failed_check_count"] == 1
+    assert (
+        payload["candidate"]["publish_preflight_quality_metrics_compare"][
+            "default_promotion_quality_metrics_compare_status"
+        ]
+        == "failed"
+    )
 
 
 def test_phase2_status_compare_flags_stack_publication_resident_result_regression(

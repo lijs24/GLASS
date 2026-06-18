@@ -1054,6 +1054,30 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 "default_promotion_stack_engine_publication_resident_winsorized_agreement"
             )
         ),
+        "matrix_quality_metrics_compare_present": summary.get(
+            "matrix_quality_metrics_compare_present"
+        ),
+        "matrix_quality_metrics_compare_ready": summary.get(
+            "matrix_quality_metrics_compare_ready"
+        ),
+        "matrix_quality_metrics_compare_status": summary.get(
+            "matrix_quality_metrics_compare_status"
+        ),
+        "matrix_quality_metrics_compare_failed_check_count": summary.get(
+            "matrix_quality_metrics_compare_failed_check_count"
+        ),
+        "default_promotion_quality_metrics_compare_present": summary.get(
+            "default_promotion_quality_metrics_compare_present"
+        ),
+        "default_promotion_quality_metrics_compare_ready": summary.get(
+            "default_promotion_quality_metrics_compare_ready"
+        ),
+        "default_promotion_quality_metrics_compare_status": summary.get(
+            "default_promotion_quality_metrics_compare_status"
+        ),
+        "default_promotion_quality_metrics_compare_failed_check_count": summary.get(
+            "default_promotion_quality_metrics_compare_failed_check_count"
+        ),
         "github_plan_matrix_resident_result_contract_ready": summary.get(
             "github_plan_matrix_resident_result_contract_ready"
         ),
@@ -1257,6 +1281,24 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
             _check_passed(
                 payload,
                 "matrix_stack_engine_publication_audit_matches_default_promotion",
+            )
+        ),
+        "windows_release_matrix_quality_metrics_compare_handoff_passed": (
+            _check_passed(
+                payload,
+                "windows_release_matrix_quality_metrics_compare_handoff_passed",
+            )
+        ),
+        "default_promotion_quality_metrics_compare_handoff_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_quality_metrics_compare_handoff_passed",
+            )
+        ),
+        "matrix_quality_metrics_compare_matches_default_promotion": (
+            _check_passed(
+                payload,
+                "matrix_quality_metrics_compare_matches_default_promotion",
             )
         ),
         "github_plan_matrix_resident_result_contract_handoff_passed": _check_passed(
@@ -4159,6 +4201,108 @@ def build_phase2_status(
                 },
             }
         )
+        quality_compare_present = any(
+            preflight.get(field) is not None
+            for field in (
+                "matrix_quality_metrics_compare_present",
+                "matrix_quality_metrics_compare_ready",
+                "matrix_quality_metrics_compare_status",
+                "matrix_quality_metrics_compare_failed_check_count",
+                "default_promotion_quality_metrics_compare_present",
+                "default_promotion_quality_metrics_compare_ready",
+                "default_promotion_quality_metrics_compare_status",
+                "default_promotion_quality_metrics_compare_failed_check_count",
+            )
+        )
+        checks.append(
+            {
+                "name": "windows_publish_preflight_quality_metrics_compare_passed",
+                "passed": (
+                    not quality_compare_present
+                    or (
+                        preflight.get(
+                            "windows_release_matrix_quality_metrics_compare_handoff_passed"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_quality_metrics_compare_handoff_passed"
+                        )
+                        is True
+                        and preflight.get(
+                            "matrix_quality_metrics_compare_matches_default_promotion"
+                        )
+                        is True
+                        and preflight.get("matrix_quality_metrics_compare_present")
+                        is True
+                        and preflight.get("matrix_quality_metrics_compare_ready")
+                        is True
+                        and preflight.get("matrix_quality_metrics_compare_status")
+                        == "passed"
+                        and _int_or_zero(
+                            preflight.get(
+                                "matrix_quality_metrics_compare_failed_check_count"
+                            )
+                        )
+                        == 0
+                        and preflight.get(
+                            "default_promotion_quality_metrics_compare_present"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_quality_metrics_compare_ready"
+                        )
+                        is True
+                        and preflight.get(
+                            "default_promotion_quality_metrics_compare_status"
+                        )
+                        == "passed"
+                        and _int_or_zero(
+                            preflight.get(
+                                "default_promotion_quality_metrics_compare_failed_check_count"
+                            )
+                        )
+                        == 0
+                    )
+                ),
+                "evidence": {
+                    "present": quality_compare_present,
+                    "matrix_present": preflight.get(
+                        "matrix_quality_metrics_compare_present"
+                    ),
+                    "matrix_ready": preflight.get(
+                        "matrix_quality_metrics_compare_ready"
+                    ),
+                    "matrix_status": preflight.get(
+                        "matrix_quality_metrics_compare_status"
+                    ),
+                    "matrix_failed_check_count": preflight.get(
+                        "matrix_quality_metrics_compare_failed_check_count"
+                    ),
+                    "default_promotion_present": preflight.get(
+                        "default_promotion_quality_metrics_compare_present"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_quality_metrics_compare_ready"
+                    ),
+                    "default_promotion_status": preflight.get(
+                        "default_promotion_quality_metrics_compare_status"
+                    ),
+                    "default_promotion_failed_check_count": preflight.get(
+                        "default_promotion_quality_metrics_compare_failed_check_count"
+                    ),
+                    "matrix_check": preflight.get(
+                        "windows_release_matrix_quality_metrics_compare_handoff_passed"
+                    ),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_quality_metrics_compare_handoff_passed"
+                    ),
+                    "agreement_check": preflight.get(
+                        "matrix_quality_metrics_compare_matches_default_promotion"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
         checks.append(
             {
                 "name": "windows_publish_preflight_resident_result_contract_handoff_passed",
@@ -5450,6 +5594,25 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     "agreement="
                     f"{preflight.get('matrix_stack_engine_publication_audit_matches_default_promotion')}"
                 ),
+                (
+                    "- Quality metrics compare handoff: "
+                    f"matrix={preflight.get('matrix_quality_metrics_compare_status')}/"
+                    f"{preflight.get('matrix_quality_metrics_compare_ready')}/"
+                    f"{preflight.get('matrix_quality_metrics_compare_failed_check_count')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_quality_metrics_compare_status')}/"
+                    f"{preflight.get('default_promotion_quality_metrics_compare_ready')}/"
+                    f"{preflight.get('default_promotion_quality_metrics_compare_failed_check_count')}"
+                ),
+                (
+                    "- Quality metrics compare checks: "
+                    "matrix="
+                    f"{preflight.get('windows_release_matrix_quality_metrics_compare_handoff_passed')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_quality_metrics_compare_handoff_passed')}, "
+                    "agreement="
+                    f"{preflight.get('matrix_quality_metrics_compare_matches_default_promotion')}"
+                ),
             ]
         )
     if publication_audit:
@@ -6121,6 +6284,24 @@ _PUBLISH_PREFLIGHT_STACK_PUBLICATION_STATUS_FIELDS = (
 )
 
 
+_PUBLISH_PREFLIGHT_QUALITY_COMPARE_CHECK_FIELDS = (
+    "windows_release_matrix_quality_metrics_compare_handoff_passed",
+    "default_promotion_quality_metrics_compare_handoff_passed",
+    "matrix_quality_metrics_compare_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_QUALITY_COMPARE_STATUS_FIELDS = (
+    "matrix_quality_metrics_compare_present",
+    "matrix_quality_metrics_compare_ready",
+    "matrix_quality_metrics_compare_status",
+    "matrix_quality_metrics_compare_failed_check_count",
+    "default_promotion_quality_metrics_compare_present",
+    "default_promotion_quality_metrics_compare_ready",
+    "default_promotion_quality_metrics_compare_status",
+    "default_promotion_quality_metrics_compare_failed_check_count",
+)
+
+
 def _publish_preflight_rejection_checks_passed(payload: dict[str, Any]) -> bool:
     return all(
         _status_value(payload, "publish_preflight", field) is True
@@ -6631,6 +6812,58 @@ def _publish_preflight_stack_publication_statuses_passed(
             "default_promotion_stack_engine_publication_resident_winsorized_agreement"
         )
         is True
+    )
+
+
+def _publish_preflight_quality_compare_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_QUALITY_COMPARE_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_quality_compare_present(payload: dict[str, Any]) -> bool:
+    return any(
+        _status_value(payload, "publish_preflight", field) is not None
+        for field in _PUBLISH_PREFLIGHT_QUALITY_COMPARE_STATUS_FIELDS
+    )
+
+
+def _publish_preflight_quality_compare_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return _publish_preflight_quality_compare_present(payload) and all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_QUALITY_COMPARE_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_quality_compare_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_quality_compare_statuses(payload)
+    return (
+        _publish_preflight_quality_compare_present(payload)
+        and statuses.get("matrix_quality_metrics_compare_present") is True
+        and statuses.get("matrix_quality_metrics_compare_ready") is True
+        and statuses.get("matrix_quality_metrics_compare_status") == "passed"
+        and _int_or_zero(
+            statuses.get("matrix_quality_metrics_compare_failed_check_count")
+        )
+        == 0
+        and statuses.get("default_promotion_quality_metrics_compare_present")
+        is True
+        and statuses.get("default_promotion_quality_metrics_compare_ready") is True
+        and statuses.get("default_promotion_quality_metrics_compare_status")
+        == "passed"
+        and _int_or_zero(
+            statuses.get(
+                "default_promotion_quality_metrics_compare_failed_check_count"
+            )
+        )
+        == 0
     )
 
 
@@ -7576,6 +7809,30 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_stack_publication_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_quality_metrics_compare_preserved",
+            not _publish_preflight_quality_compare_checks_passed(baseline)
+            or _publish_preflight_quality_compare_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_quality_compare_checks_passed(
+                    baseline
+                ),
+                "statuses": _publish_preflight_quality_compare_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_quality_compare_checks_passed(
+                    candidate
+                ),
+                "statuses": _publish_preflight_quality_compare_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_quality_metrics_compare_status_preserved",
+            not _publish_preflight_quality_compare_statuses_passed(baseline)
+            or _publish_preflight_quality_compare_statuses_passed(candidate),
+            baseline=_publish_preflight_quality_compare_statuses(baseline),
+            candidate=_publish_preflight_quality_compare_statuses(candidate),
+        ),
+        _compare_check(
             "stack_engine_publication_audit_passed_preserved",
             baseline_publication.get("passed") is not True
             or candidate_publication.get("passed") is True,
@@ -8074,6 +8331,9 @@ def build_phase2_status_compare(
             "publish_preflight_stack_publication_audit": (
                 _publish_preflight_stack_publication_statuses(baseline)
             ),
+            "publish_preflight_quality_metrics_compare": (
+                _publish_preflight_quality_compare_statuses(baseline)
+            ),
             "stack_engine_publication_audit": baseline_publication,
             "registration_admission": _status_value(baseline, "registration_admission"),
             "quality_saturation": _status_value(baseline, "quality_saturation"),
@@ -8157,6 +8417,9 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_stack_publication_audit": (
                 _publish_preflight_stack_publication_statuses(candidate)
+            ),
+            "publish_preflight_quality_metrics_compare": (
+                _publish_preflight_quality_compare_statuses(candidate)
             ),
             "stack_engine_publication_audit": candidate_publication,
             "registration_admission": _status_value(candidate, "registration_admission"),

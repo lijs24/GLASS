@@ -6482,6 +6482,27 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 364: Phase2 Publish-Preflight Quality Metric Compare Handoff
+
+- Carry `windows-publish-preflight` quality-metrics-compare evidence into
+  `glass phase2-status`.
+- Add `windows_publish_preflight_quality_metrics_compare_passed` so Phase2
+  status blocks failed publish-preflight quality compare handoffs while keeping
+  older publish-preflight artifacts without that optional evidence non-blocking.
+- Extend `glass phase2-status-compare` with
+  `windows_publish_preflight_quality_metrics_compare_preserved` and
+  `windows_publish_preflight_quality_metrics_compare_status_preserved` so a
+  candidate cannot lose a previously passing publish-preflight quality compare
+  chain.
+- Surface the publish-preflight quality compare handoff in Phase2 status
+  Markdown.
+- Add focused status, compatibility, failure, CLI Markdown, and compare tests.
+- Keep this gate Phase2 status/compare scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
