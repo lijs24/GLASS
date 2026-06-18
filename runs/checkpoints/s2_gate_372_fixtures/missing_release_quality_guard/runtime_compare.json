@@ -1,0 +1,37 @@
+{
+  "artifact_type": "resident_runtime_compare",
+  "ranked_runs": [
+    {
+      "label": "repeat_2",
+      "total_elapsed_s": 18.0
+    },
+    {
+      "label": "repeat_1",
+      "total_elapsed_s": 18.5
+    },
+    {
+      "label": "repeat_3",
+      "total_elapsed_s": 19.0
+    }
+  ],
+  "runs": [
+    {
+      "label": "repeat_1",
+      "total_elapsed_s": 18.5
+    },
+    {
+      "label": "repeat_2",
+      "total_elapsed_s": 18.0
+    },
+    {
+      "label": "repeat_3",
+      "total_elapsed_s": 19.0
+    }
+  ],
+  "summary": {
+    "best_elapsed_s": 18.0,
+    "best_label": "repeat_2",
+    "recommendation": "best_observed:repeat_2",
+    "run_count": 3
+  }
+}

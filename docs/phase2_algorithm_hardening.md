@@ -6646,6 +6646,25 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 372: Release Promotion Decision Quality Publication Guard
+
+- Carry StackEngine publication-audit release quality publication guard evidence
+  into `glass release-promotion-decision`.
+- Add `stack_engine_publication_release_quality_guard_passed` so release
+  candidate readiness blocks when the publication audit records failed,
+  one-sided missing, or mismatched release quality guard handoff evidence.
+- Keep older StackEngine publication-audit artifacts without this optional guard
+  non-blocking when no raw/Phase2 guard checks or layers are present.
+- Surface release quality guard ready, compatible-missing, raw matrix/default,
+  Phase2 matrix/default, decision-check, and cross-artifact match evidence in
+  release decision JSON and Markdown check output.
+- Add focused ready, compatibility, raw-failure, and Phase2-mismatch tests.
+- Keep this gate release-decision scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
