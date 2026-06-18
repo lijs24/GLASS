@@ -122,6 +122,58 @@ def _output_variance_map_enabled(policy: dict[str, Any]) -> bool:
     return bool(policy.get("output_variance_map", True))
 
 
+def _bool_policy(policy: dict[str, Any], key: str, default: bool = False) -> bool:
+    value = policy.get(key, default)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _integration_engine_selection(
+    *,
+    backend: str,
+    rejection: str,
+    cuda_module: Any,
+    policy: dict[str, Any],
+) -> dict[str, Any]:
+    cuda_available = cuda_module is not None
+    cuda_fast_path_eligible = cuda_available and rejection == "none"
+    explicit_cuda_fast_path = (
+        backend == "cuda"
+        or _bool_policy(policy, "allow_cuda_streaming_accumulator_fast_path", False)
+    )
+    use_cuda_fast_path = cuda_fast_path_eligible and explicit_cuda_fast_path
+    if use_cuda_fast_path:
+        reason = "explicit_cuda_fast_path_requested"
+    elif cuda_available and rejection != "none":
+        reason = "stack_engine_required_for_rejection"
+    elif cuda_available and not explicit_cuda_fast_path:
+        reason = "stack_engine_default_requires_explicit_cuda_fast_path"
+    elif backend == "cuda":
+        reason = "cuda_requested_but_unavailable"
+    else:
+        reason = "stack_engine_default"
+    return {
+        "default_engine": "stack_engine_cpu",
+        "actual_backend": "cuda" if use_cuda_fast_path else "cpu",
+        "use_stack_engine": not use_cuda_fast_path,
+        "tile_stack_mode": (
+            "cuda_streaming_accumulator_fast_path"
+            if use_cuda_fast_path
+            else "stack_engine_cpu"
+        ),
+        "backend": backend,
+        "cuda_available": cuda_available,
+        "cuda_fast_path_eligible": cuda_fast_path_eligible,
+        "explicit_cuda_fast_path": explicit_cuda_fast_path,
+        "allow_cuda_streaming_accumulator_fast_path": _bool_policy(
+            policy, "allow_cuda_streaming_accumulator_fast_path", False
+        ),
+        "rejection": rejection,
+        "reason": reason,
+    }
+
+
 @dataclass(slots=True)
 class _CoverageImageSource:
     path: str | Path
@@ -325,6 +377,12 @@ def integrate_registered_frames(
     high_sigma = float(policy.get("high_sigma") or 3.0)
     frame_weights = _quality_weights(run, records, weighting)
     cuda_module = _cuda_module_if_requested(backend)
+    engine_selection = _integration_engine_selection(
+        backend=backend,
+        rejection=rejection,
+        cuda_module=cuda_module,
+        policy=policy,
+    )
 
     by_filter: dict[str, list[dict[str, Any]]] = {}
     for item in records:
@@ -348,13 +406,9 @@ def integrate_registered_frames(
             high_path = out_dir / f"high_rejection_{filt}.fits"
             dq_path = out_dir / f"dq_map_{filt}.fits"
             tile_count = 0
-            actual_backend = "cuda" if cuda_module is not None and rejection == "none" else "cpu"
-            use_stack_engine = actual_backend == "cpu"
-            tile_stack_mode = (
-                "stack_engine_cpu"
-                if use_stack_engine
-                else "cuda_streaming_accumulator_fast_path"
-            )
+            actual_backend = str(engine_selection["actual_backend"])
+            use_stack_engine = bool(engine_selection["use_stack_engine"])
+            tile_stack_mode = str(engine_selection["tile_stack_mode"])
             stack_engine_metrics: dict[str, Any] | None = None
             stack_engine_rejection_method: str | None = None
             stack_engine_dq_provenance: dict[str, Any] | None = None
@@ -472,6 +526,7 @@ def integrate_registered_frames(
                 "backend": actual_backend,
                 "tile_stack_mode": tile_stack_mode,
                 "stack_engine_enabled": use_stack_engine,
+                "engine_selection": engine_selection,
                 "stack_engine_metrics": stack_engine_metrics,
                 "stack_engine_rejection_method": stack_engine_rejection_method,
                 "stack_engine_dq_provenance": stack_engine_dq_provenance,
@@ -496,6 +551,7 @@ def integrate_registered_frames(
         "high_sigma": high_sigma,
         "frame_weights": frame_weights,
         "output_variance_map": output_variance_map,
+        "integration_engine_policy": engine_selection,
         "outputs": outputs,
     }
     write_json(run / "integration_results.json", payload)

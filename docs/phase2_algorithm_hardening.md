@@ -4676,6 +4676,24 @@ integration where applicable.
   succeeds, no CUDA kernel change, no package build/upload, no publication
   handoff change, and no real-data benchmark rerun.
 
+### S2-Gate 278: Explicit Non-Resident CUDA Integration Fast Path
+
+- Keep non-resident light integration on `stack_engine_cpu` by default, even
+  when CUDA is importable and rejection is `none`.
+- Add `IntegrationPolicy.allow_cuda_streaming_accumulator_fast_path`, defaulting
+  to `false`, so the older non-resident CUDA streaming accumulator can only
+  bypass StackEngine when explicitly requested by policy, or when the user
+  explicitly chooses `--backend cuda`.
+- Record an `integration_engine_policy` artifact summary and per-output
+  `engine_selection` details so reports/contracts can audit why a run used
+  StackEngine or the explicit CUDA fast path.
+- Add synthetic registered-frame tests that monkeypatch a CUDA integration
+  module and prove `backend=auto` keeps the StackEngine default while policy
+  opt-in enables the CUDA fast path.
+- Keep this gate default-route scoped: no resident CUDA path change, no CUDA
+  kernel change, no package build/upload, no publication handoff change, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

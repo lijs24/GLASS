@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 import struct
+import sys
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from glass.cli import main
+from glass.engine.integration import integrate_registered_frames
 from glass.engine.pipeline import (
     _exact_median_scratch,
     _mean_stack_tile,
@@ -39,6 +43,69 @@ def _write_test_xisf_from_fits(path: Path, data, header: dict[str, object]) -> N
     if 16 + len(xml) > offset:
         raise AssertionError("test XISF header exceeded fixed offset")
     path.write_bytes(b"XISF0100" + struct.pack("<Q", len(xml)) + xml + b"\0" * (offset - 16 - len(xml)) + payload)
+
+
+def _write_registered_integration_fixture(
+    tmp_path: Path,
+    *,
+    allow_cuda_fast_path: bool = False,
+) -> tuple[Path, Path]:
+    import numpy as np
+
+    run = tmp_path / "run"
+    registered = run / "registered"
+    registered.mkdir(parents=True)
+    frame_paths: list[Path] = []
+    coverage_paths: list[Path] = []
+    for index, value in enumerate([2.0, 6.0]):
+        frame_path = registered / f"light_{index}.fits"
+        coverage_path = registered / f"coverage_{index}.fits"
+        write_fits_data(frame_path, np.full((4, 4), value, dtype=np.float32))
+        write_fits_data(coverage_path, np.ones((4, 4), dtype=np.float32))
+        frame_paths.append(frame_path)
+        coverage_paths.append(coverage_path)
+    write_json(
+        run / "warp_results.json",
+        {
+            "warp_results": [
+                {
+                    "frame_id": f"light-{index}",
+                    "registered_path": str(frame_paths[index]),
+                    "coverage_path": str(coverage_paths[index]),
+                }
+                for index in range(2)
+            ]
+        },
+    )
+    plan = tmp_path / "processing_plan.json"
+    write_json(
+        plan,
+        {
+            "frames": [{"id": f"light-{index}", "filter": "H"} for index in range(2)],
+            "integration_policy": {
+                "combine": "mean",
+                "weighting": "none",
+                "rejection": "none",
+                "output_variance_map": True,
+                "allow_cuda_streaming_accumulator_fast_path": allow_cuda_fast_path,
+            },
+        },
+    )
+    return run, plan
+
+
+def _install_fake_integration_cuda(monkeypatch) -> None:
+    def accumulate(frame_tile, weight_tile, sum_tile, weight_sum_tile):
+        return sum_tile + frame_tile * weight_tile, weight_sum_tile + weight_tile
+
+    monkeypatch.setitem(
+        sys.modules,
+        "glass_cuda",
+        SimpleNamespace(
+            cuda_available=lambda: True,
+            integrate_accumulate_mean_tile_f32=accumulate,
+        ),
+    )
 
 
 def test_pipeline_fixture_audit(tmp_path: Path):
@@ -84,6 +151,53 @@ def test_pipeline_fixture_audit(tmp_path: Path):
     assert "variance_map_" in report_text
     assert "winsorized_sigma" in report_text
     assert main(["resume", "--run", str(run)]) == 0
+
+
+def test_integration_auto_keeps_stack_engine_default_when_cuda_is_available(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _install_fake_integration_cuda(monkeypatch)
+    run, plan = _write_registered_integration_fixture(tmp_path)
+
+    payload = integrate_registered_frames(run, plan_path=plan, backend="auto", tile_size=2)
+
+    assert payload["integration_engine_policy"]["default_engine"] == "stack_engine_cpu"
+    assert payload["integration_engine_policy"]["cuda_available"] is True
+    assert payload["integration_engine_policy"]["explicit_cuda_fast_path"] is False
+    assert (
+        payload["integration_engine_policy"]["reason"]
+        == "stack_engine_default_requires_explicit_cuda_fast_path"
+    )
+    assert all(output["backend"] == "cpu" for output in payload["outputs"])
+    assert all(output["tile_stack_mode"] == "stack_engine_cpu" for output in payload["outputs"])
+    assert all(output["stack_engine_enabled"] for output in payload["outputs"])
+    assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
+
+
+def test_integration_cuda_fast_path_requires_explicit_policy(
+    tmp_path: Path,
+    monkeypatch,
+):
+    _install_fake_integration_cuda(monkeypatch)
+    run, plan = _write_registered_integration_fixture(
+        tmp_path,
+        allow_cuda_fast_path=True,
+    )
+
+    payload = integrate_registered_frames(run, plan_path=plan, backend="auto", tile_size=2)
+
+    assert payload["integration_engine_policy"]["default_engine"] == "stack_engine_cpu"
+    assert payload["integration_engine_policy"]["allow_cuda_streaming_accumulator_fast_path"] is True
+    assert payload["integration_engine_policy"]["explicit_cuda_fast_path"] is True
+    assert payload["integration_engine_policy"]["reason"] == "explicit_cuda_fast_path_requested"
+    assert all(output["backend"] == "cuda" for output in payload["outputs"])
+    assert all(
+        output["tile_stack_mode"] == "cuda_streaming_accumulator_fast_path"
+        for output in payload["outputs"]
+    )
+    assert all(not output["stack_engine_enabled"] for output in payload["outputs"])
+    assert np.allclose(read_fits_data(run / "integration" / "master_H.fits"), 4.0)
 
 
 def test_pipeline_fixture_run_calibration(tmp_path: Path):

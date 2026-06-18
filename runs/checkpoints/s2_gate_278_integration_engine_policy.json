@@ -1,0 +1,94 @@
+{
+  "artifact_type": "integration_engine_policy_audit",
+  "checks": [
+    {
+      "evidence": {
+        "actual_backend": "cpu",
+        "allow_cuda_streaming_accumulator_fast_path": false,
+        "backend": "auto",
+        "cuda_available": true,
+        "cuda_fast_path_eligible": true,
+        "default_engine": "stack_engine_cpu",
+        "explicit_cuda_fast_path": false,
+        "reason": "stack_engine_default_requires_explicit_cuda_fast_path",
+        "rejection": "none",
+        "tile_stack_mode": "stack_engine_cpu",
+        "use_stack_engine": true
+      },
+      "name": "auto_default_uses_stack_engine",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "mean_pixel": 4.0
+      },
+      "name": "auto_default_result_mean_preserved",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_backend": "cuda",
+        "allow_cuda_streaming_accumulator_fast_path": true,
+        "backend": "auto",
+        "cuda_available": true,
+        "cuda_fast_path_eligible": true,
+        "default_engine": "stack_engine_cpu",
+        "explicit_cuda_fast_path": true,
+        "reason": "explicit_cuda_fast_path_requested",
+        "rejection": "none",
+        "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+        "use_stack_engine": false
+      },
+      "name": "policy_opt_in_uses_cuda_fast_path",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "mean_pixel": 4.0
+      },
+      "name": "policy_opt_in_result_mean_preserved",
+      "passed": true
+    }
+  ],
+  "clean_room": "Synthetic registered FITS fixtures and a monkeypatched GLASS CUDA integration module only; no user image pixels or external source were read.",
+  "created_at": "2026-06-18T04:54:29+00:00",
+  "default_auto": {
+    "integration_engine_policy": {
+      "actual_backend": "cpu",
+      "allow_cuda_streaming_accumulator_fast_path": false,
+      "backend": "auto",
+      "cuda_available": true,
+      "cuda_fast_path_eligible": true,
+      "default_engine": "stack_engine_cpu",
+      "explicit_cuda_fast_path": false,
+      "reason": "stack_engine_default_requires_explicit_cuda_fast_path",
+      "rejection": "none",
+      "tile_stack_mode": "stack_engine_cpu",
+      "use_stack_engine": true
+    },
+    "output_modes": [
+      "stack_engine_cpu"
+    ]
+  },
+  "passed": true,
+  "policy_opt_in": {
+    "integration_engine_policy": {
+      "actual_backend": "cuda",
+      "allow_cuda_streaming_accumulator_fast_path": true,
+      "backend": "auto",
+      "cuda_available": true,
+      "cuda_fast_path_eligible": true,
+      "default_engine": "stack_engine_cpu",
+      "explicit_cuda_fast_path": true,
+      "reason": "explicit_cuda_fast_path_requested",
+      "rejection": "none",
+      "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+      "use_stack_engine": false
+    },
+    "output_modes": [
+      "cuda_streaming_accumulator_fast_path"
+    ]
+  },
+  "schema_version": 1,
+  "status": "passed"
+}

@@ -128,6 +128,7 @@ class IntegrationPolicy:
     output_rejection_maps: bool = True
     output_coverage_map: bool = True
     output_variance_map: bool = True
+    allow_cuda_streaming_accumulator_fast_path: bool = False
 
 
 @dataclass(slots=True)
