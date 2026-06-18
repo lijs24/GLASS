@@ -289,6 +289,80 @@ def _write_pipeline_contract(
     )
 
 
+def _write_stack_engine_contract(
+    path: Path,
+    *,
+    ready: bool = True,
+    passed: bool = True,
+    gap_count: int = 0,
+) -> None:
+    recommendation = (
+        "stack_engine_default_ready"
+        if ready and gap_count == 0
+        else "stack_engine_contract_gaps_remain"
+    )
+    blockers = []
+    if not ready:
+        blockers.append(
+            {
+                "name": "phase2_stack_engine_default_gaps",
+                "gap_count": gap_count,
+                "gap_surfaces": [
+                    {
+                        "surface": "integration",
+                        "item": "H",
+                        "engine_family": "legacy",
+                        "gap_reason": "legacy_or_unknown_engine",
+                    }
+                ]
+                if gap_count
+                else [],
+            }
+        )
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "audit_type": "stack_engine_default_contract",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "scope": "all",
+            "expected_integration_engine": "stack_engine_cpu",
+            "resident_calibration_contract_attached": False,
+            "resident_result_contract_attached": False,
+            "checks": [
+                {"name": "calibration_masters_use_stack_engine", "passed": passed},
+                {"name": "integration_outputs_use:stack_engine_cpu", "passed": passed},
+            ],
+            "adoption": {
+                "target_engine": "stack_engine_cpu",
+                "surface_count": 4,
+                "stack_engine_surface_count": 4 - gap_count,
+                "cuda_resident_surface_count": 0,
+                "contract_ready_count": 4 - gap_count,
+                "result_contract_passed_count": 4 - gap_count,
+                "fallback_count": 0,
+                "phase2_stack_engine_default_gap_count": gap_count,
+                "gap_surfaces": blockers[0]["gap_surfaces"] if blockers else [],
+                "recommendation": recommendation,
+            },
+            "default_promotion": {
+                "ready": ready,
+                "status": "ready" if ready else "blocked",
+                "required_scope": "all",
+                "actual_scope": "all",
+                "surface_count": 4,
+                "calibration_surface_count": 3,
+                "integration_surface_count": 1,
+                "phase2_stack_engine_default_gap_count": gap_count,
+                "recommendation": recommendation,
+                "blocker_count": len(blockers),
+                "blockers": blockers,
+            },
+        },
+    )
+
+
 def _write_release_decision(path: Path, *, ready: bool = True) -> None:
     write_json(
         path,
@@ -494,9 +568,17 @@ def _status_payload(
     pipeline_rejection_sample_status: str = "passed",
     pipeline_sample_closure_check_present: bool = True,
     pipeline_sample_closure_status: str = "passed",
+    stack_engine_ready: bool = True,
+    stack_engine_status: str = "passed",
+    stack_engine_gap_count: int = 0,
     default_change_ready: bool = True,
     release_recommendation: str = "promote_default_candidate",
 ) -> dict:
+    stack_engine_recommendation = (
+        "stack_engine_default_ready"
+        if stack_engine_ready and stack_engine_gap_count == 0
+        else "stack_engine_contract_gaps_remain"
+    )
     return {
         "schema_version": 1,
         "artifact_type": "glass_phase2_status",
@@ -611,6 +693,22 @@ def _status_payload(
                 "failed_count": 0 if pipeline_sample_closure_status == "passed" else 1,
             },
         },
+        "stack_engine_contract": {
+            "audit_type": "stack_engine_default_contract",
+            "status": stack_engine_status,
+            "passed": stack_engine_status == "passed",
+            "scope": "all",
+            "expected_integration_engine": "stack_engine_cpu",
+            "adoption_recommendation": stack_engine_recommendation,
+            "adoption_phase2_stack_engine_default_gap_count": stack_engine_gap_count,
+            "default_promotion_ready": stack_engine_ready,
+            "default_promotion_status": "ready" if stack_engine_ready else "blocked",
+            "default_promotion_recommendation": stack_engine_recommendation,
+            "default_promotion_phase2_stack_engine_default_gap_count": (
+                stack_engine_gap_count
+            ),
+            "default_promotion_blocker_count": 0 if stack_engine_ready else 1,
+        },
         "release_decision": {
             "status": "default_change_ready" if default_change_ready else "release_candidate_ready",
             "default_change_ready": default_change_ready,
@@ -631,10 +729,12 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     github_plan = tmp_path / "github_release_plan.json"
     publish_preflight = tmp_path / "publish_preflight.json"
     pipeline_contract = tmp_path / "pipeline_contract.json"
+    stack_engine_contract = tmp_path / "stack_engine_contract.json"
     release_decision = tmp_path / "release_decision.json"
     _write_acceptance(acceptance)
     _write_default_route_acceptance(default_route_acceptance)
     _write_pipeline_contract(pipeline_contract)
+    _write_stack_engine_contract(stack_engine_contract)
     _write_release_decision(release_decision)
     _write_publish_preflight(publish_preflight)
     write_json(
@@ -668,6 +768,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         github_release_plan=github_plan,
         publish_preflight=publish_preflight,
         pipeline_contract=pipeline_contract,
+        stack_engine_contract=stack_engine_contract,
         release_decision=release_decision,
         doctor_payload=_doctor_payload(),
     )
@@ -721,6 +822,10 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["pipeline_contract"]["sample_accounting_closure_status"] == "passed"
     assert payload["pipeline_contract"]["sample_accounting_closure_present_count"] == 1
     assert payload["pipeline_contract"]["sample_accounting_closure_failed_count"] == 0
+    assert payload["stack_engine_contract"]["status"] == "passed"
+    assert payload["stack_engine_contract"]["default_promotion_ready"] is True
+    assert payload["stack_engine_contract"]["adoption_recommendation"] == "stack_engine_default_ready"
+    assert payload["stack_engine_contract"]["adoption_phase2_stack_engine_default_gap_count"] == 0
     assert payload["release_decision"]["status"] == "default_change_ready"
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["release_decision"]["recommendation"] == "promote_default_candidate"
@@ -731,6 +836,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["default_route_acceptance_route_contract_passed"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
+    assert checks["stack_engine_default_contract_ready"] is True
     assert checks["windows_publish_preflight_ready"] is True
     assert checks["windows_publish_preflight_rejection_sample_accounting_passed"] is True
     assert checks["windows_publish_preflight_sample_accounting_closure_passed"] is True
@@ -745,11 +851,13 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     out = tmp_path / "phase2_status.json"
     markdown = tmp_path / "phase2_status.md"
     pipeline_contract = tmp_path / "pipeline_contract.json"
+    stack_engine_contract = tmp_path / "stack_engine_contract.json"
     release_decision = tmp_path / "release_decision.json"
     publish_preflight = tmp_path / "publish_preflight.json"
     _write_acceptance(acceptance)
     _write_default_route_acceptance(default_route_acceptance)
     _write_pipeline_contract(pipeline_contract)
+    _write_stack_engine_contract(stack_engine_contract)
     _write_release_decision(release_decision)
     _write_publish_preflight(publish_preflight)
 
@@ -764,6 +872,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(default_route_acceptance),
             "--pipeline-contract",
             str(pipeline_contract),
+            "--stack-engine-contract",
+            str(stack_engine_contract),
             "--release-decision",
             str(release_decision),
             "--publish-preflight",
@@ -784,6 +894,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["acceptance_audit"]["resident_result_contract_source"] == "run_default"
     assert payload["default_route_acceptance"]["route_contract_passed"] is True
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
+    assert payload["stack_engine_contract"]["default_promotion_ready"] is True
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
     text = markdown.read_text(encoding="utf-8")
@@ -801,6 +912,9 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "DQ pixels match summary: True" in text
     assert "Rejection sample counts match maps: True" in text
     assert "Rejection sample accounting: passed failed=0" in text
+    assert "StackEngine Default Contract" in text
+    assert "Adoption recommendation: stack_engine_default_ready" in text
+    assert "Default promotion: ready ready=True blockers=0" in text
     assert "Release Decision" in text
     assert "Default change ready: True" in text
     assert "Runtime repeat ratio vs best: 1.053" in text
@@ -808,6 +922,42 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Preflight status: publish_preflight_ready" in text
     assert "Default route checks: 4" in text
     assert "Rejection sample accounting statuses: phase2=passed" in text
+
+
+def test_phase2_status_blocks_stack_engine_default_contract_gap(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=251)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    stack_engine_contract = tmp_path / "stack_engine_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_stack_engine_contract(stack_engine_contract, ready=False, gap_count=1)
+    _write_release_decision(release_decision)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        pipeline_contract=pipeline_contract,
+        stack_engine_contract=stack_engine_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    assert status["status"] == "attention_required"
+    assert status["stack_engine_contract"]["status"] == "passed"
+    assert status["stack_engine_contract"]["default_promotion_ready"] is False
+    assert (
+        status["stack_engine_contract"]["adoption_phase2_stack_engine_default_gap_count"]
+        == 1
+    )
+    check = checks["stack_engine_default_contract_ready"]
+    assert check["passed"] is False
+    assert check["evidence"]["adoption_gap_count"] == 1
+    assert check["evidence"]["default_promotion_status"] == "blocked"
 
 
 def test_phase2_status_blocks_default_ready_without_fastpath_contract(tmp_path: Path):
@@ -1173,6 +1323,8 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["pipeline_rejection_sample_accounting_passed_preserved"] is True
     assert checks["pipeline_sample_accounting_closure_check_preserved"] is True
     assert checks["pipeline_sample_accounting_closure_passed_preserved"] is True
+    assert checks["stack_engine_default_contract_ready_preserved"] is True
+    assert checks["stack_engine_default_gap_count_not_increased"] is True
     assert checks["release_decision_default_change_ready_preserved"] is True
     assert checks["release_decision_promote_recommendation_preserved"] is True
 
@@ -1365,6 +1517,42 @@ def test_phase2_status_compare_flags_sample_closure_regression(tmp_path: Path):
     assert checks["pipeline_sample_accounting_closure_passed_preserved"]["evidence"] == {
         "baseline": "passed",
         "candidate": "not_available",
+    }
+
+
+def test_phase2_status_compare_flags_stack_engine_default_contract_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=250))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=251,
+            stack_engine_ready=False,
+            stack_engine_gap_count=2,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["stack_engine_default_contract_ready_preserved"]["passed"] is False
+    assert checks["stack_engine_default_contract_ready_preserved"]["evidence"][
+        "baseline"
+    ]["ready"] is True
+    assert checks["stack_engine_default_contract_ready_preserved"]["evidence"][
+        "candidate"
+    ]["ready"] is False
+    assert checks["stack_engine_default_gap_count_not_increased"]["passed"] is False
+    assert checks["stack_engine_default_gap_count_not_increased"]["evidence"] == {
+        "baseline": 0,
+        "candidate": 2,
     }
 
 

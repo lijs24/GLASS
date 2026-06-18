@@ -2790,6 +2790,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         github_release_plan=args.github_release_plan,
         publish_preflight=args.publish_preflight,
         pipeline_contract=args.pipeline_contract,
+        stack_engine_contract=args.stack_engine_contract,
         release_decision=args.release_decision,
         doctor_payload=_doctor_payload(skip_cuda_probe=args.skip_cuda_probe),
     )
@@ -2872,6 +2873,10 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_status.add_argument("--github-release-plan", help="optional Windows GitHub release-plan JSON artifact")
     phase2_status.add_argument("--publish-preflight", help="optional Windows publish-preflight JSON artifact")
     phase2_status.add_argument("--pipeline-contract", help="optional pipeline-contract JSON artifact")
+    phase2_status.add_argument(
+        "--stack-engine-contract",
+        help="optional StackEngine default-contract JSON artifact",
+    )
     phase2_status.add_argument("--release-decision", help="optional release-promotion-decision JSON artifact")
     phase2_status.add_argument("--out", required=True, help="output Phase 2 status JSON")
     phase2_status.add_argument("--markdown", help="optional output Markdown summary")

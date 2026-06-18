@@ -4209,6 +4209,23 @@ integration where applicable.
   default change, package build, upload, package release, publish-preflight
   behavior change, or real-data benchmark rerun.
 
+### S2-Gate 251: Phase 2 StackEngine Default Contract Handoff
+
+- Carry StackEngine default-contract audit evidence into `glass phase2-status`.
+- Add `stack_engine_default_contract_ready` so Phase 2 status cannot remain
+  green when StackEngine default promotion is not ready, when adoption gaps
+  remain, or when default-promotion blockers exist.
+- Extend Phase 2 Markdown with StackEngine adoption, resident/StackEngine
+  surface counts, default-gap count, and default-promotion blocker evidence.
+- Extend `glass phase2-status-compare` so candidates cannot lose a previously
+  ready StackEngine default contract or increase the recorded default-gap
+  count.
+- Add focused tests for green handoff, CLI Markdown output, default-contract
+  gap blocking, and status-compare regression.
+- Keep this gate Phase2-status scoped: no image math, CUDA kernel, runtime
+  default change, package build, upload, package release, StackEngine audit
+  behavior change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

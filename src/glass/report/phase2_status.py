@@ -771,6 +771,85 @@ def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None
     }
 
 
+def _stack_engine_contract_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+            "default_promotion_ready": False,
+        }
+
+    checks = [item for item in payload.get("checks") or [] if isinstance(item, dict)]
+    failed_checks = [str(item.get("name")) for item in checks if not item.get("passed")]
+    adoption = payload.get("adoption") if isinstance(payload.get("adoption"), dict) else {}
+    default_promotion = (
+        payload.get("default_promotion")
+        if isinstance(payload.get("default_promotion"), dict)
+        else {}
+    )
+    gap_surfaces = adoption.get("gap_surfaces") if isinstance(adoption.get("gap_surfaces"), list) else []
+    blockers = (
+        default_promotion.get("blockers")
+        if isinstance(default_promotion.get("blockers"), list)
+        else []
+    )
+    return {
+        "path": payload.get("_path"),
+        "exists": True,
+        "audit_type": payload.get("audit_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "scope": payload.get("scope"),
+        "expected_integration_engine": payload.get("expected_integration_engine"),
+        "resident_calibration_contract_attached": payload.get(
+            "resident_calibration_contract_attached"
+        ),
+        "resident_result_contract_attached": payload.get("resident_result_contract_attached"),
+        "check_count": len(checks),
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "adoption_target_engine": adoption.get("target_engine"),
+        "adoption_surface_count": adoption.get("surface_count"),
+        "adoption_stack_engine_surface_count": adoption.get("stack_engine_surface_count"),
+        "adoption_cuda_resident_surface_count": adoption.get("cuda_resident_surface_count"),
+        "adoption_contract_ready_count": adoption.get("contract_ready_count"),
+        "adoption_result_contract_passed_count": adoption.get(
+            "result_contract_passed_count"
+        ),
+        "adoption_fallback_count": adoption.get("fallback_count"),
+        "adoption_phase2_stack_engine_default_gap_count": adoption.get(
+            "phase2_stack_engine_default_gap_count"
+        ),
+        "adoption_recommendation": adoption.get("recommendation"),
+        "adoption_gap_surfaces": gap_surfaces,
+        "default_promotion_ready": default_promotion.get("ready"),
+        "default_promotion_status": default_promotion.get("status"),
+        "default_promotion_required_scope": default_promotion.get("required_scope"),
+        "default_promotion_actual_scope": default_promotion.get("actual_scope"),
+        "default_promotion_surface_count": default_promotion.get("surface_count"),
+        "default_promotion_calibration_surface_count": default_promotion.get(
+            "calibration_surface_count"
+        ),
+        "default_promotion_integration_surface_count": default_promotion.get(
+            "integration_surface_count"
+        ),
+        "default_promotion_phase2_stack_engine_default_gap_count": (
+            default_promotion.get("phase2_stack_engine_default_gap_count")
+        ),
+        "default_promotion_recommendation": default_promotion.get("recommendation"),
+        "default_promotion_blocker_count": default_promotion.get(
+            "blocker_count",
+            len(blockers),
+        ),
+        "default_promotion_blockers": blockers,
+    }
+
+
 def _release_decision_summary(path: str | Path | None) -> dict[str, Any] | None:
     payload = _read_json_optional(path)
     if payload is None:
@@ -838,6 +917,27 @@ def _resident_fastpath_contract_passed(acceptance: dict[str, Any] | None) -> boo
     )
 
 
+def _stack_engine_default_contract_ready(contract: dict[str, Any] | None) -> bool:
+    if not isinstance(contract, dict):
+        return False
+    adoption_gap_count = int(contract.get("adoption_phase2_stack_engine_default_gap_count") or 0)
+    promotion_gap_count = int(
+        contract.get("default_promotion_phase2_stack_engine_default_gap_count") or 0
+    )
+    return (
+        contract.get("audit_type") == "stack_engine_default_contract"
+        and contract.get("status") == "passed"
+        and contract.get("passed") is True
+        and contract.get("default_promotion_ready") is True
+        and contract.get("default_promotion_status") == "ready"
+        and contract.get("adoption_recommendation") == "stack_engine_default_ready"
+        and contract.get("default_promotion_recommendation") == "stack_engine_default_ready"
+        and adoption_gap_count == 0
+        and promotion_gap_count == 0
+        and int(contract.get("default_promotion_blocker_count") or 0) == 0
+    )
+
+
 def build_phase2_status(
     *,
     checkpoint_dir: str | Path,
@@ -847,6 +947,7 @@ def build_phase2_status(
     github_release_plan: str | Path | None = None,
     publish_preflight: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
+    stack_engine_contract: str | Path | None = None,
     release_decision: str | Path | None = None,
     doctor_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -858,6 +959,7 @@ def build_phase2_status(
     github_plan = _github_release_plan_summary(github_release_plan)
     preflight = _publish_preflight_summary(publish_preflight)
     pipeline = _pipeline_contract_summary(pipeline_contract)
+    stack_engine = _stack_engine_contract_summary(stack_engine_contract)
     decision = _release_decision_summary(release_decision)
     checks = [
         {
@@ -1118,6 +1220,38 @@ def build_phase2_status(
                 },
             }
         )
+    if stack_engine is not None:
+        checks.append(
+            {
+                "name": "stack_engine_default_contract_ready",
+                "passed": _stack_engine_default_contract_ready(stack_engine),
+                "evidence": {
+                    "status": stack_engine.get("status"),
+                    "passed": stack_engine.get("passed"),
+                    "scope": stack_engine.get("scope"),
+                    "expected_integration_engine": stack_engine.get(
+                        "expected_integration_engine"
+                    ),
+                    "adoption_recommendation": stack_engine.get(
+                        "adoption_recommendation"
+                    ),
+                    "adoption_gap_count": stack_engine.get(
+                        "adoption_phase2_stack_engine_default_gap_count"
+                    ),
+                    "default_promotion_ready": stack_engine.get(
+                        "default_promotion_ready"
+                    ),
+                    "default_promotion_status": stack_engine.get(
+                        "default_promotion_status"
+                    ),
+                    "default_promotion_blocker_count": stack_engine.get(
+                        "default_promotion_blocker_count"
+                    ),
+                    "failed_checks": stack_engine.get("failed_checks"),
+                    "blockers": stack_engine.get("default_promotion_blockers"),
+                },
+            }
+        )
     if decision is not None:
         checks.append(
             {
@@ -1171,6 +1305,7 @@ def build_phase2_status(
         "github_release_plan": github_plan,
         "publish_preflight": preflight,
         "pipeline_contract": pipeline,
+        "stack_engine_contract": stack_engine,
         "release_decision": decision,
         "checks": checks,
     }
@@ -1185,6 +1320,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     github_plan = payload.get("github_release_plan") or {}
     preflight = payload.get("publish_preflight") or {}
     pipeline = payload.get("pipeline_contract") or {}
+    stack_engine = payload.get("stack_engine_contract") or {}
     decision = payload.get("release_decision") or {}
     lines = [
         "# GLASS Phase 2 Status",
@@ -1436,6 +1572,51 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"rejected_samples={row.get('rejected_samples')} "
                     f"valid_rejection_match={row.get('valid_rejection_match')}"
                 )
+    if stack_engine:
+        lines.extend(
+            [
+                "",
+                "## StackEngine Default Contract",
+                "",
+                f"- Status: {stack_engine.get('status')}",
+                f"- Passed: {stack_engine.get('passed')}",
+                f"- Scope: {stack_engine.get('scope')}",
+                (
+                    "- Expected integration engine: "
+                    f"{stack_engine.get('expected_integration_engine')}"
+                ),
+                (
+                    "- Adoption recommendation: "
+                    f"{stack_engine.get('adoption_recommendation')}"
+                ),
+                (
+                    "- Adoption surfaces: "
+                    f"{stack_engine.get('adoption_surface_count')} "
+                    f"ready={stack_engine.get('adoption_contract_ready_count')}"
+                ),
+                (
+                    "- StackEngine/resident surfaces: "
+                    f"{stack_engine.get('adoption_stack_engine_surface_count')}/"
+                    f"{stack_engine.get('adoption_cuda_resident_surface_count')}"
+                ),
+                (
+                    "- Phase 2 default gaps: "
+                    f"{stack_engine.get('adoption_phase2_stack_engine_default_gap_count')}"
+                ),
+                (
+                    "- Default promotion: "
+                    f"{stack_engine.get('default_promotion_status')} "
+                    f"ready={stack_engine.get('default_promotion_ready')} "
+                    f"blockers={stack_engine.get('default_promotion_blocker_count')}"
+                ),
+            ]
+        )
+        for blocker in stack_engine.get("default_promotion_blockers") or []:
+            if not isinstance(blocker, dict):
+                continue
+            lines.append(
+                f"- StackEngine default blocker {blocker.get('name')}: {blocker}"
+            )
     if decision:
         lines.extend(
             [
@@ -1589,6 +1770,46 @@ def _publish_preflight_sample_closure_statuses_passed(payload: dict[str, Any]) -
     return bool(statuses) and all(value == "passed" for value in statuses.values())
 
 
+def _stack_engine_status_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    contract = _status_value(payload, "stack_engine_contract")
+    if not isinstance(contract, dict):
+        return {
+            "present": False,
+            "ready": False,
+            "status": None,
+            "default_promotion_status": None,
+            "gap_count": None,
+            "recommendation": None,
+        }
+    gap_count = contract.get("default_promotion_phase2_stack_engine_default_gap_count")
+    if gap_count is None:
+        gap_count = contract.get("adoption_phase2_stack_engine_default_gap_count")
+    return {
+        "present": True,
+        "ready": _stack_engine_default_contract_ready(contract),
+        "status": contract.get("status"),
+        "passed": contract.get("passed"),
+        "scope": contract.get("scope"),
+        "expected_integration_engine": contract.get("expected_integration_engine"),
+        "default_promotion_ready": contract.get("default_promotion_ready"),
+        "default_promotion_status": contract.get("default_promotion_status"),
+        "gap_count": gap_count,
+        "blocker_count": contract.get("default_promotion_blocker_count"),
+        "recommendation": contract.get("adoption_recommendation"),
+    }
+
+
+def _stack_engine_gap_count(payload: dict[str, Any]) -> int | None:
+    summary = _stack_engine_status_summary(payload)
+    value = summary.get("gap_count")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_phase2_status_compare(
     *,
     baseline_status: str | Path,
@@ -1598,6 +1819,10 @@ def build_phase2_status_compare(
     candidate = _load_phase2_status(candidate_status)
     baseline_gate = _status_value(baseline, "latest_checkpoint", "gate")
     candidate_gate = _status_value(candidate, "latest_checkpoint", "gate")
+    baseline_stack_engine = _stack_engine_status_summary(baseline)
+    candidate_stack_engine = _stack_engine_status_summary(candidate)
+    baseline_stack_gap_count = _stack_engine_gap_count(baseline)
+    candidate_stack_gap_count = _stack_engine_gap_count(candidate)
     checks = [
         _compare_check(
             "baseline_artifact_type",
@@ -1939,6 +2164,22 @@ def build_phase2_status_compare(
             ),
         ),
         _compare_check(
+            "stack_engine_default_contract_ready_preserved",
+            not baseline_stack_engine.get("ready") or candidate_stack_engine.get("ready") is True,
+            baseline=baseline_stack_engine,
+            candidate=candidate_stack_engine,
+        ),
+        _compare_check(
+            "stack_engine_default_gap_count_not_increased",
+            baseline_stack_gap_count is None
+            or (
+                candidate_stack_gap_count is not None
+                and candidate_stack_gap_count <= baseline_stack_gap_count
+            ),
+            baseline=baseline_stack_gap_count,
+            candidate=candidate_stack_gap_count,
+        ),
+        _compare_check(
             "release_decision_default_change_ready_preserved",
             _status_value(baseline, "release_decision", "default_change_ready") is not True
             or _status_value(candidate, "release_decision", "default_change_ready") is True,
@@ -1996,6 +2237,7 @@ def build_phase2_status_compare(
                 "sample_accounting_closure",
                 "status",
             ),
+            "stack_engine_default_contract": baseline_stack_engine,
             "release_decision_status": _status_value(baseline, "release_decision", "status"),
             "default_change_ready": _status_value(
                 baseline,
@@ -2035,6 +2277,7 @@ def build_phase2_status_compare(
                 "sample_accounting_closure",
                 "status",
             ),
+            "stack_engine_default_contract": candidate_stack_engine,
             "release_decision_status": _status_value(candidate, "release_decision", "status"),
             "default_change_ready": _status_value(
                 candidate,
