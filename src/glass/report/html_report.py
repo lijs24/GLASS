@@ -1440,6 +1440,10 @@ def _warp_quality_summary_rows(contract: dict[str, Any] | None) -> list[dict[str
             "threshold_max_skipped_frames": thresholds.get("max_skipped_frames"),
             "require_artifacts": thresholds.get("require_artifacts"),
             "require_all_registered": thresholds.get("require_all_registered"),
+            "pixel_verify": summary.get("pixel_verify"),
+            "pixel_verified_output_count": summary.get("pixel_verified_output_count"),
+            "pixel_failed_output_count": summary.get("pixel_failed_output_count"),
+            "pixel_max_delta": summary.get("pixel_max_delta"),
         }
     ]
 
@@ -1484,6 +1488,7 @@ def _warp_quality_output_rows(contract: dict[str, Any] | None) -> list[dict[str,
     for item in (contract or {}).get("outputs") or []:
         if not isinstance(item, dict):
             continue
+        pixel = item.get("pixel_verification") if isinstance(item.get("pixel_verification"), dict) else {}
         rows.append(
             {
                 "frame_id": item.get("frame_id"),
@@ -1500,6 +1505,11 @@ def _warp_quality_output_rows(contract: dict[str, Any] | None) -> list[dict[str,
                 "coverage_path_exists": item.get("coverage_path_exists"),
                 "dq_mask_path_exists": item.get("dq_mask_path_exists"),
                 "dq_summary_has_valid": item.get("dq_summary_has_valid"),
+                "pixel_status": pixel.get("status"),
+                "pixel_max_delta": pixel.get("max_delta"),
+                "coverage_valid_pixels": pixel.get("coverage_valid_pixels"),
+                "dq_valid_pixels": pixel.get("dq_valid_pixels"),
+                "dq_warp_edge_pixels": pixel.get("dq_warp_edge_pixels"),
                 "failed_checks": item.get("failed_checks"),
             }
         )

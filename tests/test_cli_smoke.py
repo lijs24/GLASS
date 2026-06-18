@@ -811,6 +811,9 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
                 "2",
                 "--require-warp-artifacts",
                 "--require-warp-all-registered",
+                "--warp-pixel-verify",
+                "--warp-pixel-verify-tile-size",
+                "8",
             ]
         )
         == 0
@@ -825,6 +828,8 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
     assert passing_contract["required"] is True
     assert passing_contract["summary"]["output_count"] >= 1
     assert passing_contract["summary"]["min_valid_fraction"] == 1.0
+    assert passing_contract["summary"]["pixel_verified_output_count"] >= 1
+    assert passing_contract["summary"]["pixel_failed_output_count"] == 0
     assert "Warp quality contract" in html
     assert "warp_quality_contract.json" in html
 
@@ -848,6 +853,9 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
                 "99",
                 "--require-warp-artifacts",
                 "--require-warp-all-registered",
+                "--warp-pixel-verify",
+                "--warp-pixel-verify-tile-size",
+                "8",
             ]
         )
         == 2
@@ -860,6 +868,7 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
     assert failing_bundle["passed"] is False
     assert failing_checks["warp_quality"]["passed"] is False
     assert "warp_valid_fraction_meets_threshold" in failing_contract["failed_checks"]
+    assert "warp_pixel_verification_passed" in failing_contract["failed_checks"]
 
 
 def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):

@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
+from glass.engine.contracts import DQFlag
+from glass.gpu.tile_scheduler import iter_tiles
 from glass.io.fits_io import FitsImageReader
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
@@ -67,6 +71,116 @@ def _image_shape(path_value: Any, run_root: Path) -> tuple[int, int] | None:
         return None
 
 
+def _pixel_verification(
+    item: dict[str, Any],
+    run_root: Path,
+    *,
+    tile_size: int,
+    tolerance: int,
+) -> dict[str, Any]:
+    coverage_path = _resolve_path(item.get("coverage_path"), run_root)
+    dq_path = _resolve_path(item.get("dq_mask_path"), run_root)
+    if coverage_path is None or not coverage_path.exists() or dq_path is None or not dq_path.exists():
+        return {
+            "verified": False,
+            "status": "missing_artifact",
+            "passed": False,
+            "coverage_path": None if coverage_path is None else str(coverage_path),
+            "dq_mask_path": None if dq_path is None else str(dq_path),
+            "failed_checks": ["coverage_or_dq_missing"],
+        }
+
+    try:
+        with FitsImageReader(coverage_path) as coverage_reader, FitsImageReader(dq_path) as dq_reader:
+            if coverage_reader.shape != dq_reader.shape:
+                return {
+                    "verified": False,
+                    "status": "shape_mismatch",
+                    "passed": False,
+                    "coverage_shape": list(coverage_reader.shape),
+                    "dq_shape": list(dq_reader.shape),
+                    "failed_checks": ["coverage_dq_shape_match"],
+                }
+            width = int(coverage_reader.width)
+            height = int(coverage_reader.height)
+            coverage_valid = 0
+            coverage_invalid = 0
+            dq_valid = 0
+            dq_warp_edge = 0
+            for tile in iter_tiles(width=width, height=height, tile_size=max(1, int(tile_size))):
+                coverage = coverage_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                dq = dq_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1).astype(np.uint32, copy=False)
+                valid = np.isfinite(coverage) & (coverage > 0.5)
+                coverage_valid += int(np.count_nonzero(valid))
+                coverage_invalid += int(valid.size - np.count_nonzero(valid))
+                dq_valid += int(np.count_nonzero(dq == 0))
+                dq_warp_edge += int(np.count_nonzero((dq & np.uint32(int(DQFlag.WARP_EDGE))) != 0))
+    except Exception as exc:
+        return {
+            "verified": False,
+            "status": "read_failed",
+            "passed": False,
+            "error": str(exc),
+            "failed_checks": ["pixel_verification_read"],
+        }
+
+    reported_valid = _nonnegative_int(item.get("valid_pixels"))
+    dq_summary = item.get("dq_summary") if isinstance(item.get("dq_summary"), dict) else {}
+    summary_valid = _nonnegative_int(dq_summary.get("valid"))
+    summary_warp_edge = _nonnegative_int(dq_summary.get("warp_edge"))
+    expected_warp_edge = coverage_invalid
+    valid_delta = None if reported_valid is None else abs(int(reported_valid) - coverage_valid)
+    dq_valid_delta = abs(dq_valid - coverage_valid)
+    summary_valid_delta = None if summary_valid is None else abs(int(summary_valid) - dq_valid)
+    dq_warp_edge_delta = abs(dq_warp_edge - expected_warp_edge)
+    summary_warp_edge_delta = None if summary_warp_edge is None else abs(int(summary_warp_edge) - dq_warp_edge)
+    max_delta = max(
+        value
+        for value in (
+            valid_delta,
+            dq_valid_delta,
+            summary_valid_delta,
+            dq_warp_edge_delta,
+            summary_warp_edge_delta,
+        )
+        if value is not None
+    )
+    allowed = max(0, int(tolerance))
+    failed_checks: list[str] = []
+    if valid_delta is None or valid_delta > allowed:
+        failed_checks.append("reported_valid_matches_coverage")
+    if dq_valid_delta > allowed:
+        failed_checks.append("dq_valid_matches_coverage")
+    if summary_valid_delta is None or summary_valid_delta > allowed:
+        failed_checks.append("dq_summary_valid_matches_dq")
+    if dq_warp_edge_delta > allowed:
+        failed_checks.append("dq_warp_edge_matches_coverage_invalid")
+    if summary_warp_edge is not None and summary_warp_edge_delta is not None and summary_warp_edge_delta > allowed:
+        failed_checks.append("dq_summary_warp_edge_matches_dq")
+    return {
+        "verified": True,
+        "status": "passed" if not failed_checks else "failed",
+        "passed": not failed_checks,
+        "tile_size": max(1, int(tile_size)),
+        "tolerance": allowed,
+        "coverage_valid_pixels": coverage_valid,
+        "coverage_invalid_pixels": coverage_invalid,
+        "reported_valid_pixels": reported_valid,
+        "dq_valid_pixels": dq_valid,
+        "dq_warp_edge_pixels": dq_warp_edge,
+        "expected_warp_edge_pixels": expected_warp_edge,
+        "dq_summary_valid": summary_valid,
+        "dq_summary_warp_edge": summary_warp_edge,
+        "valid_delta": valid_delta,
+        "dq_valid_delta": dq_valid_delta,
+        "summary_valid_delta": summary_valid_delta,
+        "dq_warp_edge_delta": dq_warp_edge_delta,
+        "summary_warp_edge_delta": summary_warp_edge_delta,
+        "max_delta": max_delta,
+        "failed_checks": failed_checks,
+    }
+
+
 def _row_accepted_registration(item: dict[str, Any]) -> bool:
     validation = item.get("registration_validation") if isinstance(item.get("registration_validation"), dict) else {}
     if "accepted" in validation:
@@ -91,6 +205,9 @@ def _warp_output_rows(
     *,
     min_valid_fraction: float | None,
     require_artifacts: bool,
+    pixel_verify: bool,
+    pixel_verify_tile_size: int,
+    pixel_tolerance: int,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in payload.get("warp_results") or []:
@@ -129,6 +246,18 @@ def _warp_output_rows(
             valid_fraction is None or valid_fraction < float(min_valid_fraction)
         ):
             failed_checks.append("valid_fraction_meets_threshold")
+        pixel_verification = (
+            _pixel_verification(
+                item,
+                run_root,
+                tile_size=pixel_verify_tile_size,
+                tolerance=pixel_tolerance,
+            )
+            if pixel_verify
+            else None
+        )
+        if pixel_verify and (not isinstance(pixel_verification, dict) or not pixel_verification.get("passed")):
+            failed_checks.append("pixel_verification_passed")
         rows.append(
             {
                 "frame_id": item.get("frame_id"),
@@ -155,6 +284,7 @@ def _warp_output_rows(
                     and isinstance(dq_summary, dict)
                     and "valid" in dq_summary
                 ),
+                "pixel_verification": pixel_verification,
                 "passed": not failed_checks,
                 "failed_checks": failed_checks,
             }
@@ -194,6 +324,9 @@ def build_warp_quality_contract(
     max_skipped_frames: int | None = None,
     require_artifacts: bool = False,
     require_all_registered: bool = False,
+    pixel_verify: bool = False,
+    pixel_verify_tile_size: int = 2048,
+    pixel_tolerance: int = 0,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
     warp_path = run_root / "warp_results.json"
@@ -210,6 +343,9 @@ def build_warp_quality_contract(
         "max_skipped_frames": max_skipped_frames,
         "require_artifacts": bool(require_artifacts),
         "require_all_registered": bool(require_all_registered),
+        "pixel_verify": bool(pixel_verify),
+        "pixel_verify_tile_size": max(1, int(pixel_verify_tile_size)),
+        "pixel_tolerance": max(0, int(pixel_tolerance)),
     }
     if payload is None:
         checks = [
@@ -249,6 +385,9 @@ def build_warp_quality_contract(
         run_root,
         min_valid_fraction=min_valid_fraction,
         require_artifacts=require_artifacts,
+        pixel_verify=pixel_verify,
+        pixel_verify_tile_size=max(1, int(pixel_verify_tile_size)),
+        pixel_tolerance=max(0, int(pixel_tolerance)),
     )
     skipped = _skipped_rows(payload)
     artifact_failures = [row for row in rows if require_artifacts and not row["artifact_ready"]]
@@ -259,6 +398,15 @@ def build_warp_quality_contract(
         and (row["valid_fraction"] is None or row["valid_fraction"] < float(min_valid_fraction))
     ]
     skipped_contract_failures = [row for row in skipped if not row["passed"]]
+    pixel_failures = [
+        row
+        for row in rows
+        if pixel_verify
+        and (
+            not isinstance(row.get("pixel_verification"), dict)
+            or not row["pixel_verification"].get("passed")
+        )
+    ]
     accepted_registration_ids = _accepted_registration_frame_ids(run_root)
     output_ids = {str(row["frame_id"]) for row in rows if row.get("frame_id") is not None}
     missing_registered_ids = (
@@ -318,8 +466,27 @@ def build_warp_quality_contract(
                 },
             )
         )
+    if pixel_verify:
+        checks.append(
+            _check(
+                "warp_pixel_verification_passed",
+                bool(rows) and not pixel_failures,
+                {"failed": [row["frame_id"] for row in pixel_failures]},
+            )
+        )
     failed_outputs = [row for row in rows if row["failed_checks"]]
     passed = all(item["passed"] for item in checks)
+    pixel_payloads = [
+        row["pixel_verification"]
+        for row in rows
+        if isinstance(row.get("pixel_verification"), dict)
+    ]
+    pixel_failed_count = len([item for item in pixel_payloads if not item.get("passed")])
+    pixel_verified_count = len([item for item in pixel_payloads if item.get("verified")])
+    pixel_max_delta = max(
+        [int(item.get("max_delta") or 0) for item in pixel_payloads if item.get("max_delta") is not None],
+        default=None,
+    )
     return {
         "schema_version": 1,
         "artifact_type": "warp_quality_contract",
@@ -344,6 +511,10 @@ def build_warp_quality_contract(
             "missing_warp_for_accepted_registration_count": None
             if missing_registered_ids is None
             else len(missing_registered_ids),
+            "pixel_verify": bool(pixel_verify),
+            "pixel_verified_output_count": pixel_verified_count,
+            "pixel_failed_output_count": pixel_failed_count,
+            "pixel_max_delta": pixel_max_delta,
             "interpolation": payload.get("interpolation"),
             "interpolator_registry": payload.get("interpolator_registry"),
         },
@@ -381,6 +552,8 @@ def write_warp_quality_contract(
         f"- Max skipped frames: {thresholds.get('max_skipped_frames')}",
         f"- Require artifacts: {thresholds.get('require_artifacts')}",
         f"- Require all registered: {thresholds.get('require_all_registered')}",
+        f"- Pixel verify: {thresholds.get('pixel_verify')}",
+        f"- Pixel tolerance: {thresholds.get('pixel_tolerance')}",
         "",
         "## Checks",
         "",
@@ -393,7 +566,8 @@ def write_warp_quality_contract(
         marker = "PASS" if item.get("passed") else "FAIL"
         lines.append(
             f"- {marker}: {item.get('frame_id')} model={item.get('warp_model')} "
-            f"valid_fraction={item.get('valid_fraction')} artifact_ready={item.get('artifact_ready')}"
+            f"valid_fraction={item.get('valid_fraction')} artifact_ready={item.get('artifact_ready')} "
+            f"pixel={item.get('pixel_verification')}"
         )
     if payload.get("skipped_frames"):
         lines.extend(["", "## Skipped Frames", ""])

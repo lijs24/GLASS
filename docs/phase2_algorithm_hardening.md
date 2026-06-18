@@ -5624,6 +5624,27 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 320: Warp Pixel Verification Guardrail
+
+- Extend `warp_quality_contract.json` with optional tiled pixel verification
+  of warp coverage and DQ maps.
+- Add `glass guardrails --warp-pixel-verify`,
+  `--warp-pixel-verify-tile-size`, and `--warp-pixel-tolerance`.
+- When enabled, stream coverage and DQ FITS tiles and compare reported
+  `valid_pixels`, coverage valid-pixel count, DQ valid-pixel count, DQ
+  `WARP_EDGE` count, and DQ summary counts within the supplied tolerance.
+- Preserve default compatibility: no FITS pixel scan is performed unless
+  `--warp-pixel-verify` is supplied.
+- Surface pixel verification status, count deltas, verified output count, and
+  failed output count in `warp_quality_contract.json`, Markdown, guardrails
+  summaries, acceptance bundles, and the HTML report.
+- Add focused tests for passing pixel verification and injected valid-pixel
+  drift failure.
+- Generate Gate320 guardrail artifacts from a small CPU validation run.
+- Keep this gate diagnostic/guardrail scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

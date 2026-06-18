@@ -2786,11 +2786,15 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     max_warp_skipped_frames = getattr(args, "max_warp_skipped_frames", None)
     require_warp_artifacts = bool(getattr(args, "require_warp_artifacts", False))
     require_warp_all_registered = bool(getattr(args, "require_warp_all_registered", False))
+    warp_pixel_verify = bool(getattr(args, "warp_pixel_verify", False))
+    warp_pixel_verify_tile_size = int(getattr(args, "warp_pixel_verify_tile_size", 2048))
+    warp_pixel_tolerance = int(getattr(args, "warp_pixel_tolerance", 0))
     warp_quality_required = (
         min_warp_valid_fraction is not None
         or max_warp_skipped_frames is not None
         or require_warp_artifacts
         or require_warp_all_registered
+        or warp_pixel_verify
     )
     warp_quality_present = (run / "warp_results.json").exists() or warp_quality_required
     warp_quality_contract = None
@@ -2801,6 +2805,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             max_skipped_frames=max_warp_skipped_frames,
             require_artifacts=require_warp_artifacts,
             require_all_registered=require_warp_all_registered,
+            pixel_verify=warp_pixel_verify,
+            pixel_verify_tile_size=warp_pixel_verify_tile_size,
+            pixel_tolerance=warp_pixel_tolerance,
         )
         write_warp_quality_contract(
             warp_quality_path,
@@ -2975,6 +2982,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "max_warp_skipped_frames": max_warp_skipped_frames,
         "require_warp_artifacts": require_warp_artifacts,
         "require_warp_all_registered": require_warp_all_registered,
+        "warp_pixel_verify": warp_pixel_verify,
+        "warp_pixel_verify_tile_size": warp_pixel_verify_tile_size,
+        "warp_pixel_tolerance": warp_pixel_tolerance,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -3166,6 +3176,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "max_warp_skipped_frames": max_warp_skipped_frames,
         "require_warp_artifacts": require_warp_artifacts,
         "require_warp_all_registered": require_warp_all_registered,
+        "warp_pixel_verify": warp_pixel_verify,
+        "warp_pixel_verify_tile_size": warp_pixel_verify_tile_size,
+        "warp_pixel_tolerance": warp_pixel_tolerance,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -3241,6 +3254,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "max_warp_skipped_frames": max_warp_skipped_frames,
             "require_warp_artifacts": require_warp_artifacts,
             "require_warp_all_registered": require_warp_all_registered,
+            "warp_pixel_verify": warp_pixel_verify,
+            "warp_pixel_verify_tile_size": warp_pixel_verify_tile_size,
+            "warp_pixel_tolerance": warp_pixel_tolerance,
             "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
@@ -6243,6 +6259,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-warp-all-registered",
         action="store_true",
         help="fail guardrails unless every accepted registration frame has a warp output",
+    )
+    guardrails.add_argument(
+        "--warp-pixel-verify",
+        action="store_true",
+        help="scan warp coverage/DQ FITS pixels and fail when counts disagree with summaries",
+    )
+    guardrails.add_argument(
+        "--warp-pixel-verify-tile-size",
+        type=int,
+        default=2048,
+        help="tile size for optional warp coverage/DQ pixel verification",
+    )
+    guardrails.add_argument(
+        "--warp-pixel-tolerance",
+        type=int,
+        default=0,
+        help="allowed count delta for optional warp coverage/DQ pixel verification",
     )
     guardrails.add_argument(
         "--pixel-verify",

@@ -565,3 +565,29 @@ This gate does not change warp math or interpolation behavior. It turns the
 existing registered image, coverage, and DQ outputs into a reusable acceptance
 surface so registration failures or missing warp artifacts cannot hide until
 local normalization or integration.
+
+## S2-Gate 320 Warp Pixel Verification
+
+S2-Gate 320 extends the warp quality contract with optional tiled pixel
+verification. When `glass guardrails --warp-pixel-verify` is supplied, GLASS
+streams the warp coverage and DQ FITS maps and checks:
+
+- reported `valid_pixels` versus the number of coverage pixels greater than
+  `0.5`
+- DQ valid-pixel count versus coverage valid-pixel count
+- DQ summary `valid` versus the DQ map valid-pixel count
+- DQ `WARP_EDGE` count versus coverage invalid-pixel count
+- DQ summary `warp_edge`, when present, versus the DQ map `WARP_EDGE` count
+
+The scan is tiled and controlled by:
+
+```text
+--warp-pixel-verify
+--warp-pixel-verify-tile-size VALUE
+--warp-pixel-tolerance VALUE
+```
+
+The verification is opt-in because it reads diagnostic FITS pixels. Normal
+guardrails still report warp metadata without scanning maps. When enabled,
+pixel verification becomes part of the warp quality pass/fail state and is
+surfaced in the HTML report as pixel status and count deltas.

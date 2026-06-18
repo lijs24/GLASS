@@ -1,0 +1,186 @@
+{
+  "artifact_type": "warp_quality_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\warp_results.json",
+        "required": true
+      },
+      "name": "warp_results_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "output_count": 1
+      },
+      "name": "warp_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": []
+      },
+      "name": "skipped_warp_rows_have_reasons",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": []
+      },
+      "name": "warp_output_artifacts_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "min_observed_valid_fraction": 1.0,
+        "min_valid_fraction": 1.0
+      },
+      "name": "warp_valid_fraction_meets_threshold",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_skipped_frames": 2,
+        "skipped_count": 2
+      },
+      "name": "warp_skipped_frames_within_threshold",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "accepted_registration_count": 1,
+        "missing": [],
+        "registration_results_present": true
+      },
+      "name": "all_accepted_registration_frames_warped",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": []
+      },
+      "name": "warp_pixel_verification_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T14:29:42+00:00",
+  "failed_checks": [],
+  "failed_outputs": [],
+  "missing_warp_for_accepted_registration": [],
+  "outputs": [
+    {
+      "artifact_ready": true,
+      "coverage_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\coverage_cache\\coverage_F000010.fits",
+      "coverage_path_exists": true,
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\dq_cache\\dq_warp_F000010.fits",
+      "dq_mask_path_exists": true,
+      "dq_summary_has_valid": true,
+      "dq_summary_present": true,
+      "failed_checks": [],
+      "frame_id": "F000010",
+      "interpolation": "bilinear",
+      "passed": true,
+      "pixel_count": 576,
+      "pixel_verification": {
+        "coverage_invalid_pixels": 0,
+        "coverage_valid_pixels": 576,
+        "dq_summary_valid": 576,
+        "dq_summary_warp_edge": null,
+        "dq_valid_delta": 0,
+        "dq_valid_pixels": 576,
+        "dq_warp_edge_delta": 0,
+        "dq_warp_edge_pixels": 0,
+        "expected_warp_edge_pixels": 0,
+        "failed_checks": [],
+        "max_delta": 0,
+        "passed": true,
+        "reported_valid_pixels": 576,
+        "status": "passed",
+        "summary_valid_delta": 0,
+        "summary_warp_edge_delta": null,
+        "tile_size": 8,
+        "tolerance": 0,
+        "valid_delta": 0,
+        "verified": true
+      },
+      "registered_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\registered_cache\\registered_F000010.fits",
+      "registered_path_exists": true,
+      "registration_status": "reference",
+      "tile_count": 9,
+      "tile_size": 8,
+      "valid_fraction": 1.0,
+      "valid_pixels": 576,
+      "warp_model": "integer_translation_nearest"
+    }
+  ],
+  "passed": true,
+  "required": true,
+  "run_dir": "runs\\checkpoints\\s2_gate_316_enabled_run",
+  "schema_version": 1,
+  "skipped_frames": [
+    {
+      "failed_checks": [],
+      "frame_id": "F000011",
+      "passed": true,
+      "reason": "registration did not produce an accepted transform",
+      "status": "quality_rejected",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    },
+    {
+      "failed_checks": [],
+      "frame_id": "F000012",
+      "passed": true,
+      "reason": "registration did not produce an accepted transform",
+      "status": "quality_rejected",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    }
+  ],
+  "status": "passed",
+  "summary": {
+    "accepted_registration_count": 1,
+    "artifact_ready_count": 1,
+    "failed_output_count": 0,
+    "interpolation": "bilinear",
+    "interpolator_registry": [
+      "nearest",
+      "bilinear",
+      "bicubic",
+      "lanczos3"
+    ],
+    "max_valid_fraction": 1.0,
+    "min_valid_fraction": 1.0,
+    "missing_warp_for_accepted_registration_count": 0,
+    "output_count": 1,
+    "pixel_failed_output_count": 0,
+    "pixel_max_delta": 0,
+    "pixel_verified_output_count": 1,
+    "pixel_verify": true,
+    "skipped_count": 2,
+    "total_valid_pixels": 576
+  },
+  "thresholds": {
+    "max_skipped_frames": 2,
+    "min_valid_fraction": 1.0,
+    "pixel_tolerance": 0,
+    "pixel_verify": true,
+    "pixel_verify_tile_size": 8,
+    "require_all_registered": true,
+    "require_artifacts": true
+  },
+  "warp_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\warp_results.json"
+}
