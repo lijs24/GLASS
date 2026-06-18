@@ -4893,6 +4893,25 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 289: Windows Release Matrix StackEngine Publication Audit Guard
+
+- Carry the S2-Gate 288 default-promotion StackEngine publication-audit
+  evidence into `glass windows-release-matrix`.
+- Require Windows release-matrix readiness to preserve the default-promotion
+  publication-audit artifact, its Phase 2 audit check, its integration
+  engine-policy chain, and its resident winsorized sweep chain before Windows
+  CUDA publication can remain green.
+- Block stale default-promotion manifests that still report ready status but do
+  not contain Gate288 publication-audit summaries and checks.
+- Surface publication-audit readiness, failed checks, policy-chain agreement,
+  and resident winsorized-chain agreement in release-matrix JSON and Markdown.
+- Add focused release-matrix tests for ready evidence, missing stale
+  publication-audit evidence, failed policy-chain evidence, failed resident
+  winsorized-chain evidence, and CLI Markdown output.
+- Keep this gate release-matrix scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
