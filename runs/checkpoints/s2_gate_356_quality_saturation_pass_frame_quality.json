@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "quality_gate_policy": {
+    "max_saturation_fraction": 0.005,
+    "saturation_level": 5000.0
+  },
+  "frame_quality": [
+    {
+      "frame_id": "F_SAT",
+      "saturation_fraction": 0.0087890625,
+      "saturated_pixel_count": 36,
+      "saturation_level": 5000.0,
+      "saturation_source": "threshold",
+      "quality_gate_status": "accepted",
+      "quality_gate_warnings": []
+    },
+    {
+      "frame_id": "F_OK",
+      "saturation_fraction": 0.0,
+      "saturated_pixel_count": 0,
+      "saturation_level": 5000.0,
+      "saturation_source": "threshold",
+      "quality_gate_status": "accepted",
+      "quality_gate_warnings": []
+    }
+  ],
+  "reference_frame_id": "F_OK"
+}

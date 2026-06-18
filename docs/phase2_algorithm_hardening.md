@@ -6328,6 +6328,26 @@ integration where applicable.
   integration math change, no CUDA kernel change, no runtime default change, no
   package upload, no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 356: Phase2 Quality Saturation Handoff
+
+- Add optional `frame_quality.json` ingestion to `glass phase2-status` via
+  `--quality-results`.
+- Summarize saturation status, pass/fail state, total/saturated frame counts,
+  saturation quality-gate rejection count, maximum/mean saturation fraction,
+  threshold/source metadata, worst frame id, and rejected frame ids in Phase2
+  status JSON and Markdown.
+- Add a Phase2 status check, `quality_saturation_no_rejections`, so explicitly
+  supplied quality artifacts with saturation quality-gate rejections require
+  attention.
+- Extend `glass phase2-status-compare` with
+  `quality_saturation_no_rejections_preserved`, preventing a candidate status
+  from losing a previously passing quality-saturation handoff.
+- Add focused build, CLI, Markdown, and compare tests.
+- Keep this gate Phase2 status handoff scoped: no quality metric math change,
+  no star detector algorithm change, no registration transform math change, no
+  integration math change, no CUDA kernel change, no runtime default change, no
+  package upload, no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

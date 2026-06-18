@@ -313,6 +313,117 @@ def _registration_admission_summary(path: str | Path | None) -> dict[str, Any] |
     }
 
 
+def _quality_saturation_warning_text(item: dict[str, Any]) -> str:
+    warnings = item.get("quality_gate_warnings")
+    if warnings is None:
+        warning_values: list[Any] = []
+    elif isinstance(warnings, list):
+        warning_values = warnings
+    else:
+        warning_values = [warnings]
+    saturation_warnings = [
+        str(warning) for warning in warning_values if "saturation" in str(warning).lower()
+    ]
+    return "; ".join(saturation_warnings)
+
+
+def _quality_saturation_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+            "reason": "quality artifact missing",
+        }
+    frame_quality = payload.get("frame_quality")
+    if not isinstance(frame_quality, list):
+        return {
+            "path": payload.get("_path"),
+            "exists": True,
+            "status": "invalid",
+            "passed": False,
+            "reason": "frame_quality list missing",
+        }
+    policy = payload.get("quality_gate_policy")
+    if not isinstance(policy, dict):
+        summary = payload.get("quality_gate_summary")
+        policy = summary.get("policy") if isinstance(summary, dict) else {}
+    if not isinstance(policy, dict):
+        policy = {}
+    fractions = [
+        _float_or_none(item.get("saturation_fraction")) or 0.0
+        for item in frame_quality
+        if isinstance(item, dict)
+    ]
+    counts = [
+        _float_or_none(item.get("saturated_pixel_count")) or 0.0
+        for item in frame_quality
+        if isinstance(item, dict)
+    ]
+    dict_rows = [item for item in frame_quality if isinstance(item, dict)]
+    saturated_rows = [
+        item
+        for item in dict_rows
+        if (_float_or_none(item.get("saturation_fraction")) or 0.0) > 0.0
+        or (_float_or_none(item.get("saturated_pixel_count")) or 0.0) > 0.0
+    ]
+    rejected_rows = [
+        item
+        for item in dict_rows
+        if str(item.get("quality_gate_status", "")).lower() == "rejected"
+        and _quality_saturation_warning_text(item)
+    ]
+    sources = sorted({str(item.get("saturation_source")) for item in dict_rows if item.get("saturation_source")})
+    row_levels = sorted(
+        {
+            str(item.get("saturation_level"))
+            for item in dict_rows
+            if item.get("saturation_level") is not None
+        }
+    )
+    policy_level = policy.get("saturation_level", policy.get("quality_saturation_level"))
+    saturation_level: Any
+    if policy_level is not None:
+        saturation_level = policy_level
+    elif len(row_levels) == 1:
+        saturation_level = row_levels[0]
+    else:
+        saturation_level = ", ".join(row_levels)
+    worst_row: dict[str, Any] = {}
+    if dict_rows:
+        worst_row = max(
+            dict_rows,
+            key=lambda item: (
+                _float_or_none(item.get("saturation_fraction")) or 0.0,
+                _float_or_none(item.get("saturated_pixel_count")) or 0.0,
+            ),
+        )
+    rejected_frame_ids = [str(item.get("frame_id")) for item in rejected_rows if item.get("frame_id")]
+    passed = len(rejected_rows) == 0
+    return {
+        "path": payload.get("_path"),
+        "exists": True,
+        "status": "passed" if passed else "attention_required",
+        "passed": passed,
+        "reason": None if passed else "saturation quality-gate rejection present",
+        "frame_count": len(dict_rows),
+        "saturated_frame_count": len(saturated_rows),
+        "quality_gate_saturation_rejected_count": len(rejected_rows),
+        "max_saturation_fraction": round(max(fractions or [0.0]), 8),
+        "mean_saturation_fraction": round(sum(fractions) / len(fractions), 8) if fractions else 0.0,
+        "max_saturated_pixel_count": int(max(counts or [0.0])),
+        "saturation_level": saturation_level,
+        "max_saturation_fraction_policy": policy.get("max_saturation_fraction"),
+        "saturation_sources": sources,
+        "worst_frame_id": worst_row.get("frame_id"),
+        "rejected_frame_ids": rejected_frame_ids,
+    }
+
+
 def _resident_registration_fastpath_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
     fastpath = (
         payload.get("resident_registration_fastpath")
@@ -2621,6 +2732,7 @@ def build_phase2_status(
     pipeline_contract: str | Path | None = None,
     stack_engine_contract: str | Path | None = None,
     registration_results: str | Path | None = None,
+    quality_results: str | Path | None = None,
     resident_winsorized_benchmark_audit: str | Path | None = None,
     resident_winsorized_sweep_audit: str | Path | None = None,
     release_decision: str | Path | None = None,
@@ -2639,6 +2751,7 @@ def build_phase2_status(
     pipeline = _pipeline_contract_summary(pipeline_contract)
     stack_engine = _stack_engine_contract_summary(stack_engine_contract)
     registration_admission = _registration_admission_summary(registration_results)
+    quality_saturation = _quality_saturation_summary(quality_results)
     winsorized_audit = _resident_winsorized_benchmark_audit_summary(
         resident_winsorized_benchmark_audit
     )
@@ -2827,6 +2940,30 @@ def build_phase2_status(
                         "quality_reference_admission_row_count"
                     ),
                     "path": registration_admission.get("path"),
+                },
+            }
+        )
+    if quality_saturation is not None:
+        checks.append(
+            {
+                "name": "quality_saturation_no_rejections",
+                "passed": quality_saturation.get("passed") is True,
+                "evidence": {
+                    "status": quality_saturation.get("status"),
+                    "frame_count": quality_saturation.get("frame_count"),
+                    "saturated_frame_count": quality_saturation.get("saturated_frame_count"),
+                    "quality_gate_saturation_rejected_count": quality_saturation.get(
+                        "quality_gate_saturation_rejected_count"
+                    ),
+                    "max_saturation_fraction": quality_saturation.get(
+                        "max_saturation_fraction"
+                    ),
+                    "max_saturation_fraction_policy": quality_saturation.get(
+                        "max_saturation_fraction_policy"
+                    ),
+                    "worst_frame_id": quality_saturation.get("worst_frame_id"),
+                    "rejected_frame_ids": quality_saturation.get("rejected_frame_ids"),
+                    "path": quality_saturation.get("path"),
                 },
             }
         )
@@ -4530,6 +4667,7 @@ def build_phase2_status(
         "pipeline_contract": pipeline,
         "stack_engine_contract": stack_engine,
         "registration_admission": registration_admission,
+        "quality_saturation": quality_saturation,
         "resident_winsorized_benchmark_audit": winsorized_audit,
         "resident_winsorized_sweep_audit": winsorized_sweep_audit,
         "release_decision": decision,
@@ -4550,6 +4688,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     pipeline = payload.get("pipeline_contract") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
     registration_admission = payload.get("registration_admission") or {}
+    quality_saturation = payload.get("quality_saturation") or {}
     winsorized_audit = payload.get("resident_winsorized_benchmark_audit") or {}
     winsorized_sweep_audit = payload.get("resident_winsorized_sweep_audit") or {}
     decision = payload.get("release_decision") or {}
@@ -4672,6 +4811,39 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{registration_admission.get('quality_reference_admission_row_count')} "
                     f"quality_rejected={registration_admission.get('quality_rejected_row_count')}"
                 ),
+            ]
+        )
+    if quality_saturation:
+        lines.extend(
+            [
+                "",
+                "## Quality Saturation",
+                "",
+                (
+                    "- Quality saturation: "
+                    f"{quality_saturation.get('status')} "
+                    f"passed={quality_saturation.get('passed')}"
+                ),
+                (
+                    "- Frames: "
+                    f"total={quality_saturation.get('frame_count')} "
+                    f"saturated={quality_saturation.get('saturated_frame_count')} "
+                    "saturation_rejected="
+                    f"{quality_saturation.get('quality_gate_saturation_rejected_count')}"
+                ),
+                (
+                    "- Saturation fraction: "
+                    f"max={quality_saturation.get('max_saturation_fraction')} "
+                    f"mean={quality_saturation.get('mean_saturation_fraction')} "
+                    f"policy={quality_saturation.get('max_saturation_fraction_policy')}"
+                ),
+                (
+                    "- Saturation threshold/source: "
+                    f"level={quality_saturation.get('saturation_level')} "
+                    f"sources={quality_saturation.get('saturation_sources')}"
+                ),
+                f"- Worst frame: {quality_saturation.get('worst_frame_id')}",
+                f"- Rejected frames: {quality_saturation.get('rejected_frame_ids')}",
             ]
         )
     if doctor:
@@ -6705,6 +6877,61 @@ def build_phase2_status_compare(
             },
         ),
         _compare_check(
+            "quality_saturation_no_rejections_preserved",
+            _status_value(baseline, "quality_saturation", "passed") is not True
+            or _status_value(candidate, "quality_saturation", "passed") is True,
+            baseline={
+                "status": _status_value(baseline, "quality_saturation", "status"),
+                "passed": _status_value(baseline, "quality_saturation", "passed"),
+                "frame_count": _status_value(baseline, "quality_saturation", "frame_count"),
+                "saturated_frame_count": _status_value(
+                    baseline,
+                    "quality_saturation",
+                    "saturated_frame_count",
+                ),
+                "quality_gate_saturation_rejected_count": _status_value(
+                    baseline,
+                    "quality_saturation",
+                    "quality_gate_saturation_rejected_count",
+                ),
+                "max_saturation_fraction": _status_value(
+                    baseline,
+                    "quality_saturation",
+                    "max_saturation_fraction",
+                ),
+                "worst_frame_id": _status_value(
+                    baseline,
+                    "quality_saturation",
+                    "worst_frame_id",
+                ),
+            },
+            candidate={
+                "status": _status_value(candidate, "quality_saturation", "status"),
+                "passed": _status_value(candidate, "quality_saturation", "passed"),
+                "frame_count": _status_value(candidate, "quality_saturation", "frame_count"),
+                "saturated_frame_count": _status_value(
+                    candidate,
+                    "quality_saturation",
+                    "saturated_frame_count",
+                ),
+                "quality_gate_saturation_rejected_count": _status_value(
+                    candidate,
+                    "quality_saturation",
+                    "quality_gate_saturation_rejected_count",
+                ),
+                "max_saturation_fraction": _status_value(
+                    candidate,
+                    "quality_saturation",
+                    "max_saturation_fraction",
+                ),
+                "worst_frame_id": _status_value(
+                    candidate,
+                    "quality_saturation",
+                    "worst_frame_id",
+                ),
+            },
+        ),
+        _compare_check(
             "cuda_available_preserved",
             _status_value(baseline, "doctor", "cuda_available") is not True
             or _status_value(candidate, "doctor", "cuda_available") is True,
@@ -7535,6 +7762,7 @@ def build_phase2_status_compare(
             ),
             "stack_engine_publication_audit": baseline_publication,
             "registration_admission": _status_value(baseline, "registration_admission"),
+            "quality_saturation": _status_value(baseline, "quality_saturation"),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "acceptance_pipeline_integration_engine_policy": _status_value(
@@ -7613,6 +7841,7 @@ def build_phase2_status_compare(
             ),
             "stack_engine_publication_audit": candidate_publication,
             "registration_admission": _status_value(candidate, "registration_admission"),
+            "quality_saturation": _status_value(candidate, "quality_saturation"),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
             "acceptance_pipeline_integration_engine_policy": _status_value(

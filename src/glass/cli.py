@@ -3565,6 +3565,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         pipeline_contract=args.pipeline_contract,
         stack_engine_contract=args.stack_engine_contract,
         registration_results=args.registration_results,
+        quality_results=args.quality_results,
         resident_winsorized_benchmark_audit=args.resident_winsorized_benchmark_audit,
         resident_winsorized_sweep_audit=args.resident_winsorized_sweep_audit,
         release_decision=args.release_decision,
@@ -3582,6 +3583,11 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
     registration_admission = (
         payload.get("registration_admission")
         if isinstance(payload.get("registration_admission"), dict)
+        else {}
+    )
+    quality_saturation = (
+        payload.get("quality_saturation")
+        if isinstance(payload.get("quality_saturation"), dict)
         else {}
     )
     winsorized_audit = (
@@ -3609,6 +3615,10 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             "publish_preflight_passed": preflight.get("passed"),
             "pipeline_contract_status": pipeline.get("status"),
             "registration_admission_status": registration_admission.get("status"),
+            "quality_saturation_status": quality_saturation.get("status"),
+            "quality_saturation_rejected": quality_saturation.get(
+                "quality_gate_saturation_rejected_count"
+            ),
             "resident_winsorized_benchmark_audit_status": winsorized_audit.get("status"),
             "resident_winsorized_benchmark_audit_passed": winsorized_audit.get("passed"),
             "resident_winsorized_sweep_audit_status": winsorized_sweep_audit.get("status"),
@@ -3680,6 +3690,10 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_status.add_argument(
         "--registration-results",
         help="optional registration_results.json artifact used to summarize reference admission",
+    )
+    phase2_status.add_argument(
+        "--quality-results",
+        help="optional frame_quality.json artifact used to summarize saturation quality evidence",
     )
     phase2_status.add_argument(
         "--resident-winsorized-benchmark-audit",

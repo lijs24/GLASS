@@ -282,6 +282,46 @@ def _write_registration_results(path: Path, *, admission_status: str = "accepted
     )
 
 
+def _write_quality_results(path: Path, *, rejected: bool = False) -> None:
+    bad_status = "rejected" if rejected else "accepted"
+    bad_warnings = (
+        ["saturation_fraction 0.00879 exceeds max_saturation_fraction=0.005"]
+        if rejected
+        else []
+    )
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "quality_gate_policy": {
+                "max_saturation_fraction": 0.005,
+                "saturation_level": 5000.0,
+            },
+            "frame_quality": [
+                {
+                    "frame_id": "F_SAT",
+                    "saturation_fraction": 0.0087890625,
+                    "saturated_pixel_count": 36,
+                    "saturation_level": 5000.0,
+                    "saturation_source": "threshold",
+                    "quality_gate_status": bad_status,
+                    "quality_gate_warnings": bad_warnings,
+                },
+                {
+                    "frame_id": "F_OK",
+                    "saturation_fraction": 0.0,
+                    "saturated_pixel_count": 0,
+                    "saturation_level": 5000.0,
+                    "saturation_source": "threshold",
+                    "quality_gate_status": "accepted",
+                    "quality_gate_warnings": [],
+                },
+            ],
+            "reference_frame_id": "F_OK",
+        },
+    )
+
+
 def _write_resident_winsorized_benchmark_audit(path: Path, *, passed: bool = True) -> None:
     write_json(
         path,
@@ -3285,6 +3325,63 @@ def test_phase2_status_blocks_registration_admission_failure(tmp_path: Path):
     assert "reference frame failed the quality gate" in text
 
 
+def test_phase2_status_surfaces_quality_saturation_summary(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=356)
+    quality = tmp_path / "frame_quality.json"
+    out_md = tmp_path / "phase2.md"
+    _write_quality_results(quality)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        quality_results=quality,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    summary = payload["quality_saturation"]
+    assert payload["status"] == "green"
+    assert summary["status"] == "passed"
+    assert summary["passed"] is True
+    assert summary["frame_count"] == 2
+    assert summary["saturated_frame_count"] == 1
+    assert summary["quality_gate_saturation_rejected_count"] == 0
+    assert summary["worst_frame_id"] == "F_SAT"
+    assert checks["quality_saturation_no_rejections"]["passed"] is True
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert "Quality Saturation" in text
+    assert "Quality saturation: passed passed=True" in text
+    assert "saturation_rejected=0" in text
+
+
+def test_phase2_status_blocks_quality_saturation_rejection(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=356)
+    quality = tmp_path / "frame_quality.json"
+    _write_quality_results(quality, rejected=True)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        quality_results=quality,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    summary = payload["quality_saturation"]
+    assert payload["status"] == "attention_required"
+    assert summary["status"] == "attention_required"
+    assert summary["passed"] is False
+    assert summary["quality_gate_saturation_rejected_count"] == 1
+    assert summary["rejected_frame_ids"] == ["F_SAT"]
+    check = checks["quality_saturation_no_rejections"]
+    assert check["passed"] is False
+    assert check["evidence"]["quality_gate_saturation_rejected_count"] == 1
+
+
 def test_phase2_status_blocks_default_change_without_runtime_repeat(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -3567,6 +3664,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     publish_preflight = tmp_path / "publish_preflight.json"
     publication_audit = tmp_path / "stack_engine_publication_audit.json"
     registration_results = tmp_path / "registration_results.json"
+    quality_results = tmp_path / "frame_quality.json"
     winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
     winsorized_sweep_audit = tmp_path / "resident_winsorized_sweep_audit.json"
     _write_acceptance(acceptance)
@@ -3577,6 +3675,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     _write_publish_preflight(publish_preflight)
     _write_stack_engine_publication_audit(publication_audit)
     _write_registration_results(registration_results)
+    _write_quality_results(quality_results)
     _write_resident_winsorized_benchmark_audit(winsorized_audit)
     _write_resident_winsorized_sweep_audit(winsorized_sweep_audit)
 
@@ -3601,6 +3700,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(publication_audit),
             "--registration-results",
             str(registration_results),
+            "--quality-results",
+            str(quality_results),
             "--resident-winsorized-benchmark-audit",
             str(winsorized_audit),
             "--resident-winsorized-sweep-audit",
@@ -3629,6 +3730,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["stack_engine_publication_audit"]["status"] == "passed"
     assert payload["registration_admission"]["status"] == "accepted"
     assert payload["registration_admission"]["passed"] is True
+    assert payload["quality_saturation"]["status"] == "passed"
+    assert payload["quality_saturation"]["quality_gate_saturation_rejected_count"] == 0
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -3637,6 +3740,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Registration fast path: present" in text
     assert "Registration fast path contract: passed" in text
     assert "Registration admission: accepted passed=True blocked=False" in text
+    assert "Quality saturation: passed passed=True" in text
     assert "Triangle warp batch frames: 188" in text
     assert "Default Route Acceptance" in text
     assert "Route contract passed: True" in text
@@ -5780,6 +5884,52 @@ def test_phase2_status_compare_flags_registration_admission_regression(
     assert check["evidence"]["baseline"]["status"] == "accepted"
     assert check["evidence"]["candidate"]["status"] == "blocked"
     assert payload["candidate"]["registration_admission"]["blocked"] is True
+
+
+def test_phase2_status_compare_flags_quality_saturation_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    baseline_payload = _status_payload(gate=355)
+    baseline_payload["quality_saturation"] = {
+        "status": "passed",
+        "passed": True,
+        "frame_count": 2,
+        "saturated_frame_count": 1,
+        "quality_gate_saturation_rejected_count": 0,
+        "max_saturation_fraction": 0.00878906,
+        "worst_frame_id": "F_SAT",
+    }
+    candidate_payload = _status_payload(gate=356, status="attention_required")
+    candidate_payload["quality_saturation"] = {
+        "status": "attention_required",
+        "passed": False,
+        "frame_count": 2,
+        "saturated_frame_count": 1,
+        "quality_gate_saturation_rejected_count": 1,
+        "max_saturation_fraction": 0.00878906,
+        "worst_frame_id": "F_SAT",
+    }
+    write_json(baseline, baseline_payload)
+    write_json(candidate, candidate_payload)
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    check = checks["quality_saturation_no_rejections_preserved"]
+    assert payload["status"] == "regressed"
+    assert check["passed"] is False
+    assert check["evidence"]["baseline"]["passed"] is True
+    assert check["evidence"]["candidate"]["passed"] is False
+    assert (
+        check["evidence"]["candidate"]["quality_gate_saturation_rejected_count"]
+        == 1
+    )
+    assert payload["candidate"]["quality_saturation"]["status"] == "attention_required"
 
 
 def test_phase2_status_compare_flags_stack_publication_resident_result_regression(
