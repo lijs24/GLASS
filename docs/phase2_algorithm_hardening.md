@@ -4872,6 +4872,27 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 288: Default Promotion StackEngine Publication Audit Guard
+
+- Carry the S2-Gate 287 Phase 2 StackEngine publication-audit handoff into
+  `glass default-promotion-manifest`.
+- Require default-promotion readiness to preserve a passing StackEngine
+  publication-audit artifact when the Phase 2 status is used for default-route
+  promotion.
+- Require the default-promotion manifest to preserve both publication-audit
+  integration engine-policy chain evidence and resident winsorized sweep chain
+  evidence.
+- Block stale Phase 2 status artifacts that still report green status but do
+  not contain Gate287 publication-audit summaries and checks.
+- Surface publication-audit status, failed checks, policy-chain checks, and
+  resident winsorized chain checks in default-promotion JSON and Markdown.
+- Add focused default-promotion tests for ready evidence, missing stale
+  publication-audit evidence, failed policy-chain evidence, and CLI Markdown
+  output.
+- Keep this gate default-promotion scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

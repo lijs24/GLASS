@@ -54,6 +54,10 @@ def _write_phase2_status(
     resident_winsorized_sweep_required_frame_ready: bool = True,
     resident_winsorized_sweep_check_count: int = 27,
     resident_winsorized_sweep_required_frame_count: int = 200,
+    include_stack_publication_audit: bool = True,
+    stack_publication_audit_ready: bool = True,
+    stack_publication_policy_ready: bool = True,
+    stack_publication_resident_winsorized_ready: bool = True,
     include_integration_engine_policy: bool = True,
     acceptance_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_ready: bool = True,
@@ -80,6 +84,13 @@ def _write_phase2_status(
         pipeline_ready
         and acceptance_policy_chain_ready
         and (stack_engine_ready if include_stack_engine_contract else True)
+        and (
+            stack_publication_audit_ready
+            and stack_publication_policy_ready
+            and stack_publication_resident_winsorized_ready
+            if include_stack_publication_audit
+            else True
+        )
         and (
             resident_winsorized_sweep_ready
             and resident_winsorized_sweep_required_frame_ready
@@ -386,6 +397,87 @@ def _write_phase2_status(
                 }
             ],
         }
+    if include_stack_publication_audit:
+        publication_failed_checks = []
+        if not stack_publication_audit_ready:
+            publication_failed_checks.append("stack_engine_publication_audit_passed")
+        if not stack_publication_policy_ready:
+            publication_failed_checks.append(
+                "stack_engine_publication_audit_policy_chain_passed"
+            )
+        if not stack_publication_resident_winsorized_ready:
+            publication_failed_checks.append(
+                "stack_engine_publication_audit_resident_winsorized_chain_passed"
+            )
+        payload["stack_engine_publication_audit"] = {
+            "path": "C:/glass_runs/run/stack_engine_publication_audit.json",
+            "status": "passed" if stack_publication_audit_ready else "blocked",
+            "passed": stack_publication_audit_ready,
+            "recommendation": "publication_chain_ready"
+            if stack_publication_audit_ready
+            else "fix_stack_engine_publication_chain",
+            "check_count": 21,
+            "failed_check_count": len(publication_failed_checks),
+            "failed_checks": publication_failed_checks,
+            "publish_preflight_integration_engine_policy": {
+                "status": "publish_preflight_ready"
+                if stack_publication_policy_ready
+                else "blocked",
+                "ready": stack_publication_policy_ready,
+            },
+            "phase2_publish_preflight_integration_engine_policy": {
+                "status": "publish_preflight_ready"
+                if stack_publication_policy_ready
+                else "blocked",
+                "ready": stack_publication_policy_ready,
+            },
+            "publish_preflight_integration_engine_policy_ready": (
+                stack_publication_policy_ready
+            ),
+            "phase2_publish_preflight_integration_engine_policy_ready": (
+                stack_publication_policy_ready
+            ),
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight": (
+                stack_publication_policy_ready
+            ),
+            "publish_preflight_resident_winsorized_sweep": {
+                "status": "publish_preflight_ready"
+                if stack_publication_resident_winsorized_ready
+                else "blocked",
+                "ready": stack_publication_resident_winsorized_ready,
+            },
+            "phase2_publish_preflight_resident_winsorized_sweep": {
+                "status": "publish_preflight_ready"
+                if stack_publication_resident_winsorized_ready
+                else "blocked",
+                "ready": stack_publication_resident_winsorized_ready,
+            },
+            "publish_preflight_resident_winsorized_sweep_ready": (
+                stack_publication_resident_winsorized_ready
+            ),
+            "phase2_publish_preflight_resident_winsorized_sweep_ready": (
+                stack_publication_resident_winsorized_ready
+            ),
+            "phase2_publish_preflight_resident_winsorized_matches_publish_preflight": (
+                stack_publication_resident_winsorized_ready
+            ),
+        }
+        payload["checks"].extend(
+            [
+                {
+                    "name": "stack_engine_publication_audit_passed",
+                    "passed": stack_publication_audit_ready,
+                },
+                {
+                    "name": "stack_engine_publication_audit_policy_chain_passed",
+                    "passed": stack_publication_policy_ready,
+                },
+                {
+                    "name": "stack_engine_publication_audit_resident_winsorized_chain_passed",
+                    "passed": stack_publication_resident_winsorized_ready,
+                },
+            ]
+        )
     if include_default_route:
         payload["default_route_acceptance"] = {
             "path": "C:/glass_runs/run/default_route_acceptance.json",
@@ -472,6 +564,14 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["resident_winsorized_sweep_audit_passed"] is True
     assert checks["resident_winsorized_sweep_required_frame_passed"] is True
     assert checks["resident_winsorized_sweep_check_count"] is True
+    assert checks["stack_engine_publication_audit_passed"] is True
+    assert checks["stack_engine_publication_policy_chain_passed"] is True
+    assert checks["stack_engine_publication_resident_winsorized_chain_passed"] is True
+    assert payload["stack_engine_publication_audit"]["ready"] is True
+    assert (
+        payload["stack_engine_publication_audit"]["publish_preflight_policy_ready"]
+        is True
+    )
     assert payload["resident_winsorized_sweep_audit"]["required_frame_count"] == 200
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
 
@@ -805,6 +905,80 @@ def test_default_promotion_manifest_blocks_failed_resident_winsorized_sweep(
     }
 
 
+def test_default_promotion_manifest_blocks_missing_publication_audit(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        include_stack_publication_audit=False,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" not in payload["failed_checks"]
+    assert "stack_engine_publication_audit_passed" in payload["failed_checks"]
+    assert "stack_engine_publication_policy_chain_passed" in payload["failed_checks"]
+    assert (
+        "stack_engine_publication_resident_winsorized_chain_passed"
+        in payload["failed_checks"]
+    )
+    assert payload["stack_engine_publication_audit"]["present"] is False
+    assert checks["stack_engine_publication_audit_passed"]["evidence"] == {
+        "present": False,
+        "status": None,
+        "passed": None,
+        "phase2_check_passed": None,
+        "failed_checks": [],
+    }
+
+
+def test_default_promotion_manifest_blocks_failed_publication_policy_chain(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        stack_publication_audit_ready=False,
+        stack_publication_policy_ready=False,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "stack_engine_publication_audit_passed" in payload["failed_checks"]
+    assert "stack_engine_publication_policy_chain_passed" in payload["failed_checks"]
+    assert (
+        "stack_engine_publication_resident_winsorized_chain_passed"
+        not in payload["failed_checks"]
+    )
+    assert payload["stack_engine_publication_audit"]["ready"] is False
+    assert checks["stack_engine_publication_policy_chain_passed"]["evidence"][
+        "publish_preflight_policy_ready"
+    ] is False
+    assert checks["stack_engine_publication_policy_chain_passed"]["evidence"][
+        "policy_agreement"
+    ] is False
+
+
 def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path) -> None:
     decision = tmp_path / "decision.json"
     phase2 = tmp_path / "phase2.json"
@@ -851,4 +1025,7 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "Default promotion: `ready` ready=`True` blockers=`0`" in markdown_text
     assert "Resident Winsorized Sweep" in markdown_text
     assert "Required frame count: `200`" in markdown_text
+    assert "StackEngine Publication Audit" in markdown_text
+    assert "Policy chain: raw=`True` phase2=`True` agreement=`True`" in markdown_text
+    assert "Resident winsorized chain: raw=`True` phase2=`True` agreement=`True`" in markdown_text
     assert "Route contract passed: `True`" in markdown_text
