@@ -5140,6 +5140,26 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 300: Release Decision Publication Runtime Default Guard
+
+- Carry the S2-Gate 299 StackEngine publication-audit runtime-default handoff
+  into `glass release-promotion-decision`.
+- Allow existing release-decision workflows to remain usable without the new
+  optional publication-audit input, but require the handoff when
+  `--stack-engine-publication-audit` is supplied.
+- Block release-candidate/default-change readiness when the supplied
+  publication-audit artifact is stale, lacks publish-preflight runtime-default
+  layers/checks, or reports failed raw/Phase2 runtime-default evidence.
+- Surface publication runtime-default status, raw/Phase2 readiness,
+  Phase2-check state, legacy master drift, failed output drift, and failed
+  publication checks in release-decision JSON and Markdown.
+- Add focused release-decision tests for passing evidence, failed raw
+  publication runtime-default evidence, stale missing runtime-default evidence,
+  and CLI Markdown output.
+- Keep this gate release-decision scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

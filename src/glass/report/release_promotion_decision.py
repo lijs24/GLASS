@@ -374,6 +374,68 @@ def _preflight_evidence(preflight: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_PUBLICATION_RUNTIME_DEFAULT_CHECKS = (
+    "publish_preflight_stack_engine_runtime_default_ready",
+    "phase2_publish_preflight_stack_engine_runtime_default_ready",
+    "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight",
+)
+
+
+def _publication_audit_runtime_default_evidence(
+    publication_audit: dict[str, Any],
+) -> dict[str, Any]:
+    if not publication_audit:
+        return {"present": False, "status": None, "passed": None}
+    checks = {
+        name: _pipeline_contract_check_state(publication_audit, name)
+        for name in _PUBLICATION_RUNTIME_DEFAULT_CHECKS
+    }
+    layers = (
+        publication_audit.get("layers")
+        if isinstance(publication_audit.get("layers"), dict)
+        else {}
+    )
+    raw_layer = (
+        layers.get("publish_preflight_stack_engine_runtime_default")
+        if isinstance(layers.get("publish_preflight_stack_engine_runtime_default"), dict)
+        else {}
+    )
+    phase2_layer = (
+        layers.get("phase2_publish_preflight_stack_engine_runtime_default")
+        if isinstance(
+            layers.get("phase2_publish_preflight_stack_engine_runtime_default"),
+            dict,
+        )
+        else {}
+    )
+    checks_passed = all(value is True for value in checks.values())
+    return {
+        "present": True,
+        "artifact_type": publication_audit.get("artifact_type"),
+        "status": publication_audit.get("status"),
+        "passed": publication_audit.get("passed"),
+        "recommendation": publication_audit.get("recommendation"),
+        "failed_checks": publication_audit.get("failed_checks") or [],
+        "checks": checks,
+        "checks_passed": checks_passed,
+        "raw_ready": raw_layer.get("ready"),
+        "raw_matrix_status": raw_layer.get("matrix_acceptance_status"),
+        "raw_pipeline_status": raw_layer.get("matrix_pipeline_status"),
+        "raw_legacy_master_count": raw_layer.get("matrix_acceptance_legacy_master_count"),
+        "raw_failed_output_count": raw_layer.get("matrix_pipeline_failed_output_count"),
+        "phase2_ready": phase2_layer.get("ready"),
+        "phase2_check_passed": phase2_layer.get("phase2_check_passed"),
+        "phase2_matrix_status": phase2_layer.get("matrix_acceptance_status"),
+        "phase2_pipeline_status": phase2_layer.get("matrix_pipeline_status"),
+        "phase2_legacy_master_count": phase2_layer.get(
+            "matrix_acceptance_legacy_master_count"
+        ),
+        "phase2_failed_output_count": phase2_layer.get(
+            "matrix_pipeline_failed_output_count"
+        ),
+    }
+
+
 def build_release_promotion_decision(
     *,
     acceptance_audit: str | Path,
@@ -381,6 +443,7 @@ def build_release_promotion_decision(
     pipeline_contract: str | Path | None = None,
     runtime_compare: str | Path | None = None,
     repeat_preflight: str | Path | None = None,
+    stack_engine_publication_audit: str | Path | None = None,
     min_speedup: float | None = None,
     min_runtime_runs: int = 2,
     max_elapsed_ratio_vs_best: float = 1.25,
@@ -391,6 +454,7 @@ def build_release_promotion_decision(
     pipeline = _read_json_object(pipeline_contract)
     runtime = _read_json_object(runtime_compare)
     preflight = _read_json_object(repeat_preflight)
+    publication_audit = _read_json_object(stack_engine_publication_audit)
     speedup_summary = acceptance.get("speedup_summary") if isinstance(acceptance.get("speedup_summary"), dict) else {}
     speedup = _number(speedup_summary.get("speedup_vs_wbpp"))
     required_speedup = float(min_speedup if min_speedup is not None else speedup_summary.get("min_speedup") or 2.0)
@@ -404,6 +468,9 @@ def build_release_promotion_decision(
         ignore_warmup_runs=ignore_warmup_runs,
     )
     preflight_evidence = _preflight_evidence(preflight)
+    publication_runtime_default = _publication_audit_runtime_default_evidence(
+        publication_audit
+    )
 
     checks = [
         _check(
@@ -547,6 +614,19 @@ def build_release_promotion_decision(
             "Default changes require at least two stable runtime observations; release-candidate status can pass without this.",
         ),
     ]
+    if stack_engine_publication_audit is not None:
+        checks.append(
+            _check(
+                "stack_engine_publication_runtime_default_passed",
+                publication_runtime_default.get("status") == "passed"
+                and publication_runtime_default.get("passed") is True
+                and publication_runtime_default.get("checks_passed") is True
+                and publication_runtime_default.get("raw_ready") is True
+                and publication_runtime_default.get("phase2_ready") is True
+                and publication_runtime_default.get("phase2_check_passed") is True,
+                publication_runtime_default,
+            )
+        )
     release_blocking_names = {
         "acceptance_audit_passed",
         "speedup_threshold",
@@ -562,6 +642,8 @@ def build_release_promotion_decision(
         "stack_engine_default_ready",
         "stack_engine_scope_all",
     }
+    if stack_engine_publication_audit is not None:
+        release_blocking_names.add("stack_engine_publication_runtime_default_passed")
     release_candidate_ready = all(
         item["passed"] for item in checks if str(item.get("name")) in release_blocking_names
     )
@@ -597,9 +679,13 @@ def build_release_promotion_decision(
             "pipeline_contract": None if pipeline_contract is None else str(pipeline_contract),
             "runtime_compare": None if runtime_compare is None else str(runtime_compare),
             "repeat_preflight": None if repeat_preflight is None else str(repeat_preflight),
+            "stack_engine_publication_audit": None
+            if stack_engine_publication_audit is None
+            else str(stack_engine_publication_audit),
         },
         "speedup": {"actual": speedup, "required_min": required_speedup},
         "pipeline_handoff": pipeline_handoff,
+        "stack_engine_publication_runtime_default": publication_runtime_default,
         "runtime_repeat": runtime_evidence,
         "repeat_preflight": preflight_evidence,
         "checks": checks,
@@ -629,6 +715,11 @@ def _markdown(payload: dict[str, Any]) -> str:
         lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
     runtime = payload.get("runtime_repeat") if isinstance(payload.get("runtime_repeat"), dict) else {}
     pipeline = payload.get("pipeline_handoff") if isinstance(payload.get("pipeline_handoff"), dict) else {}
+    publication = (
+        payload.get("stack_engine_publication_runtime_default")
+        if isinstance(payload.get("stack_engine_publication_runtime_default"), dict)
+        else {}
+    )
     lines.extend(
         [
             "",
@@ -642,6 +733,23 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Pixel verification enabled: `{pipeline.get('pixel_verification_enabled')}`",
             f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
             f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
+            "",
+        ]
+    )
+    lines.extend(
+        [
+            "",
+            "## StackEngine Publication Runtime Default",
+            "",
+            f"- Present: `{publication.get('present')}`",
+            f"- Status: `{publication.get('status')}`",
+            f"- Passed: `{publication.get('passed')}`",
+            f"- Checks passed: `{publication.get('checks_passed')}`",
+            f"- Raw ready: `{publication.get('raw_ready')}`",
+            f"- Phase2 ready: `{publication.get('phase2_ready')}`",
+            f"- Phase2 check: `{publication.get('phase2_check_passed')}`",
+            f"- Raw drift: legacy=`{publication.get('raw_legacy_master_count')}` failed_outputs=`{publication.get('raw_failed_output_count')}`",
+            f"- Phase2 drift: legacy=`{publication.get('phase2_legacy_master_count')}` failed_outputs=`{publication.get('phase2_failed_output_count')}`",
             "",
         ]
     )

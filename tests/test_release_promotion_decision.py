@@ -348,6 +348,73 @@ def _write_runtime_compare_with_slow_warmup(path: Path) -> None:
     )
 
 
+def _write_publication_audit(
+    path: Path,
+    *,
+    passed: bool = True,
+    include_runtime_default: bool = True,
+    raw_ready: bool = True,
+    phase2_ready: bool = True,
+) -> None:
+    artifact_passed = passed and (raw_ready and phase2_ready if include_runtime_default else True)
+    runtime_status = "passed" if raw_ready else "failed"
+    phase2_status = "passed" if phase2_ready else "failed"
+    layers = {}
+    checks = []
+    if include_runtime_default:
+        layers = {
+            "publish_preflight_stack_engine_runtime_default": {
+                "status": "publish_preflight_ready" if raw_ready else "blocked",
+                "ready": raw_ready,
+                "matrix_acceptance_status": runtime_status,
+                "matrix_pipeline_status": runtime_status,
+                "matrix_acceptance_legacy_master_count": 0 if raw_ready else 1,
+                "matrix_pipeline_failed_output_count": 0 if raw_ready else 1,
+            },
+            "phase2_publish_preflight_stack_engine_runtime_default": {
+                "status": "publish_preflight_ready" if phase2_ready else "blocked",
+                "ready": phase2_ready,
+                "phase2_check_passed": phase2_ready,
+                "matrix_acceptance_status": phase2_status,
+                "matrix_pipeline_status": phase2_status,
+                "matrix_acceptance_legacy_master_count": 0 if phase2_ready else 1,
+                "matrix_pipeline_failed_output_count": 0 if phase2_ready else 1,
+            },
+        }
+        checks = [
+            {
+                "name": "publish_preflight_stack_engine_runtime_default_ready",
+                "passed": raw_ready,
+            },
+            {
+                "name": "phase2_publish_preflight_stack_engine_runtime_default_ready",
+                "passed": phase2_ready,
+            },
+            {
+                "name": (
+                    "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight"
+                ),
+                "passed": raw_ready and phase2_ready,
+            },
+        ]
+    write_json(
+        path,
+        {
+            "artifact_type": "stack_engine_publication_audit",
+            "status": "passed" if artifact_passed else "blocked",
+            "passed": artifact_passed,
+            "recommendation": "publication_chain_ready"
+            if artifact_passed
+            else "fix_stack_engine_publication_chain",
+            "layers": layers,
+            "checks": checks,
+            "failed_checks": [
+                str(item["name"]) for item in checks if item.get("passed") is not True
+            ],
+        },
+    )
+
+
 def test_release_promotion_decision_requires_repeat_for_default_change(tmp_path: Path) -> None:
     acceptance = tmp_path / "acceptance.json"
     stack = tmp_path / "stack.json"
@@ -389,6 +456,94 @@ def test_release_promotion_decision_accepts_stable_runtime_compare(tmp_path: Pat
     assert payload["recommendation"] == "promote_default_candidate"
     assert payload["pipeline_handoff"]["source"] == "acceptance_pipeline_contract"
     assert payload["runtime_repeat"]["elapsed_ratio_vs_best"] == 19.0 / 18.0
+
+
+def test_release_promotion_decision_accepts_publication_runtime_default(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = payload["stack_engine_publication_runtime_default"]
+    assert payload["release_candidate_ready"] is True
+    assert payload["default_change_ready"] is True
+    assert checks["stack_engine_publication_runtime_default_passed"]["passed"] is True
+    assert evidence["checks_passed"] is True
+    assert evidence["raw_ready"] is True
+    assert evidence["phase2_ready"] is True
+    assert evidence["phase2_check_passed"] is True
+
+
+def test_release_promotion_decision_blocks_failed_publication_runtime_default(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication, raw_ready=False)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = payload["stack_engine_publication_runtime_default"]
+    assert payload["passed"] is False
+    assert payload["release_candidate_ready"] is False
+    assert payload["default_change_ready"] is False
+    assert payload["recommendation"] == "fix_release_blockers"
+    assert checks["stack_engine_publication_runtime_default_passed"]["passed"] is False
+    assert evidence["checks"]["publish_preflight_stack_engine_runtime_default_ready"] is False
+    assert evidence["raw_ready"] is False
+    assert evidence["raw_legacy_master_count"] == 1
+    assert evidence["raw_failed_output_count"] == 1
+
+
+def test_release_promotion_decision_blocks_stale_publication_runtime_default(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(publication, include_runtime_default=False)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = payload["stack_engine_publication_runtime_default"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_runtime_default_passed"]["passed"] is False
+    assert evidence["status"] == "passed"
+    assert evidence["checks_passed"] is False
+    assert evidence["checks"] == {
+        "publish_preflight_stack_engine_runtime_default_ready": None,
+        "phase2_publish_preflight_stack_engine_runtime_default_ready": None,
+        "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight": None,
+    }
 
 
 def test_release_promotion_decision_can_ignore_explicit_warmup_run(tmp_path: Path) -> None:
@@ -530,9 +685,11 @@ def test_release_promotion_decision_blocks_sample_accounting_closure_drift(
 
 def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_path: Path) -> None:
     acceptance = tmp_path / "acceptance.json"
+    publication = tmp_path / "publication_audit.json"
     out = tmp_path / "decision.json"
     markdown = tmp_path / "decision.md"
     _write_acceptance(acceptance)
+    _write_publication_audit(publication)
 
     assert (
         main(
@@ -540,6 +697,8 @@ def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_pat
                 "release-promotion-decision",
                 "--acceptance-audit",
                 str(acceptance),
+                "--stack-engine-publication-audit",
+                str(publication),
                 "--out",
                 str(out),
                 "--markdown",
@@ -552,6 +711,7 @@ def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_pat
     markdown_text = markdown.read_text(encoding="utf-8")
     assert "Release Promotion Decision" in markdown_text
     assert "Pipeline DQ Handoff" in markdown_text
+    assert "StackEngine Publication Runtime Default" in markdown_text
 
     strict = tmp_path / "strict.json"
     assert (

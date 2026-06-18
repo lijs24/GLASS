@@ -1899,6 +1899,7 @@ def cmd_release_promotion_decision(args: argparse.Namespace) -> int:
         pipeline_contract=args.pipeline_contract,
         runtime_compare=args.runtime_compare,
         repeat_preflight=args.repeat_preflight,
+        stack_engine_publication_audit=args.stack_engine_publication_audit,
         min_speedup=args.min_speedup,
         min_runtime_runs=args.min_runtime_runs,
         max_elapsed_ratio_vs_best=args.max_elapsed_ratio_vs_best,
@@ -4770,6 +4771,10 @@ def build_parser() -> argparse.ArgumentParser:
     release_promotion_decision.add_argument(
         "--repeat-preflight",
         help="optional resident-runtime-repeat-preflight JSON used to explain why repeat benchmarking should wait",
+    )
+    release_promotion_decision.add_argument(
+        "--stack-engine-publication-audit",
+        help="optional stack-engine-publication-audit JSON used to prove final runtime-default publication handoff",
     )
     release_promotion_decision.add_argument("--out", required=True, help="output release promotion decision JSON")
     release_promotion_decision.add_argument("--markdown", help="optional output Markdown summary")
