@@ -1,0 +1,15 @@
+{
+  "abs_diff_p99": 0.002,
+  "candidate_transform": {
+    "applied": true,
+    "offset": 0.0,
+    "scale": 1.0
+  },
+  "comparison_region": {
+    "compared_pixels": 1024,
+    "coverage_fraction": 1.0,
+    "min_coverage": 1.0
+  },
+  "rms_diff": 0.001,
+  "shape_match": true
+}

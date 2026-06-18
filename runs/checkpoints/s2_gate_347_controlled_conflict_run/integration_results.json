@@ -1,0 +1,17 @@
+{
+  "frame_weights": {
+    "conflict": 1.0
+  },
+  "outputs": [
+    {
+      "backend": "cuda_resident_stack",
+      "filter": "H",
+      "frame_count": 1,
+      "master_path": "master.fits",
+      "memory_mode": "resident"
+    }
+  ],
+  "rejection": "winsorized_sigma",
+  "source_stage": "local_normalization",
+  "weighting": "none"
+}

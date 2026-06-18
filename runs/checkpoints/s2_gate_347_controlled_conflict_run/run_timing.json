@@ -1,0 +1,5 @@
+{
+  "backend": "cuda",
+  "memory_mode": "resident",
+  "total_elapsed_s": 10.0
+}

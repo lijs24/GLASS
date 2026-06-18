@@ -1,0 +1,30 @@
+{
+  "comparison": {
+    "max_abs_diff_p99": 0.01,
+    "max_rms_diff": 0.01,
+    "min_coverage_fraction": 0.95
+  },
+  "dataset_requirements": {
+    "active_light_frames": 1,
+    "bias": 0,
+    "dark": 0,
+    "flat": 0,
+    "light": 1
+  },
+  "frame_accounting": {
+    "require_no_integration_conflicts": true,
+    "required": true,
+    "required_final_status_counts": {
+      "integration_conflict": 1
+    },
+    "required_input_light_frames": 1,
+    "required_integrated_frames": 0,
+    "required_registration_accepted_frames": 0,
+    "required_zero_weight_frames": 0
+  },
+  "name": "s2_gate_347_controlled_conflict_contract",
+  "runtime": {
+    "min_speedup_vs_reference": 2.0
+  },
+  "schema_version": 1
+}

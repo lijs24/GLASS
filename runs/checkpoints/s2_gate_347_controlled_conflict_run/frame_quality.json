@@ -1,0 +1,11 @@
+{
+  "frame_quality": [
+    {
+      "frame_id": "conflict",
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "saturation_fraction exceeds limit"
+      ]
+    }
+  ]
+}

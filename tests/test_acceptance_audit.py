@@ -3176,10 +3176,68 @@ def test_acceptance_audit_applies_frame_accounting_contract(tmp_path: Path):
     assert checks["contract_frame_accounting_zero_weight_frames"] is True
     assert checks["contract_frame_accounting_final_status:integrated"] is True
     assert checks["contract_frame_accounting_final_status:zero_weight"] is True
+    assert checks["contract_frame_accounting_no_integration_conflicts"] is True
     assert checks["contract_frame_accounting_matches_integration_weights"] is True
     assert checks["contract_frame_accounting_matches_speedup_summary"] is True
     assert checks["contract_frame_accounting_matches_dq_active_frames"] is True
     assert checks["contract_frame_accounting_matches_registration"] is True
+
+
+def test_acceptance_audit_frame_accounting_contract_catches_integration_conflict(
+    tmp_path: Path,
+):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=38.0,
+        active=193,
+        zero=7,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_dq=True,
+        frame_accounting=True,
+    )
+    accounting = read_json(gp_run / "frame_accounting.json")
+    accounting["frames"][0]["final_status"] = "integration_conflict"
+    accounting["frames"][0]["integration_conflict_count"] = 1
+    accounting["frames"][0]["integration_conflicts"] = [
+        {
+            "stage": "registration",
+            "status": "failed",
+            "reason": "positive integration weight for non-accepted registration frame",
+        }
+    ]
+    accounting["summary"]["integration_conflict_frames"] = 1
+    write_json(gp_run / "frame_accounting.json", accounting)
+    _write_wbpp_result(wbpp, elapsed_s=1092.541)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_dq_contract(contract)
+    _add_frame_accounting_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    no_conflict = checks["contract_frame_accounting_no_integration_conflicts"]
+    assert audit["passed"] is False
+    assert no_conflict["passed"] is False
+    assert no_conflict["evidence"]["conflict_count"] == 1
+    assert no_conflict["evidence"]["conflicts"][0]["frame_id"] == "L0000"
 
 
 def test_acceptance_audit_frame_accounting_contract_catches_mismatch(tmp_path: Path):

@@ -1,0 +1,641 @@
+{
+  "benchmark_contract": {
+    "name": "s2_gate_347_controlled_conflict_contract",
+    "path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\benchmark_contract.json",
+    "schema_version": 1
+  },
+  "checks": [
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 1
+      },
+      "name": "minimum_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 0
+      },
+      "name": "minimum_bias_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 0
+      },
+      "name": "minimum_dark_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 0
+      },
+      "name": "minimum_flat_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 1
+      },
+      "name": "minimum_active_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 10.0,
+        "required": 2.0
+      },
+      "name": "minimum_speedup",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "required": true
+      },
+      "name": "shape_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.0,
+        "required": 0.95
+      },
+      "name": "minimum_coverage_fraction",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.001,
+        "required_max": 0.01
+      },
+      "name": "maximum_rms_diff",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.002,
+        "required_max": 0.01
+      },
+      "name": "maximum_abs_diff_p99",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 1
+      },
+      "name": "contract_minimum_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 0
+      },
+      "name": "contract_minimum_bias_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 0
+      },
+      "name": "contract_minimum_dark_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 0
+      },
+      "name": "contract_minimum_flat_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 1
+      },
+      "name": "contract_minimum_active_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 10.0,
+        "required": 2.0
+      },
+      "name": "contract_minimum_speedup_vs_reference",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.001,
+        "required_max": 0.01
+      },
+      "name": "contract_max_rms_diff",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.002,
+        "required_max": 0.01
+      },
+      "name": "contract_max_abs_diff_p99",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.0,
+        "required": 0.95
+      },
+      "name": "contract_min_coverage_fraction",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "exists": true,
+        "path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\frame_accounting.json"
+      },
+      "name": "contract_frame_accounting_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required": 1
+      },
+      "name": "contract_frame_accounting_input_light_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0,
+        "required": 0
+      },
+      "name": "contract_frame_accounting_integrated_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0,
+        "required": 0
+      },
+      "name": "contract_frame_accounting_zero_weight_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0,
+        "required": 0
+      },
+      "name": "contract_frame_accounting_registration_accepted_frames",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "calculated_from_rows": 1,
+        "required": 1
+      },
+      "name": "contract_frame_accounting_final_status:integration_conflict",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "conflict_count": 1,
+        "conflicts": [
+          {
+            "conflicts": [
+              {
+                "reason": "positive integration weight for quality-rejected frame",
+                "stage": "quality",
+                "status": "rejected"
+              },
+              {
+                "reason": "positive integration weight for non-accepted registration frame",
+                "stage": "registration",
+                "status": "quality_rejected"
+              },
+              {
+                "reason": "positive integration weight for non-warped frame",
+                "stage": "warp",
+                "status": "skipped"
+              }
+            ],
+            "final_status": "integration_conflict",
+            "frame_id": "conflict",
+            "integration_weight": 1.0,
+            "local_norm_status": "not_run",
+            "registration_status": "quality_rejected",
+            "warp_status": "skipped"
+          }
+        ]
+      },
+      "name": "contract_frame_accounting_no_integration_conflicts",
+      "note": "",
+      "passed": false
+    }
+  ],
+  "clean_room": {
+    "note": "Acceptance audit consumes GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only.",
+    "status": "compliant"
+  },
+  "compare_json": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\compare.json",
+  "contract_bundle": null,
+  "contract_bundle_schema": null,
+  "dq_provenance": {
+    "contract": null,
+    "record_count": 0,
+    "records": [],
+    "schema_version": 1
+  },
+  "frame_accounting": {
+    "calculated_final_status_counts": {
+      "integration_conflict": 1
+    },
+    "exception_frames": [
+      {
+        "filter": "H",
+        "final_status": "integration_conflict",
+        "frame_id": "conflict",
+        "input_path": "light/conflict.fits",
+        "integration_status": "used",
+        "integration_weight": 1.0,
+        "local_norm_status": "not_run",
+        "primary_reason": "positive integration weight for quality-rejected frame",
+        "primary_stage": "quality",
+        "quality_gate_status": "rejected",
+        "reason_count": 3,
+        "registration_status": "quality_rejected",
+        "warning_count": 1,
+        "warp_status": "skipped"
+      }
+    ],
+    "exception_summary": {
+      "count": 1,
+      "final_status_counts": {
+        "integration_conflict": 1
+      },
+      "primary_stage_counts": {
+        "quality": 1
+      }
+    },
+    "exists": true,
+    "frame_count": 1,
+    "integration_conflict_count": 1,
+    "integration_conflicts": [
+      {
+        "conflicts": [
+          {
+            "reason": "positive integration weight for quality-rejected frame",
+            "stage": "quality",
+            "status": "rejected"
+          },
+          {
+            "reason": "positive integration weight for non-accepted registration frame",
+            "stage": "registration",
+            "status": "quality_rejected"
+          },
+          {
+            "reason": "positive integration weight for non-warped frame",
+            "stage": "warp",
+            "status": "skipped"
+          }
+        ],
+        "final_status": "integration_conflict",
+        "frame_id": "conflict",
+        "integration_weight": 1.0,
+        "local_norm_status": "not_run",
+        "registration_status": "quality_rejected",
+        "warp_status": "skipped"
+      }
+    ],
+    "integration_source_stage": "local_normalization",
+    "integration_weight_counts": {
+      "invalid": 0,
+      "positive": 1,
+      "total": 1,
+      "zero": 0
+    },
+    "path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\frame_accounting.json",
+    "registration_counts": {
+      "accepted": 0,
+      "status_counts": {
+        "quality_rejected": 1
+      },
+      "total": 1,
+      "zero_weight_statuses": 1
+    },
+    "schema_version": 1,
+    "sources": {
+      "calibration": false,
+      "integration": true,
+      "local_norm": false,
+      "plan": true,
+      "quality": true,
+      "registration": true,
+      "resident": true,
+      "warp": true
+    },
+    "summary": {
+      "calibrated_frames": 0,
+      "calibration_artifact_type": null,
+      "calibration_master_count": 0,
+      "exception_frames": 1,
+      "final_status_counts": {
+        "integration_conflict": 1
+      },
+      "input_light_frames": 1,
+      "integrated_frames": 0,
+      "integration_conflict_frames": 1,
+      "not_integrated_frames": 0,
+      "quality_accepted_frames": 0,
+      "quality_rejected_frames": 1,
+      "registration_accepted_frames": 0,
+      "resident_calibrated_frames": 0,
+      "resident_calibrated_light_ledger_rows": 0,
+      "resident_native_calibration_artifact": false,
+      "warp_accepted_frames": 0,
+      "warp_skipped_frames": 1,
+      "zero_weight_frames": 0
+    }
+  },
+  "frame_type_counts": {
+    "bias": 1,
+    "dark": 1,
+    "flat": 1,
+    "light": 1
+  },
+  "glass_run": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run",
+  "manifest_path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\manifest.json",
+  "native_guardrails_bundle": null,
+  "optimization_guidance": {
+    "exception_context": {
+      "count": 1,
+      "dominant_stage": "quality",
+      "final_status_counts": {
+        "integration_conflict": 1
+      },
+      "note": "Exception frames explain active-frame count drift; timing priorities remain based on wall-clock stages.",
+      "primary_stage_counts": {
+        "quality": 1
+      },
+      "sample_frame_ids": [
+        "conflict"
+      ]
+    },
+    "primary_target": null,
+    "schema_version": 1,
+    "stage_timing_rows": [],
+    "targets": []
+  },
+  "output_numerical_drifts": [],
+  "passed": false,
+  "performance_regression": null,
+  "pipeline_contract": null,
+  "release_contract_evidence": {
+    "pipeline_contract": {
+      "benchmark_check_count": 0,
+      "checks": [],
+      "direct_check_count": 0,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "integration_default_engine_policy": null,
+      "integration_engine_policy": {
+        "check_name": "integration_default_engine_policy",
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "output_count": 0,
+        "resident_count": 0,
+        "rows": [],
+        "status": "not_requested"
+      },
+      "integration_engine_policy_failed_count": 0,
+      "integration_engine_policy_failed_items": [],
+      "integration_engine_policy_non_resident_count": 0,
+      "integration_engine_policy_status": "not_requested",
+      "integration_sample_accounting_closure": null,
+      "passed_check_count": 0,
+      "pipeline_contract_audit_type": null,
+      "pipeline_contract_check_count": 0,
+      "pipeline_contract_passed": null,
+      "pipeline_contract_path": null,
+      "pipeline_contract_status": null,
+      "rejection_sample_accounting": {
+        "accounted_output_count": 0,
+        "check_name": "integration_rejection_sample_counts_match_maps",
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "output_count": 0,
+        "pixel_verification_enabled": false,
+        "required_count": 0,
+        "rows": [],
+        "status": "not_requested",
+        "verified_count": 0
+      },
+      "required_by_benchmark_contract": false,
+      "runtime_default": {
+        "check_name": "stack_engine_runtime_default_path",
+        "check_passed": null,
+        "check_present": false,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_master_count": 0,
+        "failed_masters": [],
+        "failed_output_count": 0,
+        "failed_outputs": [],
+        "integration_output_count": 0,
+        "integration_resident_count": 0,
+        "integration_stack_engine_default_count": 0,
+        "legacy_master_count": 0,
+        "master_count": 0,
+        "master_resident_count": 0,
+        "master_stack_engine_count": 0,
+        "rows": {
+          "masters": [],
+          "outputs": []
+        },
+        "status": "not_requested"
+      },
+      "sample_accounting_closure": {
+        "check_name": "integration_sample_accounting_closure",
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "output_count": 0,
+        "present_count": 0,
+        "required_count": 0,
+        "rows": [],
+        "status": "not_requested"
+      },
+      "sample_accounting_closure_failed_count": 0,
+      "sample_accounting_closure_failed_items": [],
+      "sample_accounting_closure_present_count": 0,
+      "sample_accounting_closure_status": "not_requested",
+      "stack_engine_runtime_default": null,
+      "stack_engine_runtime_default_failed_master_count": 0,
+      "stack_engine_runtime_default_failed_masters": [],
+      "stack_engine_runtime_default_failed_output_count": 0,
+      "stack_engine_runtime_default_failed_outputs": [],
+      "stack_engine_runtime_default_legacy_master_count": 0,
+      "stack_engine_runtime_default_status": "not_requested",
+      "status": "not_requested"
+    },
+    "resident_registration_fastpath": {
+      "artifact_count": 0,
+      "available": false,
+      "checks": [],
+      "exists": true,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "mode": null,
+      "passed_check_count": 0,
+      "path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\resident_artifacts.json",
+      "required_by_benchmark_contract": false,
+      "resident_io_pipeline_warp_copy_mode": null,
+      "resident_io_pipeline_warp_scratch_bytes": null,
+      "resident_warp_copy_mode": null,
+      "resident_warp_scratch_bytes": null,
+      "source": "resident_artifacts_json",
+      "status": "not_requested",
+      "triangle_descriptor_fit_batch": null,
+      "triangle_descriptor_fit_batch_mode": null,
+      "triangle_pixel_refine_batch": null,
+      "triangle_pixel_refine_batch_metric_mode": null,
+      "triangle_pixel_refine_batch_mode": null,
+      "triangle_warp_batch": null,
+      "triangle_warp_batch_frame_count": null,
+      "triangle_warp_batch_mode": null
+    },
+    "stack_engine_default_promotion": {
+      "adoption_recommendation": null,
+      "benchmark_check_count": 0,
+      "checks": [],
+      "default_promotion_blocker_count": null,
+      "default_promotion_gap_count": null,
+      "default_promotion_ready": null,
+      "default_promotion_status": null,
+      "direct_check_count": 0,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "passed_check_count": 0,
+      "required_by_benchmark_contract": false,
+      "stack_engine_contract_audit_type": null,
+      "stack_engine_contract_passed": null,
+      "stack_engine_contract_path": null,
+      "stack_engine_contract_scope": null,
+      "stack_engine_contract_status": null,
+      "status": "not_requested"
+    }
+  },
+  "resident_contracts": {
+    "calibration": null,
+    "result": null
+  },
+  "resident_determinism": null,
+  "resident_registration_fastpath": {
+    "artifact": {
+      "resident_warp_copy_mode": null,
+      "resident_warp_scratch_bytes": null
+    },
+    "artifact_count": 0,
+    "artifact_index": null,
+    "available": false,
+    "exists": true,
+    "path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\resident_artifacts.json",
+    "registration_component_seconds": {},
+    "resident_io_pipeline": {},
+    "resident_registration": {},
+    "schema_version": 1,
+    "source": "resident_artifacts_json"
+  },
+  "schema_version": 1,
+  "speedup_summary": {
+    "clean_room": {
+      "note": "This summary uses GLASS artifacts and user-generated PixInsight/WBPP black-box timing/output metadata only. It does not use PixInsight/WBPP implementation source.",
+      "status": "compliant"
+    },
+    "comparison": {
+      "abs_diff_p50": null,
+      "abs_diff_p90": null,
+      "abs_diff_p99": 0.002,
+      "abs_diff_p999": null,
+      "compare_speedup_vs_reference": null,
+      "compared_pixels": 1024,
+      "coverage_fraction": 1.0,
+      "path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\compare.json",
+      "relative_rms_diff": null,
+      "rms_diff": 0.001,
+      "shape_match": true
+    },
+    "glass": {
+      "backend": "cuda_resident_stack",
+      "command": null,
+      "elapsed_s": 10.0,
+      "frame_count": 1,
+      "master_path": "master.fits",
+      "memory_mode": "resident",
+      "rejection": "winsorized_sigma",
+      "resident_device": "controlled fixture",
+      "resident_estimated_peak_gib": null,
+      "run": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run",
+      "weighted_frame_count": 1,
+      "weighting": "none",
+      "zero_weight_frame_count": 0
+    },
+    "glass_faster": true,
+    "meets_min_speedup": true,
+    "min_speedup": 2.0,
+    "schema_version": 1,
+    "speedup_vs_wbpp": 10.0,
+    "wbpp_blackbox": {
+      "clean_room_note": null,
+      "dataset": "s2_gate_347_controlled_conflict",
+      "elapsed_s": 100.0,
+      "final_master_files": [],
+      "output_dir": null,
+      "reported_wbpp_time": null,
+      "result_path": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\wbpp_result.json"
+    }
+  },
+  "stack_engine_contract": null,
+  "status": "failed",
+  "warp_quality_contract": null,
+  "wbpp_result": "runs\\checkpoints\\s2_gate_347_controlled_conflict_run\\wbpp_result.json"
+}

@@ -509,11 +509,24 @@ def collect_frame_accounting_record(glass_run: str | Path) -> dict[str, Any]:
     registration = _load_json_object_if_present(run_root / "registration_results.json")
     frames = accounting.get("frames") if isinstance(accounting.get("frames"), list) else []
     calculated_final_counts: dict[str, int] = {}
+    integration_conflicts: list[dict[str, Any]] = []
     for row in frames:
         if not isinstance(row, dict):
             continue
         status = str(row.get("final_status") or "unknown")
         calculated_final_counts[status] = calculated_final_counts.get(status, 0) + 1
+        if status == "integration_conflict" or row.get("integration_conflict_count"):
+            integration_conflicts.append(
+                {
+                    "frame_id": row.get("frame_id"),
+                    "final_status": status,
+                    "integration_weight": row.get("integration_weight"),
+                    "registration_status": row.get("registration_status"),
+                    "warp_status": row.get("warp_status"),
+                    "local_norm_status": row.get("local_norm_status"),
+                    "conflicts": row.get("integration_conflicts"),
+                }
+            )
     return {
         "schema_version": 1,
         "path": str(accounting_path),
@@ -527,6 +540,8 @@ def collect_frame_accounting_record(glass_run: str | Path) -> dict[str, Any]:
         else [],
         "frame_count": len(frames),
         "calculated_final_status_counts": calculated_final_counts,
+        "integration_conflict_count": len(integration_conflicts),
+        "integration_conflicts": integration_conflicts,
         "integration_source_stage": accounting.get("integration_source_stage"),
         "sources": accounting.get("sources") if isinstance(accounting.get("sources"), dict) else {},
         "integration_weight_counts": _weight_count_summary(integration.get("frame_weights")),
@@ -1246,6 +1261,23 @@ def _build_frame_accounting_contract_checks(
                     },
                 )
             )
+
+    require_no_conflicts = frame_contract.get(
+        "require_no_integration_conflicts",
+        frame_contract.get("required", False),
+    )
+    if require_no_conflicts:
+        conflict_count = int(record.get("integration_conflict_count") or 0)
+        checks.append(
+            _check(
+                "contract_frame_accounting_no_integration_conflicts",
+                bool(record.get("exists")) and conflict_count == 0,
+                {
+                    "conflict_count": conflict_count,
+                    "conflicts": record.get("integration_conflicts") or [],
+                },
+            )
+        )
 
     if frame_contract.get("match_integration_frame_weights"):
         weights = record.get("integration_weight_counts") or {}

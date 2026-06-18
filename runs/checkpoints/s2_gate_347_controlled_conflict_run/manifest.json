@@ -1,0 +1,21 @@
+{
+  "frames": [
+    {
+      "filter": "H",
+      "frame_type": "light",
+      "id": "conflict"
+    },
+    {
+      "frame_type": "bias",
+      "id": "bias_0"
+    },
+    {
+      "frame_type": "dark",
+      "id": "dark_0"
+    },
+    {
+      "frame_type": "flat",
+      "id": "flat_0"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+glass run --memory-mode resident --resident-registration similarity_cuda_triangle --flat-floor 0.05

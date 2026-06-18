@@ -1,0 +1,10 @@
+{
+  "skipped_frames": [
+    {
+      "frame_id": "conflict",
+      "reason": "registration did not produce an accepted transform",
+      "status": "quality_rejected"
+    }
+  ],
+  "warp_results": []
+}

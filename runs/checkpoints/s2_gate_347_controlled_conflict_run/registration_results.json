@@ -1,0 +1,12 @@
+{
+  "registration_results": [
+    {
+      "frame_id": "conflict",
+      "status": "quality_rejected",
+      "warnings": [
+        "registration skipped because frame failed the quality gate"
+      ]
+    }
+  ],
+  "source_stage": "resident_calibrated_stack"
+}

@@ -1,0 +1,116 @@
+{
+  "artifact": "frame_accounting",
+  "calibration_artifact_type": null,
+  "exception_frames": [
+    {
+      "filter": "H",
+      "final_status": "integration_conflict",
+      "frame_id": "conflict",
+      "input_path": "light/conflict.fits",
+      "integration_status": "used",
+      "integration_weight": 1.0,
+      "local_norm_status": "not_run",
+      "primary_reason": "positive integration weight for quality-rejected frame",
+      "primary_stage": "quality",
+      "quality_gate_status": "rejected",
+      "reason_count": 3,
+      "registration_status": "quality_rejected",
+      "warning_count": 1,
+      "warp_status": "skipped"
+    }
+  ],
+  "exception_summary": {
+    "count": 1,
+    "final_status_counts": {
+      "integration_conflict": 1
+    },
+    "primary_stage_counts": {
+      "quality": 1
+    }
+  },
+  "frames": [
+    {
+      "calibration_backend": null,
+      "calibration_source_stage": null,
+      "calibration_status": "not_run",
+      "filter": "H",
+      "final_status": "integration_conflict",
+      "frame_id": "conflict",
+      "input_path": "light/conflict.fits",
+      "integration_conflict_count": 3,
+      "integration_conflicts": [
+        {
+          "reason": "positive integration weight for quality-rejected frame",
+          "stage": "quality",
+          "status": "rejected"
+        },
+        {
+          "reason": "positive integration weight for non-accepted registration frame",
+          "stage": "registration",
+          "status": "quality_rejected"
+        },
+        {
+          "reason": "positive integration weight for non-warped frame",
+          "stage": "warp",
+          "status": "skipped"
+        }
+      ],
+      "integration_status": "used",
+      "integration_weight": 1.0,
+      "local_norm_status": "not_run",
+      "quality_gate_status": "rejected",
+      "quality_score": null,
+      "reasons": [
+        "saturation_fraction exceeds limit",
+        "registration did not produce an accepted transform",
+        "positive integration weight conflicts with upstream rejection"
+      ],
+      "reference_candidate": null,
+      "registration_source": null,
+      "registration_status": "quality_rejected",
+      "resident_master_path": null,
+      "resident_output_index": null,
+      "resident_stack_index": null,
+      "warnings": [
+        "registration skipped because frame failed the quality gate"
+      ],
+      "warp_reason": "registration did not produce an accepted transform",
+      "warp_status": "skipped"
+    }
+  ],
+  "integration_source_stage": "local_normalization",
+  "resident_native_calibration_artifact": false,
+  "schema_version": 1,
+  "sources": {
+    "calibration": false,
+    "integration": true,
+    "local_norm": false,
+    "plan": true,
+    "quality": true,
+    "registration": true,
+    "resident": true,
+    "warp": true
+  },
+  "summary": {
+    "calibrated_frames": 0,
+    "calibration_artifact_type": null,
+    "calibration_master_count": 0,
+    "exception_frames": 1,
+    "final_status_counts": {
+      "integration_conflict": 1
+    },
+    "input_light_frames": 1,
+    "integrated_frames": 0,
+    "integration_conflict_frames": 1,
+    "not_integrated_frames": 0,
+    "quality_accepted_frames": 0,
+    "quality_rejected_frames": 1,
+    "registration_accepted_frames": 0,
+    "resident_calibrated_frames": 0,
+    "resident_calibrated_light_ledger_rows": 0,
+    "resident_native_calibration_artifact": false,
+    "warp_accepted_frames": 0,
+    "warp_skipped_frames": 1,
+    "zero_weight_frames": 0
+  }
+}

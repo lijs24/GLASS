@@ -1,0 +1,10 @@
+{
+  "frames": [
+    {
+      "filter": "H",
+      "frame_type": "light",
+      "id": "conflict",
+      "path": "light/conflict.fits"
+    }
+  ]
+}

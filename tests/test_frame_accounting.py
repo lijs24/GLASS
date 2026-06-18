@@ -138,6 +138,73 @@ def test_frame_accounting_builds_per_light_ledger(tmp_path: Path):
     }
 
 
+def test_frame_accounting_flags_integrated_rejected_frame_conflict(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    write_json(run / "processing_plan.json", {"frames": [_plan_frame("conflict")]})
+    write_json(
+        run / "frame_quality.json",
+        {
+            "frame_quality": [
+                {
+                    "frame_id": "conflict",
+                    "quality_gate_status": "rejected",
+                    "quality_gate_warnings": ["saturation_fraction exceeds limit"],
+                }
+            ]
+        },
+    )
+    write_json(
+        run / "registration_results.json",
+        {
+            "registration_results": [
+                {
+                    "frame_id": "conflict",
+                    "status": "quality_rejected",
+                    "warnings": ["registration skipped because frame failed the quality gate"],
+                }
+            ]
+        },
+    )
+    write_json(
+        run / "warp_results.json",
+        {
+            "warp_results": [],
+            "skipped_frames": [
+                {
+                    "frame_id": "conflict",
+                    "status": "quality_rejected",
+                    "reason": "registration did not produce an accepted transform",
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "integration_results.json",
+        {
+            "source_stage": "local_normalization",
+            "frame_weights": {"conflict": 1.0},
+            "outputs": [{"filter": "H", "frame_count": 1}],
+        },
+    )
+
+    accounting = build_frame_accounting(run)
+    row = accounting["frames"][0]
+
+    assert row["final_status"] == "integration_conflict"
+    assert row["integration_conflict_count"] == 3
+    assert {item["stage"] for item in row["integration_conflicts"]} == {
+        "quality",
+        "registration",
+        "warp",
+    }
+    assert accounting["summary"]["integrated_frames"] == 0
+    assert accounting["summary"]["integration_conflict_frames"] == 1
+    assert accounting["summary"]["final_status_counts"] == {"integration_conflict": 1}
+    assert accounting["exception_frames"][0]["primary_stage"] == "quality"
+    assert "positive integration weight" in accounting["exception_frames"][0]["primary_reason"]
+
+
 def test_report_renders_frame_accounting(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()
@@ -147,6 +214,7 @@ def test_report_renders_frame_accounting(tmp_path: Path):
             "summary": {
                 "input_light_frames": 1,
                 "integrated_frames": 1,
+                "integration_conflict_frames": 1,
                 "final_status_counts": {"integrated": 1},
             },
             "frames": [{"frame_id": "light_001", "final_status": "integrated"}],
@@ -170,6 +238,7 @@ def test_report_renders_frame_accounting(tmp_path: Path):
     assert "frame_accounting.json" in html
     assert "light_001" in html
     assert "light_002" in html
+    assert "integration_conflict_frames" in html
     assert "integration weight is zero" in html
 
 

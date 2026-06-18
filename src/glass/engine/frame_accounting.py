@@ -103,7 +103,10 @@ def _final_status(
     local_norm_status: str,
     integration_status: str,
     has_integration: bool,
+    integration_conflicts: list[dict[str, str]] | None = None,
 ) -> str:
+    if integration_status == "used" and integration_conflicts:
+        return "integration_conflict"
     if integration_status == "used":
         return "integrated"
     if integration_status == "zero_weight":
@@ -119,6 +122,52 @@ def _final_status(
     if has_integration:
         return "not_integrated"
     return "pending"
+
+
+def _integration_conflicts(
+    *,
+    quality_gate_status: str,
+    registration_status: str,
+    warp_status: str,
+    local_norm_status: str,
+    integration_status: str,
+) -> list[dict[str, str]]:
+    if integration_status != "used":
+        return []
+    conflicts: list[dict[str, str]] = []
+    if quality_gate_status == "rejected":
+        conflicts.append(
+            {
+                "stage": "quality",
+                "status": quality_gate_status,
+                "reason": "positive integration weight for quality-rejected frame",
+            }
+        )
+    if registration_status in {"quality_rejected", "failed", "rejected", "missing", "excluded"}:
+        conflicts.append(
+            {
+                "stage": "registration",
+                "status": registration_status,
+                "reason": "positive integration weight for non-accepted registration frame",
+            }
+        )
+    if warp_status in {"skipped", "missing"}:
+        conflicts.append(
+            {
+                "stage": "warp",
+                "status": warp_status,
+                "reason": "positive integration weight for non-warped frame",
+            }
+        )
+    if local_norm_status in {"empty", "skipped_zero_weight", "missing"}:
+        conflicts.append(
+            {
+                "stage": "local_normalization",
+                "status": local_norm_status,
+                "reason": "positive integration weight for local-normalization rejected frame",
+            }
+        )
+    return conflicts
 
 
 def _status_counts(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
@@ -139,6 +188,18 @@ def _primary_exception(row: dict[str, Any]) -> tuple[str, str]:
         return "warp", str(row.get("warp_reason") or "warp skipped frame")
     if final_status == "local_norm_rejected":
         return "local_normalization", warnings[0] if warnings else "local normalization rejected frame"
+    if final_status == "integration_conflict":
+        conflicts = row.get("integration_conflicts")
+        if isinstance(conflicts, list) and conflicts:
+            first = conflicts[0]
+            if isinstance(first, dict):
+                stage = str(first.get("stage") or "integration")
+                reason = str(
+                    first.get("reason")
+                    or "positive integration weight conflicts with upstream rejection"
+                )
+                return stage, reason
+        return "integration", "positive integration weight conflicts with upstream rejection"
     if final_status == "not_integrated":
         return "integration", reasons[0] if reasons else "frame was not present in integration weights"
     return final_status, reasons[0] if reasons else (warnings[0] if warnings else final_status)
@@ -330,6 +391,19 @@ def build_frame_accounting(
             integration_status = "zero_weight"
             _append_unique(reasons, "integration weight is zero")
 
+        integration_conflicts = _integration_conflicts(
+            quality_gate_status=quality_gate_status,
+            registration_status=registration_status,
+            warp_status=warp_status,
+            local_norm_status=local_norm_status,
+            integration_status=integration_status,
+        )
+        if integration_conflicts:
+            _append_unique(
+                reasons,
+                "positive integration weight conflicts with upstream rejection",
+            )
+
         final_status = _final_status(
             quality_gate_status=quality_gate_status,
             registration_status=registration_status,
@@ -337,6 +411,7 @@ def build_frame_accounting(
             local_norm_status=local_norm_status,
             integration_status=integration_status,
             has_integration=bool(integration),
+            integration_conflicts=integration_conflicts,
         )
 
         rows.append(
@@ -360,6 +435,8 @@ def build_frame_accounting(
                 "local_norm_status": local_norm_status,
                 "integration_status": integration_status,
                 "integration_weight": integration_weight,
+                "integration_conflict_count": len(integration_conflicts),
+                "integration_conflicts": integration_conflicts,
                 "final_status": final_status,
                 "reasons": reasons,
                 "warnings": warnings,
@@ -391,6 +468,7 @@ def build_frame_accounting(
         "warp_skipped_frames": sum(1 for row in rows if row["warp_status"] == "skipped"),
         "integrated_frames": final_counts.get("integrated", 0),
         "zero_weight_frames": final_counts.get("zero_weight", 0),
+        "integration_conflict_frames": final_counts.get("integration_conflict", 0),
         "not_integrated_frames": final_counts.get("not_integrated", 0),
         "final_status_counts": final_counts,
         "exception_frames": len(exceptions),

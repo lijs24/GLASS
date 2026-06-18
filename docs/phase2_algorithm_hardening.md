@@ -6155,6 +6155,24 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 347: Frame Accounting Integration-Conflict Guard
+
+- Harden `frame_accounting.json` so a frame with positive integration weight
+  cannot be silently counted as integrated when quality, registration, warp, or
+  local-normalization state already rejected or skipped it.
+- Add a formal `integration_conflict` final status, per-frame
+  `integration_conflicts` evidence, and `integration_conflict_frames` summary
+  count.
+- Surface integration-conflict counts in the HTML frame-accounting tables.
+- Extend benchmark/acceptance frame-accounting contract checks with
+  `contract_frame_accounting_no_integration_conflicts`, enabled by default
+  when frame accounting is required.
+- Generate Gate347 controlled conflict artifacts proving the frame ledger and
+  acceptance audit both fail the conflicting integration case.
+- Keep this gate accounting/contract scoped: no registration math change, no
+  CUDA kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
