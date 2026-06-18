@@ -298,6 +298,161 @@ def _write_pipeline_contract(
     )
 
 
+def _write_pipeline_contract_not_required_sample_scopes(path: Path) -> None:
+    write_json(
+        path,
+        {
+            "audit_type": "pipeline_invariant_contract",
+            "status": "passed",
+            "passed": True,
+            "checks": [
+                {"name": "integration_dq_contract", "passed": True},
+                {"name": "integration_stack_result_contract", "passed": True},
+                {"name": "integration_resident_result_contract", "passed": True},
+                {"name": "integration_dq_map_pixels_match_summary", "passed": True},
+                {"name": "integration_coverage_map_pixels_match_dq", "passed": True},
+                {"name": "integration_rejection_map_pixels_match_dq", "passed": True},
+                {
+                    "name": "integration_rejection_sample_counts_match_maps",
+                    "passed": True,
+                },
+                {"name": "integration_sample_accounting_closure", "passed": True},
+            ],
+            "rejection_sample_accounting": {
+                "status": "not_required",
+                "check_name": "integration_rejection_sample_counts_match_maps",
+                "check_present": True,
+                "check_passed": True,
+                "output_count": 1,
+                "accounted_output_count": 1,
+                "required_count": 0,
+                "verified_count": 0,
+                "failed_count": 0,
+                "failed_items": [],
+            },
+            "sample_accounting_closure": {
+                "status": "not_required",
+                "check_name": "integration_sample_accounting_closure",
+                "check_present": True,
+                "check_passed": True,
+                "output_count": 1,
+                "present_count": 0,
+                "required_count": 0,
+                "failed_count": 0,
+                "failed_items": [],
+            },
+            "integration": {
+                "outputs": [
+                    {
+                        "item": "H",
+                        "rejection": "none",
+                        "sample_accounting_closure": {
+                            "present": False,
+                            "required": False,
+                            "status": "missing",
+                            "passed": True,
+                        },
+                    }
+                ],
+                "maps": [
+                    {"item": "H", "map": "master"},
+                    {"item": "H", "map": "coverage"},
+                    {"item": "H", "map": "dq"},
+                ],
+            },
+            "pixel_verification": {
+                "enabled": True,
+                "tile_size": 2048,
+                "integration_outputs": [
+                    {
+                        "item": "H",
+                        "rejection_sample_accounting": {
+                            "status": "not_required",
+                            "verified": False,
+                            "ok": True,
+                            "required": False,
+                            "source_counts": [],
+                        },
+                    }
+                ],
+            },
+        },
+    )
+
+
+def _write_pipeline_contract_missing_required_rejection_scope(path: Path) -> None:
+    write_json(
+        path,
+        {
+            "audit_type": "pipeline_invariant_contract",
+            "status": "passed",
+            "passed": True,
+            "checks": [
+                {"name": "integration_dq_contract", "passed": True},
+                {"name": "integration_stack_result_contract", "passed": True},
+                {"name": "integration_resident_result_contract", "passed": True},
+                {"name": "integration_dq_map_pixels_match_summary", "passed": True},
+                {"name": "integration_coverage_map_pixels_match_dq", "passed": True},
+                {"name": "integration_rejection_map_pixels_match_dq", "passed": True},
+                {"name": "integration_sample_accounting_closure", "passed": True},
+            ],
+            "sample_accounting_closure": {
+                "status": "not_required",
+                "check_name": "integration_sample_accounting_closure",
+                "check_present": True,
+                "check_passed": True,
+                "output_count": 1,
+                "present_count": 0,
+                "required_count": 0,
+                "failed_count": 0,
+                "failed_items": [],
+            },
+            "integration": {
+                "outputs": [
+                    {
+                        "item": "H",
+                        "rejection": "winsorized_sigma",
+                        "sample_accounting_closure": {
+                            "present": False,
+                            "required": False,
+                            "status": "missing",
+                            "passed": True,
+                        },
+                    }
+                ],
+                "maps": [
+                    {"item": "H", "map": "master"},
+                    {"item": "H", "map": "coverage"},
+                    {"item": "H", "map": "dq"},
+                    {"item": "H", "map": "low_rejection"},
+                    {"item": "H", "map": "high_rejection"},
+                ],
+            },
+            "pixel_verification": {
+                "enabled": True,
+                "tile_size": 2048,
+                "integration_outputs": [
+                    {
+                        "item": "H",
+                        "count_maps": {
+                            "low_rejection": {
+                                "required": True,
+                                "verified": True,
+                                "ok": True,
+                            },
+                            "high_rejection": {
+                                "required": True,
+                                "verified": True,
+                                "ok": True,
+                            },
+                        },
+                    }
+                ],
+            },
+        },
+    )
+
+
 def _write_runtime_compare(path: Path) -> None:
     write_json(
         path,
@@ -667,20 +822,101 @@ def test_release_promotion_decision_blocks_sample_accounting_closure_drift(
     assert payload["recommendation"] == "fix_release_blockers"
     assert payload["pipeline_handoff"]["sample_accounting_closure_status"] == "failed"
     assert checks["pipeline_sample_accounting_closure_passed"]["passed"] is False
-    assert checks["pipeline_sample_accounting_closure_passed"]["evidence"] == {
-        "check": False,
-        "status": "failed",
-        "present_count": 1,
-        "failed_count": 1,
-        "failed_items": [
-            {
-                "item": "H",
-                "input_valid_samples_before_rejection": 9,
-                "valid_samples_after_rejection": 6,
-                "rejected_samples": 2,
-            }
-        ],
+    evidence = checks["pipeline_sample_accounting_closure_passed"]["evidence"]
+    assert evidence["ready"] is False
+    assert evidence["check"] is False
+    assert evidence["status"] == "failed"
+    assert evidence["scope"] == "required"
+    assert evidence["present_count"] == 1
+    assert evidence["required_count"] == 1
+    assert evidence["failed_count"] == 1
+    assert evidence["failed_items"] == [
+        {
+            "item": "H",
+            "input_valid_samples_before_rejection": 9,
+            "valid_samples_after_rejection": 6,
+            "rejected_samples": 2,
+        }
+    ]
+
+
+def test_release_promotion_decision_accepts_not_required_sample_scopes(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    stack = tmp_path / "stack.json"
+    pipeline = tmp_path / "pipeline.json"
+    runtime = tmp_path / "runtime_compare.json"
+    _write_acceptance(acceptance)
+    _write_stack_contract(stack)
+    _write_pipeline_contract_not_required_sample_scopes(pipeline)
+    _write_runtime_compare(runtime)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        stack_engine_contract=stack,
+        pipeline_contract=pipeline,
+        runtime_compare=runtime,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["release_candidate_ready"] is True
+    assert payload["default_change_ready"] is True
+    assert payload["pipeline_rejection_sample_release"] == {
+        "ready": True,
+        "check": True,
+        "status": "not_required",
+        "check_present": True,
+        "required_count": 0,
+        "verified_count": 0,
+        "accounted_output_count": 1,
+        "failed_count": 0,
+        "failed_items": [],
+        "scope": "not_required",
     }
+    assert payload["pipeline_sample_closure_release"]["ready"] is True
+    assert payload["pipeline_sample_closure_release"]["scope"] == "not_required"
+    assert checks["pipeline_rejection_sample_accounting_passed"]["passed"] is True
+    assert checks["pipeline_sample_accounting_closure_passed"]["passed"] is True
+
+
+def test_release_promotion_decision_blocks_missing_required_rejection_sample_scope(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    stack = tmp_path / "stack.json"
+    pipeline = tmp_path / "pipeline.json"
+    runtime = tmp_path / "runtime_compare.json"
+    _write_acceptance(acceptance)
+    _write_stack_contract(stack)
+    _write_pipeline_contract_missing_required_rejection_scope(pipeline)
+    _write_runtime_compare(runtime)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        stack_engine_contract=stack,
+        pipeline_contract=pipeline,
+        runtime_compare=runtime,
+        min_runtime_runs=3,
+    )
+
+    evidence = payload["pipeline_rejection_sample_release"]
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["release_candidate_ready"] is False
+    assert payload["recommendation"] == "fix_release_blockers"
+    assert evidence["ready"] is False
+    assert evidence["check"] is None
+    assert evidence["status"] == "failed"
+    assert evidence["required_count"] == 1
+    assert evidence["failed_count"] == 1
+    assert evidence["failed_items"][0]["status"] == "missing_required"
+    assert evidence["failed_items"][0]["required_maps"] == [
+        "low_rejection",
+        "high_rejection",
+    ]
+    assert checks["pipeline_rejection_sample_accounting_passed"]["passed"] is False
+    assert checks["pipeline_sample_accounting_closure_passed"]["passed"] is True
 
 
 def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_path: Path) -> None:

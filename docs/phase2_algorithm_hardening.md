@@ -5160,6 +5160,28 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 301: Release Decision Sample Accounting Scope Guard
+
+- Harden `glass release-promotion-decision` so pipeline rejection sample
+  accounting and integration sample-closure checks distinguish three release
+  states: `passed`, explicitly `not_required`, and missing/stale required
+  evidence.
+- Require the pipeline contract check to be present and passing before release
+  readiness can accept either `passed` or `not_required` sample-accounting
+  scope.
+- Detect stale pixel-verification artifacts where low/high rejection count maps
+  are required but the `rejection_sample_accounting` row is missing, and report
+  those rows as `missing_required` instead of generic `not_available`.
+- Surface sample-accounting release scope, readiness, required counts,
+  verified counts, present counts, and failed rows in release-decision JSON and
+  Markdown.
+- Add release-decision tests for not-required sample scopes, missing required
+  rejection-sample rows, failed sample-count drift, and failed sample-closure
+  drift.
+- Keep this gate release-decision scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

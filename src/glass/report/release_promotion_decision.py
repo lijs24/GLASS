@@ -122,37 +122,64 @@ def _pipeline_rejection_sample_accounting(pipeline: dict[str, Any]) -> dict[str,
         if not isinstance(output, dict):
             continue
         accounting = output.get("rejection_sample_accounting")
-        if not isinstance(accounting, dict):
+        if isinstance(accounting, dict):
+            failed_matches = [
+                {
+                    "source": match.get("source"),
+                    "actual": match.get("actual"),
+                    "summary": match.get("summary"),
+                    "delta": match.get("delta"),
+                }
+                for match in accounting.get("source_matches") or []
+                if isinstance(match, dict) and not match.get("passed")
+            ]
+            rows.append(
+                {
+                    "item": output.get("item"),
+                    "status": accounting.get("status"),
+                    "accounting_present": True,
+                    "required": bool(accounting.get("required")),
+                    "verified": bool(accounting.get("verified")),
+                    "ok": bool(accounting.get("ok")),
+                    "map_rejected_sample_sum": accounting.get("map_rejected_sample_sum"),
+                    "source_counts": accounting.get("source_counts") or [],
+                    "failed_matches": failed_matches,
+                }
+            )
             continue
-        failed_matches = [
-            {
-                "source": match.get("source"),
-                "actual": match.get("actual"),
-                "summary": match.get("summary"),
-                "delta": match.get("delta"),
-            }
-            for match in accounting.get("source_matches") or []
-            if isinstance(match, dict) and not match.get("passed")
-        ]
+
+        count_maps = output.get("count_maps") if isinstance(output.get("count_maps"), dict) else {}
+        required_maps: list[str] = []
+        verified_maps: list[str] = []
+        for map_name in ("low_rejection", "high_rejection"):
+            row = count_maps.get(map_name) if isinstance(count_maps.get(map_name), dict) else {}
+            if row.get("required") is True:
+                required_maps.append(map_name)
+            if row.get("verified") is True:
+                verified_maps.append(map_name)
+        required = bool(required_maps)
         rows.append(
             {
                 "item": output.get("item"),
-                "status": accounting.get("status"),
-                "required": bool(accounting.get("required")),
-                "verified": bool(accounting.get("verified")),
-                "ok": bool(accounting.get("ok")),
-                "map_rejected_sample_sum": accounting.get("map_rejected_sample_sum"),
-                "source_counts": accounting.get("source_counts") or [],
-                "failed_matches": failed_matches,
+                "status": "missing_required" if required else "not_required",
+                "accounting_present": False,
+                "required": required,
+                "verified": False,
+                "ok": not required,
+                "map_rejected_sample_sum": None,
+                "source_counts": [],
+                "failed_matches": [],
+                "required_maps": required_maps,
+                "verified_maps": verified_maps,
             }
         )
 
-    failed_items = [row for row in rows if not row.get("ok")]
+    failed_items = [row for row in rows if row.get("required") and not row.get("ok")]
     check_present = check_passed is not None
     if check_present:
-        status = "passed" if check_passed else "failed"
+        status = "passed" if check_passed and not failed_items else "failed"
     elif rows:
-        status = "passed" if not failed_items else "failed"
+        status = "failed" if failed_items else "not_required"
     else:
         status = "not_available"
     return {
@@ -162,11 +189,13 @@ def _pipeline_rejection_sample_accounting(pipeline: dict[str, Any]) -> dict[str,
         "check_present": check_present,
         "check_passed": check_passed,
         "pixel_verification_enabled": bool(pixel_verification.get("enabled")),
-        "accounted_output_count": len(rows),
+        "output_count": len(integration_outputs),
+        "accounted_output_count": sum(1 for row in rows if row.get("accounting_present")),
         "required_count": sum(1 for row in rows if row.get("required")),
         "verified_count": sum(1 for row in rows if row.get("verified")),
         "failed_count": len(failed_items),
         "failed_items": failed_items,
+        "rows": rows,
     }
 
 
@@ -188,6 +217,23 @@ def _pipeline_sample_accounting_closure(pipeline: dict[str, Any]) -> dict[str, A
             continue
         closure = output.get("sample_accounting_closure")
         if not isinstance(closure, dict):
+            rows.append(
+                {
+                    "item": output.get("item"),
+                    "status": "missing",
+                    "present": False,
+                    "required": False,
+                    "passed": True,
+                    "input_total_match": None,
+                    "valid_rejection_match": None,
+                    "input_samples": None,
+                    "input_valid_samples_before_rejection": None,
+                    "input_invalid_samples_before_rejection": None,
+                    "valid_samples_after_rejection": None,
+                    "rejected_samples": None,
+                    "semantics": None,
+                }
+            )
             continue
         rows.append(
             {
@@ -216,7 +262,7 @@ def _pipeline_sample_accounting_closure(pipeline: dict[str, Any]) -> dict[str, A
     if check_present:
         status = "passed" if check_passed else "failed"
     elif rows:
-        status = "passed" if not failed_items else "failed"
+        status = "passed" if any(row.get("present") for row in rows) and not failed_items else "not_available"
     else:
         status = "not_available"
     return {
@@ -231,6 +277,88 @@ def _pipeline_sample_accounting_closure(pipeline: dict[str, Any]) -> dict[str, A
         "failed_count": len(failed_items),
         "failed_items": failed_items,
         "rows": rows,
+    }
+
+
+def _zero_count(value: Any) -> bool:
+    numeric = _int_value(value)
+    return numeric is not None and numeric == 0
+
+
+def _release_sample_scope_ready(
+    *,
+    status: Any,
+    check_passed: Any,
+    required_count: Any,
+    failed_count: Any,
+) -> bool:
+    if check_passed is not True:
+        return False
+    if failed_count not in (None, 0):
+        return False
+    if status == "passed":
+        return True
+    return status == "not_required" and _zero_count(required_count)
+
+
+def _rejection_sample_release_evidence(pipeline_handoff: dict[str, Any]) -> dict[str, Any]:
+    accounting = (
+        pipeline_handoff.get("rejection_sample_accounting")
+        if isinstance(pipeline_handoff.get("rejection_sample_accounting"), dict)
+        else {}
+    )
+    check = pipeline_handoff["checks"].get("integration_rejection_sample_counts_match_maps")
+    status = pipeline_handoff.get("rejection_sample_accounting_status")
+    required_count = accounting.get("required_count")
+    failed_count = accounting.get("failed_count")
+    ready = _release_sample_scope_ready(
+        status=status,
+        check_passed=check,
+        required_count=required_count,
+        failed_count=failed_count,
+    )
+    return {
+        "ready": ready,
+        "check": check,
+        "status": status,
+        "check_present": accounting.get("check_present"),
+        "required_count": required_count,
+        "verified_count": accounting.get("verified_count"),
+        "accounted_output_count": accounting.get("accounted_output_count"),
+        "failed_count": failed_count,
+        "failed_items": accounting.get("failed_items"),
+        "scope": "required" if _int_value(required_count) else "not_required",
+    }
+
+
+def _sample_closure_release_evidence(pipeline_handoff: dict[str, Any]) -> dict[str, Any]:
+    closure = (
+        pipeline_handoff.get("sample_accounting_closure")
+        if isinstance(pipeline_handoff.get("sample_accounting_closure"), dict)
+        else {}
+    )
+    check = pipeline_handoff["checks"].get("integration_sample_accounting_closure")
+    status = pipeline_handoff.get("sample_accounting_closure_status")
+    required_count = closure.get("required_count")
+    if required_count is None and _int_value(closure.get("present_count")):
+        required_count = closure.get("present_count")
+    failed_count = closure.get("failed_count")
+    ready = _release_sample_scope_ready(
+        status=status,
+        check_passed=check,
+        required_count=required_count,
+        failed_count=failed_count,
+    )
+    return {
+        "ready": ready,
+        "check": check,
+        "status": status,
+        "check_present": closure.get("check_present"),
+        "present_count": closure.get("present_count"),
+        "required_count": required_count,
+        "failed_count": failed_count,
+        "failed_items": closure.get("failed_items"),
+        "scope": "required" if _int_value(required_count) else "not_required",
     }
 
 
@@ -277,6 +405,12 @@ def _pipeline_handoff_evidence(
         "rejection_sample_accounting_failed_count": rejection_sample_accounting.get(
             "failed_count"
         ),
+        "rejection_sample_accounting_required_count": rejection_sample_accounting.get(
+            "required_count"
+        ),
+        "rejection_sample_accounting_verified_count": rejection_sample_accounting.get(
+            "verified_count"
+        ),
         "sample_accounting_closure": sample_accounting_closure,
         "sample_accounting_closure_status": sample_accounting_closure.get("status"),
         "sample_accounting_closure_failed_count": sample_accounting_closure.get(
@@ -284,6 +418,9 @@ def _pipeline_handoff_evidence(
         ),
         "sample_accounting_closure_present_count": sample_accounting_closure.get(
             "present_count"
+        ),
+        "sample_accounting_closure_required_count": sample_accounting_closure.get(
+            "required_count"
         ),
         "checks": checks,
     }
@@ -471,6 +608,8 @@ def build_release_promotion_decision(
     publication_runtime_default = _publication_audit_runtime_default_evidence(
         publication_audit
     )
+    rejection_sample_release = _rejection_sample_release_evidence(pipeline_handoff)
+    sample_closure_release = _sample_closure_release_evidence(pipeline_handoff)
 
     checks = [
         _check(
@@ -552,36 +691,15 @@ def build_release_promotion_decision(
         ),
         _check(
             "pipeline_rejection_sample_accounting_passed",
-            pipeline_handoff["checks"].get("integration_rejection_sample_counts_match_maps") is True
-            and pipeline_handoff.get("rejection_sample_accounting_status") == "passed",
-            {
-                "check": pipeline_handoff["checks"].get(
-                    "integration_rejection_sample_counts_match_maps"
-                ),
-                "status": pipeline_handoff.get("rejection_sample_accounting_status"),
-                "failed_count": pipeline_handoff.get("rejection_sample_accounting_failed_count"),
-                "failed_items": (
-                    pipeline_handoff.get("rejection_sample_accounting") or {}
-                ).get("failed_items"),
-            },
+            bool(rejection_sample_release["ready"]),
+            rejection_sample_release,
+            "Release requires the pipeline contract to prove rejection sample accounting passed, or explicitly prove it was not required.",
         ),
         _check(
             "pipeline_sample_accounting_closure_passed",
-            pipeline_handoff["checks"].get("integration_sample_accounting_closure") is True
-            and pipeline_handoff.get("sample_accounting_closure_status") == "passed",
-            {
-                "check": pipeline_handoff["checks"].get(
-                    "integration_sample_accounting_closure"
-                ),
-                "status": pipeline_handoff.get("sample_accounting_closure_status"),
-                "present_count": pipeline_handoff.get(
-                    "sample_accounting_closure_present_count"
-                ),
-                "failed_count": pipeline_handoff.get("sample_accounting_closure_failed_count"),
-                "failed_items": (
-                    pipeline_handoff.get("sample_accounting_closure") or {}
-                ).get("failed_items"),
-            },
+            bool(sample_closure_release["ready"]),
+            sample_closure_release,
+            "Release requires the pipeline contract to prove sample-closure evidence passed, or explicitly prove it was not required.",
         ),
         _check(
             "stack_engine_release_evidence_passed",
@@ -685,6 +803,8 @@ def build_release_promotion_decision(
         },
         "speedup": {"actual": speedup, "required_min": required_speedup},
         "pipeline_handoff": pipeline_handoff,
+        "pipeline_rejection_sample_release": rejection_sample_release,
+        "pipeline_sample_closure_release": sample_closure_release,
         "stack_engine_publication_runtime_default": publication_runtime_default,
         "runtime_repeat": runtime_evidence,
         "repeat_preflight": preflight_evidence,
@@ -715,6 +835,16 @@ def _markdown(payload: dict[str, Any]) -> str:
         lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
     runtime = payload.get("runtime_repeat") if isinstance(payload.get("runtime_repeat"), dict) else {}
     pipeline = payload.get("pipeline_handoff") if isinstance(payload.get("pipeline_handoff"), dict) else {}
+    rejection_sample = (
+        payload.get("pipeline_rejection_sample_release")
+        if isinstance(payload.get("pipeline_rejection_sample_release"), dict)
+        else {}
+    )
+    sample_closure = (
+        payload.get("pipeline_sample_closure_release")
+        if isinstance(payload.get("pipeline_sample_closure_release"), dict)
+        else {}
+    )
     publication = (
         payload.get("stack_engine_publication_runtime_default")
         if isinstance(payload.get("stack_engine_publication_runtime_default"), dict)
@@ -732,7 +862,9 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Integration maps: `{pipeline.get('integration_map_count')}`",
             f"- Pixel verification enabled: `{pipeline.get('pixel_verification_enabled')}`",
             f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
+            f"- Rejection sample release scope: `{rejection_sample.get('scope')}`, ready `{rejection_sample.get('ready')}`, required `{rejection_sample.get('required_count')}`, verified `{rejection_sample.get('verified_count')}`",
             f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
+            f"- Sample closure release scope: `{sample_closure.get('scope')}`, ready `{sample_closure.get('ready')}`, required `{sample_closure.get('required_count')}`, present `{sample_closure.get('present_count')}`",
             "",
         ]
     )

@@ -1,0 +1,379 @@
+{
+  "artifact_type": "release_promotion_decision",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_294_acceptance_runtime_default_ready.json",
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 10.0,
+        "required_min": 2.0
+      },
+      "name": "speedup_threshold",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "pipeline_contract_passed": false,
+        "pipeline_contract_status": "failed",
+        "release_evidence_status": "passed"
+      },
+      "name": "pipeline_release_evidence_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "pipeline_invariant_contract",
+        "source": "explicit_pipeline_contract",
+        "status": "failed"
+      },
+      "name": "pipeline_handoff_evidence_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "integration_map_count": 6,
+        "integration_output_count": 1,
+        "source": "explicit_pipeline_contract"
+      },
+      "name": "pipeline_integration_dq_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "resident_result_contract": false,
+        "stack_result_contract": true
+      },
+      "name": "pipeline_result_contracts_passed",
+      "note": "",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "enabled": true,
+        "tile_size": 2048
+      },
+      "name": "pipeline_pixel_verification_enabled",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "coverage_pixels": true,
+        "dq_pixels": true,
+        "rejection_pixels": true
+      },
+      "name": "pipeline_pixel_verification_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "accounted_output_count": 1,
+        "check": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "ready": true,
+        "required_count": 1,
+        "scope": "required",
+        "status": "passed",
+        "verified_count": 1
+      },
+      "name": "pipeline_rejection_sample_accounting_passed",
+      "note": "Release requires the pipeline contract to prove rejection sample accounting passed, or explicitly prove it was not required.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "present_count": 0,
+        "ready": true,
+        "required_count": 0,
+        "scope": "not_required",
+        "status": "passed"
+      },
+      "name": "pipeline_sample_accounting_closure_passed",
+      "note": "Release requires the pipeline contract to prove sample-closure evidence passed, or explicitly prove it was not required.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "release_evidence_status": "not_requested",
+        "stack_engine_contract_passed": true,
+        "stack_engine_contract_status": "passed"
+      },
+      "name": "stack_engine_release_evidence_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_release_status": "not_requested",
+        "contract_default_ready": true
+      },
+      "name": "stack_engine_default_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "all",
+        "required": "all"
+      },
+      "name": "stack_engine_scope_all",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "best_elapsed_s": 22.598500299995067,
+        "best_label": "gate218_default_repeat02",
+        "considered_run_count": 3,
+        "elapsed_ratio_vs_best": 1.053510511049479,
+        "ignored_warmup_labels": [],
+        "ignored_warmup_run_count": 0,
+        "max_elapsed_ratio_vs_best": 1.25,
+        "present": true,
+        "recommendation": "best_observed:gate218_default_repeat02",
+        "required_min_runtime_runs": 2,
+        "run_count": 3,
+        "slowest_elapsed_s": 23.807757599999604
+      },
+      "name": "runtime_repeat_evidence_ready",
+      "note": "Default changes require at least two stable runtime observations; release-candidate status can pass without this.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "stack_engine_publication_audit",
+        "checks": {
+          "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight": true,
+          "phase2_publish_preflight_stack_engine_runtime_default_ready": true,
+          "publish_preflight_stack_engine_runtime_default_ready": true
+        },
+        "checks_passed": true,
+        "failed_checks": [],
+        "passed": true,
+        "phase2_check_passed": true,
+        "phase2_failed_output_count": 0,
+        "phase2_legacy_master_count": 0,
+        "phase2_matrix_status": "passed",
+        "phase2_pipeline_status": "passed",
+        "phase2_ready": true,
+        "present": true,
+        "raw_failed_output_count": 0,
+        "raw_legacy_master_count": 0,
+        "raw_matrix_status": "passed",
+        "raw_pipeline_status": "passed",
+        "raw_ready": true,
+        "recommendation": "publication_chain_ready",
+        "status": "passed"
+      },
+      "name": "stack_engine_publication_runtime_default_passed",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T09:32:24+00:00",
+  "default_change_ready": false,
+  "inputs": {
+    "acceptance_audit": "runs\\checkpoints\\s2_gate_294_acceptance_runtime_default_ready.json",
+    "pipeline_contract": "runs\\checkpoints\\s2_gate_301_pipeline_contract_sample_accounting_reaudit.json",
+    "repeat_preflight": null,
+    "runtime_compare": "runs\\checkpoints\\s2_gate_218_runtime_compare.json",
+    "stack_engine_contract": "runs\\checkpoints\\s2_gate_211_stack_engine_contract.json",
+    "stack_engine_publication_audit": "runs\\checkpoints\\s2_gate_299_stack_engine_publication_runtime_default.json"
+  },
+  "limitations": [
+    "This decision artifact does not change GLASS defaults.",
+    "Release-candidate readiness is based on supplied acceptance and contract artifacts.",
+    "Default-change readiness additionally requires stable repeat/runtime evidence."
+  ],
+  "passed": false,
+  "pipeline_handoff": {
+    "audit_type": "pipeline_invariant_contract",
+    "check_count": 14,
+    "checks": {
+      "integration_coverage_map_pixels_match_dq": true,
+      "integration_dq_contract": true,
+      "integration_dq_map_pixels_match_summary": true,
+      "integration_rejection_map_pixels_match_dq": true,
+      "integration_rejection_sample_counts_match_maps": true,
+      "integration_resident_result_contract": false,
+      "integration_sample_accounting_closure": true,
+      "integration_stack_result_contract": true
+    },
+    "failed_checks": [],
+    "integration_map_count": 6,
+    "integration_output_count": 1,
+    "passed": false,
+    "pixel_verification_enabled": true,
+    "pixel_verification_tile_size": 2048,
+    "present": true,
+    "rejection_sample_accounting": {
+      "accounted_output_count": 1,
+      "check_name": "integration_rejection_sample_counts_match_maps",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "pixel_verification_enabled": true,
+      "required_count": 1,
+      "rows": [
+        {
+          "accounting_present": true,
+          "failed_matches": [],
+          "item": "H",
+          "map_rejected_sample_sum": 62488423,
+          "ok": true,
+          "required": true,
+          "source_counts": [
+            {
+              "count": 62488423,
+              "name": "dq_coverage_provenance.rejected_sample_count"
+            },
+            {
+              "count": 62488423,
+              "name": "dq_provenance_summary.rejected_samples"
+            }
+          ],
+          "status": "verified",
+          "verified": true
+        }
+      ],
+      "schema_version": 1,
+      "status": "passed",
+      "verified_count": 1
+    },
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_required_count": 1,
+    "rejection_sample_accounting_status": "passed",
+    "rejection_sample_accounting_verified_count": 1,
+    "sample_accounting_closure": {
+      "check_name": "integration_sample_accounting_closure",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "present_count": 0,
+      "required_count": 0,
+      "rows": [
+        {
+          "input_invalid_samples_before_rejection": null,
+          "input_samples": null,
+          "input_total_match": null,
+          "input_valid_samples_before_rejection": null,
+          "item": "H",
+          "passed": true,
+          "present": false,
+          "rejected_samples": null,
+          "required": false,
+          "semantics": null,
+          "status": "missing",
+          "valid_rejection_match": null,
+          "valid_samples_after_rejection": null
+        }
+      ],
+      "schema_version": 1,
+      "status": "passed"
+    },
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 0,
+    "sample_accounting_closure_required_count": 0,
+    "sample_accounting_closure_status": "passed",
+    "source": "explicit_pipeline_contract",
+    "status": "failed"
+  },
+  "pipeline_rejection_sample_release": {
+    "accounted_output_count": 1,
+    "check": true,
+    "check_present": true,
+    "failed_count": 0,
+    "failed_items": [],
+    "ready": true,
+    "required_count": 1,
+    "scope": "required",
+    "status": "passed",
+    "verified_count": 1
+  },
+  "pipeline_sample_closure_release": {
+    "check": true,
+    "check_present": true,
+    "failed_count": 0,
+    "failed_items": [],
+    "present_count": 0,
+    "ready": true,
+    "required_count": 0,
+    "scope": "not_required",
+    "status": "passed"
+  },
+  "recommendation": "fix_release_blockers",
+  "release_candidate_ready": false,
+  "repeat_preflight": {
+    "present": false,
+    "ready_to_execute": null,
+    "recommendation": null
+  },
+  "runtime_repeat": {
+    "best_elapsed_s": 22.598500299995067,
+    "best_label": "gate218_default_repeat02",
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.053510511049479,
+    "ignored_warmup_labels": [],
+    "ignored_warmup_run_count": 0,
+    "max_elapsed_ratio_vs_best": 1.25,
+    "present": true,
+    "recommendation": "best_observed:gate218_default_repeat02",
+    "required_min_runtime_runs": 2,
+    "run_count": 3,
+    "slowest_elapsed_s": 23.807757599999604
+  },
+  "schema_version": 1,
+  "speedup": {
+    "actual": 10.0,
+    "required_min": 2.0
+  },
+  "stack_engine_publication_runtime_default": {
+    "artifact_type": "stack_engine_publication_audit",
+    "checks": {
+      "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight": true,
+      "phase2_publish_preflight_stack_engine_runtime_default_ready": true,
+      "publish_preflight_stack_engine_runtime_default_ready": true
+    },
+    "checks_passed": true,
+    "failed_checks": [],
+    "passed": true,
+    "phase2_check_passed": true,
+    "phase2_failed_output_count": 0,
+    "phase2_legacy_master_count": 0,
+    "phase2_matrix_status": "passed",
+    "phase2_pipeline_status": "passed",
+    "phase2_ready": true,
+    "present": true,
+    "raw_failed_output_count": 0,
+    "raw_legacy_master_count": 0,
+    "raw_matrix_status": "passed",
+    "raw_pipeline_status": "passed",
+    "raw_ready": true,
+    "recommendation": "publication_chain_ready",
+    "status": "passed"
+  },
+  "status": "blocked"
+}
