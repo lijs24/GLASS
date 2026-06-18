@@ -1,0 +1,36 @@
+{
+  "artifact_type": "s2_gate_374_fixture_index",
+  "cases": [
+    {
+      "expected_passed": true,
+      "matrix": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_374_fixtures\\ready\\windows_release_matrix.json",
+      "name": "ready"
+    },
+    {
+      "expected_passed": true,
+      "matrix": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_374_fixtures\\compatible_missing_release_quality_guard\\windows_release_matrix.json",
+      "name": "compatible_missing_release_quality_guard"
+    },
+    {
+      "expected_passed": false,
+      "matrix": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_374_fixtures\\failed_release_decision_release_quality_guard\\windows_release_matrix.json",
+      "name": "failed_release_decision_release_quality_guard"
+    },
+    {
+      "expected_passed": false,
+      "matrix": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_374_fixtures\\missing_default_promotion_release_quality_guard\\windows_release_matrix.json",
+      "name": "missing_default_promotion_release_quality_guard"
+    },
+    {
+      "expected_passed": false,
+      "matrix": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_374_fixtures\\failed_default_promotion_release_quality_guard\\windows_release_matrix.json",
+      "name": "failed_default_promotion_release_quality_guard"
+    },
+    {
+      "expected_passed": false,
+      "matrix": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_374_fixtures\\phase2_default_promotion_release_quality_mismatch\\windows_release_matrix.json",
+      "name": "phase2_default_promotion_release_quality_mismatch"
+    }
+  ],
+  "schema_version": 1
+}

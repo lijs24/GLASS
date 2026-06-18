@@ -6685,6 +6685,30 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 374: Windows Release Matrix Release Quality Publication Guard
+
+- Carry release-decision and default-promotion release quality publication guard
+  evidence into `glass windows-release-matrix`.
+- Add `release_decision_release_quality_publication_guard_passed` and
+  `default_promotion_release_decision_release_quality_publication_guard_passed`
+  so Windows release readiness blocks when release quality guard evidence fails,
+  is lost during default promotion, or diverges between raw and Phase2 layers.
+- Keep older release-decision artifacts without this optional guard non-blocking
+  when no release quality guard payload or decision check is present, while
+  requiring default-promotion manifests to explicitly carry that compatibility
+  state.
+- Surface release quality guard ready, compatible-missing, raw matrix/default,
+  Phase2 matrix/default, decision-check, raw-status, Phase2-status, and
+  cross-artifact match evidence in release matrix JSON and Markdown.
+- Add focused ready, compatibility, release-decision failure,
+  default-promotion missing, default-promotion failure, and Phase2-mismatch
+  tests.
+- Keep this gate Windows release-matrix scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
