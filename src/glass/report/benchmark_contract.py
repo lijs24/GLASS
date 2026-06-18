@@ -92,10 +92,13 @@ def _load_resident_io_pipelines(glass_run: str | Path) -> list[dict[str, Any]]:
     return pipelines
 
 
-def collect_resident_registration_fastpath_record(glass_run: str | Path) -> dict[str, Any]:
-    run_root = Path(glass_run)
-    resident_path = run_root / "resident_artifacts.json"
-    resident = _load_json_object_if_present(resident_path)
+def resident_registration_fastpath_record_from_payload(
+    resident: dict[str, Any],
+    *,
+    path: str | Path,
+    exists: bool = True,
+    source: str = "resident_artifacts_json",
+) -> dict[str, Any]:
     artifacts = resident.get("artifacts") if isinstance(resident.get("artifacts"), list) else []
     artifact = artifacts[0] if artifacts and isinstance(artifacts[0], dict) else {}
     registration = (
@@ -116,8 +119,9 @@ def collect_resident_registration_fastpath_record(glass_run: str | Path) -> dict
     )
     return {
         "schema_version": 1,
-        "path": str(resident_path),
-        "exists": resident_path.exists(),
+        "path": str(path),
+        "exists": bool(exists),
+        "source": source,
         "artifact_count": len(artifacts),
         "artifact_index": 0 if artifact else None,
         "available": bool(registration),
@@ -131,6 +135,17 @@ def collect_resident_registration_fastpath_record(glass_run: str | Path) -> dict
             str(key): value for key, value in components.items()
         },
     }
+
+
+def collect_resident_registration_fastpath_record(glass_run: str | Path) -> dict[str, Any]:
+    run_root = Path(glass_run)
+    resident_path = run_root / "resident_artifacts.json"
+    resident = _load_json_object_if_present(resident_path)
+    return resident_registration_fastpath_record_from_payload(
+        resident,
+        path=resident_path,
+        exists=resident_path.exists(),
+    )
 
 
 def _fastpath_value(record: dict[str, Any], field_path: str) -> Any:

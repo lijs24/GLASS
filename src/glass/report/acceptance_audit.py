@@ -11,6 +11,7 @@ from glass.report.benchmark_contract import (
     collect_frame_accounting_record,
     collect_resident_registration_fastpath_record,
     load_benchmark_contract,
+    resident_registration_fastpath_record_from_payload,
 )
 from glass.report.optimization_guide import build_optimization_guidance
 from glass.report.speedup_report import _read_json_lenient, summarize_wbpp_speedup
@@ -116,6 +117,49 @@ def _contract_bundle_paths(
         "checks": bundle_payload.get("checks") if isinstance(bundle_payload.get("checks"), list) else [],
     }
     return resolved_pipeline, resolved_stack, bundle
+
+
+def _resident_registration_fastpath_record_from_json(
+    path: str | Path | None,
+) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    json_path = Path(path)
+    payload = _read_json_lenient(json_path) if json_path.exists() else {}
+    if not payload:
+        return {
+            "schema_version": 1,
+            "path": str(json_path),
+            "exists": json_path.exists(),
+            "source": "explicit_resident_registration_fastpath_json",
+            "artifact_count": 0,
+            "artifact_index": None,
+            "available": False,
+            "resident_registration": {},
+            "resident_io_pipeline": {},
+            "artifact": {},
+            "registration_component_seconds": {},
+        }
+    if "resident_registration" in payload or "resident_io_pipeline" in payload:
+        record = dict(payload)
+        record.setdefault("schema_version", 1)
+        record["path"] = str(json_path)
+        record["exists"] = json_path.exists()
+        record["source"] = "explicit_resident_registration_fastpath_record"
+        record.setdefault("available", bool(record.get("resident_registration")))
+        record.setdefault("artifact_count", 1 if record.get("available") else 0)
+        record.setdefault("artifact_index", 0 if record.get("available") else None)
+        record.setdefault("resident_registration", {})
+        record.setdefault("resident_io_pipeline", {})
+        record.setdefault("artifact", {})
+        record.setdefault("registration_component_seconds", {})
+        return record
+    return resident_registration_fastpath_record_from_payload(
+        payload,
+        path=json_path,
+        exists=json_path.exists(),
+        source="explicit_resident_artifacts_json",
+    )
 
 
 def _native_guardrails_bundle_summary(contract_bundle: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -796,6 +840,7 @@ def build_acceptance_audit(
     max_abs_diff_p99: float | None = 0.01,
     benchmark_contract: str | Path | None = None,
     resident_determinism_json: str | Path | None = None,
+    resident_registration_fastpath_json: str | Path | None = None,
     contract_bundle_json: str | Path | None = None,
     pipeline_contract_json: str | Path | None = None,
     stack_engine_contract_json: str | Path | None = None,
@@ -1178,7 +1223,14 @@ def build_acceptance_audit(
         dq_contract=(contract_payload or {}).get("dq_provenance"),
     )
     frame_accounting_record = collect_frame_accounting_record(glass_run)
-    resident_registration_fastpath = collect_resident_registration_fastpath_record(glass_run)
+    explicit_fastpath = _resident_registration_fastpath_record_from_json(
+        resident_registration_fastpath_json
+    )
+    resident_registration_fastpath = (
+        explicit_fastpath
+        if explicit_fastpath is not None
+        else collect_resident_registration_fastpath_record(glass_run)
+    )
     if benchmark_contract is not None:
         checks.extend(
             build_benchmark_contract_checks(

@@ -5244,6 +5244,27 @@ integration where applicable.
   creation, and no real-data benchmark rerun. The acceptance fastpath handoff is
   intentionally left for a later gate.
 
+### S2-Gate 305: Acceptance Direct Fastpath Runtime-Default Evidence
+
+- Add an explicit `acceptance-audit --resident-registration-fastpath-json`
+  input that can read either a resident fastpath summary or a
+  `resident_artifacts.json` file.
+- Preserve the existing default behavior: without the explicit input,
+  acceptance audit still collects fastpath evidence from `--glass-run`.
+- Use the explicit fastpath evidence with the existing benchmark-contract
+  fastpath checks so the acceptance artifact records
+  `resident_registration_fastpath_contract_status=passed` directly.
+- Re-run the real 200-light acceptance audit with:
+  - Gate304 direct pipeline contract,
+  - Gate211 StackEngine contract,
+  - benchmark `benchmarks/phase2_m38_h_200_contract.json`,
+  - explicit real-run `resident_artifacts.json` fastpath evidence.
+- Require Phase2 status and default-promotion manifest to remain green/ready
+  without the Gate303 acceptance handoff bundle.
+- Keep this gate acceptance/report scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

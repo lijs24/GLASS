@@ -2618,6 +2618,61 @@ def test_acceptance_audit_applies_resident_registration_fastpath_contract(tmp_pa
     )
 
 
+def test_acceptance_audit_uses_explicit_resident_registration_fastpath_json(
+    tmp_path: Path,
+):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    fastpath_run = tmp_path / "fastpath_source"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    contract = tmp_path / "benchmark_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(
+        gp_run,
+        elapsed_s=20.0,
+        command=(
+            "glass run --memory-mode resident --resident-registration similarity_cuda_triangle "
+            "--flat-floor 0.05"
+        ),
+        resident_registration_mode=None,
+        frame_accounting=True,
+    )
+    fastpath_run.mkdir()
+    _write_resident_registration_fastpath_artifact(fastpath_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_contract(contract)
+    _add_resident_registration_fastpath_contract(contract)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        benchmark_contract=contract,
+        resident_registration_fastpath_json=fastpath_run / "resident_artifacts.json",
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    fastpath = audit["resident_registration_fastpath"]
+    assert audit["passed"] is True
+    assert fastpath["source"] == "explicit_resident_artifacts_json"
+    assert fastpath["path"] == str(fastpath_run / "resident_artifacts.json")
+    assert fastpath["available"] is True
+    assert fastpath["resident_registration"]["triangle_descriptor_fit_batch"] is True
+    assert checks["contract_resident_registration_fastpath_present"]["passed"] is True
+    assert (
+        checks[
+            "contract_resident_registration_fastpath_value:"
+            "resident_registration.mode"
+        ]["passed"]
+        is True
+    )
+
+
 def test_acceptance_audit_blocks_resident_registration_fastpath_regression(tmp_path: Path):
     manifest = tmp_path / "manifest.json"
     gp_run = tmp_path / "gp"

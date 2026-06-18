@@ -1876,6 +1876,7 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         max_abs_diff_p99=args.max_abs_diff_p99,
         benchmark_contract=args.benchmark_contract,
         resident_determinism_json=args.resident_determinism_json,
+        resident_registration_fastpath_json=args.resident_registration_fastpath_json,
         contract_bundle_json=args.contract_bundle,
         pipeline_contract_json=args.pipeline_contract_json,
         stack_engine_contract_json=args.stack_engine_contract_json,
@@ -4728,6 +4729,13 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "optional resident-determinism JSON; copied into the acceptance audit so reports can "
             "show strict drift status and numerical output-drift magnitude"
+        ),
+    )
+    acceptance.add_argument(
+        "--resident-registration-fastpath-json",
+        help=(
+            "optional resident registration fastpath record or resident_artifacts.json; "
+            "overrides the fastpath record collected from --glass-run"
         ),
     )
     acceptance.add_argument(
