@@ -62,6 +62,10 @@ from glass.report.resident_runtime_compare import (
     build_resident_runtime_compare,
     write_resident_runtime_compare,
 )
+from glass.report.resident_winsorized_benchmark import (
+    build_resident_winsorized_benchmark,
+    write_resident_winsorized_benchmark,
+)
 from glass.report.resident_runtime_repeat_plan import (
     build_resident_runtime_repeat_plan,
     write_resident_runtime_repeat_plan,
@@ -2251,6 +2255,33 @@ def cmd_resident_runtime_compare(args: argparse.Namespace) -> int:
             "markdown": args.markdown,
         }
     )
+    return 0
+
+
+def cmd_resident_winsorized_benchmark(args: argparse.Namespace) -> int:
+    payload = build_resident_winsorized_benchmark(
+        frame_count=args.frames,
+        height=args.height,
+        width=args.width,
+        seed=args.seed,
+        low_sigma=args.low_sigma,
+        high_sigma=args.high_sigma,
+        tolerance_rms=args.tolerance_rms,
+        tolerance_max_abs=args.tolerance_max_abs,
+    )
+    write_resident_winsorized_benchmark(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "timing_s": payload.get("timing_s"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
     return 0
 
 
@@ -5131,6 +5162,27 @@ def build_parser() -> argparse.ArgumentParser:
     resident_runtime_compare.add_argument("--out", required=True, help="output runtime comparison JSON")
     resident_runtime_compare.add_argument("--markdown", help="optional output Markdown summary")
     resident_runtime_compare.set_defaults(func=cmd_resident_runtime_compare)
+
+    resident_winsorized_benchmark = sub.add_parser(
+        "resident-winsorized-benchmark",
+        help="run a synthetic resident CUDA winsorized benchmark against the CPU baseline",
+    )
+    resident_winsorized_benchmark.add_argument("--out", required=True, help="output benchmark JSON")
+    resident_winsorized_benchmark.add_argument("--markdown", help="optional output Markdown summary")
+    resident_winsorized_benchmark.add_argument("--frames", type=int, default=16, help="synthetic frame count")
+    resident_winsorized_benchmark.add_argument("--height", type=int, default=32, help="synthetic image height")
+    resident_winsorized_benchmark.add_argument("--width", type=int, default=32, help="synthetic image width")
+    resident_winsorized_benchmark.add_argument("--seed", type=int, default=12345, help="deterministic RNG seed")
+    resident_winsorized_benchmark.add_argument("--low-sigma", type=float, default=3.0)
+    resident_winsorized_benchmark.add_argument("--high-sigma", type=float, default=3.0)
+    resident_winsorized_benchmark.add_argument("--tolerance-rms", type=float, default=2.0e-5)
+    resident_winsorized_benchmark.add_argument("--tolerance-max-abs", type=float, default=2.0e-4)
+    resident_winsorized_benchmark.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless CUDA is available and hardened parity checks pass",
+    )
+    resident_winsorized_benchmark.set_defaults(func=cmd_resident_winsorized_benchmark)
 
     resident_runtime_repeat_plan = sub.add_parser(
         "resident-runtime-repeat-plan",

@@ -4455,6 +4455,24 @@ integration where applicable.
   benchmark rerun, no package build/upload, no default switch, and no
   fused-matrix or tile-local hardened parity migration.
 
+### S2-Gate 265: Resident Winsorized Microbenchmark Artifact
+
+- Add `glass resident-winsorized-benchmark`, a deterministic synthetic
+  microbenchmark for resident CUDA winsorized integration.
+- Generate a small in-memory stack with gradients, frame-to-frame variation,
+  weights, and low/high outliers without reading user image directories.
+- Compare the existing fast resident winsorized approximation, the opt-in
+  hardened resident CUDA path, and the CPU `weighted_integrate_stack`
+  winsorized baseline.
+- Emit JSON and optional Markdown with timing, hardened-vs-CPU map differences,
+  fast-approx-vs-CPU context, pass/fail checks, limitations, and CUDA
+  unavailable diagnostics.
+- Add CPU-only unavailable-path tests, CUDA microbenchmark tests, CLI tests,
+  and help-list coverage.
+- Keep this gate microbenchmark scoped: it does not replace the 200-light real
+  benchmark, change image math, optimize kernels, build/upload packages, or
+  change defaults.
+
 ## Gate Rules
 
 Each gate requires:

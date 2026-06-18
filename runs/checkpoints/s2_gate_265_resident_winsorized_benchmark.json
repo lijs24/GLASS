@@ -1,0 +1,173 @@
+{
+  "artifact_type": "resident_winsorized_benchmark",
+  "checks": [
+    {
+      "evidence": {
+        "cuda_available": true
+      },
+      "name": "cuda_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "frame_count": 8,
+        "limit": 256
+      },
+      "name": "hardened_frame_limit_ok",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 5.781343294611998e-06,
+        "required_max": 2e-05
+      },
+      "name": "hardened_master_rms_within_tolerance",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.52587890625e-05,
+        "required_max": 0.0002
+      },
+      "name": "hardened_master_max_abs_within_tolerance",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      },
+      "name": "hardened_weight_map_matches_cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      },
+      "name": "hardened_coverage_map_matches_cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      },
+      "name": "hardened_low_rejection_map_matches_cpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      },
+      "name": "hardened_high_rejection_map_matches_cpu",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "comparisons": {
+    "fast_approx_vs_cpu": {
+      "master": {
+        "max_abs": 5.23980712890625,
+        "p99_abs": 4.125134658813474,
+        "rms": 0.566935986706338
+      },
+      "note": "fast approximation is measured for attribution and is not required to match CPU parity"
+    },
+    "hardened_vs_cpu": {
+      "coverage": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      },
+      "high_rejection": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      },
+      "low_rejection": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      },
+      "master": {
+        "max_abs": 1.52587890625e-05,
+        "p99_abs": 1.52587890625e-05,
+        "rms": 5.781343294611998e-06
+      },
+      "weight": {
+        "max_abs": 0.0,
+        "p99_abs": 0.0,
+        "rms": 0.0
+      }
+    }
+  },
+  "config": {
+    "frame_count": 8,
+    "hardened_frame_limit": 256,
+    "height": 16,
+    "high_sigma": 3.0,
+    "low_sigma": 3.0,
+    "seed": 265,
+    "tolerance_max_abs": 0.0002,
+    "tolerance_rms": 2e-05,
+    "width": 16
+  },
+  "created_at": "2026-06-18T01:43:57+00:00",
+  "cuda_fast_approx_timing": {
+    "frame_count": 8,
+    "height": 16,
+    "high_sigma": 3.0,
+    "includes_device_sync_and_download": true,
+    "low_sigma": 3.0,
+    "native_method": "ResidentCalibratedStack.integrate_sigma_clip",
+    "pixel_count": 256,
+    "rejection": "winsorized_sigma",
+    "resident_winsorized_mode": "fast_approx",
+    "schema_version": 1,
+    "timing_model": "python_native_resident_fast_winsorized_sigma_one_sync",
+    "total_s": 0.0008526000019628555,
+    "width": 16
+  },
+  "cuda_hardened_timing": {
+    "frame_count": 8,
+    "height": 16,
+    "high_sigma": 3.0,
+    "includes_device_sync_and_download": true,
+    "low_sigma": 3.0,
+    "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+    "pixel_count": 256,
+    "rejection": "winsorized_sigma",
+    "resident_winsorized_mode": "hardened_cpu_parity",
+    "schema_version": 1,
+    "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+    "total_s": 0.000185800003237091,
+    "width": 16
+  },
+  "failed_checks": [],
+  "limitations": [
+    "Synthetic microbenchmark only; it does not replace the 200-light benchmark.",
+    "CPU timing is a local baseline for this small stack and is not a throughput claim.",
+    "Fast approximation is included for timing and difference context, not as a parity requirement."
+  ],
+  "passed": true,
+  "schema_version": 1,
+  "status": "passed",
+  "timing_s": {
+    "cpu_baseline": 0.014615500003856141,
+    "cuda_fast_approx": 0.0008526000019628555,
+    "cuda_hardened": 0.000185800003237091
+  }
+}
