@@ -4419,6 +4419,25 @@ integration where applicable.
   200-light hardened benchmark, tile-local parity migration, fused matrix
   parity migration, package build/upload, or release update is required.
 
+### S2-Gate 263: Hardened Winsorized Runtime Guardrails
+
+- Promote the S2-Gate 261 hardened resident frame-count limit into a shared
+  Python contract so runtime validation, descriptors, artifacts, and tests all
+  report the same capacity boundary.
+- Validate `--resident-winsorized-mode hardened_cpu_parity` before allocating
+  the resident stack and fail clearly when a filter/shape light group exceeds
+  the prototype capacity.
+- Record a per-output resident winsorized runtime contract in
+  `resident_artifacts.json` and `integration_results.json`, including mode,
+  implementation, frame count, frame limit, dispatch requirement, and pass/fail
+  booleans.
+- Add CPU-only helper tests for over-limit hardened mode and non-applicable
+  fast-approx mode, plus a CUDA runtime artifact test for a successful hardened
+  stack-dispatch run.
+- Keep this gate guardrail scoped: no CUDA kernel rewrite, no 200-light
+  benchmark, no package build/upload, no default switch, and no fused-matrix or
+  tile-local hardened parity migration.
+
 ## Gate Rules
 
 Each gate requires:

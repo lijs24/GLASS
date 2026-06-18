@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 from astropy.io import fits
 
 from glass.cli import main
@@ -25,9 +26,11 @@ from glass.engine.resident_cuda import (
     _resident_triangle_agreement_quality,
     _resident_triangle_determinism_summary,
     _resident_similarity_frame_dispatch,
+    _resident_winsorized_runtime_contract,
     _select_star_core_preselected_seed_indices,
     _select_star_guarded_seed,
     _tile_local_policy_application_arrays,
+    _validate_resident_winsorized_runtime_contract,
 )
 from tests.conftest import cuda_module_or_skip
 
@@ -209,6 +212,35 @@ def test_resident_output_map_selection_modes():
         "high_rejection": False,
         "dq": False,
     }
+
+
+def test_resident_hardened_winsorized_contract_rejects_over_limit():
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="hardened_cpu_parity",
+        frame_count=257,
+        dispatch_mode="stack",
+    )
+
+    assert contract["hardened_requested"] is True
+    assert contract["hardened_frame_limit"] == 256
+    assert contract["frame_limit_ok"] is False
+    with pytest.raises(ValueError, match="at most 256 resident frames"):
+        _validate_resident_winsorized_runtime_contract(contract)
+
+
+def test_resident_fast_winsorized_contract_does_not_apply_hardened_limit():
+    contract = _resident_winsorized_runtime_contract(
+        rejection_mode="winsorized_sigma",
+        resident_winsorized_mode="fast_approx",
+        frame_count=512,
+        dispatch_mode="fused_matrix",
+    )
+
+    _validate_resident_winsorized_runtime_contract(contract)
+    assert contract["hardened_requested"] is False
+    assert contract["frame_limit_applies"] is False
+    assert contract["frame_limit_ok"] is True
 
 
 def test_resident_triangle_determinism_signatures_are_stable_and_sensitive():
@@ -867,6 +899,7 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     artifact = resident["artifacts"][0]
     descriptor = output["integration_rejection"]
     dispatch = artifact["resident_integration_dispatch"]
+    winsorized_contract = output["resident_winsorized_contract"]
 
     master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
     weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
@@ -883,6 +916,13 @@ def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Pa
     assert dispatch["effective_mode"] == "stack"
     assert dispatch["selection_reason"] == "auto_stack_hardened_winsorized_requires_stack"
     assert dispatch["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert dispatch["resident_winsorized_contract"] == winsorized_contract
+    assert winsorized_contract["hardened_requested"] is True
+    assert winsorized_contract["frame_count"] == 4
+    assert winsorized_contract["hardened_frame_limit"] == 256
+    assert winsorized_contract["frame_limit_ok"] is True
+    assert winsorized_contract["dispatch_ok"] is True
+    assert winsorized_contract["requires_stack_dispatch"] is True
     assert contract["passed"] is True
     assert any("hardened median/IQR" in warning for warning in integration["warnings"])
     assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)

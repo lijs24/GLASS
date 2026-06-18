@@ -19,6 +19,7 @@ from glass.engine.contracts import DQFlag, DQMask
 from glass.engine.dq import dq_provenance_summary_from_resident
 from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
     RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
     resident_rejection_descriptor,
 )
@@ -1098,6 +1099,56 @@ def _resident_output_map_selection(policy: str) -> dict[str, bool]:
         "high_rejection": policy == "audit",
         "dq": policy in {"audit", "science"},
     }
+
+
+def _resident_winsorized_runtime_contract(
+    *,
+    rejection_mode: str,
+    resident_winsorized_mode: str,
+    frame_count: int,
+    dispatch_mode: str,
+) -> dict[str, Any]:
+    hardened_requested = (
+        rejection_mode == "winsorized_sigma"
+        and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+    )
+    frame_limit_ok = int(frame_count) <= RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT
+    return {
+        "schema_version": 1,
+        "rejection": str(rejection_mode),
+        "resident_winsorized_mode": str(resident_winsorized_mode),
+        "dispatch_mode": str(dispatch_mode),
+        "default_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+        "hardened_requested": hardened_requested,
+        "hardened_frame_limit": RESIDENT_WINSORIZED_SIGMA_HARDENED_FRAME_LIMIT,
+        "frame_count": int(frame_count),
+        "frame_limit_applies": hardened_requested,
+        "frame_limit_ok": (not hardened_requested) or frame_limit_ok,
+        "requires_stack_dispatch": hardened_requested,
+        "dispatch_ok": (not hardened_requested) or dispatch_mode == "stack",
+        "implementation": (
+            "median_iqr_hardened_cuda_resident_prototype"
+            if hardened_requested
+            else "two_stage_mean_std_fast_approximation"
+            if rejection_mode == "winsorized_sigma"
+            else "not_winsorized"
+        ),
+    }
+
+
+def _validate_resident_winsorized_runtime_contract(contract: dict[str, Any]) -> None:
+    if not contract.get("hardened_requested"):
+        return
+    if not contract.get("dispatch_ok"):
+        raise ValueError(
+            "resident_winsorized_mode=hardened_cpu_parity requires resident_integration_dispatch=stack"
+        )
+    if not contract.get("frame_limit_ok"):
+        raise ValueError(
+            "resident_winsorized_mode=hardened_cpu_parity currently supports at most "
+            f"{contract['hardened_frame_limit']} resident frames per filter/shape group; "
+            f"got {contract['frame_count']}"
+        )
 
 
 def _count_map_for_write(data: np.ndarray, dtype: Any) -> np.ndarray:
@@ -2562,6 +2613,13 @@ def run_resident_calibration_integration(
             height = int(light_frames[0]["height"])
             width = int(light_frames[0]["width"])
             filt = _safe_filter_name(filter_name)
+            resident_winsorized_contract = _resident_winsorized_runtime_contract(
+                rejection_mode=rejection_mode,
+                resident_winsorized_mode=resident_winsorized_mode,
+                frame_count=len(light_frames),
+                dispatch_mode=resident_integration_dispatch,
+            )
+            _validate_resident_winsorized_runtime_contract(resident_winsorized_contract)
             group_tile_local_policy_replay = copy.deepcopy(tile_local_policy_replay)
             tile_local_policy_any_enabled = tile_local_policy_any_enabled or bool(
                 group_tile_local_policy_replay.get("enabled")
@@ -6997,6 +7055,7 @@ def run_resident_calibration_integration(
                         "interpolation": resident_warp_interpolation,
                         "clamping_threshold": resident_warp_clamping_threshold,
                         "resident_winsorized_mode": resident_winsorized_mode,
+                        "resident_winsorized_contract": resident_winsorized_contract,
                         "download_mode": fused_matrix_download_mode if fused_matrix_integration_used else "full",
                         "diagnostic_maps_downloaded": bool(
                             fused_matrix_integration_timing.get(
@@ -7073,6 +7132,7 @@ def run_resident_calibration_integration(
                     "resident_integration_dispatch": resident_integration_dispatch,
                     "resident_integration_dispatch_requested": resident_integration_dispatch_requested,
                     "resident_integration_dispatch_reason": resident_integration_dispatch_reason,
+                    "resident_winsorized_contract": resident_winsorized_contract,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
                     "resident_integration_s": integrate_elapsed,
