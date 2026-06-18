@@ -5926,7 +5926,7 @@ integration where applicable.
   evidence into `glass phase2-status`.
 - Add `windows_publish_preflight_resident_fastpath_handoff_passed` as a Phase2
   check, requiring plan/matrix/default-promotion readiness, cross-artifact
-  agreement, passed raw statuses, green Phase2 handoff statuses, and nonzero raw
+  agreement, passed raw statuses, passed Phase2 handoff statuses, and nonzero raw
   check counts.
 - Surface plan, matrix, and default-promotion resident fastpath handoff
   readiness/status/counts in Phase2 Markdown.
@@ -5938,6 +5938,23 @@ integration where applicable.
 - Generate Gate334 Phase2 status artifacts from the Gate333 publish-preflight
   artifact.
 - Keep this gate status/compare scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
+### S2-Gate 335: HTML Resident Fastpath Release Evidence
+
+- Surface acceptance-audit `release_contract_evidence.resident_registration_fastpath`
+  in the main HTML report's release-contract evidence table.
+- Include source, availability, artifact count, registration mode, descriptor
+  batch mode, pixel-refine batch mode, pixel-refine metric mode, warp batch
+  mode, warp batch frame count, warp copy modes, scratch-byte evidence, pass
+  counts, failed-check counts, failed-check names, and artifact path.
+- Include resident fastpath release-contract checks in the report's release
+  contract check table.
+- Add focused HTML report tests proving resident fastpath evidence and check
+  names are visible.
+- Generate Gate335 report artifacts from a controlled acceptance-audit fixture.
+- Keep this gate report-surface scoped: no registration math change, no CUDA
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 

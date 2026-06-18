@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GLASS Report</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; color: #202124; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+    th, td { border: 1px solid #d0d7de; padding: 0.35rem 0.5rem; text-align: left; }
+    th { background: #f6f8fa; }
+    code { background: #f6f8fa; padding: 0.1rem 0.25rem; }
+    .report-toc { border: 1px solid #d0d7de; padding: 0.75rem 1rem; margin: 1rem 0 1.5rem; }
+    .report-toc h2 { margin-top: 0; }
+    .report-toc ol { columns: 2; padding-left: 1.25rem; }
+    .section-anchor { color: #57606a; text-decoration: none; font-size: 0.8em; }
+    .table-limit-note { color: #57606a; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>GLASS Report</h1>
+  <nav class="report-toc" aria-label="Report sections"><h2>Report navigation</h2><ol><li><a href="#project-summary">Project summary</a></li><li><a href="#benchmark-comparison">Benchmark comparison</a></li><li><a href="#release-contract-evidence">Release contract evidence</a></li><li><a href="#optimization-guidance">Optimization guidance</a></li><li><a href="#acceptance-check-failures">Acceptance check failures</a></li><li><a href="#output-numerical-drift">Output numerical drift</a></li><li><a href="#stage-coverage-summary">Stage coverage summary</a></li><li><a href="#input-frame-table">Input frame table</a></li><li><a href="#frame-type-distribution">Frame type distribution</a></li><li><a href="#calibration-group-matching">Calibration group matching</a></li><li><a href="#master-frame-statistics">Master frame statistics</a></li><li><a href="#resident-calibration-artifact">Resident calibration artifact</a></li><li><a href="#xisf-input-cache">XISF input cache</a></li><li><a href="#frame-quality-table">Frame quality table</a></li><li><a href="#registration-table">Registration table</a></li><li><a href="#registration-quality-contract">Registration quality contract</a></li><li><a href="#warp-quality-contract">Warp quality contract</a></li><li><a href="#local-normalization-summary">Local normalization summary</a></li><li><a href="#local-normalization-contract">Local normalization contract</a></li><li><a href="#integration-summary">Integration summary</a></li><li><a href="#frame-accounting">Frame accounting</a></li><li><a href="#rejected-zero-weight-frames">Rejected/zero-weight frames</a></li><li><a href="#output-diagnostics">Output diagnostics</a></li><li><a href="#integration-output-maps">Integration output maps</a></li><li><a href="#output-map-policy">Output map policy</a></li><li><a href="#resident-output-maps">Resident output maps</a></li><li><a href="#dq-mask-summary">DQ/mask summary</a></li><li><a href="#stackengine-dq-provenance">StackEngine DQ provenance</a></li><li><a href="#stackengine-contract-audit">StackEngine contract audit</a></li><li><a href="#pipeline-contract-audit">Pipeline contract audit</a></li><li><a href="#dq-provenance-contract">DQ provenance contract</a></li><li><a href="#geometric-warp-coverage">Geometric warp coverage</a></li><li><a href="#resident-cuda-summary">Resident CUDA summary</a></li><li><a href="#output-artifacts">Output artifacts</a></li><li><a href="#memory-usage-summary">Memory usage summary</a></li><li><a href="#runtime-summary">Runtime summary</a></li><li><a href="#warnings-errors">Warnings/errors</a></li><li><a href="#pixinsight-comparison-if-available">PixInsight comparison if available</a></li><li><a href="#known-differences-from-wbpp">Known differences from WBPP</a></li><li><a href="#clean-room-compliance-note">Clean-room compliance note</a></li></ol></nav>
+  <h2 id="project-summary">Project summary <a class="section-anchor" href="#project-summary" aria-label="Link to Project summary">#</a></h2>
+  <p>Clean-room GLASS report. Input directories are not modified.</p>
+  <h2 id="benchmark-comparison">Benchmark comparison <a class="section-anchor" href="#benchmark-comparison" aria-label="Link to Benchmark comparison">#</a></h2>
+  <p>When compare and acceptance-audit JSON artifacts are present, this table
+  brings speed, image-difference, frame-count, and pass/fail evidence into the
+  main report.</p>
+  <table><thead><tr><th>acceptance_status</th><th>benchmark_contract</th><th>compare_json</th><th>acceptance_json</th><th>glass_time_s</th><th>reference_time_s</th><th>speedup</th><th>shape_match</th><th>rms_diff</th><th>abs_diff_p99</th><th>coverage_fraction</th><th>compared_pixels</th><th>active_frames</th><th>zero_weight_frames</th><th>light_frames</th><th>bias_frames</th><th>dark_frames</th><th>flat_frames</th><th>checks_passed</th><th>checks_failed</th><th>failed_check_names</th></tr></thead><tbody><tr><td>passed</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>None</td><td>0</td><td>0</td><td></td></tr></tbody></table>
+  <h2 id="release-contract-evidence">Release contract evidence <a class="section-anchor" href="#release-contract-evidence" aria-label="Link to Release contract evidence">#</a></h2>
+  <p>Release-grade benchmark acceptance must carry the pipeline invariant
+  contract evidence required by the benchmark contract. This section shows those
+  checks even when they all pass.</p>
+  <table><thead><tr><th>surface</th><th>status</th><th>required_by_benchmark_contract</th><th>source</th><th>available</th><th>artifact_count</th><th>mode</th><th>descriptor_batch</th><th>descriptor_batch_mode</th><th>pixel_refine_batch</th><th>pixel_refine_batch_mode</th><th>pixel_refine_metric_mode</th><th>warp_batch</th><th>warp_batch_mode</th><th>warp_batch_frame_count</th><th>warp_copy_mode</th><th>io_warp_copy_mode</th><th>warp_scratch_bytes</th><th>io_warp_scratch_bytes</th><th>acceptance_fastpath_checks_passed</th><th>acceptance_fastpath_checks_failed</th><th>failed_checks</th><th>path</th></tr></thead><tbody><tr><td>resident_registration_fastpath</td><td>passed</td><td>True</td><td>explicit_resident_artifacts_json</td><td>True</td><td>1</td><td>similarity_cuda_triangle</td><td>True</td><td>native_batch_shared_reference_device</td><td>True</td><td>native_batch_one_seed_per_frame</td><td>flattened_frame_candidate_grid</td><td>True</td><td>native_matrix_lanczos3_frames</td><td>200</td><td>default_stream_async_device_to_device</td><td>default_stream_async_device_to_device</td><td>4096</td><td>4096</td><td>12</td><td>0</td><td></td><td>resident_artifacts.json</td></tr></tbody></table>
+  <table><thead><tr><th>surface</th><th>check</th><th>passed</th><th>note</th><th>evidence</th></tr></thead><tbody><tr><td>resident_registration_fastpath</td><td>contract_resident_registration_fastpath_present</td><td>True</td><td></td><td>available=True</td></tr><tr><td>resident_registration_fastpath</td><td>contract_resident_registration_fastpath_value:resident_registration.mode</td><td>True</td><td></td><td>actual=similarity_cuda_triangle, required=similarity_cuda_triangle</td></tr></tbody></table>
+  <h2 id="optimization-guidance">Optimization guidance <a class="section-anchor" href="#optimization-guidance" aria-label="Link to Optimization guidance">#</a></h2>
+  <p>This diagnostic view joins benchmark stage timings with rejected-frame
+  accounting so the next optimization target is explicit instead of inferred
+  from scattered artifacts.</p>
+  <p>No rows.</p>
+  <table><thead><tr><th>exception_frames</th><th>dominant_stage</th><th>primary_stage_counts</th><th>final_status_counts</th><th>sample_frame_ids</th><th>note</th></tr></thead><tbody><tr><td>0</td><td>None</td><td>{}</td><td>{}</td><td></td><td>No rejected or zero-weight frame exceptions were recorded.</td></tr></tbody></table>
+  <p>No rows.</p>
+  <h2 id="acceptance-check-failures">Acceptance check failures <a class="section-anchor" href="#acceptance-check-failures" aria-label="Link to Acceptance check failures">#</a></h2>
+  <p>Only failed acceptance-audit checks are listed here. A green run reports no
+  rows while retaining the authoritative check list in the audit JSON.</p>
+  <p>No rows.</p>
+  <h2 id="output-numerical-drift">Output numerical drift <a class="section-anchor" href="#output-numerical-drift" aria-label="Link to Output numerical drift">#</a></h2>
+  <p>When a resident determinism or acceptance audit contains output FITS
+  numerical drift evidence, this table reports the magnitude of strict output
+  mismatches instead of leaving only hashes to interpret.</p>
+  <p>No rows.</p>
+  <h2 id="stage-coverage-summary">Stage coverage summary <a class="section-anchor" href="#stage-coverage-summary" aria-label="Link to Stage coverage summary">#</a></h2>
+  <table><thead><tr><th>stage</th><th>rows</th><th>artifact</th></tr></thead><tbody><tr><td>scan</td><td>0</td><td>missing</td></tr><tr><td>plan</td><td>0</td><td>missing</td></tr><tr><td>calibration</td><td>0</td><td>missing</td></tr><tr><td>quality</td><td>0</td><td>missing</td></tr><tr><td>registration</td><td>0</td><td>missing</td></tr><tr><td>local_normalization</td><td>0</td><td>missing</td></tr><tr><td>integration</td><td>0</td><td>missing</td></tr><tr><td>frame_accounting</td><td>0</td><td>missing</td></tr><tr><td>frame_accounting_exceptions</td><td>0</td><td>missing</td></tr></tbody></table>
+  <h2 id="input-frame-table">Input frame table <a class="section-anchor" href="#input-frame-table" aria-label="Link to Input frame table">#</a></h2>
+  <p>No rows.</p>
+  <h2 id="frame-type-distribution">Frame type distribution <a class="section-anchor" href="#frame-type-distribution" aria-label="Link to Frame type distribution">#</a></h2>
+  <pre>{}</pre>
+  <h2 id="calibration-group-matching">Calibration group matching <a class="section-anchor" href="#calibration-group-matching" aria-label="Link to Calibration group matching">#</a></h2>
+  <p>No rows.</p>
+  <h2 id="master-frame-statistics">Master frame statistics <a class="section-anchor" href="#master-frame-statistics" aria-label="Link to Master frame statistics">#</a></h2>
+  <pre>{}</pre>
+  <p>No rows.</p>
+  <h2 id="resident-calibration-artifact">Resident calibration artifact <a class="section-anchor" href="#resident-calibration-artifact" aria-label="Link to Resident calibration artifact">#</a></h2>
+  <p>Resident CUDA calibration artifacts record master bias/dark/flat surfaces
+  and per-light in-VRAM calibration ledger rows without implying calibrated
+  FITS intermediates were written to disk.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="xisf-input-cache">XISF input cache <a class="section-anchor" href="#xisf-input-cache" aria-label="Link to XISF input cache">#</a></h2>
+  <p>XISF sources are streamed into run-local FITS cache files before calibration.</p>
+  <p>No rows.</p>
+  <h2 id="frame-quality-table">Frame quality table <a class="section-anchor" href="#frame-quality-table" aria-label="Link to Frame quality table">#</a></h2>
+  <p>Detector: <code>pending</code>.
+  Weight source: <code>pending</code>.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>Reference frame: <code>pending</code></p>
+  <h2 id="registration-table">Registration table <a class="section-anchor" href="#registration-table" aria-label="Link to Registration table">#</a></h2>
+  <p>No rows.</p>
+  <h2 id="registration-quality-contract">Registration quality contract <a class="section-anchor" href="#registration-quality-contract" aria-label="Link to Registration quality contract">#</a></h2>
+  <p>The registration quality contract summarizes accepted/rejected alignment
+  rows and optional inlier/RMS acceptance thresholds.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="warp-quality-contract">Warp quality contract <a class="section-anchor" href="#warp-quality-contract" aria-label="Link to Warp quality contract">#</a></h2>
+  <p>The warp quality contract checks registered image, coverage, and DQ
+  artifact readiness, valid-pixel fraction, skipped-frame accounting, and
+  whether accepted registration outputs reached the warp stage. Full evidence
+  is recorded in <code>warp_quality_contract.json</code>.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="local-normalization-summary">Local normalization summary <a class="section-anchor" href="#local-normalization-summary" aria-label="Link to Local normalization summary">#</a></h2>
+  <p>Enabled: <code>pending</code>.
+  Reference frame: <code>pending</code>.</p>
+  <p>No rows.</p>
+  <h2 id="local-normalization-contract">Local normalization contract <a class="section-anchor" href="#local-normalization-contract" aria-label="Link to Local normalization contract">#</a></h2>
+  <p>The local-normalization contract proves whether the stage emitted an
+  explicit disabled passthrough artifact or a continuous coefficient-field
+  artifact with audited coefficient grids.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="integration-summary">Integration summary <a class="section-anchor" href="#integration-summary" aria-label="Link to Integration summary">#</a></h2>
+  <p>Combine: <code>pending</code>.
+  Weighting: <code>pending</code>.
+  Rejection: <code>pending</code>.</p>
+  <p>No rows.</p>
+  <h2 id="frame-accounting">Frame accounting <a class="section-anchor" href="#frame-accounting" aria-label="Link to Frame accounting">#</a></h2>
+  <p>Per-light acceptance accounting joins quality, registration, warp, local
+  normalization, integration weight, and final use/skip status. Full details are
+  authoritative in <code>frame_accounting.json</code>.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="rejected-zero-weight-frames">Rejected/zero-weight frames <a class="section-anchor" href="#rejected-zero-weight-frames" aria-label="Link to Rejected/zero-weight frames">#</a></h2>
+  <p>This compact table focuses on frames that did not enter the final integrated
+  stack. The complete per-frame ledger remains in <code>frame_accounting.json</code>.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="output-diagnostics">Output diagnostics <a class="section-anchor" href="#output-diagnostics" aria-label="Link to Output diagnostics">#</a></h2>
+  <p>Output diagnostics are flattened from integration and resident artifacts to
+  avoid dumping nested JSON into the report.</p>
+  <p>No rows.</p>
+  <h2 id="integration-output-maps">Integration output maps <a class="section-anchor" href="#integration-output-maps" aria-label="Link to Integration output maps">#</a></h2>
+  <p>No rows.</p>
+  <h2 id="output-map-policy">Output map policy <a class="section-anchor" href="#output-map-policy" aria-label="Link to Output map policy">#</a></h2>
+  <p>No rows.</p>
+  <h2 id="resident-output-maps">Resident output maps <a class="section-anchor" href="#resident-output-maps" aria-label="Link to Resident output maps">#</a></h2>
+  <p>Resident artifact records expose map paths, write policy status, storage
+  dtype, estimated payload size, and per-map write timing for audit review.</p>
+  <p>No rows.</p>
+  <h2 id="dq-mask-summary">DQ/mask summary <a class="section-anchor" href="#dq-mask-summary" aria-label="Link to DQ/mask summary">#</a></h2>
+  <p>No rows.</p>
+  <h2 id="stackengine-dq-provenance">StackEngine DQ provenance <a class="section-anchor" href="#stackengine-dq-provenance" aria-label="Link to StackEngine DQ provenance">#</a></h2>
+  <p>StackEngine paths record source DQ flag counts, non-finite samples,
+  zero-coverage pixels, rejection-touched pixels, and output DQ summaries.</p>
+  <p>No rows.</p>
+  <h2 id="stackengine-contract-audit">StackEngine contract audit <a class="section-anchor" href="#stackengine-contract-audit" aria-label="Link to StackEngine contract audit">#</a></h2>
+  <p>The standalone StackEngine contract audit verifies default routing and DQ
+  provenance from GLASS artifacts. Failed checks are shown here while the JSON
+  audit remains authoritative.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="pipeline-contract-audit">Pipeline contract audit <a class="section-anchor" href="#pipeline-contract-audit" aria-label="Link to Pipeline contract audit">#</a></h2>
+  <p>The pipeline invariant contract audit verifies structural DQ, LN, warp,
+  rejection-map, crop-box, and output-map expectations from GLASS artifacts.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>pipeline contract rejection sample accounting rows expose the sample-count
+  total from low/high rejection maps separately from DQ touched-pixel counts.</p>
+  <p>No rows.</p>
+  <p>pipeline contract sample-closure rows show whether initially valid samples
+  close over final valid plus rejected samples; missing is allowed for old
+  artifacts, failed is blocking.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <p>No rows.</p>
+  <h2 id="dq-provenance-contract">DQ provenance contract <a class="section-anchor" href="#dq-provenance-contract" aria-label="Link to DQ provenance contract">#</a></h2>
+  <p>This normalized summary bridges StackEngine and resident CUDA provenance
+  schemas for report and audit consumers.</p>
+  <p>No rows.</p>
+  <h2 id="geometric-warp-coverage">Geometric warp coverage <a class="section-anchor" href="#geometric-warp-coverage" aria-label="Link to Geometric warp coverage">#</a></h2>
+  <p>Resident CUDA runs can accumulate a pre-rejection geometric footprint from
+  warp kernels. Partial geometric coverage is reported separately from low/high
+  rejection counts.</p>
+  <p>No rows.</p>
+  <h2 id="resident-cuda-summary">Resident CUDA summary <a class="section-anchor" href="#resident-cuda-summary" aria-label="Link to Resident CUDA summary">#</a></h2>
+  <p>Backend: <code>not used</code>.
+  Device: <code>pending</code>.</p>
+  <p>No rows.</p>
+  <h2 id="output-artifacts">Output artifacts <a class="section-anchor" href="#output-artifacts" aria-label="Link to Output artifacts">#</a></h2>
+  <p>See adjacent JSON files in the run directory.</p>
+  <h2 id="memory-usage-summary">Memory usage summary <a class="section-anchor" href="#memory-usage-summary" aria-label="Link to Memory usage summary">#</a></h2>
+  <p>Heavy stages use explicit memory modes. Tile/slab streaming is the bounded
+  fallback; resident mode is allowed only when the planned hot set fits within
+  the configured device memory budget.</p>
+  <h2 id="runtime-summary">Runtime summary <a class="section-anchor" href="#runtime-summary" aria-label="Link to Runtime summary">#</a></h2>
+  <p>Total elapsed seconds: <code>pending</code>.</p>
+  <table><thead><tr><th>command</th><th>backend</th><th>memory_mode</th><th>total_elapsed_s</th><th>stage_count</th></tr></thead><tbody><tr><td>None</td><td>None</td><td>tile</td><td>None</td><td>0</td></tr></tbody></table>
+  <p>No rows.</p>
+  <h2 id="warnings-errors">Warnings/errors <a class="section-anchor" href="#warnings-errors" aria-label="Link to Warnings/errors">#</a></h2>
+  <p>No rows.</p>
+  <h2 id="pixinsight-comparison-if-available">PixInsight comparison if available <a class="section-anchor" href="#pixinsight-comparison-if-available" aria-label="Link to PixInsight comparison if available">#</a></h2>
+  <p>No comparison artifact attached.</p>
+  <h2 id="known-differences-from-wbpp">Known differences from WBPP <a class="section-anchor" href="#known-differences-from-wbpp" aria-label="Link to Known differences from WBPP">#</a></h2>
+  <p>This is an independent implementation and does not claim numerical equivalence.</p>
+  <h2 id="clean-room-compliance-note">Clean-room compliance note <a class="section-anchor" href="#clean-room-compliance-note" aria-label="Link to Clean-room compliance note">#</a></h2>
+  <p>No official WBPP/PJSR source code is used as implementation input.</p>
+</body>
+</html>

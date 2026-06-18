@@ -399,21 +399,22 @@ def _release_contract_evidence_rows(acceptance_audit: dict[str, Any] | None) -> 
         return []
     pipeline = evidence.get("pipeline_contract")
     stack_default = evidence.get("stack_engine_default_promotion")
+    resident_fastpath = evidence.get("resident_registration_fastpath")
     rows: list[dict[str, Any]] = []
     if isinstance(pipeline, dict):
         rows.append(
             {
-            "surface": "pipeline_contract",
-            "status": pipeline.get("status"),
-            "required_by_benchmark_contract": pipeline.get("required_by_benchmark_contract"),
-            "pipeline_contract_audit_type": pipeline.get("pipeline_contract_audit_type"),
-            "pipeline_contract_passed": pipeline.get("pipeline_contract_passed"),
-            "pipeline_contract_status": pipeline.get("pipeline_contract_status"),
-            "pipeline_contract_checks": pipeline.get("pipeline_contract_check_count"),
-            "acceptance_pipeline_checks_passed": pipeline.get("passed_check_count"),
-            "acceptance_pipeline_checks_failed": pipeline.get("failed_check_count"),
-            "failed_checks": ", ".join(str(item) for item in pipeline.get("failed_checks") or []),
-            "path": pipeline.get("pipeline_contract_path"),
+                "surface": "pipeline_contract",
+                "status": pipeline.get("status"),
+                "required_by_benchmark_contract": pipeline.get("required_by_benchmark_contract"),
+                "pipeline_contract_audit_type": pipeline.get("pipeline_contract_audit_type"),
+                "pipeline_contract_passed": pipeline.get("pipeline_contract_passed"),
+                "pipeline_contract_status": pipeline.get("pipeline_contract_status"),
+                "pipeline_contract_checks": pipeline.get("pipeline_contract_check_count"),
+                "acceptance_pipeline_checks_passed": pipeline.get("passed_check_count"),
+                "acceptance_pipeline_checks_failed": pipeline.get("failed_check_count"),
+                "failed_checks": ", ".join(str(item) for item in pipeline.get("failed_checks") or []),
+                "path": pipeline.get("pipeline_contract_path"),
             }
         )
     if isinstance(stack_default, dict):
@@ -437,6 +438,60 @@ def _release_contract_evidence_rows(acceptance_audit: dict[str, Any] | None) -> 
                 "path": stack_default.get("stack_engine_contract_path"),
             }
         )
+    if isinstance(resident_fastpath, dict):
+        rows.append(
+            {
+                "surface": "resident_registration_fastpath",
+                "status": resident_fastpath.get("status"),
+                "required_by_benchmark_contract": resident_fastpath.get(
+                    "required_by_benchmark_contract"
+                ),
+                "source": resident_fastpath.get("source"),
+                "available": resident_fastpath.get("available"),
+                "artifact_count": resident_fastpath.get("artifact_count"),
+                "mode": resident_fastpath.get("mode"),
+                "descriptor_batch": resident_fastpath.get(
+                    "triangle_descriptor_fit_batch"
+                ),
+                "descriptor_batch_mode": resident_fastpath.get(
+                    "triangle_descriptor_fit_batch_mode"
+                ),
+                "pixel_refine_batch": resident_fastpath.get(
+                    "triangle_pixel_refine_batch"
+                ),
+                "pixel_refine_batch_mode": resident_fastpath.get(
+                    "triangle_pixel_refine_batch_mode"
+                ),
+                "pixel_refine_metric_mode": resident_fastpath.get(
+                    "triangle_pixel_refine_batch_metric_mode"
+                ),
+                "warp_batch": resident_fastpath.get("triangle_warp_batch"),
+                "warp_batch_mode": resident_fastpath.get("triangle_warp_batch_mode"),
+                "warp_batch_frame_count": resident_fastpath.get(
+                    "triangle_warp_batch_frame_count"
+                ),
+                "warp_copy_mode": resident_fastpath.get("resident_warp_copy_mode"),
+                "io_warp_copy_mode": resident_fastpath.get(
+                    "resident_io_pipeline_warp_copy_mode"
+                ),
+                "warp_scratch_bytes": resident_fastpath.get(
+                    "resident_warp_scratch_bytes"
+                ),
+                "io_warp_scratch_bytes": resident_fastpath.get(
+                    "resident_io_pipeline_warp_scratch_bytes"
+                ),
+                "acceptance_fastpath_checks_passed": resident_fastpath.get(
+                    "passed_check_count"
+                ),
+                "acceptance_fastpath_checks_failed": resident_fastpath.get(
+                    "failed_check_count"
+                ),
+                "failed_checks": ", ".join(
+                    str(item) for item in resident_fastpath.get("failed_checks") or []
+                ),
+                "path": resident_fastpath.get("path"),
+            }
+        )
     return rows
 
 
@@ -444,10 +499,12 @@ def _release_contract_check_rows(acceptance_audit: dict[str, Any] | None) -> lis
     evidence = (acceptance_audit or {}).get("release_contract_evidence")
     pipeline = evidence.get("pipeline_contract") if isinstance(evidence, dict) else None
     stack_default = evidence.get("stack_engine_default_promotion") if isinstance(evidence, dict) else None
+    resident_fastpath = evidence.get("resident_registration_fastpath") if isinstance(evidence, dict) else None
     rows: list[dict[str, Any]] = []
     for surface, payload in (
         ("pipeline_contract", pipeline),
         ("stack_engine_default_promotion", stack_default),
+        ("resident_registration_fastpath", resident_fastpath),
     ):
         if not isinstance(payload, dict):
             continue

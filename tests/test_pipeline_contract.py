@@ -606,6 +606,79 @@ def test_html_report_surfaces_pipeline_sample_accounting_closure(tmp_path: Path)
     assert "<td>passed</td>" in text
 
 
+def test_html_report_surfaces_resident_registration_fastpath_release_evidence(
+    tmp_path: Path,
+):
+    report = tmp_path / "report.html"
+    write_html_report(
+        report,
+        acceptance_audit={
+            "release_contract_evidence": {
+                "resident_registration_fastpath": {
+                    "status": "passed",
+                    "required_by_benchmark_contract": True,
+                    "source": "explicit_resident_artifacts_json",
+                    "path": "resident_artifacts.json",
+                    "available": True,
+                    "artifact_count": 1,
+                    "mode": "similarity_cuda_triangle",
+                    "triangle_descriptor_fit_batch": True,
+                    "triangle_descriptor_fit_batch_mode": (
+                        "native_batch_shared_reference_device"
+                    ),
+                    "triangle_pixel_refine_batch": True,
+                    "triangle_pixel_refine_batch_mode": (
+                        "native_batch_one_seed_per_frame"
+                    ),
+                    "triangle_pixel_refine_batch_metric_mode": (
+                        "flattened_frame_candidate_grid"
+                    ),
+                    "triangle_warp_batch": True,
+                    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+                    "triangle_warp_batch_frame_count": 200,
+                    "resident_warp_copy_mode": (
+                        "default_stream_async_device_to_device"
+                    ),
+                    "resident_io_pipeline_warp_copy_mode": (
+                        "default_stream_async_device_to_device"
+                    ),
+                    "resident_warp_scratch_bytes": 4096,
+                    "resident_io_pipeline_warp_scratch_bytes": 4096,
+                    "passed_check_count": 12,
+                    "failed_check_count": 0,
+                    "failed_checks": [],
+                    "checks": [
+                        {
+                            "name": "contract_resident_registration_fastpath_present",
+                            "passed": True,
+                            "evidence": {"available": True},
+                        },
+                        {
+                            "name": (
+                                "contract_resident_registration_fastpath_value:"
+                                "resident_registration.mode"
+                            ),
+                            "passed": True,
+                            "evidence": {
+                                "actual": "similarity_cuda_triangle",
+                                "required": "similarity_cuda_triangle",
+                            },
+                        },
+                    ],
+                }
+            }
+        },
+    )
+
+    text = report.read_text(encoding="utf-8")
+    assert "resident_registration_fastpath" in text
+    assert "similarity_cuda_triangle" in text
+    assert "native_batch_shared_reference_device" in text
+    assert "native_matrix_lanczos3_frames" in text
+    assert "default_stream_async_device_to_device" in text
+    assert "contract_resident_registration_fastpath_present" in text
+
+
 def test_pipeline_contract_pixel_verification_reports_resident_rejection_sample_accounting(tmp_path: Path):
     run = tmp_path / "run"
     _write_resident_pipeline_run(run)
