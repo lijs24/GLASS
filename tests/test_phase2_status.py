@@ -300,6 +300,13 @@ def _write_quality_results(path: Path, *, rejected: bool = False) -> None:
             "frame_quality": [
                 {
                     "frame_id": "F_SAT",
+                    "star_count": 90,
+                    "fwhm_px": 5.8,
+                    "eccentricity": 0.44,
+                    "background_rms": 24.0,
+                    "snr": 33.0,
+                    "quality_score": 420.0,
+                    "weight": 0.42,
                     "saturation_fraction": 0.0087890625,
                     "saturated_pixel_count": 36,
                     "saturation_level": 5000.0,
@@ -309,6 +316,13 @@ def _write_quality_results(path: Path, *, rejected: bool = False) -> None:
                 },
                 {
                     "frame_id": "F_OK",
+                    "star_count": 120,
+                    "fwhm_px": 2.1,
+                    "eccentricity": 0.31,
+                    "background_rms": 18.0,
+                    "snr": 55.0,
+                    "quality_score": 1000.0,
+                    "weight": 1.0,
                     "saturation_fraction": 0.0,
                     "saturated_pixel_count": 0,
                     "saturation_level": 5000.0,
@@ -3357,6 +3371,38 @@ def test_phase2_status_surfaces_quality_saturation_summary(tmp_path: Path):
     assert "saturation_rejected=0" in text
 
 
+def test_phase2_status_surfaces_quality_metric_summary(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=358)
+    quality = tmp_path / "frame_quality.json"
+    out_md = tmp_path / "phase2.md"
+    _write_quality_results(quality)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        quality_results=quality,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    summary = payload["quality_metrics"]
+    metric_rows = {item["metric"]: item for item in summary["summary_rows"]}
+    assert payload["status"] == "green"
+    assert summary["status"] == "passed"
+    assert summary["metric_count"] == 7
+    assert summary["frame_count"] == 2
+    assert metric_rows["fwhm_px"]["worst_frame_id"] == "F_SAT"
+    assert metric_rows["snr"]["worst_frame_id"] == "F_SAT"
+    assert checks["quality_metric_summary_available"]["passed"] is True
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert "Quality Metrics" in text
+    assert "Quality metrics: passed metrics=7 frames=2" in text
+    assert "fwhm_px: median=3.95" in text
+
+
 def test_phase2_status_blocks_quality_saturation_rejection(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -3732,6 +3778,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["registration_admission"]["passed"] is True
     assert payload["quality_saturation"]["status"] == "passed"
     assert payload["quality_saturation"]["quality_gate_saturation_rejected_count"] == 0
+    assert payload["quality_metrics"]["status"] == "passed"
+    assert payload["quality_metrics"]["metric_count"] == 7
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -3741,6 +3789,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Registration fast path contract: passed" in text
     assert "Registration admission: accepted passed=True blocked=False" in text
     assert "Quality saturation: passed passed=True" in text
+    assert "Quality metrics: passed metrics=7 frames=2" in text
     assert "Triangle warp batch frames: 188" in text
     assert "Default Route Acceptance" in text
     assert "Route contract passed: True" in text
@@ -5930,6 +5979,52 @@ def test_phase2_status_compare_flags_quality_saturation_regression(
         == 1
     )
     assert payload["candidate"]["quality_saturation"]["status"] == "attention_required"
+
+
+def test_phase2_status_compare_flags_quality_metric_summary_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    baseline_payload = _status_payload(gate=357)
+    baseline_payload["quality_metrics"] = {
+        "status": "passed",
+        "passed": True,
+        "frame_count": 2,
+        "metric_count": 7,
+        "metrics": [
+            "star_count",
+            "fwhm_px",
+            "eccentricity",
+            "background_rms",
+            "snr",
+            "quality_score",
+            "weight",
+        ],
+    }
+    candidate_payload = _status_payload(gate=358, status="attention_required")
+    candidate_payload["quality_metrics"] = {
+        "status": "not_available",
+        "passed": False,
+        "frame_count": 2,
+        "metric_count": 0,
+        "metrics": [],
+    }
+    write_json(baseline, baseline_payload)
+    write_json(candidate, candidate_payload)
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    check = checks["quality_metric_summary_available_preserved"]
+    assert payload["status"] == "regressed"
+    assert check["passed"] is False
+    assert check["evidence"]["baseline"]["metric_count"] == 7
+    assert check["evidence"]["candidate"]["metric_count"] == 0
+    assert payload["candidate"]["quality_metrics"]["status"] == "not_available"
 
 
 def test_phase2_status_compare_flags_stack_publication_resident_result_regression(

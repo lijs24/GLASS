@@ -6365,6 +6365,27 @@ integration where applicable.
   integration math change, no CUDA kernel change, no runtime default change, no
   package upload, no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 358: Phase2 Quality Metric Summary Handoff
+
+- Reuse `glass phase2-status --quality-results` to summarize core
+  `frame_quality.json` metric distributions in Phase2 status JSON and
+  Markdown.
+- Add a `quality_metrics` payload with frame count, metric count, metric names,
+  and per-metric min/median/mean/max/worst-frame summaries for `star_count`,
+  `fwhm_px`, `eccentricity`, `background_rms`, `snr`, `quality_score`, and
+  `weight`.
+- Add `quality_metric_summary_available` so explicitly supplied quality
+  artifacts must contain at least one configured metric summary.
+- Extend `glass phase2-status-compare` with
+  `quality_metric_summary_available_preserved`, preventing candidates from
+  dropping previously available quality metric summary evidence.
+- Add focused build, CLI, Markdown, and compare tests.
+- Keep this gate Phase2 status handoff scoped: no quality metric math change,
+  no quality thresholds, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

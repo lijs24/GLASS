@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "quality_gate_policy": {
+    "max_saturation_fraction": 0.005,
+    "saturation_level": 5000.0
+  },
+  "frame_quality": [
+    {
+      "frame_id": "F_SAT",
+      "star_count": 90,
+      "fwhm_px": 5.8,
+      "eccentricity": 0.44,
+      "background_rms": 24.0,
+      "snr": 33.0,
+      "quality_score": 420.0,
+      "weight": 0.42,
+      "saturation_fraction": 0.0087890625,
+      "saturated_pixel_count": 36,
+      "saturation_level": 5000.0,
+      "saturation_source": "threshold",
+      "quality_gate_status": "accepted",
+      "quality_gate_warnings": []
+    },
+    {
+      "frame_id": "F_OK",
+      "star_count": 120,
+      "fwhm_px": 2.1,
+      "eccentricity": 0.31,
+      "background_rms": 18.0,
+      "snr": 55.0,
+      "quality_score": 1000.0,
+      "weight": 1.0,
+      "saturation_fraction": 0.0,
+      "saturated_pixel_count": 0,
+      "saturation_level": 5000.0,
+      "saturation_source": "threshold",
+      "quality_gate_status": "accepted",
+      "quality_gate_warnings": []
+    }
+  ],
+  "reference_frame_id": "F_OK"
+}

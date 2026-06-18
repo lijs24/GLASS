@@ -3590,6 +3590,11 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         if isinstance(payload.get("quality_saturation"), dict)
         else {}
     )
+    quality_metrics = (
+        payload.get("quality_metrics")
+        if isinstance(payload.get("quality_metrics"), dict)
+        else {}
+    )
     winsorized_audit = (
         payload.get("resident_winsorized_benchmark_audit")
         if isinstance(payload.get("resident_winsorized_benchmark_audit"), dict)
@@ -3619,6 +3624,8 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             "quality_saturation_rejected": quality_saturation.get(
                 "quality_gate_saturation_rejected_count"
             ),
+            "quality_metrics_status": quality_metrics.get("status"),
+            "quality_metrics_count": quality_metrics.get("metric_count"),
             "resident_winsorized_benchmark_audit_status": winsorized_audit.get("status"),
             "resident_winsorized_benchmark_audit_passed": winsorized_audit.get("passed"),
             "resident_winsorized_sweep_audit_status": winsorized_sweep_audit.get("status"),

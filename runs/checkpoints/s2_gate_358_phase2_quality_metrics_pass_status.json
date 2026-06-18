@@ -1,0 +1,291 @@
+{
+  "acceptance_audit": null,
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 357,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      },
+      "name": "cuda_doctor_available",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "frame_count": 2,
+        "max_saturation_fraction": 0.00878906,
+        "max_saturation_fraction_policy": 0.005,
+        "path": "runs\\checkpoints\\s2_gate_358_quality_metrics_frame_quality.json",
+        "quality_gate_saturation_rejected_count": 0,
+        "rejected_frame_ids": [],
+        "saturated_frame_count": 1,
+        "status": "passed",
+        "worst_frame_id": "F_SAT"
+      },
+      "name": "quality_saturation_no_rejections",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "frame_count": 2,
+        "metric_count": 7,
+        "metrics": [
+          "star_count",
+          "fwhm_px",
+          "eccentricity",
+          "background_rms",
+          "snr",
+          "quality_score",
+          "weight"
+        ],
+        "path": "runs\\checkpoints\\s2_gate_358_quality_metrics_frame_quality.json",
+        "status": "passed"
+      },
+      "name": "quality_metric_summary_available",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T21:11:20+00:00",
+  "default_route_acceptance": null,
+  "doctor": {
+    "compute_capability": "12.0",
+    "cuda_available": true,
+    "device_count": 1,
+    "driver_version": "596.21",
+    "native_extension_loaded": true,
+    "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "recommendation": "cuda",
+    "vram_mib": 97886,
+    "windows_cuda_packages": {
+      "fallbacks": [
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+      "ordered_try_list": [
+        "cuda13",
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "packages": [
+        {
+          "architectures": [
+            "5.0",
+            "5.2",
+            "6.0",
+            "6.1",
+            "7.0",
+            "7.5",
+            "8.0",
+            "8.6"
+          ],
+          "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+          "label": "cuda11",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "11.8"
+        },
+        {
+          "architectures": [
+            "7.5",
+            "8.0",
+            "8.6",
+            "8.9",
+            "9.0"
+          ],
+          "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+          "label": "cuda12",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "12.4"
+        },
+        {
+          "architectures": [
+            "8.6",
+            "8.9",
+            "9.0",
+            "10.0",
+            "12.0"
+          ],
+          "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+          "label": "cuda13",
+          "match": "native_cubin",
+          "note": "This package contains native GPU code for this compute capability.",
+          "toolkit": "13.0"
+        }
+      ],
+      "primary": "cuda13",
+      "ptx_forward_compatibility": true,
+      "selected_device": {
+        "compute_capability": "12.0",
+        "compute_capability_code": 120,
+        "device_id": 0,
+        "driver_version": "596.21",
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      }
+    },
+    "wrapper_importable": true
+  },
+  "github_release_plan": null,
+  "latest_checkpoint": {
+    "checkpoint_dir": "runs\\checkpoints",
+    "date": "2026-06-19",
+    "exists": true,
+    "gate": 357,
+    "green": true,
+    "path": "runs\\checkpoints\\s2_gate_357_status.md",
+    "scope": "Quality metric distribution report surface",
+    "status": "green"
+  },
+  "passed": true,
+  "pipeline_contract": null,
+  "publish_preflight": null,
+  "quality_metrics": {
+    "exists": true,
+    "frame_count": 2,
+    "metric_count": 7,
+    "metrics": [
+      "star_count",
+      "fwhm_px",
+      "eccentricity",
+      "background_rms",
+      "snr",
+      "quality_score",
+      "weight"
+    ],
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_358_quality_metrics_frame_quality.json",
+    "reason": null,
+    "status": "passed",
+    "summary_rows": [
+      {
+        "bad_direction": "low",
+        "max": 120.0,
+        "mean": 105.0,
+        "median": 105.0,
+        "metric": "star_count",
+        "min": 90.0,
+        "valid_frames": 2,
+        "worst_frame_id": "F_SAT",
+        "worst_value": 90.0
+      },
+      {
+        "bad_direction": "high",
+        "max": 5.8,
+        "mean": 3.95,
+        "median": 3.95,
+        "metric": "fwhm_px",
+        "min": 2.1,
+        "valid_frames": 2,
+        "worst_frame_id": "F_SAT",
+        "worst_value": 5.8
+      },
+      {
+        "bad_direction": "high",
+        "max": 0.44,
+        "mean": 0.375,
+        "median": 0.375,
+        "metric": "eccentricity",
+        "min": 0.31,
+        "valid_frames": 2,
+        "worst_frame_id": "F_SAT",
+        "worst_value": 0.44
+      },
+      {
+        "bad_direction": "high",
+        "max": 24.0,
+        "mean": 21.0,
+        "median": 21.0,
+        "metric": "background_rms",
+        "min": 18.0,
+        "valid_frames": 2,
+        "worst_frame_id": "F_SAT",
+        "worst_value": 24.0
+      },
+      {
+        "bad_direction": "low",
+        "max": 55.0,
+        "mean": 44.0,
+        "median": 44.0,
+        "metric": "snr",
+        "min": 33.0,
+        "valid_frames": 2,
+        "worst_frame_id": "F_SAT",
+        "worst_value": 33.0
+      },
+      {
+        "bad_direction": "low",
+        "max": 1000.0,
+        "mean": 710.0,
+        "median": 710.0,
+        "metric": "quality_score",
+        "min": 420.0,
+        "valid_frames": 2,
+        "worst_frame_id": "F_SAT",
+        "worst_value": 420.0
+      },
+      {
+        "bad_direction": "low",
+        "max": 1.0,
+        "mean": 0.71,
+        "median": 0.71,
+        "metric": "weight",
+        "min": 0.42,
+        "valid_frames": 2,
+        "worst_frame_id": "F_SAT",
+        "worst_value": 0.42
+      }
+    ]
+  },
+  "quality_saturation": {
+    "exists": true,
+    "frame_count": 2,
+    "max_saturated_pixel_count": 36,
+    "max_saturation_fraction": 0.00878906,
+    "max_saturation_fraction_policy": 0.005,
+    "mean_saturation_fraction": 0.00439453,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_358_quality_metrics_frame_quality.json",
+    "quality_gate_saturation_rejected_count": 0,
+    "reason": null,
+    "rejected_frame_ids": [],
+    "saturated_frame_count": 1,
+    "saturation_level": 5000.0,
+    "saturation_sources": [
+      "threshold"
+    ],
+    "status": "passed",
+    "worst_frame_id": "F_SAT"
+  },
+  "registration_admission": null,
+  "release_decision": null,
+  "release_decision_runtime_repeat_closure": {
+    "ready": true,
+    "reason": "release decision was not supplied",
+    "required": false,
+    "status": "not_supplied"
+  },
+  "release_manifest": null,
+  "resident_winsorized_benchmark_audit": null,
+  "resident_winsorized_sweep_audit": null,
+  "schema_version": 1,
+  "stack_engine_contract": null,
+  "stack_engine_publication_audit": null,
+  "status": "green"
+}
