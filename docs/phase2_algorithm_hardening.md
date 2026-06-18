@@ -5645,6 +5645,31 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 321: Warp Science Residual Guardrail
+
+- Extend `warp_quality_contract.json` with optional tiled registered-image
+  residual verification against a reference warp output.
+- Add `glass guardrails --warp-science-residual-verify`,
+  `--warp-science-reference-frame-id`, `--max-warp-science-rms`,
+  `--max-warp-science-max-abs`, and
+  `--warp-science-residual-tile-size`.
+- When enabled, stream registered and coverage FITS tiles, compare only common
+  finite covered pixels, and report common-valid count, mean residual,
+  mean absolute residual, RMS, and maximum absolute residual.
+- Treat residual thresholds as opt-in acceptance checks: guardrails fail when
+  residual evidence is missing, no common valid pixels exist, or RMS/max-abs
+  exceeds the supplied threshold.
+- Preserve default compatibility: registered science pixels are not scanned
+  unless residual verification or residual thresholds are supplied.
+- Surface residual verification status and aggregate residual metrics in
+  `warp_quality_contract.json`, Markdown, guardrails summaries, acceptance
+  bundles, and the HTML report.
+- Add focused tests for passing and failing residual thresholds.
+- Generate Gate321 guardrail artifacts from a small CPU validation run.
+- Keep this gate diagnostic/guardrail scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

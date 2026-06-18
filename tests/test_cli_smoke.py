@@ -814,6 +814,13 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
                 "--warp-pixel-verify",
                 "--warp-pixel-verify-tile-size",
                 "8",
+                "--warp-science-residual-verify",
+                "--max-warp-science-rms",
+                "0.0",
+                "--max-warp-science-max-abs",
+                "0.0",
+                "--warp-science-residual-tile-size",
+                "8",
             ]
         )
         == 0
@@ -830,6 +837,8 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
     assert passing_contract["summary"]["min_valid_fraction"] == 1.0
     assert passing_contract["summary"]["pixel_verified_output_count"] >= 1
     assert passing_contract["summary"]["pixel_failed_output_count"] == 0
+    assert passing_contract["summary"]["science_residual_verified_output_count"] >= 1
+    assert passing_contract["summary"]["science_residual_failed_output_count"] == 0
     assert "Warp quality contract" in html
     assert "warp_quality_contract.json" in html
 
@@ -855,6 +864,13 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
                 "--require-warp-all-registered",
                 "--warp-pixel-verify",
                 "--warp-pixel-verify-tile-size",
+                "8",
+                "--warp-science-residual-verify",
+                "--max-warp-science-rms",
+                "0.0",
+                "--max-warp-science-max-abs",
+                "0.0",
+                "--warp-science-residual-tile-size",
                 "8",
             ]
         )

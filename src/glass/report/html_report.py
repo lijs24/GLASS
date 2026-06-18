@@ -1444,6 +1444,11 @@ def _warp_quality_summary_rows(contract: dict[str, Any] | None) -> list[dict[str
             "pixel_verified_output_count": summary.get("pixel_verified_output_count"),
             "pixel_failed_output_count": summary.get("pixel_failed_output_count"),
             "pixel_max_delta": summary.get("pixel_max_delta"),
+            "science_residual_verify": summary.get("science_residual_verify"),
+            "science_residual_reference": summary.get("science_residual_reference_frame_id"),
+            "science_residual_failed_output_count": summary.get("science_residual_failed_output_count"),
+            "science_residual_max_rms": summary.get("science_residual_max_rms"),
+            "science_residual_max_abs": summary.get("science_residual_max_abs"),
         }
     ]
 
@@ -1489,6 +1494,7 @@ def _warp_quality_output_rows(contract: dict[str, Any] | None) -> list[dict[str,
         if not isinstance(item, dict):
             continue
         pixel = item.get("pixel_verification") if isinstance(item.get("pixel_verification"), dict) else {}
+        science = item.get("science_residual") if isinstance(item.get("science_residual"), dict) else {}
         rows.append(
             {
                 "frame_id": item.get("frame_id"),
@@ -1510,6 +1516,11 @@ def _warp_quality_output_rows(contract: dict[str, Any] | None) -> list[dict[str,
                 "coverage_valid_pixels": pixel.get("coverage_valid_pixels"),
                 "dq_valid_pixels": pixel.get("dq_valid_pixels"),
                 "dq_warp_edge_pixels": pixel.get("dq_warp_edge_pixels"),
+                "science_status": science.get("status"),
+                "science_reference": science.get("reference_frame_id"),
+                "science_common_valid_pixels": science.get("common_valid_pixels"),
+                "science_rms": science.get("rms"),
+                "science_max_abs": science.get("max_abs"),
                 "failed_checks": item.get("failed_checks"),
             }
         )

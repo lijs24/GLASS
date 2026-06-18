@@ -181,6 +181,204 @@ def _pixel_verification(
     }
 
 
+def _row_by_frame_id(rows: list[dict[str, Any]], frame_id: str | None) -> dict[str, Any] | None:
+    if frame_id is None:
+        return None
+    for row in rows:
+        if str(row.get("frame_id")) == str(frame_id):
+            return row
+    return None
+
+
+def _reference_row(rows: list[dict[str, Any]], reference_frame_id: str | None) -> dict[str, Any] | None:
+    explicit = _row_by_frame_id(rows, reference_frame_id)
+    if explicit is not None:
+        return explicit
+    for row in rows:
+        if str(row.get("registration_status") or "").lower() == "reference":
+            return row
+    return rows[0] if rows else None
+
+
+def _science_residual(
+    item: dict[str, Any],
+    reference: dict[str, Any],
+    run_root: Path,
+    *,
+    tile_size: int,
+    max_rms: float | None,
+    max_abs: float | None,
+) -> dict[str, Any]:
+    registered_path = _resolve_path(item.get("registered_path"), run_root)
+    coverage_path = _resolve_path(item.get("coverage_path"), run_root)
+    reference_path = _resolve_path(reference.get("registered_path"), run_root)
+    reference_coverage_path = _resolve_path(reference.get("coverage_path"), run_root)
+    if (
+        registered_path is None
+        or not registered_path.exists()
+        or coverage_path is None
+        or not coverage_path.exists()
+        or reference_path is None
+        or not reference_path.exists()
+        or reference_coverage_path is None
+        or not reference_coverage_path.exists()
+    ):
+        return {
+            "verified": False,
+            "status": "missing_artifact",
+            "passed": False,
+            "reference_frame_id": reference.get("frame_id"),
+            "failed_checks": ["registered_or_coverage_missing"],
+        }
+    try:
+        with (
+            FitsImageReader(registered_path) as source_reader,
+            FitsImageReader(coverage_path) as source_coverage_reader,
+            FitsImageReader(reference_path) as reference_reader,
+            FitsImageReader(reference_coverage_path) as reference_coverage_reader,
+        ):
+            shapes = {
+                "source": source_reader.shape,
+                "source_coverage": source_coverage_reader.shape,
+                "reference": reference_reader.shape,
+                "reference_coverage": reference_coverage_reader.shape,
+            }
+            if len(set(shapes.values())) != 1:
+                return {
+                    "verified": False,
+                    "status": "shape_mismatch",
+                    "passed": False,
+                    "reference_frame_id": reference.get("frame_id"),
+                    "shapes": {key: list(value) for key, value in shapes.items()},
+                    "failed_checks": ["registered_coverage_reference_shape_match"],
+                }
+            width = int(source_reader.width)
+            height = int(source_reader.height)
+            common_valid_pixels = 0
+            sum_diff = 0.0
+            sum_abs = 0.0
+            sum_sq = 0.0
+            max_abs_observed = 0.0
+            for tile in iter_tiles(width=width, height=height, tile_size=max(1, int(tile_size))):
+                source = source_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                reference_tile = reference_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                source_coverage = source_coverage_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                reference_coverage = reference_coverage_reader.read_tile(tile.y0, tile.y1, tile.x0, tile.x1)
+                valid = (
+                    np.isfinite(source)
+                    & np.isfinite(reference_tile)
+                    & np.isfinite(source_coverage)
+                    & np.isfinite(reference_coverage)
+                    & (source_coverage > 0.5)
+                    & (reference_coverage > 0.5)
+                )
+                if not np.any(valid):
+                    continue
+                diff = np.asarray(source[valid] - reference_tile[valid], dtype=np.float64)
+                abs_diff = np.abs(diff)
+                common_valid_pixels += int(diff.size)
+                sum_diff += float(np.sum(diff))
+                sum_abs += float(np.sum(abs_diff))
+                sum_sq += float(np.sum(diff * diff))
+                max_abs_observed = max(max_abs_observed, float(np.max(abs_diff)))
+    except Exception as exc:
+        return {
+            "verified": False,
+            "status": "read_failed",
+            "passed": False,
+            "reference_frame_id": reference.get("frame_id"),
+            "error": str(exc),
+            "failed_checks": ["science_residual_read"],
+        }
+
+    failed_checks: list[str] = []
+    if common_valid_pixels <= 0:
+        failed_checks.append("common_valid_pixels_present")
+        mean = None
+        mean_abs = None
+        rms = None
+        max_abs_observed_value = None
+    else:
+        mean = sum_diff / float(common_valid_pixels)
+        mean_abs = sum_abs / float(common_valid_pixels)
+        rms = float(np.sqrt(sum_sq / float(common_valid_pixels)))
+        max_abs_observed_value = max_abs_observed
+        if max_rms is not None and rms > float(max_rms):
+            failed_checks.append("science_residual_rms_within_threshold")
+        if max_abs is not None and max_abs_observed > float(max_abs):
+            failed_checks.append("science_residual_max_abs_within_threshold")
+    return {
+        "verified": True,
+        "status": "passed" if not failed_checks else "failed",
+        "passed": not failed_checks,
+        "reference_frame_id": reference.get("frame_id"),
+        "tile_size": max(1, int(tile_size)),
+        "common_valid_pixels": common_valid_pixels,
+        "mean": mean,
+        "mean_abs": mean_abs,
+        "rms": rms,
+        "max_abs": max_abs_observed_value,
+        "max_rms_threshold": max_rms,
+        "max_abs_threshold": max_abs,
+        "failed_checks": failed_checks,
+    }
+
+
+def _attach_science_residuals(
+    rows: list[dict[str, Any]],
+    run_root: Path,
+    *,
+    reference_frame_id: str | None,
+    tile_size: int,
+    max_rms: float | None,
+    max_abs: float | None,
+) -> dict[str, Any]:
+    reference = _reference_row(rows, reference_frame_id)
+    if reference is None:
+        return {
+            "reference_frame_id": reference_frame_id,
+            "verified_count": 0,
+            "failed_count": 0,
+            "max_rms": None,
+            "max_abs": None,
+            "failed_rows": [],
+        }
+    residuals: list[dict[str, Any]] = []
+    for row in rows:
+        residual = _science_residual(
+            row,
+            reference,
+            run_root,
+            tile_size=tile_size,
+            max_rms=max_rms,
+            max_abs=max_abs,
+        )
+        row["science_residual"] = residual
+        if not residual.get("passed"):
+            row["failed_checks"].append("science_residual_passed")
+        residuals.append(residual)
+    verified = [item for item in residuals if item.get("verified")]
+    failed = [row for row in rows if isinstance(row.get("science_residual"), dict) and not row["science_residual"].get("passed")]
+    rms_values = [
+        float(item["rms"])
+        for item in residuals
+        if item.get("rms") is not None
+    ]
+    max_abs_values = [
+        float(item["max_abs"])
+        for item in residuals
+        if item.get("max_abs") is not None
+    ]
+    return {
+        "reference_frame_id": reference.get("frame_id"),
+        "verified_count": len(verified),
+        "failed_count": len(failed),
+        "max_rms": max(rms_values) if rms_values else None,
+        "max_abs": max(max_abs_values) if max_abs_values else None,
+        "failed_rows": failed,
+    }
+
+
 def _row_accepted_registration(item: dict[str, Any]) -> bool:
     validation = item.get("registration_validation") if isinstance(item.get("registration_validation"), dict) else {}
     if "accepted" in validation:
@@ -327,6 +525,11 @@ def build_warp_quality_contract(
     pixel_verify: bool = False,
     pixel_verify_tile_size: int = 2048,
     pixel_tolerance: int = 0,
+    science_residual_verify: bool = False,
+    science_reference_frame_id: str | None = None,
+    max_science_rms: float | None = None,
+    max_science_max_abs: float | None = None,
+    science_residual_tile_size: int = 2048,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
     warp_path = run_root / "warp_results.json"
@@ -336,6 +539,15 @@ def build_warp_quality_contract(
         or max_skipped_frames is not None
         or bool(require_artifacts)
         or bool(require_all_registered)
+        or bool(pixel_verify)
+        or bool(science_residual_verify)
+        or max_science_rms is not None
+        or max_science_max_abs is not None
+    )
+    science_residual_required = (
+        bool(science_residual_verify)
+        or max_science_rms is not None
+        or max_science_max_abs is not None
     )
     created_at = now_iso()
     thresholds = {
@@ -346,6 +558,11 @@ def build_warp_quality_contract(
         "pixel_verify": bool(pixel_verify),
         "pixel_verify_tile_size": max(1, int(pixel_verify_tile_size)),
         "pixel_tolerance": max(0, int(pixel_tolerance)),
+        "science_residual_verify": bool(science_residual_required),
+        "science_reference_frame_id": science_reference_frame_id,
+        "max_science_rms": max_science_rms,
+        "max_science_max_abs": max_science_max_abs,
+        "science_residual_tile_size": max(1, int(science_residual_tile_size)),
     }
     if payload is None:
         checks = [
@@ -372,6 +589,11 @@ def build_warp_quality_contract(
                 "min_valid_fraction": None,
                 "accepted_registration_count": None,
                 "missing_warp_for_accepted_registration_count": None,
+                "science_residual_verify": bool(science_residual_required),
+                "science_residual_verified_output_count": 0,
+                "science_residual_failed_output_count": 0,
+                "science_residual_max_rms": None,
+                "science_residual_max_abs": None,
             },
             "checks": checks,
             "outputs": [],
@@ -398,6 +620,25 @@ def build_warp_quality_contract(
         and (row["valid_fraction"] is None or row["valid_fraction"] < float(min_valid_fraction))
     ]
     skipped_contract_failures = [row for row in skipped if not row["passed"]]
+    science_residual_state = (
+        _attach_science_residuals(
+            rows,
+            run_root,
+            reference_frame_id=science_reference_frame_id,
+            tile_size=max(1, int(science_residual_tile_size)),
+            max_rms=max_science_rms,
+            max_abs=max_science_max_abs,
+        )
+        if science_residual_required
+        else {
+            "reference_frame_id": None,
+            "verified_count": 0,
+            "failed_count": 0,
+            "max_rms": None,
+            "max_abs": None,
+            "failed_rows": [],
+        }
+    )
     pixel_failures = [
         row
         for row in rows
@@ -474,6 +715,22 @@ def build_warp_quality_contract(
                 {"failed": [row["frame_id"] for row in pixel_failures]},
             )
         )
+    if science_residual_required:
+        checks.append(
+            _check(
+                "warp_science_residual_verification_passed",
+                bool(rows) and not science_residual_state["failed_rows"],
+                {
+                    "reference_frame_id": science_residual_state["reference_frame_id"],
+                    "verified_count": science_residual_state["verified_count"],
+                    "failed": [row["frame_id"] for row in science_residual_state["failed_rows"]],
+                    "max_rms": science_residual_state["max_rms"],
+                    "max_abs": science_residual_state["max_abs"],
+                    "max_rms_threshold": max_science_rms,
+                    "max_abs_threshold": max_science_max_abs,
+                },
+            )
+        )
     failed_outputs = [row for row in rows if row["failed_checks"]]
     passed = all(item["passed"] for item in checks)
     pixel_payloads = [
@@ -515,6 +772,12 @@ def build_warp_quality_contract(
             "pixel_verified_output_count": pixel_verified_count,
             "pixel_failed_output_count": pixel_failed_count,
             "pixel_max_delta": pixel_max_delta,
+            "science_residual_verify": bool(science_residual_required),
+            "science_residual_reference_frame_id": science_residual_state["reference_frame_id"],
+            "science_residual_verified_output_count": science_residual_state["verified_count"],
+            "science_residual_failed_output_count": science_residual_state["failed_count"],
+            "science_residual_max_rms": science_residual_state["max_rms"],
+            "science_residual_max_abs": science_residual_state["max_abs"],
             "interpolation": payload.get("interpolation"),
             "interpolator_registry": payload.get("interpolator_registry"),
         },
@@ -554,6 +817,10 @@ def write_warp_quality_contract(
         f"- Require all registered: {thresholds.get('require_all_registered')}",
         f"- Pixel verify: {thresholds.get('pixel_verify')}",
         f"- Pixel tolerance: {thresholds.get('pixel_tolerance')}",
+        f"- Science residual verify: {thresholds.get('science_residual_verify')}",
+        f"- Science residual reference: {thresholds.get('science_reference_frame_id')}",
+        f"- Max science RMS: {thresholds.get('max_science_rms')}",
+        f"- Max science max abs: {thresholds.get('max_science_max_abs')}",
         "",
         "## Checks",
         "",
@@ -567,7 +834,7 @@ def write_warp_quality_contract(
         lines.append(
             f"- {marker}: {item.get('frame_id')} model={item.get('warp_model')} "
             f"valid_fraction={item.get('valid_fraction')} artifact_ready={item.get('artifact_ready')} "
-            f"pixel={item.get('pixel_verification')}"
+            f"pixel={item.get('pixel_verification')} science={item.get('science_residual')}"
         )
     if payload.get("skipped_frames"):
         lines.extend(["", "## Skipped Frames", ""])

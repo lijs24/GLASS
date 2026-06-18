@@ -591,3 +591,34 @@ The verification is opt-in because it reads diagnostic FITS pixels. Normal
 guardrails still report warp metadata without scanning maps. When enabled,
 pixel verification becomes part of the warp quality pass/fail state and is
 surfaced in the HTML report as pixel status and count deltas.
+
+## S2-Gate 321 Warp Science Residual Verification
+
+S2-Gate 321 extends the warp quality contract with optional registered science
+image residual checks. When enabled, GLASS selects a reference warp output by
+explicit frame id, by `registration_status = reference`, or by the first warp
+output. It then streams each registered image together with its coverage map and
+compares it to the reference registered image on common finite covered pixels.
+
+The recorded per-frame metrics are:
+
+- common valid pixel count
+- signed mean residual
+- mean absolute residual
+- RMS residual
+- maximum absolute residual
+
+The guardrail options are:
+
+```text
+--warp-science-residual-verify
+--warp-science-reference-frame-id VALUE
+--max-warp-science-rms VALUE
+--max-warp-science-max-abs VALUE
+--warp-science-residual-tile-size VALUE
+```
+
+Residual thresholds are opt-in. They are intended as an internal consistency
+guard for registered GLASS outputs, not as an equivalence claim against an
+external stack. The check does not alter registration, interpolation,
+integration, or CUDA kernels.
