@@ -129,6 +129,11 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
     pipeline = (
         phase2.get("pipeline_contract") if isinstance(phase2.get("pipeline_contract"), dict) else {}
     )
+    engine_policy = (
+        pipeline.get("integration_engine_policy")
+        if isinstance(pipeline.get("integration_engine_policy"), dict)
+        else {}
+    )
     return {
         "present": bool(pipeline),
         "status": pipeline.get("status"),
@@ -155,6 +160,29 @@ def _pipeline_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         ),
         "integration_sample_accounting_closure": pipeline.get(
             "integration_sample_accounting_closure"
+        ),
+        "integration_default_engine_policy": pipeline.get(
+            "integration_default_engine_policy"
+        ),
+        "integration_engine_policy": engine_policy,
+        "integration_engine_policy_status": pipeline.get(
+            "integration_engine_policy_status", engine_policy.get("status")
+        ),
+        "integration_engine_policy_check_present": pipeline.get(
+            "integration_engine_policy_check_present",
+            engine_policy.get("check_present"),
+        ),
+        "integration_engine_policy_check_passed": pipeline.get(
+            "integration_engine_policy_check_passed",
+            engine_policy.get("check_passed"),
+        ),
+        "integration_engine_policy_non_resident_count": pipeline.get(
+            "integration_engine_policy_non_resident_count",
+            engine_policy.get("non_resident_count"),
+        ),
+        "integration_engine_policy_failed_count": pipeline.get(
+            "integration_engine_policy_failed_count",
+            engine_policy.get("failed_count"),
         ),
         "rejection_sample_accounting": pipeline.get("rejection_sample_accounting")
         if isinstance(pipeline.get("rejection_sample_accounting"), dict)
@@ -308,6 +336,102 @@ def _resident_winsorized_sweep_summary(phase2: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _integration_engine_policy_summary(
+    phase2: dict[str, Any],
+    pipeline: dict[str, Any],
+) -> dict[str, Any]:
+    acceptance = (
+        phase2.get("acceptance_audit")
+        if isinstance(phase2.get("acceptance_audit"), dict)
+        else {}
+    )
+    acceptance_policy = (
+        acceptance.get("pipeline_integration_engine_policy")
+        if isinstance(acceptance.get("pipeline_integration_engine_policy"), dict)
+        else {}
+    )
+    pipeline_policy = (
+        pipeline.get("integration_engine_policy")
+        if isinstance(pipeline.get("integration_engine_policy"), dict)
+        else {}
+    )
+    acceptance_status = acceptance.get(
+        "pipeline_integration_engine_policy_status",
+        acceptance_policy.get("status"),
+    )
+    acceptance_check_present = acceptance.get(
+        "pipeline_integration_engine_policy_check_present",
+        acceptance_policy.get("check_present"),
+    )
+    acceptance_check_passed = acceptance.get(
+        "pipeline_integration_engine_policy_check_passed",
+        acceptance_policy.get("check_passed"),
+    )
+    pipeline_status = pipeline.get(
+        "integration_engine_policy_status",
+        pipeline_policy.get("status"),
+    )
+    pipeline_check_present = pipeline.get(
+        "integration_engine_policy_check_present",
+        pipeline_policy.get("check_present"),
+    )
+    pipeline_check_passed = pipeline.get(
+        "integration_engine_policy_check_passed",
+        pipeline_policy.get("check_passed"),
+    )
+    acceptance_phase2_check = _phase2_check_passed(
+        phase2,
+        "acceptance_pipeline_integration_engine_policy_passed",
+    )
+    pipeline_phase2_check = _phase2_check_passed(
+        phase2,
+        "pipeline_integration_engine_policy_passed",
+    )
+    ready = (
+        acceptance_status == "passed"
+        and acceptance_check_present is True
+        and acceptance_check_passed is True
+        and acceptance_phase2_check is True
+        and pipeline_status == "passed"
+        and pipeline_check_present is True
+        and pipeline_check_passed is True
+        and pipeline_phase2_check is True
+    )
+    return {
+        "present": bool(acceptance_policy or pipeline_policy),
+        "ready": ready,
+        "acceptance_status": acceptance_status,
+        "acceptance_check_present": acceptance_check_present,
+        "acceptance_check_passed": acceptance_check_passed,
+        "acceptance_phase2_check_passed": acceptance_phase2_check,
+        "acceptance_non_resident_count": acceptance.get(
+            "pipeline_integration_engine_policy_non_resident_count",
+            acceptance_policy.get("non_resident_count"),
+        ),
+        "acceptance_failed_count": acceptance.get(
+            "pipeline_integration_engine_policy_failed_count",
+            acceptance_policy.get("failed_count"),
+        ),
+        "acceptance_failed_items": acceptance_policy.get("failed_items") or [],
+        "pipeline_status": pipeline_status,
+        "pipeline_check_present": pipeline_check_present,
+        "pipeline_check_passed": pipeline_check_passed,
+        "pipeline_phase2_check_passed": pipeline_phase2_check,
+        "pipeline_default_engine_policy": pipeline.get(
+            "integration_default_engine_policy"
+        ),
+        "pipeline_non_resident_count": pipeline.get(
+            "integration_engine_policy_non_resident_count",
+            pipeline_policy.get("non_resident_count"),
+        ),
+        "pipeline_failed_count": pipeline.get(
+            "integration_engine_policy_failed_count",
+            pipeline_policy.get("failed_count"),
+        ),
+        "pipeline_failed_items": pipeline_policy.get("failed_items") or [],
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -332,6 +456,7 @@ def build_default_promotion_manifest(
     stack_engine = _stack_engine_summary(phase2)
     default_route = _default_route_acceptance_summary(phase2)
     resident_winsorized_sweep = _resident_winsorized_sweep_summary(phase2)
+    integration_engine_policy = _integration_engine_policy_summary(phase2, pipeline)
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
         phase2.get("release_decision") if isinstance(phase2.get("release_decision"), dict) else {}
@@ -508,6 +633,65 @@ def build_default_promotion_manifest(
                 "failed_count": pipeline.get("sample_accounting_closure_failed_count"),
                 "failed_items": (pipeline.get("sample_accounting_closure") or {}).get(
                     "failed_items"
+                ),
+            },
+        ),
+        _check(
+            "acceptance_integration_engine_policy_handoff_passed",
+            integration_engine_policy.get("acceptance_status") == "passed"
+            and integration_engine_policy.get("acceptance_check_present") is True
+            and integration_engine_policy.get("acceptance_check_passed") is True
+            and integration_engine_policy.get("acceptance_phase2_check_passed") is True,
+            {
+                "status": integration_engine_policy.get("acceptance_status"),
+                "check_present": integration_engine_policy.get(
+                    "acceptance_check_present"
+                ),
+                "check_passed": integration_engine_policy.get(
+                    "acceptance_check_passed"
+                ),
+                "phase2_check_passed": integration_engine_policy.get(
+                    "acceptance_phase2_check_passed"
+                ),
+                "non_resident_count": integration_engine_policy.get(
+                    "acceptance_non_resident_count"
+                ),
+                "failed_count": integration_engine_policy.get(
+                    "acceptance_failed_count"
+                ),
+                "failed_items": integration_engine_policy.get(
+                    "acceptance_failed_items"
+                ),
+            },
+        ),
+        _check(
+            "pipeline_integration_engine_policy_default_passed",
+            integration_engine_policy.get("pipeline_status") == "passed"
+            and integration_engine_policy.get("pipeline_check_present") is True
+            and integration_engine_policy.get("pipeline_check_passed") is True
+            and integration_engine_policy.get("pipeline_phase2_check_passed") is True,
+            {
+                "status": integration_engine_policy.get("pipeline_status"),
+                "check_present": integration_engine_policy.get(
+                    "pipeline_check_present"
+                ),
+                "check_passed": integration_engine_policy.get(
+                    "pipeline_check_passed"
+                ),
+                "phase2_check_passed": integration_engine_policy.get(
+                    "pipeline_phase2_check_passed"
+                ),
+                "default_engine_policy": integration_engine_policy.get(
+                    "pipeline_default_engine_policy"
+                ),
+                "non_resident_count": integration_engine_policy.get(
+                    "pipeline_non_resident_count"
+                ),
+                "failed_count": integration_engine_policy.get(
+                    "pipeline_failed_count"
+                ),
+                "failed_items": integration_engine_policy.get(
+                    "pipeline_failed_items"
                 ),
             },
         ),
@@ -699,6 +883,7 @@ def build_default_promotion_manifest(
         "runtime_repeat": runtime,
         "default_route_acceptance": default_route,
         "pipeline_contract": pipeline,
+        "integration_engine_policy": integration_engine_policy,
         "stack_engine_contract": stack_engine,
         "resident_winsorized_sweep_audit": resident_winsorized_sweep,
         "doctor": doctor_info,
@@ -717,6 +902,7 @@ def _markdown(payload: dict[str, Any]) -> str:
     runtime = payload.get("runtime_repeat") or {}
     default_route = payload.get("default_route_acceptance") or {}
     pipeline = payload.get("pipeline_contract") or {}
+    integration_engine_policy = payload.get("integration_engine_policy") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
     resident_winsorized_sweep = payload.get("resident_winsorized_sweep_audit") or {}
     doctor = payload.get("doctor") or {}
@@ -750,6 +936,12 @@ def _markdown(payload: dict[str, Any]) -> str:
         f"- Speedup vs reference: `{default_route.get('speedup_vs_reference')}`",
         f"- Rejection sample accounting: `{pipeline.get('rejection_sample_accounting_status')}`",
         f"- Sample accounting closure: `{pipeline.get('sample_accounting_closure_status')}`",
+        f"- Acceptance integration engine policy: `{integration_engine_policy.get('acceptance_status')}`",
+        f"- Pipeline integration engine policy: `{integration_engine_policy.get('pipeline_status')}`",
+        (
+            "- Integration engine policy ready: "
+            f"`{integration_engine_policy.get('ready')}`"
+        ),
         "",
         "## StackEngine Default Contract",
         "",

@@ -4754,6 +4754,25 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 282: Default Promotion Integration Engine Policy Guard
+
+- Carry the S2-Gate 281 Phase 2 status integration engine-policy evidence into
+  `glass default-promotion-manifest`.
+- Require the default-promotion manifest to preserve both acceptance-side
+  integration engine-policy handoff evidence and raw pipeline-contract default
+  engine-policy evidence before recommending the resident CUDA default route.
+- Block stale Phase 2 status artifacts that still report green status but do not
+  contain Gate281 `acceptance_pipeline_integration_engine_policy_passed` and
+  `pipeline_integration_engine_policy_passed` checks.
+- Surface acceptance/pipeline engine-policy status, required check presence,
+  required check result, Phase 2 check result, non-resident counts, and failed
+  rows in default-promotion JSON and Markdown.
+- Add focused default-promotion tests for ready evidence, missing stale policy
+  evidence, failed acceptance/pipeline policy evidence, and Markdown output.
+- Keep this gate default-promotion scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

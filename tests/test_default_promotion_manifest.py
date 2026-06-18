@@ -54,10 +54,31 @@ def _write_phase2_status(
     resident_winsorized_sweep_required_frame_ready: bool = True,
     resident_winsorized_sweep_check_count: int = 27,
     resident_winsorized_sweep_required_frame_count: int = 200,
+    include_integration_engine_policy: bool = True,
+    acceptance_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_check_present: bool = True,
 ) -> None:
-    pipeline_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
+    acceptance_policy_chain_ready = (
+        acceptance_integration_engine_policy_ready
+        if include_integration_engine_policy
+        else True
+    )
+    pipeline_policy_chain_ready = (
+        pipeline_integration_engine_policy_ready
+        and pipeline_integration_engine_policy_check_present
+        if include_integration_engine_policy
+        else True
+    )
+    pipeline_ready = (
+        ready
+        and rejection_sample_accounting_ready
+        and sample_accounting_closure_ready
+        and pipeline_policy_chain_ready
+    )
     phase2_ready = (
         pipeline_ready
+        and acceptance_policy_chain_ready
         and (stack_engine_ready if include_stack_engine_contract else True)
         and (
             resident_winsorized_sweep_ready
@@ -71,6 +92,8 @@ def _write_phase2_status(
         failed_pipeline_checks.append("integration_rejection_sample_counts_match_maps")
     if not sample_accounting_closure_ready:
         failed_pipeline_checks.append("integration_sample_accounting_closure")
+    if include_integration_engine_policy and not pipeline_policy_chain_ready:
+        failed_pipeline_checks.append("integration_default_engine_policy")
     stack_engine_recommendation = (
         "stack_engine_default_ready"
         if stack_engine_ready and stack_engine_gap_count == 0
@@ -100,9 +123,9 @@ def _write_phase2_status(
             "runtime_repeat_considered_run_count": 3,
             "runtime_repeat_elapsed_ratio_vs_best": 1.053,
         },
-        "pipeline_contract": {
-            "audit_type": "pipeline_invariant_contract",
-            "status": "passed" if pipeline_ready else "failed",
+            "pipeline_contract": {
+                "audit_type": "pipeline_invariant_contract",
+                "status": "passed" if pipeline_ready else "failed",
             "passed": pipeline_ready,
             "check_count": 15,
             "failed_check_count": len(failed_pipeline_checks),
@@ -179,6 +202,121 @@ def _write_phase2_status(
             },
         ],
     }
+    if include_integration_engine_policy:
+        acceptance_policy_status = (
+            "passed" if acceptance_integration_engine_policy_ready else "failed"
+        )
+        pipeline_policy_status = (
+            "passed"
+            if pipeline_integration_engine_policy_ready
+            else "failed"
+        )
+        acceptance_failed_items = (
+            []
+            if acceptance_integration_engine_policy_ready
+            else [
+                {
+                    "item": "H",
+                    "status": "implicit_cuda_fast_path",
+                    "backend": "cuda",
+                    "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                    "failures": ["cuda_fast_path_not_explicit"],
+                }
+            ]
+        )
+        pipeline_failed_items = (
+            []
+            if pipeline_integration_engine_policy_ready
+            else [
+                {
+                    "item": "H",
+                    "status": "implicit_cuda_fast_path",
+                    "backend": "cuda",
+                    "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                    "failures": ["cuda_fast_path_not_explicit"],
+                }
+            ]
+        )
+        payload["acceptance_audit"] = {
+            "status": "passed" if acceptance_policy_chain_ready else "failed",
+            "passed": acceptance_policy_chain_ready,
+            "pipeline_integration_engine_policy_status": acceptance_policy_status,
+            "pipeline_integration_engine_policy_check_present": True,
+            "pipeline_integration_engine_policy_check_passed": (
+                acceptance_integration_engine_policy_ready
+            ),
+            "pipeline_integration_engine_policy_non_resident_count": 0
+            if acceptance_integration_engine_policy_ready
+            else 1,
+            "pipeline_integration_engine_policy_failed_count": 0
+            if acceptance_integration_engine_policy_ready
+            else 1,
+            "pipeline_integration_engine_policy": {
+                "status": acceptance_policy_status,
+                "check_name": "integration_default_engine_policy",
+                "check_present": True,
+                "check_passed": acceptance_integration_engine_policy_ready,
+                "non_resident_count": 0
+                if acceptance_integration_engine_policy_ready
+                else 1,
+                "resident_count": 1 if acceptance_integration_engine_policy_ready else 0,
+                "failed_count": 0
+                if acceptance_integration_engine_policy_ready
+                else 1,
+                "failed_items": acceptance_failed_items,
+            },
+        }
+        payload["pipeline_contract"].update(
+            {
+                "integration_default_engine_policy": (
+                    pipeline_integration_engine_policy_ready
+                    if pipeline_integration_engine_policy_check_present
+                    else None
+                ),
+                "integration_engine_policy_status": pipeline_policy_status,
+                "integration_engine_policy_check_present": (
+                    pipeline_integration_engine_policy_check_present
+                ),
+                "integration_engine_policy_check_passed": (
+                    pipeline_integration_engine_policy_ready
+                    if pipeline_integration_engine_policy_check_present
+                    else None
+                ),
+                "integration_engine_policy_non_resident_count": 0
+                if pipeline_integration_engine_policy_ready
+                else 1,
+                "integration_engine_policy_failed_count": 0
+                if pipeline_integration_engine_policy_ready
+                else 1,
+                "integration_engine_policy": {
+                    "status": pipeline_policy_status,
+                    "check_present": pipeline_integration_engine_policy_check_present,
+                    "check_passed": pipeline_integration_engine_policy_ready
+                    if pipeline_integration_engine_policy_check_present
+                    else None,
+                    "non_resident_count": 0
+                    if pipeline_integration_engine_policy_ready
+                    else 1,
+                    "resident_count": 1 if pipeline_integration_engine_policy_ready else 0,
+                    "failed_count": 0
+                    if pipeline_integration_engine_policy_ready
+                    else 1,
+                    "failed_items": pipeline_failed_items,
+                },
+            }
+        )
+        payload["checks"].extend(
+            [
+                {
+                    "name": "acceptance_pipeline_integration_engine_policy_passed",
+                    "passed": acceptance_policy_chain_ready,
+                },
+                {
+                    "name": "pipeline_integration_engine_policy_passed",
+                    "passed": pipeline_policy_chain_ready,
+                },
+            ]
+        )
     if include_resident_winsorized_sweep:
         payload["resident_winsorized_sweep_audit"] = {
             "schema_version": 1,
@@ -326,6 +464,10 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["pipeline_pixel_maps_match_dq"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
+    assert checks["acceptance_integration_engine_policy_handoff_passed"] is True
+    assert checks["pipeline_integration_engine_policy_default_passed"] is True
+    assert payload["integration_engine_policy"]["ready"] is True
+    assert payload["integration_engine_policy"]["pipeline_non_resident_count"] == 0
     assert checks["phase2_stack_engine_default_contract_ready"] is True
     assert checks["resident_winsorized_sweep_audit_passed"] is True
     assert checks["resident_winsorized_sweep_required_frame_passed"] is True
@@ -442,6 +584,92 @@ def test_default_promotion_manifest_blocks_sample_accounting_closure_drift(
             }
         ],
     }
+
+
+def test_default_promotion_manifest_blocks_missing_integration_engine_policy(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        include_integration_engine_policy=False,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" not in payload["failed_checks"]
+    assert (
+        "acceptance_integration_engine_policy_handoff_passed"
+        in payload["failed_checks"]
+    )
+    assert (
+        "pipeline_integration_engine_policy_default_passed"
+        in payload["failed_checks"]
+    )
+    assert payload["integration_engine_policy"]["present"] is False
+    assert checks["acceptance_integration_engine_policy_handoff_passed"][
+        "evidence"
+    ] == {
+        "status": None,
+        "check_present": None,
+        "check_passed": None,
+        "phase2_check_passed": None,
+        "non_resident_count": None,
+        "failed_count": None,
+        "failed_items": [],
+    }
+    assert checks["pipeline_integration_engine_policy_default_passed"][
+        "evidence"
+    ]["check_present"] is None
+
+
+def test_default_promotion_manifest_blocks_failed_integration_engine_policy(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        acceptance_integration_engine_policy_ready=False,
+        pipeline_integration_engine_policy_ready=False,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "pipeline_contract_passed" in payload["failed_checks"]
+    assert (
+        "acceptance_integration_engine_policy_handoff_passed"
+        in payload["failed_checks"]
+    )
+    assert (
+        "pipeline_integration_engine_policy_default_passed"
+        in payload["failed_checks"]
+    )
+    assert payload["integration_engine_policy"]["ready"] is False
+    assert checks["acceptance_integration_engine_policy_handoff_passed"][
+        "evidence"
+    ]["non_resident_count"] == 1
+    assert checks["pipeline_integration_engine_policy_default_passed"][
+        "evidence"
+    ]["failed_items"][0]["failures"] == ["cuda_fast_path_not_explicit"]
 
 
 def test_default_promotion_manifest_blocks_missing_stack_engine_contract(
@@ -615,6 +843,9 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "Default Route Evidence" in markdown_text
     assert "Rejection sample accounting: `passed`" in markdown_text
     assert "Sample accounting closure: `passed`" in markdown_text
+    assert "Acceptance integration engine policy: `passed`" in markdown_text
+    assert "Pipeline integration engine policy: `passed`" in markdown_text
+    assert "Integration engine policy ready: `True`" in markdown_text
     assert "StackEngine Default Contract" in markdown_text
     assert "Adoption recommendation: `stack_engine_default_ready`" in markdown_text
     assert "Default promotion: `ready` ready=`True` blockers=`0`" in markdown_text
