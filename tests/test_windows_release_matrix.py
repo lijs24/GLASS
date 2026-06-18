@@ -99,11 +99,28 @@ def _default_promotion(
     resident_winsorized_sweep_ready: bool = True,
     resident_winsorized_sweep_required_frame_ready: bool = True,
     resident_winsorized_sweep_check_count: int = 27,
+    include_integration_engine_policy: bool = True,
+    acceptance_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_check_present: bool = True,
 ) -> None:
+    acceptance_policy_chain_ready = (
+        acceptance_integration_engine_policy_ready
+        if include_integration_engine_policy
+        else True
+    )
+    pipeline_policy_chain_ready = (
+        pipeline_integration_engine_policy_ready
+        and pipeline_integration_engine_policy_check_present
+        if include_integration_engine_policy
+        else True
+    )
     manifest_ready = (
         ready
         and rejection_sample_accounting_ready
         and sample_accounting_closure_ready
+        and acceptance_policy_chain_ready
+        and pipeline_policy_chain_ready
         and (stack_engine_ready if include_stack_engine_contract else True)
         and (
             resident_winsorized_sweep_ready
@@ -197,6 +214,70 @@ def _default_promotion(
                 else 1,
             },
         }
+    if include_integration_engine_policy:
+        acceptance_policy_status = (
+            "passed" if acceptance_integration_engine_policy_ready else "failed"
+        )
+        pipeline_policy_status = (
+            "passed" if pipeline_integration_engine_policy_ready else "failed"
+        )
+        acceptance_failed_items = (
+            []
+            if acceptance_integration_engine_policy_ready
+            else [
+                {
+                    "item": "H",
+                    "status": "implicit_cuda_fast_path",
+                    "backend": "cuda",
+                    "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                    "failures": ["cuda_fast_path_not_explicit"],
+                }
+            ]
+        )
+        pipeline_failed_items = (
+            []
+            if pipeline_integration_engine_policy_ready
+            else [
+                {
+                    "item": "H",
+                    "status": "implicit_cuda_fast_path",
+                    "backend": "cuda",
+                    "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                    "failures": ["cuda_fast_path_not_explicit"],
+                }
+            ]
+        )
+        payload["integration_engine_policy"] = {
+            "present": True,
+            "ready": acceptance_policy_chain_ready and pipeline_policy_chain_ready,
+            "acceptance_status": acceptance_policy_status,
+            "acceptance_check_present": True,
+            "acceptance_check_passed": acceptance_integration_engine_policy_ready,
+            "acceptance_phase2_check_passed": acceptance_policy_chain_ready,
+            "acceptance_non_resident_count": 0
+            if acceptance_integration_engine_policy_ready
+            else 1,
+            "acceptance_failed_count": 0
+            if acceptance_integration_engine_policy_ready
+            else 1,
+            "acceptance_failed_items": acceptance_failed_items,
+            "pipeline_status": pipeline_policy_status,
+            "pipeline_check_present": pipeline_integration_engine_policy_check_present,
+            "pipeline_check_passed": pipeline_integration_engine_policy_ready
+            if pipeline_integration_engine_policy_check_present
+            else None,
+            "pipeline_phase2_check_passed": pipeline_policy_chain_ready,
+            "pipeline_default_engine_policy": pipeline_integration_engine_policy_ready
+            if pipeline_integration_engine_policy_check_present
+            else None,
+            "pipeline_non_resident_count": 0
+            if pipeline_integration_engine_policy_ready
+            else 1,
+            "pipeline_failed_count": 0
+            if pipeline_integration_engine_policy_ready
+            else 1,
+            "pipeline_failed_items": pipeline_failed_items,
+        }
     if include_stack_engine_contract:
         payload["stack_engine_contract"] = {
             "present": True,
@@ -273,6 +354,15 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["default_promotion_default_route_passed"] is True
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
     assert checks["default_promotion_sample_accounting_closure_passed"] is True
+    assert checks["default_promotion_acceptance_integration_engine_policy_passed"] is True
+    assert checks["default_promotion_pipeline_integration_engine_policy_passed"] is True
+    assert payload["default_promotion_manifest"]["integration_engine_policy_ready"] is True
+    assert (
+        payload["default_promotion_manifest"][
+            "pipeline_integration_engine_policy_non_resident_count"
+        ]
+        == 0
+    )
     assert checks["default_promotion_stack_engine_contract_ready"] is True
     assert checks["default_promotion_resident_winsorized_sweep_audit_passed"] is True
     assert checks["default_promotion_resident_winsorized_required_frame_passed"] is True
@@ -427,6 +517,89 @@ def test_windows_release_matrix_blocks_sample_accounting_closure_drift(tmp_path:
             }
         ],
     }
+
+
+def test_windows_release_matrix_blocks_missing_integration_engine_policy(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        include_integration_engine_policy=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_ready"]["passed"] is True
+    assert checks["default_promotion_acceptance_integration_engine_policy_passed"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_pipeline_integration_engine_policy_passed"][
+        "passed"
+    ] is False
+    assert payload["default_promotion_manifest"]["integration_engine_policy_ready"] is None
+    assert checks["default_promotion_acceptance_integration_engine_policy_passed"][
+        "evidence"
+    ] == {
+        "status": None,
+        "check_present": None,
+        "check_passed": None,
+        "phase2_check_passed": None,
+        "non_resident_count": None,
+        "failed_count": None,
+        "failed_items": [],
+    }
+
+
+def test_windows_release_matrix_blocks_failed_integration_engine_policy(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        acceptance_integration_engine_policy_ready=False,
+        pipeline_integration_engine_policy_ready=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_ready"]["passed"] is False
+    assert checks["default_promotion_acceptance_integration_engine_policy_passed"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_pipeline_integration_engine_policy_passed"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_acceptance_integration_engine_policy_passed"][
+        "evidence"
+    ]["non_resident_count"] == 1
+    assert checks["default_promotion_pipeline_integration_engine_policy_passed"][
+        "evidence"
+    ]["failed_items"][0]["failures"] == ["cuda_fast_path_not_explicit"]
 
 
 def test_windows_release_matrix_blocks_missing_stack_engine_contract(tmp_path: Path):
@@ -616,6 +789,10 @@ def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     assert "Default route contract/checks: `True`/`4`" in markdown_text
     assert "Rejection sample accounting: `passed` failed=`0`" in markdown_text
     assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text
+    assert (
+        "Integration engine policy: ready=`True` acceptance=`passed` pipeline=`passed`"
+        in markdown_text
+    )
     assert (
         "StackEngine default contract: ready=`True` phase2-check=`True` gaps=`0` blockers=`0`"
         in markdown_text

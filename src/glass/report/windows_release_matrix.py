@@ -55,6 +55,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         payload.get("default_candidate") if isinstance(payload.get("default_candidate"), dict) else {}
     )
     pipeline = payload.get("pipeline_contract") if isinstance(payload.get("pipeline_contract"), dict) else {}
+    integration_engine_policy = (
+        payload.get("integration_engine_policy")
+        if isinstance(payload.get("integration_engine_policy"), dict)
+        else {}
+    )
     rejection_sample_accounting = (
         pipeline.get("rejection_sample_accounting")
         if isinstance(pipeline.get("rejection_sample_accounting"), dict)
@@ -99,6 +104,55 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "integration_sample_accounting_closure": pipeline.get(
             "integration_sample_accounting_closure"
         ),
+        "integration_engine_policy": integration_engine_policy,
+        "integration_engine_policy_ready": integration_engine_policy.get("ready"),
+        "acceptance_integration_engine_policy_status": integration_engine_policy.get(
+            "acceptance_status"
+        ),
+        "acceptance_integration_engine_policy_check_present": integration_engine_policy.get(
+            "acceptance_check_present"
+        ),
+        "acceptance_integration_engine_policy_check_passed": integration_engine_policy.get(
+            "acceptance_check_passed"
+        ),
+        "acceptance_integration_engine_policy_phase2_check_passed": integration_engine_policy.get(
+            "acceptance_phase2_check_passed"
+        ),
+        "acceptance_integration_engine_policy_non_resident_count": integration_engine_policy.get(
+            "acceptance_non_resident_count"
+        ),
+        "acceptance_integration_engine_policy_failed_count": integration_engine_policy.get(
+            "acceptance_failed_count"
+        ),
+        "acceptance_integration_engine_policy_failed_items": integration_engine_policy.get(
+            "acceptance_failed_items"
+        )
+        or [],
+        "pipeline_integration_engine_policy_status": integration_engine_policy.get(
+            "pipeline_status"
+        ),
+        "pipeline_integration_engine_policy_check_present": integration_engine_policy.get(
+            "pipeline_check_present"
+        ),
+        "pipeline_integration_engine_policy_check_passed": integration_engine_policy.get(
+            "pipeline_check_passed"
+        ),
+        "pipeline_integration_engine_policy_phase2_check_passed": integration_engine_policy.get(
+            "pipeline_phase2_check_passed"
+        ),
+        "pipeline_integration_engine_policy_default_engine_policy": integration_engine_policy.get(
+            "pipeline_default_engine_policy"
+        ),
+        "pipeline_integration_engine_policy_non_resident_count": integration_engine_policy.get(
+            "pipeline_non_resident_count"
+        ),
+        "pipeline_integration_engine_policy_failed_count": integration_engine_policy.get(
+            "pipeline_failed_count"
+        ),
+        "pipeline_integration_engine_policy_failed_items": integration_engine_policy.get(
+            "pipeline_failed_items"
+        )
+        or [],
         "rejection_sample_accounting": rejection_sample_accounting,
         "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
         "rejection_sample_accounting_failed_count": pipeline.get(
@@ -387,6 +441,97 @@ def build_windows_release_matrix(
             },
         ),
         _check(
+            "default_promotion_acceptance_integration_engine_policy_passed",
+            (
+                default_promotion.get("acceptance_integration_engine_policy_status")
+                == "passed"
+                and default_promotion.get(
+                    "acceptance_integration_engine_policy_check_present"
+                )
+                is True
+                and default_promotion.get(
+                    "acceptance_integration_engine_policy_check_passed"
+                )
+                is True
+                and default_promotion.get(
+                    "acceptance_integration_engine_policy_phase2_check_passed"
+                )
+                is True
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "status": default_promotion.get(
+                    "acceptance_integration_engine_policy_status"
+                ),
+                "check_present": default_promotion.get(
+                    "acceptance_integration_engine_policy_check_present"
+                ),
+                "check_passed": default_promotion.get(
+                    "acceptance_integration_engine_policy_check_passed"
+                ),
+                "phase2_check_passed": default_promotion.get(
+                    "acceptance_integration_engine_policy_phase2_check_passed"
+                ),
+                "non_resident_count": default_promotion.get(
+                    "acceptance_integration_engine_policy_non_resident_count"
+                ),
+                "failed_count": default_promotion.get(
+                    "acceptance_integration_engine_policy_failed_count"
+                ),
+                "failed_items": default_promotion.get(
+                    "acceptance_integration_engine_policy_failed_items"
+                ),
+            },
+        ),
+        _check(
+            "default_promotion_pipeline_integration_engine_policy_passed",
+            (
+                default_promotion.get("pipeline_integration_engine_policy_status")
+                == "passed"
+                and default_promotion.get(
+                    "pipeline_integration_engine_policy_check_present"
+                )
+                is True
+                and default_promotion.get(
+                    "pipeline_integration_engine_policy_check_passed"
+                )
+                is True
+                and default_promotion.get(
+                    "pipeline_integration_engine_policy_phase2_check_passed"
+                )
+                is True
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "status": default_promotion.get(
+                    "pipeline_integration_engine_policy_status"
+                ),
+                "check_present": default_promotion.get(
+                    "pipeline_integration_engine_policy_check_present"
+                ),
+                "check_passed": default_promotion.get(
+                    "pipeline_integration_engine_policy_check_passed"
+                ),
+                "phase2_check_passed": default_promotion.get(
+                    "pipeline_integration_engine_policy_phase2_check_passed"
+                ),
+                "default_engine_policy": default_promotion.get(
+                    "pipeline_integration_engine_policy_default_engine_policy"
+                ),
+                "non_resident_count": default_promotion.get(
+                    "pipeline_integration_engine_policy_non_resident_count"
+                ),
+                "failed_count": default_promotion.get(
+                    "pipeline_integration_engine_policy_failed_count"
+                ),
+                "failed_items": default_promotion.get(
+                    "pipeline_integration_engine_policy_failed_items"
+                ),
+            },
+        ),
+        _check(
             "default_promotion_stack_engine_contract_ready",
             (
                 default_promotion.get("stack_engine_contract_present") is True
@@ -637,6 +782,12 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"`{default_promotion.get('sample_accounting_closure_status')}` "
                 f"present=`{default_promotion.get('sample_accounting_closure_present_count')}` "
                 f"failed=`{default_promotion.get('sample_accounting_closure_failed_count')}`"
+            ),
+            (
+                "- Integration engine policy: "
+                f"ready=`{default_promotion.get('integration_engine_policy_ready')}` "
+                f"acceptance=`{default_promotion.get('acceptance_integration_engine_policy_status')}` "
+                f"pipeline=`{default_promotion.get('pipeline_integration_engine_policy_status')}`"
             ),
             (
                 "- StackEngine default contract: "

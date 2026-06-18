@@ -4773,6 +4773,24 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 283: Windows Release Matrix Integration Engine Policy Guard
+
+- Carry the S2-Gate 282 default-promotion integration engine-policy evidence
+  into `glass windows-release-matrix`.
+- Require Windows release-matrix readiness to preserve both default-promotion
+  acceptance-side engine-policy handoff evidence and pipeline-side default
+  engine-policy evidence.
+- Block default-promotion manifests that report ready status but do not contain
+  Gate282 `integration_engine_policy` summaries.
+- Surface integration engine-policy readiness, acceptance status, pipeline
+  status, required check presence, Phase 2 check result, non-resident counts,
+  and failed rows in release-matrix JSON and Markdown.
+- Add focused release-matrix tests for ready evidence, missing stale policy
+  evidence, failed acceptance/pipeline policy evidence, and Markdown output.
+- Keep this gate release-matrix scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

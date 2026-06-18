@@ -1,0 +1,567 @@
+{
+  "artifact_type": "windows_release_matrix",
+  "checks": [
+    {
+      "evidence": {
+        "actual": 1,
+        "path": "synthetic://gate283/fixture/doctor.json",
+        "required": 1
+      },
+      "name": "doctor_schema_version",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "probe_skipped": false
+      },
+      "name": "cuda_probe_completed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "native_extension_loaded": true,
+        "required": true,
+        "wrapper_importable": true
+      },
+      "name": "cuda_available_for_release_machine",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ],
+        "package_count": 3
+      },
+      "name": "windows_package_recommendation_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ]
+      },
+      "name": "ordered_try_list_has_cpu_fallback",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda13",
+        "required": "cuda13"
+      },
+      "name": "primary_package_matches_expected",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "recommendation": "promote_default_candidate",
+        "required": true,
+        "status": "default_change_ready"
+      },
+      "name": "release_decision_default_change_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "promote_default_candidate",
+        "required": "promote_default_candidate"
+      },
+      "name": "release_decision_recommends_promotion",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "present": true,
+        "required": true
+      },
+      "name": "default_promotion_manifest_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "default_promotion_manifest",
+        "default_change_ready": true,
+        "passed": true,
+        "status": "default_promotion_ready"
+      },
+      "name": "default_promotion_manifest_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_route_passed": true,
+        "route_check_count": 4,
+        "route_contract_passed": true
+      },
+      "name": "default_promotion_default_route_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "pipeline_contract_passed": true,
+        "pipeline_contract_status": "passed",
+        "status": "passed"
+      },
+      "name": "default_promotion_rejection_sample_accounting_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "pipeline_contract_passed": true,
+        "pipeline_contract_status": "passed",
+        "present_count": 1,
+        "status": "passed"
+      },
+      "name": "default_promotion_sample_accounting_closure_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": null,
+        "check_present": null,
+        "failed_count": null,
+        "failed_items": [],
+        "non_resident_count": null,
+        "phase2_check_passed": null,
+        "status": null
+      },
+      "name": "default_promotion_acceptance_integration_engine_policy_passed",
+      "note": "",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "check_passed": null,
+        "check_present": null,
+        "default_engine_policy": null,
+        "failed_count": null,
+        "failed_items": [],
+        "non_resident_count": null,
+        "phase2_check_passed": null,
+        "status": null
+      },
+      "name": "default_promotion_pipeline_integration_engine_policy_passed",
+      "note": "",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "adoption_recommendation": "stack_engine_default_ready",
+        "blocker_count": 0,
+        "blockers": [],
+        "default_gap_count": 0,
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "ready": true,
+        "scope": "all",
+        "status": "passed"
+      },
+      "name": "default_promotion_stack_engine_contract_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "status": "passed"
+      },
+      "name": "default_promotion_resident_winsorized_sweep_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_frame_count": 200,
+        "required_frame_count": 200,
+        "required_frame_count_passed": true,
+        "required_frame_master_max_abs": 6.1e-05,
+        "required_frame_master_rms": 2.3e-05
+      },
+      "name": "default_promotion_resident_winsorized_required_frame_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 27,
+        "failed_check_count": 0,
+        "required_min": 27
+      },
+      "name": "default_promotion_resident_winsorized_sweep_check_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "throughput-v1",
+        "required": "throughput-v1"
+      },
+      "name": "default_runtime_preset",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.0140343433372492,
+        "required_max": 1.25
+      },
+      "name": "runtime_repeat_ratio_within_release_bound",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "synthetic://gate283/fixture/acceptance.json",
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "cpu",
+          "cuda11",
+          "cuda12",
+          "cuda13"
+        ],
+        "label": "cuda13"
+      },
+      "name": "required_cuda_package_present:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "compatible": true,
+        "label": "cuda13",
+        "match": "native_cubin"
+      },
+      "name": "required_cuda_package_compatible:cuda13",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "cpu",
+          "cuda11",
+          "cuda12",
+          "cuda13"
+        ],
+        "label": "cuda12"
+      },
+      "name": "required_cuda_package_present:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "compatible": true,
+        "label": "cuda12",
+        "match": "ptx_jit_forward"
+      },
+      "name": "required_cuda_package_compatible:cuda12",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": [
+          "cpu",
+          "cuda11",
+          "cuda12",
+          "cuda13"
+        ],
+        "label": "cuda11"
+      },
+      "name": "required_cuda_package_present:cuda11",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "compatible": true,
+        "label": "cuda11",
+        "match": "ptx_jit_forward"
+      },
+      "name": "required_cuda_package_compatible:cuda11",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T05:50:12+00:00",
+  "current_machine": {
+    "cuda_available": true,
+    "device": {
+      "compute_capability": "12.0",
+      "compute_capability_code": 120,
+      "device_id": 0,
+      "driver_version": "596.21",
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+    },
+    "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+    "native_extension_loaded": true,
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "primary_package": "cuda13"
+  },
+  "default_promotion_manifest": {
+    "acceptance_integration_engine_policy_check_passed": null,
+    "acceptance_integration_engine_policy_check_present": null,
+    "acceptance_integration_engine_policy_failed_count": null,
+    "acceptance_integration_engine_policy_failed_items": [],
+    "acceptance_integration_engine_policy_non_resident_count": null,
+    "acceptance_integration_engine_policy_phase2_check_passed": null,
+    "acceptance_integration_engine_policy_status": null,
+    "artifact_type": "default_promotion_manifest",
+    "default_change_ready": true,
+    "default_memory_mode": "resident",
+    "default_route_passed": true,
+    "default_route_present": true,
+    "default_route_route_check_count": 4,
+    "default_route_route_contract_passed": true,
+    "default_route_speedup_vs_reference": 28.75,
+    "fallback_memory_mode": "tile",
+    "integration_engine": "cuda_resident_stack",
+    "integration_engine_policy": {},
+    "integration_engine_policy_ready": null,
+    "integration_rejection_sample_counts_match_maps": true,
+    "integration_sample_accounting_closure": true,
+    "passed": true,
+    "pipeline_contract_passed": true,
+    "pipeline_contract_status": "passed",
+    "pipeline_integration_engine_policy_check_passed": null,
+    "pipeline_integration_engine_policy_check_present": null,
+    "pipeline_integration_engine_policy_default_engine_policy": null,
+    "pipeline_integration_engine_policy_failed_count": null,
+    "pipeline_integration_engine_policy_failed_items": [],
+    "pipeline_integration_engine_policy_non_resident_count": null,
+    "pipeline_integration_engine_policy_phase2_check_passed": null,
+    "pipeline_integration_engine_policy_status": null,
+    "present": true,
+    "recommendation": "promote_resident_cuda_default",
+    "rejection_sample_accounting": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "status": "passed"
+    },
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_status": "passed",
+    "resident_runtime_preset": "throughput-v1",
+    "resident_winsorized_sweep_audit": {
+      "check_count": 27,
+      "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "frame_counts": [
+        8,
+        32,
+        128,
+        200
+      ],
+      "passed": true,
+      "path": "runs/checkpoints/s2_gate_269_resident_winsorized_sweep_audit.json",
+      "phase2_check_passed": true,
+      "present": true,
+      "required_frame_count": 200,
+      "required_frame_count_passed": true,
+      "required_frame_cuda_hardened_s": 0.0012,
+      "required_frame_master_max_abs": 6.1e-05,
+      "required_frame_master_rms": 2.3e-05,
+      "run_count": 4,
+      "status": "passed",
+      "sweep_path": "runs/checkpoints/s2_gate_268_resident_winsorized_sweep.json"
+    },
+    "resident_winsorized_sweep_check_count": 27,
+    "resident_winsorized_sweep_failed_check_count": 0,
+    "resident_winsorized_sweep_failed_checks": [],
+    "resident_winsorized_sweep_passed": true,
+    "resident_winsorized_sweep_phase2_check_passed": true,
+    "resident_winsorized_sweep_present": true,
+    "resident_winsorized_sweep_required_frame_count": 200,
+    "resident_winsorized_sweep_required_frame_count_passed": true,
+    "resident_winsorized_sweep_required_frame_cuda_hardened_s": 0.0012,
+    "resident_winsorized_sweep_required_frame_master_max_abs": 6.1e-05,
+    "resident_winsorized_sweep_required_frame_master_rms": 2.3e-05,
+    "resident_winsorized_sweep_status": "passed",
+    "sample_accounting_closure": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "present_count": 1,
+      "status": "passed"
+    },
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 1,
+    "sample_accounting_closure_status": "passed",
+    "stack_engine_contract": {
+      "adoption_recommendation": "stack_engine_default_ready",
+      "default_promotion_blocker_count": 0,
+      "default_promotion_blockers": [],
+      "default_promotion_phase2_stack_engine_default_gap_count": 0,
+      "passed": true,
+      "phase2_check_passed": true,
+      "present": true,
+      "ready": true,
+      "scope": "all",
+      "status": "passed"
+    },
+    "stack_engine_contract_adoption_recommendation": "stack_engine_default_ready",
+    "stack_engine_contract_blocker_count": 0,
+    "stack_engine_contract_blockers": [],
+    "stack_engine_contract_default_gap_count": 0,
+    "stack_engine_contract_passed": true,
+    "stack_engine_contract_phase2_check_passed": true,
+    "stack_engine_contract_present": true,
+    "stack_engine_contract_ready": true,
+    "stack_engine_contract_scope": "all",
+    "stack_engine_contract_status": "passed",
+    "status": "default_promotion_ready"
+  },
+  "default_runtime": {
+    "default_change_ready": true,
+    "release_decision_status": "default_change_ready",
+    "resident_runtime_preset": "throughput-v1",
+    "source": "Gate181 promoted default"
+  },
+  "failed_checks": [
+    "default_promotion_acceptance_integration_engine_policy_passed",
+    "default_promotion_pipeline_integration_engine_policy_passed"
+  ],
+  "inputs": {
+    "acceptance_audit_json": "synthetic://gate283/fixture/acceptance.json",
+    "default_promotion_manifest_json": "synthetic://gate283/fixture/stale_default_promotion.json",
+    "doctor_json": "synthetic://gate283/fixture/doctor.json",
+    "release_decision_json": "synthetic://gate283/fixture/release_decision.json"
+  },
+  "limitations": [
+    "This artifact audits release readiness from existing GLASS artifacts; it does not build packages.",
+    "CUDA package compatibility is based on detected compute capability and planned package targets.",
+    "Older CUDA packages on newer GPUs may use PTX JIT and can be slower than the native package."
+  ],
+  "packages": [
+    {
+      "architectures": [
+        "5.0",
+        "5.2",
+        "6.0",
+        "6.1",
+        "7.0",
+        "7.5",
+        "8.0",
+        "8.6"
+      ],
+      "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+      "compatible": true,
+      "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+      "label": "cuda11",
+      "match": "ptx_jit_forward",
+      "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+      "recommended_order": 3,
+      "release_artifact": "GLASS-Portable-win64-cuda11.zip",
+      "release_role": "cuda_fallback_candidate",
+      "toolkit": "11.8"
+    },
+    {
+      "architectures": [
+        "7.5",
+        "8.0",
+        "8.6",
+        "8.9",
+        "9.0"
+      ],
+      "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+      "compatible": true,
+      "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+      "label": "cuda12",
+      "match": "ptx_jit_forward",
+      "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+      "recommended_order": 2,
+      "release_artifact": "GLASS-Portable-win64-cuda12.zip",
+      "release_role": "cuda_fallback_candidate",
+      "toolkit": "12.4"
+    },
+    {
+      "architectures": [
+        "8.6",
+        "8.9",
+        "9.0",
+        "10.0",
+        "12.0"
+      ],
+      "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+      "compatible": true,
+      "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+      "label": "cuda13",
+      "match": "native_cubin",
+      "note": "This package contains native GPU code for this compute capability.",
+      "recommended_order": 1,
+      "release_artifact": "GLASS-Portable-win64-cuda13.zip",
+      "release_role": "primary_cuda_package",
+      "toolkit": "13.0"
+    },
+    {
+      "architectures": [],
+      "compatible": true,
+      "label": "cpu",
+      "match": "cpu_fallback",
+      "note": "CPU package remains the fallback and does not require CUDA.",
+      "recommended_order": 4,
+      "release_artifact": "GLASS-Portable-win64-cpu.zip",
+      "release_role": "universal_cpu_fallback",
+      "toolkit": null
+    }
+  ],
+  "passed": false,
+  "recommendation": "fix_release_matrix_blockers",
+  "runtime_repeat": {
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.0140343433372492,
+    "present": true,
+    "recommendation": "best_observed:repeat02",
+    "run_count": 3
+  },
+  "schema_version": 1,
+  "status": "blocked"
+}
