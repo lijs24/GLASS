@@ -81,6 +81,13 @@ from glass.report.resident_winsorized_sweep import (
     parse_frame_counts,
     write_resident_winsorized_frame_count_sweep,
 )
+from glass.report.resident_winsorized_sweep_contract import (
+    DEFAULT_CONTRACT_PATH as DEFAULT_RESIDENT_WINSORIZED_SWEEP_CONTRACT,
+)
+from glass.report.resident_winsorized_sweep_contract import (
+    build_resident_winsorized_sweep_audit,
+    write_resident_winsorized_sweep_audit,
+)
 from glass.report.resident_runtime_repeat_plan import (
     build_resident_runtime_repeat_plan,
     write_resident_runtime_repeat_plan,
@@ -2348,6 +2355,33 @@ def cmd_resident_winsorized_sweep(args: argparse.Namespace) -> int:
             "max_hardened_master_rms": payload.get("summary", {}).get(
                 "max_hardened_master_rms"
             ),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_resident_winsorized_sweep_audit(args: argparse.Namespace) -> int:
+    payload = build_resident_winsorized_sweep_audit(
+        args.artifact,
+        contract=args.contract,
+    )
+    write_resident_winsorized_sweep_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "contract": payload.get("contract_path"),
+            "sweep": payload.get("sweep_path"),
+            "required_frame_count": payload.get("summary", {}).get("required_frame_count"),
+            "required_frame_master": payload.get("summary", {}).get(
+                "required_frame_master"
+            ),
+            "failed_checks": payload.get("failed_checks"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -5321,6 +5355,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless every frame-count row passes",
     )
     resident_winsorized_sweep.set_defaults(func=cmd_resident_winsorized_sweep)
+
+    resident_winsorized_sweep_audit = sub.add_parser(
+        "resident-winsorized-sweep-audit",
+        help="audit a resident winsorized frame-count sweep against a machine-readable contract",
+    )
+    resident_winsorized_sweep_audit.add_argument(
+        "--artifact",
+        required=True,
+        help="resident-winsorized-sweep JSON artifact",
+    )
+    resident_winsorized_sweep_audit.add_argument(
+        "--contract",
+        default=str(DEFAULT_RESIDENT_WINSORIZED_SWEEP_CONTRACT),
+        help="resident winsorized sweep contract JSON",
+    )
+    resident_winsorized_sweep_audit.add_argument("--out", required=True, help="output audit JSON")
+    resident_winsorized_sweep_audit.add_argument("--markdown", help="optional output Markdown summary")
+    resident_winsorized_sweep_audit.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 when the sweep artifact fails the contract",
+    )
+    resident_winsorized_sweep_audit.set_defaults(func=cmd_resident_winsorized_sweep_audit)
 
     resident_runtime_repeat_plan = sub.add_parser(
         "resident-runtime-repeat-plan",

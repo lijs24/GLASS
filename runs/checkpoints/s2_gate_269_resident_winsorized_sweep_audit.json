@@ -1,0 +1,320 @@
+{
+  "artifact_type": "resident_winsorized_sweep_audit",
+  "checks": [
+    {
+      "evidence": {
+        "actual": "resident_winsorized_frame_count_sweep",
+        "expected": "resident_winsorized_frame_count_sweep"
+      },
+      "name": "artifact_type_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "passed": true,
+        "status": "passed"
+      },
+      "name": "sweep_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": [
+          8,
+          32,
+          128,
+          200
+        ],
+        "expected": [
+          8,
+          32,
+          128,
+          200
+        ],
+        "tolerance": 1e-12
+      },
+      "name": "config_frame_counts_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 16,
+        "expected": 16,
+        "tolerance": 1e-12
+      },
+      "name": "config_height_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3.0,
+        "expected": 3.0,
+        "tolerance": 1e-12
+      },
+      "name": "config_high_sigma_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3.0,
+        "expected": 3.0,
+        "tolerance": 1e-12
+      },
+      "name": "config_low_sigma_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 200,
+        "expected": 200,
+        "tolerance": 1e-12
+      },
+      "name": "config_required_frame_count_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 268,
+        "expected": 268,
+        "tolerance": 1e-12
+      },
+      "name": "config_seed_base_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0002,
+        "expected": 0.0002,
+        "tolerance": 1e-12
+      },
+      "name": "config_tolerance_max_abs_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 5e-05,
+        "expected": 5e-05,
+        "tolerance": 1e-12
+      },
+      "name": "config_tolerance_rms_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 16,
+        "expected": 16,
+        "tolerance": 1e-12
+      },
+      "name": "config_width_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": [
+          8,
+          32,
+          128,
+          200
+        ],
+        "expected": [
+          8,
+          32,
+          128,
+          200
+        ]
+      },
+      "name": "run_frame_counts_match_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "expected_run_count": 4,
+        "run_count": 4
+      },
+      "name": "all_runs_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "required_frame_count": 200
+      },
+      "name": "required_frame_count_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "required_frame_count": 200,
+        "run_passed": true,
+        "summary_required_frame_count_passed": true
+      },
+      "name": "required_frame_count_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 2.3066304440398834e-05,
+        "frame_count": 200,
+        "required_max": 5e-05
+      },
+      "name": "frame_200_hardened_master_rms_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 6.103515625e-05,
+        "frame_count": 200,
+        "required_max": 0.0002
+      },
+      "name": "frame_200_hardened_master_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.52587890625e-05,
+        "frame_count": 200,
+        "required_max": 0.0002
+      },
+      "name": "frame_200_hardened_weight_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "frame_count": 200,
+        "required_max": 0.0002
+      },
+      "name": "frame_200_hardened_coverage_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "frame_count": 200,
+        "required_max": 0.0002
+      },
+      "name": "frame_200_hardened_low_rejection_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "frame_count": 200,
+        "required_max": 0.0002
+      },
+      "name": "frame_200_hardened_high_rejection_max_abs_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 2.3066304440398834e-05,
+        "required_max": 5e-05
+      },
+      "name": "max_hardened_master_rms_within_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 0.01229839999723481,
+        "frame_count": 200
+      },
+      "name": "frame_200_timing_cpu_baseline_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 0.0002525999952922575,
+        "frame_count": 200
+      },
+      "name": "frame_200_timing_cuda_fast_approx_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 0.0012743999977828935,
+        "frame_count": 200
+      },
+      "name": "frame_200_timing_cuda_hardened_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "hardened_cpu_parity",
+        "expected": "hardened_cpu_parity"
+      },
+      "name": "required_frame_hardened_timing_mode_matches_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+        "expected": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma"
+      },
+      "name": "required_frame_hardened_native_method_matches_contract",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+  "contract_path": "benchmarks\\resident_winsorized_sweep_contract.json",
+  "created_at": "2026-06-18T03:30:20+00:00",
+  "failed_checks": [],
+  "limitations": [
+    "This audit validates the synthetic frame-count sweep artifact only.",
+    "The required 200-frame row is a small-image sample-count probe, not a real-data benchmark.",
+    "Timing presence is required, but no wall-time upper bound is imposed."
+  ],
+  "passed": true,
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "frame_counts": [
+      8,
+      32,
+      128,
+      200
+    ],
+    "max_hardened_master_rms": 2.3066304440398834e-05,
+    "required_frame_count": 200,
+    "required_frame_count_passed": true,
+    "required_frame_master": {
+      "max_abs": 6.103515625e-05,
+      "p99_abs": 4.920959472656241e-05,
+      "rms": 2.3066304440398834e-05
+    },
+    "required_frame_timing_s": {
+      "cpu_baseline": 0.01229839999723481,
+      "cuda_fast_approx": 0.0002525999952922575,
+      "cuda_hardened": 0.0012743999977828935
+    },
+    "run_count": 4,
+    "sweep_passed": true,
+    "sweep_status": "passed"
+  },
+  "sweep_path": "runs\\checkpoints\\s2_gate_268_resident_winsorized_sweep.json"
+}

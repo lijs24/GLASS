@@ -4521,6 +4521,23 @@ integration where applicable.
   benchmark, change image math, optimize kernels, raise the 256-frame prototype
   limit, build/upload packages, change defaults, or rerun real data.
 
+### S2-Gate 269: Resident Winsorized Sweep Contract Audit
+
+- Add a machine-readable contract for the Gate268 resident winsorized
+  frame-count sweep artifact.
+- Add `glass resident-winsorized-sweep-audit` to validate sweep pass status,
+  deterministic configuration, expected frame-count rows, the required
+  200-frame row, hardened-vs-CPU RMS/max-absolute tolerances, per-row map
+  agreement, required timing metadata, and hardened native method/mode.
+- Emit JSON and optional Markdown with pass/fail checks so 200-frame
+  sample-count parity drift can be caught without rerunning the full real-data
+  benchmark.
+- Add focused contract tests for passing, missing required row, RMS drift,
+  Markdown writing, CLI artifact writing, and help-list coverage.
+- Keep this gate audit scoped: no image math, CUDA kernel, runtime default,
+  package build/upload, release update, status handoff, status-compare change,
+  or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

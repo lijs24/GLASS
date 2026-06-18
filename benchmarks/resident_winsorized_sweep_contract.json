@@ -1,0 +1,44 @@
+{
+  "artifact_type": "resident_winsorized_sweep_contract",
+  "name": "s2_gate_269_default_resident_winsorized_sweep",
+  "requirements": {
+    "artifact_type": "resident_winsorized_frame_count_sweep",
+    "config": {
+      "frame_counts": [
+        8,
+        32,
+        128,
+        200
+      ],
+      "height": 16,
+      "high_sigma": 3.0,
+      "low_sigma": 3.0,
+      "required_frame_count": 200,
+      "seed_base": 268,
+      "tolerance_max_abs": 0.0002,
+      "tolerance_rms": 0.00005,
+      "width": 16
+    },
+    "config_float_tolerance": 1e-12,
+    "max_hardened_master_rms_max": 0.00005,
+    "required_frame_count": 200,
+    "required_frame_hardened_vs_cpu": {
+      "map_max_abs_max": 0.0002,
+      "master": {
+        "max_abs_max": 0.0002,
+        "rms_max": 0.00005
+      }
+    },
+    "require_passed": true,
+    "timing": {
+      "hardened_native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+      "hardened_resident_winsorized_mode": "hardened_cpu_parity",
+      "required_timing_keys": [
+        "cpu_baseline",
+        "cuda_fast_approx",
+        "cuda_hardened"
+      ]
+    }
+  },
+  "schema_version": 1
+}
