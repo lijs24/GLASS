@@ -5,6 +5,7 @@ from dataclasses import asdict
 import numpy as np
 
 from glass.cpu.calibration import calibrate_light
+from glass.cpu.integration import weighted_integrate_stack
 from glass.cpu.warp import warp_translation
 from glass.engine.resident_cuda import _output_diagnostics
 from glass.models import CalibrationPolicy
@@ -1312,7 +1313,7 @@ def test_resident_stack_sigma_clip_ignores_zero_weight_frames():
     assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
 
 
-def test_resident_stack_winsorized_sigma_matches_cpu_reference():
+def test_resident_stack_winsorized_sigma_matches_mean_std_reference():
     module = cuda_module_or_skip()
     if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
         module.ResidentCalibratedStack, "integrate_sigma_clip"
@@ -1339,6 +1340,48 @@ def test_resident_stack_winsorized_sigma_matches_cpu_reference():
     assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
     assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
     assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
+
+
+def test_resident_stack_hardened_winsorized_sigma_matches_cpu_baseline():
+    module = cuda_module_or_skip()
+    if not hasattr(module, "ResidentCalibratedStack") or not hasattr(
+        module.ResidentCalibratedStack, "integrate_hardened_winsorized_sigma"
+    ):
+        raise AssertionError(
+            "ResidentCalibratedStack.integrate_hardened_winsorized_sigma is missing from glass_cuda"
+        )
+
+    frames = [
+        np.array([[1, 1], [10, 4]], dtype=np.float32),
+        np.array([[1, 2], [10, 4]], dtype=np.float32),
+        np.array([[1, 3], [10, 4]], dtype=np.float32),
+        np.array([[12, 4], [10, 40]], dtype=np.float32),
+    ]
+    weights = np.array([1.0, 2.0, 1.0, 1.0], dtype=np.float32)
+    resident_stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        resident_stack.upload_calibrated_frame(index, frame)
+
+    master, weight_map, coverage, low_reject, high_reject = (
+        resident_stack.integrate_hardened_winsorized_sigma(weights, 2.4, 2.4)
+    )
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            np.stack(frames, axis=0),
+            weights=weights,
+            rejection="winsorized_sigma",
+            low_sigma=2.4,
+            high_sigma=2.4,
+        )
+    )
+
+    assert np.allclose(master, expected_master, rtol=1e-5, atol=1e-5)
+    assert np.allclose(weight_map, expected_weight, rtol=1e-5, atol=1e-5)
+    assert np.allclose(coverage, expected_coverage, rtol=1e-5, atol=1e-5)
+    assert np.allclose(low_reject, expected_low, rtol=1e-5, atol=1e-5)
+    assert np.allclose(high_reject, expected_high, rtol=1e-5, atol=1e-5)
+    assert high_reject[0, 0] == 1
+    assert high_reject[1, 1] == 1
 
 
 def _expected_matrix_warped_sigma(

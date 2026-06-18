@@ -4383,6 +4383,23 @@ integration where applicable.
   runtime behavior change, runtime default change, package build, upload,
   GitHub release creation, or real-data benchmark rerun.
 
+### S2-Gate 261: Resident Hardened Winsorized CUDA Parity Prototype
+
+- Add an explicit native `ResidentCalibratedStack.integrate_hardened_winsorized_sigma`
+  method for CUDA resident stacks.
+- Implement a prototype CUDA kernel that gathers valid per-pixel resident
+  samples, sorts up to 256 active frames, computes median/q25/q75 with linear
+  percentile interpolation, applies the S2-Gate 258/259 median-IQR winsorized
+  rejection baseline, and accumulates weighted mean plus rejection maps.
+- Keep the existing resident `integrate_sigma_clip(..., winsorize=true)` fast
+  path unchanged and leave runtime defaults untouched.
+- Add a CUDA parity test comparing the new native method against
+  `glass.cpu.integration.weighted_integrate_stack(..., rejection="winsorized_sigma")`
+  on a low-sample outlier case with non-uniform weights.
+- Keep this gate CUDA prototype scoped: no resident runtime default change,
+  no tile-local/matrix-warped parity migration, no package build/upload, no
+  GitHub release creation, and no 200-light real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

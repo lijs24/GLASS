@@ -454,6 +454,191 @@ void glass_integrate_resident_sigma_clip_f32_launch(
       winsorize);
 }
 
+constexpr int kGlassHardenedWinsorizedMaxFrames = 256;
+
+__device__ float glass_percentile_sorted_f32(const float* values, int count, float fraction) {
+  if (count <= 0) {
+    return 0.0f;
+  }
+  if (count == 1) {
+    return values[0];
+  }
+  const float position = static_cast<float>(count - 1) * fraction;
+  const int lower = static_cast<int>(floorf(position));
+  int upper = lower + 1;
+  if (upper >= count) {
+    upper = count - 1;
+  }
+  const float t = position - static_cast<float>(lower);
+  return values[lower] * (1.0f - t) + values[upper] * t;
+}
+
+__global__ void glass_integrate_resident_hardened_winsorized_sigma_f32_kernel(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma) {
+  const std::size_t pixel = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  if (pixel >= pixels_per_frame) {
+    return;
+  }
+
+  float values[kGlassHardenedWinsorizedMaxFrames];
+  int count = 0;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    const float value = stack[frame * pixels_per_frame + pixel];
+    if (!isfinite(value)) {
+      continue;
+    }
+    if (count < kGlassHardenedWinsorizedMaxFrames) {
+      values[count] = value;
+      ++count;
+    }
+  }
+  if (count <= 0) {
+    master[pixel] = 0.0f;
+    weight_map[pixel] = 0.0f;
+    coverage_map[pixel] = 0.0f;
+    low_rejection_map[pixel] = 0.0f;
+    high_rejection_map[pixel] = 0.0f;
+    return;
+  }
+
+  float mean = 0.0f;
+  for (int i = 0; i < count; ++i) {
+    mean += values[i];
+  }
+  mean /= static_cast<float>(count);
+  float variance = 0.0f;
+  for (int i = 0; i < count; ++i) {
+    const float delta = values[i] - mean;
+    variance += delta * delta;
+  }
+  const float fallback_scale = sqrtf(variance / static_cast<float>(count));
+
+  for (int i = 1; i < count; ++i) {
+    const float item = values[i];
+    int j = i - 1;
+    while (j >= 0 && values[j] > item) {
+      values[j + 1] = values[j];
+      --j;
+    }
+    values[j + 1] = item;
+  }
+
+  const float center0 = glass_percentile_sorted_f32(values, count, 0.5f);
+  const float q25 = glass_percentile_sorted_f32(values, count, 0.25f);
+  const float q75 = glass_percentile_sorted_f32(values, count, 0.75f);
+  float first_scale = (q75 - q25) / 1.349f;
+  if (!(first_scale > 0.0f) || !isfinite(first_scale)) {
+    first_scale = fallback_scale;
+  }
+  const float first_low = center0 - low_sigma * first_scale;
+  const float first_high = center0 + high_sigma * first_scale;
+
+  float winsor_mean = 0.0f;
+  for (int i = 0; i < count; ++i) {
+    float value = values[i];
+    if (value < first_low) {
+      value = first_low;
+    } else if (value > first_high) {
+      value = first_high;
+    }
+    winsor_mean += value;
+  }
+  winsor_mean /= static_cast<float>(count);
+
+  float winsor_variance = 0.0f;
+  for (int i = 0; i < count; ++i) {
+    float value = values[i];
+    if (value < first_low) {
+      value = first_low;
+    } else if (value > first_high) {
+      value = first_high;
+    }
+    const float delta = value - winsor_mean;
+    winsor_variance += delta * delta;
+  }
+  float scale = sqrtf(winsor_variance / static_cast<float>(count));
+  if (!(scale > 0.0f) || !isfinite(scale)) {
+    scale = first_scale;
+  }
+  const float low_threshold = winsor_mean - low_sigma * scale;
+  const float high_threshold = winsor_mean + high_sigma * scale;
+
+  float sum = 0.0f;
+  float weight_sum = 0.0f;
+  float coverage = 0.0f;
+  float low_reject = 0.0f;
+  float high_reject = 0.0f;
+  for (std::size_t frame = 0; frame < frame_count; ++frame) {
+    const float weight = weights[frame];
+    if (weight <= 0.0f || !isfinite(weight)) {
+      continue;
+    }
+    const float value = stack[frame * pixels_per_frame + pixel];
+    if (!isfinite(value)) {
+      continue;
+    }
+    if (scale > 0.0f && value < low_threshold) {
+      low_reject += 1.0f;
+      continue;
+    }
+    if (scale > 0.0f && value > high_threshold) {
+      high_reject += 1.0f;
+      continue;
+    }
+    sum += value * weight;
+    weight_sum += weight;
+    coverage += 1.0f;
+  }
+
+  master[pixel] = weight_sum > 0.0f ? sum / weight_sum : 0.0f;
+  weight_map[pixel] = weight_sum;
+  coverage_map[pixel] = coverage;
+  low_rejection_map[pixel] = low_reject;
+  high_rejection_map[pixel] = high_reject;
+}
+
+void glass_integrate_resident_hardened_winsorized_sigma_f32_launch(
+    const float* stack,
+    const float* weights,
+    float* master,
+    float* weight_map,
+    float* coverage_map,
+    float* low_rejection_map,
+    float* high_rejection_map,
+    std::size_t frame_count,
+    std::size_t pixels_per_frame,
+    float low_sigma,
+    float high_sigma) {
+  constexpr int threads = 256;
+  const int blocks = static_cast<int>((pixels_per_frame + threads - 1) / threads);
+  glass_integrate_resident_hardened_winsorized_sigma_f32_kernel<<<blocks, threads>>>(
+      stack,
+      weights,
+      master,
+      weight_map,
+      coverage_map,
+      low_rejection_map,
+      high_rejection_map,
+      frame_count,
+      pixels_per_frame,
+      low_sigma,
+      high_sigma);
+}
+
 __global__ void glass_integrate_resident_tile_local_sigma_clip_f32_kernel(
     const float* stack,
     const float* weights,
