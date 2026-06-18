@@ -210,3 +210,21 @@ This is a reporting handoff only. It does not change local-normalization math,
 read FITS pixels, or alter CUDA/CPU execution. Its purpose is to keep the
 continuous coefficient-field contract visible in the same report used for
 acceptance review.
+
+## S2-Gate 316 Enabled-Run Guardrail
+
+S2-Gate 316 adds `glass guardrails --require-local-normalization-enabled`.
+This option is intended for benchmark or acceptance runs where local
+normalization must be an active processing stage, not a disabled passthrough.
+
+When the option is supplied, guardrails require all of the following:
+
+- `local_norm_results.json` exists
+- `local_norm_contract.json` is generated and passes
+- the generated contract reports `enabled = true`
+
+Without this option, disabled passthrough remains valid and explicit. This keeps
+old or intentionally LN-off runs compatible while giving LN-required validation
+runs a hard acceptance switch. The guardrail records
+`require_local_normalization_enabled`, `local_norm_contract_enabled`, and a
+`local_norm_enabled_requirement` check in the summary and acceptance bundle.

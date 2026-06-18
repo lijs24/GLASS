@@ -435,9 +435,11 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["passed"] is True
     assert summary["pixel_verify"] is True
     assert summary["require_stack_default_ready"] is True
+    assert summary["require_local_normalization_enabled"] is False
     assert summary["local_norm_contract_required"] is True
     assert summary["local_norm_contract_attached"] is True
     assert summary["local_norm_contract_status"] == "passed"
+    assert summary["local_norm_contract_enabled"] is False
     assert summary["resident_calibration_contract_json"] == str(resident_calibration)
     assert summary["resident_result_contract_json"] == str(resident_result)
     assert summary["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
@@ -448,9 +450,11 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert bundle["artifact_type"] == "glass_acceptance_contract_bundle"
     assert bundle["passed"] is True
     assert bundle["purpose"] == "acceptance_audit_contract_inputs"
+    assert bundle["require_local_normalization_enabled"] is False
     assert bundle["local_norm_contract_required"] is True
     assert bundle["local_norm_contract_attached"] is True
     assert bundle["local_norm_contract_status"] == "passed"
+    assert bundle["local_norm_contract_enabled"] is False
     assert bundle["resident_calibration_contract_json"] == str(resident_calibration)
     assert bundle["resident_result_contract_json"] == str(resident_result)
     assert bundle["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
@@ -473,6 +477,9 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["checks"][2]["ready"] is True
     assert summary["checks"][3]["name"] == "local_norm_contract"
     assert summary["checks"][3]["passed"] is True
+    assert summary["checks"][4]["name"] == "local_norm_enabled_requirement"
+    assert summary["checks"][4]["passed"] is True
+    assert summary["checks"][4]["required"] is False
     assert stack_contract["passed"] is True
     assert stack_contract["default_promotion"]["ready"] is True
     assert pipeline_contract["passed"] is True
@@ -497,6 +504,90 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert "Local normalization contract" in html
     assert "local_norm_contract.json" in html
     assert "disabled_passthrough" in html
+
+
+def test_cli_guardrails_require_enabled_local_normalization(small_fits_dataset, tmp_path: Path):
+    disabled_run = tmp_path / "disabled_run"
+    disabled_out = tmp_path / "disabled_guardrails"
+    enabled_run = tmp_path / "enabled_run"
+    enabled_out = tmp_path / "enabled_guardrails"
+
+    assert (
+        main(["audit", "--root", str(small_fits_dataset), "--out", str(disabled_run), "--backend", "cpu", "--tile-size", "8"])
+        == 0
+    )
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(disabled_run),
+                "--out-dir",
+                str(disabled_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--require-local-normalization-enabled",
+            ]
+        )
+        == 2
+    )
+    disabled_summary = read_json(disabled_out / "guardrails_summary.json")
+    disabled_checks = {item["name"]: item for item in disabled_summary["checks"]}
+    assert disabled_summary["passed"] is False
+    assert disabled_summary["require_local_normalization_enabled"] is True
+    assert disabled_summary["local_norm_contract_enabled"] is False
+    assert disabled_checks["local_norm_enabled_requirement"]["passed"] is False
+    assert disabled_checks["local_norm_enabled_requirement"]["status"] == "missing_or_disabled"
+
+    assert (
+        main(
+            [
+                "audit",
+                "--root",
+                str(small_fits_dataset),
+                "--out",
+                str(enabled_run),
+                "--backend",
+                "cpu",
+                "--tile-size",
+                "8",
+                "--local-normalization",
+                "on",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(enabled_run),
+                "--out-dir",
+                str(enabled_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--require-local-normalization-enabled",
+            ]
+        )
+        == 0
+    )
+    enabled_summary = read_json(enabled_out / "guardrails_summary.json")
+    enabled_bundle = read_json(enabled_out / "acceptance_contract_bundle.json")
+    enabled_contract = read_json(enabled_out / "local_norm_contract.json")
+    enabled_checks = {item["name"]: item for item in enabled_summary["checks"]}
+    html = (enabled_out / "report.html").read_text(encoding="utf-8")
+    assert enabled_summary["passed"] is True
+    assert enabled_summary["require_local_normalization_enabled"] is True
+    assert enabled_summary["local_norm_contract_enabled"] is True
+    assert enabled_bundle["require_local_normalization_enabled"] is True
+    assert enabled_bundle["local_norm_contract_enabled"] is True
+    assert enabled_checks["local_norm_enabled_requirement"]["passed"] is True
+    assert enabled_contract["enabled"] is True
+    assert enabled_contract["model"] == "continuous_grid_mean_std_v1"
+    assert enabled_contract["coefficient_field_model"] == "bilinear_tile_center_v1"
+    assert "continuous_grid_mean_std_v1" in html
+    assert "bilinear_tile_center_v1" in html
 
 
 def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):

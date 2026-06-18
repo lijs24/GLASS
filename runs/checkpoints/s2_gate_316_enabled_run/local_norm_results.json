@@ -1,0 +1,52 @@
+{
+  "background_mask_policy": "sigma",
+  "coefficient_field_model": "bilinear_tile_center_v1",
+  "crop_box": null,
+  "enabled": true,
+  "full_field_map_max_pixels": 4000000,
+  "local_norm_results": [
+    {
+      "backend": "cpu_continuous_field",
+      "coefficient_field_model": "bilinear_tile_center_v1",
+      "coefficient_grid_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_coefficients.json",
+      "coverage_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\coverage_cache\\coverage_F000010.fits",
+      "crop_box": null,
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\dq_cache\\dq_local_norm_F000010.fits",
+      "dq_summary": {
+        "valid": 576
+      },
+      "empty_tiles_filled": 0,
+      "frame_id": "F000010",
+      "full_field_map_status": "written",
+      "grid_cols": 3,
+      "grid_rows": 3,
+      "input_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\registered_cache\\registered_F000010.fits",
+      "interpolation": "bilinear_tile_center",
+      "mean_offset": 0.0,
+      "mean_scale": 1.0,
+      "model": "continuous_grid_mean_std_v1",
+      "normalized_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010.fits",
+      "offset_field_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_offset_field.fits",
+      "residual_map_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_residual.fits",
+      "residual_summary": {
+        "max_abs": 0.0,
+        "mean": 0.0,
+        "rms": 0.0,
+        "valid_pixels": 576
+      },
+      "scale_field_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache\\local_norm_F000010_scale_field.fits",
+      "status": "reference",
+      "tile_count": 9,
+      "tile_size": 8,
+      "valid_pixels": 576,
+      "warnings": []
+    }
+  ],
+  "model": "continuous_grid_mean_std_v1",
+  "outlier_policy": "clip",
+  "output_dir": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_cache",
+  "reference_frame_id": "F000010",
+  "reference_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\registered_cache\\registered_F000010.fits",
+  "schema_version": 1,
+  "tile_radius": 64
+}

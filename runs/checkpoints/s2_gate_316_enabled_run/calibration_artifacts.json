@@ -1,0 +1,1278 @@
+{
+  "calibrated_lights": [
+    {
+      "backend": "cpu",
+      "cosmetic_correction": {
+        "cold_pixels": 0,
+        "cold_sigma": 8.0,
+        "enabled": false,
+        "hot_pixels": 0,
+        "hot_sigma": 8.0
+      },
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\dq\\dq_calibrated_F000010.fits",
+      "dq_summary": {
+        "valid": 576
+      },
+      "frame_id": "F000010",
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\calibrated\\calibrated_F000010.fits",
+      "tile_count": 9,
+      "tile_size": 8
+    },
+    {
+      "backend": "cpu",
+      "cosmetic_correction": {
+        "cold_pixels": 0,
+        "cold_sigma": 8.0,
+        "enabled": false,
+        "hot_pixels": 0,
+        "hot_sigma": 8.0
+      },
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\dq\\dq_calibrated_F000011.fits",
+      "dq_summary": {
+        "valid": 576
+      },
+      "frame_id": "F000011",
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\calibrated\\calibrated_F000011.fits",
+      "tile_count": 9,
+      "tile_size": 8
+    },
+    {
+      "backend": "cpu",
+      "cosmetic_correction": {
+        "cold_pixels": 0,
+        "cold_sigma": 8.0,
+        "enabled": false,
+        "hot_pixels": 0,
+        "hot_sigma": 8.0
+      },
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\dq\\dq_calibrated_F000012.fits",
+      "dq_summary": {
+        "valid": 576
+      },
+      "frame_id": "F000012",
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\calibrated\\calibrated_F000012.fits",
+      "tile_count": 9,
+      "tile_size": 8
+    }
+  ],
+  "input_cache": [],
+  "masters": {
+    "G409bfdf826": {
+      "bias_group": null,
+      "bias_subtracted_from_source": false,
+      "dq_provenance_summary": {
+        "engine": "stack_engine_cpu",
+        "high_rejected_pixels": 0,
+        "high_rejected_samples": 0,
+        "input_flagged_samples": 0,
+        "input_invalid_samples_before_rejection": 0,
+        "input_nonfinite_samples": 0,
+        "input_samples": 1728,
+        "input_valid_samples_before_rejection": 1728,
+        "item": "G409bfdf826",
+        "low_rejected_pixels": 0,
+        "low_rejected_samples": 0,
+        "no_data_pixels": null,
+        "output_dq_summary": {},
+        "partial_coverage_pixels": null,
+        "rejected_samples": 0,
+        "sample_accounting_closure": {
+          "input_invalid_samples_before_rejection": 0,
+          "input_samples": 1728,
+          "input_total_match": true,
+          "input_valid_samples_before_rejection": 1728,
+          "rejected_samples": 0,
+          "semantics": "Initial valid input samples close over final valid samples plus low/high rejected samples. Invalid input samples are not rejection samples.",
+          "status": "passed",
+          "valid_rejection_match": true,
+          "valid_samples_after_rejection": 1728
+        },
+        "schema_version": 1,
+        "semantics": "StackEngine consumes source DQ flags and non-finite samples as invalid samples; output DQ records zero-coverage and rejection-touched pixels; rejected sample counts are separate from invalid input sample counts.",
+        "source_dq_flag_counts": {
+          "cold_pixel": 0,
+          "cosmetic_corrected": 0,
+          "dead_pixel": 0,
+          "high_rejected": 0,
+          "hot_pixel": 0,
+          "local_normalization_excluded": 0,
+          "low_rejected": 0,
+          "no_data": 0,
+          "saturated": 0,
+          "warp_edge": 0
+        },
+        "source_schema": "stack_engine_dq_provenance",
+        "stage": "master_calibration",
+        "valid_pixels": null,
+        "valid_samples_after_rejection": 1728,
+        "warp_edge_pixels": null,
+        "zero_coverage_pixels": 0
+      },
+      "exposure_s": 60.0,
+      "master_dark_includes_bias": true,
+      "master_rejection": "winsorized_sigma",
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_dark_G409bfdf826.fits",
+      "stack_engine_dq_provenance": {
+        "high_rejected_samples": 0,
+        "input_dq_flag_counts": {
+          "cold_pixel": 0,
+          "cosmetic_corrected": 0,
+          "dead_pixel": 0,
+          "high_rejected": 0,
+          "hot_pixel": 0,
+          "local_normalization_excluded": 0,
+          "low_rejected": 0,
+          "no_data": 0,
+          "saturated": 0,
+          "warp_edge": 0
+        },
+        "input_flagged_samples": 0,
+        "input_invalid_samples_before_rejection": 0,
+        "input_nonfinite_samples": 0,
+        "input_samples": 1728,
+        "input_valid_samples_before_rejection": 1728,
+        "low_rejected_samples": 0,
+        "output_coverage_zero_pixels": 0,
+        "output_dq_summary": null,
+        "output_high_rejected_pixels": 0,
+        "output_low_rejected_pixels": 0,
+        "rejected_samples": 0,
+        "rejection_policy": {
+          "final_center": "nanmean_after_winsorization",
+          "final_scale": "nanstd_after_winsorization",
+          "high_sigma": 3.0,
+          "iterations": 1,
+          "low_sigma": 3.0,
+          "max_reject_fraction": 0.5,
+          "method": "winsorized_sigma",
+          "min_samples": 3,
+          "scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+          "winsorization_center": "nanmedian",
+          "winsorization_scale": "iqr_sigma_with_standard_deviation_fallback",
+          "winsorized": true
+        },
+        "result_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "missing": [],
+                "requested": {
+                  "coverage": false,
+                  "dq": false,
+                  "high_rejection": false,
+                  "low_rejection": false,
+                  "variance": false,
+                  "weight": false
+                }
+              },
+              "name": "requested_maps_present",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bad_shapes": {},
+                "master_shape": [
+                  24,
+                  24
+                ]
+              },
+              "name": "maps_match_master_shape",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "nonfinite_pixels": 0,
+                "total_pixels": 576
+              },
+              "name": "master_is_finite",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "dq_summary": {},
+                "mismatches": {},
+                "provenance_output_dq_summary": {}
+              },
+              "name": "dq_summary_matches_provenance",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "input_invalid_samples_before_rejection": 0,
+                "input_samples": 1728,
+                "input_valid_samples_before_rejection": 1728
+              },
+              "name": "input_valid_invalid_samples_match_total",
+              "note": "Initial input sample accounting is before rejection; DQ/non-finite invalid samples are not rejected samples.",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "input_valid_samples_before_rejection": 1728,
+                "metrics_accounted_samples": 1728,
+                "metrics_high_rejected_samples": 0,
+                "metrics_low_rejected_samples": 0,
+                "metrics_valid_samples": 1728
+              },
+              "name": "input_valid_samples_close_after_rejection",
+              "note": "Rejected sample counts plus final valid samples must close over initially valid input samples.",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "metrics_input_invalid_samples": 0,
+                "metrics_input_valid_samples": 1728,
+                "provenance_input_invalid_samples_before_rejection": 0,
+                "provenance_input_valid_samples_before_rejection": 1728
+              },
+              "name": "input_valid_invalid_metrics_match_provenance",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "expected_input_samples": 1728,
+                "frame_count": 3,
+                "pixels_per_frame": 576,
+                "provenance_input_samples": 1728
+              },
+              "name": "input_samples_match_request_shape",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "stack_engine_result_contract",
+          "master_shape": [
+            24,
+            24
+          ],
+          "passed": true,
+          "requested_maps": {
+            "coverage": false,
+            "dq": false,
+            "high_rejection": false,
+            "low_rejection": false,
+            "variance": false,
+            "weight": false
+          },
+          "schema_version": 1,
+          "status": "passed"
+        },
+        "schema_version": 1,
+        "semantics": "Source DQ flags and non-finite samples are consumed as invalid input stack samples before rejection. The output DQ map marks pixels with no valid samples and pixels touched by low/high rejection; source DQ flag counts are preserved here for audit. Input invalid samples are not rejected samples.",
+        "valid_samples_after_rejection": 1728
+      },
+      "stack_engine_enabled": true,
+      "stack_engine_fallback_reason": null,
+      "stack_engine_metrics": {
+        "combine": "mean",
+        "dq_provenance": {
+          "high_rejected_samples": 0,
+          "input_dq_flag_counts": {
+            "cold_pixel": 0,
+            "cosmetic_corrected": 0,
+            "dead_pixel": 0,
+            "high_rejected": 0,
+            "hot_pixel": 0,
+            "local_normalization_excluded": 0,
+            "low_rejected": 0,
+            "no_data": 0,
+            "saturated": 0,
+            "warp_edge": 0
+          },
+          "input_flagged_samples": 0,
+          "input_invalid_samples_before_rejection": 0,
+          "input_nonfinite_samples": 0,
+          "input_samples": 1728,
+          "input_valid_samples_before_rejection": 1728,
+          "low_rejected_samples": 0,
+          "output_coverage_zero_pixels": 0,
+          "output_dq_summary": null,
+          "output_high_rejected_pixels": 0,
+          "output_low_rejected_pixels": 0,
+          "rejected_samples": 0,
+          "rejection_policy": {
+            "final_center": "nanmean_after_winsorization",
+            "final_scale": "nanstd_after_winsorization",
+            "high_sigma": 3.0,
+            "iterations": 1,
+            "low_sigma": 3.0,
+            "max_reject_fraction": 0.5,
+            "method": "winsorized_sigma",
+            "min_samples": 3,
+            "scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+            "winsorization_center": "nanmedian",
+            "winsorization_scale": "iqr_sigma_with_standard_deviation_fallback",
+            "winsorized": true
+          },
+          "result_contract": {
+            "checks": [
+              {
+                "evidence": {
+                  "missing": [],
+                  "requested": {
+                    "coverage": false,
+                    "dq": false,
+                    "high_rejection": false,
+                    "low_rejection": false,
+                    "variance": false,
+                    "weight": false
+                  }
+                },
+                "name": "requested_maps_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "bad_shapes": {},
+                  "master_shape": [
+                    24,
+                    24
+                  ]
+                },
+                "name": "maps_match_master_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "nonfinite_pixels": 0,
+                  "total_pixels": 576
+                },
+                "name": "master_is_finite",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "dq_summary": {},
+                  "mismatches": {},
+                  "provenance_output_dq_summary": {}
+                },
+                "name": "dq_summary_matches_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "input_invalid_samples_before_rejection": 0,
+                  "input_samples": 1728,
+                  "input_valid_samples_before_rejection": 1728
+                },
+                "name": "input_valid_invalid_samples_match_total",
+                "note": "Initial input sample accounting is before rejection; DQ/non-finite invalid samples are not rejected samples.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "input_valid_samples_before_rejection": 1728,
+                  "metrics_accounted_samples": 1728,
+                  "metrics_high_rejected_samples": 0,
+                  "metrics_low_rejected_samples": 0,
+                  "metrics_valid_samples": 1728
+                },
+                "name": "input_valid_samples_close_after_rejection",
+                "note": "Rejected sample counts plus final valid samples must close over initially valid input samples.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "metrics_input_invalid_samples": 0,
+                  "metrics_input_valid_samples": 1728,
+                  "provenance_input_invalid_samples_before_rejection": 0,
+                  "provenance_input_valid_samples_before_rejection": 1728
+                },
+                "name": "input_valid_invalid_metrics_match_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "expected_input_samples": 1728,
+                  "frame_count": 3,
+                  "pixels_per_frame": 576,
+                  "provenance_input_samples": 1728
+                },
+                "name": "input_samples_match_request_shape",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "contract_type": "stack_engine_result_contract",
+            "master_shape": [
+              24,
+              24
+            ],
+            "passed": true,
+            "requested_maps": {
+              "coverage": false,
+              "dq": false,
+              "high_rejection": false,
+              "low_rejection": false,
+              "variance": false,
+              "weight": false
+            },
+            "schema_version": 1,
+            "status": "passed"
+          },
+          "schema_version": 1,
+          "semantics": "Source DQ flags and non-finite samples are consumed as invalid input stack samples before rejection. The output DQ map marks pixels with no valid samples and pixels touched by low/high rejection; source DQ flag counts are preserved here for audit. Input invalid samples are not rejected samples.",
+          "valid_samples_after_rejection": 1728
+        },
+        "frame_count": 3,
+        "height": 24,
+        "high_rejected": 0,
+        "input_invalid_samples": 0,
+        "input_valid_samples": 1728,
+        "low_rejected": 0,
+        "rejected_samples": 0,
+        "rejection": "winsorized_sigma",
+        "rejection_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+        "result_contract_passed": true,
+        "valid_samples": 1728,
+        "width": 24
+      },
+      "stats": {
+        "max": 2025.7490234375,
+        "mean": 1041.3527510960896,
+        "median": 1024.1392042371963,
+        "min": 1017.2991943359375,
+        "std": 96.19414916781047
+      },
+      "streaming": true,
+      "tile_size": 8,
+      "tile_stack_mode": "stack_engine_cpu",
+      "type": "dark"
+    },
+    "G9e8d28c798": {
+      "bias_group": "Ga8f40c9e17",
+      "bias_subtracted_from_source": true,
+      "dq_provenance_summary": {
+        "engine": "stack_engine_cpu",
+        "high_rejected_pixels": 0,
+        "high_rejected_samples": 0,
+        "input_flagged_samples": 0,
+        "input_invalid_samples_before_rejection": 0,
+        "input_nonfinite_samples": 0,
+        "input_samples": 1728,
+        "input_valid_samples_before_rejection": 1728,
+        "item": "G9e8d28c798",
+        "low_rejected_pixels": 0,
+        "low_rejected_samples": 0,
+        "no_data_pixels": null,
+        "output_dq_summary": {},
+        "partial_coverage_pixels": null,
+        "rejected_samples": 0,
+        "sample_accounting_closure": {
+          "input_invalid_samples_before_rejection": 0,
+          "input_samples": 1728,
+          "input_total_match": true,
+          "input_valid_samples_before_rejection": 1728,
+          "rejected_samples": 0,
+          "semantics": "Initial valid input samples close over final valid samples plus low/high rejected samples. Invalid input samples are not rejection samples.",
+          "status": "passed",
+          "valid_rejection_match": true,
+          "valid_samples_after_rejection": 1728
+        },
+        "schema_version": 1,
+        "semantics": "StackEngine consumes source DQ flags and non-finite samples as invalid samples; output DQ records zero-coverage and rejection-touched pixels; rejected sample counts are separate from invalid input sample counts.",
+        "source_dq_flag_counts": {
+          "cold_pixel": 0,
+          "cosmetic_corrected": 0,
+          "dead_pixel": 0,
+          "high_rejected": 0,
+          "hot_pixel": 0,
+          "local_normalization_excluded": 0,
+          "low_rejected": 0,
+          "no_data": 0,
+          "saturated": 0,
+          "warp_edge": 0
+        },
+        "source_schema": "stack_engine_dq_provenance",
+        "stage": "master_calibration",
+        "valid_pixels": null,
+        "valid_samples_after_rejection": 1728,
+        "warp_edge_pixels": null,
+        "zero_coverage_pixels": 0
+      },
+      "filter": "H",
+      "flat_floor": 1e-06,
+      "master_rejection": "winsorized_sigma",
+      "normalization": "median",
+      "normalization_method": "median_scratch_memmap_per_flat",
+      "normalization_scalar": 25026.501953125,
+      "normalization_stage": "per_flat",
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_flat_G9e8d28c798.fits",
+      "per_flat_normalization": [
+        {
+          "normalization_method": "median_scratch_memmap_per_flat",
+          "normalization_scalar": 25026.501953125,
+          "path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\flat\\flat_000.fits"
+        },
+        {
+          "normalization_method": "median_scratch_memmap_per_flat",
+          "normalization_scalar": 25011.671875,
+          "path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\flat\\flat_001.fits"
+        },
+        {
+          "normalization_method": "median_scratch_memmap_per_flat",
+          "normalization_scalar": 25029.2412109375,
+          "path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\flat\\flat_002.fits"
+        }
+      ],
+      "stack_engine_dq_provenance": {
+        "high_rejected_samples": 0,
+        "input_dq_flag_counts": {
+          "cold_pixel": 0,
+          "cosmetic_corrected": 0,
+          "dead_pixel": 0,
+          "high_rejected": 0,
+          "hot_pixel": 0,
+          "local_normalization_excluded": 0,
+          "low_rejected": 0,
+          "no_data": 0,
+          "saturated": 0,
+          "warp_edge": 0
+        },
+        "input_flagged_samples": 0,
+        "input_invalid_samples_before_rejection": 0,
+        "input_nonfinite_samples": 0,
+        "input_samples": 1728,
+        "input_valid_samples_before_rejection": 1728,
+        "low_rejected_samples": 0,
+        "output_coverage_zero_pixels": 0,
+        "output_dq_summary": null,
+        "output_high_rejected_pixels": 0,
+        "output_low_rejected_pixels": 0,
+        "rejected_samples": 0,
+        "rejection_policy": {
+          "final_center": "nanmean_after_winsorization",
+          "final_scale": "nanstd_after_winsorization",
+          "high_sigma": 3.0,
+          "iterations": 1,
+          "low_sigma": 3.0,
+          "max_reject_fraction": 0.5,
+          "method": "winsorized_sigma",
+          "min_samples": 3,
+          "scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+          "winsorization_center": "nanmedian",
+          "winsorization_scale": "iqr_sigma_with_standard_deviation_fallback",
+          "winsorized": true
+        },
+        "result_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "missing": [],
+                "requested": {
+                  "coverage": false,
+                  "dq": false,
+                  "high_rejection": false,
+                  "low_rejection": false,
+                  "variance": false,
+                  "weight": false
+                }
+              },
+              "name": "requested_maps_present",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bad_shapes": {},
+                "master_shape": [
+                  24,
+                  24
+                ]
+              },
+              "name": "maps_match_master_shape",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "nonfinite_pixels": 0,
+                "total_pixels": 576
+              },
+              "name": "master_is_finite",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "dq_summary": {},
+                "mismatches": {},
+                "provenance_output_dq_summary": {}
+              },
+              "name": "dq_summary_matches_provenance",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "input_invalid_samples_before_rejection": 0,
+                "input_samples": 1728,
+                "input_valid_samples_before_rejection": 1728
+              },
+              "name": "input_valid_invalid_samples_match_total",
+              "note": "Initial input sample accounting is before rejection; DQ/non-finite invalid samples are not rejected samples.",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "input_valid_samples_before_rejection": 1728,
+                "metrics_accounted_samples": 1728,
+                "metrics_high_rejected_samples": 0,
+                "metrics_low_rejected_samples": 0,
+                "metrics_valid_samples": 1728
+              },
+              "name": "input_valid_samples_close_after_rejection",
+              "note": "Rejected sample counts plus final valid samples must close over initially valid input samples.",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "metrics_input_invalid_samples": 0,
+                "metrics_input_valid_samples": 1728,
+                "provenance_input_invalid_samples_before_rejection": 0,
+                "provenance_input_valid_samples_before_rejection": 1728
+              },
+              "name": "input_valid_invalid_metrics_match_provenance",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "expected_input_samples": 1728,
+                "frame_count": 3,
+                "pixels_per_frame": 576,
+                "provenance_input_samples": 1728
+              },
+              "name": "input_samples_match_request_shape",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "stack_engine_result_contract",
+          "master_shape": [
+            24,
+            24
+          ],
+          "passed": true,
+          "requested_maps": {
+            "coverage": false,
+            "dq": false,
+            "high_rejection": false,
+            "low_rejection": false,
+            "variance": false,
+            "weight": false
+          },
+          "schema_version": 1,
+          "status": "passed"
+        },
+        "schema_version": 1,
+        "semantics": "Source DQ flags and non-finite samples are consumed as invalid input stack samples before rejection. The output DQ map marks pixels with no valid samples and pixels touched by low/high rejection; source DQ flag counts are preserved here for audit. Input invalid samples are not rejected samples.",
+        "valid_samples_after_rejection": 1728
+      },
+      "stack_engine_enabled": true,
+      "stack_engine_fallback_reason": null,
+      "stack_engine_metrics": {
+        "combine": "mean",
+        "dq_provenance": {
+          "high_rejected_samples": 0,
+          "input_dq_flag_counts": {
+            "cold_pixel": 0,
+            "cosmetic_corrected": 0,
+            "dead_pixel": 0,
+            "high_rejected": 0,
+            "hot_pixel": 0,
+            "local_normalization_excluded": 0,
+            "low_rejected": 0,
+            "no_data": 0,
+            "saturated": 0,
+            "warp_edge": 0
+          },
+          "input_flagged_samples": 0,
+          "input_invalid_samples_before_rejection": 0,
+          "input_nonfinite_samples": 0,
+          "input_samples": 1728,
+          "input_valid_samples_before_rejection": 1728,
+          "low_rejected_samples": 0,
+          "output_coverage_zero_pixels": 0,
+          "output_dq_summary": null,
+          "output_high_rejected_pixels": 0,
+          "output_low_rejected_pixels": 0,
+          "rejected_samples": 0,
+          "rejection_policy": {
+            "final_center": "nanmean_after_winsorization",
+            "final_scale": "nanstd_after_winsorization",
+            "high_sigma": 3.0,
+            "iterations": 1,
+            "low_sigma": 3.0,
+            "max_reject_fraction": 0.5,
+            "method": "winsorized_sigma",
+            "min_samples": 3,
+            "scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+            "winsorization_center": "nanmedian",
+            "winsorization_scale": "iqr_sigma_with_standard_deviation_fallback",
+            "winsorized": true
+          },
+          "result_contract": {
+            "checks": [
+              {
+                "evidence": {
+                  "missing": [],
+                  "requested": {
+                    "coverage": false,
+                    "dq": false,
+                    "high_rejection": false,
+                    "low_rejection": false,
+                    "variance": false,
+                    "weight": false
+                  }
+                },
+                "name": "requested_maps_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "bad_shapes": {},
+                  "master_shape": [
+                    24,
+                    24
+                  ]
+                },
+                "name": "maps_match_master_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "nonfinite_pixels": 0,
+                  "total_pixels": 576
+                },
+                "name": "master_is_finite",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "dq_summary": {},
+                  "mismatches": {},
+                  "provenance_output_dq_summary": {}
+                },
+                "name": "dq_summary_matches_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "input_invalid_samples_before_rejection": 0,
+                  "input_samples": 1728,
+                  "input_valid_samples_before_rejection": 1728
+                },
+                "name": "input_valid_invalid_samples_match_total",
+                "note": "Initial input sample accounting is before rejection; DQ/non-finite invalid samples are not rejected samples.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "input_valid_samples_before_rejection": 1728,
+                  "metrics_accounted_samples": 1728,
+                  "metrics_high_rejected_samples": 0,
+                  "metrics_low_rejected_samples": 0,
+                  "metrics_valid_samples": 1728
+                },
+                "name": "input_valid_samples_close_after_rejection",
+                "note": "Rejected sample counts plus final valid samples must close over initially valid input samples.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "metrics_input_invalid_samples": 0,
+                  "metrics_input_valid_samples": 1728,
+                  "provenance_input_invalid_samples_before_rejection": 0,
+                  "provenance_input_valid_samples_before_rejection": 1728
+                },
+                "name": "input_valid_invalid_metrics_match_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "expected_input_samples": 1728,
+                  "frame_count": 3,
+                  "pixels_per_frame": 576,
+                  "provenance_input_samples": 1728
+                },
+                "name": "input_samples_match_request_shape",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "contract_type": "stack_engine_result_contract",
+            "master_shape": [
+              24,
+              24
+            ],
+            "passed": true,
+            "requested_maps": {
+              "coverage": false,
+              "dq": false,
+              "high_rejection": false,
+              "low_rejection": false,
+              "variance": false,
+              "weight": false
+            },
+            "schema_version": 1,
+            "status": "passed"
+          },
+          "schema_version": 1,
+          "semantics": "Source DQ flags and non-finite samples are consumed as invalid input stack samples before rejection. The output DQ map marks pixels with no valid samples and pixels touched by low/high rejection; source DQ flag counts are preserved here for audit. Input invalid samples are not rejected samples.",
+          "valid_samples_after_rejection": 1728
+        },
+        "frame_count": 3,
+        "height": 24,
+        "high_rejected": 0,
+        "input_invalid_samples": 0,
+        "input_valid_samples": 1728,
+        "low_rejected": 0,
+        "rejected_samples": 0,
+        "rejection": "winsorized_sigma",
+        "rejection_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+        "result_contract_passed": true,
+        "valid_samples": 1728,
+        "width": 24
+      },
+      "stats": {
+        "max": 1.070944905281067,
+        "mean": 1.0000486090365384,
+        "median": 1.0000192787912157,
+        "min": 0.9305070042610168,
+        "std": 0.032395267786598486
+      },
+      "streaming": true,
+      "tile_size": 8,
+      "tile_stack_mode": "stack_engine_cpu_per_flat_normalized",
+      "type": "flat"
+    },
+    "Ga8f40c9e17": {
+      "dq_provenance_summary": {
+        "engine": "stack_engine_cpu",
+        "high_rejected_pixels": 0,
+        "high_rejected_samples": 0,
+        "input_flagged_samples": 0,
+        "input_invalid_samples_before_rejection": 0,
+        "input_nonfinite_samples": 0,
+        "input_samples": 1728,
+        "input_valid_samples_before_rejection": 1728,
+        "item": "Ga8f40c9e17",
+        "low_rejected_pixels": 0,
+        "low_rejected_samples": 0,
+        "no_data_pixels": null,
+        "output_dq_summary": {},
+        "partial_coverage_pixels": null,
+        "rejected_samples": 0,
+        "sample_accounting_closure": {
+          "input_invalid_samples_before_rejection": 0,
+          "input_samples": 1728,
+          "input_total_match": true,
+          "input_valid_samples_before_rejection": 1728,
+          "rejected_samples": 0,
+          "semantics": "Initial valid input samples close over final valid samples plus low/high rejected samples. Invalid input samples are not rejection samples.",
+          "status": "passed",
+          "valid_rejection_match": true,
+          "valid_samples_after_rejection": 1728
+        },
+        "schema_version": 1,
+        "semantics": "StackEngine consumes source DQ flags and non-finite samples as invalid samples; output DQ records zero-coverage and rejection-touched pixels; rejected sample counts are separate from invalid input sample counts.",
+        "source_dq_flag_counts": {
+          "cold_pixel": 0,
+          "cosmetic_corrected": 0,
+          "dead_pixel": 0,
+          "high_rejected": 0,
+          "hot_pixel": 0,
+          "local_normalization_excluded": 0,
+          "low_rejected": 0,
+          "no_data": 0,
+          "saturated": 0,
+          "warp_edge": 0
+        },
+        "source_schema": "stack_engine_dq_provenance",
+        "stage": "master_calibration",
+        "valid_pixels": null,
+        "valid_samples_after_rejection": 1728,
+        "warp_edge_pixels": null,
+        "zero_coverage_pixels": 0
+      },
+      "master_rejection": "winsorized_sigma",
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_bias_Ga8f40c9e17.fits",
+      "stack_engine_dq_provenance": {
+        "high_rejected_samples": 0,
+        "input_dq_flag_counts": {
+          "cold_pixel": 0,
+          "cosmetic_corrected": 0,
+          "dead_pixel": 0,
+          "high_rejected": 0,
+          "hot_pixel": 0,
+          "local_normalization_excluded": 0,
+          "low_rejected": 0,
+          "no_data": 0,
+          "saturated": 0,
+          "warp_edge": 0
+        },
+        "input_flagged_samples": 0,
+        "input_invalid_samples_before_rejection": 0,
+        "input_nonfinite_samples": 0,
+        "input_samples": 1728,
+        "input_valid_samples_before_rejection": 1728,
+        "low_rejected_samples": 0,
+        "output_coverage_zero_pixels": 0,
+        "output_dq_summary": null,
+        "output_high_rejected_pixels": 0,
+        "output_low_rejected_pixels": 0,
+        "rejected_samples": 0,
+        "rejection_policy": {
+          "final_center": "nanmean_after_winsorization",
+          "final_scale": "nanstd_after_winsorization",
+          "high_sigma": 3.0,
+          "iterations": 1,
+          "low_sigma": 3.0,
+          "max_reject_fraction": 0.5,
+          "method": "winsorized_sigma",
+          "min_samples": 3,
+          "scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+          "winsorization_center": "nanmedian",
+          "winsorization_scale": "iqr_sigma_with_standard_deviation_fallback",
+          "winsorized": true
+        },
+        "result_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "missing": [],
+                "requested": {
+                  "coverage": false,
+                  "dq": false,
+                  "high_rejection": false,
+                  "low_rejection": false,
+                  "variance": false,
+                  "weight": false
+                }
+              },
+              "name": "requested_maps_present",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bad_shapes": {},
+                "master_shape": [
+                  24,
+                  24
+                ]
+              },
+              "name": "maps_match_master_shape",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "nonfinite_pixels": 0,
+                "total_pixels": 576
+              },
+              "name": "master_is_finite",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "dq_summary": {},
+                "mismatches": {},
+                "provenance_output_dq_summary": {}
+              },
+              "name": "dq_summary_matches_provenance",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "input_invalid_samples_before_rejection": 0,
+                "input_samples": 1728,
+                "input_valid_samples_before_rejection": 1728
+              },
+              "name": "input_valid_invalid_samples_match_total",
+              "note": "Initial input sample accounting is before rejection; DQ/non-finite invalid samples are not rejected samples.",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "input_valid_samples_before_rejection": 1728,
+                "metrics_accounted_samples": 1728,
+                "metrics_high_rejected_samples": 0,
+                "metrics_low_rejected_samples": 0,
+                "metrics_valid_samples": 1728
+              },
+              "name": "input_valid_samples_close_after_rejection",
+              "note": "Rejected sample counts plus final valid samples must close over initially valid input samples.",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "metrics_input_invalid_samples": 0,
+                "metrics_input_valid_samples": 1728,
+                "provenance_input_invalid_samples_before_rejection": 0,
+                "provenance_input_valid_samples_before_rejection": 1728
+              },
+              "name": "input_valid_invalid_metrics_match_provenance",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "expected_input_samples": 1728,
+                "frame_count": 3,
+                "pixels_per_frame": 576,
+                "provenance_input_samples": 1728
+              },
+              "name": "input_samples_match_request_shape",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "stack_engine_result_contract",
+          "master_shape": [
+            24,
+            24
+          ],
+          "passed": true,
+          "requested_maps": {
+            "coverage": false,
+            "dq": false,
+            "high_rejection": false,
+            "low_rejection": false,
+            "variance": false,
+            "weight": false
+          },
+          "schema_version": 1,
+          "status": "passed"
+        },
+        "schema_version": 1,
+        "semantics": "Source DQ flags and non-finite samples are consumed as invalid input stack samples before rejection. The output DQ map marks pixels with no valid samples and pixels touched by low/high rejection; source DQ flag counts are preserved here for audit. Input invalid samples are not rejected samples.",
+        "valid_samples_after_rejection": 1728
+      },
+      "stack_engine_enabled": true,
+      "stack_engine_fallback_reason": null,
+      "stack_engine_metrics": {
+        "combine": "mean",
+        "dq_provenance": {
+          "high_rejected_samples": 0,
+          "input_dq_flag_counts": {
+            "cold_pixel": 0,
+            "cosmetic_corrected": 0,
+            "dead_pixel": 0,
+            "high_rejected": 0,
+            "hot_pixel": 0,
+            "local_normalization_excluded": 0,
+            "low_rejected": 0,
+            "no_data": 0,
+            "saturated": 0,
+            "warp_edge": 0
+          },
+          "input_flagged_samples": 0,
+          "input_invalid_samples_before_rejection": 0,
+          "input_nonfinite_samples": 0,
+          "input_samples": 1728,
+          "input_valid_samples_before_rejection": 1728,
+          "low_rejected_samples": 0,
+          "output_coverage_zero_pixels": 0,
+          "output_dq_summary": null,
+          "output_high_rejected_pixels": 0,
+          "output_low_rejected_pixels": 0,
+          "rejected_samples": 0,
+          "rejection_policy": {
+            "final_center": "nanmean_after_winsorization",
+            "final_scale": "nanstd_after_winsorization",
+            "high_sigma": 3.0,
+            "iterations": 1,
+            "low_sigma": 3.0,
+            "max_reject_fraction": 0.5,
+            "method": "winsorized_sigma",
+            "min_samples": 3,
+            "scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+            "winsorization_center": "nanmedian",
+            "winsorization_scale": "iqr_sigma_with_standard_deviation_fallback",
+            "winsorized": true
+          },
+          "result_contract": {
+            "checks": [
+              {
+                "evidence": {
+                  "missing": [],
+                  "requested": {
+                    "coverage": false,
+                    "dq": false,
+                    "high_rejection": false,
+                    "low_rejection": false,
+                    "variance": false,
+                    "weight": false
+                  }
+                },
+                "name": "requested_maps_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "bad_shapes": {},
+                  "master_shape": [
+                    24,
+                    24
+                  ]
+                },
+                "name": "maps_match_master_shape",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "nonfinite_pixels": 0,
+                  "total_pixels": 576
+                },
+                "name": "master_is_finite",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "dq_summary": {},
+                  "mismatches": {},
+                  "provenance_output_dq_summary": {}
+                },
+                "name": "dq_summary_matches_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "input_invalid_samples_before_rejection": 0,
+                  "input_samples": 1728,
+                  "input_valid_samples_before_rejection": 1728
+                },
+                "name": "input_valid_invalid_samples_match_total",
+                "note": "Initial input sample accounting is before rejection; DQ/non-finite invalid samples are not rejected samples.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "input_valid_samples_before_rejection": 1728,
+                  "metrics_accounted_samples": 1728,
+                  "metrics_high_rejected_samples": 0,
+                  "metrics_low_rejected_samples": 0,
+                  "metrics_valid_samples": 1728
+                },
+                "name": "input_valid_samples_close_after_rejection",
+                "note": "Rejected sample counts plus final valid samples must close over initially valid input samples.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "metrics_input_invalid_samples": 0,
+                  "metrics_input_valid_samples": 1728,
+                  "provenance_input_invalid_samples_before_rejection": 0,
+                  "provenance_input_valid_samples_before_rejection": 1728
+                },
+                "name": "input_valid_invalid_metrics_match_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "expected_input_samples": 1728,
+                  "frame_count": 3,
+                  "pixels_per_frame": 576,
+                  "provenance_input_samples": 1728
+                },
+                "name": "input_samples_match_request_shape",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "contract_type": "stack_engine_result_contract",
+            "master_shape": [
+              24,
+              24
+            ],
+            "passed": true,
+            "requested_maps": {
+              "coverage": false,
+              "dq": false,
+              "high_rejection": false,
+              "low_rejection": false,
+              "variance": false,
+              "weight": false
+            },
+            "schema_version": 1,
+            "status": "passed"
+          },
+          "schema_version": 1,
+          "semantics": "Source DQ flags and non-finite samples are consumed as invalid input stack samples before rejection. The output DQ map marks pixels with no valid samples and pixels touched by low/high rejection; source DQ flag counts are preserved here for audit. Input invalid samples are not rejected samples.",
+          "valid_samples_after_rejection": 1728
+        },
+        "frame_count": 3,
+        "height": 24,
+        "high_rejected": 0,
+        "input_invalid_samples": 0,
+        "input_valid_samples": 1728,
+        "low_rejected": 0,
+        "rejected_samples": 0,
+        "rejection": "winsorized_sigma",
+        "rejection_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+        "result_contract_passed": true,
+        "valid_samples": 1728,
+        "width": 24
+      },
+      "stats": {
+        "max": 1005.453125,
+        "mean": 999.8807636896769,
+        "median": 999.8793402777778,
+        "min": 995.1305541992188,
+        "std": 1.746991620802354
+      },
+      "streaming": true,
+      "tile_size": 8,
+      "tile_stack_mode": "stack_engine_cpu",
+      "type": "bias"
+    }
+  },
+  "policy": {
+    "allow_legacy_stack_fallback": false,
+    "cosmetic_cold_sigma": 8.0,
+    "cosmetic_correction_enabled": false,
+    "cosmetic_hot_sigma": 8.0,
+    "dark_scaling_enabled": true,
+    "flat_floor": 1e-06,
+    "flat_normalization": "median",
+    "master_dark_includes_bias": true,
+    "master_rejection": "winsorized_sigma",
+    "master_rejection_high_sigma": 3.0,
+    "master_rejection_iterations": 1,
+    "master_rejection_low_sigma": 3.0,
+    "master_rejection_max_fraction": 0.5,
+    "master_rejection_min_samples": 3,
+    "overscan_columns": 0,
+    "overscan_enabled": false,
+    "overscan_rows": 0,
+    "pedestal": 0.0,
+    "saturation_level": null,
+    "trim_overscan": true
+  },
+  "requested_backend": "cpu",
+  "tile_size": 8
+}

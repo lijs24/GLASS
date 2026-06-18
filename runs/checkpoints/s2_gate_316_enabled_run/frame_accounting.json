@@ -1,0 +1,172 @@
+{
+  "artifact": "frame_accounting",
+  "calibration_artifact_type": null,
+  "exception_frames": [
+    {
+      "filter": "H",
+      "final_status": "quality_rejected",
+      "frame_id": "F000011",
+      "input_path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_001.fits",
+      "integration_status": "not_integrated",
+      "integration_weight": null,
+      "local_norm_status": "missing",
+      "primary_reason": "star_count 5 below min_stars=8",
+      "primary_stage": "quality",
+      "quality_gate_status": "rejected",
+      "reason_count": 2,
+      "registration_status": "quality_rejected",
+      "warning_count": 2,
+      "warp_status": "skipped"
+    },
+    {
+      "filter": "H",
+      "final_status": "quality_rejected",
+      "frame_id": "F000012",
+      "input_path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_002.fits",
+      "integration_status": "not_integrated",
+      "integration_weight": null,
+      "local_norm_status": "missing",
+      "primary_reason": "star_count 5 below min_stars=8",
+      "primary_stage": "quality",
+      "quality_gate_status": "rejected",
+      "reason_count": 2,
+      "registration_status": "quality_rejected",
+      "warning_count": 2,
+      "warp_status": "skipped"
+    }
+  ],
+  "exception_summary": {
+    "count": 2,
+    "final_status_counts": {
+      "quality_rejected": 2
+    },
+    "primary_stage_counts": {
+      "quality": 2
+    }
+  },
+  "frames": [
+    {
+      "calibration_backend": "cpu",
+      "calibration_source_stage": null,
+      "calibration_status": "calibrated",
+      "filter": "H",
+      "final_status": "integrated",
+      "frame_id": "F000010",
+      "input_path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_000.fits",
+      "integration_status": "used",
+      "integration_weight": 1.0,
+      "local_norm_status": "reference",
+      "quality_gate_status": "rejected",
+      "quality_score": 0.007915128755409116,
+      "reasons": [
+        "star_count 5 below min_stars=8"
+      ],
+      "reference_candidate": false,
+      "registration_source": "streaming_star_detector",
+      "registration_status": "reference",
+      "resident_master_path": null,
+      "resident_output_index": null,
+      "resident_stack_index": null,
+      "warnings": [
+        "reference frame failed quality gate but is required as registration reference"
+      ],
+      "warp_reason": null,
+      "warp_status": "accepted"
+    },
+    {
+      "calibration_backend": "cpu",
+      "calibration_source_stage": null,
+      "calibration_status": "calibrated",
+      "filter": "H",
+      "final_status": "quality_rejected",
+      "frame_id": "F000011",
+      "input_path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_001.fits",
+      "integration_status": "not_integrated",
+      "integration_weight": null,
+      "local_norm_status": "missing",
+      "quality_gate_status": "rejected",
+      "quality_score": 0.007763571217205114,
+      "reasons": [
+        "star_count 5 below min_stars=8",
+        "registration did not produce an accepted transform"
+      ],
+      "reference_candidate": false,
+      "registration_source": "quality_gate",
+      "registration_status": "quality_rejected",
+      "resident_master_path": null,
+      "resident_output_index": null,
+      "resident_stack_index": null,
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ],
+      "warp_reason": "registration did not produce an accepted transform",
+      "warp_status": "skipped"
+    },
+    {
+      "calibration_backend": "cpu",
+      "calibration_source_stage": null,
+      "calibration_status": "calibrated",
+      "filter": "H",
+      "final_status": "quality_rejected",
+      "frame_id": "F000012",
+      "input_path": "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_002.fits",
+      "integration_status": "not_integrated",
+      "integration_weight": null,
+      "local_norm_status": "missing",
+      "quality_gate_status": "rejected",
+      "quality_score": 0.0070568426863619315,
+      "reasons": [
+        "star_count 5 below min_stars=8",
+        "registration did not produce an accepted transform"
+      ],
+      "reference_candidate": false,
+      "registration_source": "quality_gate",
+      "registration_status": "quality_rejected",
+      "resident_master_path": null,
+      "resident_output_index": null,
+      "resident_stack_index": null,
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ],
+      "warp_reason": "registration did not produce an accepted transform",
+      "warp_status": "skipped"
+    }
+  ],
+  "integration_source_stage": "local_normalization",
+  "resident_native_calibration_artifact": false,
+  "schema_version": 1,
+  "sources": {
+    "calibration": true,
+    "integration": true,
+    "local_norm": true,
+    "plan": true,
+    "quality": true,
+    "registration": true,
+    "resident": false,
+    "warp": true
+  },
+  "summary": {
+    "calibrated_frames": 3,
+    "calibration_artifact_type": null,
+    "calibration_master_count": 3,
+    "exception_frames": 2,
+    "final_status_counts": {
+      "integrated": 1,
+      "quality_rejected": 2
+    },
+    "input_light_frames": 3,
+    "integrated_frames": 1,
+    "not_integrated_frames": 0,
+    "quality_accepted_frames": 0,
+    "quality_rejected_frames": 3,
+    "registration_accepted_frames": 1,
+    "resident_calibrated_frames": 0,
+    "resident_calibrated_light_ledger_rows": 0,
+    "resident_native_calibration_artifact": false,
+    "warp_accepted_frames": 1,
+    "warp_skipped_frames": 2,
+    "zero_weight_frames": 0
+  }
+}

@@ -5523,6 +5523,28 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 316: Enabled Local Normalization Guardrail
+
+- Add `glass guardrails --require-local-normalization-enabled` for benchmark or
+  acceptance runs that must prove local normalization actually executed rather
+  than emitted a disabled passthrough artifact.
+- Fail guardrails when the requirement is set and `local_norm_results.json` is
+  missing, the generated `local_norm_contract.json` is absent/failed, or the
+  contract reports `enabled = false`.
+- Preserve default compatibility: guardrails remain passing for disabled LN
+  passthrough contracts unless the new require-enabled flag is supplied.
+- Surface `require_local_normalization_enabled` and
+  `local_norm_contract_enabled` in `guardrails_summary.json`,
+  `acceptance_contract_bundle.json`, console output, and checks.
+- Add focused tests for disabled passthrough failure under the new requirement
+  and enabled continuous LN success with `continuous_grid_mean_std_v1` and
+  `bilinear_tile_center_v1` evidence visible in the report.
+- Generate Gate316 guardrail artifacts from a small CPU validation run with
+  `--local-normalization on`.
+- Keep this gate guardrail scoped: no image math change, no CUDA kernel change,
+  no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

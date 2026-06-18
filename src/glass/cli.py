@@ -2770,6 +2770,18 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     local_norm_contract_status = (
         local_norm_contract.get("status") if isinstance(local_norm_contract, dict) else "not_present"
     )
+    local_norm_enabled_required = bool(getattr(args, "require_local_normalization_enabled", False))
+    local_norm_contract_enabled = (
+        local_norm_contract.get("enabled") if isinstance(local_norm_contract, dict) else None
+    )
+    local_norm_enabled_condition = (
+        not local_norm_enabled_required
+        or (
+            local_norm_results_present
+            and local_norm_contract_enabled is True
+            and local_norm_contract_condition
+        )
+    )
     pipeline_calibration = (
         pipeline_audit.get("calibration") if isinstance(pipeline_audit.get("calibration"), dict) else {}
     )
@@ -2786,6 +2798,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         and bool(pipeline_audit.get("passed"))
         and stack_default_condition
         and local_norm_contract_condition
+        and local_norm_enabled_condition
     )
     summary = {
         "schema_version": 1,
@@ -2799,6 +2812,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "stack_scope": args.stack_scope,
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
+        "require_local_normalization_enabled": local_norm_enabled_required,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -2807,6 +2821,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "local_norm_contract_required": local_norm_results_present,
         "local_norm_contract_attached": isinstance(local_norm_contract, dict),
         "local_norm_contract_status": local_norm_contract_status,
+        "local_norm_contract_enabled": local_norm_contract_enabled,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2870,6 +2885,17 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             else [],
         }
     )
+    summary["checks"].append(
+        {
+            "name": "local_norm_enabled_requirement",
+            "passed": local_norm_enabled_condition,
+            "required": local_norm_enabled_required,
+            "enabled": local_norm_contract_enabled,
+            "local_norm_results_present": local_norm_results_present,
+            "contract_passed": local_norm_contract_condition,
+            "status": "passed" if local_norm_enabled_condition else "missing_or_disabled",
+        }
+    )
     bundle = {
         "schema_version": 1,
         "created_at": now_iso(),
@@ -2883,6 +2909,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "stack_scope": args.stack_scope,
         "expected_integration_engine": args.expected_integration_engine,
         "require_stack_default_ready": stack_default_required,
+        "require_local_normalization_enabled": local_norm_enabled_required,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -2891,6 +2918,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "local_norm_contract_required": local_norm_results_present,
         "local_norm_contract_attached": isinstance(local_norm_contract, dict),
         "local_norm_contract_status": local_norm_contract_status,
+        "local_norm_contract_enabled": local_norm_contract_enabled,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2930,12 +2958,14 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "pixel_verify": args.pixel_verify,
             "stack_default_promotion_ready": stack_default_ready,
             "require_stack_default_ready": stack_default_required,
+            "require_local_normalization_enabled": local_norm_enabled_required,
             "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
             "resident_result_contract_source": resident_result_contract_source,
             "local_norm_contract_status": local_norm_contract_status,
             "local_norm_contract_required": local_norm_results_present,
+            "local_norm_contract_enabled": local_norm_contract_enabled,
             "resident_native_calibration": resident_native_calibration,
         }
     )
@@ -5874,6 +5904,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-stack-default-ready",
         action="store_true",
         help="fail guardrails unless the StackEngine contract is ready for full default promotion",
+    )
+    guardrails.add_argument(
+        "--require-local-normalization-enabled",
+        action="store_true",
+        help="fail guardrails unless local normalization is present, enabled, and passes its contract",
     )
     guardrails.add_argument(
         "--pixel-verify",
