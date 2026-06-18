@@ -5690,6 +5690,27 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 323: Acceptance Audit Warp Quality Handoff
+
+- Carry `warp_quality_contract.json` into `glass acceptance-audit` as an
+  optional acceptance evidence artifact.
+- Resolve the warp-quality contract from
+  `acceptance_contract_bundle.json`, or from an explicit
+  `--warp-quality-contract-json` override.
+- Add `--require-warp-quality-contract` so release and benchmark scripts can
+  fail acceptance when warp evidence is missing, malformed, or failed.
+- Preserve default compatibility: existing acceptance bundles without warp
+  evidence remain valid unless the new requirement flag is supplied.
+- Surface warp-quality status, type, check count, output count, failed checks,
+  and path in acceptance JSON and Markdown.
+- Add focused tests for bundle handoff, required-missing failure, failed
+  contract failure, and CLI required-mode handoff.
+- Generate Gate323 acceptance-audit artifacts from existing small validation
+  outputs.
+- Keep this gate audit-surface scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1195,6 +1195,39 @@ def _write_resident_contract(path: Path, *, artifact_type: str, passed: bool = T
     )
 
 
+def _write_warp_quality_contract(path: Path, *, passed: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "warp_quality_contract",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "output_count": 2,
+            "summary": {
+                "output_count": 2,
+                "skipped_count": 0 if passed else 1,
+                "artifact_ready_count": 2 if passed else 1,
+                "min_valid_fraction": 0.997 if passed else 0.72,
+            },
+            "checks": [
+                {
+                    "name": "warp_outputs_present",
+                    "passed": True,
+                    "evidence": {"output_count": 2},
+                    "note": "",
+                },
+                {
+                    "name": "warp_output_artifacts_ready",
+                    "passed": passed,
+                    "evidence": {"failed": [] if passed else ["light_001"]},
+                    "note": "",
+                },
+            ],
+        },
+    )
+
+
 def _write_contract_bundle(
     path: Path,
     *,
@@ -1203,6 +1236,7 @@ def _write_contract_bundle(
     passed: bool = True,
     resident_calibration: Path | None = None,
     resident_result: Path | None = None,
+    warp_quality: Path | None = None,
     resident_result_source: str | None = None,
     resident_native_calibration: dict | None = None,
 ) -> None:
@@ -1211,10 +1245,17 @@ def _write_contract_bundle(
         "stack_engine_contract": str(stack),
         "guardrails_summary": str(path.with_name("guardrails_summary.json")),
     }
+    argument_map = {
+        "pipeline_contract_json": str(pipeline),
+        "stack_engine_contract_json": str(stack),
+    }
     if resident_calibration is not None:
         artifacts["resident_calibration_contract"] = str(resident_calibration)
     if resident_result is not None:
         artifacts["resident_result_contract"] = str(resident_result)
+    if warp_quality is not None:
+        artifacts["warp_quality_contract"] = str(warp_quality)
+        argument_map["warp_quality_contract_json"] = str(warp_quality)
     write_json(
         path,
         {
@@ -1228,14 +1269,13 @@ def _write_contract_bundle(
             if resident_calibration is None
             else str(resident_calibration),
             "resident_result_contract_json": None if resident_result is None else str(resident_result),
+            "warp_quality_contract_json": None if warp_quality is None else str(warp_quality),
             "resident_calibration_contract_attached": resident_calibration is not None,
             "resident_result_contract_attached": resident_result is not None,
+            "warp_quality_contract_attached": warp_quality is not None,
             "resident_result_contract_source": resident_result_source,
             "resident_native_calibration": resident_native_calibration or {},
-            "acceptance_audit_argument_map": {
-                "pipeline_contract_json": str(pipeline),
-                "stack_engine_contract_json": str(stack),
-            },
+            "acceptance_audit_argument_map": argument_map,
             "checks": [
                 {"name": "pipeline_contract", "passed": passed, "status": "passed" if passed else "failed"},
                 {"name": "stack_engine_contract", "passed": passed, "status": "passed" if passed else "failed"},
@@ -1663,6 +1703,118 @@ def test_acceptance_audit_enforces_resident_contract_bundle_attachments(tmp_path
     assert checks["resident_result_contract_present"]["passed"] is True
     assert checks["resident_result_contract_type"]["passed"] is True
     assert checks["resident_result_contract_passed"]["passed"] is True
+
+
+def test_acceptance_audit_enforces_warp_quality_contract_attachment(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    stack = tmp_path / "stack_engine_contract.json"
+    warp_quality = tmp_path / "warp_quality_contract.json"
+    bundle = tmp_path / "acceptance_contract_bundle.json"
+    markdown = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract(pipeline, passed=True)
+    _write_stack_engine_contract(stack, passed=True, ready=True)
+    _write_warp_quality_contract(warp_quality, passed=True)
+    _write_contract_bundle(
+        bundle,
+        pipeline=pipeline,
+        stack=stack,
+        warp_quality=warp_quality,
+    )
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        contract_bundle_json=bundle,
+        require_warp_quality_contract=True,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is True
+    assert audit["contract_bundle"]["warp_quality_contract_json"] == str(warp_quality)
+    assert audit["contract_bundle"]["warp_quality_contract_attached"] is True
+    assert audit["warp_quality_contract"]["path"] == str(warp_quality)
+    assert audit["warp_quality_contract"]["passed"] is True
+    assert checks["warp_quality_contract_present"]["passed"] is True
+    assert checks["warp_quality_contract_type"]["passed"] is True
+    assert checks["warp_quality_contract_passed"]["passed"] is True
+
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "Warp Quality Contract" in text
+    assert "Warp quality contract: passed" in text
+
+
+def test_acceptance_audit_fails_when_required_warp_quality_contract_missing(
+    tmp_path: Path,
+):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        require_warp_quality_contract=True,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["warp_quality_contract"]["exists"] is False
+    assert checks["warp_quality_contract_present"]["passed"] is False
+    assert checks["warp_quality_contract_type"]["passed"] is False
+    assert checks["warp_quality_contract_passed"]["passed"] is False
+
+
+def test_acceptance_audit_fails_failed_warp_quality_contract(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    warp_quality = tmp_path / "warp_quality_contract.json"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_warp_quality_contract(warp_quality, passed=False)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        warp_quality_contract_json=warp_quality,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    assert audit["passed"] is False
+    assert audit["warp_quality_contract"]["path"] == str(warp_quality)
+    assert audit["warp_quality_contract"]["passed"] is False
+    assert checks["warp_quality_contract_present"]["passed"] is True
+    assert checks["warp_quality_contract_type"]["passed"] is True
+    assert checks["warp_quality_contract_passed"]["passed"] is False
 
 
 def test_acceptance_audit_summarizes_native_guardrails_bundle_provenance(tmp_path: Path):
@@ -2339,6 +2491,7 @@ def test_acceptance_audit_cli_accepts_contract_bundle(tmp_path: Path):
     contract = tmp_path / "contract.json"
     pipeline = tmp_path / "pipeline_contract.json"
     stack = tmp_path / "stack_engine_contract.json"
+    warp_quality = tmp_path / "warp_quality_contract.json"
     bundle = tmp_path / "acceptance_contract_bundle.json"
     out_json = tmp_path / "audit.json"
     out_md = tmp_path / "audit.md"
@@ -2358,7 +2511,8 @@ def test_acceptance_audit_cli_accepts_contract_bundle(tmp_path: Path):
     _add_stack_engine_default_promotion_requirement(contract)
     _write_pipeline_contract(pipeline, passed=True)
     _write_stack_engine_contract(stack, passed=True, ready=True)
-    _write_contract_bundle(bundle, pipeline=pipeline, stack=stack)
+    _write_warp_quality_contract(warp_quality, passed=True)
+    _write_contract_bundle(bundle, pipeline=pipeline, stack=stack, warp_quality=warp_quality)
 
     result = main(
         [
@@ -2375,6 +2529,7 @@ def test_acceptance_audit_cli_accepts_contract_bundle(tmp_path: Path):
             str(contract),
             "--contract-bundle",
             str(bundle),
+            "--require-warp-quality-contract",
             "--out",
             str(out_json),
             "--markdown",
@@ -2390,10 +2545,13 @@ def test_acceptance_audit_cli_accepts_contract_bundle(tmp_path: Path):
     assert payload["contract_bundle"]["path"] == str(bundle)
     assert payload["pipeline_contract"]["path"] == str(pipeline)
     assert payload["stack_engine_contract"]["path"] == str(stack)
+    assert payload["warp_quality_contract"]["path"] == str(warp_quality)
     assert checks["contract_pipeline_contract_passed"]["passed"] is True
     assert checks["contract_stack_engine_default_promotion_ready"]["passed"] is True
+    assert checks["warp_quality_contract_passed"]["passed"] is True
     markdown = out_md.read_text(encoding="utf-8")
     assert "Contract bundle: passed" in markdown
+    assert "Warp quality contract: passed" in markdown
     assert "PASS: contract_pipeline_contract_passed" in markdown
     assert "PASS: contract_stack_engine_default_promotion_ready" in markdown
 

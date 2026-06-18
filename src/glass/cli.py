@@ -1927,6 +1927,8 @@ def cmd_acceptance_audit(args: argparse.Namespace) -> int:
         contract_bundle_json=args.contract_bundle,
         pipeline_contract_json=args.pipeline_contract_json,
         stack_engine_contract_json=args.stack_engine_contract_json,
+        warp_quality_contract_json=args.warp_quality_contract_json,
+        require_warp_quality_contract=args.require_warp_quality_contract,
     )
     write_acceptance_audit(args.out, audit, markdown=args.markdown)
     console.print(
@@ -5253,6 +5255,15 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance.add_argument(
         "--stack-engine-contract-json",
         help="optional StackEngine contract JSON; benchmark contracts may require default-promotion readiness",
+    )
+    acceptance.add_argument(
+        "--warp-quality-contract-json",
+        help="optional warp-quality contract JSON; required to pass when supplied",
+    )
+    acceptance.add_argument(
+        "--require-warp-quality-contract",
+        action="store_true",
+        help="fail acceptance unless a passing warp-quality contract is attached or supplied",
     )
     acceptance.set_defaults(func=cmd_acceptance_audit)
 

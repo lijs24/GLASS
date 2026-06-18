@@ -50,9 +50,20 @@ def _contract_bundle_paths(
     *,
     pipeline_contract_json: str | Path | None,
     stack_engine_contract_json: str | Path | None,
-) -> tuple[str | Path | None, str | Path | None, dict[str, Any] | None]:
+    warp_quality_contract_json: str | Path | None,
+) -> tuple[
+    str | Path | None,
+    str | Path | None,
+    str | Path | None,
+    dict[str, Any] | None,
+]:
     if contract_bundle_json is None:
-        return pipeline_contract_json, stack_engine_contract_json, None
+        return (
+            pipeline_contract_json,
+            stack_engine_contract_json,
+            warp_quality_contract_json,
+            None,
+        )
     bundle_path = Path(contract_bundle_json)
     bundle_payload = _read_json_lenient(bundle_path) if bundle_path.exists() else {}
     artifact_map = (
@@ -76,6 +87,11 @@ def _contract_bundle_paths(
         or bundle_payload.get("resident_result_contract_json")
     )
     bundle_guardrails_summary = artifact_map.get("guardrails_summary")
+    bundle_warp_quality = (
+        artifact_map.get("warp_quality_contract")
+        or argument_map.get("warp_quality_contract_json")
+        or bundle_payload.get("warp_quality_contract_json")
+    )
     resident_native_calibration = (
         bundle_payload.get("resident_native_calibration")
         if isinstance(bundle_payload.get("resident_native_calibration"), dict)
@@ -83,6 +99,11 @@ def _contract_bundle_paths(
     )
     resolved_pipeline = pipeline_contract_json if pipeline_contract_json is not None else bundle_pipeline
     resolved_stack = stack_engine_contract_json if stack_engine_contract_json is not None else bundle_stack
+    resolved_warp_quality = (
+        warp_quality_contract_json
+        if warp_quality_contract_json is not None
+        else bundle_warp_quality
+    )
     bundle = {
         "path": str(bundle_path),
         "exists": bundle_path.exists(),
@@ -98,6 +119,9 @@ def _contract_bundle_paths(
         else 0,
         "pipeline_contract_json": None if resolved_pipeline is None else str(resolved_pipeline),
         "stack_engine_contract_json": None if resolved_stack is None else str(resolved_stack),
+        "warp_quality_contract_json": None
+        if resolved_warp_quality is None
+        else str(resolved_warp_quality),
         "guardrails_summary_json": None
         if bundle_guardrails_summary is None
         else str(bundle_guardrails_summary),
@@ -107,6 +131,10 @@ def _contract_bundle_paths(
         "resident_result_contract_json": None if bundle_resident_result is None else str(bundle_resident_result),
         "resident_calibration_contract_attached": bundle_payload.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": bundle_payload.get("resident_result_contract_attached"),
+        "warp_quality_contract_attached": (
+            bundle_payload.get("warp_quality_contract_attached")
+            or resolved_warp_quality is not None
+        ),
         "resident_result_contract_source": bundle_payload.get("resident_result_contract_source"),
         "resident_native_calibration": resident_native_calibration,
         "expected_integration_engine": bundle_payload.get("expected_integration_engine"),
@@ -114,9 +142,10 @@ def _contract_bundle_paths(
         "stack_scope": bundle_payload.get("stack_scope"),
         "explicit_pipeline_contract_overrode_bundle": pipeline_contract_json is not None,
         "explicit_stack_engine_contract_overrode_bundle": stack_engine_contract_json is not None,
+        "explicit_warp_quality_contract_overrode_bundle": warp_quality_contract_json is not None,
         "checks": bundle_payload.get("checks") if isinstance(bundle_payload.get("checks"), list) else [],
     }
-    return resolved_pipeline, resolved_stack, bundle
+    return resolved_pipeline, resolved_stack, resolved_warp_quality, bundle
 
 
 def _resident_registration_fastpath_record_from_json(
@@ -844,11 +873,19 @@ def build_acceptance_audit(
     contract_bundle_json: str | Path | None = None,
     pipeline_contract_json: str | Path | None = None,
     stack_engine_contract_json: str | Path | None = None,
+    warp_quality_contract_json: str | Path | None = None,
+    require_warp_quality_contract: bool = False,
 ) -> dict[str, Any]:
-    pipeline_contract_json, stack_engine_contract_json, contract_bundle = _contract_bundle_paths(
+    (
+        pipeline_contract_json,
+        stack_engine_contract_json,
+        warp_quality_contract_json,
+        contract_bundle,
+    ) = _contract_bundle_paths(
         contract_bundle_json,
         pipeline_contract_json=pipeline_contract_json,
         stack_engine_contract_json=stack_engine_contract_json,
+        warp_quality_contract_json=warp_quality_contract_json,
     )
     manifest = _read_json_lenient(manifest_path)
     speedup = summarize_wbpp_speedup(
@@ -966,6 +1003,23 @@ def build_acceptance_audit(
     )
     checks.extend(resident_calibration_checks)
     checks.extend(resident_result_checks)
+    warp_quality_contract_bundle = contract_bundle
+    if warp_quality_contract_json is not None or require_warp_quality_contract:
+        warp_quality_contract_bundle = dict(contract_bundle or {})
+        warp_quality_contract_bundle["warp_quality_contract_json"] = (
+            None
+            if warp_quality_contract_json is None
+            else str(warp_quality_contract_json)
+        )
+        warp_quality_contract_bundle["warp_quality_contract_attached"] = True
+    warp_quality_contract, warp_quality_contract_checks = _contract_attachment_audit(
+        contract_bundle=warp_quality_contract_bundle,
+        label="warp_quality_contract",
+        path_key="warp_quality_contract_json",
+        attached_key="warp_quality_contract_attached",
+        expected_artifact_type="warp_quality_contract",
+    )
+    checks.extend(warp_quality_contract_checks)
     native_guardrails_bundle = _native_guardrails_bundle_summary(contract_bundle)
 
     pipeline_contract_path = Path(pipeline_contract_json) if pipeline_contract_json is not None else None
@@ -1306,6 +1360,7 @@ def build_acceptance_audit(
             "calibration": resident_calibration_contract,
             "result": resident_result_contract,
         },
+        "warp_quality_contract": warp_quality_contract,
         "pipeline_contract": pipeline_contract,
         "stack_engine_contract": stack_engine_contract,
         "release_contract_evidence": release_contract_evidence,
@@ -1332,6 +1387,7 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
         f"- Contract bundle: {(audit.get('contract_bundle') or {}).get('status')}",
         f"- Pipeline contract: {(audit.get('pipeline_contract') or {}).get('status')}",
         f"- StackEngine contract: {(audit.get('stack_engine_contract') or {}).get('status')}",
+        f"- Warp quality contract: {(audit.get('warp_quality_contract') or {}).get('status')}",
         f"- DQ provenance records: {(audit.get('dq_provenance') or {}).get('record_count')}",
         f"- Frame accounting artifact: {(audit.get('frame_accounting') or {}).get('path')}",
         f"- Speedup vs WBPP: {speedup.get('speedup_vs_wbpp')}",
@@ -1592,6 +1648,23 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
             failed = payload.get("failed_checks")
             if failed:
                 lines.append(f"  failed_checks={failed}")
+        lines.append("")
+    warp_quality = (
+        audit.get("warp_quality_contract")
+        if isinstance(audit.get("warp_quality_contract"), dict)
+        else {}
+    )
+    if warp_quality:
+        lines.extend(["## Warp Quality Contract", ""])
+        lines.append(f"- Status: {warp_quality.get('status')}")
+        lines.append(f"- Passed: {warp_quality.get('passed')}")
+        lines.append(f"- Type: {warp_quality.get('artifact_type')}")
+        lines.append(f"- Checks: {warp_quality.get('check_count')}")
+        lines.append(f"- Outputs: {warp_quality.get('output_count')}")
+        lines.append(f"- Path: {warp_quality.get('path')}")
+        failed = warp_quality.get("failed_checks")
+        if failed:
+            lines.append(f"- Failed checks: {failed}")
         lines.append("")
     for item in audit["checks"]:
         marker = "PASS" if item["passed"] else "FAIL"
