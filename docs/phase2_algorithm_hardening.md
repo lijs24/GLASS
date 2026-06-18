@@ -6626,6 +6626,26 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 371: StackEngine Publication Audit Quality Publication Guard
+
+- Carry raw `windows-publish-preflight` and Phase2 status release quality
+  publication guard evidence into `glass stack-engine-publication-audit`.
+- Add publication-audit checks for raw publish-preflight release quality guard
+  readiness, Phase2 handoff readiness, and raw/Phase2 agreement.
+- Keep older artifacts without the optional release quality publication guard
+  non-blocking when both raw publish-preflight and Phase2 status omit the
+  guard; block mismatches when only one side contains it.
+- Preserve matrix, matrix-default, default-promotion, raw-status,
+  Phase2-status, decision-check, and cross-artifact match evidence in audit
+  JSON layers and Markdown.
+- Add focused ready, compatibility, raw-failure, Phase2-failure, missing-Phase2,
+  and CLI Markdown tests.
+- Keep this gate StackEngine publication-audit scoped: no quality metric math
+  change, no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

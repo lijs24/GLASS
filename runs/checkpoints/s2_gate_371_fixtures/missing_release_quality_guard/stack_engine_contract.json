@@ -1,0 +1,19 @@
+{
+  "adoption": {
+    "phase2_stack_engine_default_gap_count": 0,
+    "recommendation": "stack_engine_default_ready"
+  },
+  "audit_type": "stack_engine_default_contract",
+  "default_promotion": {
+    "blocker_count": 0,
+    "blockers": [],
+    "phase2_stack_engine_default_gap_count": 0,
+    "ready": true,
+    "recommendation": "stack_engine_default_ready",
+    "status": "ready"
+  },
+  "expected_integration_engine": "stack_engine_cpu",
+  "passed": true,
+  "scope": "all",
+  "status": "passed"
+}

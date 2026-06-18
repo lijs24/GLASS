@@ -1,0 +1,33 @@
+{
+  "artifact_type": "windows_github_release_plan",
+  "checks": [
+    {
+      "name": "phase2_stack_engine_default_contract_ready",
+      "passed": true
+    },
+    {
+      "name": "windows_release_matrix_stack_engine_contract_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_release_matrix_stack_engine_contract_agree",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "phase2": {
+    "status": {
+      "stack_engine_default_contract_blocker_count": 0,
+      "stack_engine_default_contract_default_gap_count": 0,
+      "stack_engine_default_contract_status": "passed"
+    }
+  },
+  "publication_ready": true,
+  "release_matrix": {
+    "stack_engine_contract_blocker_count": 0,
+    "stack_engine_contract_default_gap_count": 0,
+    "stack_engine_contract_ready": true,
+    "stack_engine_contract_status": "passed"
+  },
+  "status": "release_plan_ready"
+}

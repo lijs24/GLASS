@@ -1311,6 +1311,259 @@ def _quality_compare_summaries_match(
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
 
 
+def _release_quality_publication_guard_present(summary: dict[str, Any]) -> bool:
+    return any(
+        summary.get(field) is not None
+        for field in (
+            "matrix_present",
+            "matrix_ready",
+            "matrix_check_passed",
+            "matrix_layers_ready",
+            "matrix_raw_status",
+            "matrix_phase2_status",
+            "matrix_default_ready",
+            "matrix_default_raw_status",
+            "matrix_default_phase2_status",
+            "default_promotion_present",
+            "default_promotion_ready",
+            "default_promotion_check_passed",
+            "default_promotion_layers_ready",
+            "default_promotion_raw_status",
+            "default_promotion_phase2_status",
+        )
+    )
+
+
+def _release_quality_publication_guard_ready(summary: dict[str, Any]) -> bool:
+    if not _release_quality_publication_guard_present(summary):
+        return True
+    return (
+        summary.get("matrix_present") is True
+        and summary.get("matrix_ready") is True
+        and summary.get("matrix_check_passed") is True
+        and summary.get("matrix_layers_ready") is True
+        and summary.get("matrix_raw_status") == "passed"
+        and summary.get("matrix_phase2_status") == "passed"
+        and summary.get("matrix_default_ready") is True
+        and summary.get("matrix_default_raw_status") == "passed"
+        and summary.get("matrix_default_phase2_status") == "passed"
+        and summary.get("default_promotion_present") is True
+        and summary.get("default_promotion_ready") is True
+        and summary.get("default_promotion_check_passed") is True
+        and summary.get("default_promotion_layers_ready") is True
+        and summary.get("default_promotion_raw_status") == "passed"
+        and summary.get("default_promotion_phase2_status") == "passed"
+        and _all_true(
+            [
+                summary.get("matrix_check"),
+                summary.get("matrix_default_check"),
+                summary.get("default_promotion_check"),
+                summary.get("matrix_default_match_check"),
+                summary.get("matrix_manifest_match_check"),
+            ]
+        )
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "matrix_present": summary.get("matrix_release_quality_publication_guard_present"),
+        "matrix_ready": summary.get("matrix_release_quality_publication_guard_ready"),
+        "matrix_check_passed": summary.get(
+            "matrix_release_quality_publication_guard_check_passed"
+        ),
+        "matrix_layers_ready": summary.get(
+            "matrix_release_quality_publication_guard_layers_ready"
+        ),
+        "matrix_raw_status": summary.get(
+            "matrix_release_quality_publication_guard_raw_status"
+        ),
+        "matrix_phase2_status": summary.get(
+            "matrix_release_quality_publication_guard_phase2_status"
+        ),
+        "matrix_default_ready": summary.get(
+            "matrix_default_promotion_release_quality_publication_guard_ready"
+        ),
+        "matrix_default_raw_status": summary.get(
+            "matrix_default_promotion_release_quality_publication_guard_raw_status"
+        ),
+        "matrix_default_phase2_status": summary.get(
+            "matrix_default_promotion_release_quality_publication_guard_phase2_status"
+        ),
+        "default_promotion_present": summary.get(
+            "default_promotion_release_quality_publication_guard_present"
+        ),
+        "default_promotion_ready": summary.get(
+            "default_promotion_release_quality_publication_guard_ready"
+        ),
+        "default_promotion_check_passed": summary.get(
+            "default_promotion_release_quality_publication_guard_check_passed"
+        ),
+        "default_promotion_layers_ready": summary.get(
+            "default_promotion_release_quality_publication_guard_layers_ready"
+        ),
+        "default_promotion_raw_status": summary.get(
+            "default_promotion_release_quality_publication_guard_raw_status"
+        ),
+        "default_promotion_phase2_status": summary.get(
+            "default_promotion_release_quality_publication_guard_phase2_status"
+        ),
+        "matrix_check": _check_passed(
+            payload,
+            "matrix_release_decision_quality_compare_publication_guard_passed",
+        ),
+        "matrix_default_check": _check_passed(
+            payload,
+            (
+                "matrix_default_promotion_release_decision_quality_compare_"
+                "publication_guard_passed"
+            ),
+        ),
+        "default_promotion_check": _check_passed(
+            payload,
+            "default_promotion_release_decision_quality_compare_publication_guard_passed",
+        ),
+        "matrix_default_match_check": _check_passed(
+            payload,
+            "matrix_release_decision_quality_publication_guard_matches_default_promotion",
+        ),
+        "matrix_manifest_match_check": _check_passed(
+            payload,
+            (
+                "matrix_default_promotion_release_decision_quality_publication_"
+                "guard_matches_manifest"
+            ),
+        ),
+    }
+    result["present"] = _release_quality_publication_guard_present(result)
+    result["ready"] = _release_quality_publication_guard_ready(result)
+    return result
+
+
+def _phase2_publish_preflight_release_quality_publication_guard_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "matrix_present": preflight.get(
+            "matrix_release_quality_publication_guard_present"
+        ),
+        "matrix_ready": preflight.get("matrix_release_quality_publication_guard_ready"),
+        "matrix_check_passed": preflight.get(
+            "matrix_release_quality_publication_guard_check_passed"
+        ),
+        "matrix_layers_ready": preflight.get(
+            "matrix_release_quality_publication_guard_layers_ready"
+        ),
+        "matrix_raw_status": preflight.get(
+            "matrix_release_quality_publication_guard_raw_status"
+        ),
+        "matrix_phase2_status": preflight.get(
+            "matrix_release_quality_publication_guard_phase2_status"
+        ),
+        "matrix_default_ready": preflight.get(
+            "matrix_default_promotion_release_quality_publication_guard_ready"
+        ),
+        "matrix_default_raw_status": preflight.get(
+            "matrix_default_promotion_release_quality_publication_guard_raw_status"
+        ),
+        "matrix_default_phase2_status": preflight.get(
+            "matrix_default_promotion_release_quality_publication_guard_phase2_status"
+        ),
+        "default_promotion_present": preflight.get(
+            "default_promotion_release_quality_publication_guard_present"
+        ),
+        "default_promotion_ready": preflight.get(
+            "default_promotion_release_quality_publication_guard_ready"
+        ),
+        "default_promotion_check_passed": preflight.get(
+            "default_promotion_release_quality_publication_guard_check_passed"
+        ),
+        "default_promotion_layers_ready": preflight.get(
+            "default_promotion_release_quality_publication_guard_layers_ready"
+        ),
+        "default_promotion_raw_status": preflight.get(
+            "default_promotion_release_quality_publication_guard_raw_status"
+        ),
+        "default_promotion_phase2_status": preflight.get(
+            "default_promotion_release_quality_publication_guard_phase2_status"
+        ),
+        "matrix_check": preflight.get(
+            "matrix_release_decision_quality_compare_publication_guard_passed"
+        ),
+        "matrix_default_check": preflight.get(
+            (
+                "matrix_default_promotion_release_decision_quality_compare_"
+                "publication_guard_passed"
+            )
+        ),
+        "default_promotion_check": preflight.get(
+            "default_promotion_release_decision_quality_compare_publication_guard_passed"
+        ),
+        "matrix_default_match_check": preflight.get(
+            "matrix_release_decision_quality_publication_guard_matches_default_promotion"
+        ),
+        "matrix_manifest_match_check": preflight.get(
+            (
+                "matrix_default_promotion_release_decision_quality_publication_"
+                "guard_matches_manifest"
+            )
+        ),
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_release_quality_publication_guard_passed",
+        ),
+    }
+    result["present"] = _release_quality_publication_guard_present(result)
+    result["ready"] = _release_quality_publication_guard_ready(result) and (
+        not result["present"] or result.get("phase2_check_passed") is True
+    )
+    return result
+
+
+def _release_quality_publication_guard_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "present",
+        "matrix_present",
+        "matrix_ready",
+        "matrix_check_passed",
+        "matrix_layers_ready",
+        "matrix_raw_status",
+        "matrix_phase2_status",
+        "matrix_default_ready",
+        "matrix_default_raw_status",
+        "matrix_default_phase2_status",
+        "default_promotion_present",
+        "default_promotion_ready",
+        "default_promotion_check_passed",
+        "default_promotion_layers_ready",
+        "default_promotion_raw_status",
+        "default_promotion_phase2_status",
+        "matrix_check",
+        "matrix_default_check",
+        "default_promotion_check",
+        "matrix_default_match_check",
+        "matrix_manifest_match_check",
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
 def _publication_audit_summary_ready(summary: dict[str, Any]) -> bool:
     return (
         summary.get("matrix_status") == "passed"
@@ -1562,6 +1815,16 @@ def build_stack_engine_publication_audit(
     phase2_preflight_quality_compare = (
         _phase2_publish_preflight_quality_compare_summary(phase2_payload)
     )
+    preflight_release_quality_guard = (
+        _publish_preflight_release_quality_publication_guard_summary(
+            preflight_payload
+        )
+    )
+    phase2_preflight_release_quality_guard = (
+        _phase2_publish_preflight_release_quality_publication_guard_summary(
+            phase2_payload
+        )
+    )
 
     layers = {
         "source_contract": source,
@@ -1600,6 +1863,12 @@ def build_stack_engine_publication_audit(
         "publish_preflight_quality_metrics_compare": preflight_quality_compare,
         "phase2_publish_preflight_quality_metrics_compare": (
             phase2_preflight_quality_compare
+        ),
+        "publish_preflight_release_quality_publication_guard": (
+            preflight_release_quality_guard
+        ),
+        "phase2_publish_preflight_release_quality_publication_guard": (
+            phase2_preflight_release_quality_guard
         ),
     }
     direct_gap_counts = [
@@ -1826,6 +2095,30 @@ def build_stack_engine_publication_audit(
             {
                 "phase2_publish_preflight": phase2_preflight_quality_compare,
                 "publish_preflight": preflight_quality_compare,
+            },
+        ),
+        _check(
+            "publish_preflight_release_quality_publication_guard_ready",
+            preflight_release_quality_guard.get("ready") is True,
+            preflight_release_quality_guard,
+        ),
+        _check(
+            "phase2_publish_preflight_release_quality_publication_guard_ready",
+            phase2_preflight_release_quality_guard.get("ready") is True,
+            phase2_preflight_release_quality_guard,
+        ),
+        _check(
+            (
+                "phase2_publish_preflight_release_quality_publication_guard_"
+                "matches_publish_preflight"
+            ),
+            _release_quality_publication_guard_summaries_match(
+                phase2_preflight_release_quality_guard,
+                preflight_release_quality_guard,
+            ),
+            {
+                "phase2_publish_preflight": phase2_preflight_release_quality_guard,
+                "publish_preflight": preflight_release_quality_guard,
             },
         ),
         _check(
