@@ -5881,6 +5881,25 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 332: GitHub Release Plan Resident Fastpath Handoff
+
+- Carry Windows release-matrix resident fastpath release handoff evidence into
+  `glass windows-github-release-plan`.
+- Add a release-plan blocker
+  `windows_release_matrix_resident_fastpath_release_handoff_ready`.
+- Require the matrix/default-promotion resident fastpath handoff to be present,
+  ready, raw/Phase2 agreeing, benchmark-required, failed-check-free, and backed
+  by nonzero check counts before a GitHub release plan is publication-ready.
+- Surface resident fastpath handoff state in release notes, release-plan
+  Markdown, and the generated PowerShell dry-run validation script.
+- Add focused tests for passing and failed release-matrix resident fastpath
+  handoff evidence.
+- Generate Gate332 release-plan artifacts from a controlled Windows release
+  matrix fixture.
+- Keep this gate publication-plan scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

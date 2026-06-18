@@ -139,6 +139,129 @@ def _release_direct_publication_guard_evidence(
     }
 
 
+def _resident_fastpath_release_handoff_fields(
+    source: dict[str, Any],
+    *,
+    output_prefix: str,
+) -> dict[str, Any]:
+    handoff = (
+        source.get("resident_registration_fastpath_release_handoff")
+        if isinstance(source.get("resident_registration_fastpath_release_handoff"), dict)
+        else {}
+    )
+
+    def field(flat_name: str, *handoff_names: str) -> Any:
+        flattened = source.get(f"resident_registration_fastpath_release_handoff_{flat_name}")
+        if flattened is not None:
+            return flattened
+        for handoff_name in handoff_names:
+            value = handoff.get(handoff_name)
+            if value is not None:
+                return value
+        return None
+
+    return {
+        output_prefix: handoff,
+        f"{output_prefix}_present": field("present", "present"),
+        f"{output_prefix}_ready": field("ready", "ready"),
+        f"{output_prefix}_raw_ready": field("raw_ready", "raw_ready"),
+        f"{output_prefix}_phase2_ready": field("phase2_ready", "phase2_ready"),
+        f"{output_prefix}_agreement": field("agreement", "agreement"),
+        f"{output_prefix}_decision_check_passed": field(
+            "decision_check_passed",
+            "decision_check_passed",
+        ),
+        f"{output_prefix}_phase2_check_passed": field(
+            "phase2_check_passed",
+            "phase2_check_passed",
+        ),
+        f"{output_prefix}_raw_status": field("raw_status", "raw_status"),
+        f"{output_prefix}_phase2_status": field("phase2_status", "phase2_status"),
+        f"{output_prefix}_raw_required": field("raw_required", "raw_required"),
+        f"{output_prefix}_phase2_required": field("phase2_required", "phase2_required"),
+        f"{output_prefix}_raw_mode": field("raw_mode", "raw_mode"),
+        f"{output_prefix}_phase2_mode": field("phase2_mode", "phase2_mode"),
+        f"{output_prefix}_raw_passed_check_count": _int_or_zero(
+            field("raw_passed_check_count", "raw_passed_check_count")
+        ),
+        f"{output_prefix}_phase2_passed_check_count": _int_or_zero(
+            field("phase2_passed_check_count", "phase2_passed_check_count")
+        ),
+        f"{output_prefix}_raw_failed_check_count": _int_or_zero(
+            field("raw_failed_check_count", "raw_failed_check_count")
+        ),
+        f"{output_prefix}_phase2_failed_check_count": _int_or_zero(
+            field("phase2_failed_check_count", "phase2_failed_check_count")
+        ),
+        f"{output_prefix}_raw_failed_checks": field(
+            "raw_failed_checks",
+            "raw_failed_checks",
+        )
+        or [],
+        f"{output_prefix}_phase2_failed_checks": field(
+            "phase2_failed_checks",
+            "phase2_failed_checks",
+        )
+        or [],
+    }
+
+
+def _resident_fastpath_release_handoff_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    return (
+        summary.get(f"{prefix}_present") is True
+        and summary.get(f"{prefix}_ready") is True
+        and summary.get(f"{prefix}_raw_ready") is True
+        and summary.get(f"{prefix}_phase2_ready") is True
+        and summary.get(f"{prefix}_agreement") is True
+        and summary.get(f"{prefix}_decision_check_passed") is True
+        and summary.get(f"{prefix}_phase2_check_passed") is True
+        and summary.get(f"{prefix}_raw_status") == "passed"
+        and summary.get(f"{prefix}_phase2_status") == "passed"
+        and summary.get(f"{prefix}_raw_required") is True
+        and summary.get(f"{prefix}_phase2_required") is True
+        and _int_or_zero(summary.get(f"{prefix}_raw_passed_check_count")) > 0
+        and _int_or_zero(summary.get(f"{prefix}_phase2_passed_check_count")) > 0
+        and _int_or_zero(summary.get(f"{prefix}_raw_failed_check_count")) == 0
+        and _int_or_zero(summary.get(f"{prefix}_phase2_failed_check_count")) == 0
+    )
+
+
+def _resident_fastpath_release_handoff_evidence(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> dict[str, Any]:
+    return {
+        "present": summary.get(f"{prefix}_present"),
+        "ready": summary.get(f"{prefix}_ready"),
+        "raw_ready": summary.get(f"{prefix}_raw_ready"),
+        "phase2_ready": summary.get(f"{prefix}_phase2_ready"),
+        "agreement": summary.get(f"{prefix}_agreement"),
+        "decision_check_passed": summary.get(f"{prefix}_decision_check_passed"),
+        "phase2_check_passed": summary.get(f"{prefix}_phase2_check_passed"),
+        "raw_status": summary.get(f"{prefix}_raw_status"),
+        "phase2_status": summary.get(f"{prefix}_phase2_status"),
+        "raw_required": summary.get(f"{prefix}_raw_required"),
+        "phase2_required": summary.get(f"{prefix}_phase2_required"),
+        "raw_mode": summary.get(f"{prefix}_raw_mode"),
+        "phase2_mode": summary.get(f"{prefix}_phase2_mode"),
+        "raw_passed_check_count": summary.get(f"{prefix}_raw_passed_check_count"),
+        "phase2_passed_check_count": summary.get(
+            f"{prefix}_phase2_passed_check_count"
+        ),
+        "raw_failed_check_count": summary.get(f"{prefix}_raw_failed_check_count"),
+        "phase2_failed_check_count": summary.get(
+            f"{prefix}_phase2_failed_check_count"
+        ),
+        "raw_failed_checks": summary.get(f"{prefix}_raw_failed_checks"),
+        "phase2_failed_checks": summary.get(f"{prefix}_phase2_failed_checks"),
+    }
+
+
 def _asset_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in manifest.get("packages") or []:
@@ -487,6 +610,10 @@ def _windows_release_matrix_summary(path: str | Path | None) -> dict[str, Any] |
             "stack_engine_contract_blockers"
         )
         or [],
+        **_resident_fastpath_release_handoff_fields(
+            default_promotion,
+            output_prefix="resident_registration_fastpath_release_handoff",
+        ),
         **_release_direct_publication_guard_fields(
             payload,
             output_prefix="release_decision_direct_runtime_publication_guard",
@@ -740,6 +867,14 @@ def _release_notes(payload: dict[str, Any]) -> str:
                     f"blockers `{release_matrix.get('stack_engine_contract_blocker_count')}`"
                 ),
                 (
+                    "- Resident fastpath release handoff: "
+                    f"ready `{release_matrix.get('resident_registration_fastpath_release_handoff_ready')}` "
+                    f"raw `{release_matrix.get('resident_registration_fastpath_release_handoff_raw_status')}` "
+                    f"phase2 `{release_matrix.get('resident_registration_fastpath_release_handoff_phase2_status')}` "
+                    f"agreement `{release_matrix.get('resident_registration_fastpath_release_handoff_agreement')}` "
+                    f"checks `{release_matrix.get('resident_registration_fastpath_release_handoff_raw_passed_check_count')}`"
+                ),
+                (
                     "- Rejection sample accounting: "
                     f"`{release_matrix.get('rejection_sample_accounting_status')}` "
                     f"failed `{release_matrix.get('rejection_sample_accounting_failed_count')}`"
@@ -970,6 +1105,10 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "    }",
             "    if ($matrix.default_promotion_manifest.stack_engine_contract_present -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_ready -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_phase2_check_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_status -ne 'passed' -or $matrix.default_promotion_manifest.stack_engine_contract_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_scope -ne 'all' -or $matrix.default_promotion_manifest.stack_engine_contract_adoption_recommendation -ne 'stack_engine_default_ready' -or [int]$matrix.default_promotion_manifest.stack_engine_contract_default_gap_count -ne 0 -or [int]$matrix.default_promotion_manifest.stack_engine_contract_blocker_count -ne 0) {",
             "        throw \"Windows release matrix StackEngine default contract failed: $WindowsReleaseMatrixFile\"",
+            "    }",
+            "    $residentFastpathHandoff = $matrix.default_promotion_manifest.resident_registration_fastpath_release_handoff",
+            "    if (-not $residentFastpathHandoff -or $residentFastpathHandoff.present -ne $true -or $residentFastpathHandoff.ready -ne $true -or $residentFastpathHandoff.raw_ready -ne $true -or $residentFastpathHandoff.phase2_ready -ne $true -or $residentFastpathHandoff.agreement -ne $true -or $residentFastpathHandoff.decision_check_passed -ne $true -or $residentFastpathHandoff.phase2_check_passed -ne $true -or $residentFastpathHandoff.raw_status -ne 'passed' -or $residentFastpathHandoff.phase2_status -ne 'passed' -or $residentFastpathHandoff.raw_required -ne $true -or $residentFastpathHandoff.phase2_required -ne $true -or [int]$residentFastpathHandoff.raw_passed_check_count -le 0 -or [int]$residentFastpathHandoff.phase2_passed_check_count -le 0 -or [int]$residentFastpathHandoff.raw_failed_check_count -ne 0 -or [int]$residentFastpathHandoff.phase2_failed_check_count -ne 0) {",
+            "        throw \"Windows release matrix resident fastpath release handoff failed: $WindowsReleaseMatrixFile\"",
             "    }",
             "    $releaseGuard = $matrix.release_decision_direct_runtime_publication_guard",
             "    if (-not $releaseGuard -or $releaseGuard.present -ne $true -or $releaseGuard.ready -ne $true -or $releaseGuard.decision_check_passed -ne $true -or $releaseGuard.source_ready -ne $true -or $releaseGuard.count_ready -ne $true -or $releaseGuard.raw_leaf_checks_ready -ne $true -or $releaseGuard.phase2_leaf_checks_ready -ne $true -or $releaseGuard.raw_acceptance_source -ne 'explicit_resident_artifacts_json' -or $releaseGuard.raw_calibration_source -ne 'resident_artifacts_json_fallback' -or [int]$releaseGuard.raw_resident_lights -lt 200) {",
@@ -1423,6 +1562,17 @@ def build_windows_github_release_plan(
                     },
                 ),
                 _check(
+                    "windows_release_matrix_resident_fastpath_release_handoff_ready",
+                    _resident_fastpath_release_handoff_ready(
+                        release_matrix_for_checks,
+                        prefix="resident_registration_fastpath_release_handoff",
+                    ),
+                    _resident_fastpath_release_handoff_evidence(
+                        release_matrix_for_checks,
+                        prefix="resident_registration_fastpath_release_handoff",
+                    ),
+                ),
+                _check(
                     "windows_release_matrix_release_decision_direct_runtime_publication_guard_passed",
                     _release_direct_publication_guard_ready(
                         release_matrix_for_checks,
@@ -1673,6 +1823,14 @@ def _markdown(payload: dict[str, Any]) -> str:
                     f"`{release_matrix.get('stack_engine_contract_phase2_check_passed')}` "
                     f"gaps=`{release_matrix.get('stack_engine_contract_default_gap_count')}` "
                     f"blockers=`{release_matrix.get('stack_engine_contract_blocker_count')}`"
+                ),
+                (
+                    "- Resident fastpath release handoff: "
+                    f"ready=`{release_matrix.get('resident_registration_fastpath_release_handoff_ready')}` "
+                    f"raw=`{release_matrix.get('resident_registration_fastpath_release_handoff_raw_status')}` "
+                    f"phase2=`{release_matrix.get('resident_registration_fastpath_release_handoff_phase2_status')}` "
+                    f"agreement=`{release_matrix.get('resident_registration_fastpath_release_handoff_agreement')}` "
+                    f"checks=`{release_matrix.get('resident_registration_fastpath_release_handoff_raw_passed_check_count')}`"
                 ),
                 (
                     "- Rejection sample accounting: "

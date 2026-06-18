@@ -1,0 +1,17 @@
+{
+  "artifact_type": "windows_release_manifest",
+  "failed_checks": [],
+  "packages": [
+    {
+      "exists": true,
+      "label": "cuda13",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "size_bytes": 27,
+      "source_stamp": "abc1234",
+      "zip_path": "runs\\checkpoints\\s2_gate_332_fixture\\GLASS-Portable-win64-cuda13.zip"
+    }
+  ],
+  "passed": true,
+  "schema_version": 1,
+  "status": "release_manifest_ready"
+}

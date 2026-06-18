@@ -298,6 +298,7 @@ def _release_matrix(
     release_direct_guard_ready: bool = True,
     default_release_direct_guard_ready: bool = True,
     release_direct_acceptance_source: str = "explicit_resident_artifacts_json",
+    resident_fastpath_handoff_ready: bool = True,
 ) -> None:
     ordered_try_list = labels if "cpu" in labels else [*labels, "cpu"]
     stack_ready = stack_engine_ready and stack_engine_gap_count == 0
@@ -306,6 +307,7 @@ def _release_matrix(
         and rejection_sample_accounting_ready
         and sample_accounting_closure_ready
         and (stack_ready if include_stack_engine_contract else True)
+        and resident_fastpath_handoff_ready
     )
     stack_recommendation = (
         "stack_engine_default_ready"
@@ -365,6 +367,82 @@ def _release_matrix(
         "sample_accounting_closure_failed_count": 0
         if sample_accounting_closure_ready
         else 1,
+        "resident_registration_fastpath_release_handoff": {
+            "present": True,
+            "ready": resident_fastpath_handoff_ready,
+            "raw_ready": resident_fastpath_handoff_ready,
+            "phase2_ready": resident_fastpath_handoff_ready,
+            "agreement": resident_fastpath_handoff_ready,
+            "decision_check_passed": resident_fastpath_handoff_ready,
+            "phase2_check_passed": resident_fastpath_handoff_ready,
+            "raw_status": "passed" if resident_fastpath_handoff_ready else "failed",
+            "phase2_status": "passed" if resident_fastpath_handoff_ready else "failed",
+            "raw_required": True,
+            "phase2_required": True,
+            "raw_mode": "similarity_cuda_triangle",
+            "phase2_mode": "similarity_cuda_triangle",
+            "raw_passed_check_count": 23 if resident_fastpath_handoff_ready else 22,
+            "phase2_passed_check_count": 23 if resident_fastpath_handoff_ready else 22,
+            "raw_failed_check_count": 0 if resident_fastpath_handoff_ready else 1,
+            "phase2_failed_check_count": 0 if resident_fastpath_handoff_ready else 1,
+            "raw_failed_checks": []
+            if resident_fastpath_handoff_ready
+            else ["contract_resident_registration_fastpath_component:triangle_warp_batch"],
+            "phase2_failed_checks": []
+            if resident_fastpath_handoff_ready
+            else ["release_decision_resident_fastpath_handoff_ready"],
+        },
+        "resident_registration_fastpath_release_handoff_present": True,
+        "resident_registration_fastpath_release_handoff_ready": (
+            resident_fastpath_handoff_ready
+        ),
+        "resident_registration_fastpath_release_handoff_raw_ready": (
+            resident_fastpath_handoff_ready
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_ready": (
+            resident_fastpath_handoff_ready
+        ),
+        "resident_registration_fastpath_release_handoff_agreement": (
+            resident_fastpath_handoff_ready
+        ),
+        "resident_registration_fastpath_release_handoff_decision_check_passed": (
+            resident_fastpath_handoff_ready
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_check_passed": (
+            resident_fastpath_handoff_ready
+        ),
+        "resident_registration_fastpath_release_handoff_raw_status": (
+            "passed" if resident_fastpath_handoff_ready else "failed"
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_status": (
+            "passed" if resident_fastpath_handoff_ready else "failed"
+        ),
+        "resident_registration_fastpath_release_handoff_raw_required": True,
+        "resident_registration_fastpath_release_handoff_phase2_required": True,
+        "resident_registration_fastpath_release_handoff_raw_mode": (
+            "similarity_cuda_triangle"
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_mode": (
+            "similarity_cuda_triangle"
+        ),
+        "resident_registration_fastpath_release_handoff_raw_passed_check_count": (
+            23 if resident_fastpath_handoff_ready else 22
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_passed_check_count": (
+            23 if resident_fastpath_handoff_ready else 22
+        ),
+        "resident_registration_fastpath_release_handoff_raw_failed_check_count": (
+            0 if resident_fastpath_handoff_ready else 1
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_failed_check_count": (
+            0 if resident_fastpath_handoff_ready else 1
+        ),
+        "resident_registration_fastpath_release_handoff_raw_failed_checks": []
+        if resident_fastpath_handoff_ready
+        else ["contract_resident_registration_fastpath_component:triangle_warp_batch"],
+        "resident_registration_fastpath_release_handoff_phase2_failed_checks": []
+        if resident_fastpath_handoff_ready
+        else ["release_decision_resident_fastpath_handoff_ready"],
     }
     release_direct_guard = _release_direct_publication_guard(
         ready=release_direct_guard_ready,
@@ -555,6 +633,13 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["release_matrix"]["stack_engine_contract_ready"] is True
     assert payload["release_matrix"]["stack_engine_contract_phase2_check_passed"] is True
     assert payload["release_matrix"]["stack_engine_contract_default_gap_count"] == 0
+    assert payload["release_matrix"]["resident_registration_fastpath_release_handoff_ready"] is True
+    assert (
+        payload["release_matrix"][
+            "resident_registration_fastpath_release_handoff_raw_passed_check_count"
+        ]
+        == 23
+    )
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
     assert checks["phase2_pipeline_rejection_sample_accounting_passed"] is True
@@ -567,6 +652,7 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert checks["windows_release_matrix_rejection_sample_accounting_passed"] is True
     assert checks["windows_release_matrix_sample_accounting_closure_passed"] is True
     assert checks["windows_release_matrix_stack_engine_contract_ready"] is True
+    assert checks["windows_release_matrix_resident_fastpath_release_handoff_ready"] is True
     assert (
         checks[
             "windows_release_matrix_release_decision_direct_runtime_publication_guard_passed"
@@ -859,6 +945,41 @@ def test_windows_github_release_plan_blocks_release_matrix_stack_engine_contract
     assert checks["windows_release_matrix_stack_engine_contract_ready"]["evidence"][
         "blocker_count"
     ] == 1
+
+
+def test_windows_github_release_plan_blocks_failed_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(
+        matrix,
+        labels=["cuda13"],
+        resident_fastpath_handoff_ready=False,
+    )
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    check = checks["windows_release_matrix_resident_fastpath_release_handoff_ready"]
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert payload["release_matrix"]["resident_registration_fastpath_release_handoff_ready"] is False
+    assert payload["release_matrix"]["resident_registration_fastpath_release_handoff_raw_status"] == "failed"
+    assert check["passed"] is False
+    assert check["evidence"]["raw_failed_check_count"] == 1
+    assert check["evidence"]["phase2_failed_check_count"] == 1
+    assert (
+        "windows_release_matrix_resident_fastpath_release_handoff_ready"
+        in payload["failed_checks"]
+    )
 
 
 def test_windows_github_release_plan_blocks_missing_release_matrix_direct_publication_guard(
