@@ -1,0 +1,1433 @@
+{
+  "artifact_type": "default_promotion_manifest",
+  "checks": [
+    {
+      "evidence": {
+        "actual": "release_promotion_decision",
+        "required": "release_promotion_decision"
+      },
+      "name": "release_decision_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "glass_phase2_status",
+        "required": "glass_phase2_status"
+      },
+      "name": "phase2_status_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "passed": true,
+        "status": "green"
+      },
+      "name": "phase2_status_green",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "gate": 252,
+        "green": true,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "status": "default_change_ready"
+      },
+      "name": "release_decision_default_change_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "promote_default_candidate",
+        "required": "promote_default_candidate"
+      },
+      "name": "release_decision_recommends_promotion",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "input": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_373_fixtures\\phase2_release_quality_mismatch\\release_decision.json",
+        "phase2_release_decision_path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_373_fixtures\\phase2_release_quality_mismatch\\release_decision.json"
+      },
+      "name": "phase2_embeds_same_release_decision",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "phase2_release_decision_default_change_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "promote_default_candidate",
+        "required": "promote_default_candidate"
+      },
+      "name": "phase2_release_decision_recommends_promotion",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "checks_passed": true,
+        "count_ready": true,
+        "decision_check_passed": true,
+        "leaf_checks_ready": true,
+        "passed": true,
+        "phase2_check_passed": true,
+        "phase2_default_promotion_acceptance_check_count": 24,
+        "phase2_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+        "phase2_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+        "phase2_default_promotion_pipeline_resident_lights": 200,
+        "phase2_matrix_acceptance_check_count": 24,
+        "phase2_matrix_acceptance_source": "explicit_resident_artifacts_json",
+        "phase2_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+        "phase2_matrix_pipeline_resident_lights": 200,
+        "phase2_ready": true,
+        "present": true,
+        "raw_default_promotion_acceptance_check_count": 24,
+        "raw_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+        "raw_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+        "raw_default_promotion_pipeline_resident_lights": 200,
+        "raw_matrix_acceptance_check_count": 24,
+        "raw_matrix_acceptance_source": "explicit_resident_artifacts_json",
+        "raw_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+        "raw_matrix_pipeline_resident_lights": 200,
+        "raw_ready": true,
+        "ready": true,
+        "required_min_resident_lights": 200,
+        "source_ready": true,
+        "status": "passed"
+      },
+      "name": "release_decision_direct_runtime_publication_guard_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "checks_passed": true,
+        "checks_ready": true,
+        "compatible_missing": false,
+        "decision_check_passed": true,
+        "decision_check_ready": true,
+        "failed_checks": [],
+        "layers_ready": true,
+        "passed": true,
+        "phase2_check_passed": true,
+        "phase2_default_promotion_failed_check_count": 0,
+        "phase2_default_promotion_status": "passed",
+        "phase2_matrix_failed_check_count": 0,
+        "phase2_matrix_status": "passed",
+        "phase2_present": true,
+        "phase2_ready": true,
+        "present": true,
+        "quality_compare_present": true,
+        "raw_default_promotion_failed_check_count": 0,
+        "raw_default_promotion_status": "passed",
+        "raw_matrix_failed_check_count": 0,
+        "raw_matrix_status": "passed",
+        "raw_present": true,
+        "raw_ready": true,
+        "ready": true,
+        "status": "passed"
+      },
+      "name": "release_decision_quality_compare_publication_guard_passed",
+      "note": "Required when the release decision supplies StackEngine publication quality compare evidence.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "checks_passed": false,
+        "checks_ready": false,
+        "compatible_missing": false,
+        "decision_check_passed": false,
+        "decision_check_ready": false,
+        "failed_checks": [
+          "stack_engine_publication_release_quality_guard_passed"
+        ],
+        "layers_ready": false,
+        "passed": false,
+        "phase2_check_passed": false,
+        "phase2_default_promotion_check": false,
+        "phase2_default_promotion_check_passed": false,
+        "phase2_default_promotion_layers_ready": false,
+        "phase2_default_promotion_phase2_status": "attention_required",
+        "phase2_default_promotion_raw_status": "failed",
+        "phase2_matrix_check": false,
+        "phase2_matrix_check_passed": false,
+        "phase2_matrix_default_check": false,
+        "phase2_matrix_default_match_check": false,
+        "phase2_matrix_layers_ready": false,
+        "phase2_matrix_manifest_match_check": false,
+        "phase2_matrix_phase2_status": "attention_required",
+        "phase2_matrix_raw_status": "failed",
+        "phase2_present": true,
+        "phase2_ready": false,
+        "present": true,
+        "raw_default_promotion_check": true,
+        "raw_default_promotion_check_passed": true,
+        "raw_default_promotion_layers_ready": true,
+        "raw_default_promotion_phase2_status": "passed",
+        "raw_default_promotion_raw_status": "passed",
+        "raw_matrix_check": true,
+        "raw_matrix_check_passed": true,
+        "raw_matrix_default_check": true,
+        "raw_matrix_default_match_check": true,
+        "raw_matrix_layers_ready": true,
+        "raw_matrix_manifest_match_check": true,
+        "raw_matrix_phase2_status": "passed",
+        "raw_matrix_raw_status": "passed",
+        "raw_present": true,
+        "raw_ready": true,
+        "ready": false,
+        "release_quality_guard_present": true,
+        "status": "passed"
+      },
+      "name": "release_decision_release_quality_publication_guard_passed",
+      "note": "Required when the release decision supplies StackEngine publication release quality guard evidence.",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "agreement": true,
+        "decision_check_passed": true,
+        "phase2_check_passed": true,
+        "phase2_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "phase2_failed_acceptance_checks": [],
+        "phase2_failed_check_count": 0,
+        "phase2_failed_checks": [],
+        "phase2_mode": "similarity_cuda_triangle",
+        "phase2_passed_check_count": 23,
+        "phase2_path": "resident_artifacts.json",
+        "phase2_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "phase2_ready": true,
+        "phase2_required": true,
+        "phase2_source": "explicit_resident_artifacts_json",
+        "phase2_status": "passed",
+        "phase2_triangle_warp_batch_frame_count": 3,
+        "phase2_triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+        "phase2_warp_copy_mode": "default_stream_async_device_to_device",
+        "present": true,
+        "raw_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "raw_failed_acceptance_checks": [],
+        "raw_failed_check_count": 0,
+        "raw_failed_checks": [],
+        "raw_mode": "similarity_cuda_triangle",
+        "raw_passed_check_count": 23,
+        "raw_path": "resident_artifacts.json",
+        "raw_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "raw_ready": true,
+        "raw_required": true,
+        "raw_source": "explicit_resident_artifacts_json",
+        "raw_status": "passed",
+        "raw_triangle_warp_batch_frame_count": 3,
+        "raw_triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+        "raw_warp_copy_mode": "default_stream_async_device_to_device",
+        "ready": true
+      },
+      "name": "resident_registration_fastpath_release_handoff_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "C:/glass_runs/run/default_route_acceptance.json",
+        "status": "passed"
+      },
+      "name": "default_route_acceptance_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_passed": true,
+        "passed": true,
+        "status": "passed"
+      },
+      "name": "default_route_acceptance_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "route_contract_passed": true,
+        "route_failed_checks": []
+      },
+      "name": "default_route_acceptance_route_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 4,
+        "required_min": 4
+      },
+      "name": "default_route_acceptance_route_check_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "present": true,
+        "recommendation": "best_observed:repeat02"
+      },
+      "name": "runtime_repeat_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 3
+      },
+      "name": "runtime_repeat_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.053,
+        "required_max": 1.25
+      },
+      "name": "runtime_repeat_ratio_within_bound",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "baseline_metric_count": 7,
+        "candidate_metric_count": 7,
+        "check_count": 3,
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "metric_row_count": 7,
+        "passed": true,
+        "path": "runs/checkpoints/quality_metrics_compare.json",
+        "phase2_check_passed": true,
+        "present": true,
+        "ready": true,
+        "status": "passed",
+        "threshold_failure_count": 0,
+        "threshold_failures": []
+      },
+      "name": "quality_metrics_compare_handoff_passed",
+      "note": "Required only when Phase2 status supplies quality-metrics-compare evidence.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "passed": true,
+        "status": "passed"
+      },
+      "name": "pipeline_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "pipeline_dq_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "resident": true,
+        "stack": true
+      },
+      "name": "pipeline_stack_and_resident_result_contracts_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "failed_count": 0,
+        "failed_items": [],
+        "phase2_check_passed": true,
+        "present": true,
+        "ready": true,
+        "required_count": 1,
+        "status": "passed",
+        "top_level_check": true
+      },
+      "name": "pipeline_resident_result_contract_handoff_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": true,
+        "tile_size": 2048
+      },
+      "name": "pipeline_pixel_verification_enabled",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "coverage": true,
+        "dq": true,
+        "rejection": true
+      },
+      "name": "pipeline_pixel_maps_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "status": "passed"
+      },
+      "name": "pipeline_rejection_sample_accounting_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "present_count": 1,
+        "status": "passed"
+      },
+      "name": "pipeline_sample_accounting_closure_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "acceptance_integration_engine_policy_handoff_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "default_engine_policy": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "pipeline_integration_engine_policy_default_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "explicit_cuda_fast_path_count": 1,
+        "failed_master_count": 0,
+        "failed_masters": [],
+        "failed_output_count": 0,
+        "failed_outputs": [],
+        "legacy_master_count": 0,
+        "master_count": 3,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "acceptance_stack_engine_runtime_default_handoff_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "explicit_cuda_fast_path_count": 1,
+        "failed_master_count": 0,
+        "failed_masters": [],
+        "failed_output_count": 0,
+        "failed_outputs": [],
+        "legacy_master_count": 0,
+        "master_count": 3,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "pipeline_stack_engine_runtime_default_handoff_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "adoption_gap_count": 0,
+        "adoption_recommendation": "stack_engine_default_ready",
+        "default_promotion_blocker_count": 0,
+        "default_promotion_blockers": [],
+        "default_promotion_ready": true,
+        "default_promotion_status": "ready",
+        "expected_integration_engine": "stack_engine_cpu",
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "scope": "all",
+        "status": "passed"
+      },
+      "name": "phase2_stack_engine_default_contract_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "resident_calibration_artifact_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 200,
+        "required_min": 200
+      },
+      "name": "resident_light_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "status": "passed"
+      },
+      "name": "resident_winsorized_sweep_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_frame_count": 200,
+        "required_frame_count": 200,
+        "required_frame_count_passed": true,
+        "required_frame_master_max_abs": 6.1e-05,
+        "required_frame_master_rms": 2.3e-05
+      },
+      "name": "resident_winsorized_sweep_required_frame_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 27,
+        "failed_check_count": 0,
+        "required_min": 27
+      },
+      "name": "resident_winsorized_sweep_check_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "status": "passed"
+      },
+      "name": "stack_engine_publication_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "phase2_check_passed": true,
+        "phase2_layer": {
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "phase2_policy_ready": true,
+        "policy_agreement": true,
+        "publish_preflight_layer": {
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "publish_preflight_policy_ready": true
+      },
+      "name": "stack_engine_publication_policy_chain_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "phase2_check_passed": true,
+        "phase2_layer": {
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "phase2_resident_winsorized_ready": true,
+        "publish_preflight_layer": {
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "publish_preflight_resident_winsorized_ready": true,
+        "resident_winsorized_agreement": true
+      },
+      "name": "stack_engine_publication_resident_winsorized_chain_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "resident",
+        "required": "resident"
+      },
+      "name": "default_memory_mode_candidate",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "tile",
+        "required": "tile"
+      },
+      "name": "fallback_memory_mode_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "throughput-v1",
+        "required": "throughput-v1"
+      },
+      "name": "default_runtime_preset_candidate",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda_resident_stack",
+        "required": "cuda_resident_stack"
+      },
+      "name": "integration_engine_candidate",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "present": true,
+        "required": true
+      },
+      "name": "doctor_artifact_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "native_extension_loaded": true,
+        "wrapper_importable": true
+      },
+      "name": "doctor_cuda_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "doctor_native_extension_loaded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ]
+      },
+      "name": "windows_package_try_list_has_cpu_fallback",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "primary": "cuda13"
+      },
+      "name": "windows_package_primary_present",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T23:37:16+00:00",
+  "default_candidate": {
+    "cpu_only_install_preserved": true,
+    "cuda_optional": true,
+    "fallback_memory_mode": "tile",
+    "integration_engine": "cuda_resident_stack",
+    "memory_mode": "resident",
+    "resident_runtime_preset": "throughput-v1"
+  },
+  "default_change_ready": false,
+  "default_route_acceptance": {
+    "acceptance_passed": true,
+    "active_frames": 193,
+    "benchmark_contract": {
+      "name": "default_route_fixture_contract"
+    },
+    "passed": true,
+    "path": "C:/glass_runs/run/default_route_acceptance.json",
+    "present": true,
+    "route_check_count": 4,
+    "route_contract_passed": true,
+    "route_failed_checks": [],
+    "speedup_vs_reference": 28.75,
+    "status": "passed"
+  },
+  "doctor": {
+    "cuda_available": true,
+    "device": {
+      "compute_capability": "12.0",
+      "device_id": 0,
+      "driver_version": "596.21",
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+    },
+    "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+    "native_extension_loaded": true,
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "package_rows": [
+      {
+        "architectures": [
+          "5.0",
+          "5.2",
+          "6.0",
+          "6.1",
+          "7.0",
+          "7.5",
+          "8.0",
+          "8.6"
+        ],
+        "compatible": true,
+        "label": "cuda11",
+        "match": "ptx_jit_forward",
+        "toolkit": "11.8"
+      },
+      {
+        "architectures": [
+          "7.5",
+          "8.0",
+          "8.6",
+          "8.9",
+          "9.0"
+        ],
+        "compatible": true,
+        "label": "cuda12",
+        "match": "ptx_jit_forward",
+        "toolkit": "12.4"
+      },
+      {
+        "architectures": [
+          "8.6",
+          "8.9",
+          "9.0",
+          "10.0",
+          "12.0"
+        ],
+        "compatible": true,
+        "label": "cuda13",
+        "match": "native_cubin",
+        "toolkit": "13.0"
+      }
+    ],
+    "present": true,
+    "primary_package": "cuda13",
+    "probe_skipped": false,
+    "recommendation": "cuda",
+    "schema_version": 1,
+    "wrapper_importable": true
+  },
+  "failed_checks": [
+    "release_decision_release_quality_publication_guard_passed"
+  ],
+  "inputs": {
+    "doctor_json": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_373_fixtures\\phase2_release_quality_mismatch\\doctor.json",
+    "phase2_status_json": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_373_fixtures\\phase2_release_quality_mismatch\\phase2_status.json",
+    "release_decision_json": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_373_fixtures\\phase2_release_quality_mismatch\\release_decision.json"
+  },
+  "integration_engine_policy": {
+    "acceptance_check_passed": true,
+    "acceptance_check_present": true,
+    "acceptance_failed_count": 0,
+    "acceptance_failed_items": [],
+    "acceptance_non_resident_count": 0,
+    "acceptance_phase2_check_passed": true,
+    "acceptance_status": "passed",
+    "pipeline_check_passed": true,
+    "pipeline_check_present": true,
+    "pipeline_default_engine_policy": true,
+    "pipeline_failed_count": 0,
+    "pipeline_failed_items": [],
+    "pipeline_non_resident_count": 0,
+    "pipeline_phase2_check_passed": true,
+    "pipeline_status": "passed",
+    "present": true,
+    "ready": true
+  },
+  "limitations": [
+    "This manifest proves readiness for a default promotion; it does not change CLI defaults.",
+    "The resident CUDA default candidate still requires the tile and CPU fallback paths to remain available.",
+    "Runtime evidence is bounded by the supplied repeat artifacts and the current storage/GPU state."
+  ],
+  "passed": false,
+  "phase2_status": {
+    "latest_checkpoint": {
+      "gate": 252,
+      "green": true,
+      "status": "green"
+    },
+    "passed": true,
+    "release_decision": {
+      "artifact_type": "release_promotion_decision",
+      "default_change_ready": true,
+      "passed": true,
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_373_fixtures\\phase2_release_quality_mismatch\\release_decision.json",
+      "recommendation": "promote_default_candidate",
+      "release_candidate_ready": true,
+      "resident_registration_fastpath_handoff": {
+        "available": true,
+        "descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "exists": true,
+        "failed_acceptance_checks": [],
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "passed_check_count": 23,
+        "path": "resident_artifacts.json",
+        "pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "present": true,
+        "ready": true,
+        "required_by_benchmark_contract": true,
+        "resident_registration_mode": "similarity_cuda_triangle",
+        "source": "explicit_resident_artifacts_json",
+        "status": "passed",
+        "triangle_warp_batch_frame_count": 3,
+        "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+        "warp_copy_mode": "default_stream_async_device_to_device"
+      },
+      "runtime_repeat_considered_run_count": 3,
+      "runtime_repeat_elapsed_ratio_vs_best": 1.053,
+      "runtime_repeat_present": true,
+      "status": "default_change_ready"
+    },
+    "status": "green"
+  },
+  "pipeline_contract": {
+    "calibrated_light_count": null,
+    "check_count": 16,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "integration_coverage_map_pixels_match_dq": true,
+    "integration_default_engine_policy": true,
+    "integration_dq_contract": true,
+    "integration_dq_map_pixels_match_summary": true,
+    "integration_engine_policy": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 0,
+      "resident_count": 1,
+      "status": "passed"
+    },
+    "integration_engine_policy_check_passed": true,
+    "integration_engine_policy_check_present": true,
+    "integration_engine_policy_failed_count": 0,
+    "integration_engine_policy_non_resident_count": 0,
+    "integration_engine_policy_status": "passed",
+    "integration_map_count": 6,
+    "integration_output_count": 1,
+    "integration_rejection_map_pixels_match_dq": true,
+    "integration_rejection_sample_counts_match_maps": true,
+    "integration_resident_result_contract": true,
+    "integration_resident_result_contract_check_passed": true,
+    "integration_resident_result_contract_check_present": true,
+    "integration_resident_result_contract_failed_check_count": 0,
+    "integration_resident_result_contract_failed_checks": [],
+    "integration_resident_result_contract_failed_count": 0,
+    "integration_resident_result_contract_failed_items": [],
+    "integration_resident_result_contract_required_count": 1,
+    "integration_resident_result_contract_status": "passed",
+    "integration_sample_accounting_closure": true,
+    "integration_stack_result_contract": true,
+    "passed": true,
+    "pixel_verification_enabled": true,
+    "pixel_verification_tile_size": 2048,
+    "present": true,
+    "rejection_sample_accounting": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "status": "passed"
+    },
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_status": "passed",
+    "resident_calibrated_light_count": 200,
+    "resident_native_calibration_artifact": true,
+    "resident_result_contract": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_check_count": 0,
+      "failed_checks": [],
+      "failed_count": 0,
+      "failed_items": [],
+      "required_count": 1,
+      "status": "passed"
+    },
+    "sample_accounting_closure": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "present_count": 1,
+      "status": "passed"
+    },
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 1,
+    "sample_accounting_closure_status": "passed",
+    "stack_engine_runtime_default": {
+      "check_name": "stack_engine_runtime_default_path",
+      "check_passed": true,
+      "check_present": true,
+      "explicit_cuda_fast_path_count": 1,
+      "failed_master_count": 0,
+      "failed_masters": [],
+      "failed_output_count": 0,
+      "failed_outputs": [],
+      "integration_output_count": 1,
+      "integration_resident_count": 0,
+      "integration_stack_engine_default_count": 1,
+      "legacy_master_count": 0,
+      "master_count": 3,
+      "master_resident_count": 0,
+      "master_stack_engine_count": 3,
+      "status": "passed"
+    },
+    "stack_engine_runtime_default_check_passed": true,
+    "stack_engine_runtime_default_check_present": true,
+    "stack_engine_runtime_default_explicit_cuda_fast_path_count": 1,
+    "stack_engine_runtime_default_failed_master_count": 0,
+    "stack_engine_runtime_default_failed_output_count": 0,
+    "stack_engine_runtime_default_legacy_master_count": 0,
+    "stack_engine_runtime_default_master_count": 3,
+    "stack_engine_runtime_default_status": "passed",
+    "status": "passed"
+  },
+  "quality_metrics_compare": {
+    "baseline_metric_count": 7,
+    "candidate_metric_count": 7,
+    "check_count": 3,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "metric_row_count": 7,
+    "passed": true,
+    "path": "runs/checkpoints/quality_metrics_compare.json",
+    "phase2_check_passed": true,
+    "present": true,
+    "ready": true,
+    "status": "passed",
+    "threshold_failure_count": 0,
+    "threshold_failures": []
+  },
+  "recommendation": "fix_default_blockers",
+  "release_decision": {
+    "default_change_ready": true,
+    "direct_runtime_publication_guard": {
+      "checks_passed": true,
+      "count_ready": true,
+      "decision_check_passed": true,
+      "leaf_checks_ready": true,
+      "passed": true,
+      "phase2_check_passed": true,
+      "phase2_default_promotion_acceptance_check_count": 24,
+      "phase2_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "phase2_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "phase2_default_promotion_pipeline_resident_lights": 200,
+      "phase2_matrix_acceptance_check_count": 24,
+      "phase2_matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "phase2_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "phase2_matrix_pipeline_resident_lights": 200,
+      "phase2_ready": true,
+      "present": true,
+      "raw_default_promotion_acceptance_check_count": 24,
+      "raw_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "raw_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "raw_default_promotion_pipeline_resident_lights": 200,
+      "raw_matrix_acceptance_check_count": 24,
+      "raw_matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "raw_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "raw_matrix_pipeline_resident_lights": 200,
+      "raw_ready": true,
+      "ready": true,
+      "required_min_resident_lights": 200,
+      "source_ready": true,
+      "status": "passed"
+    },
+    "passed": true,
+    "quality_compare_publication_guard": {
+      "checks_passed": true,
+      "checks_ready": true,
+      "compatible_missing": false,
+      "decision_check_passed": true,
+      "decision_check_ready": true,
+      "failed_checks": [],
+      "layers_ready": true,
+      "passed": true,
+      "phase2_check_passed": true,
+      "phase2_default_promotion_failed_check_count": 0,
+      "phase2_default_promotion_status": "passed",
+      "phase2_matrix_failed_check_count": 0,
+      "phase2_matrix_status": "passed",
+      "phase2_present": true,
+      "phase2_ready": true,
+      "present": true,
+      "quality_compare_present": true,
+      "raw_default_promotion_failed_check_count": 0,
+      "raw_default_promotion_status": "passed",
+      "raw_matrix_failed_check_count": 0,
+      "raw_matrix_status": "passed",
+      "raw_present": true,
+      "raw_ready": true,
+      "ready": true,
+      "status": "passed"
+    },
+    "recommendation": "promote_default_candidate",
+    "release_candidate_ready": true,
+    "release_quality_publication_guard": {
+      "checks_passed": false,
+      "checks_ready": false,
+      "compatible_missing": false,
+      "decision_check_passed": false,
+      "decision_check_ready": false,
+      "failed_checks": [
+        "stack_engine_publication_release_quality_guard_passed"
+      ],
+      "layers_ready": false,
+      "passed": false,
+      "phase2_check_passed": false,
+      "phase2_default_promotion_check": false,
+      "phase2_default_promotion_check_passed": false,
+      "phase2_default_promotion_layers_ready": false,
+      "phase2_default_promotion_phase2_status": "attention_required",
+      "phase2_default_promotion_raw_status": "failed",
+      "phase2_matrix_check": false,
+      "phase2_matrix_check_passed": false,
+      "phase2_matrix_default_check": false,
+      "phase2_matrix_default_match_check": false,
+      "phase2_matrix_layers_ready": false,
+      "phase2_matrix_manifest_match_check": false,
+      "phase2_matrix_phase2_status": "attention_required",
+      "phase2_matrix_raw_status": "failed",
+      "phase2_present": true,
+      "phase2_ready": false,
+      "present": true,
+      "raw_default_promotion_check": true,
+      "raw_default_promotion_check_passed": true,
+      "raw_default_promotion_layers_ready": true,
+      "raw_default_promotion_phase2_status": "passed",
+      "raw_default_promotion_raw_status": "passed",
+      "raw_matrix_check": true,
+      "raw_matrix_check_passed": true,
+      "raw_matrix_default_check": true,
+      "raw_matrix_default_match_check": true,
+      "raw_matrix_layers_ready": true,
+      "raw_matrix_manifest_match_check": true,
+      "raw_matrix_phase2_status": "passed",
+      "raw_matrix_raw_status": "passed",
+      "raw_present": true,
+      "raw_ready": true,
+      "ready": false,
+      "release_quality_guard_present": true,
+      "status": "passed"
+    },
+    "resident_winsorized_semantics": {
+      "descriptor_sources": [
+        "resident_artifacts.integration_rejection"
+      ],
+      "failed_count": 0,
+      "failed_items": [],
+      "legacy_completion_count": 1,
+      "output_count": 1,
+      "ready": true,
+      "required_count": 1,
+      "rows": [
+        {
+          "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+          "approximation": true,
+          "cpu_baseline_parity": false,
+          "descriptor_source": "resident_artifacts.integration_rejection",
+          "integration_results_descriptor_present": false,
+          "item": "H",
+          "legacy_completion_applied": true,
+          "legacy_completion_source": "fast_approx_algorithm",
+          "parity_status": "known_non_parity_pending_cuda_update",
+          "passed": true,
+          "present": true,
+          "rejection": "winsorized_sigma",
+          "required": true,
+          "resident_artifacts_descriptor_present": true,
+          "resident_winsorized_mode": "fast_approx",
+          "scale_estimator": "mean_std_two_stage_winsorized",
+          "status": "passed"
+        }
+      ],
+      "schema_version": 1,
+      "scope": "passed",
+      "status": "passed"
+    },
+    "speedup": {
+      "actual": 58.1,
+      "required_min": 2.0
+    },
+    "status": "default_change_ready"
+  },
+  "release_decision_direct_runtime_publication_guard": {
+    "checks_passed": true,
+    "count_ready": true,
+    "decision_check_passed": true,
+    "leaf_checks_ready": true,
+    "passed": true,
+    "phase2_check_passed": true,
+    "phase2_default_promotion_acceptance_check_count": 24,
+    "phase2_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+    "phase2_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+    "phase2_default_promotion_pipeline_resident_lights": 200,
+    "phase2_matrix_acceptance_check_count": 24,
+    "phase2_matrix_acceptance_source": "explicit_resident_artifacts_json",
+    "phase2_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+    "phase2_matrix_pipeline_resident_lights": 200,
+    "phase2_ready": true,
+    "present": true,
+    "raw_default_promotion_acceptance_check_count": 24,
+    "raw_default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+    "raw_default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+    "raw_default_promotion_pipeline_resident_lights": 200,
+    "raw_matrix_acceptance_check_count": 24,
+    "raw_matrix_acceptance_source": "explicit_resident_artifacts_json",
+    "raw_matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+    "raw_matrix_pipeline_resident_lights": 200,
+    "raw_ready": true,
+    "ready": true,
+    "required_min_resident_lights": 200,
+    "source_ready": true,
+    "status": "passed"
+  },
+  "release_decision_quality_compare_publication_guard": {
+    "checks_passed": true,
+    "checks_ready": true,
+    "compatible_missing": false,
+    "decision_check_passed": true,
+    "decision_check_ready": true,
+    "failed_checks": [],
+    "layers_ready": true,
+    "passed": true,
+    "phase2_check_passed": true,
+    "phase2_default_promotion_failed_check_count": 0,
+    "phase2_default_promotion_status": "passed",
+    "phase2_matrix_failed_check_count": 0,
+    "phase2_matrix_status": "passed",
+    "phase2_present": true,
+    "phase2_ready": true,
+    "present": true,
+    "quality_compare_present": true,
+    "raw_default_promotion_failed_check_count": 0,
+    "raw_default_promotion_status": "passed",
+    "raw_matrix_failed_check_count": 0,
+    "raw_matrix_status": "passed",
+    "raw_present": true,
+    "raw_ready": true,
+    "ready": true,
+    "status": "passed"
+  },
+  "release_decision_release_quality_publication_guard": {
+    "checks_passed": false,
+    "checks_ready": false,
+    "compatible_missing": false,
+    "decision_check_passed": false,
+    "decision_check_ready": false,
+    "failed_checks": [
+      "stack_engine_publication_release_quality_guard_passed"
+    ],
+    "layers_ready": false,
+    "passed": false,
+    "phase2_check_passed": false,
+    "phase2_default_promotion_check": false,
+    "phase2_default_promotion_check_passed": false,
+    "phase2_default_promotion_layers_ready": false,
+    "phase2_default_promotion_phase2_status": "attention_required",
+    "phase2_default_promotion_raw_status": "failed",
+    "phase2_matrix_check": false,
+    "phase2_matrix_check_passed": false,
+    "phase2_matrix_default_check": false,
+    "phase2_matrix_default_match_check": false,
+    "phase2_matrix_layers_ready": false,
+    "phase2_matrix_manifest_match_check": false,
+    "phase2_matrix_phase2_status": "attention_required",
+    "phase2_matrix_raw_status": "failed",
+    "phase2_present": true,
+    "phase2_ready": false,
+    "present": true,
+    "raw_default_promotion_check": true,
+    "raw_default_promotion_check_passed": true,
+    "raw_default_promotion_layers_ready": true,
+    "raw_default_promotion_phase2_status": "passed",
+    "raw_default_promotion_raw_status": "passed",
+    "raw_matrix_check": true,
+    "raw_matrix_check_passed": true,
+    "raw_matrix_default_check": true,
+    "raw_matrix_default_match_check": true,
+    "raw_matrix_layers_ready": true,
+    "raw_matrix_manifest_match_check": true,
+    "raw_matrix_phase2_status": "passed",
+    "raw_matrix_raw_status": "passed",
+    "raw_present": true,
+    "raw_ready": true,
+    "ready": false,
+    "release_quality_guard_present": true,
+    "status": "passed"
+  },
+  "resident_registration_fastpath_release_handoff": {
+    "agreement": true,
+    "decision_check_passed": true,
+    "phase2_check_passed": true,
+    "phase2_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+    "phase2_failed_acceptance_checks": [],
+    "phase2_failed_check_count": 0,
+    "phase2_failed_checks": [],
+    "phase2_mode": "similarity_cuda_triangle",
+    "phase2_passed_check_count": 23,
+    "phase2_path": "resident_artifacts.json",
+    "phase2_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+    "phase2_ready": true,
+    "phase2_required": true,
+    "phase2_source": "explicit_resident_artifacts_json",
+    "phase2_status": "passed",
+    "phase2_triangle_warp_batch_frame_count": 3,
+    "phase2_triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+    "phase2_warp_copy_mode": "default_stream_async_device_to_device",
+    "present": true,
+    "raw_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+    "raw_failed_acceptance_checks": [],
+    "raw_failed_check_count": 0,
+    "raw_failed_checks": [],
+    "raw_mode": "similarity_cuda_triangle",
+    "raw_passed_check_count": 23,
+    "raw_path": "resident_artifacts.json",
+    "raw_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+    "raw_ready": true,
+    "raw_required": true,
+    "raw_source": "explicit_resident_artifacts_json",
+    "raw_status": "passed",
+    "raw_triangle_warp_batch_frame_count": 3,
+    "raw_triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+    "raw_warp_copy_mode": "default_stream_async_device_to_device",
+    "ready": true
+  },
+  "resident_result_contract": {
+    "check_passed": true,
+    "check_present": true,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "failed_count": 0,
+    "failed_items": [],
+    "phase2_check_passed": true,
+    "present": true,
+    "ready": true,
+    "required_count": 1,
+    "status": "passed",
+    "top_level_check": true
+  },
+  "resident_winsorized_sweep_audit": {
+    "check_count": 27,
+    "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "frame_counts": [
+      8,
+      32,
+      128,
+      200
+    ],
+    "max_hardened_master_rms": 2.3e-05,
+    "passed": true,
+    "path": "C:/glass_runs/run/resident_winsorized_sweep_audit.json",
+    "phase2_check_passed": true,
+    "present": true,
+    "required_frame_count": 200,
+    "required_frame_count_passed": true,
+    "required_frame_cuda_hardened_s": 0.0012,
+    "required_frame_master_max_abs": 6.1e-05,
+    "required_frame_master_rms": 2.3e-05,
+    "run_count": 4,
+    "status": "passed",
+    "sweep_path": "runs/checkpoints/s2_gate_268_resident_winsorized_sweep.json"
+  },
+  "runtime_default_direct_evidence": {
+    "acceptance_audit_exists": false,
+    "acceptance_audit_path": null,
+    "acceptance_audit_read_error": null,
+    "acceptance_direct_fastpath": false,
+    "acceptance_fastpath_artifact_path": null,
+    "acceptance_fastpath_available": null,
+    "acceptance_fastpath_check_count": 0,
+    "acceptance_fastpath_exists": null,
+    "acceptance_fastpath_failed_check_count": 0,
+    "acceptance_fastpath_failed_checks": [],
+    "acceptance_fastpath_source": null,
+    "decision_inputs_present": false,
+    "pipeline_calibration_artifact_exists": null,
+    "pipeline_calibration_artifact_generated_for_contract": null,
+    "pipeline_calibration_artifact_path": null,
+    "pipeline_calibration_artifact_path_exists": null,
+    "pipeline_calibration_artifact_source": null,
+    "pipeline_contract_exists": false,
+    "pipeline_contract_path": null,
+    "pipeline_contract_read_error": null,
+    "pipeline_direct_resident_calibration": false,
+    "pipeline_resident_calibrated_light_count": 200,
+    "pipeline_resident_native_calibration_artifact": true,
+    "present": false,
+    "ready": false
+  },
+  "runtime_repeat": {
+    "best_elapsed_s": 22.6,
+    "best_label": "repeat02",
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.053,
+    "max_elapsed_ratio_vs_best": 1.25,
+    "present": true,
+    "recommendation": "best_observed:repeat02",
+    "required_min_runtime_runs": null,
+    "run_count": 3,
+    "slowest_elapsed_s": 23.8
+  },
+  "schema_version": 1,
+  "stack_engine_contract": {
+    "adoption_contract_ready_count": 4,
+    "adoption_cuda_resident_surface_count": 0,
+    "adoption_gap_surfaces": [],
+    "adoption_phase2_stack_engine_default_gap_count": 0,
+    "adoption_recommendation": "stack_engine_default_ready",
+    "adoption_stack_engine_surface_count": 4,
+    "adoption_surface_count": 4,
+    "audit_type": "stack_engine_default_contract",
+    "default_promotion_blocker_count": 0,
+    "default_promotion_blockers": [],
+    "default_promotion_phase2_stack_engine_default_gap_count": 0,
+    "default_promotion_ready": true,
+    "default_promotion_recommendation": "stack_engine_default_ready",
+    "default_promotion_status": "ready",
+    "expected_integration_engine": "stack_engine_cpu",
+    "passed": true,
+    "path": "C:/glass_runs/run/stack_engine_contract.json",
+    "phase2_check_passed": true,
+    "present": true,
+    "ready": true,
+    "scope": "all",
+    "status": "passed"
+  },
+  "stack_engine_publication_audit": {
+    "check_count": 21,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "passed": true,
+    "path": "C:/glass_runs/run/stack_engine_publication_audit.json",
+    "phase2_audit_check_passed": true,
+    "phase2_policy_layer": {
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_policy_ready": true,
+    "phase2_resident_winsorized_layer": {
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_resident_winsorized_ready": true,
+    "policy_agreement": true,
+    "policy_chain_phase2_check_passed": true,
+    "present": true,
+    "publish_preflight_policy_layer": {
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_policy_ready": true,
+    "publish_preflight_resident_winsorized_layer": {
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_resident_winsorized_ready": true,
+    "ready": true,
+    "recommendation": "publication_chain_ready",
+    "resident_winsorized_agreement": true,
+    "resident_winsorized_chain_phase2_check_passed": true,
+    "status": "passed"
+  },
+  "stack_engine_runtime_default": {
+    "acceptance_check_passed": true,
+    "acceptance_check_present": true,
+    "acceptance_explicit_cuda_fast_path_count": 1,
+    "acceptance_failed_master_count": 0,
+    "acceptance_failed_masters": [],
+    "acceptance_failed_output_count": 0,
+    "acceptance_failed_outputs": [],
+    "acceptance_legacy_master_count": 0,
+    "acceptance_master_count": 3,
+    "acceptance_phase2_check_passed": true,
+    "acceptance_status": "passed",
+    "pipeline_check_passed": true,
+    "pipeline_check_present": true,
+    "pipeline_explicit_cuda_fast_path_count": 1,
+    "pipeline_failed_master_count": 0,
+    "pipeline_failed_masters": [],
+    "pipeline_failed_output_count": 0,
+    "pipeline_failed_outputs": [],
+    "pipeline_legacy_master_count": 0,
+    "pipeline_master_count": 3,
+    "pipeline_phase2_check_passed": true,
+    "pipeline_status": "passed",
+    "present": true,
+    "ready": true
+  },
+  "status": "blocked"
+}

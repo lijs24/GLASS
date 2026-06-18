@@ -6665,6 +6665,26 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 373: Default Promotion Release Quality Publication Guard
+
+- Carry release-decision `stack_engine_publication_release_quality_guard`
+  evidence into `glass default-promotion-manifest`.
+- Add `release_decision_release_quality_publication_guard_passed` so default
+  promotion blocks when the release decision records failed, one-sided missing,
+  or mismatched release quality guard handoff evidence.
+- Keep older release-decision artifacts without this optional guard non-blocking
+  when no release quality guard payload or decision check is present.
+- Surface release quality guard ready, compatible-missing, raw matrix/default,
+  Phase2 matrix/default, decision-check, raw-status, Phase2-status, and
+  cross-artifact match evidence in default-promotion JSON and Markdown.
+- Add focused ready, compatibility, raw-failure, Phase2-mismatch, and CLI
+  Markdown tests.
+- Keep this gate default-promotion scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
