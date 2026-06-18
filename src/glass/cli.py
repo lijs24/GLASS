@@ -123,6 +123,10 @@ from glass.report.windows_publish_preflight import (
     build_windows_publish_preflight,
     write_windows_publish_preflight,
 )
+from glass.report.stack_engine_publication_audit import (
+    build_stack_engine_publication_audit,
+    write_stack_engine_publication_audit,
+)
 from glass.report.windows_package_smoke import (
     build_windows_package_smoke,
     write_windows_package_smoke,
@@ -2126,6 +2130,31 @@ def cmd_windows_publish_preflight(args: argparse.Namespace) -> int:
             "release_tag": summary.get("release_tag"),
             "asset_count": summary.get("asset_count"),
             "primary_package": summary.get("primary_package"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    if bool(args.fail_on_failure) and not payload.get("passed"):
+        return 2
+    return 0
+
+
+def cmd_stack_engine_publication_audit(args: argparse.Namespace) -> int:
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=args.stack_engine_contract,
+        phase2_status=args.phase2_status,
+        default_promotion_manifest=args.default_promotion_manifest,
+        windows_release_matrix=args.windows_release_matrix,
+        github_release_plan=args.github_release_plan,
+        publish_preflight=args.publish_preflight,
+    )
+    write_stack_engine_publication_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "recommendation": payload["recommendation"],
+            "failed_checks": payload.get("failed_checks"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -4938,6 +4967,49 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the publish preflight passes",
     )
     windows_publish_preflight.set_defaults(func=cmd_windows_publish_preflight)
+
+    stack_publication_audit = sub.add_parser(
+        "stack-engine-publication-audit",
+        help="audit StackEngine default-contract evidence across release publication artifacts",
+    )
+    stack_publication_audit.add_argument(
+        "--stack-engine-contract",
+        required=True,
+        help="stack-engine-contract JSON artifact",
+    )
+    stack_publication_audit.add_argument(
+        "--phase2-status",
+        required=True,
+        help="phase2-status JSON artifact containing direct and publish-preflight evidence",
+    )
+    stack_publication_audit.add_argument(
+        "--default-promotion-manifest",
+        required=True,
+        help="default-promotion-manifest JSON artifact",
+    )
+    stack_publication_audit.add_argument(
+        "--windows-release-matrix",
+        required=True,
+        help="windows-release-matrix JSON artifact",
+    )
+    stack_publication_audit.add_argument(
+        "--github-release-plan",
+        required=True,
+        help="windows-github-release-plan JSON artifact",
+    )
+    stack_publication_audit.add_argument(
+        "--publish-preflight",
+        required=True,
+        help="windows-publish-preflight JSON artifact",
+    )
+    stack_publication_audit.add_argument("--out", required=True, help="output audit JSON")
+    stack_publication_audit.add_argument("--markdown", help="optional output Markdown summary")
+    stack_publication_audit.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless the publication evidence audit passes",
+    )
+    stack_publication_audit.set_defaults(func=cmd_stack_engine_publication_audit)
 
     windows_package_smoke = sub.add_parser(
         "windows-package-smoke",

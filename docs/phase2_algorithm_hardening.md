@@ -4318,6 +4318,23 @@ integration where applicable.
   upload, package release, GitHub release creation, or real-data benchmark
   rerun.
 
+### S2-Gate 257: StackEngine Publication Evidence Chain Audit
+
+- Add `glass stack-engine-publication-audit` to audit the complete StackEngine
+  default-contract publication evidence chain from source StackEngine contract
+  through Phase 2 status, default-promotion manifest, Windows release matrix,
+  GitHub release plan, publish preflight, and the Phase 2 publish-preflight
+  handoff.
+- Require every layer to report ready StackEngine default-contract evidence,
+  zero default gaps, zero blockers, and agreement between adjacent artifacts.
+- Emit JSON and Markdown audit artifacts with per-layer summaries and failed
+  checks for release checklist use.
+- Add focused tests for a passing chain, a release-matrix gap/mismatch, and CLI
+  output/help behavior.
+- Keep this gate audit scoped: no image math, CUDA kernel, StackEngine runtime
+  behavior change, default change, package build, upload, GitHub release
+  creation, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

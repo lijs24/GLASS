@@ -364,6 +364,7 @@ def test_cli_help_commands():
         "release-promotion-decision",
         "default-promotion-manifest",
         "windows-release-matrix",
+        "stack-engine-publication-audit",
         "windows-package-smoke",
         "resident-determinism",
         "resident-registration-audit",
