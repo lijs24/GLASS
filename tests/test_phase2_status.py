@@ -659,6 +659,7 @@ def _write_release_decision(
     *,
     ready: bool = True,
     warp_quality_ready: bool | None = None,
+    resident_fastpath_ready: bool | None = None,
     include_runtime_repeat: bool = True,
     runtime_ratio: float = 1.053,
 ) -> None:
@@ -709,6 +710,32 @@ def _write_release_decision(
             "failed_acceptance_checks": []
             if warp_quality_ready
             else ["warp_quality_contract_passed"],
+        }
+    if resident_fastpath_ready is not None:
+        failed_checks = (
+            []
+            if resident_fastpath_ready
+            else ["contract_resident_registration_fastpath_descriptor_batch_mode"]
+        )
+        payload["resident_registration_fastpath_handoff"] = {
+            "source": "explicit_resident_artifacts_json",
+            "present": True,
+            "status": "passed" if resident_fastpath_ready else "failed",
+            "ready": resident_fastpath_ready,
+            "required_by_benchmark_contract": True,
+            "path": "resident_artifacts.json",
+            "exists": True,
+            "available": True,
+            "resident_registration_mode": "similarity_cuda_triangle",
+            "descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+            "pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+            "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+            "triangle_warp_batch_frame_count": 3,
+            "warp_copy_mode": "default_stream_async_device_to_device",
+            "passed_check_count": 23 if resident_fastpath_ready else 22,
+            "failed_check_count": 0 if resident_fastpath_ready else 1,
+            "failed_checks": failed_checks,
+            "failed_acceptance_checks": failed_checks,
         }
     write_json(path, payload)
 
@@ -2795,6 +2822,74 @@ def test_phase2_status_blocks_failed_release_warp_quality_handoff(tmp_path: Path
     assert checks["release_decision_warp_quality_handoff_ready"]["evidence"][
         "failed_acceptance_checks"
     ] == ["warp_quality_contract_passed"]
+
+
+def test_phase2_status_surfaces_release_resident_fastpath_handoff(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=329)
+    release_decision = tmp_path / "release_decision.json"
+    out_md = tmp_path / "phase2.md"
+    _write_release_decision(release_decision, resident_fastpath_ready=True)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    decision = payload["release_decision"]
+    assert payload["status"] == "green"
+    assert decision["resident_registration_fastpath_handoff_status"] == "passed"
+    assert decision["resident_registration_fastpath_handoff_ready"] is True
+    assert decision["resident_registration_fastpath_handoff_required"] is True
+    assert decision["resident_registration_fastpath_handoff_mode"] == (
+        "similarity_cuda_triangle"
+    )
+    assert decision[
+        "resident_registration_fastpath_handoff_descriptor_fit_batch_mode"
+    ] == "native_batch_shared_reference_device"
+    assert decision[
+        "resident_registration_fastpath_handoff_triangle_warp_batch_frame_count"
+    ] == 3
+    assert checks["release_decision_resident_fastpath_handoff_ready"]["passed"] is True
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert (
+        "Resident fastpath handoff: passed ready=True required=True checks=23 failed=0"
+        in text
+    )
+
+
+def test_phase2_status_blocks_failed_release_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=329)
+    release_decision = tmp_path / "release_decision.json"
+    _write_release_decision(release_decision, resident_fastpath_ready=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "attention_required"
+    assert (
+        payload["release_decision"]["resident_registration_fastpath_handoff_status"]
+        == "failed"
+    )
+    check = checks["release_decision_resident_fastpath_handoff_ready"]
+    assert check["passed"] is False
+    assert check["evidence"]["failed_check_count"] == 1
+    assert check["evidence"]["failed_acceptance_checks"] == [
+        "contract_resident_registration_fastpath_descriptor_batch_mode"
+    ]
 
 
 def test_phase2_status_blocks_acceptance_runtime_default_regression(tmp_path: Path):

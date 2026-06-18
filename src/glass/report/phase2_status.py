@@ -2093,6 +2093,11 @@ def _release_decision_summary(path: str | Path | None) -> dict[str, Any] | None:
         if isinstance(payload.get("warp_quality_handoff"), dict)
         else {}
     )
+    resident_fastpath_handoff = (
+        payload.get("resident_registration_fastpath_handoff")
+        if isinstance(payload.get("resident_registration_fastpath_handoff"), dict)
+        else {}
+    )
     speedup = payload.get("speedup") if isinstance(payload.get("speedup"), dict) else {}
     return {
         "path": payload.get("_path"),
@@ -2136,6 +2141,55 @@ def _release_decision_summary(path: str | Path | None) -> dict[str, Any] | None:
             warp_quality_handoff.get("failed_acceptance_checks") or []
         ),
         "warp_quality_handoff_path": warp_quality_handoff.get("path"),
+        "resident_registration_fastpath_handoff": resident_fastpath_handoff or None,
+        "resident_registration_fastpath_handoff_present": (
+            resident_fastpath_handoff.get("present")
+        ),
+        "resident_registration_fastpath_handoff_status": (
+            resident_fastpath_handoff.get("status")
+        ),
+        "resident_registration_fastpath_handoff_ready": (
+            resident_fastpath_handoff.get("ready")
+        ),
+        "resident_registration_fastpath_handoff_required": (
+            resident_fastpath_handoff.get("required_by_benchmark_contract")
+        ),
+        "resident_registration_fastpath_handoff_source": (
+            resident_fastpath_handoff.get("source")
+        ),
+        "resident_registration_fastpath_handoff_path": (
+            resident_fastpath_handoff.get("path")
+        ),
+        "resident_registration_fastpath_handoff_mode": (
+            resident_fastpath_handoff.get("resident_registration_mode")
+        ),
+        "resident_registration_fastpath_handoff_descriptor_fit_batch_mode": (
+            resident_fastpath_handoff.get("descriptor_fit_batch_mode")
+        ),
+        "resident_registration_fastpath_handoff_pixel_refine_batch_mode": (
+            resident_fastpath_handoff.get("pixel_refine_batch_mode")
+        ),
+        "resident_registration_fastpath_handoff_triangle_warp_batch_mode": (
+            resident_fastpath_handoff.get("triangle_warp_batch_mode")
+        ),
+        "resident_registration_fastpath_handoff_triangle_warp_batch_frame_count": (
+            resident_fastpath_handoff.get("triangle_warp_batch_frame_count")
+        ),
+        "resident_registration_fastpath_handoff_warp_copy_mode": (
+            resident_fastpath_handoff.get("warp_copy_mode")
+        ),
+        "resident_registration_fastpath_handoff_passed_check_count": (
+            resident_fastpath_handoff.get("passed_check_count")
+        ),
+        "resident_registration_fastpath_handoff_failed_check_count": (
+            resident_fastpath_handoff.get("failed_check_count")
+        ),
+        "resident_registration_fastpath_handoff_failed_checks": (
+            resident_fastpath_handoff.get("failed_checks") or []
+        ),
+        "resident_registration_fastpath_handoff_failed_acceptance_checks": (
+            resident_fastpath_handoff.get("failed_acceptance_checks") or []
+        ),
     }
 
 
@@ -3673,6 +3727,67 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "release_decision_resident_fastpath_handoff_ready",
+                "passed": (
+                    decision.get("resident_registration_fastpath_handoff_status")
+                    in (None, "not_available")
+                    or decision.get("resident_registration_fastpath_handoff_ready")
+                    is True
+                ),
+                "evidence": {
+                    "present": decision.get(
+                        "resident_registration_fastpath_handoff_present"
+                    ),
+                    "status": decision.get(
+                        "resident_registration_fastpath_handoff_status"
+                    ),
+                    "ready": decision.get(
+                        "resident_registration_fastpath_handoff_ready"
+                    ),
+                    "required": decision.get(
+                        "resident_registration_fastpath_handoff_required"
+                    ),
+                    "source": decision.get(
+                        "resident_registration_fastpath_handoff_source"
+                    ),
+                    "mode": decision.get(
+                        "resident_registration_fastpath_handoff_mode"
+                    ),
+                    "descriptor_fit_batch_mode": decision.get(
+                        "resident_registration_fastpath_handoff_descriptor_fit_batch_mode"
+                    ),
+                    "pixel_refine_batch_mode": decision.get(
+                        "resident_registration_fastpath_handoff_pixel_refine_batch_mode"
+                    ),
+                    "triangle_warp_batch_mode": decision.get(
+                        "resident_registration_fastpath_handoff_triangle_warp_batch_mode"
+                    ),
+                    "triangle_warp_batch_frame_count": decision.get(
+                        "resident_registration_fastpath_handoff_triangle_warp_batch_frame_count"
+                    ),
+                    "warp_copy_mode": decision.get(
+                        "resident_registration_fastpath_handoff_warp_copy_mode"
+                    ),
+                    "passed_check_count": decision.get(
+                        "resident_registration_fastpath_handoff_passed_check_count"
+                    ),
+                    "failed_check_count": decision.get(
+                        "resident_registration_fastpath_handoff_failed_check_count"
+                    ),
+                    "failed_checks": decision.get(
+                        "resident_registration_fastpath_handoff_failed_checks"
+                    ),
+                    "failed_acceptance_checks": decision.get(
+                        "resident_registration_fastpath_handoff_failed_acceptance_checks"
+                    ),
+                    "path": decision.get(
+                        "resident_registration_fastpath_handoff_path"
+                    ),
+                },
+            }
+        )
+        checks.append(
+            {
                 "name": "release_decision_runtime_repeat_evidence_ready",
                 "passed": runtime_repeat_closure.get("ready") is True,
                 "evidence": runtime_repeat_closure,
@@ -4484,6 +4599,14 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"ready={decision.get('warp_quality_handoff_ready')} "
                     f"outputs={decision.get('warp_quality_handoff_output_count')} "
                     f"failed={decision.get('warp_quality_handoff_failed_checks')}"
+                ),
+                (
+                    "- Resident fastpath handoff: "
+                    f"{decision.get('resident_registration_fastpath_handoff_status')} "
+                    f"ready={decision.get('resident_registration_fastpath_handoff_ready')} "
+                    f"required={decision.get('resident_registration_fastpath_handoff_required')} "
+                    f"checks={decision.get('resident_registration_fastpath_handoff_passed_check_count')} "
+                    f"failed={decision.get('resident_registration_fastpath_handoff_failed_check_count')}"
                 ),
             ]
         )

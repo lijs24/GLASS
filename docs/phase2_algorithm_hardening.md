@@ -5818,6 +5818,27 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 329: Phase2 Release Resident Fastpath Handoff
+
+- Carry `release_decision.resident_registration_fastpath_handoff` into
+  `glass phase2-status`.
+- Add Phase2 release-decision summary fields for resident fastpath handoff
+  status, readiness, required state, source, path, mode, descriptor/pixel/warp
+  batch modes, triangle warp batch frame count, warp copy mode, passed check
+  count, failed check count, and failed checks.
+- Add `release_decision_resident_fastpath_handoff_ready` as a Phase2 check.
+- Preserve compatibility for older release-decision artifacts: missing resident
+  fastpath handoff evidence is recorded as not available and does not block
+  Phase2 green status.
+- Surface release-decision resident fastpath handoff state in Phase2 Markdown.
+- Add focused tests for passing and failed release-decision resident fastpath
+  handoff.
+- Generate Gate329 Phase2 status artifacts from the Gate328 release decision
+  and Gate327 acceptance fixture.
+- Keep this gate audit-surface scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
