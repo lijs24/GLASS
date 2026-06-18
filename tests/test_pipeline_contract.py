@@ -191,6 +191,7 @@ def test_pipeline_contract_passes_for_cpu_audit_run(tmp_path: Path):
     assert checks["integration_output_maps_available"]["passed"] is True
     assert checks["integration_dq_contract"]["passed"] is True
     assert checks["integration_default_engine_policy"]["passed"] is True
+    assert checks["stack_engine_runtime_default_path"]["passed"] is True
     assert checks["calibration_master_surface_contract"]["passed"] is True
     assert checks["calibrated_light_dq_contract"]["passed"] is True
     assert checks["local_normalization_contract"]["passed"] is True
@@ -201,12 +202,19 @@ def test_pipeline_contract_passes_for_cpu_audit_run(tmp_path: Path):
         for item in audit["integration"]["engine_policy"]["outputs"]
         if item["required"]
     )
+    runtime_default = audit["stack_engine_runtime_default"]
+    assert runtime_default["status"] == "passed"
+    assert runtime_default["master_count"] >= 3
+    assert runtime_default["legacy_master_count"] == 0
+    assert runtime_default["integration_stack_engine_default_count"] >= 1
+    assert runtime_default["failed_masters"] == []
     assert audit["calibration"]["master_count"] >= 3
     assert audit["calibration"]["calibrated_light_count"] >= 3
     assert all(item["contract_ok"] for item in audit["calibration"]["masters"])
     assert all(item["contract_ok"] for item in audit["calibration"]["calibrated_lights"])
     assert "GLASS Pipeline Invariant Contract Audit" in markdown.read_text(encoding="utf-8")
     assert "Integration Engine Policy" in markdown.read_text(encoding="utf-8")
+    assert "StackEngine Runtime Default Path" in markdown.read_text(encoding="utf-8")
 
 
 def test_pipeline_contract_pixel_verification_passes_for_cpu_audit_run(tmp_path: Path):
@@ -315,12 +323,17 @@ def test_pipeline_contract_allows_explicit_nonresident_cuda_fast_path(tmp_path: 
     audit = build_pipeline_contract_audit(run)
     checks = {item["name"]: item for item in audit["checks"]}
     engine_policy = audit["integration"]["engine_policy"]
+    runtime_default = audit["stack_engine_runtime_default"]
 
     assert audit["passed"] is True
     assert checks["integration_default_engine_policy"]["passed"] is True
+    assert checks["stack_engine_runtime_default_path"]["passed"] is True
     assert engine_policy["non_resident_count"] == 1
     assert engine_policy["failed"] == []
     assert engine_policy["outputs"][0]["status"] == "explicit_cuda_fast_path"
+    assert runtime_default["explicit_cuda_fast_path_count"] == 1
+    assert runtime_default["integration_stack_engine_default_count"] == 0
+    assert runtime_default["failed_outputs"] == []
 
 
 def test_pipeline_contract_blocks_implicit_nonresident_cuda_fast_path(tmp_path: Path):
@@ -344,6 +357,69 @@ def test_pipeline_contract_blocks_implicit_nonresident_cuda_fast_path(tmp_path: 
     ]
     assert engine_policy["failed"][0]["status"] == "implicit_cuda_fast_path"
     assert engine_policy["outputs"][0]["selection_explicit_cuda_fast_path"] is False
+
+
+def test_pipeline_contract_blocks_legacy_master_runtime_default(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    calib_dir = run / "calib_cache"
+    master_dir = calib_dir / "masters"
+    light_dir = calib_dir / "calibrated"
+    dq_dir = calib_dir / "dq"
+    master_dir.mkdir(parents=True)
+    light_dir.mkdir()
+    dq_dir.mkdir()
+    master_path = master_dir / "master_bias_legacy.fits"
+    light_path = light_dir / "calibrated_L1.fits"
+    dq_path = dq_dir / "dq_calibrated_L1.fits"
+    write_fits_data(master_path, np.ones((2, 2), dtype=np.float32))
+    write_fits_data(light_path, np.ones((2, 2), dtype=np.float32))
+    write_fits_data(dq_path, np.zeros((2, 2), dtype=np.float32))
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "masters": {
+                "bias_legacy": {
+                    "path": str(master_path),
+                    "stats": {
+                        "min": 1.0,
+                        "max": 1.0,
+                        "mean": 1.0,
+                        "median": 1.0,
+                        "std": 0.0,
+                    },
+                    "type": "bias",
+                    "streaming": True,
+                    "tile_stack_mode": "legacy_streaming_accumulator",
+                    "stack_engine_enabled": False,
+                    "stack_engine_fallback_reason": "diagnostic fixture",
+                    "master_rejection": "none",
+                    "tile_size": 2,
+                }
+            },
+            "calibrated_lights": [
+                {
+                    "frame_id": "L1",
+                    "path": str(light_path),
+                    "dq_mask_path": str(dq_path),
+                    "dq_summary": {"valid": 4, "no_data": 0},
+                    "tile_count": 1,
+                    "tile_size": 2,
+                }
+            ],
+        },
+    )
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    runtime_default = audit["stack_engine_runtime_default"]
+
+    assert audit["passed"] is False
+    assert checks["calibration_master_surface_contract"]["passed"] is True
+    assert checks["stack_engine_runtime_default_path"]["passed"] is False
+    assert runtime_default["legacy_master_count"] == 1
+    assert runtime_default["failed_masters"][0]["name"] == "bias_legacy"
+    assert "legacy_master_stack_mode" in runtime_default["failed_masters"][0]["failures"]
 
 
 def test_pipeline_contract_surfaces_sample_accounting_closure(tmp_path: Path):

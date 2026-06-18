@@ -4978,6 +4978,28 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 293: Pipeline Contract StackEngine Runtime Default Surface
+
+- Return from publication-chain closure to runtime artifact hardening by
+  extending `glass pipeline-contract` with a single StackEngine runtime-default
+  surface summary.
+- Require pipeline-contract evidence to show that master calibration surfaces
+  use StackEngine CPU or resident CUDA calibration contracts, blocking legacy
+  master accumulator artifacts even when their science metadata is otherwise
+  well formed.
+- Preserve the existing explicit opt-in CUDA streaming accumulator exception for
+  non-resident integration while counting it separately from true StackEngine
+  default integration outputs.
+- Surface counts for StackEngine CPU masters, resident masters, legacy masters,
+  StackEngine integration outputs, resident integration outputs, explicit CUDA
+  fast-path outputs, and failed runtime-default rows in JSON and Markdown.
+- Add focused pipeline-contract tests for a real synthetic CPU audit run, an
+  explicit non-resident CUDA fast-path artifact, and a malformed legacy-master
+  runtime-default regression.
+- Keep this gate runtime-contract scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

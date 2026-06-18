@@ -863,6 +863,156 @@ def _integration_engine_policy_state(
     }
 
 
+def _stack_engine_runtime_default_state(
+    *,
+    calibration_master_rows: list[dict[str, Any]],
+    integration_rows: list[dict[str, Any]],
+    integration_engine_policy: dict[str, Any],
+) -> dict[str, Any]:
+    master_states: list[dict[str, Any]] = []
+    failed_masters: list[dict[str, Any]] = []
+    for row in calibration_master_rows:
+        tile_mode = str(row.get("tile_stack_mode") or "")
+        is_stack_engine = tile_mode.startswith("stack_engine_cpu")
+        is_resident_stack = tile_mode == "cuda_resident_stack"
+        result_contract = row.get("stack_result_contract") if isinstance(row.get("stack_result_contract"), dict) else {}
+        failures: list[str] = []
+        if not row.get("contract_ok"):
+            failures.append("master_contract_failed")
+        if not row.get("stack_engine_enabled"):
+            failures.append("master_stack_engine_not_enabled")
+        if tile_mode.startswith("legacy"):
+            failures.append("legacy_master_stack_mode")
+        elif is_stack_engine:
+            if result_contract.get("passed") is not True:
+                failures.append("stack_result_contract_missing_or_failed")
+        elif is_resident_stack:
+            pass
+        else:
+            failures.append("unsupported_master_stack_mode")
+        state = {
+            "name": row.get("name"),
+            "type": row.get("type"),
+            "tile_stack_mode": tile_mode,
+            "path_exists": row.get("path_exists"),
+            "stack_engine_enabled": row.get("stack_engine_enabled"),
+            "contract_ok": row.get("contract_ok"),
+            "status": "passed" if not failures else "failed",
+            "failures": failures,
+        }
+        master_states.append(state)
+        if failures:
+            failed_masters.append(state)
+
+    policy_rows = integration_engine_policy.get("outputs")
+    policy_rows = policy_rows if isinstance(policy_rows, list) else []
+    output_states: list[dict[str, Any]] = []
+    failed_outputs: list[dict[str, Any]] = []
+    for row in policy_rows:
+        if not isinstance(row, dict):
+            continue
+        failures: list[str] = []
+        status = str(row.get("status") or "")
+        if row.get("passed") is not True:
+            failures.append("integration_engine_policy_failed")
+        if status in {"stack_engine_default", "resident_not_required", "explicit_cuda_fast_path"}:
+            pass
+        elif status:
+            failures.append("unsupported_integration_runtime_status")
+        else:
+            failures.append("missing_integration_runtime_status")
+        state = {
+            "item": row.get("item"),
+            "backend": row.get("backend"),
+            "memory_mode": row.get("memory_mode"),
+            "tile_stack_mode": row.get("tile_stack_mode"),
+            "status": status,
+            "passed": row.get("passed") is True and not failures,
+            "required": row.get("required"),
+            "failures": failures,
+        }
+        output_states.append(state)
+        if failures:
+            failed_outputs.append(state)
+
+    stack_contract_failures: list[dict[str, Any]] = []
+    resident_contract_failures: list[dict[str, Any]] = []
+    for row in integration_rows:
+        stack_contract = (
+            row.get("stack_result_contract")
+            if isinstance(row.get("stack_result_contract"), dict)
+            else {}
+        )
+        resident_contract = (
+            row.get("resident_result_contract")
+            if isinstance(row.get("resident_result_contract"), dict)
+            else {}
+        )
+        if stack_contract.get("required") and stack_contract.get("passed") is not True:
+            stack_contract_failures.append(
+                {
+                    "item": row.get("item"),
+                    "status": stack_contract.get("status"),
+                    "tile_stack_mode": row.get("tile_stack_mode"),
+                }
+            )
+        if resident_contract.get("required") and resident_contract.get("passed") is not True:
+            resident_contract_failures.append(
+                {
+                    "item": row.get("item"),
+                    "status": resident_contract.get("status"),
+                    "tile_stack_mode": row.get("tile_stack_mode"),
+                }
+            )
+
+    master_required = bool(calibration_master_rows)
+    integration_required = bool(policy_rows)
+    passed = (
+        (not master_required or not failed_masters)
+        and integration_required
+        and bool(integration_engine_policy.get("passed"))
+        and not failed_outputs
+    )
+    return {
+        "passed": passed,
+        "status": "passed" if passed else "failed",
+        "master_required": master_required,
+        "master_count": len(master_states),
+        "master_stack_engine_count": sum(
+            1 for row in master_states if str(row.get("tile_stack_mode") or "").startswith("stack_engine_cpu")
+        ),
+        "master_resident_count": sum(
+            1 for row in master_states if row.get("tile_stack_mode") == "cuda_resident_stack"
+        ),
+        "legacy_master_count": sum(
+            1 for row in master_states if str(row.get("tile_stack_mode") or "").startswith("legacy")
+        ),
+        "failed_masters": failed_masters,
+        "integration_required": integration_required,
+        "integration_output_count": len(output_states),
+        "integration_stack_engine_default_count": sum(
+            1 for row in output_states if row.get("status") == "stack_engine_default"
+        ),
+        "integration_resident_count": sum(
+            1 for row in output_states if row.get("status") == "resident_not_required"
+        ),
+        "explicit_cuda_fast_path_count": sum(
+            1 for row in output_states if row.get("status") == "explicit_cuda_fast_path"
+        ),
+        "failed_outputs": failed_outputs,
+        "stack_result_contract_failures": stack_contract_failures,
+        "resident_result_contract_failures": resident_contract_failures,
+        "masters": master_states,
+        "outputs": output_states,
+        "semantics": (
+            "Master calibration surfaces must use StackEngine CPU or resident CUDA "
+            "calibration contracts. Non-resident integration defaults to StackEngine CPU; "
+            "the older CUDA streaming accumulator remains acceptable only when explicitly "
+            "requested and recorded by integration_engine_policy."
+        ),
+    }
+
+
 def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, output in enumerate(integration.get("outputs") or []):
@@ -1027,6 +1177,11 @@ def build_pipeline_contract_audit(
     integration_rows = _integration_rows(integration, run_root)
     integration_map_rows = _integration_map_rows(integration, run_root)
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
+    stack_engine_runtime_default = _stack_engine_runtime_default_state(
+        calibration_master_rows=calibration_master_rows,
+        integration_rows=integration_rows,
+        integration_engine_policy=integration_engine_policy,
+    )
     pixel_verification_rows = (
         _integration_pixel_verification_rows(
             integration,
@@ -1057,6 +1212,41 @@ def build_pipeline_contract_audit(
                 "failed": integration_engine_policy["failed"],
             },
             "Non-resident integration must default to StackEngine unless the CUDA fast path is explicitly requested.",
+        ),
+        _check(
+            "stack_engine_runtime_default_path",
+            bool(stack_engine_runtime_default["passed"]),
+            {
+                "master_count": stack_engine_runtime_default["master_count"],
+                "master_stack_engine_count": stack_engine_runtime_default[
+                    "master_stack_engine_count"
+                ],
+                "master_resident_count": stack_engine_runtime_default[
+                    "master_resident_count"
+                ],
+                "legacy_master_count": stack_engine_runtime_default["legacy_master_count"],
+                "integration_output_count": stack_engine_runtime_default[
+                    "integration_output_count"
+                ],
+                "integration_stack_engine_default_count": stack_engine_runtime_default[
+                    "integration_stack_engine_default_count"
+                ],
+                "integration_resident_count": stack_engine_runtime_default[
+                    "integration_resident_count"
+                ],
+                "explicit_cuda_fast_path_count": stack_engine_runtime_default[
+                    "explicit_cuda_fast_path_count"
+                ],
+                "failed_masters": stack_engine_runtime_default["failed_masters"],
+                "failed_outputs": stack_engine_runtime_default["failed_outputs"],
+                "stack_result_contract_failures": stack_engine_runtime_default[
+                    "stack_result_contract_failures"
+                ],
+                "resident_result_contract_failures": stack_engine_runtime_default[
+                    "resident_result_contract_failures"
+                ],
+            },
+            "Runtime artifacts must preserve StackEngine master calibration and StackEngine/resident integration defaults.",
         ),
         _check(
             "integration_output_maps_available",
@@ -1404,6 +1594,7 @@ def build_pipeline_contract_audit(
             "maps": integration_map_rows,
             "engine_policy": integration_engine_policy,
         },
+        "stack_engine_runtime_default": stack_engine_runtime_default,
         "pixel_verification": {
             "enabled": bool(pixel_verify),
             "tile_size": max(1, int(pixel_verify_tile_size)),
@@ -1445,6 +1636,26 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
             f"status `{row.get('status')}`, "
             f"passed `{row.get('passed')}`"
         )
+    runtime_default = audit.get("stack_engine_runtime_default") or {}
+    lines.extend(["", "## StackEngine Runtime Default Path", ""])
+    lines.append(
+        "- "
+        f"status `{runtime_default.get('status')}`, "
+        f"masters `{runtime_default.get('master_count')}`, "
+        f"master StackEngine `{runtime_default.get('master_stack_engine_count')}`, "
+        f"master resident `{runtime_default.get('master_resident_count')}`, "
+        f"legacy masters `{runtime_default.get('legacy_master_count')}`, "
+        f"integration outputs `{runtime_default.get('integration_output_count')}`, "
+        f"integration StackEngine `{runtime_default.get('integration_stack_engine_default_count')}`, "
+        f"resident outputs `{runtime_default.get('integration_resident_count')}`, "
+        f"explicit CUDA fast paths `{runtime_default.get('explicit_cuda_fast_path_count')}`"
+    )
+    failed_masters = runtime_default.get("failed_masters") or []
+    if failed_masters:
+        lines.append(f"- failed masters: `{failed_masters}`")
+    failed_outputs = runtime_default.get("failed_outputs") or []
+    if failed_outputs:
+        lines.append(f"- failed integration outputs: `{failed_outputs}`")
     lines.extend(["", "## Integration Sample Accounting Closure", ""])
     for row in ((audit.get("integration") or {}).get("outputs") or []):
         closure = row.get("sample_accounting_closure") if isinstance(row, dict) else {}

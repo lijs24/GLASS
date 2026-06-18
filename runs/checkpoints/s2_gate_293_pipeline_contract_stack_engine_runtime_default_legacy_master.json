@@ -1,0 +1,959 @@
+{
+  "artifacts": {
+    "calibration": {
+      "exists": true,
+      "path": "GATE293_FIXTURE\\legacy_master_run\\calibration_artifacts.json"
+    },
+    "integration": {
+      "exists": true,
+      "path": "GATE293_FIXTURE\\legacy_master_run\\integration_results.json"
+    },
+    "local_norm": {
+      "exists": false,
+      "path": "GATE293_FIXTURE\\legacy_master_run\\local_norm_results.json"
+    },
+    "resident_calibration_contract": {
+      "artifact_type": null,
+      "attached": false,
+      "passed": null
+    },
+    "warp": {
+      "exists": false,
+      "path": "GATE293_FIXTURE\\legacy_master_run\\warp_results.json"
+    }
+  },
+  "audit_type": "pipeline_invariant_contract",
+  "calibration": {
+    "artifact_path": "GATE293_FIXTURE\\legacy_master_run\\calibration_artifacts.json",
+    "calibrated_light_count": 1,
+    "calibrated_lights": [
+      {
+        "backend": null,
+        "contract_ok": true,
+        "dq_contract_ok": true,
+        "dq_mask_path": "GATE293_FIXTURE\\legacy_master_run\\calib_cache\\dq\\dq_calibrated_L1.fits",
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "L1",
+        "index": 0,
+        "path": "GATE293_FIXTURE\\legacy_master_run\\calib_cache\\calibrated\\calibrated_L1.fits",
+        "path_exists": true,
+        "resident": false,
+        "resident_contract_ok": false,
+        "resident_output_index": null,
+        "resident_stack_index": null,
+        "source_stage": null,
+        "status": null,
+        "tile_count": 1,
+        "tile_size": 2
+      }
+    ],
+    "exists": true,
+    "local_calibrated_light_count": 1,
+    "local_master_count": 1,
+    "master_count": 1,
+    "masters": [
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": null,
+        "dq_provenance_summary_present": false,
+        "name": "bias_legacy",
+        "path": "GATE293_FIXTURE\\legacy_master_run\\calib_cache\\masters\\master_bias_legacy.fits",
+        "path_exists": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "GATE293_FIXTURE\\legacy_master_run\\calib_cache\\masters\\master_bias_legacy.fits"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 1.0,
+                  "mean": 1.0,
+                  "median": 1.0,
+                  "min": 1.0,
+                  "std": 0.0
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "bias"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 2
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "none"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "bias",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "bias"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 2
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "none"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "bias",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 1.0,
+              "mean": 1.0,
+              "median": 1.0,
+              "min": 1.0,
+              "std": 0.0
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "stack_engine_enabled": false,
+        "stack_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "legacy_streaming_accumulator",
+        "type": "bias"
+      }
+    ],
+    "resident_calibrated_light_count": 0,
+    "resident_calibrated_lights": [],
+    "resident_calibration_contract_attached": false,
+    "resident_master_count": 0,
+    "resident_masters": [],
+    "resident_native_calibration_artifact": false
+  },
+  "checks": [
+    {
+      "evidence": {
+        "path": "GATE293_FIXTURE\\legacy_master_run\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "non_resident_count": 0,
+        "output_count": 1,
+        "resident_count": 1,
+        "top_level_default_ok": false,
+        "top_level_present": false
+      },
+      "name": "integration_default_engine_policy",
+      "note": "Non-resident integration must default to StackEngine unless the CUDA fast path is explicitly requested.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "explicit_cuda_fast_path_count": 0,
+        "failed_masters": [
+          {
+            "contract_ok": true,
+            "failures": [
+              "master_stack_engine_not_enabled",
+              "legacy_master_stack_mode"
+            ],
+            "name": "bias_legacy",
+            "path_exists": true,
+            "stack_engine_enabled": false,
+            "status": "failed",
+            "tile_stack_mode": "legacy_streaming_accumulator",
+            "type": "bias"
+          }
+        ],
+        "failed_outputs": [],
+        "integration_output_count": 1,
+        "integration_resident_count": 1,
+        "integration_stack_engine_default_count": 0,
+        "legacy_master_count": 1,
+        "master_count": 1,
+        "master_resident_count": 0,
+        "master_stack_engine_count": 0,
+        "resident_result_contract_failures": [],
+        "stack_result_contract_failures": []
+      },
+      "name": "stack_engine_runtime_default_path",
+      "note": "Runtime artifacts must preserve StackEngine master calibration and StackEngine/resident integration defaults.",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "map_count": 6
+      },
+      "name": "integration_output_maps_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_dq_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 0
+      },
+      "name": "integration_stack_result_contract",
+      "note": "CPU StackEngine integration outputs must carry an embedded passing result contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 1
+      },
+      "name": "integration_resident_result_contract",
+      "note": "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "present_count": 0
+      },
+      "name": "integration_sample_accounting_closure",
+      "note": "Sample-closure evidence is optional for old artifacts, but explicit failed closure blocks the pipeline contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "calibration_master_surfaces_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 1
+      },
+      "name": "calibration_master_surface_contract",
+      "note": "Master calibration surfaces must expose stats, semantics, and StackEngine result contracts.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "required": false,
+        "resident_surface_count": 0
+      },
+      "name": "resident_calibration_surface_contract",
+      "note": "Resident CUDA calibration surfaces must pass their resident calibration contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "calibrated_lights_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "light_count": 1
+      },
+      "name": "calibrated_light_dq_contract",
+      "note": "Calibrated light records must carry a calibrated image path, DQ map path, DQ summary, and tile metadata.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T07:47:28+00:00",
+  "integration": {
+    "engine_policy": {
+      "failed": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "outputs": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "selection_actual_backend": null,
+          "selection_allow_cuda_fast_path": null,
+          "selection_backend": null,
+          "selection_default_engine": null,
+          "selection_explicit_cuda_fast_path": null,
+          "selection_present": true,
+          "selection_use_stack_engine": null,
+          "status": "resident_not_required",
+          "tile_stack_mode": "",
+          "top_level_default_engine": null,
+          "top_level_default_ok": false,
+          "top_level_present": false
+        }
+      ],
+      "passed": true,
+      "resident_count": 1,
+      "top_level": {},
+      "top_level_default_ok": false,
+      "top_level_present": false
+    },
+    "maps": [
+      {
+        "exists": true,
+        "item": "H",
+        "map": "master",
+        "ok": true,
+        "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\master_H.fits",
+        "path_key": "master_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "weight",
+        "ok": true,
+        "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\weight_H.fits",
+        "path_key": "weight_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "coverage",
+        "ok": true,
+        "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\coverage_H.fits",
+        "path_key": "coverage_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "dq",
+        "ok": true,
+        "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\dq_H.fits",
+        "path_key": "dq_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "low_rejection",
+        "ok": true,
+        "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\low_H.fits",
+        "path_key": "low_rejection_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "high_rejection",
+        "ok": true,
+        "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\high_H.fits",
+        "path_key": "high_rejection_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "dq_contract_ok": true,
+        "dq_map_exists": true,
+        "dq_map_path": "GATE293_FIXTURE\\legacy_master_run\\integration\\dq_H.fits",
+        "dq_provenance_engine": "cuda_resident_stack",
+        "dq_provenance_summary_present": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "engine_selection": {},
+        "frame_count": 3,
+        "item": "H",
+        "memory_mode": "resident",
+        "rejection": "winsorized_sigma",
+        "resident_result_contract": {
+          "check_count": 13,
+          "contract": {
+            "active_frame_count": 3,
+            "backend": "cuda_resident_stack",
+            "checks": [
+              {
+                "evidence": {
+                  "backend": "cuda_resident_stack",
+                  "memory_mode": "resident"
+                },
+                "name": "resident_identity",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "failed": [],
+                  "map_count": 6
+                },
+                "name": "required_maps_exist",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "keys": [
+                    "high_rejected",
+                    "low_rejected",
+                    "no_data",
+                    "valid"
+                  ]
+                },
+                "name": "dq_summary_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "engine": "cuda_resident_stack",
+                  "source_schema": "resident_dq_coverage_provenance",
+                  "stage": "integration"
+                },
+                "name": "resident_provenance_summary",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "dq_summary": {
+                    "high_rejected": 1,
+                    "low_rejected": 1,
+                    "no_data": 1,
+                    "valid": 1
+                  },
+                  "mismatches": {},
+                  "provenance_output_dq_summary": {
+                    "high_rejected": 1,
+                    "low_rejected": 1,
+                    "no_data": 1,
+                    "valid": 1
+                  }
+                },
+                "name": "dq_summary_matches_provenance",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "active_frame_count": 3,
+                  "frame_count": 3
+                },
+                "name": "active_frame_count_valid",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "coverage_required": true,
+                  "keys": [
+                    "active_frame_count",
+                    "available",
+                    "geometric_frame_count_matches_active",
+                    "rejected_sample_count",
+                    "rejected_sample_count_source",
+                    "source_terms"
+                  ]
+                },
+                "name": "coverage_provenance_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "required": true,
+                  "source_terms": [
+                    "geometric_warp_coverage",
+                    "high_rejection",
+                    "low_rejection",
+                    "post_rejection_coverage"
+                  ]
+                },
+                "name": "source_terms_present",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "coverage_provenance": true,
+                  "output": true
+                },
+                "name": "geometric_frame_count_matches_active",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "coverage_provenance_rejected_samples": 3,
+                  "provenance_summary_rejected_samples": 3,
+                  "rejection": "winsorized_sigma",
+                  "required": true,
+                  "source_terms": [
+                    "geometric_warp_coverage",
+                    "high_rejection",
+                    "low_rejection",
+                    "post_rejection_coverage"
+                  ]
+                },
+                "name": "rejection_sample_count_recorded",
+                "note": "Resident rejection provenance records rejected samples separately from DQ pixels.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "actual": 3,
+                  "delta": 0,
+                  "expected": 3,
+                  "passed": true
+                },
+                "name": "rejection_sample_count_summary_matches_coverage",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "descriptor": {
+                    "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+                    "approximation": true,
+                    "cpu_baseline_parity": false,
+                    "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                    "high_sigma": 3.0,
+                    "low_sigma": 3.0,
+                    "mode": "winsorized_sigma",
+                    "parity_status": "known_non_parity_pending_cuda_update",
+                    "resident_winsorized_mode": "fast_approx",
+                    "scale_estimator": "mean_std_two_stage_winsorized"
+                  },
+                  "expected": {
+                    "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+                    "approximation": true,
+                    "cpu_baseline_parity": false,
+                    "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                    "mode": "winsorized_sigma",
+                    "parity_status": "known_non_parity_pending_cuda_update",
+                    "resident_winsorized_mode": "fast_approx",
+                    "scale_estimator": "mean_std_two_stage_winsorized"
+                  },
+                  "expected_options": [
+                    {
+                      "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+                      "approximation": true,
+                      "cpu_baseline_parity": false,
+                      "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                      "mode": "winsorized_sigma",
+                      "parity_status": "known_non_parity_pending_cuda_update",
+                      "resident_winsorized_mode": "fast_approx",
+                      "scale_estimator": "mean_std_two_stage_winsorized"
+                    },
+                    {
+                      "algorithm": "median_iqr_winsorized_sigma_cuda_resident_prototype",
+                      "approximation": false,
+                      "cpu_baseline_parity": true,
+                      "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                      "mode": "winsorized_sigma",
+                      "parity_status": "cpu_baseline_parity_passed_gate_261",
+                      "resident_winsorized_mode": "hardened_cpu_parity",
+                      "scale_estimator": "median_iqr_winsorized_standard_deviation_scale"
+                    }
+                  ],
+                  "matched_expected_index": 0,
+                  "mismatches": {},
+                  "passed": true,
+                  "present": true,
+                  "rejection": "winsorized_sigma",
+                  "required": true,
+                  "semantics": "Resident CUDA winsorized_sigma must disclose whether it used the default mean/std approximation or the opt-in hardened median/IQR CPU-parity prototype.",
+                  "status": "passed"
+                },
+                "name": "resident_winsorized_rejection_semantics_disclosed",
+                "note": "Resident winsorized rejection must disclose approximation and CPU-baseline parity status.",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "passed": true,
+                  "present": false,
+                  "required": false,
+                  "status": "missing"
+                },
+                "name": "sample_accounting_closure_valid",
+                "note": "Optional resident sample closure verifies pre-rejection valid samples against post-rejection valid plus rejected samples.",
+                "passed": true
+              }
+            ],
+            "contract_type": "resident_cuda_result_contract",
+            "filter": "H",
+            "frame_count": 3,
+            "index": 0,
+            "maps": [
+              {
+                "exists": true,
+                "map": "master",
+                "ok": true,
+                "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\master_H.fits",
+                "path_key": "master_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "weight",
+                "ok": true,
+                "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\weight_H.fits",
+                "path_key": "weight_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "coverage",
+                "ok": true,
+                "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\coverage_H.fits",
+                "path_key": "coverage_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "dq",
+                "ok": true,
+                "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\dq_H.fits",
+                "path_key": "dq_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "low_rejection",
+                "ok": true,
+                "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\low_H.fits",
+                "path_key": "low_rejection_map_path",
+                "policy_skipped": false,
+                "required": true
+              },
+              {
+                "exists": true,
+                "map": "high_rejection",
+                "ok": true,
+                "path": "GATE293_FIXTURE\\legacy_master_run\\integration\\high_H.fits",
+                "path_key": "high_rejection_map_path",
+                "policy_skipped": false,
+                "required": true
+              }
+            ],
+            "memory_mode": "resident",
+            "passed": true,
+            "pixel_verification": {
+              "enabled": false,
+              "tile_size": 2048,
+              "tolerance_pixels": 0
+            },
+            "rejection": "winsorized_sigma",
+            "rejection_semantics": {
+              "descriptor": {
+                "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+                "approximation": true,
+                "cpu_baseline_parity": false,
+                "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                "high_sigma": 3.0,
+                "low_sigma": 3.0,
+                "mode": "winsorized_sigma",
+                "parity_status": "known_non_parity_pending_cuda_update",
+                "resident_winsorized_mode": "fast_approx",
+                "scale_estimator": "mean_std_two_stage_winsorized"
+              },
+              "expected": {
+                "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+                "approximation": true,
+                "cpu_baseline_parity": false,
+                "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                "mode": "winsorized_sigma",
+                "parity_status": "known_non_parity_pending_cuda_update",
+                "resident_winsorized_mode": "fast_approx",
+                "scale_estimator": "mean_std_two_stage_winsorized"
+              },
+              "expected_options": [
+                {
+                  "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+                  "approximation": true,
+                  "cpu_baseline_parity": false,
+                  "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                  "mode": "winsorized_sigma",
+                  "parity_status": "known_non_parity_pending_cuda_update",
+                  "resident_winsorized_mode": "fast_approx",
+                  "scale_estimator": "mean_std_two_stage_winsorized"
+                },
+                {
+                  "algorithm": "median_iqr_winsorized_sigma_cuda_resident_prototype",
+                  "approximation": false,
+                  "cpu_baseline_parity": true,
+                  "cpu_baseline_scale_estimator": "median_iqr_winsorized_standard_deviation_scale",
+                  "mode": "winsorized_sigma",
+                  "parity_status": "cpu_baseline_parity_passed_gate_261",
+                  "resident_winsorized_mode": "hardened_cpu_parity",
+                  "scale_estimator": "median_iqr_winsorized_standard_deviation_scale"
+                }
+              ],
+              "matched_expected_index": 0,
+              "mismatches": {},
+              "passed": true,
+              "present": true,
+              "rejection": "winsorized_sigma",
+              "required": true,
+              "semantics": "Resident CUDA winsorized_sigma must disclose whether it used the default mean/std approximation or the opt-in hardened median/IQR CPU-parity prototype.",
+              "status": "passed"
+            },
+            "sample_accounting_closure": {
+              "passed": true,
+              "present": false,
+              "required": false,
+              "status": "missing"
+            },
+            "schema_version": 1,
+            "status": "passed"
+          },
+          "contract_type": "resident_cuda_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "sample_accounting_closure": {
+          "input_invalid_samples_before_rejection": null,
+          "input_samples": null,
+          "input_total_match": null,
+          "input_valid_samples_before_rejection": null,
+          "passed": true,
+          "present": false,
+          "rejected_samples": null,
+          "required": false,
+          "semantics": null,
+          "status": "missing",
+          "valid_rejection_match": null,
+          "valid_samples_after_rejection": null
+        },
+        "stack_engine_enabled": false,
+        "stack_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "tile_stack_mode": null
+      }
+    ]
+  },
+  "local_normalization": {
+    "crop_box": null,
+    "enabled": null,
+    "outputs": [],
+    "reference_frame_id": null
+  },
+  "passed": false,
+  "pixel_verification": {
+    "enabled": false,
+    "integration_outputs": [],
+    "tile_size": 2048,
+    "tolerance_pixels": 0
+  },
+  "run_dir": "GATE293_FIXTURE\\legacy_master_run",
+  "schema_version": 1,
+  "stack_engine_runtime_default": {
+    "explicit_cuda_fast_path_count": 0,
+    "failed_masters": [
+      {
+        "contract_ok": true,
+        "failures": [
+          "master_stack_engine_not_enabled",
+          "legacy_master_stack_mode"
+        ],
+        "name": "bias_legacy",
+        "path_exists": true,
+        "stack_engine_enabled": false,
+        "status": "failed",
+        "tile_stack_mode": "legacy_streaming_accumulator",
+        "type": "bias"
+      }
+    ],
+    "failed_outputs": [],
+    "integration_output_count": 1,
+    "integration_required": true,
+    "integration_resident_count": 1,
+    "integration_stack_engine_default_count": 0,
+    "legacy_master_count": 1,
+    "master_count": 1,
+    "master_required": true,
+    "master_resident_count": 0,
+    "master_stack_engine_count": 0,
+    "masters": [
+      {
+        "contract_ok": true,
+        "failures": [
+          "master_stack_engine_not_enabled",
+          "legacy_master_stack_mode"
+        ],
+        "name": "bias_legacy",
+        "path_exists": true,
+        "stack_engine_enabled": false,
+        "status": "failed",
+        "tile_stack_mode": "legacy_streaming_accumulator",
+        "type": "bias"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "failures": [],
+        "item": "H",
+        "memory_mode": "resident",
+        "passed": true,
+        "required": false,
+        "status": "resident_not_required",
+        "tile_stack_mode": ""
+      }
+    ],
+    "passed": false,
+    "resident_result_contract_failures": [],
+    "semantics": "Master calibration surfaces must use StackEngine CPU or resident CUDA calibration contracts. Non-resident integration defaults to StackEngine CPU; the older CUDA streaming accumulator remains acceptable only when explicitly requested and recorded by integration_engine_policy.",
+    "stack_result_contract_failures": [],
+    "status": "failed"
+  },
+  "status": "failed",
+  "warp": {
+    "outputs": [],
+    "skipped_frames": []
+  }
+}
