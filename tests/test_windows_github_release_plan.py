@@ -299,6 +299,7 @@ def _release_matrix(
     default_release_direct_guard_ready: bool = True,
     release_direct_acceptance_source: str = "explicit_resident_artifacts_json",
     resident_fastpath_handoff_ready: bool = True,
+    resident_result_contract_ready: bool = True,
 ) -> None:
     ordered_try_list = labels if "cpu" in labels else [*labels, "cpu"]
     stack_ready = stack_engine_ready and stack_engine_gap_count == 0
@@ -308,6 +309,7 @@ def _release_matrix(
         and sample_accounting_closure_ready
         and (stack_ready if include_stack_engine_contract else True)
         and resident_fastpath_handoff_ready
+        and resident_result_contract_ready
     )
     stack_recommendation = (
         "stack_engine_default_ready"
@@ -334,6 +336,22 @@ def _release_matrix(
                 "gap_count": stack_engine_gap_count,
             }
         ],
+    }
+    resident_result_contract = {
+        "status": "passed" if resident_result_contract_ready else "failed",
+        "top_level_check": resident_result_contract_ready,
+        "check_present": True,
+        "check_passed": resident_result_contract_ready,
+        "phase2_check_passed": resident_result_contract_ready,
+        "required_count": 1,
+        "failed_count": 0 if resident_result_contract_ready else 1,
+        "failed_check_count": 0 if resident_result_contract_ready else 1,
+        "failed_checks": []
+        if resident_result_contract_ready
+        else ["source_terms_present"],
+        "failed_items": []
+        if resident_result_contract_ready
+        else [{"output_id": "master_H", "reason": "source_terms_missing"}],
     }
     default_promotion = {
         "status": "default_promotion_ready" if matrix_ready else "blocked",
@@ -367,6 +385,37 @@ def _release_matrix(
         "sample_accounting_closure_failed_count": 0
         if sample_accounting_closure_ready
         else 1,
+        "resident_result_contract": resident_result_contract,
+        "resident_result_contract_present": True,
+        "resident_result_contract_ready": resident_result_contract_ready,
+        "resident_result_contract_status": resident_result_contract["status"],
+        "resident_result_contract_top_level_check": resident_result_contract[
+            "top_level_check"
+        ],
+        "resident_result_contract_check_present": resident_result_contract[
+            "check_present"
+        ],
+        "resident_result_contract_check_passed": resident_result_contract[
+            "check_passed"
+        ],
+        "resident_result_contract_phase2_check_passed": resident_result_contract[
+            "phase2_check_passed"
+        ],
+        "resident_result_contract_required_count": resident_result_contract[
+            "required_count"
+        ],
+        "resident_result_contract_failed_count": resident_result_contract[
+            "failed_count"
+        ],
+        "resident_result_contract_failed_check_count": resident_result_contract[
+            "failed_check_count"
+        ],
+        "resident_result_contract_failed_checks": resident_result_contract[
+            "failed_checks"
+        ],
+        "resident_result_contract_failed_items": resident_result_contract[
+            "failed_items"
+        ],
         "resident_registration_fastpath_release_handoff": {
             "present": True,
             "ready": resident_fastpath_handoff_ready,
@@ -633,6 +682,10 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["release_matrix"]["stack_engine_contract_ready"] is True
     assert payload["release_matrix"]["stack_engine_contract_phase2_check_passed"] is True
     assert payload["release_matrix"]["stack_engine_contract_default_gap_count"] == 0
+    assert payload["release_matrix"]["resident_result_contract_ready"] is True
+    assert payload["release_matrix"]["resident_result_contract_status"] == "passed"
+    assert payload["release_matrix"]["resident_result_contract_required_count"] == 1
+    assert payload["release_matrix"]["resident_result_contract_failed_count"] == 0
     assert payload["release_matrix"]["resident_registration_fastpath_release_handoff_ready"] is True
     assert (
         payload["release_matrix"][
@@ -651,6 +704,7 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert checks["windows_release_matrix_default_route_passed"] is True
     assert checks["windows_release_matrix_rejection_sample_accounting_passed"] is True
     assert checks["windows_release_matrix_sample_accounting_closure_passed"] is True
+    assert checks["windows_release_matrix_resident_result_contract_handoff_passed"] is True
     assert checks["windows_release_matrix_stack_engine_contract_ready"] is True
     assert checks["windows_release_matrix_resident_fastpath_release_handoff_ready"] is True
     assert (
@@ -871,6 +925,53 @@ def test_windows_github_release_plan_blocks_release_matrix_sample_closure_drift(
         "failed_count": 1,
         "failed_items": [{"output_id": "master_H", "reason": "sample_closure_drift"}],
     }
+
+
+def test_windows_github_release_plan_blocks_release_matrix_resident_result_contract_drift(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(
+        matrix,
+        labels=["cuda13"],
+        resident_result_contract_ready=False,
+    )
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    check = checks["windows_release_matrix_resident_result_contract_handoff_passed"]
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert payload["release_matrix"]["resident_result_contract_ready"] is False
+    assert payload["release_matrix"]["resident_result_contract_status"] == "failed"
+    assert check["passed"] is False
+    assert check["evidence"] == {
+        "present": True,
+        "ready": False,
+        "status": "failed",
+        "top_level_check": False,
+        "check_present": True,
+        "check_passed": False,
+        "phase2_check_passed": False,
+        "required_count": 1,
+        "failed_count": 1,
+        "failed_check_count": 1,
+        "failed_checks": ["source_terms_present"],
+        "failed_items": [{"output_id": "master_H", "reason": "source_terms_missing"}],
+    }
+    assert (
+        "windows_release_matrix_resident_result_contract_handoff_passed"
+        in payload["failed_checks"]
+    )
 
 
 def test_windows_github_release_plan_blocks_missing_release_matrix_stack_engine_contract(
@@ -1149,6 +1250,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Release direct publication guard: ready=`True` check=`True`" in markdown_text
     assert "Default-promotion release direct guard: ready=`True` check=`True`" in markdown_text
     assert "StackEngine default contract: ready=`True` phase2-check=`True` gaps=`0` blockers=`0`" in markdown_text
+    assert "Resident result contract: ready=`True` status=`passed` phase2=`True`" in markdown_text
     assert "Rejection sample accounting: `passed` failed `0`" in markdown_text
     assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text
     assert "Phase 2 Handoff Preflight" in markdown_text
@@ -1170,6 +1272,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Release direct publication guard: ready `True` check `True`" in notes_text
     assert "Default-promotion release direct guard: ready `True` check `True`" in notes_text
     assert "StackEngine default contract: ready `True` phase2-check `True` gaps `0` blockers `0`" in notes_text
+    assert "Resident result contract: ready `True` status `passed` phase2 `True`" in notes_text
     assert "Rejection sample accounting: `passed` failed `0`" in notes_text
     assert "Sample accounting closure: `passed` present `1` failed `0`" in notes_text
     assert "Native resident contract source: `run_default`" in notes_text
@@ -1190,6 +1293,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Windows release matrix default-promotion evidence failed" in script_text
     assert "Windows release matrix rejection sample accounting failed" in script_text
     assert "Windows release matrix sample accounting closure failed" in script_text
+    assert "Windows release matrix resident result contract failed" in script_text
     assert "Windows release matrix StackEngine default contract failed" in script_text
     assert "Windows release matrix release-decision direct publication guard failed" in script_text
     assert "Windows release matrix default-promotion direct publication guard failed" in script_text

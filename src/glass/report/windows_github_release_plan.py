@@ -262,6 +262,46 @@ def _resident_fastpath_release_handoff_evidence(
     }
 
 
+def _resident_result_contract_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str = "resident_result_contract",
+) -> bool:
+    return (
+        summary.get(f"{prefix}_present") is True
+        and summary.get(f"{prefix}_ready") is True
+        and summary.get(f"{prefix}_status") == "passed"
+        and summary.get(f"{prefix}_top_level_check") is True
+        and summary.get(f"{prefix}_check_present") is True
+        and summary.get(f"{prefix}_check_passed") is True
+        and summary.get(f"{prefix}_phase2_check_passed") is True
+        and _int_or_zero(summary.get(f"{prefix}_required_count")) > 0
+        and _int_or_zero(summary.get(f"{prefix}_failed_count")) == 0
+        and _int_or_zero(summary.get(f"{prefix}_failed_check_count")) == 0
+    )
+
+
+def _resident_result_contract_evidence(
+    summary: dict[str, Any],
+    *,
+    prefix: str = "resident_result_contract",
+) -> dict[str, Any]:
+    return {
+        "present": summary.get(f"{prefix}_present"),
+        "ready": summary.get(f"{prefix}_ready"),
+        "status": summary.get(f"{prefix}_status"),
+        "top_level_check": summary.get(f"{prefix}_top_level_check"),
+        "check_present": summary.get(f"{prefix}_check_present"),
+        "check_passed": summary.get(f"{prefix}_check_passed"),
+        "phase2_check_passed": summary.get(f"{prefix}_phase2_check_passed"),
+        "required_count": summary.get(f"{prefix}_required_count"),
+        "failed_count": summary.get(f"{prefix}_failed_count"),
+        "failed_check_count": summary.get(f"{prefix}_failed_check_count"),
+        "failed_checks": summary.get(f"{prefix}_failed_checks"),
+        "failed_items": summary.get(f"{prefix}_failed_items"),
+    }
+
+
 def _asset_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in manifest.get("packages") or []:
@@ -586,6 +626,45 @@ def _windows_release_matrix_summary(path: str | Path | None) -> dict[str, Any] |
         "sample_accounting_closure_failed_count": default_promotion.get(
             "sample_accounting_closure_failed_count"
         ),
+        "resident_result_contract": default_promotion.get("resident_result_contract"),
+        "resident_result_contract_present": default_promotion.get(
+            "resident_result_contract_present"
+        ),
+        "resident_result_contract_ready": default_promotion.get(
+            "resident_result_contract_ready"
+        ),
+        "resident_result_contract_status": default_promotion.get(
+            "resident_result_contract_status"
+        ),
+        "resident_result_contract_top_level_check": default_promotion.get(
+            "resident_result_contract_top_level_check"
+        ),
+        "resident_result_contract_check_present": default_promotion.get(
+            "resident_result_contract_check_present"
+        ),
+        "resident_result_contract_check_passed": default_promotion.get(
+            "resident_result_contract_check_passed"
+        ),
+        "resident_result_contract_phase2_check_passed": default_promotion.get(
+            "resident_result_contract_phase2_check_passed"
+        ),
+        "resident_result_contract_required_count": default_promotion.get(
+            "resident_result_contract_required_count"
+        ),
+        "resident_result_contract_failed_count": default_promotion.get(
+            "resident_result_contract_failed_count"
+        ),
+        "resident_result_contract_failed_check_count": default_promotion.get(
+            "resident_result_contract_failed_check_count"
+        ),
+        "resident_result_contract_failed_checks": default_promotion.get(
+            "resident_result_contract_failed_checks"
+        )
+        or [],
+        "resident_result_contract_failed_items": default_promotion.get(
+            "resident_result_contract_failed_items"
+        )
+        or [],
         "stack_engine_contract": default_promotion.get("stack_engine_contract"),
         "stack_engine_contract_present": default_promotion.get(
             "stack_engine_contract_present"
@@ -875,6 +954,14 @@ def _release_notes(payload: dict[str, Any]) -> str:
                     f"checks `{release_matrix.get('resident_registration_fastpath_release_handoff_raw_passed_check_count')}`"
                 ),
                 (
+                    "- Resident result contract: "
+                    f"ready `{release_matrix.get('resident_result_contract_ready')}` "
+                    f"status `{release_matrix.get('resident_result_contract_status')}` "
+                    f"phase2 `{release_matrix.get('resident_result_contract_phase2_check_passed')}` "
+                    f"required `{release_matrix.get('resident_result_contract_required_count')}` "
+                    f"failed `{release_matrix.get('resident_result_contract_failed_count')}`"
+                ),
+                (
                     "- Rejection sample accounting: "
                     f"`{release_matrix.get('rejection_sample_accounting_status')}` "
                     f"failed `{release_matrix.get('rejection_sample_accounting_failed_count')}`"
@@ -1102,6 +1189,10 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "    }",
             "    if ($matrix.default_promotion_manifest.integration_sample_accounting_closure -ne $true -or $matrix.default_promotion_manifest.sample_accounting_closure_status -ne 'passed' -or [int]$matrix.default_promotion_manifest.sample_accounting_closure_failed_count -ne 0) {",
             "        throw \"Windows release matrix sample accounting closure failed: $WindowsReleaseMatrixFile\"",
+            "    }",
+            "    $residentResultContract = $matrix.default_promotion_manifest.resident_result_contract",
+            "    if (-not $residentResultContract -or $matrix.default_promotion_manifest.resident_result_contract_ready -ne $true -or $matrix.default_promotion_manifest.resident_result_contract_status -ne 'passed' -or $matrix.default_promotion_manifest.resident_result_contract_top_level_check -ne $true -or $matrix.default_promotion_manifest.resident_result_contract_check_present -ne $true -or $matrix.default_promotion_manifest.resident_result_contract_check_passed -ne $true -or $matrix.default_promotion_manifest.resident_result_contract_phase2_check_passed -ne $true -or [int]$matrix.default_promotion_manifest.resident_result_contract_required_count -le 0 -or [int]$matrix.default_promotion_manifest.resident_result_contract_failed_count -ne 0 -or [int]$matrix.default_promotion_manifest.resident_result_contract_failed_check_count -ne 0) {",
+            "        throw \"Windows release matrix resident result contract failed: $WindowsReleaseMatrixFile\"",
             "    }",
             "    if ($matrix.default_promotion_manifest.stack_engine_contract_present -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_ready -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_phase2_check_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_status -ne 'passed' -or $matrix.default_promotion_manifest.stack_engine_contract_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_scope -ne 'all' -or $matrix.default_promotion_manifest.stack_engine_contract_adoption_recommendation -ne 'stack_engine_default_ready' -or [int]$matrix.default_promotion_manifest.stack_engine_contract_default_gap_count -ne 0 -or [int]$matrix.default_promotion_manifest.stack_engine_contract_blocker_count -ne 0) {",
             "        throw \"Windows release matrix StackEngine default contract failed: $WindowsReleaseMatrixFile\"",
@@ -1528,6 +1619,11 @@ def build_windows_github_release_plan(
                     },
                 ),
                 _check(
+                    "windows_release_matrix_resident_result_contract_handoff_passed",
+                    _resident_result_contract_ready(release_matrix_for_checks),
+                    _resident_result_contract_evidence(release_matrix_for_checks),
+                ),
+                _check(
                     "windows_release_matrix_stack_engine_contract_ready",
                     _windows_release_matrix_stack_engine_contract_ready(
                         release_matrix_for_checks
@@ -1831,6 +1927,14 @@ def _markdown(payload: dict[str, Any]) -> str:
                     f"phase2=`{release_matrix.get('resident_registration_fastpath_release_handoff_phase2_status')}` "
                     f"agreement=`{release_matrix.get('resident_registration_fastpath_release_handoff_agreement')}` "
                     f"checks=`{release_matrix.get('resident_registration_fastpath_release_handoff_raw_passed_check_count')}`"
+                ),
+                (
+                    "- Resident result contract: "
+                    f"ready=`{release_matrix.get('resident_result_contract_ready')}` "
+                    f"status=`{release_matrix.get('resident_result_contract_status')}` "
+                    f"phase2=`{release_matrix.get('resident_result_contract_phase2_check_passed')}` "
+                    f"required=`{release_matrix.get('resident_result_contract_required_count')}` "
+                    f"failed=`{release_matrix.get('resident_result_contract_failed_count')}`"
                 ),
                 (
                     "- Rejection sample accounting: "

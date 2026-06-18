@@ -1,0 +1,43 @@
+﻿{
+    "schema_version":  1,
+    "artifact_type":  "windows_release_manifest",
+    "status":  "release_manifest_ready",
+    "passed":  true,
+    "failed_checks":  [
+
+                      ],
+    "packages":  [
+                     {
+                         "label":  "cuda13",
+                         "zip_path":  "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_341_fixture\\GLASS-Portable-win64-cuda13.zip",
+                         "exists":  true,
+                         "size_bytes":  20,
+                         "sha256":  "81ef7633b1c7d700aff468c131055ee625b5f2efcc31b67ebaa1a1b35efb3d98",
+                         "source_stamp":  "s2-gate-341"
+                     },
+                     {
+                         "label":  "cuda12",
+                         "zip_path":  "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_341_fixture\\GLASS-Portable-win64-cuda12.zip",
+                         "exists":  true,
+                         "size_bytes":  20,
+                         "sha256":  "a661671be01d3028d5580c506adf858600c1252c621cdc8d6dfc4a462e3b7fd6",
+                         "source_stamp":  "s2-gate-341"
+                     },
+                     {
+                         "label":  "cuda11",
+                         "zip_path":  "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_341_fixture\\GLASS-Portable-win64-cuda11.zip",
+                         "exists":  true,
+                         "size_bytes":  20,
+                         "sha256":  "ca9d8a29bf75e27ef6e0d7eab2d6ee23496e78314be793293f219f2aa9918256",
+                         "source_stamp":  "s2-gate-341"
+                     },
+                     {
+                         "label":  "cpu",
+                         "zip_path":  "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_341_fixture\\GLASS-Portable-win64-cpu.zip",
+                         "exists":  true,
+                         "size_bytes":  17,
+                         "sha256":  "843662196aad1d87a22bfff89308b04f5b579a43a9c945d823ae7a91a634a48e",
+                         "source_stamp":  "s2-gate-341"
+                     }
+                 ]
+}

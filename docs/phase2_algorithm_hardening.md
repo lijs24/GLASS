@@ -6045,6 +6045,26 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 341: GitHub Release Plan Resident Result-Contract Guard
+
+- Carry Windows release-matrix resident result-contract evidence into
+  `glass windows-github-release-plan`.
+- Add `windows_release_matrix_resident_result_contract_handoff_passed` as a
+  GitHub release-plan blocker requiring release-matrix/default-promotion
+  resident result-contract evidence to be present, ready, passed,
+  Phase2-checked, required by at least one output, and free of failed output
+  rows or nested failed checks.
+- Surface resident result-contract readiness, status, Phase2 check state,
+  required count, and failed count in release notes, release-plan Markdown,
+  and generated PowerShell dry-run validation.
+- Add focused tests for passing release-plan artifacts and failed
+  resident-result-contract drift in the supplied Windows release matrix.
+- Generate Gate341 GitHub release-plan artifacts from controlled
+  release-matrix fixtures.
+- Keep this gate publication-plan scoped: no registration math change, no
+  CUDA kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
