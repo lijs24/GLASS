@@ -518,6 +518,25 @@ def _release_contract_check_rows(acceptance_audit: dict[str, Any] | None) -> lis
                     "check": item.get("name"),
                     "passed": item.get("passed"),
                     "note": item.get("note", ""),
+                    "actual": evidence_payload.get("actual"),
+                    "required": evidence_payload.get(
+                        "required",
+                        evidence_payload.get(
+                            "expected",
+                            evidence_payload.get(
+                                "required_min",
+                                evidence_payload.get("required_max"),
+                            ),
+                        ),
+                    ),
+                    "status": evidence_payload.get("status"),
+                    "available": evidence_payload.get("available"),
+                    "failed_checks": ", ".join(
+                        str(check) for check in evidence_payload.get("failed_checks") or []
+                    ),
+                    "blockers": ", ".join(
+                        str(blocker) for blocker in evidence_payload.get("blockers") or []
+                    ),
                     "evidence": ", ".join(f"{key}={value}" for key, value in evidence_payload.items()),
                 }
             )

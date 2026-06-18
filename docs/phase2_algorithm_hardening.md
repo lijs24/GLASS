@@ -5958,6 +5958,20 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 336: HTML Release Contract Failure Evidence Columns
+
+- Expand the HTML report release-contract check table with explicit `actual`,
+  `required`, `status`, `available`, `failed_checks`, and `blockers` columns.
+- Preserve the existing compact evidence string while making failed resident
+  fastpath contract rows readable without parsing a Python-style evidence blob.
+- Add focused HTML report tests for a failed resident registration fastpath
+  contract check.
+- Generate Gate336 report artifacts from a controlled failed resident-fastpath
+  acceptance-audit fixture.
+- Keep this gate report-surface scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,36 @@
+{
+  "artifact_type": "acceptance_audit_fixture",
+  "passed": false,
+  "release_contract_evidence": {
+    "resident_registration_fastpath": {
+      "artifact_count": 1,
+      "available": true,
+      "checks": [
+        {
+          "evidence": {
+            "actual": false,
+            "field": "resident_registration.triangle_descriptor_fit_batch",
+            "required": true
+          },
+          "name": "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_batch",
+          "note": "Resident descriptor fitting must stay batch-enabled.",
+          "passed": false
+        }
+      ],
+      "failed_check_count": 1,
+      "failed_checks": [
+        "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_batch"
+      ],
+      "mode": "similarity_cuda_triangle",
+      "passed_check_count": 11,
+      "path": "resident_artifacts.json",
+      "required_by_benchmark_contract": true,
+      "source": "explicit_resident_artifacts_json",
+      "status": "failed",
+      "triangle_descriptor_fit_batch": false,
+      "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device"
+    }
+  },
+  "schema_version": 1,
+  "status": "failed"
+}

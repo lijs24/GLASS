@@ -679,6 +679,60 @@ def test_html_report_surfaces_resident_registration_fastpath_release_evidence(
     assert "contract_resident_registration_fastpath_present" in text
 
 
+def test_html_report_surfaces_failed_resident_fastpath_check_evidence(
+    tmp_path: Path,
+):
+    report = tmp_path / "report.html"
+    failed_check = (
+        "contract_resident_registration_fastpath_true:"
+        "resident_registration.triangle_descriptor_fit_batch"
+    )
+    write_html_report(
+        report,
+        acceptance_audit={
+            "release_contract_evidence": {
+                "resident_registration_fastpath": {
+                    "status": "failed",
+                    "required_by_benchmark_contract": True,
+                    "source": "explicit_resident_artifacts_json",
+                    "path": "resident_artifacts.json",
+                    "available": True,
+                    "artifact_count": 1,
+                    "mode": "similarity_cuda_triangle",
+                    "triangle_descriptor_fit_batch": False,
+                    "triangle_descriptor_fit_batch_mode": (
+                        "native_batch_shared_reference_device"
+                    ),
+                    "passed_check_count": 11,
+                    "failed_check_count": 1,
+                    "failed_checks": [failed_check],
+                    "checks": [
+                        {
+                            "name": failed_check,
+                            "passed": False,
+                            "evidence": {
+                                "actual": False,
+                                "required": True,
+                                "field": (
+                                    "resident_registration."
+                                    "triangle_descriptor_fit_batch"
+                                ),
+                            },
+                        },
+                    ],
+                }
+            }
+        },
+    )
+
+    text = report.read_text(encoding="utf-8")
+    assert failed_check in text
+    assert "resident_registration.triangle_descriptor_fit_batch" in text
+    assert "<td>False</td>" in text
+    assert "<td>True</td>" in text
+    assert "contract_resident_registration_fastpath_true" in text
+
+
 def test_pipeline_contract_pixel_verification_reports_resident_rejection_sample_accounting(tmp_path: Path):
     run = tmp_path / "run"
     _write_resident_pipeline_run(run)
