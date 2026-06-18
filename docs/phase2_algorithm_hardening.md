@@ -5900,6 +5900,26 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 333: Publish Preflight Resident Fastpath Handoff
+
+- Carry GitHub release-plan and Windows release-matrix resident fastpath release
+  handoff evidence into `glass windows-publish-preflight`.
+- Add final publish-preflight blockers for:
+  - GitHub release-plan matrix resident fastpath handoff readiness.
+  - Direct Windows release-matrix resident fastpath handoff readiness.
+  - Direct default-promotion resident fastpath handoff readiness.
+  - GitHub plan versus matrix handoff agreement.
+  - Matrix versus default-promotion handoff agreement.
+- Surface plan, matrix, and default-promotion resident fastpath handoff state in
+  publish-preflight summary and Markdown.
+- Add focused tests for passing evidence and failed plan/matrix/default
+  resident fastpath handoff states.
+- Generate Gate333 publish-preflight artifacts from controlled release-chain
+  fixtures.
+- Keep this gate final-publication-preflight scoped: no registration math
+  change, no CUDA kernel change, no runtime default change, no package upload,
+  no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

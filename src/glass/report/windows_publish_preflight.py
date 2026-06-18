@@ -519,6 +519,174 @@ def _release_direct_publication_guard_matches(
     )
 
 
+def _resident_fastpath_release_handoff_fields(
+    source: dict[str, Any],
+    *,
+    output_prefix: str,
+) -> dict[str, Any]:
+    handoff = (
+        source.get("resident_registration_fastpath_release_handoff")
+        if isinstance(source.get("resident_registration_fastpath_release_handoff"), dict)
+        else {}
+    )
+
+    def field(flat_name: str, *handoff_names: str) -> Any:
+        flattened = source.get(f"resident_registration_fastpath_release_handoff_{flat_name}")
+        if flattened is not None:
+            return flattened
+        for handoff_name in handoff_names:
+            value = handoff.get(handoff_name)
+            if value is not None:
+                return value
+        return None
+
+    return {
+        output_prefix: handoff,
+        f"{output_prefix}_present": field("present", "present"),
+        f"{output_prefix}_ready": field("ready", "ready"),
+        f"{output_prefix}_raw_ready": field("raw_ready", "raw_ready"),
+        f"{output_prefix}_phase2_ready": field("phase2_ready", "phase2_ready"),
+        f"{output_prefix}_agreement": field("agreement", "agreement"),
+        f"{output_prefix}_decision_check_passed": field(
+            "decision_check_passed",
+            "decision_check_passed",
+        ),
+        f"{output_prefix}_phase2_check_passed": field(
+            "phase2_check_passed",
+            "phase2_check_passed",
+        ),
+        f"{output_prefix}_raw_status": field("raw_status", "raw_status"),
+        f"{output_prefix}_phase2_status": field("phase2_status", "phase2_status"),
+        f"{output_prefix}_raw_required": field("raw_required", "raw_required"),
+        f"{output_prefix}_phase2_required": field("phase2_required", "phase2_required"),
+        f"{output_prefix}_raw_mode": field("raw_mode", "raw_mode"),
+        f"{output_prefix}_phase2_mode": field("phase2_mode", "phase2_mode"),
+        f"{output_prefix}_raw_passed_check_count": _int_or_zero(
+            field("raw_passed_check_count", "raw_passed_check_count")
+        ),
+        f"{output_prefix}_phase2_passed_check_count": _int_or_zero(
+            field("phase2_passed_check_count", "phase2_passed_check_count")
+        ),
+        f"{output_prefix}_raw_failed_check_count": _int_or_zero(
+            field("raw_failed_check_count", "raw_failed_check_count")
+        ),
+        f"{output_prefix}_phase2_failed_check_count": _int_or_zero(
+            field("phase2_failed_check_count", "phase2_failed_check_count")
+        ),
+        f"{output_prefix}_raw_failed_checks": field(
+            "raw_failed_checks",
+            "raw_failed_checks",
+        )
+        or [],
+        f"{output_prefix}_phase2_failed_checks": field(
+            "phase2_failed_checks",
+            "phase2_failed_checks",
+        )
+        or [],
+    }
+
+
+def _resident_fastpath_release_handoff_evidence(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> dict[str, Any]:
+    return {
+        "present": summary.get(f"{prefix}_present"),
+        "ready": summary.get(f"{prefix}_ready"),
+        "raw_ready": summary.get(f"{prefix}_raw_ready"),
+        "phase2_ready": summary.get(f"{prefix}_phase2_ready"),
+        "agreement": summary.get(f"{prefix}_agreement"),
+        "decision_check_passed": summary.get(f"{prefix}_decision_check_passed"),
+        "phase2_check_passed": summary.get(f"{prefix}_phase2_check_passed"),
+        "raw_status": summary.get(f"{prefix}_raw_status"),
+        "phase2_status": summary.get(f"{prefix}_phase2_status"),
+        "raw_required": summary.get(f"{prefix}_raw_required"),
+        "phase2_required": summary.get(f"{prefix}_phase2_required"),
+        "raw_mode": summary.get(f"{prefix}_raw_mode"),
+        "phase2_mode": summary.get(f"{prefix}_phase2_mode"),
+        "raw_passed_check_count": summary.get(f"{prefix}_raw_passed_check_count"),
+        "phase2_passed_check_count": summary.get(
+            f"{prefix}_phase2_passed_check_count"
+        ),
+        "raw_failed_check_count": summary.get(f"{prefix}_raw_failed_check_count"),
+        "phase2_failed_check_count": summary.get(
+            f"{prefix}_phase2_failed_check_count"
+        ),
+        "raw_failed_checks": summary.get(f"{prefix}_raw_failed_checks") or [],
+        "phase2_failed_checks": summary.get(f"{prefix}_phase2_failed_checks") or [],
+    }
+
+
+def _resident_fastpath_release_handoff_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    evidence = _resident_fastpath_release_handoff_evidence(summary, prefix=prefix)
+    return (
+        evidence.get("present") is True
+        and evidence.get("ready") is True
+        and evidence.get("raw_ready") is True
+        and evidence.get("phase2_ready") is True
+        and evidence.get("agreement") is True
+        and evidence.get("decision_check_passed") is True
+        and evidence.get("phase2_check_passed") is True
+        and evidence.get("raw_status") == "passed"
+        and evidence.get("phase2_status") == "passed"
+        and evidence.get("raw_required") is True
+        and evidence.get("phase2_required") is True
+        and _int_or_zero(evidence.get("raw_passed_check_count")) > 0
+        and _int_or_zero(evidence.get("phase2_passed_check_count")) > 0
+        and _int_or_zero(evidence.get("raw_failed_check_count")) == 0
+        and _int_or_zero(evidence.get("phase2_failed_check_count")) == 0
+    )
+
+
+_RESIDENT_FASTPATH_RELEASE_HANDOFF_MATCH_FIELDS = (
+    "present",
+    "ready",
+    "raw_ready",
+    "phase2_ready",
+    "agreement",
+    "decision_check_passed",
+    "phase2_check_passed",
+    "raw_status",
+    "phase2_status",
+    "raw_required",
+    "phase2_required",
+    "raw_mode",
+    "phase2_mode",
+    "raw_passed_check_count",
+    "phase2_passed_check_count",
+    "raw_failed_check_count",
+    "phase2_failed_check_count",
+    "raw_failed_checks",
+    "phase2_failed_checks",
+)
+
+
+def _resident_fastpath_release_handoff_matches(
+    left: dict[str, Any],
+    *,
+    left_prefix: str,
+    right: dict[str, Any],
+    right_prefix: str,
+) -> bool:
+    left_evidence = _resident_fastpath_release_handoff_evidence(
+        left,
+        prefix=left_prefix,
+    )
+    right_evidence = _resident_fastpath_release_handoff_evidence(
+        right,
+        prefix=right_prefix,
+    )
+    return all(
+        left_evidence.get(field) == right_evidence.get(field)
+        for field in _RESIDENT_FASTPATH_RELEASE_HANDOFF_MATCH_FIELDS
+    )
+
+
 def _stack_engine_runtime_default_evidence(
     summary: dict[str, Any],
     prefix: str,
@@ -886,6 +1054,10 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "stack_engine_contract_blockers": promotion.get("stack_engine_contract_blockers")
         or [],
+        **_resident_fastpath_release_handoff_fields(
+            promotion,
+            output_prefix="resident_registration_fastpath_release_handoff",
+        ),
         **_release_direct_publication_guard_fields(
             payload,
             output_prefix="release_decision_direct_runtime_publication_guard",
@@ -1109,6 +1281,10 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "stack_engine_contract_blockers": stack_engine.get("default_promotion_blockers")
         or [],
+        **_resident_fastpath_release_handoff_fields(
+            payload,
+            output_prefix="resident_registration_fastpath_release_handoff",
+        ),
         **_release_direct_publication_guard_fields(
             payload,
             output_prefix="release_decision_direct_runtime_publication_guard",
@@ -1328,6 +1504,60 @@ def _plan_release_direct_publication_guard_summary(
         "release_matrix_default_promotion_raw_resident_lights": matrix.get(
             f"{default_prefix}_raw_resident_lights"
         ),
+    }
+
+
+def _plan_resident_fastpath_release_handoff_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    matrix = (
+        payload.get("release_matrix")
+        if isinstance(payload.get("release_matrix"), dict)
+        else {}
+    )
+    checks = _checks_by_name(payload.get("checks") or [])
+    matrix_check = checks.get(
+        "windows_release_matrix_resident_fastpath_release_handoff_ready"
+    ) or {}
+    prefix = "resident_registration_fastpath_release_handoff"
+    return {
+        "release_matrix_check_passed": matrix_check.get("passed"),
+        "release_matrix_check_evidence": matrix_check.get("evidence"),
+        "release_matrix_present": matrix.get(f"{prefix}_present"),
+        "release_matrix_ready": matrix.get(f"{prefix}_ready"),
+        "release_matrix_raw_ready": matrix.get(f"{prefix}_raw_ready"),
+        "release_matrix_phase2_ready": matrix.get(f"{prefix}_phase2_ready"),
+        "release_matrix_agreement": matrix.get(f"{prefix}_agreement"),
+        "release_matrix_decision_check_passed": matrix.get(
+            f"{prefix}_decision_check_passed"
+        ),
+        "release_matrix_phase2_check_passed": matrix.get(
+            f"{prefix}_phase2_check_passed"
+        ),
+        "release_matrix_raw_status": matrix.get(f"{prefix}_raw_status"),
+        "release_matrix_phase2_status": matrix.get(f"{prefix}_phase2_status"),
+        "release_matrix_raw_required": matrix.get(f"{prefix}_raw_required"),
+        "release_matrix_phase2_required": matrix.get(f"{prefix}_phase2_required"),
+        "release_matrix_raw_mode": matrix.get(f"{prefix}_raw_mode"),
+        "release_matrix_phase2_mode": matrix.get(f"{prefix}_phase2_mode"),
+        "release_matrix_raw_passed_check_count": matrix.get(
+            f"{prefix}_raw_passed_check_count"
+        ),
+        "release_matrix_phase2_passed_check_count": matrix.get(
+            f"{prefix}_phase2_passed_check_count"
+        ),
+        "release_matrix_raw_failed_check_count": matrix.get(
+            f"{prefix}_raw_failed_check_count"
+        ),
+        "release_matrix_phase2_failed_check_count": matrix.get(
+            f"{prefix}_phase2_failed_check_count"
+        ),
+        "release_matrix_raw_failed_checks": matrix.get(f"{prefix}_raw_failed_checks")
+        or [],
+        "release_matrix_phase2_failed_checks": matrix.get(
+            f"{prefix}_phase2_failed_checks"
+        )
+        or [],
     }
 
 
@@ -1595,6 +1825,9 @@ def build_windows_publish_preflight(
     plan_stack_engine = _plan_stack_engine_summary(plan)
     plan_release_direct_publication_guard = (
         _plan_release_direct_publication_guard_summary(plan)
+    )
+    plan_resident_fastpath_handoff = (
+        _plan_resident_fastpath_release_handoff_summary(plan)
     )
     manifest_matrix = (
         manifest.get("windows_release_matrix")
@@ -2479,6 +2712,114 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "github_plan_matrix_resident_fastpath_release_handoff_ready",
+            plan_resident_fastpath_handoff.get("release_matrix_check_passed") is True
+            and _resident_fastpath_release_handoff_ready(
+                plan_resident_fastpath_handoff,
+                prefix="release_matrix",
+            ),
+            {
+                "check_passed": plan_resident_fastpath_handoff.get(
+                    "release_matrix_check_passed"
+                ),
+                "ready": plan_resident_fastpath_handoff.get(
+                    "release_matrix_ready"
+                ),
+                "raw_ready": plan_resident_fastpath_handoff.get(
+                    "release_matrix_raw_ready"
+                ),
+                "phase2_ready": plan_resident_fastpath_handoff.get(
+                    "release_matrix_phase2_ready"
+                ),
+                "agreement": plan_resident_fastpath_handoff.get(
+                    "release_matrix_agreement"
+                ),
+                "raw_status": plan_resident_fastpath_handoff.get(
+                    "release_matrix_raw_status"
+                ),
+                "phase2_status": plan_resident_fastpath_handoff.get(
+                    "release_matrix_phase2_status"
+                ),
+                "raw_passed_check_count": plan_resident_fastpath_handoff.get(
+                    "release_matrix_raw_passed_check_count"
+                ),
+                "phase2_passed_check_count": plan_resident_fastpath_handoff.get(
+                    "release_matrix_phase2_passed_check_count"
+                ),
+                "raw_failed_check_count": plan_resident_fastpath_handoff.get(
+                    "release_matrix_raw_failed_check_count"
+                ),
+                "phase2_failed_check_count": plan_resident_fastpath_handoff.get(
+                    "release_matrix_phase2_failed_check_count"
+                ),
+                "plan_check_evidence": plan_resident_fastpath_handoff.get(
+                    "release_matrix_check_evidence"
+                ),
+            },
+        ),
+        _check(
+            "matrix_resident_fastpath_release_handoff_ready",
+            _resident_fastpath_release_handoff_ready(
+                matrix_info,
+                prefix="resident_registration_fastpath_release_handoff",
+            ),
+            _resident_fastpath_release_handoff_evidence(
+                matrix_info,
+                prefix="resident_registration_fastpath_release_handoff",
+            ),
+        ),
+        _check(
+            "default_promotion_resident_fastpath_release_handoff_ready",
+            _resident_fastpath_release_handoff_ready(
+                promotion_info,
+                prefix="resident_registration_fastpath_release_handoff",
+            ),
+            _resident_fastpath_release_handoff_evidence(
+                promotion_info,
+                prefix="resident_registration_fastpath_release_handoff",
+            ),
+        ),
+        _check(
+            "github_plan_matrix_resident_fastpath_handoff_matches_matrix",
+            _resident_fastpath_release_handoff_matches(
+                plan_resident_fastpath_handoff,
+                left_prefix="release_matrix",
+                right=matrix_info,
+                right_prefix="resident_registration_fastpath_release_handoff",
+            ),
+            {
+                "github_release_plan": _resident_fastpath_release_handoff_evidence(
+                    plan_resident_fastpath_handoff,
+                    prefix="release_matrix",
+                ),
+                "windows_release_matrix": _resident_fastpath_release_handoff_evidence(
+                    matrix_info,
+                    prefix="resident_registration_fastpath_release_handoff",
+                ),
+            },
+        ),
+        _check(
+            "matrix_resident_fastpath_handoff_matches_default_promotion",
+            _resident_fastpath_release_handoff_matches(
+                matrix_info,
+                left_prefix="resident_registration_fastpath_release_handoff",
+                right=promotion_info,
+                right_prefix="resident_registration_fastpath_release_handoff",
+            ),
+            {
+                "windows_release_matrix": _resident_fastpath_release_handoff_evidence(
+                    matrix_info,
+                    prefix="resident_registration_fastpath_release_handoff",
+                ),
+                "default_promotion_manifest": (
+                    _resident_fastpath_release_handoff_evidence(
+                        promotion_info,
+                        prefix="resident_registration_fastpath_release_handoff",
+                    )
+                ),
+            },
+        ),
+        _check(
             "github_plan_phase2_stack_engine_default_contract_ready",
             _stack_engine_plan_phase2_ready(plan_stack_engine),
             {
@@ -3068,6 +3409,50 @@ def build_windows_publish_preflight(
                     "release_decision_direct_runtime_publication_guard_raw_resident_lights"
                 )
             ),
+            "github_plan_matrix_resident_fastpath_handoff_ready": (
+                plan_resident_fastpath_handoff.get("release_matrix_ready")
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_raw_status": (
+                plan_resident_fastpath_handoff.get("release_matrix_raw_status")
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_phase2_status": (
+                plan_resident_fastpath_handoff.get("release_matrix_phase2_status")
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_raw_check_count": (
+                plan_resident_fastpath_handoff.get(
+                    "release_matrix_raw_passed_check_count"
+                )
+            ),
+            "matrix_resident_fastpath_handoff_ready": matrix_info.get(
+                "resident_registration_fastpath_release_handoff_ready"
+            ),
+            "matrix_resident_fastpath_handoff_raw_status": matrix_info.get(
+                "resident_registration_fastpath_release_handoff_raw_status"
+            ),
+            "matrix_resident_fastpath_handoff_phase2_status": matrix_info.get(
+                "resident_registration_fastpath_release_handoff_phase2_status"
+            ),
+            "matrix_resident_fastpath_handoff_raw_check_count": matrix_info.get(
+                "resident_registration_fastpath_release_handoff_raw_passed_check_count"
+            ),
+            "default_promotion_resident_fastpath_handoff_ready": promotion_info.get(
+                "resident_registration_fastpath_release_handoff_ready"
+            ),
+            "default_promotion_resident_fastpath_handoff_raw_status": (
+                promotion_info.get(
+                    "resident_registration_fastpath_release_handoff_raw_status"
+                )
+            ),
+            "default_promotion_resident_fastpath_handoff_phase2_status": (
+                promotion_info.get(
+                    "resident_registration_fastpath_release_handoff_phase2_status"
+                )
+            ),
+            "default_promotion_resident_fastpath_handoff_raw_check_count": (
+                promotion_info.get(
+                    "resident_registration_fastpath_release_handoff_raw_passed_check_count"
+                )
+            ),
             "github_plan_phase2_stack_engine_contract_status": (
                 plan_stack_engine.get("phase2_status")
             ),
@@ -3159,6 +3544,7 @@ def build_windows_publish_preflight(
             "release_decision_direct_publication_guard": (
                 plan_release_direct_publication_guard
             ),
+            "resident_fastpath_release_handoff": plan_resident_fastpath_handoff,
         },
         "windows_release_matrix": matrix_info,
         "default_promotion_manifest": promotion_info,
@@ -3262,6 +3648,23 @@ def _markdown(payload: dict[str, Any]) -> str:
             "default-promotion "
             f"`{summary.get('default_promotion_release_direct_publication_guard_ready')}`/"
             f"`{summary.get('default_promotion_release_direct_publication_guard_lights')}`"
+        ),
+        (
+            "- Resident fastpath release handoff: "
+            f"plan-matrix `{summary.get('github_plan_matrix_resident_fastpath_handoff_ready')}`/"
+            f"`{summary.get('github_plan_matrix_resident_fastpath_handoff_raw_status')}`/"
+            f"`{summary.get('github_plan_matrix_resident_fastpath_handoff_phase2_status')}`/"
+            f"`{summary.get('github_plan_matrix_resident_fastpath_handoff_raw_check_count')}`, "
+            "matrix "
+            f"`{summary.get('matrix_resident_fastpath_handoff_ready')}`/"
+            f"`{summary.get('matrix_resident_fastpath_handoff_raw_status')}`/"
+            f"`{summary.get('matrix_resident_fastpath_handoff_phase2_status')}`/"
+            f"`{summary.get('matrix_resident_fastpath_handoff_raw_check_count')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_resident_fastpath_handoff_ready')}`/"
+            f"`{summary.get('default_promotion_resident_fastpath_handoff_raw_status')}`/"
+            f"`{summary.get('default_promotion_resident_fastpath_handoff_phase2_status')}`/"
+            f"`{summary.get('default_promotion_resident_fastpath_handoff_raw_check_count')}`"
         ),
         (
             "- StackEngine default contract: "

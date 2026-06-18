@@ -80,6 +80,79 @@ def _resident_winsorized_sweep(
     }
 
 
+def _resident_fastpath_release_handoff(
+    *,
+    ready: bool = True,
+) -> dict[str, object]:
+    handoff = {
+        "present": True,
+        "ready": ready,
+        "raw_ready": ready,
+        "phase2_ready": ready,
+        "agreement": ready,
+        "decision_check_passed": ready,
+        "phase2_check_passed": ready,
+        "raw_status": "passed" if ready else "failed",
+        "phase2_status": "passed" if ready else "failed",
+        "raw_required": True,
+        "phase2_required": True,
+        "raw_mode": "similarity_cuda_triangle",
+        "phase2_mode": "similarity_cuda_triangle",
+        "raw_passed_check_count": 23 if ready else 22,
+        "phase2_passed_check_count": 23 if ready else 22,
+        "raw_failed_check_count": 0 if ready else 1,
+        "phase2_failed_check_count": 0 if ready else 1,
+        "raw_failed_checks": []
+        if ready
+        else ["contract_resident_registration_fastpath_component:triangle_warp_batch"],
+        "phase2_failed_checks": []
+        if ready
+        else ["release_decision_resident_fastpath_handoff_ready"],
+    }
+    return {
+        "resident_registration_fastpath_release_handoff": handoff,
+        "resident_registration_fastpath_release_handoff_present": True,
+        "resident_registration_fastpath_release_handoff_ready": ready,
+        "resident_registration_fastpath_release_handoff_raw_ready": ready,
+        "resident_registration_fastpath_release_handoff_phase2_ready": ready,
+        "resident_registration_fastpath_release_handoff_agreement": ready,
+        "resident_registration_fastpath_release_handoff_decision_check_passed": ready,
+        "resident_registration_fastpath_release_handoff_phase2_check_passed": ready,
+        "resident_registration_fastpath_release_handoff_raw_status": (
+            "passed" if ready else "failed"
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_status": (
+            "passed" if ready else "failed"
+        ),
+        "resident_registration_fastpath_release_handoff_raw_required": True,
+        "resident_registration_fastpath_release_handoff_phase2_required": True,
+        "resident_registration_fastpath_release_handoff_raw_mode": (
+            "similarity_cuda_triangle"
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_mode": (
+            "similarity_cuda_triangle"
+        ),
+        "resident_registration_fastpath_release_handoff_raw_passed_check_count": (
+            23 if ready else 22
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_passed_check_count": (
+            23 if ready else 22
+        ),
+        "resident_registration_fastpath_release_handoff_raw_failed_check_count": (
+            0 if ready else 1
+        ),
+        "resident_registration_fastpath_release_handoff_phase2_failed_check_count": (
+            0 if ready else 1
+        ),
+        "resident_registration_fastpath_release_handoff_raw_failed_checks": []
+        if ready
+        else ["contract_resident_registration_fastpath_component:triangle_warp_batch"],
+        "resident_registration_fastpath_release_handoff_phase2_failed_checks": []
+        if ready
+        else ["release_decision_resident_fastpath_handoff_ready"],
+    }
+
+
 def _integration_engine_policy_flattened(
     *,
     acceptance_ready: bool = True,
@@ -659,6 +732,8 @@ def _matrix(
     resident_winsorized_sweep_ready: bool = True,
     resident_winsorized_required_frame_count: int = 200,
     resident_winsorized_check_count: int = 27,
+    include_resident_fastpath_handoff: bool = True,
+    resident_fastpath_handoff_ready: bool = True,
     include_integration_engine_policy: bool = True,
     acceptance_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_ready: bool = True,
@@ -696,6 +771,9 @@ def _matrix(
         and bool(resident_sweep["resident_winsorized_sweep_required_frame_count_passed"])
         and int(resident_sweep["resident_winsorized_sweep_check_count"]) > 0
         and int(resident_sweep["resident_winsorized_sweep_failed_check_count"]) == 0
+    )
+    resident_fastpath_handoff = _resident_fastpath_release_handoff(
+        ready=resident_fastpath_handoff_ready
     )
     integration_engine_policy = _integration_engine_policy_flattened(
         acceptance_ready=acceptance_integration_engine_policy_ready,
@@ -763,6 +841,11 @@ def _matrix(
             else True
         )
         and (publication_audit_ready if include_stack_publication_audit else True)
+        and (
+            resident_fastpath_handoff_ready
+            if include_resident_fastpath_handoff
+            else True
+        )
     )
     promotion = {
         "status": "default_promotion_ready" if matrix_ready else "blocked",
@@ -827,6 +910,8 @@ def _matrix(
         )
     if include_resident_winsorized_sweep:
         promotion.update(resident_sweep)
+    if include_resident_fastpath_handoff:
+        promotion.update(resident_fastpath_handoff)
     if include_integration_engine_policy:
         promotion.update(integration_engine_policy)
     if include_stack_engine_runtime_default:
@@ -873,6 +958,8 @@ def _default_promotion(
     resident_winsorized_sweep_ready: bool = True,
     resident_winsorized_required_frame_count: int = 200,
     resident_winsorized_check_count: int = 27,
+    include_resident_fastpath_handoff: bool = True,
+    resident_fastpath_handoff_ready: bool = True,
     include_integration_engine_policy: bool = True,
     acceptance_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_ready: bool = True,
@@ -909,6 +996,9 @@ def _default_promotion(
         and bool(resident_sweep["resident_winsorized_sweep_required_frame_count_passed"])
         and int(resident_sweep["resident_winsorized_sweep_check_count"]) > 0
         and int(resident_sweep["resident_winsorized_sweep_failed_check_count"]) == 0
+    )
+    resident_fastpath_handoff = _resident_fastpath_release_handoff(
+        ready=resident_fastpath_handoff_ready
     )
     integration_engine_policy = _integration_engine_policy_manifest(
         acceptance_ready=acceptance_integration_engine_policy_ready,
@@ -968,6 +1058,11 @@ def _default_promotion(
             else True
         )
         and (publication_audit_ready if include_stack_publication_audit else True)
+        and (
+            resident_fastpath_handoff_ready
+            if include_resident_fastpath_handoff
+            else True
+        )
     )
     payload = {
         "schema_version": 1,
@@ -1031,6 +1126,8 @@ def _default_promotion(
         payload["stack_engine_contract"] = stack_contract
     if include_resident_winsorized_sweep:
         payload.update(resident_sweep)
+    if include_resident_fastpath_handoff:
+        payload.update(resident_fastpath_handoff)
     if include_integration_engine_policy:
         payload["integration_engine_policy"] = integration_engine_policy
     if include_stack_engine_runtime_default:
@@ -1092,9 +1189,13 @@ def _github_plan(
     phase2_stack_engine_gap_count: int = 0,
     matrix_stack_engine_ready: bool = True,
     matrix_stack_engine_gap_count: int = 0,
+    matrix_resident_fastpath_handoff_ready: bool = True,
 ) -> None:
     phase2_stack_ready = phase2_stack_engine_ready and phase2_stack_engine_gap_count == 0
     matrix_stack_ready = matrix_stack_engine_ready and matrix_stack_engine_gap_count == 0
+    matrix_fastpath_handoff = _resident_fastpath_release_handoff(
+        ready=matrix_resident_fastpath_handoff_ready
+    )
     release_direct_guard = _release_direct_publication_guard(
         ready=True,
         top_level=True,
@@ -1110,6 +1211,7 @@ def _github_plan(
         and matrix_sample_accounting_closure_ready
         and phase2_stack_ready
         and matrix_stack_ready
+        and matrix_resident_fastpath_handoff_ready
     )
     phase2_stack_recommendation = (
         "stack_engine_default_ready"
@@ -1202,12 +1304,14 @@ def _github_plan(
                     matrix_rejection_sample_accounting_ready
                     and matrix_sample_accounting_closure_ready
                     and matrix_stack_ready
+                    and matrix_resident_fastpath_handoff_ready
                 )
                 else "blocked",
                 "passed": (
                     matrix_rejection_sample_accounting_ready
                     and matrix_sample_accounting_closure_ready
                     and matrix_stack_ready
+                    and matrix_resident_fastpath_handoff_ready
                 ),
                 "integration_rejection_sample_counts_match_maps": (
                     matrix_rejection_sample_accounting_ready
@@ -1327,6 +1431,7 @@ def _github_plan(
                         "release_decision_direct_runtime_publication_guard_raw_resident_lights"
                     ]
                 ),
+                **matrix_fastpath_handoff,
             },
             "assets": [
                 {
@@ -1431,6 +1536,25 @@ def _github_plan(
                     "evidence": {
                         "ready": True,
                         "resident_lights": 200,
+                    },
+                },
+                {
+                    "name": "windows_release_matrix_resident_fastpath_release_handoff_ready",
+                    "passed": matrix_resident_fastpath_handoff_ready,
+                    "evidence": {
+                        "ready": matrix_resident_fastpath_handoff_ready,
+                        "raw_status": "passed"
+                        if matrix_resident_fastpath_handoff_ready
+                        else "failed",
+                        "phase2_status": "passed"
+                        if matrix_resident_fastpath_handoff_ready
+                        else "failed",
+                        "raw_failed_check_count": 0
+                        if matrix_resident_fastpath_handoff_ready
+                        else 1,
+                        "phase2_failed_check_count": 0
+                        if matrix_resident_fastpath_handoff_ready
+                        else 1,
                     },
                 },
             ],
@@ -1645,6 +1769,29 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         ]
         == 200
     )
+    assert (
+        payload["summary"]["github_plan_matrix_resident_fastpath_handoff_ready"]
+        is True
+    )
+    assert (
+        payload["summary"]["github_plan_matrix_resident_fastpath_handoff_raw_status"]
+        == "passed"
+    )
+    assert payload["summary"]["matrix_resident_fastpath_handoff_ready"] is True
+    assert (
+        payload["summary"]["matrix_resident_fastpath_handoff_raw_check_count"]
+        == 23
+    )
+    assert (
+        payload["summary"]["default_promotion_resident_fastpath_handoff_ready"]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_resident_fastpath_handoff_phase2_status"
+        ]
+        == "passed"
+    )
     assert checks["github_plan_phase2_rejection_sample_accounting_passed"] is True
     assert checks["github_plan_matrix_rejection_sample_accounting_passed"] is True
     assert checks["matrix_rejection_sample_accounting_passed"] is True
@@ -1755,6 +1902,11 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         ]
         is True
     )
+    assert checks["github_plan_matrix_resident_fastpath_release_handoff_ready"] is True
+    assert checks["matrix_resident_fastpath_release_handoff_ready"] is True
+    assert checks["default_promotion_resident_fastpath_release_handoff_ready"] is True
+    assert checks["github_plan_matrix_resident_fastpath_handoff_matches_matrix"] is True
+    assert checks["matrix_resident_fastpath_handoff_matches_default_promotion"] is True
     assert checks["github_plan_phase2_stack_engine_default_contract_ready"] is True
     assert checks["github_plan_matrix_stack_engine_contract_ready"] is True
     assert checks["github_plan_stack_engine_contract_agreement_passed"] is True
@@ -2630,6 +2782,127 @@ def test_windows_publish_preflight_blocks_matrix_default_release_direct_guard_mi
             "matrix_default_promotion_release_decision_direct_runtime_publication_guard_passed"
         ]["evidence"]["resident_lights"]
         == 0
+    )
+
+
+def test_windows_publish_preflight_blocks_plan_matrix_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(
+        plan,
+        manifest=manifest,
+        matrix=matrix,
+        labels=labels,
+        matrix_resident_fastpath_handoff_ready=False,
+    )
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert (
+        payload["summary"]["github_plan_matrix_resident_fastpath_handoff_ready"]
+        is False
+    )
+    assert (
+        checks["github_plan_matrix_resident_fastpath_release_handoff_ready"][
+            "passed"
+        ]
+        is False
+    )
+    assert checks["matrix_resident_fastpath_release_handoff_ready"]["passed"] is True
+    assert (
+        checks["github_plan_matrix_resident_fastpath_handoff_matches_matrix"][
+            "passed"
+        ]
+        is False
+    )
+
+
+def test_windows_publish_preflight_blocks_matrix_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, resident_fastpath_handoff_ready=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["summary"]["matrix_resident_fastpath_handoff_ready"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is False
+    assert checks["matrix_resident_fastpath_release_handoff_ready"]["passed"] is False
+    assert (
+        checks["matrix_resident_fastpath_handoff_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+
+
+def test_windows_publish_preflight_blocks_default_promotion_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion, resident_fastpath_handoff_ready=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert (
+        payload["summary"]["default_promotion_resident_fastpath_handoff_ready"]
+        is False
+    )
+    assert checks["default_promotion_ready"]["passed"] is False
+    assert (
+        checks["default_promotion_resident_fastpath_release_handoff_ready"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["matrix_resident_fastpath_handoff_matches_default_promotion"][
+            "passed"
+        ]
+        is False
     )
 
 
