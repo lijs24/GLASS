@@ -5670,6 +5670,26 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 322: Standalone Warp Quality Contract CLI
+
+- Add a dedicated `glass warp-quality-contract` command for direct CI,
+  checkpoint, and release-audit use.
+- Reuse the same `warp_quality_contract.json` builder as `glass guardrails` so
+  standalone and bundled guardrail evidence have matching semantics.
+- Support JSON and Markdown outputs plus the same optional requirements:
+  artifact readiness, all-registered coverage, valid-fraction threshold,
+  skipped-frame ceiling, coverage/DQ pixel verification, and registered science
+  residual verification.
+- Add `--fail-on-failed` so scripts can choose whether a failed contract is a
+  diagnostic artifact or a blocking command.
+- Add CLI smoke tests for passing standalone contract generation and injected
+  valid-pixel drift failure.
+- Generate Gate322 standalone contract artifacts from a small CPU validation
+  run.
+- Keep this gate audit-surface scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

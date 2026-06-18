@@ -383,6 +383,7 @@ def test_cli_help_commands():
         "stack-engine-contract",
         "pipeline-contract",
         "local-norm-contract",
+        "warp-quality-contract",
         "guardrails",
         "blackbox-package",
         "blackbox-finalize",
@@ -885,6 +886,79 @@ def test_cli_guardrails_warp_quality_thresholds(small_fits_dataset, tmp_path: Pa
     assert failing_checks["warp_quality"]["passed"] is False
     assert "warp_valid_fraction_meets_threshold" in failing_contract["failed_checks"]
     assert "warp_pixel_verification_passed" in failing_contract["failed_checks"]
+
+
+def test_cli_warp_quality_contract_command(small_fits_dataset, tmp_path: Path):
+    run = tmp_path / "run"
+    out = tmp_path / "warp_quality_contract.json"
+    markdown = tmp_path / "warp_quality_contract.md"
+    failing_out = tmp_path / "warp_quality_contract_failing.json"
+
+    assert main(["audit", "--root", str(small_fits_dataset), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
+    assert (
+        main(
+            [
+                "warp-quality-contract",
+                "--run",
+                str(run),
+                "--out",
+                str(out),
+                "--markdown",
+                str(markdown),
+                "--min-valid-fraction",
+                "1.0",
+                "--max-skipped-frames",
+                "99",
+                "--require-artifacts",
+                "--require-all-registered",
+                "--pixel-verify",
+                "--pixel-verify-tile-size",
+                "8",
+                "--science-residual-verify",
+                "--max-science-rms",
+                "0.0",
+                "--max-science-max-abs",
+                "0.0",
+                "--science-residual-tile-size",
+                "8",
+                "--fail-on-failed",
+            ]
+        )
+        == 0
+    )
+    contract = read_json(out)
+    assert contract["artifact_type"] == "warp_quality_contract"
+    assert contract["passed"] is True
+    assert contract["summary"]["pixel_verified_output_count"] >= 1
+    assert contract["summary"]["science_residual_verified_output_count"] >= 1
+    assert markdown.exists()
+    assert "Warp Quality Contract" in markdown.read_text(encoding="utf-8")
+
+    warp_results = read_json(run / "warp_results.json")
+    warp_results["warp_results"][0]["valid_pixels"] = 0
+    write_json(run / "warp_results.json", warp_results)
+    assert (
+        main(
+            [
+                "warp-quality-contract",
+                "--run",
+                str(run),
+                "--out",
+                str(failing_out),
+                "--min-valid-fraction",
+                "1.0",
+                "--pixel-verify",
+                "--pixel-verify-tile-size",
+                "8",
+                "--fail-on-failed",
+            ]
+        )
+        == 2
+    )
+    failing = read_json(failing_out)
+    assert failing["passed"] is False
+    assert "warp_valid_fraction_meets_threshold" in failing["failed_checks"]
+    assert "warp_pixel_verification_passed" in failing["failed_checks"]
 
 
 def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):

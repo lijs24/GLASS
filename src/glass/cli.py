@@ -2722,6 +2722,44 @@ def cmd_local_norm_contract(args: argparse.Namespace) -> int:
     return 0 if audit.get("passed") or not args.fail_on_failed else 2
 
 
+def cmd_warp_quality_contract(args: argparse.Namespace) -> int:
+    audit = build_warp_quality_contract(
+        args.run,
+        min_valid_fraction=args.min_valid_fraction,
+        max_skipped_frames=args.max_skipped_frames,
+        require_artifacts=args.require_artifacts,
+        require_all_registered=args.require_all_registered,
+        pixel_verify=args.pixel_verify,
+        pixel_verify_tile_size=args.pixel_verify_tile_size,
+        pixel_tolerance=args.pixel_tolerance,
+        science_residual_verify=args.science_residual_verify,
+        science_reference_frame_id=args.science_reference_frame_id,
+        max_science_rms=args.max_science_rms,
+        max_science_max_abs=args.max_science_max_abs,
+        science_residual_tile_size=args.science_residual_tile_size,
+    )
+    write_warp_quality_contract(args.out, audit, markdown=args.markdown)
+    summary = audit.get("summary") if isinstance(audit.get("summary"), dict) else {}
+    console.print(
+        {
+            "artifact_type": audit.get("artifact_type"),
+            "status": audit.get("status"),
+            "required": audit.get("required"),
+            "output_count": summary.get("output_count"),
+            "skipped_count": summary.get("skipped_count"),
+            "artifact_ready_count": summary.get("artifact_ready_count"),
+            "pixel_verified_output_count": summary.get("pixel_verified_output_count"),
+            "science_residual_verified_output_count": summary.get(
+                "science_residual_verified_output_count"
+            ),
+            "failed_checks": audit.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if audit.get("passed") or not args.fail_on_failed else 2
+
+
 def cmd_guardrails(args: argparse.Namespace) -> int:
     run = Path(args.run)
     out_dir = Path(args.out_dir)
@@ -6205,6 +6243,82 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when the local-normalization contract fails",
     )
     local_norm_contract.set_defaults(func=cmd_local_norm_contract)
+
+    warp_quality_contract = sub.add_parser(
+        "warp-quality-contract",
+        help="audit warp registered, coverage, DQ, and optional residual artifacts from a GLASS run",
+    )
+    warp_quality_contract.add_argument("--run", required=True, help="GLASS run directory to audit")
+    warp_quality_contract.add_argument("--out", required=True, help="output audit JSON")
+    warp_quality_contract.add_argument("--markdown", help="optional output Markdown summary")
+    warp_quality_contract.add_argument(
+        "--min-valid-fraction",
+        type=float,
+        help="fail when accepted warp outputs have a lower valid-pixel fraction",
+    )
+    warp_quality_contract.add_argument(
+        "--max-skipped-frames",
+        type=int,
+        help="fail when warp skipped-frame count exceeds this threshold",
+    )
+    warp_quality_contract.add_argument(
+        "--require-artifacts",
+        action="store_true",
+        help="fail unless warp registered, coverage, and DQ artifacts are present",
+    )
+    warp_quality_contract.add_argument(
+        "--require-all-registered",
+        action="store_true",
+        help="fail unless every accepted registration frame has a warp output",
+    )
+    warp_quality_contract.add_argument(
+        "--pixel-verify",
+        action="store_true",
+        help="scan warp coverage/DQ FITS pixels and fail when counts disagree with summaries",
+    )
+    warp_quality_contract.add_argument(
+        "--pixel-verify-tile-size",
+        type=int,
+        default=2048,
+        help="tile size for optional warp coverage/DQ pixel verification",
+    )
+    warp_quality_contract.add_argument(
+        "--pixel-tolerance",
+        type=int,
+        default=0,
+        help="allowed count delta for optional warp coverage/DQ pixel verification",
+    )
+    warp_quality_contract.add_argument(
+        "--science-residual-verify",
+        action="store_true",
+        help="stream registered warp outputs and compare science pixels against the reference warp output",
+    )
+    warp_quality_contract.add_argument(
+        "--science-reference-frame-id",
+        help="reference frame id for optional warp science residual verification; defaults to reference output",
+    )
+    warp_quality_contract.add_argument(
+        "--max-science-rms",
+        type=float,
+        help="fail when warp science residual RMS exceeds this threshold",
+    )
+    warp_quality_contract.add_argument(
+        "--max-science-max-abs",
+        type=float,
+        help="fail when warp science residual maximum absolute difference exceeds this threshold",
+    )
+    warp_quality_contract.add_argument(
+        "--science-residual-tile-size",
+        type=int,
+        default=2048,
+        help="tile size for optional warp registered-image residual verification",
+    )
+    warp_quality_contract.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when the warp quality contract fails",
+    )
+    warp_quality_contract.set_defaults(func=cmd_warp_quality_contract)
 
     guardrails = sub.add_parser(
         "guardrails",
