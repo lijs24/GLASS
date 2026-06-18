@@ -5972,6 +5972,21 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 337: HTML Resident Result-Contract Failure Rows
+
+- Expand the HTML Pipeline contract audit section with resident CUDA
+  result-contract failure rows.
+- Surface failed nested resident result-contract checks such as missing DQ
+  source terms with output item, backend, memory mode, contract status,
+  required/pass state, check name, actual/required values, and compact
+  evidence.
+- Add focused HTML report tests for a failed resident result-contract fixture.
+- Generate Gate337 report artifacts from a controlled resident pipeline
+  contract failure fixture.
+- Keep this gate report-surface scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

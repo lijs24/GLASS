@@ -733,6 +733,22 @@ def test_html_report_surfaces_failed_resident_fastpath_check_evidence(
     assert "contract_resident_registration_fastpath_true" in text
 
 
+def test_html_report_surfaces_resident_result_contract_failures(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run, missing_source_terms=True)
+    audit = build_pipeline_contract_audit(run)
+    report = tmp_path / "report.html"
+
+    write_html_report(report, pipeline_contract=audit, run_root=run)
+
+    text = report.read_text(encoding="utf-8")
+    assert "resident result-contract failure rows" in text
+    assert "source_terms_present" in text
+    assert "resident_contract_status" in text
+    assert "<td>failed</td>" in text
+    assert "cuda_resident_stack" in text
+
+
 def test_pipeline_contract_pixel_verification_reports_resident_rejection_sample_accounting(tmp_path: Path):
     run = tmp_path / "run"
     _write_resident_pipeline_run(run)

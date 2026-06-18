@@ -1350,6 +1350,77 @@ def _pipeline_contract_failure_rows(contract: dict[str, Any] | None) -> list[dic
     return rows
 
 
+def _pipeline_contract_resident_result_failure_rows(
+    contract: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    integration = (contract or {}).get("integration") or {}
+    for output in integration.get("outputs") or []:
+        if not isinstance(output, dict):
+            continue
+        resident = output.get("resident_result_contract")
+        if not isinstance(resident, dict):
+            continue
+        resident_contract = resident.get("contract")
+        contract_checks = (
+            resident_contract.get("checks")
+            if isinstance(resident_contract, dict)
+            else []
+        )
+        failed_checks = [
+            item
+            for item in contract_checks or []
+            if isinstance(item, dict) and not item.get("passed")
+        ]
+        if not failed_checks and resident.get("required") and resident.get("passed") is not True:
+            rows.append(
+                {
+                    "item": output.get("item"),
+                    "backend": output.get("backend"),
+                    "memory_mode": output.get("memory_mode"),
+                    "resident_contract_status": resident.get("status"),
+                    "resident_contract_required": resident.get("required"),
+                    "resident_contract_passed": resident.get("passed"),
+                    "check": "resident_result_contract_missing_or_failed",
+                    "passed": resident.get("passed"),
+                    "note": "",
+                    "actual": resident.get("passed"),
+                    "required": True,
+                    "available": bool(resident_contract),
+                    "evidence": "",
+                }
+            )
+            continue
+        for item in failed_checks:
+            evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+            rows.append(
+                {
+                    "item": output.get("item"),
+                    "backend": output.get("backend"),
+                    "memory_mode": output.get("memory_mode"),
+                    "resident_contract_status": resident.get("status"),
+                    "resident_contract_required": resident.get("required"),
+                    "resident_contract_passed": resident.get("passed"),
+                    "check": item.get("name"),
+                    "passed": item.get("passed"),
+                    "note": item.get("note", ""),
+                    "actual": evidence.get("actual"),
+                    "required": evidence.get(
+                        "required",
+                        evidence.get(
+                            "expected",
+                            evidence.get("required_min", evidence.get("required_max")),
+                        ),
+                    ),
+                    "available": evidence.get("available"),
+                    "evidence": ", ".join(
+                        f"{key}={value}" for key, value in evidence.items()
+                    ),
+                }
+            )
+    return rows
+
+
 def _pipeline_contract_calibration_master_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     calibration = (contract or {}).get("calibration") or {}
@@ -2015,6 +2086,9 @@ def write_html_report(
     stack_engine_default_promotion_rows = _stack_engine_default_promotion_rows(stack_engine_contract)
     pipeline_contract_summary_rows = _pipeline_contract_summary_rows(pipeline_contract)
     pipeline_contract_failure_rows = _pipeline_contract_failure_rows(pipeline_contract)
+    pipeline_contract_resident_result_failure_rows = (
+        _pipeline_contract_resident_result_failure_rows(pipeline_contract)
+    )
     pipeline_contract_calibration_master_rows = _pipeline_contract_calibration_master_rows(pipeline_contract)
     pipeline_contract_calibrated_light_rows = _pipeline_contract_calibrated_light_rows(pipeline_contract)
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
@@ -2187,6 +2261,9 @@ def write_html_report(
   rejection-map, crop-box, and output-map expectations from GLASS artifacts.</p>
   {_table(pipeline_contract_summary_rows)}
   {_table(pipeline_contract_failure_rows)}
+  <p>resident result-contract failure rows expand failed checks from resident
+  CUDA integration output contracts, including nested DQ/source-term failures.</p>
+  {_limited_table(pipeline_contract_resident_result_failure_rows, label="pipeline contract resident result-contract failure rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_calibration_master_rows, label="pipeline contract calibration master rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_calibrated_light_rows, label="pipeline contract calibrated light rows", artifact="pipeline_contract JSON")}
   {_limited_table(pipeline_contract_map_rows, label="pipeline contract map rows", artifact="pipeline_contract JSON")}
