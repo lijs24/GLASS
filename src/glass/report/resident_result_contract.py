@@ -6,6 +6,10 @@ from typing import Any
 from glass.engine.rejection import (
     CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
     RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+    RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
     RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
     RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
 )
@@ -162,15 +166,28 @@ def _resident_rejection_semantics_state(output: dict[str, Any], rejection: str) 
         else {}
     )
     required = rejection == "winsorized_sigma"
-    expected = {
-        "mode": "winsorized_sigma",
-        "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
-        "scale_estimator": RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
-        "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
-        "cpu_baseline_parity": False,
-        "parity_status": RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
-        "approximation": True,
-    }
+    expected_options = [
+        {
+            "mode": "winsorized_sigma",
+            "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+            "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+            "scale_estimator": RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+            "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+            "cpu_baseline_parity": False,
+            "parity_status": RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
+            "approximation": True,
+        },
+        {
+            "mode": "winsorized_sigma",
+            "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+            "algorithm": RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM,
+            "scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+            "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+            "cpu_baseline_parity": True,
+            "parity_status": RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
+            "approximation": False,
+        },
+    ]
     if not required:
         return {
             "required": False,
@@ -181,25 +198,39 @@ def _resident_rejection_semantics_state(output: dict[str, Any], rejection: str) 
             "descriptor": descriptor,
             "expected": None,
         }
-    mismatches = {
-        key: {"actual": descriptor.get(key), "expected": expected_value}
-        for key, expected_value in expected.items()
-        if descriptor.get(key) != expected_value
-    }
+    mismatch_options = [
+        {
+            key: {"actual": descriptor.get(key), "expected": expected_value}
+            for key, expected_value in expected.items()
+            if descriptor.get(key) != expected_value
+        }
+        for expected in expected_options
+    ]
+    passed_option_index = next(
+        (index for index, mismatches in enumerate(mismatch_options) if not mismatches),
+        None,
+    )
+    matched_expected = (
+        expected_options[passed_option_index]
+        if passed_option_index is not None
+        else expected_options[0]
+    )
     present = bool(descriptor)
+    mismatches = {} if passed_option_index is not None else mismatch_options[0]
     return {
         "required": True,
         "present": present,
-        "passed": present and not mismatches,
-        "status": "passed" if present and not mismatches else "failed",
+        "passed": present and passed_option_index is not None,
+        "status": "passed" if present and passed_option_index is not None else "failed",
         "rejection": rejection,
         "descriptor": descriptor,
-        "expected": expected,
+        "expected": matched_expected,
+        "expected_options": expected_options,
+        "matched_expected_index": passed_option_index,
         "mismatches": mismatches,
         "semantics": (
-            "Resident CUDA winsorized_sigma currently uses an explicit mean/std "
-            "two-stage approximation and must not be reported as parity with the "
-            "hardened CPU median/IQR winsorized baseline until the CUDA kernels are updated."
+            "Resident CUDA winsorized_sigma must disclose whether it used the default "
+            "mean/std approximation or the opt-in hardened median/IQR CPU-parity prototype."
         ),
     }
 

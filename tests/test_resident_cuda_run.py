@@ -6,6 +6,7 @@ import numpy as np
 from astropy.io import fits
 
 from glass.cli import main
+from glass.cpu.integration import weighted_integrate_stack
 from glass.engine.contracts import DQFlag
 from glass.io.fits_io import read_fits_data
 from glass.io.json_io import read_json, write_json
@@ -606,6 +607,31 @@ def _two_light_weight_dataset(tmp_path: Path) -> Path:
     return root
 
 
+def _four_light_rejection_dataset(tmp_path: Path) -> Path:
+    root = tmp_path / "rejection_dataset"
+    shape = (10, 12)
+    yy, xx = np.indices(shape, dtype=np.float32)
+    base = np.full(shape, 10.0, dtype=np.float32) + 0.05 * xx + 0.03 * yy
+    frames = [
+        base,
+        base + np.float32(0.08),
+        base - np.float32(0.06),
+        base + np.float32(0.02),
+    ]
+    frames[3] = frames[3].copy()
+    frames[3][2, 3] = 80.0
+    frames[3][7, 8] = -120.0
+    frames[2] = frames[2].copy()
+    frames[2][1, 10] = 65.0
+
+    _write_test_frame(root / "bias" / "bias_001.fits", "bias", np.zeros(shape, dtype=np.float32), 0.0)
+    _write_test_frame(root / "dark" / "dark_001.fits", "dark", np.zeros(shape, dtype=np.float32), 60.0)
+    _write_test_frame(root / "flat" / "flat_001.fits", "flat", np.ones(shape, dtype=np.float32), 60.0)
+    for index, frame in enumerate(frames, start=1):
+        _write_test_frame(root / "light" / f"light_{index:03d}.fits", "light", frame, 60.0)
+    return root
+
+
 def test_cli_resident_cuda_tile_local_policy_apply_mean_changes_target_tile(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_weight_dataset(tmp_path)
@@ -782,6 +808,90 @@ def test_cli_resident_cuda_tile_local_policy_apply_winsorized_sigma_records_reje
     assert Path(output["low_rejection_map_path"]).exists()
     assert Path(output["high_rejection_map_path"]).exists()
     assert any("tile-local policy replay was applied to winsorized_sigma" in warning for warning in integration["warnings"])
+
+
+def test_cli_resident_cuda_hardened_winsorized_matches_cpu_baseline(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _four_light_rejection_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_hardened_winsorized"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "winsorized_sigma",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-integration-dispatch",
+            "auto",
+            "--resident-winsorized-mode",
+            "hardened_cpu_parity",
+        ]
+    ) == 0
+
+    light_frames = [
+        read_fits_data(path, dtype=np.float32)
+        for path in sorted((dataset / "light").glob("light_*.fits"))
+    ]
+    expected_master, expected_weight, expected_coverage, expected_low, expected_high = (
+        weighted_integrate_stack(
+            np.stack(light_frames, axis=0),
+            rejection="winsorized_sigma",
+            low_sigma=3.0,
+            high_sigma=3.0,
+        )
+    )
+
+    integration = read_json(run / "integration_results.json")
+    resident = read_json(run / "resident_artifacts.json")
+    contract = read_json(run / "resident_result_contract.json")
+    output = integration["outputs"][0]
+    artifact = resident["artifacts"][0]
+    descriptor = output["integration_rejection"]
+    dispatch = artifact["resident_integration_dispatch"]
+
+    master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
+    weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
+    coverage = read_fits_data(Path(output["coverage_map_path"]), dtype=np.float32)
+    low_reject = read_fits_data(Path(output["low_rejection_map_path"]), dtype=np.float32)
+    high_reject = read_fits_data(Path(output["high_rejection_map_path"]), dtype=np.float32)
+
+    assert descriptor["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert descriptor["cpu_baseline_parity"] is True
+    assert descriptor["approximation"] is False
+    assert artifact["integration_rejection"] == descriptor
+    assert integration["rejection_semantics"] == descriptor
+    assert integration["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert dispatch["effective_mode"] == "stack"
+    assert dispatch["selection_reason"] == "auto_stack_hardened_winsorized_requires_stack"
+    assert dispatch["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert contract["passed"] is True
+    assert any("hardened median/IQR" in warning for warning in integration["warnings"])
+    assert np.allclose(master, expected_master, rtol=2e-5, atol=2e-5)
+    assert np.allclose(weight, expected_weight, rtol=2e-5, atol=2e-5)
+    assert np.allclose(coverage, expected_coverage, rtol=0.0, atol=0.0)
+    assert np.allclose(low_reject, expected_low, rtol=0.0, atol=0.0)
+    assert np.allclose(high_reject, expected_high, rtol=0.0, atol=0.0)
+    assert float(np.max(high_reject)) > 0.0
+    assert float(np.max(low_reject)) > 0.0
 
 
 def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):

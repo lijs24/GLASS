@@ -4400,6 +4400,25 @@ integration where applicable.
   no tile-local/matrix-warped parity migration, no package build/upload, no
   GitHub release creation, and no 200-light real-data benchmark rerun.
 
+### S2-Gate 262: Opt-In Hardened Winsorized Resident Runtime
+
+- Add an explicit resident runtime and CLI mode,
+  `--resident-winsorized-mode hardened_cpu_parity`, that calls the S2-Gate 261
+  `ResidentCalibratedStack.integrate_hardened_winsorized_sigma` method when
+  `--integration-rejection winsorized_sigma` is selected.
+- Preserve `fast_approx` as the default mode so the Phase 1/2 resident
+  throughput baseline is not silently changed by the correctness prototype.
+- Make resident `auto` dispatch choose stack integration for hardened
+  winsorized mode, and fail clearly for unsupported fused-matrix or tile-local
+  policy combinations.
+- Extend resident result contracts to accept either the default fast
+  approximation semantics or the opt-in hardened CPU-parity semantics.
+- Add a small FITS resident CUDA run test that compares hardened runtime output
+  maps against the CPU `weighted_integrate_stack` winsorized baseline.
+- Keep this gate scoped to runtime wiring and artifact semantics; no optimized
+  200-light hardened benchmark, tile-local parity migration, fused matrix
+  parity migration, package build/upload, or release update is required.
+
 ## Gate Rules
 
 Each gate requires:

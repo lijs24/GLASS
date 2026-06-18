@@ -20,6 +20,7 @@ def _write_resident_run(
     mismatch_sample_count: bool = False,
     sample_closure_status: str | None = None,
     omit_rejection_semantics: bool = False,
+    resident_winsorized_mode: str = "fast_approx",
 ) -> None:
     integration = path / "integration"
     integration.mkdir(parents=True)
@@ -111,12 +112,22 @@ def _write_resident_run(
         },
     }
     if not omit_rejection_semantics:
-        output["integration_rejection"] = resident_rejection_descriptor("winsorized_sigma", 3.0, 3.0)
+        output["integration_rejection"] = resident_rejection_descriptor(
+            "winsorized_sigma",
+            3.0,
+            3.0,
+            resident_winsorized_mode=resident_winsorized_mode,
+        )
     write_json(
         path / "integration_results.json",
         {
             "rejection": "winsorized_sigma",
-            "rejection_semantics": resident_rejection_descriptor("winsorized_sigma", 3.0, 3.0),
+            "rejection_semantics": resident_rejection_descriptor(
+                "winsorized_sigma",
+                3.0,
+                3.0,
+                resident_winsorized_mode=resident_winsorized_mode,
+            ),
             "outputs": [output],
         },
     )
@@ -143,6 +154,24 @@ def test_resident_result_contract_passes_with_pixel_verify(tmp_path: Path) -> No
     assert semantics["passed"] is True
     assert payload["outputs"][0]["rejection_semantics"]["passed"] is True
     assert payload["outputs"][0]["rejection_semantics"]["descriptor"]["cpu_baseline_parity"] is False
+
+
+def test_resident_result_contract_accepts_hardened_winsorized_parity_descriptor(
+    tmp_path: Path,
+) -> None:
+    _write_resident_run(tmp_path, resident_winsorized_mode="hardened_cpu_parity")
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    semantics = payload["outputs"][0]["rejection_semantics"]
+    descriptor = semantics["descriptor"]
+    assert payload["passed"] is True
+    assert checks["resident_winsorized_rejection_semantics_disclosed"]["passed"] is True
+    assert semantics["matched_expected_index"] == 1
+    assert descriptor["resident_winsorized_mode"] == "hardened_cpu_parity"
+    assert descriptor["cpu_baseline_parity"] is True
+    assert descriptor["approximation"] is False
 
 
 def test_resident_result_contract_requires_winsorized_semantics_disclosure(tmp_path: Path) -> None:

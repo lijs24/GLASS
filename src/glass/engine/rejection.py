@@ -8,9 +8,13 @@ from glass.engine.contracts import RejectionPolicy
 
 
 CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "median_iqr_winsorized_standard_deviation_scale"
+RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE = "fast_approx"
+RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE = "hardened_cpu_parity"
 RESIDENT_WINSORIZED_SIGMA_ALGORITHM = "two_stage_winsorized_mean_std_rejection_approximation"
 RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR = "mean_std_two_stage_winsorized"
 RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS = "known_non_parity_pending_cuda_update"
+RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM = "median_iqr_winsorized_sigma_cuda_resident_prototype"
+RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS = "cpu_baseline_parity_passed_gate_261"
 
 
 def center_and_scale(
@@ -76,15 +80,40 @@ def rejection_scale_estimator(method: str | RejectionPolicy) -> str:
     return "unknown"
 
 
-def resident_rejection_descriptor(method: str, low_sigma: float, high_sigma: float) -> dict[str, Any]:
+def resident_rejection_descriptor(
+    method: str,
+    low_sigma: float,
+    high_sigma: float,
+    *,
+    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+) -> dict[str, Any]:
     descriptor: dict[str, Any] = {
         "mode": str(method),
         "low_sigma": float(low_sigma),
         "high_sigma": float(high_sigma),
     }
     if method == "winsorized_sigma":
+        if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:
+            descriptor.update(
+                {
+                    "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+                    "algorithm": RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM,
+                    "scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+                    "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+                    "cpu_baseline_parity": True,
+                    "parity_status": RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
+                    "approximation": False,
+                    "frame_limit": 256,
+                }
+            )
+            return descriptor
+        if resident_winsorized_mode != RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE:
+            raise ValueError(
+                "resident_winsorized_mode must be fast_approx or hardened_cpu_parity"
+            )
         descriptor.update(
             {
+                "resident_winsorized_mode": RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
                 "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
                 "scale_estimator": RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
                 "cpu_baseline_scale_estimator": CPU_WINSORIZED_SIGMA_SCALE_ESTIMATOR,

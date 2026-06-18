@@ -798,6 +798,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
+                resident_winsorized_mode=args.resident_winsorized_mode,
             ),
         )
     elif plan.executable:
@@ -912,6 +913,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_calibration_release_mode=args.resident_calibration_release_mode,
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
+                resident_winsorized_mode=args.resident_winsorized_mode,
             ),
         )
         write_run_state(args.out, state)
@@ -3091,6 +3093,15 @@ def build_parser() -> argparse.ArgumentParser:
             "minimal writes only the master"
         ),
     )
+    run.add_argument(
+        "--resident-winsorized-mode",
+        choices=["fast_approx", "hardened_cpu_parity"],
+        default="fast_approx",
+        help=(
+            "resident CUDA winsorized_sigma implementation: fast_approx keeps the current optimized "
+            "mean/std approximation, hardened_cpu_parity opts into the Gate261 median/IQR parity prototype"
+        ),
+    )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument(
         "--integration-weighting",
@@ -3441,6 +3452,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "resident output map set for audit: audit writes all diagnostic maps, science keeps coverage "
             "and DQ, minimal writes only the master"
+        ),
+    )
+    audit.add_argument(
+        "--resident-winsorized-mode",
+        choices=["fast_approx", "hardened_cpu_parity"],
+        default="fast_approx",
+        help=(
+            "resident CUDA winsorized_sigma implementation for audit: fast_approx keeps the current "
+            "optimized approximation, hardened_cpu_parity opts into the Gate261 median/IQR parity prototype"
         ),
     )
     audit.add_argument(

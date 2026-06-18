@@ -17,7 +17,11 @@ from glass.cpu.registration import estimate_translation_phase_correlation, trans
 from glass.cpu.master_frames import image_stats, make_master_bias, make_master_dark, make_master_flat
 from glass.engine.contracts import DQFlag, DQMask
 from glass.engine.dq import dq_provenance_summary_from_resident
-from glass.engine.rejection import resident_rejection_descriptor
+from glass.engine.rejection import (
+    RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+    resident_rejection_descriptor,
+)
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
@@ -30,6 +34,10 @@ from glass.report.resident_result_contract import (
 
 _AUTO_STAR_THRESHOLD_SIGMAS = (0.75, 1.0, 1.25, 1.5, 2.0, 3.0)
 _RESIDENT_OUTPUT_MAP_POLICIES = {"audit", "science", "minimal"}
+_RESIDENT_WINSORIZED_MODES = {
+    RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+}
 
 
 def _cuda_module_required():
@@ -2301,6 +2309,7 @@ def run_resident_calibration_integration(
     resident_calibration_release_mode: str = "sync",
     resident_master_cache_dir: str | Path | None = None,
     resident_output_maps: str = "audit",
+    resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -2308,6 +2317,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident CUDA mode supports integration weighting=none or simple_snr")
     if resident_output_maps not in _RESIDENT_OUTPUT_MAP_POLICIES:
         raise ValueError("resident_output_maps must be audit, science, or minimal")
+    if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
+        raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
     if resident_registration not in {
         "off",
         "translation_preview",
@@ -2467,7 +2478,13 @@ def run_resident_calibration_integration(
     resident_integration_dispatch_requested = resident_integration_dispatch
     resident_integration_dispatch_reason = f"explicit_{resident_integration_dispatch}"
     if resident_integration_dispatch == "auto":
-        if local_norm_enabled:
+        if (
+            rejection_mode == "winsorized_sigma"
+            and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+        ):
+            resident_integration_dispatch = "stack"
+            resident_integration_dispatch_reason = "auto_stack_hardened_winsorized_requires_stack"
+        elif local_norm_enabled:
             resident_integration_dispatch = "stack"
             resident_integration_dispatch_reason = "auto_stack_local_normalization_enabled"
         elif resident_registration not in fused_matrix_registration_modes:
@@ -2486,6 +2503,22 @@ def run_resident_calibration_integration(
             raise ValueError("resident_tile_local_policy_mode=apply_mean currently requires --integration-rejection none")
         if resident_integration_dispatch != "stack":
             raise ValueError("resident_tile_local_policy_mode apply currently requires resident stack integration")
+        if (
+            rejection_mode == "winsorized_sigma"
+            and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+        ):
+            raise ValueError(
+                "resident_winsorized_mode=hardened_cpu_parity currently does not support "
+                "resident_tile_local_policy_mode apply"
+            )
+    if (
+        rejection_mode == "winsorized_sigma"
+        and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+        and resident_integration_dispatch == "fused_matrix"
+    ):
+        raise ValueError(
+            "resident_winsorized_mode=hardened_cpu_parity requires resident_integration_dispatch=stack"
+        )
     low_sigma = float(integration_policy.get("low_sigma", 3.0))
     high_sigma = float(integration_policy.get("high_sigma", 3.0))
     external_registration_path: Path | None = None
@@ -5873,6 +5906,21 @@ def run_resident_calibration_integration(
                 tile_local_policy_any_applied = True
             elif rejection_mode == "none":
                 master, weight_map = stack.integrate_mean(weights_arg)
+            elif (
+                rejection_mode == "winsorized_sigma"
+                and resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE
+            ):
+                if not hasattr(stack, "integrate_hardened_winsorized_sigma"):
+                    raise RuntimeError(
+                        "resident CUDA backend does not expose integrate_hardened_winsorized_sigma"
+                    )
+                (
+                    master,
+                    weight_map,
+                    coverage_map,
+                    low_rejection_map,
+                    high_rejection_map,
+                ) = stack.integrate_hardened_winsorized_sigma(weights_arg, low_sigma, high_sigma)
             else:
                 if not hasattr(stack, "integrate_sigma_clip"):
                     raise RuntimeError("resident CUDA backend does not expose integrate_sigma_clip")
@@ -6139,7 +6187,10 @@ def run_resident_calibration_integration(
                 else {}
             )
             integration_rejection_descriptor = resident_rejection_descriptor(
-                rejection_mode, low_sigma, high_sigma
+                rejection_mode,
+                low_sigma,
+                high_sigma,
+                resident_winsorized_mode=resident_winsorized_mode,
             )
             resident_artifacts.append(
                 {
@@ -6945,6 +6996,7 @@ def run_resident_calibration_integration(
                         "deferred_matrix_frame_count": len(fused_matrix_deferred_frame_indices),
                         "interpolation": resident_warp_interpolation,
                         "clamping_threshold": resident_warp_clamping_threshold,
+                        "resident_winsorized_mode": resident_winsorized_mode,
                         "download_mode": fused_matrix_download_mode if fused_matrix_integration_used else "full",
                         "diagnostic_maps_downloaded": bool(
                             fused_matrix_integration_timing.get(
@@ -7117,9 +7169,14 @@ def run_resident_calibration_integration(
         )
         integration_warnings: list[str] = []
         if rejection_mode == "winsorized_sigma":
-            integration_warnings.append(
-                "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation"
-            )
+            if resident_winsorized_mode == RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE:
+                integration_warnings.append(
+                    "resident CUDA winsorized_sigma used the opt-in hardened median/IQR CPU-parity prototype"
+                )
+            else:
+                integration_warnings.append(
+                    "resident CUDA winsorized_sigma is currently a two-stage winsorized mean/std rejection approximation"
+                )
         elif rejection_mode == "sigma_clip":
             integration_warnings.append("resident CUDA used two-pass mean/std sigma clipping")
         if weighting_mode == "simple_snr":
@@ -7146,9 +7203,15 @@ def run_resident_calibration_integration(
                 "combine": "mean",
                 "weighting": weighting_mode,
                 "rejection": rejection_mode,
+                "resident_winsorized_mode": resident_winsorized_mode,
                 "low_sigma": low_sigma,
                 "high_sigma": high_sigma,
-                "rejection_semantics": resident_rejection_descriptor(rejection_mode, low_sigma, high_sigma),
+                "rejection_semantics": resident_rejection_descriptor(
+                    rejection_mode,
+                    low_sigma,
+                    high_sigma,
+                    resident_winsorized_mode=resident_winsorized_mode,
+                ),
                 "frame_weights": frame_weights,
                 "outputs": outputs,
                 "excluded_frame_tokens": sorted(excluded_tokens),
