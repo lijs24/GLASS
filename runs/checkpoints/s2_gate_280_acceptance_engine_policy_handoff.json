@@ -1,0 +1,130 @@
+{
+  "artifact_type": "s2_gate_280_acceptance_engine_policy_handoff_fixture",
+  "blocked_implicit_fast_path": {
+    "audit_passed": false,
+    "direct_check": {
+      "evidence": {
+        "check_passed": false,
+        "check_present": true,
+        "failed_count": 1,
+        "failed_items": [
+          {
+            "backend": "cuda",
+            "failures": [
+              "cuda_fast_path_not_explicit"
+            ],
+            "item": "H",
+            "memory_mode": null,
+            "passed": false,
+            "required": true,
+            "status": "implicit_cuda_fast_path",
+            "tile_stack_mode": "cuda_streaming_accumulator_fast_path"
+          }
+        ],
+        "non_resident_count": 1,
+        "status": "failed"
+      },
+      "name": "pipeline_contract_integration_default_engine_policy",
+      "note": "Acceptance evidence must preserve the pipeline-contract integration engine policy guard.",
+      "passed": false
+    },
+    "failed_checks": [
+      "pipeline_contract_passed",
+      "pipeline_contract_integration_default_engine_policy"
+    ],
+    "markdown_excerpt": [
+      "### Integration Engine Policy",
+      "- Integration engine-policy mismatch H: status=implicit_cuda_fast_path backend=cuda mode=cuda_streaming_accumulator_fast_path failures=['cuda_fast_path_not_explicit']",
+      "- FAIL: pipeline_contract_integration_default_engine_policy - {'status': 'failed', 'check_present': True, 'check_passed': False, 'non_resident_count': 1, 'failed_count': 1, 'failed_items': [{'item': 'H', 'status': 'implicit_cuda_fast_path', 'required': True, 'passed': False, 'backend': 'cuda', 'memory_mode': None, 'tile_stack_mode': 'cuda_streaming_accumulator_fast_path', 'failures': ['cuda_fast_path_not_explicit']}]}",
+      "- FAIL: pipeline_contract_integration_default_engine_policy - {'status': 'failed', 'check_present': True, 'check_passed': False, 'non_resident_count': 1, 'failed_count': 1, 'failed_items': [{'item': 'H', 'status': 'implicit_cuda_fast_path', 'required': True, 'passed': False, 'backend': 'cuda', 'memory_mode': None, 'tile_stack_mode': 'cuda_streaming_accumulator_fast_path', 'failures': ['cuda_fast_path_not_explicit']}]}"
+    ],
+    "release_evidence": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": false,
+      "check_present": true,
+      "failed_count": 1,
+      "failed_items": [
+        {
+          "backend": "cuda",
+          "failures": [
+            "cuda_fast_path_not_explicit"
+          ],
+          "item": "H",
+          "memory_mode": null,
+          "passed": false,
+          "required": true,
+          "status": "implicit_cuda_fast_path",
+          "tile_stack_mode": "cuda_streaming_accumulator_fast_path"
+        }
+      ],
+      "non_resident_count": 1,
+      "output_count": 1,
+      "resident_count": 0,
+      "rows": [
+        {
+          "backend": "cuda",
+          "failures": [
+            "cuda_fast_path_not_explicit"
+          ],
+          "item": "H",
+          "memory_mode": null,
+          "passed": false,
+          "required": true,
+          "status": "implicit_cuda_fast_path",
+          "tile_stack_mode": "cuda_streaming_accumulator_fast_path"
+        }
+      ],
+      "status": "failed",
+      "top_level_default_ok": true,
+      "top_level_present": true
+    }
+  },
+  "clean_room": {
+    "external_source_used": false,
+    "notes": "Generated from GLASS-owned synthetic JSON fixtures and GLASS acceptance-audit code only.",
+    "user_image_data_used": false
+  },
+  "created_at": "2026-06-18T05:17:04+00:00",
+  "fixture": "temporary synthetic acceptance JSON artifacts with resident pass and implicit non-resident CUDA fast-path drift cases",
+  "passing_handoff": {
+    "audit_passed": true,
+    "direct_check": {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "status": "passed"
+      },
+      "name": "pipeline_contract_integration_default_engine_policy",
+      "note": "Acceptance evidence must preserve the pipeline-contract integration engine policy guard.",
+      "passed": true
+    },
+    "release_evidence": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "resident_count": 1,
+      "rows": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": null
+        }
+      ],
+      "status": "passed",
+      "top_level_default_ok": false,
+      "top_level_present": false
+    }
+  }
+}

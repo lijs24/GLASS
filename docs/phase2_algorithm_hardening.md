@@ -4714,6 +4714,27 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no publication
   handoff change, and no real-data benchmark rerun.
 
+### S2-Gate 280: Acceptance Audit Integration Engine Policy Handoff
+
+- Carry the S2-Gate 279 pipeline-contract integration engine-policy guard into
+  `glass acceptance-audit`.
+- Add an acceptance-audit blocker so supplied pipeline contracts must contain a
+  passing `integration_default_engine_policy` check; stale contracts that only
+  report generic pass/fail status are not sufficient Phase 2 acceptance
+  evidence.
+- Summarize integration engine-policy status, resident/non-resident output
+  counts, failed rows, and failure reasons in acceptance JSON and Markdown.
+- Extend benchmark-contract pipeline requirements used in tests so
+  `integration_default_engine_policy` is an explicit required pipeline-contract
+  check beside calibration, resident light, and resident result-contract
+  checks.
+- Add focused tests for passing handoff, blocked implicit non-resident CUDA
+  fast-path evidence, benchmark-required check propagation, missing contract
+  behavior, and Markdown output.
+- Keep this gate acceptance-handoff scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no publication
+  handoff change beyond acceptance evidence, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -452,6 +452,81 @@ def _pipeline_sample_accounting_closure_summary(
     }
 
 
+def _pipeline_integration_engine_policy_summary(
+    pipeline_contract: dict[str, Any] | None,
+) -> dict[str, Any]:
+    check_name = "integration_default_engine_policy"
+    if pipeline_contract is None:
+        return {
+            "status": "not_requested",
+            "check_name": check_name,
+            "check_present": False,
+            "check_passed": None,
+            "output_count": 0,
+            "non_resident_count": 0,
+            "resident_count": 0,
+            "failed_count": 0,
+            "failed_items": [],
+            "rows": [],
+        }
+
+    integration = pipeline_contract.get("integration")
+    if not isinstance(integration, dict):
+        integration = {}
+    engine_policy = integration.get("engine_policy")
+    if not isinstance(engine_policy, dict):
+        engine_policy = {}
+    outputs = engine_policy.get("outputs")
+    if not isinstance(outputs, list):
+        outputs = []
+
+    rows: list[dict[str, Any]] = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        failures = output.get("failures")
+        if not isinstance(failures, list):
+            failures = []
+        rows.append(
+            {
+                "item": output.get("item"),
+                "status": output.get("status"),
+                "required": bool(output.get("required")),
+                "passed": bool(output.get("passed")),
+                "backend": output.get("backend"),
+                "memory_mode": output.get("memory_mode"),
+                "tile_stack_mode": output.get("tile_stack_mode"),
+                "failures": [str(item) for item in failures],
+            }
+        )
+
+    check_names = {str(name) for name in pipeline_contract.get("check_names") or []}
+    failed_check_names = {str(name) for name in pipeline_contract.get("failed_checks") or []}
+    check_present = check_name in check_names
+    check_passed = None if not check_present else check_name not in failed_check_names
+    failed_items = [row for row in rows if not row.get("passed")]
+    if check_present:
+        status = "passed" if check_passed else "failed"
+    elif engine_policy:
+        status = "passed" if bool(engine_policy.get("passed")) and not failed_items else "failed"
+    else:
+        status = "not_available"
+    return {
+        "status": status,
+        "check_name": check_name,
+        "check_present": check_present,
+        "check_passed": check_passed,
+        "top_level_present": engine_policy.get("top_level_present"),
+        "top_level_default_ok": engine_policy.get("top_level_default_ok"),
+        "output_count": int(engine_policy.get("output_count") or len(outputs)),
+        "non_resident_count": int(engine_policy.get("non_resident_count") or 0),
+        "resident_count": int(engine_policy.get("resident_count") or 0),
+        "failed_count": len(failed_items),
+        "failed_items": failed_items,
+        "rows": rows,
+    }
+
+
 def _pipeline_contract_release_evidence(
     *,
     checks: list[dict[str, Any]],
@@ -471,6 +546,7 @@ def _pipeline_contract_release_evidence(
     contract_requirements = (contract_payload or {}).get("pipeline_contract")
     rejection_sample_accounting = _pipeline_rejection_sample_accounting_summary(pipeline_contract)
     sample_accounting_closure = _pipeline_sample_accounting_closure_summary(pipeline_contract)
+    integration_engine_policy = _pipeline_integration_engine_policy_summary(pipeline_contract)
     return {
         "status": status,
         "required_by_benchmark_contract": isinstance(contract_requirements, dict)
@@ -488,6 +564,14 @@ def _pipeline_contract_release_evidence(
         "failed_check_count": len(failed_checks),
         "failed_checks": failed_checks,
         "rejection_sample_accounting": rejection_sample_accounting,
+        "integration_default_engine_policy": integration_engine_policy.get("check_passed"),
+        "integration_engine_policy_status": integration_engine_policy.get("status"),
+        "integration_engine_policy_non_resident_count": integration_engine_policy.get(
+            "non_resident_count"
+        ),
+        "integration_engine_policy_failed_count": integration_engine_policy.get("failed_count"),
+        "integration_engine_policy_failed_items": integration_engine_policy.get("failed_items"),
+        "integration_engine_policy": integration_engine_policy,
         "integration_sample_accounting_closure": sample_accounting_closure.get(
             "check_passed"
         ),
@@ -733,6 +817,18 @@ def build_acceptance_audit(
         pipeline_contract["sample_accounting_closure"] = _pipeline_sample_accounting_closure_summary(
             pipeline_contract
         )
+        pipeline_contract["integration_engine_policy"] = _pipeline_integration_engine_policy_summary(
+            pipeline_contract
+        )
+        pipeline_contract["integration_default_engine_policy"] = pipeline_contract[
+            "integration_engine_policy"
+        ].get("check_passed")
+        pipeline_contract["integration_engine_policy_status"] = pipeline_contract[
+            "integration_engine_policy"
+        ].get("status")
+        pipeline_contract["integration_engine_policy_failed_count"] = pipeline_contract[
+            "integration_engine_policy"
+        ].get("failed_count")
         pipeline_contract["integration_sample_accounting_closure"] = pipeline_contract[
             "sample_accounting_closure"
         ].get("check_passed")
@@ -764,6 +860,30 @@ def build_acceptance_audit(
                         "status": pipeline_contract_payload.get("status"),
                         "failed_checks": failed_checks,
                     },
+                ),
+                _check(
+                    "pipeline_contract_integration_default_engine_policy",
+                    pipeline_contract["integration_engine_policy"].get("check_present") is True
+                    and pipeline_contract["integration_engine_policy"].get("check_passed") is True,
+                    {
+                        "status": pipeline_contract["integration_engine_policy"].get("status"),
+                        "check_present": pipeline_contract["integration_engine_policy"].get(
+                            "check_present"
+                        ),
+                        "check_passed": pipeline_contract["integration_engine_policy"].get(
+                            "check_passed"
+                        ),
+                        "non_resident_count": pipeline_contract["integration_engine_policy"].get(
+                            "non_resident_count"
+                        ),
+                        "failed_count": pipeline_contract["integration_engine_policy"].get(
+                            "failed_count"
+                        ),
+                        "failed_items": pipeline_contract["integration_engine_policy"].get(
+                            "failed_items"
+                        ),
+                    },
+                    "Acceptance evidence must preserve the pipeline-contract integration engine policy guard.",
                 ),
             ]
         )
@@ -1032,6 +1152,29 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
                     f"{row.get('item')}: map_rejected_sample_sum="
                     f"{row.get('map_rejected_sample_sum')} source_counts=[{source_counts}] "
                     f"failed_matches=[{failed_matches}]"
+                )
+            lines.append("")
+        engine_policy = release_evidence.get("integration_engine_policy")
+        if isinstance(engine_policy, dict):
+            lines.extend(
+                [
+                    "### Integration Engine Policy",
+                    "",
+                    f"- Status: {engine_policy.get('status')}",
+                    f"- Check passed: {engine_policy.get('check_passed')}",
+                    f"- Non-resident outputs: {engine_policy.get('non_resident_count')}",
+                    f"- Resident outputs: {engine_policy.get('resident_count')}",
+                    f"- Failed rows: {engine_policy.get('failed_count')}",
+                ]
+            )
+            for row in engine_policy.get("failed_items") or []:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "- Integration engine-policy mismatch "
+                    f"{row.get('item')}: status={row.get('status')} "
+                    f"backend={row.get('backend')} mode={row.get('tile_stack_mode')} "
+                    f"failures={row.get('failures')}"
                 )
             lines.append("")
         sample_closure = release_evidence.get("sample_accounting_closure")

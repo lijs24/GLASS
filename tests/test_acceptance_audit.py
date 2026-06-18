@@ -467,6 +467,7 @@ def _add_pipeline_contract_requirement(path: Path) -> None:
         "required_check_names": [
             "calibration_master_surface_contract",
             "resident_calibrated_light_contract",
+            "integration_default_engine_policy",
             "integration_resident_result_contract",
         ],
         "allow_failed_checks": False,
@@ -546,6 +547,19 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
             "passed": passed,
             "evidence": {"required_count": 1, "failed": [] if passed else ["H"]},
             "note": "",
+        },
+        {
+            "name": "integration_default_engine_policy",
+            "passed": True,
+            "evidence": {
+                "output_count": 1,
+                "non_resident_count": 0,
+                "resident_count": 1,
+                "top_level_present": False,
+                "top_level_default_ok": False,
+                "failed": [],
+            },
+            "note": "resident-only fixture",
         }
     ]
     write_json(
@@ -557,6 +571,27 @@ def _write_pipeline_contract(path: Path, *, passed: bool = True) -> None:
             "passed": passed,
             "checks": checks,
             "integration": {
+                "engine_policy": {
+                    "passed": True,
+                    "top_level_present": False,
+                    "top_level_default_ok": False,
+                    "output_count": 1,
+                    "non_resident_count": 0,
+                    "resident_count": 1,
+                    "failed": [],
+                    "outputs": [
+                        {
+                            "item": "H",
+                            "backend": "cuda_resident_stack",
+                            "memory_mode": "resident",
+                            "tile_stack_mode": None,
+                            "required": False,
+                            "passed": True,
+                            "status": "resident_not_required",
+                            "failures": [],
+                        }
+                    ],
+                },
                 "outputs": [
                     {
                         "item": "H",
@@ -595,6 +630,19 @@ def _write_pipeline_contract_with_rejection_sample_drift(path: Path) -> None:
             "note": "",
         },
         {
+            "name": "integration_default_engine_policy",
+            "passed": True,
+            "evidence": {
+                "output_count": 1,
+                "non_resident_count": 0,
+                "resident_count": 1,
+                "top_level_present": False,
+                "top_level_default_ok": False,
+                "failed": [],
+            },
+            "note": "resident-only fixture",
+        },
+        {
             "name": "integration_rejection_sample_counts_match_maps",
             "passed": False,
             "evidence": {
@@ -626,6 +674,27 @@ def _write_pipeline_contract_with_rejection_sample_drift(path: Path) -> None:
             "passed": False,
             "checks": checks,
             "integration": {
+                "engine_policy": {
+                    "passed": True,
+                    "top_level_present": False,
+                    "top_level_default_ok": False,
+                    "output_count": 1,
+                    "non_resident_count": 0,
+                    "resident_count": 1,
+                    "failed": [],
+                    "outputs": [
+                        {
+                            "item": "H",
+                            "backend": "cuda_resident_stack",
+                            "memory_mode": "resident",
+                            "tile_stack_mode": None,
+                            "required": False,
+                            "passed": True,
+                            "status": "resident_not_required",
+                            "failures": [],
+                        }
+                    ],
+                },
                 "outputs": [
                     {
                         "item": "H",
@@ -710,6 +779,19 @@ def _write_pipeline_contract_with_sample_closure_drift(path: Path) -> None:
             "note": "",
         },
         {
+            "name": "integration_default_engine_policy",
+            "passed": True,
+            "evidence": {
+                "output_count": 1,
+                "non_resident_count": 0,
+                "resident_count": 1,
+                "top_level_present": False,
+                "top_level_default_ok": False,
+                "failed": [],
+            },
+            "note": "resident-only fixture",
+        },
+        {
             "name": "integration_sample_accounting_closure",
             "passed": False,
             "evidence": {
@@ -737,6 +819,27 @@ def _write_pipeline_contract_with_sample_closure_drift(path: Path) -> None:
             "passed": False,
             "checks": checks,
             "integration": {
+                "engine_policy": {
+                    "passed": True,
+                    "top_level_present": False,
+                    "top_level_default_ok": False,
+                    "output_count": 1,
+                    "non_resident_count": 0,
+                    "resident_count": 1,
+                    "failed": [],
+                    "outputs": [
+                        {
+                            "item": "H",
+                            "backend": "cuda_resident_stack",
+                            "memory_mode": "resident",
+                            "tile_stack_mode": None,
+                            "required": False,
+                            "passed": True,
+                            "status": "resident_not_required",
+                            "failures": [],
+                        }
+                    ],
+                },
                 "outputs": [
                     {
                         "item": "H",
@@ -765,6 +868,106 @@ def _write_pipeline_contract_with_sample_closure_drift(path: Path) -> None:
                         },
                     }
                 ]
+            },
+            "pixel_verification": {"enabled": False},
+        },
+    )
+
+
+def _write_pipeline_contract_with_engine_policy_drift(path: Path) -> None:
+    checks = [
+        {
+            "name": "calibration_master_surface_contract",
+            "passed": True,
+            "evidence": {"master_count": 1, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "resident_calibrated_light_contract",
+            "passed": True,
+            "evidence": {"light_count": 3, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "integration_resident_result_contract",
+            "passed": True,
+            "evidence": {"required_count": 0, "failed": []},
+            "note": "",
+        },
+        {
+            "name": "integration_default_engine_policy",
+            "passed": False,
+            "evidence": {
+                "output_count": 1,
+                "non_resident_count": 1,
+                "resident_count": 0,
+                "top_level_present": True,
+                "top_level_default_ok": True,
+                "failed": [
+                    {
+                        "item": "H",
+                        "status": "implicit_cuda_fast_path",
+                        "backend": "cuda",
+                        "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                        "failures": ["cuda_fast_path_not_explicit"],
+                    }
+                ],
+            },
+            "note": "fixture implicit non-resident CUDA fast path",
+        },
+    ]
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "audit_type": "pipeline_invariant_contract",
+            "status": "failed",
+            "passed": False,
+            "checks": checks,
+            "integration": {
+                "engine_policy": {
+                    "passed": False,
+                    "top_level_present": True,
+                    "top_level_default_ok": True,
+                    "output_count": 1,
+                    "non_resident_count": 1,
+                    "resident_count": 0,
+                    "failed": [
+                        {
+                            "item": "H",
+                            "status": "implicit_cuda_fast_path",
+                            "backend": "cuda",
+                            "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                            "failures": ["cuda_fast_path_not_explicit"],
+                        }
+                    ],
+                    "outputs": [
+                        {
+                            "item": "H",
+                            "backend": "cuda",
+                            "memory_mode": None,
+                            "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                            "required": True,
+                            "passed": False,
+                            "status": "implicit_cuda_fast_path",
+                            "failures": ["cuda_fast_path_not_explicit"],
+                        }
+                    ],
+                },
+                "outputs": [
+                    {
+                        "item": "H",
+                        "backend": "cuda",
+                        "memory_mode": None,
+                        "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                        "resident_result_contract": {
+                            "required": False,
+                            "present": False,
+                            "passed": False,
+                            "status": "not_required",
+                        },
+                    }
+                ],
             },
             "pixel_verification": {"enabled": False},
         },
@@ -959,8 +1162,11 @@ def test_acceptance_audit_accepts_passing_pipeline_contract(tmp_path: Path):
     assert audit["passed"] is True
     assert checks["pipeline_contract_present"]["passed"] is True
     assert checks["pipeline_contract_passed"]["passed"] is True
+    assert checks["pipeline_contract_integration_default_engine_policy"]["passed"] is True
     assert audit["pipeline_contract"]["passed"] is True
-    assert audit["pipeline_contract"]["check_count"] == 3
+    assert audit["pipeline_contract"]["check_count"] == 4
+    assert audit["pipeline_contract"]["integration_default_engine_policy"] is True
+    assert audit["pipeline_contract"]["integration_engine_policy"]["resident_count"] == 1
 
 
 def test_acceptance_audit_summarizes_pipeline_rejection_sample_accounting(tmp_path: Path):
@@ -1075,6 +1281,53 @@ def test_acceptance_audit_summarizes_pipeline_sample_accounting_closure(tmp_path
     assert "input_valid_samples_before_rejection=9" in text
     assert "valid_samples_after_rejection=6" in text
     assert "rejected_samples=2" in text
+
+
+def test_acceptance_audit_summarizes_pipeline_engine_policy_drift(tmp_path: Path):
+    manifest = tmp_path / "manifest.json"
+    gp_run = tmp_path / "gp"
+    wbpp = tmp_path / "wbpp.json"
+    compare = tmp_path / "compare.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    markdown = tmp_path / "audit.md"
+    _write_manifest(manifest)
+    _write_glass_run(gp_run)
+    _write_wbpp_result(wbpp)
+    _write_compare(compare)
+    _write_pipeline_contract_with_engine_policy_drift(pipeline)
+
+    audit = build_acceptance_audit(
+        manifest_path=manifest,
+        glass_run=gp_run,
+        wbpp_result=wbpp,
+        compare_json=compare,
+        min_active_frames=190,
+        min_speedup=2.0,
+        pipeline_contract_json=pipeline,
+    )
+
+    checks = {item["name"]: item for item in audit["checks"]}
+    evidence = audit["release_contract_evidence"]["pipeline_contract"]
+    engine_policy = evidence["integration_engine_policy"]
+
+    assert audit["passed"] is False
+    assert checks["pipeline_contract_integration_default_engine_policy"]["passed"] is False
+    assert checks["pipeline_contract_integration_default_engine_policy"]["evidence"]["failed_count"] == 1
+    assert evidence["status"] == "failed"
+    assert evidence["integration_default_engine_policy"] is False
+    assert evidence["integration_engine_policy_status"] == "failed"
+    assert evidence["integration_engine_policy_non_resident_count"] == 1
+    assert evidence["integration_engine_policy_failed_count"] == 1
+    assert engine_policy["failed_items"][0]["item"] == "H"
+    assert engine_policy["failed_items"][0]["failures"] == ["cuda_fast_path_not_explicit"]
+    assert audit["pipeline_contract"]["integration_engine_policy_status"] == "failed"
+
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "Integration Engine Policy" in text
+    assert "Check passed: False" in text
+    assert "implicit_cuda_fast_path" in text
+    assert "cuda_fast_path_not_explicit" in text
 
 
 def test_acceptance_audit_accepts_contract_bundle(tmp_path: Path):
@@ -1512,22 +1765,25 @@ def test_acceptance_audit_applies_benchmark_pipeline_contract(tmp_path: Path):
     assert checks["contract_pipeline_contract_min_check_count"] is True
     assert checks["contract_pipeline_contract_check:calibration_master_surface_contract"] is True
     assert checks["contract_pipeline_contract_check:resident_calibrated_light_contract"] is True
+    assert checks["contract_pipeline_contract_check:integration_default_engine_policy"] is True
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is True
     assert checks["contract_pipeline_contract_no_failed_checks"] is True
     pipeline_evidence = audit["release_contract_evidence"]["pipeline_contract"]
     assert pipeline_evidence["status"] == "passed"
     assert pipeline_evidence["required_by_benchmark_contract"] is True
     assert pipeline_evidence["pipeline_contract_passed"] is True
-    assert pipeline_evidence["pipeline_contract_check_count"] == 3
-    assert pipeline_evidence["benchmark_check_count"] == 8
+    assert pipeline_evidence["pipeline_contract_check_count"] == 4
+    assert pipeline_evidence["benchmark_check_count"] == 9
     assert pipeline_evidence["failed_check_count"] == 0
     assert {item["name"] for item in pipeline_evidence["checks"]} >= {
         "pipeline_contract_present",
         "pipeline_contract_passed",
+        "pipeline_contract_integration_default_engine_policy",
         "contract_pipeline_contract_present",
         "contract_pipeline_contract_passed",
         "contract_pipeline_contract_check:calibration_master_surface_contract",
         "contract_pipeline_contract_check:resident_calibrated_light_contract",
+        "contract_pipeline_contract_check:integration_default_engine_policy",
         "contract_pipeline_contract_check:integration_resident_result_contract",
     }
 
@@ -1567,6 +1823,7 @@ def test_acceptance_audit_benchmark_pipeline_contract_requires_artifact(tmp_path
     assert audit["pipeline_contract"] is None
     assert checks["contract_pipeline_contract_present"] is False
     assert checks["contract_pipeline_contract_passed"] is False
+    assert checks["contract_pipeline_contract_check:integration_default_engine_policy"] is False
     assert checks["contract_pipeline_contract_check:integration_resident_result_contract"] is False
     pipeline_evidence = audit["release_contract_evidence"]["pipeline_contract"]
     assert pipeline_evidence["status"] == "failed"
