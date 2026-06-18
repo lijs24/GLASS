@@ -34,6 +34,7 @@ _REPORT_SECTIONS = [
     ("xisf-input-cache", "XISF input cache"),
     ("frame-quality-table", "Frame quality table"),
     ("registration-table", "Registration table"),
+    ("registration-admission", "Registration admission"),
     ("registration-quality-contract", "Registration quality contract"),
     ("warp-quality-contract", "Warp quality contract"),
     ("local-normalization-summary", "Local normalization summary"),
@@ -1532,6 +1533,55 @@ def _registration_quality_summary_rows(contract: dict[str, Any] | None) -> list[
     ]
 
 
+def _registration_admission_rows(registration: dict[str, Any] | None) -> list[dict[str, Any]]:
+    admission = (registration or {}).get("reference_admission")
+    if not isinstance(admission, dict) or not admission:
+        return []
+    return [
+        {
+            "status": admission.get("status"),
+            "reference_frame_id": admission.get("reference_frame_id"),
+            "quality_gate_status": admission.get("quality_gate_status"),
+            "quality_gate_enforced": admission.get("quality_gate_enforced"),
+            "reference_selection_fallback": admission.get("reference_selection_fallback"),
+            "allow_quality_rejected_reference": admission.get("allow_quality_rejected_reference"),
+            "reason": admission.get("reason"),
+            "quality_reference_frame_id": (registration or {}).get("quality_reference_frame_id"),
+            "requested_reference_frame_id": (registration or {}).get("requested_reference_frame_id"),
+        }
+    ]
+
+
+def _registration_admission_frame_rows(registration: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    admission = (registration or {}).get("reference_admission")
+    if not isinstance(admission, dict) or not admission:
+        return rows
+    for item in (registration or {}).get("registration_results") or []:
+        if not isinstance(item, dict):
+            continue
+        source = item.get("registration_solution_source")
+        quality_status = item.get("quality_gate_status")
+        include = source == "quality_reference_admission" or quality_status == "rejected"
+        if not include:
+            continue
+        validation = item.get("validation") if isinstance(item.get("validation"), dict) else {}
+        warnings = item.get("warnings") if isinstance(item.get("warnings"), list) else []
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "status": item.get("status"),
+                "accepted": item.get("accepted"),
+                "quality_gate_status": quality_status,
+                "solution_source": source,
+                "validation_accepted": validation.get("accepted"),
+                "validation_status": validation.get("status"),
+                "reason": item.get("reason") or (warnings[0] if warnings else None),
+            }
+        )
+    return rows
+
+
 def _registration_quality_failure_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in (contract or {}).get("checks") or []:
@@ -2005,6 +2055,8 @@ def write_html_report(
     frame_quality = (quality or {}).get("frame_quality", [])
     quality_gate_rows = _quality_gate_rows(quality)
     registration_results = (registration or {}).get("registration_results", [])
+    registration_admission_rows = _registration_admission_rows(registration)
+    registration_admission_frame_rows = _registration_admission_frame_rows(registration)
     local_norm_results = (local_norm or {}).get("local_norm_results", [])
     integration_outputs = (integration or {}).get("outputs", [])
     integration_summary_rows = _integration_output_rows(integration)
@@ -2190,6 +2242,12 @@ def write_html_report(
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
   {_h2("registration-table", "Registration table")}
   {_limited_table(registration_results, label="registration rows", artifact="registration_results.json")}
+  {_h2("registration-admission", "Registration admission")}
+  <p>Reference-admission evidence explains whether the selected reference frame
+  was allowed into registration after the quality gate. A blocked admission is a
+  deliberate registration-stage stop, not a missing integration artifact.</p>
+  {_table(registration_admission_rows)}
+  {_limited_table(registration_admission_frame_rows, label="registration admission frame rows", artifact="registration_results.json")}
   {_h2("registration-quality-contract", "Registration quality contract")}
   <p>The registration quality contract summarizes accepted/rejected alignment
   rows and optional inlier/RMS acceptance thresholds.</p>

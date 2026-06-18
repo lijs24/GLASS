@@ -280,6 +280,13 @@ def test_cli_audit_and_run_write_state_for_registration_admission_block(tmp_path
     resume_timing_by_stage = {item["stage"]: item for item in resume_timing["stages"]}
     assert resume_timing_by_stage["registration"]["status"] == "failed"
     assert resume_timing_by_stage["registration"]["resume_existing_artifact"] is True
+    admission_report = tmp_path / "registration_admission_report.html"
+    assert main(["report", "--run", str(audit), "--out", str(admission_report)]) == 0
+    admission_html = admission_report.read_text(encoding="utf-8")
+    assert "Registration admission" in admission_html
+    assert "blocked" in admission_html
+    assert "quality_reference_admission" in admission_html
+    assert "allow_quality_rejected_reference" in admission_html
 
     assert main(["scan", "--root", str(data), "--out", str(manifest)]) == 0
     assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0

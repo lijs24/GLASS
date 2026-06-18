@@ -6255,6 +6255,21 @@ integration where applicable.
   no runtime default change, no package upload, no GitHub release creation, and
   no real-data benchmark rerun.
 
+### S2-Gate 352: Registration Admission Report Surface
+
+- Surface `reference_admission` metadata from `registration_results.json` in
+  the main HTML report.
+- Add a dedicated Registration admission section showing status, selected
+  reference id, quality-gate status, fallback/override flags, and block reason.
+- Add a compact frame table for rows affected by the admission decision,
+  including `quality_reference_admission` source rows.
+- Add CLI smoke coverage proving a registration-admission failure run can still
+  generate a report that explains the blocked registration stage.
+- Keep this gate report-surface scoped: no registration transform math change,
+  no quality metric change, no integration math change, no CUDA kernel change,
+  no runtime default change, no package upload, no GitHub release creation, and
+  no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
