@@ -6,7 +6,10 @@ import numpy as np
 
 from glass.cli import main
 from glass.engine.contracts import DQFlag
-from glass.engine.rejection import resident_rejection_descriptor
+from glass.engine.rejection import (
+    RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+    resident_rejection_descriptor,
+)
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.report.dq_map_verify import summarize_count_map_pixels
@@ -20,6 +23,7 @@ def _write_resident_run(
     mismatch_sample_count: bool = False,
     sample_closure_status: str | None = None,
     omit_rejection_semantics: bool = False,
+    resident_artifact_legacy_rejection_semantics: bool = False,
     resident_winsorized_mode: str = "fast_approx",
 ) -> None:
     integration = path / "integration"
@@ -131,6 +135,25 @@ def _write_resident_run(
             "outputs": [output],
         },
     )
+    if resident_artifact_legacy_rejection_semantics:
+        write_json(
+            path / "resident_artifacts.json",
+            {
+                "schema_version": 1,
+                "backend": "cuda_resident_stack",
+                "artifacts": [
+                    {
+                        "filter": "H",
+                        "integration_rejection": {
+                            "mode": "winsorized_sigma",
+                            "low_sigma": 3.0,
+                            "high_sigma": 3.0,
+                            "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+                        },
+                    }
+                ],
+            },
+        )
 
 
 def test_resident_result_contract_passes_with_pixel_verify(tmp_path: Path) -> None:
@@ -185,6 +208,33 @@ def test_resident_result_contract_requires_winsorized_semantics_disclosure(tmp_p
     semantics = payload["outputs"][0]["rejection_semantics"]
     assert semantics["required"] is True
     assert semantics["present"] is False
+
+
+def test_resident_result_contract_completes_legacy_resident_artifact_semantics(
+    tmp_path: Path,
+) -> None:
+    _write_resident_run(
+        tmp_path,
+        omit_rejection_semantics=True,
+        resident_artifact_legacy_rejection_semantics=True,
+    )
+
+    payload = build_resident_result_contract(tmp_path, pixel_verify=True, pixel_verify_tile_size=1)
+
+    checks = {item["name"]: item for item in payload["outputs"][0]["checks"]}
+    semantics = payload["outputs"][0]["rejection_semantics"]
+    descriptor = semantics["descriptor"]
+    assert payload["passed"] is True
+    assert checks["resident_winsorized_rejection_semantics_disclosed"]["passed"] is True
+    assert semantics["integration_results_descriptor_present"] is False
+    assert semantics["resident_artifacts_descriptor_present"] is True
+    assert semantics["descriptor_source"] == "resident_artifacts.integration_rejection"
+    assert semantics["legacy_completion_applied"] is True
+    assert semantics["legacy_completion_source"] == "fast_approx_algorithm"
+    assert descriptor["resident_winsorized_mode"] == "fast_approx"
+    assert descriptor["cpu_baseline_parity"] is False
+    assert descriptor["parity_status"] == "known_non_parity_pending_cuda_update"
+    assert descriptor["approximation"] is True
 
 
 def test_resident_result_contract_accepts_sample_accounting_closure(tmp_path: Path) -> None:

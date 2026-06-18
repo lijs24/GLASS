@@ -6,7 +6,10 @@ import numpy as np
 
 from glass.cli import main
 from glass.engine.contracts import DQFlag
-from glass.engine.rejection import resident_rejection_descriptor
+from glass.engine.rejection import (
+    RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+    resident_rejection_descriptor,
+)
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
 from glass.io.fits_io import write_fits_data
 from glass.io.json_io import read_json, write_json
@@ -20,6 +23,8 @@ def _write_resident_pipeline_run(
     *,
     missing_source_terms: bool = False,
     sample_closure_status: str | None = None,
+    omit_rejection_semantics: bool = False,
+    resident_artifact_legacy_rejection_semantics: bool = False,
 ) -> None:
     integration_dir = path / "integration"
     integration_dir.mkdir(parents=True)
@@ -68,47 +73,81 @@ def _write_resident_pipeline_run(
             "rejected_samples": 3,
             "valid_rejection_match": sample_closure_status == "passed",
         }
+    output = {
+        "filter": "H",
+        "backend": "cuda_resident_stack",
+        "memory_mode": "resident",
+        "frame_count": 3,
+        "master_path": str(integration_dir / "master_H.fits"),
+        "weight_map_path": str(integration_dir / "weight_H.fits"),
+        "coverage_map_path": str(integration_dir / "coverage_H.fits"),
+        "dq_map_path": str(integration_dir / "dq_H.fits"),
+        "low_rejection_map_path": str(integration_dir / "low_H.fits"),
+        "high_rejection_map_path": str(integration_dir / "high_H.fits"),
+        "dq_summary": dq_summary,
+        "dq_coverage_provenance": {
+            "available": True,
+            "active_frame_count": 3,
+            "geometric_frame_count_matches_active": True,
+            "rejected_sample_count": 3.0,
+            "rejected_sample_count_source": "low_high_rejection_maps",
+            "source_terms": source_terms,
+        },
+        "dq_provenance_summary": provenance_summary,
+        "geometric_warp_coverage": {
+            "available": True,
+            "frame_count": 3,
+            "frame_count_matches_active": True,
+        },
+        "output_map_policy": {
+            "available": [
+                "master",
+                "weight",
+                "coverage",
+                "dq",
+                "low_rejection",
+                "high_rejection",
+            ],
+            "written": [
+                "master",
+                "weight",
+                "coverage",
+                "dq",
+                "low_rejection",
+                "high_rejection",
+            ],
+            "skipped": [],
+        },
+    }
+    if not omit_rejection_semantics:
+        output["integration_rejection"] = resident_rejection_descriptor(
+            "winsorized_sigma",
+            3.0,
+            3.0,
+        )
     write_json(
         path / "integration_results.json",
-        {
-            "rejection": "winsorized_sigma",
-            "outputs": [
-                {
-                    "filter": "H",
-                    "backend": "cuda_resident_stack",
-                    "memory_mode": "resident",
-                    "frame_count": 3,
-                    "master_path": str(integration_dir / "master_H.fits"),
-                    "weight_map_path": str(integration_dir / "weight_H.fits"),
-                    "coverage_map_path": str(integration_dir / "coverage_H.fits"),
-                    "dq_map_path": str(integration_dir / "dq_H.fits"),
-                    "low_rejection_map_path": str(integration_dir / "low_H.fits"),
-                    "high_rejection_map_path": str(integration_dir / "high_H.fits"),
-                    "integration_rejection": resident_rejection_descriptor("winsorized_sigma", 3.0, 3.0),
-                    "dq_summary": dq_summary,
-                    "dq_coverage_provenance": {
-                        "available": True,
-                        "active_frame_count": 3,
-                        "geometric_frame_count_matches_active": True,
-                        "rejected_sample_count": 3.0,
-                        "rejected_sample_count_source": "low_high_rejection_maps",
-                        "source_terms": source_terms,
-                    },
-                    "dq_provenance_summary": provenance_summary,
-                    "geometric_warp_coverage": {
-                        "available": True,
-                        "frame_count": 3,
-                        "frame_count_matches_active": True,
-                    },
-                    "output_map_policy": {
-                        "available": ["master", "weight", "coverage", "dq", "low_rejection", "high_rejection"],
-                        "written": ["master", "weight", "coverage", "dq", "low_rejection", "high_rejection"],
-                        "skipped": [],
-                    },
-                }
-            ],
-        },
+        {"rejection": "winsorized_sigma", "outputs": [output]},
     )
+    if resident_artifact_legacy_rejection_semantics:
+        write_json(
+            path / "resident_artifacts.json",
+            {
+                "schema_version": 1,
+                "backend": "cuda_resident_stack",
+                "artifacts": [
+                    {
+                        "filter": "H",
+                        "integration_rejection": {
+                            "mode": "winsorized_sigma",
+                            "low_sigma": 3.0,
+                            "high_sigma": 3.0,
+                            "algorithm": RESIDENT_WINSORIZED_SIGMA_ALGORITHM,
+                        },
+                    }
+                ],
+            },
+        )
 
 
 def _write_nonresident_cuda_fast_path_pipeline_run(path: Path, *, explicit: bool) -> None:
@@ -314,6 +353,31 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+
+
+def test_pipeline_contract_uses_resident_artifact_winsorized_semantics_handoff(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(
+        run,
+        omit_rejection_semantics=True,
+        resident_artifact_legacy_rejection_semantics=True,
+    )
+
+    audit = build_pipeline_contract_audit(run, pixel_verify=True, pixel_verify_tile_size=1)
+    checks = {item["name"]: item for item in audit["checks"]}
+    contract = audit["integration"]["outputs"][0]["resident_result_contract"]["contract"]
+    semantics = contract["rejection_semantics"]
+
+    assert audit["passed"] is True
+    assert checks["integration_resident_result_contract"]["passed"] is True
+    assert semantics["descriptor_source"] == "resident_artifacts.integration_rejection"
+    assert semantics["integration_results_descriptor_present"] is False
+    assert semantics["resident_artifacts_descriptor_present"] is True
+    assert semantics["legacy_completion_applied"] is True
+    assert semantics["descriptor"]["resident_winsorized_mode"] == "fast_approx"
+    assert semantics["descriptor"]["cpu_baseline_parity"] is False
 
 
 def test_pipeline_contract_allows_explicit_nonresident_cuda_fast_path(tmp_path: Path):

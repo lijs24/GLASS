@@ -5182,6 +5182,27 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 302: Resident Winsorized Semantics Handoff Backfill
+
+- Harden resident result-contract audits so old resident CUDA runs that omitted
+  `integration_results.json` per-output winsorized disclosure can recover
+  same-run semantics from `resident_artifacts.json`.
+- Allow compatibility completion only when the same run's resident artifact
+  contains a `winsorized_sigma` `integration_rejection` descriptor whose
+  algorithm matches a known GLASS resident winsorized implementation.
+- Complete missing legacy descriptor fields from canonical GLASS constants and
+  record the audit source, raw descriptor, completed descriptor,
+  `legacy_completion_applied`, and `legacy_completion_source`.
+- Preserve the strict Gate260 behavior for artifacts with no integration output
+  descriptor and no same-run resident-artifact descriptor; those must still fail
+  the resident result contract.
+- Re-run the 200-light resident pipeline contract against the existing
+  read-only run artifacts and require the release-decision handoff to become
+  `default_change_ready` without modifying image outputs.
+- Keep this gate resident-contract/audit scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

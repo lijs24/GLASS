@@ -12,6 +12,7 @@ from glass.engine.rejection import (
     RESIDENT_WINSORIZED_SIGMA_HARDENED_PARITY_STATUS,
     RESIDENT_WINSORIZED_SIGMA_PARITY_STATUS,
     RESIDENT_WINSORIZED_SIGMA_SCALE_ESTIMATOR,
+    resident_rejection_descriptor,
 )
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
@@ -159,11 +160,92 @@ def _sample_accounting_closure_state(provenance_summary: dict[str, Any]) -> dict
     }
 
 
-def _resident_rejection_semantics_state(output: dict[str, Any], rejection: str) -> dict[str, Any]:
-    descriptor = (
+def _resident_artifact_rejection_descriptor(
+    run_root: Path,
+    output: dict[str, Any],
+    index: int,
+) -> dict[str, Any]:
+    resident_path = run_root / "resident_artifacts.json"
+    if not resident_path.exists():
+        return {}
+    try:
+        payload = read_json(resident_path)
+    except Exception:
+        return {}
+    artifacts = payload.get("artifacts") if isinstance(payload, dict) else []
+    if not isinstance(artifacts, list):
+        return {}
+    output_filter = output.get("filter")
+    fallback: dict[str, Any] = {}
+    for artifact_index, artifact in enumerate(artifacts):
+        if not isinstance(artifact, dict):
+            continue
+        descriptor = artifact.get("integration_rejection")
+        if not isinstance(descriptor, dict):
+            continue
+        if output_filter is not None and artifact.get("filter") == output_filter:
+            return dict(descriptor)
+        if artifact_index == index:
+            fallback = dict(descriptor)
+    return fallback
+
+
+def _float_or_default(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _complete_legacy_winsorized_descriptor(
+    raw_descriptor: dict[str, Any],
+) -> tuple[dict[str, Any], bool, str | None]:
+    if raw_descriptor.get("mode") != "winsorized_sigma":
+        return dict(raw_descriptor), False, None
+    low_sigma = _float_or_default(raw_descriptor.get("low_sigma"), 3.0)
+    high_sigma = _float_or_default(raw_descriptor.get("high_sigma"), 3.0)
+    algorithm = raw_descriptor.get("algorithm")
+    if algorithm == RESIDENT_WINSORIZED_SIGMA_ALGORITHM:
+        canonical = resident_rejection_descriptor(
+            "winsorized_sigma",
+            low_sigma,
+            high_sigma,
+            resident_winsorized_mode=RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+        )
+        return {**canonical, **raw_descriptor}, True, "fast_approx_algorithm"
+    if algorithm == RESIDENT_WINSORIZED_SIGMA_HARDENED_ALGORITHM:
+        canonical = resident_rejection_descriptor(
+            "winsorized_sigma",
+            low_sigma,
+            high_sigma,
+            resident_winsorized_mode=RESIDENT_WINSORIZED_SIGMA_HARDENED_MODE,
+        )
+        return {**canonical, **raw_descriptor}, True, "hardened_algorithm"
+    return dict(raw_descriptor), False, None
+
+
+def _resident_rejection_semantics_state(
+    output: dict[str, Any],
+    rejection: str,
+    *,
+    resident_artifact_descriptor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    output_descriptor = (
         output.get("integration_rejection")
         if isinstance(output.get("integration_rejection"), dict)
         else {}
+    )
+    artifact_descriptor = resident_artifact_descriptor or {}
+    raw_descriptor = output_descriptor or artifact_descriptor
+    descriptor_source = (
+        "integration_results.output.integration_rejection"
+        if output_descriptor
+        else "resident_artifacts.integration_rejection"
+        if artifact_descriptor
+        else "missing"
+    )
+    descriptor, legacy_completion, legacy_completion_source = _complete_legacy_winsorized_descriptor(
+        raw_descriptor
     )
     required = rejection == "winsorized_sigma"
     expected_options = [
@@ -191,11 +273,17 @@ def _resident_rejection_semantics_state(output: dict[str, Any], rejection: str) 
     if not required:
         return {
             "required": False,
-            "present": bool(descriptor),
+            "present": bool(raw_descriptor),
             "passed": True,
             "status": "not_required",
             "rejection": rejection,
             "descriptor": descriptor,
+            "raw_descriptor": raw_descriptor,
+            "descriptor_source": descriptor_source,
+            "integration_results_descriptor_present": bool(output_descriptor),
+            "resident_artifacts_descriptor_present": bool(artifact_descriptor),
+            "legacy_completion_applied": legacy_completion,
+            "legacy_completion_source": legacy_completion_source,
             "expected": None,
         }
     mismatch_options = [
@@ -215,7 +303,7 @@ def _resident_rejection_semantics_state(output: dict[str, Any], rejection: str) 
         if passed_option_index is not None
         else expected_options[0]
     )
-    present = bool(descriptor)
+    present = bool(raw_descriptor)
     mismatches = {} if passed_option_index is not None else mismatch_options[0]
     return {
         "required": True,
@@ -224,6 +312,12 @@ def _resident_rejection_semantics_state(output: dict[str, Any], rejection: str) 
         "status": "passed" if present and passed_option_index is not None else "failed",
         "rejection": rejection,
         "descriptor": descriptor,
+        "raw_descriptor": raw_descriptor,
+        "descriptor_source": descriptor_source,
+        "integration_results_descriptor_present": bool(output_descriptor),
+        "resident_artifacts_descriptor_present": bool(artifact_descriptor),
+        "legacy_completion_applied": legacy_completion,
+        "legacy_completion_source": legacy_completion_source,
         "expected": matched_expected,
         "expected_options": expected_options,
         "matched_expected_index": passed_option_index,
@@ -396,7 +490,16 @@ def _resident_output_contract(
         0,
     )
     sample_closure = _sample_accounting_closure_state(provenance_summary)
-    rejection_semantics = _resident_rejection_semantics_state(output, rejection)
+    resident_artifact_descriptor = _resident_artifact_rejection_descriptor(
+        run_root,
+        output,
+        index,
+    )
+    rejection_semantics = _resident_rejection_semantics_state(
+        output,
+        rejection,
+        resident_artifact_descriptor=resident_artifact_descriptor,
+    )
     checks = [
         _check(
             "resident_identity",
