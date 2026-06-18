@@ -252,6 +252,54 @@ def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
     assert "--backend cpu" in run_command
 
 
+def test_cli_report_surfaces_quality_saturation_summary(tmp_path: Path):
+    run = tmp_path / "run"
+    report = tmp_path / "report.html"
+    run.mkdir()
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "quality_gate_policy": {
+                "max_saturation_fraction": 0.005,
+                "saturation_level": 5000.0,
+            },
+            "frame_quality": [
+                {
+                    "frame_id": "bad_threshold",
+                    "saturation_fraction": 36 / 4096,
+                    "saturated_pixel_count": 36,
+                    "saturation_level": 5000.0,
+                    "saturation_source": "threshold",
+                    "quality_gate_status": "rejected",
+                    "quality_gate_warnings": [
+                        "saturation_fraction 0.00879 exceeds max_saturation_fraction=0.005"
+                    ],
+                },
+                {
+                    "frame_id": "good_threshold",
+                    "saturation_fraction": 0.0,
+                    "saturated_pixel_count": 0,
+                    "saturation_level": 5000.0,
+                    "saturation_source": "threshold",
+                    "quality_gate_status": "accepted",
+                    "quality_gate_warnings": [],
+                },
+            ],
+            "reference_frame_id": "good_threshold",
+        },
+    )
+
+    assert main(["report", "--run", str(run), "--out", str(report)]) == 0
+    html = report.read_text(encoding="utf-8")
+
+    assert "Quality saturation" in html
+    assert "saturated_frame_count" in html
+    assert "quality_gate_saturation_rejected_count" in html
+    assert "bad_threshold" in html
+    assert "threshold" in html
+
+
 def test_cli_audit_and_run_write_state_for_registration_admission_block(tmp_path: Path):
     data = tmp_path / "uniform"
     audit = tmp_path / "audit"

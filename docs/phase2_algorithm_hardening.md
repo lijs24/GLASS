@@ -6311,6 +6311,23 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 355: Quality Saturation Report Surface
+
+- Surface Gate354 saturation evidence in the main HTML report.
+- Add a dedicated Quality saturation section summarizing frame count,
+  saturated-frame count, saturation-rejected count, maximum/mean saturation
+  fraction, maximum saturated-pixel count, active saturation threshold, source,
+  and worst frame id.
+- Add a compact frame table listing only frames with saturation counts or
+  saturation quality-gate warnings, preserving threshold/DQ source and rejection
+  reason text.
+- Add CLI report smoke coverage using a controlled `frame_quality.json`
+  artifact with one threshold-saturated rejected frame and one accepted frame.
+- Keep this gate report-surface scoped: no quality metric change, no star
+  detector algorithm change, no registration transform math change, no
+  integration math change, no CUDA kernel change, no runtime default change, no
+  package upload, no GitHub release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

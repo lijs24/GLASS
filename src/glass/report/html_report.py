@@ -33,6 +33,7 @@ _REPORT_SECTIONS = [
     ("resident-calibration-artifact", "Resident calibration artifact"),
     ("xisf-input-cache", "XISF input cache"),
     ("frame-quality-table", "Frame quality table"),
+    ("quality-saturation", "Quality saturation"),
     ("registration-table", "Registration table"),
     ("registration-admission", "Registration admission"),
     ("registration-quality-contract", "Registration quality contract"),
@@ -84,6 +85,23 @@ def _estimated_mib(storage: dict[str, Any]) -> float | None:
     if bytes_value is None:
         return None
     return round(float(bytes_value) / (1024.0 * 1024.0), 3)
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _list_or_one(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
 
 
 def _table(rows: list[dict[str, Any]]) -> str:
@@ -193,6 +211,111 @@ def _quality_gate_rows(quality: dict[str, Any] | None) -> list[dict[str, Any]]:
             "rejection_reasons": summary.get("rejection_reason_counts"),
         }
     ]
+
+
+def _quality_policy(quality: dict[str, Any] | None) -> dict[str, Any]:
+    policy = (quality or {}).get("quality_gate_policy")
+    if isinstance(policy, dict):
+        return policy
+    summary_policy = ((quality or {}).get("quality_gate_summary") or {}).get("policy")
+    if isinstance(summary_policy, dict):
+        return summary_policy
+    return {}
+
+
+def _quality_saturation_warning_text(item: dict[str, Any]) -> str:
+    warnings = [str(warning) for warning in _list_or_one(item.get("quality_gate_warnings"))]
+    saturation_warnings = [warning for warning in warnings if "saturation" in warning.lower()]
+    return "; ".join(saturation_warnings)
+
+
+def _quality_saturation_summary_rows(quality: dict[str, Any] | None) -> list[dict[str, Any]]:
+    frame_quality = (quality or {}).get("frame_quality")
+    if not isinstance(frame_quality, list) or not frame_quality:
+        return []
+    policy = _quality_policy(quality)
+    fractions = [_float_or_none(item.get("saturation_fraction")) or 0.0 for item in frame_quality]
+    counts = [_float_or_none(item.get("saturated_pixel_count")) or 0.0 for item in frame_quality]
+    saturated_rows = [
+        item
+        for item, fraction, count in zip(frame_quality, fractions, counts, strict=False)
+        if fraction > 0.0 or count > 0.0
+    ]
+    rejected_rows = [
+        item
+        for item in frame_quality
+        if str(item.get("quality_gate_status", "")).lower() == "rejected"
+        and _quality_saturation_warning_text(item)
+    ]
+    sources = sorted({str(item.get("saturation_source")) for item in frame_quality if item.get("saturation_source")})
+    row_levels = sorted(
+        {
+            str(item.get("saturation_level"))
+            for item in frame_quality
+            if item.get("saturation_level") is not None
+        }
+    )
+    policy_level = policy.get("saturation_level", policy.get("quality_saturation_level"))
+    saturation_level: Any
+    if policy_level is not None:
+        saturation_level = policy_level
+    elif len(row_levels) == 1:
+        saturation_level = row_levels[0]
+    else:
+        saturation_level = ", ".join(row_levels)
+    worst_row = max(
+        frame_quality,
+        key=lambda item: (
+            _float_or_none(item.get("saturation_fraction")) or 0.0,
+            _float_or_none(item.get("saturated_pixel_count")) or 0.0,
+        ),
+    )
+    return [
+        {
+            "frame_count": len(frame_quality),
+            "saturated_frame_count": len(saturated_rows),
+            "quality_gate_saturation_rejected_count": len(rejected_rows),
+            "max_saturation_fraction": round(max(fractions), 8),
+            "mean_saturation_fraction": round(sum(fractions) / len(fractions), 8),
+            "max_saturated_pixel_count": int(max(counts)),
+            "saturation_level": saturation_level,
+            "max_saturation_fraction_policy": policy.get("max_saturation_fraction"),
+            "saturation_sources": ", ".join(sources),
+            "worst_frame_id": worst_row.get("frame_id"),
+        }
+    ]
+
+
+def _quality_saturation_frame_rows(quality: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    frame_quality = (quality or {}).get("frame_quality")
+    if not isinstance(frame_quality, list):
+        return rows
+    for item in frame_quality:
+        fraction = _float_or_none(item.get("saturation_fraction")) or 0.0
+        saturated_count = _float_or_none(item.get("saturated_pixel_count")) or 0.0
+        warning_text = _quality_saturation_warning_text(item)
+        if fraction <= 0.0 and saturated_count <= 0.0 and not warning_text:
+            continue
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "saturation_fraction": item.get("saturation_fraction"),
+                "saturated_pixel_count": item.get("saturated_pixel_count"),
+                "saturation_level": item.get("saturation_level"),
+                "saturation_source": item.get("saturation_source"),
+                "quality_gate_status": item.get("quality_gate_status"),
+                "saturation_warning": warning_text,
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda item: (
+            _float_or_none(item.get("saturation_fraction")) or 0.0,
+            _float_or_none(item.get("saturated_pixel_count")) or 0.0,
+        ),
+        reverse=True,
+    )
 
 
 def _frame_accounting_summary_rows(frame_accounting: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -2054,6 +2177,8 @@ def write_html_report(
     input_cache_rows = (calibration or {}).get("input_cache", [])
     frame_quality = (quality or {}).get("frame_quality", [])
     quality_gate_rows = _quality_gate_rows(quality)
+    quality_saturation_rows = _quality_saturation_summary_rows(quality)
+    quality_saturation_frame_rows = _quality_saturation_frame_rows(quality)
     registration_results = (registration or {}).get("registration_results", [])
     registration_admission_rows = _registration_admission_rows(registration)
     registration_admission_frame_rows = _registration_admission_frame_rows(registration)
@@ -2240,6 +2365,12 @@ def write_html_report(
   {_table(quality_gate_rows)}
   {_limited_table(frame_quality, label="frame quality rows", artifact="frame_quality.json")}
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
+  {_h2("quality-saturation", "Quality saturation")}
+  <p>Saturation diagnostics summarize DQ/threshold saturated-pixel accounting
+  from <code>frame_quality.json</code> and highlight frames rejected by the
+  quality gate for saturation.</p>
+  {_table(quality_saturation_rows)}
+  {_limited_table(quality_saturation_frame_rows, label="quality saturation rows", artifact="frame_quality.json")}
   {_h2("registration-table", "Registration table")}
   {_limited_table(registration_results, label="registration rows", artifact="registration_results.json")}
   {_h2("registration-admission", "Registration admission")}
