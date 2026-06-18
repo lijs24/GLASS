@@ -6123,6 +6123,23 @@ integration where applicable.
   CUDA kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 345: Phase2 Status Publication-Audit Resident Result-Contract Handoff
+
+- Carry Gate344 `glass stack-engine-publication-audit` resident
+  result-contract layers and checks into `glass phase2-status`.
+- Add a top-level Phase2 check requiring the publication-audit raw
+  publish-preflight resident result-contract evidence, Phase2 handoff evidence,
+  and raw/Phase2 agreement check to remain passing.
+- Extend `glass phase2-status-compare` so candidates cannot lose a previously
+  passing StackEngine publication-audit resident result-contract chain.
+- Surface the raw and Phase2 resident result-contract publication-audit layers
+  in Phase2 Markdown reports for release-readiness diagnosis.
+- Generate Gate345 status/compare artifacts from controlled Gate344
+  publication-audit artifacts.
+- Keep this gate status/compare scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

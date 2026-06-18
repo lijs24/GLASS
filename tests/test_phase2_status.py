@@ -1617,12 +1617,14 @@ def _write_stack_engine_publication_audit(
     passed: bool = True,
     integration_engine_policy_ready: bool = True,
     resident_winsorized_ready: bool = True,
+    resident_result_contract_ready: bool = True,
     direct_runtime_ready: bool = True,
 ) -> None:
     artifact_ready = (
         passed
         and integration_engine_policy_ready
         and resident_winsorized_ready
+        and resident_result_contract_ready
         and direct_runtime_ready
     )
     status = "passed" if artifact_ready else "blocked"
@@ -1631,6 +1633,9 @@ def _write_stack_engine_publication_audit(
     )
     winsorized_status = (
         "publish_preflight_ready" if resident_winsorized_ready else "blocked"
+    )
+    resident_result_status = (
+        "publish_preflight_ready" if resident_result_contract_ready else "blocked"
     )
     direct_runtime_status = (
         "publish_preflight_ready" if direct_runtime_ready else "blocked"
@@ -1652,6 +1657,14 @@ def _write_stack_engine_publication_audit(
                 "publish_preflight_resident_winsorized_sweep_ready",
                 "phase2_publish_preflight_resident_winsorized_sweep_ready",
                 "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
+            ]
+        )
+    if not resident_result_contract_ready:
+        failed_checks.extend(
+            [
+                "publish_preflight_resident_result_contract_ready",
+                "phase2_publish_preflight_resident_result_contract_ready",
+                "phase2_publish_preflight_resident_result_contract_matches_publish_preflight",
             ]
         )
     if not direct_runtime_ready:
@@ -1678,6 +1691,18 @@ def _write_stack_engine_publication_audit(
         {
             "name": "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
             "passed": resident_winsorized_ready,
+        },
+        {
+            "name": "publish_preflight_resident_result_contract_ready",
+            "passed": resident_result_contract_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_resident_result_contract_ready",
+            "passed": resident_result_contract_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_resident_result_contract_matches_publish_preflight",
+            "passed": resident_result_contract_ready,
         },
         {
             "name": "publish_preflight_integration_engine_policy_ready",
@@ -1739,6 +1764,14 @@ def _write_stack_engine_publication_audit(
                 "phase2_publish_preflight_resident_winsorized_sweep": {
                     "status": winsorized_status,
                     "ready": resident_winsorized_ready,
+                },
+                "publish_preflight_resident_result_contract": {
+                    "status": resident_result_status,
+                    "ready": resident_result_contract_ready,
+                },
+                "phase2_publish_preflight_resident_result_contract": {
+                    "status": resident_result_status,
+                    "ready": resident_result_contract_ready,
                 },
                 "publish_preflight_integration_engine_policy": {
                     "status": policy_status,
@@ -1839,6 +1872,7 @@ def _status_payload(
     stack_publication_passed: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
+    stack_publication_resident_result_contract_ready: bool = True,
     pipeline_passed: bool = True,
     pipeline_dq_contract: bool = True,
     pixel_verification: bool = True,
@@ -2460,8 +2494,16 @@ def _status_payload(
             "recommendation": "publication_chain_ready"
             if stack_publication_passed
             else "fix_stack_engine_publication_chain",
-            "check_count": 21,
-            "failed_check_count": 0 if stack_publication_passed else 1,
+            "check_count": 24,
+            "failed_check_count": 0
+            if (
+                stack_publication_passed
+                and stack_publication_policy_ready
+                and stack_publication_resident_winsorized_ready
+                and stack_publication_resident_result_contract_ready
+                and publish_preflight_direct_runtime_ready
+            )
+            else 1,
             "publish_preflight_integration_engine_policy_ready": (
                 stack_publication_policy_ready
             ),
@@ -2479,6 +2521,15 @@ def _status_payload(
             ),
             "phase2_publish_preflight_resident_winsorized_matches_publish_preflight": (
                 stack_publication_resident_winsorized_ready
+            ),
+            "publish_preflight_resident_result_contract_ready": (
+                stack_publication_resident_result_contract_ready
+            ),
+            "phase2_publish_preflight_resident_result_contract_ready": (
+                stack_publication_resident_result_contract_ready
+            ),
+            "phase2_publish_preflight_resident_result_contract_matches_publish_preflight": (
+                stack_publication_resident_result_contract_ready
             ),
             "publish_preflight_direct_runtime_evidence_ready": (
                 publish_preflight_direct_runtime_ready
@@ -3709,6 +3760,47 @@ def test_phase2_status_blocks_failed_stack_publication_policy_handoff(
         ]["passed"]
         is True
     )
+    assert (
+        checks[
+            "stack_engine_publication_audit_resident_result_contract_chain_passed"
+        ]["passed"]
+        is True
+    )
+
+
+def test_phase2_status_blocks_failed_stack_publication_resident_result_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=345)
+    publication_audit = tmp_path / "stack_engine_publication_audit.json"
+    _write_stack_engine_publication_audit(
+        publication_audit,
+        resident_result_contract_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        stack_engine_publication_audit=publication_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    result_check = checks[
+        "stack_engine_publication_audit_resident_result_contract_chain_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["stack_engine_publication_audit"]["status"] == "blocked"
+    assert checks["stack_engine_publication_audit_passed"]["passed"] is False
+    assert result_check["passed"] is False
+    assert result_check["evidence"]["raw_ready_check"] is False
+    assert result_check["evidence"]["phase2_ready_check"] is False
+    assert result_check["evidence"]["agreement_check"] is False
+    assert (
+        "publish_preflight_resident_result_contract_ready"
+        in result_check["evidence"]["failed_checks"]
+    )
 
 
 def test_phase2_status_blocks_stack_engine_default_contract_gap(tmp_path: Path):
@@ -4845,6 +4937,10 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["stack_engine_publication_audit_passed_preserved"] is True
     assert checks["stack_engine_publication_policy_chain_preserved"] is True
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is True
+    assert (
+        checks["stack_engine_publication_resident_result_contract_chain_preserved"]
+        is True
+    )
     assert checks["stack_engine_publication_direct_runtime_chain_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["pipeline_resident_result_contract_check_preserved"] is True
@@ -4926,6 +5022,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             stack_publication_passed=False,
             stack_publication_policy_ready=False,
             stack_publication_resident_winsorized_ready=False,
+            stack_publication_resident_result_contract_ready=False,
             pipeline_passed=False,
             pipeline_dq_contract=False,
             pixel_verification=False,
@@ -5030,6 +5127,10 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["stack_engine_publication_audit_passed_preserved"] is False
     assert checks["stack_engine_publication_policy_chain_preserved"] is False
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is False
+    assert (
+        checks["stack_engine_publication_resident_result_contract_chain_preserved"]
+        is False
+    )
     assert checks["stack_engine_publication_direct_runtime_chain_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["pipeline_resident_result_contract_check_preserved"] is False
@@ -5521,6 +5622,12 @@ def test_phase2_status_compare_flags_stack_publication_policy_regression(
         ]
         is True
     )
+    assert (
+        checks["stack_engine_publication_resident_result_contract_chain_preserved"][
+            "passed"
+        ]
+        is True
+    )
     candidate_policy = checks["stack_engine_publication_policy_chain_preserved"][
         "evidence"
     ]["candidate"]
@@ -5535,6 +5642,58 @@ def test_phase2_status_compare_flags_stack_publication_policy_regression(
             "policy_checks_passed"
         ]
         is False
+    )
+
+
+def test_phase2_status_compare_flags_stack_publication_resident_result_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=344))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=345,
+            status="attention_required",
+            stack_publication_passed=False,
+            stack_publication_resident_result_contract_ready=False,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    result_check = checks[
+        "stack_engine_publication_resident_result_contract_chain_preserved"
+    ]
+    assert payload["status"] == "regressed"
+    assert checks["stack_engine_publication_audit_passed_preserved"]["passed"] is False
+    assert result_check["passed"] is False
+    assert (
+        result_check["evidence"]["candidate"][
+            "phase2_publish_preflight_resident_result_contract_matches_publish_preflight"
+        ]
+        is False
+    )
+    assert (
+        payload["candidate"]["stack_engine_publication_audit"][
+            "resident_result_contract_checks_passed"
+        ]
+        is False
+    )
+    assert (
+        checks["stack_engine_publication_policy_chain_preserved"]["passed"]
+        is True
+    )
+    assert (
+        checks["stack_engine_publication_resident_winsorized_chain_preserved"][
+            "passed"
+        ]
+        is True
     )
 
 

@@ -1534,6 +1534,16 @@ def _stack_engine_publication_audit_summary(
                 "phase2_publish_preflight_resident_winsorized_sweep",
             )
         ),
+        "publish_preflight_resident_result_contract": _publication_audit_layer(
+            payload,
+            "publish_preflight_resident_result_contract",
+        ),
+        "phase2_publish_preflight_resident_result_contract": (
+            _publication_audit_layer(
+                payload,
+                "phase2_publish_preflight_resident_result_contract",
+            )
+        ),
         "publish_preflight_integration_engine_policy": _publication_audit_layer(
             payload,
             "publish_preflight_integration_engine_policy",
@@ -1586,6 +1596,24 @@ def _stack_engine_publication_audit_summary(
             _publication_audit_check(
                 payload,
                 "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
+            )
+        ),
+        "publish_preflight_resident_result_contract_ready": (
+            _publication_audit_check(
+                payload,
+                "publish_preflight_resident_result_contract_ready",
+            )
+        ),
+        "phase2_publish_preflight_resident_result_contract_ready": (
+            _publication_audit_check(
+                payload,
+                "phase2_publish_preflight_resident_result_contract_ready",
+            )
+        ),
+        "phase2_publish_preflight_resident_result_contract_matches_publish_preflight": (
+            _publication_audit_check(
+                payload,
+                "phase2_publish_preflight_resident_result_contract_matches_publish_preflight",
             )
         ),
         "publish_preflight_integration_engine_policy_ready": (
@@ -3966,6 +3994,43 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "stack_engine_publication_audit_resident_result_contract_chain_passed",
+                "passed": (
+                    publication_audit.get(
+                        "publish_preflight_resident_result_contract_ready"
+                    )
+                    is True
+                    and publication_audit.get(
+                        "phase2_publish_preflight_resident_result_contract_ready"
+                    )
+                    is True
+                    and publication_audit.get(
+                        "phase2_publish_preflight_resident_result_contract_matches_publish_preflight"
+                    )
+                    is True
+                ),
+                "evidence": {
+                    "raw_layer": publication_audit.get(
+                        "publish_preflight_resident_result_contract"
+                    ),
+                    "phase2_layer": publication_audit.get(
+                        "phase2_publish_preflight_resident_result_contract"
+                    ),
+                    "raw_ready_check": publication_audit.get(
+                        "publish_preflight_resident_result_contract_ready"
+                    ),
+                    "phase2_ready_check": publication_audit.get(
+                        "phase2_publish_preflight_resident_result_contract_ready"
+                    ),
+                    "agreement_check": publication_audit.get(
+                        "phase2_publish_preflight_resident_result_contract_matches_publish_preflight"
+                    ),
+                    "failed_checks": publication_audit.get("failed_checks"),
+                },
+            }
+        )
+        checks.append(
+            {
                 "name": "stack_engine_publication_audit_direct_runtime_chain_passed",
                 "passed": (
                     publication_audit.get(
@@ -4900,6 +4965,19 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"phase2={publication_audit.get('phase2_publish_preflight_resident_winsorized_sweep_ready')}, "
                     "agreement="
                     f"{publication_audit.get('phase2_publish_preflight_resident_winsorized_matches_publish_preflight')}"
+                ),
+                (
+                    "- Resident result-contract layers: "
+                    f"raw={publication_audit.get('publish_preflight_resident_result_contract')}, "
+                    "phase2="
+                    f"{publication_audit.get('phase2_publish_preflight_resident_result_contract')}"
+                ),
+                (
+                    "- Resident result-contract checks: "
+                    f"raw={publication_audit.get('publish_preflight_resident_result_contract_ready')}, "
+                    f"phase2={publication_audit.get('phase2_publish_preflight_resident_result_contract_ready')}, "
+                    "agreement="
+                    f"{publication_audit.get('phase2_publish_preflight_resident_result_contract_matches_publish_preflight')}"
                 ),
             ]
         )
@@ -6030,6 +6108,12 @@ _STACK_PUBLICATION_WINSORIZED_FIELDS = (
     "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
 )
 
+_STACK_PUBLICATION_RESIDENT_RESULT_FIELDS = (
+    "publish_preflight_resident_result_contract_ready",
+    "phase2_publish_preflight_resident_result_contract_ready",
+    "phase2_publish_preflight_resident_result_contract_matches_publish_preflight",
+)
+
 _STACK_PUBLICATION_DIRECT_RUNTIME_FIELDS = (
     "publish_preflight_direct_runtime_evidence_ready",
     "phase2_publish_preflight_direct_runtime_evidence_ready",
@@ -6048,6 +6132,7 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
             "failed_check_count": None,
             "policy_checks_passed": False,
             "resident_winsorized_checks_passed": False,
+            "resident_result_contract_checks_passed": False,
             "direct_runtime_checks_passed": False,
         }
     policy = {
@@ -6057,6 +6142,10 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
     resident_winsorized = {
         field: audit.get(field)
         for field in _STACK_PUBLICATION_WINSORIZED_FIELDS
+    }
+    resident_result_contract = {
+        field: audit.get(field)
+        for field in _STACK_PUBLICATION_RESIDENT_RESULT_FIELDS
     }
     direct_runtime = {
         field: audit.get(field)
@@ -6071,10 +6160,14 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "failed_check_count": audit.get("failed_check_count"),
         "policy_checks": policy,
         "resident_winsorized_checks": resident_winsorized,
+        "resident_result_contract_checks": resident_result_contract,
         "direct_runtime_checks": direct_runtime,
         "policy_checks_passed": all(value is True for value in policy.values()),
         "resident_winsorized_checks_passed": all(
             value is True for value in resident_winsorized.values()
+        ),
+        "resident_result_contract_checks_passed": all(
+            value is True for value in resident_result_contract.values()
         ),
         "direct_runtime_checks_passed": all(
             value is True for value in direct_runtime.values()
@@ -6817,6 +6910,15 @@ def build_phase2_status_compare(
             or candidate_publication.get("resident_winsorized_checks_passed") is True,
             baseline=baseline_publication.get("resident_winsorized_checks"),
             candidate=candidate_publication.get("resident_winsorized_checks"),
+        ),
+        _compare_check(
+            "stack_engine_publication_resident_result_contract_chain_preserved",
+            baseline_publication.get("resident_result_contract_checks_passed")
+            is not True
+            or candidate_publication.get("resident_result_contract_checks_passed")
+            is True,
+            baseline=baseline_publication.get("resident_result_contract_checks"),
+            candidate=candidate_publication.get("resident_result_contract_checks"),
         ),
         _compare_check(
             "stack_engine_publication_direct_runtime_chain_preserved",
