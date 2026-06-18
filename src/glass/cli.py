@@ -2883,6 +2883,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         publish_preflight=args.publish_preflight,
         pipeline_contract=args.pipeline_contract,
         stack_engine_contract=args.stack_engine_contract,
+        resident_winsorized_benchmark_audit=args.resident_winsorized_benchmark_audit,
         release_decision=args.release_decision,
         doctor_payload=_doctor_payload(skip_cuda_probe=args.skip_cuda_probe),
     )
@@ -2895,6 +2896,11 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         else {}
     )
     pipeline = payload.get("pipeline_contract") if isinstance(payload.get("pipeline_contract"), dict) else {}
+    winsorized_audit = (
+        payload.get("resident_winsorized_benchmark_audit")
+        if isinstance(payload.get("resident_winsorized_benchmark_audit"), dict)
+        else {}
+    )
     decision = payload.get("release_decision") if isinstance(payload.get("release_decision"), dict) else {}
     preflight = payload.get("publish_preflight") if isinstance(payload.get("publish_preflight"), dict) else {}
     console.print(
@@ -2909,6 +2915,8 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             "publish_preflight_status": preflight.get("status"),
             "publish_preflight_passed": preflight.get("passed"),
             "pipeline_contract_status": pipeline.get("status"),
+            "resident_winsorized_benchmark_audit_status": winsorized_audit.get("status"),
+            "resident_winsorized_benchmark_audit_passed": winsorized_audit.get("passed"),
             "release_decision_status": decision.get("status"),
             "default_change_ready": decision.get("default_change_ready"),
             "out": args.out,
@@ -2968,6 +2976,10 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_status.add_argument(
         "--stack-engine-contract",
         help="optional StackEngine default-contract JSON artifact",
+    )
+    phase2_status.add_argument(
+        "--resident-winsorized-benchmark-audit",
+        help="optional resident-winsorized-benchmark-audit JSON artifact",
     )
     phase2_status.add_argument("--release-decision", help="optional release-promotion-decision JSON artifact")
     phase2_status.add_argument("--out", required=True, help="output Phase 2 status JSON")

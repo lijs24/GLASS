@@ -4487,6 +4487,21 @@ integration where applicable.
 - Keep this gate contract scoped: no image math, CUDA kernel, runtime default,
   package build/upload, release update, or real-data benchmark rerun.
 
+### S2-Gate 267: Phase 2 Resident Winsorized Audit Status Handoff
+
+- Carry `glass resident-winsorized-benchmark-audit` evidence into
+  `glass phase2-status`.
+- Add an optional `--resident-winsorized-benchmark-audit` input and a
+  `resident_winsorized_benchmark_audit_passed` status check when the artifact
+  is supplied.
+- Surface contract name, benchmark path, check count, failed checks,
+  hardened-vs-CPU difference metrics, fast-approximation context, and timing
+  summary in Phase 2 JSON/Markdown status outputs.
+- Add focused API and CLI tests for passing and failed audit handoff.
+- Keep this gate status-handoff scoped: no image math, CUDA kernel, runtime
+  default, package build/upload, release update, status-compare change, or
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

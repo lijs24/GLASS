@@ -324,6 +324,46 @@ def _default_route_acceptance_summary(path: str | Path | None) -> dict[str, Any]
     }
 
 
+def _resident_winsorized_benchmark_audit_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+            "failed_checks": ["artifact_missing"],
+            "check_count": 0,
+            "failed_check_count": 1,
+        }
+    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    failed_checks = payload.get("failed_checks") if isinstance(payload.get("failed_checks"), list) else []
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    return {
+        "schema_version": 1,
+        "path": payload.get("_path"),
+        "exists": True,
+        "status": payload.get("status"),
+        "passed": payload.get("passed") is True,
+        "contract_name": payload.get("contract_name"),
+        "contract_path": payload.get("contract_path"),
+        "benchmark_path": payload.get("benchmark_path"),
+        "failed_checks": [str(item) for item in failed_checks],
+        "check_count": len(checks),
+        "failed_check_count": len(failed_checks),
+        "frame_count": summary.get("frame_count"),
+        "shape": summary.get("shape"),
+        "hardened_master_rms": summary.get("hardened_master_rms"),
+        "hardened_master_max_abs": summary.get("hardened_master_max_abs"),
+        "fast_approx_master_rms": summary.get("fast_approx_master_rms"),
+        "cuda_hardened_s": summary.get("cuda_hardened_s"),
+        "cuda_fast_approx_s": summary.get("cuda_fast_approx_s"),
+        "cpu_baseline_s": summary.get("cpu_baseline_s"),
+    }
+
+
 def _native_guardrails_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
     native_guardrails_bundle = (
         payload.get("native_guardrails_bundle")
@@ -994,6 +1034,7 @@ def build_phase2_status(
     publish_preflight: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
     stack_engine_contract: str | Path | None = None,
+    resident_winsorized_benchmark_audit: str | Path | None = None,
     release_decision: str | Path | None = None,
     doctor_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1006,6 +1047,9 @@ def build_phase2_status(
     preflight = _publish_preflight_summary(publish_preflight)
     pipeline = _pipeline_contract_summary(pipeline_contract)
     stack_engine = _stack_engine_contract_summary(stack_engine_contract)
+    winsorized_audit = _resident_winsorized_benchmark_audit_summary(
+        resident_winsorized_benchmark_audit
+    )
     decision = _release_decision_summary(release_decision)
     checks = [
         {
@@ -1368,6 +1412,27 @@ def build_phase2_status(
                 },
             }
         )
+    if winsorized_audit is not None:
+        checks.append(
+            {
+                "name": "resident_winsorized_benchmark_audit_passed",
+                "passed": winsorized_audit.get("passed") is True,
+                "evidence": {
+                    "status": winsorized_audit.get("status"),
+                    "contract_name": winsorized_audit.get("contract_name"),
+                    "check_count": winsorized_audit.get("check_count"),
+                    "failed_check_count": winsorized_audit.get("failed_check_count"),
+                    "failed_checks": winsorized_audit.get("failed_checks"),
+                    "hardened_master_rms": winsorized_audit.get("hardened_master_rms"),
+                    "hardened_master_max_abs": winsorized_audit.get(
+                        "hardened_master_max_abs"
+                    ),
+                    "fast_approx_master_rms": winsorized_audit.get(
+                        "fast_approx_master_rms"
+                    ),
+                },
+            }
+        )
     if decision is not None:
         checks.append(
             {
@@ -1422,6 +1487,7 @@ def build_phase2_status(
         "publish_preflight": preflight,
         "pipeline_contract": pipeline,
         "stack_engine_contract": stack_engine,
+        "resident_winsorized_benchmark_audit": winsorized_audit,
         "release_decision": decision,
         "checks": checks,
     }
@@ -1437,6 +1503,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     preflight = payload.get("publish_preflight") or {}
     pipeline = payload.get("pipeline_contract") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
+    winsorized_audit = payload.get("resident_winsorized_benchmark_audit") or {}
     decision = payload.get("release_decision") or {}
     lines = [
         "# GLASS Phase 2 Status",
@@ -1763,6 +1830,32 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
             lines.append(
                 f"- StackEngine default blocker {blocker.get('name')}: {blocker}"
             )
+    if winsorized_audit:
+        lines.extend(
+            [
+                "",
+                "## Resident Winsorized Benchmark Audit",
+                "",
+                f"- Status: {winsorized_audit.get('status')}",
+                f"- Passed: {winsorized_audit.get('passed')}",
+                f"- Contract: {winsorized_audit.get('contract_name')}",
+                f"- Benchmark: {winsorized_audit.get('benchmark_path')}",
+                f"- Check count: {winsorized_audit.get('check_count')}",
+                f"- Failed checks: {winsorized_audit.get('failed_checks')}",
+                f"- Frame count: {winsorized_audit.get('frame_count')}",
+                f"- Shape: {winsorized_audit.get('shape')}",
+                f"- Hardened master RMS: {winsorized_audit.get('hardened_master_rms')}",
+                (
+                    "- Hardened master max abs: "
+                    f"{winsorized_audit.get('hardened_master_max_abs')}"
+                ),
+                (
+                    "- Fast approximation master RMS: "
+                    f"{winsorized_audit.get('fast_approx_master_rms')}"
+                ),
+                f"- CUDA hardened seconds: {winsorized_audit.get('cuda_hardened_s')}",
+            ]
+        )
     if decision:
         lines.extend(
             [

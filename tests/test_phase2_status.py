@@ -137,6 +137,37 @@ def _write_default_route_acceptance(path: Path, *, route_passed: bool = True) ->
     )
 
 
+def _write_resident_winsorized_benchmark_audit(path: Path, *, passed: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "resident_winsorized_benchmark_audit",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "contract_name": "s2_gate_266_default_resident_winsorized_microbenchmark",
+            "contract_path": "benchmarks/resident_winsorized_microbenchmark_contract.json",
+            "benchmark_path": "runs/checkpoints/s2_gate_265_resident_winsorized_benchmark.json",
+            "failed_checks": [] if passed else ["hardened_master_rms_within_contract"],
+            "checks": [
+                {"name": "artifact_type_matches", "passed": True},
+                {"name": "benchmark_passed", "passed": passed},
+                {"name": "hardened_master_rms_within_contract", "passed": passed},
+            ],
+            "summary": {
+                "frame_count": 8,
+                "shape": [16, 16],
+                "hardened_master_rms": 5.0e-6 if passed else 9.0e-4,
+                "hardened_master_max_abs": 1.5e-5,
+                "fast_approx_master_rms": 0.5,
+                "cuda_hardened_s": 0.002,
+                "cuda_fast_approx_s": 0.001,
+                "cpu_baseline_s": 0.01,
+            },
+        },
+    )
+
+
 def _write_pipeline_contract(
     path: Path,
     *,
@@ -953,6 +984,51 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["windows_publish_preflight_stack_engine_default_contract_ready"] is True
 
 
+def test_phase2_status_summarizes_resident_winsorized_benchmark_audit(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=267)
+    winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
+    _write_resident_winsorized_benchmark_audit(winsorized_audit)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        resident_winsorized_benchmark_audit=winsorized_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "green"
+    assert payload["resident_winsorized_benchmark_audit"]["status"] == "passed"
+    assert payload["resident_winsorized_benchmark_audit"]["contract_name"].startswith(
+        "s2_gate_266"
+    )
+    assert payload["resident_winsorized_benchmark_audit"]["hardened_master_rms"] == 5.0e-6
+    assert checks["resident_winsorized_benchmark_audit_passed"]["passed"] is True
+
+
+def test_phase2_status_blocks_failed_resident_winsorized_benchmark_audit(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=267)
+    winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
+    _write_resident_winsorized_benchmark_audit(winsorized_audit, passed=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        resident_winsorized_benchmark_audit=winsorized_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "attention_required"
+    assert payload["resident_winsorized_benchmark_audit"]["failed_check_count"] == 1
+    assert checks["resident_winsorized_benchmark_audit_passed"]["passed"] is False
+    assert checks["resident_winsorized_benchmark_audit_passed"]["evidence"]["failed_checks"] == [
+        "hardened_master_rms_within_contract"
+    ]
+
+
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -965,12 +1041,14 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     stack_engine_contract = tmp_path / "stack_engine_contract.json"
     release_decision = tmp_path / "release_decision.json"
     publish_preflight = tmp_path / "publish_preflight.json"
+    winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
     _write_acceptance(acceptance)
     _write_default_route_acceptance(default_route_acceptance)
     _write_pipeline_contract(pipeline_contract)
     _write_stack_engine_contract(stack_engine_contract)
     _write_release_decision(release_decision)
     _write_publish_preflight(publish_preflight)
+    _write_resident_winsorized_benchmark_audit(winsorized_audit)
 
     result = main(
         [
@@ -989,6 +1067,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(release_decision),
             "--publish-preflight",
             str(publish_preflight),
+            "--resident-winsorized-benchmark-audit",
+            str(winsorized_audit),
             "--out",
             str(out),
             "--markdown",
@@ -1006,6 +1086,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["default_route_acceptance"]["route_contract_passed"] is True
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["stack_engine_contract"]["default_promotion_ready"] is True
+    assert payload["resident_winsorized_benchmark_audit"]["passed"] is True
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
     text = markdown.read_text(encoding="utf-8")
@@ -1020,6 +1101,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Route contract passed: True" in text
     assert "Pipeline Contract" in text
     assert "Integration DQ contract: True" in text
+    assert "Resident Winsorized Benchmark Audit" in text
+    assert "Hardened master RMS: 5e-06" in text
     assert "DQ pixels match summary: True" in text
     assert "Rejection sample counts match maps: True" in text
     assert "Rejection sample accounting: passed failed=0" in text
