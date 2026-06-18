@@ -852,6 +852,73 @@ def _stack_engine_default_promotion_release_evidence(
     }
 
 
+def _resident_registration_fastpath_release_evidence(
+    *,
+    checks: list[dict[str, Any]],
+    resident_registration_fastpath: dict[str, Any] | None,
+    contract_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    fastpath_checks = [
+        item
+        for item in checks
+        if str(item.get("name", "")).startswith(
+            "contract_resident_registration_fastpath"
+        )
+    ]
+    failed_checks = [str(item.get("name")) for item in fastpath_checks if not item.get("passed")]
+    if fastpath_checks:
+        status = "passed" if not failed_checks else "failed"
+    else:
+        status = "not_requested"
+    requirements = (contract_payload or {}).get("resident_registration_fastpath")
+    record = resident_registration_fastpath or {}
+    registration = (
+        record.get("resident_registration")
+        if isinstance(record.get("resident_registration"), dict)
+        else {}
+    )
+    artifact = record.get("artifact") if isinstance(record.get("artifact"), dict) else {}
+    io_pipeline = (
+        record.get("resident_io_pipeline")
+        if isinstance(record.get("resident_io_pipeline"), dict)
+        else {}
+    )
+    return {
+        "status": status,
+        "required_by_benchmark_contract": isinstance(requirements, dict) and bool(requirements),
+        "path": record.get("path"),
+        "source": record.get("source"),
+        "exists": record.get("exists"),
+        "available": record.get("available"),
+        "artifact_count": record.get("artifact_count"),
+        "mode": registration.get("mode"),
+        "triangle_descriptor_fit_batch": registration.get("triangle_descriptor_fit_batch"),
+        "triangle_descriptor_fit_batch_mode": registration.get(
+            "triangle_descriptor_fit_batch_mode"
+        ),
+        "triangle_pixel_refine_batch": registration.get("triangle_pixel_refine_batch"),
+        "triangle_pixel_refine_batch_mode": registration.get(
+            "triangle_pixel_refine_batch_mode"
+        ),
+        "triangle_pixel_refine_batch_metric_mode": registration.get(
+            "triangle_pixel_refine_batch_metric_mode"
+        ),
+        "triangle_warp_batch": registration.get("triangle_warp_batch"),
+        "triangle_warp_batch_mode": registration.get("triangle_warp_batch_mode"),
+        "triangle_warp_batch_frame_count": registration.get(
+            "triangle_warp_batch_frame_count"
+        ),
+        "resident_warp_copy_mode": artifact.get("resident_warp_copy_mode"),
+        "resident_io_pipeline_warp_copy_mode": io_pipeline.get("warp_copy_mode"),
+        "resident_warp_scratch_bytes": artifact.get("resident_warp_scratch_bytes"),
+        "resident_io_pipeline_warp_scratch_bytes": io_pipeline.get("warp_scratch_bytes"),
+        "passed_check_count": sum(1 for item in fastpath_checks if item.get("passed")),
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "checks": fastpath_checks,
+    }
+
+
 def build_acceptance_audit(
     *,
     manifest_path: str | Path,
@@ -1322,6 +1389,11 @@ def build_acceptance_audit(
             stack_engine_contract=stack_engine_contract,
             contract_payload=contract_payload,
         ),
+        "resident_registration_fastpath": _resident_registration_fastpath_release_evidence(
+            checks=checks,
+            resident_registration_fastpath=resident_registration_fastpath,
+            contract_payload=contract_payload,
+        ),
     }
 
     passed = all(item["passed"] for item in checks)
@@ -1583,6 +1655,37 @@ def write_acceptance_audit_markdown(path: str | Path, audit: dict[str, Any]) -> 
             ]
         )
         for item in stack_release_evidence.get("checks") or []:
+            marker = "PASS" if item.get("passed") else "FAIL"
+            lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
+        lines.append("")
+    fastpath_evidence = (
+        (audit.get("release_contract_evidence") or {}).get("resident_registration_fastpath")
+        if isinstance(audit.get("release_contract_evidence"), dict)
+        else None
+    )
+    if fastpath_evidence:
+        lines.extend(
+            [
+                "## Resident Registration Fast Path Evidence",
+                "",
+                f"- Status: {fastpath_evidence.get('status')}",
+                f"- Required by benchmark contract: {fastpath_evidence.get('required_by_benchmark_contract')}",
+                f"- Source: {fastpath_evidence.get('source')}",
+                f"- Path: {fastpath_evidence.get('path')}",
+                f"- Available: {fastpath_evidence.get('available')}",
+                f"- Mode: {fastpath_evidence.get('mode')}",
+                f"- Descriptor fit batch: {fastpath_evidence.get('triangle_descriptor_fit_batch')}",
+                f"- Pixel refine batch: {fastpath_evidence.get('triangle_pixel_refine_batch')}",
+                f"- Triangle warp batch: {fastpath_evidence.get('triangle_warp_batch')}",
+                f"- Triangle warp batch frames: {fastpath_evidence.get('triangle_warp_batch_frame_count')}",
+                f"- Warp copy mode: {fastpath_evidence.get('resident_warp_copy_mode')}",
+                f"- Checks passed: {fastpath_evidence.get('passed_check_count')}",
+                f"- Checks failed: {fastpath_evidence.get('failed_check_count')}",
+                f"- Failed checks: {fastpath_evidence.get('failed_checks')}",
+                "",
+            ]
+        )
+        for item in fastpath_evidence.get("checks") or []:
             marker = "PASS" if item.get("passed") else "FAIL"
             lines.append(f"- {marker}: {item.get('name')} - {item.get('evidence')}")
         lines.append("")

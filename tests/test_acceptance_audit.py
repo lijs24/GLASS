@@ -2730,6 +2730,7 @@ def test_acceptance_audit_applies_resident_registration_fastpath_contract(tmp_pa
     wbpp = tmp_path / "wbpp.json"
     compare = tmp_path / "compare.json"
     contract = tmp_path / "contract.json"
+    markdown = tmp_path / "audit.md"
     _write_manifest(manifest)
     _write_glass_run(
         gp_run,
@@ -2774,6 +2775,20 @@ def test_acceptance_audit_applies_resident_registration_fastpath_contract(tmp_pa
         ]
         is True
     )
+    evidence = audit["release_contract_evidence"]["resident_registration_fastpath"]
+    assert evidence["status"] == "passed"
+    assert evidence["required_by_benchmark_contract"] is True
+    assert evidence["available"] is True
+    assert evidence["mode"] == "similarity_cuda_triangle"
+    assert evidence["triangle_warp_batch_frame_count"] == 3
+    assert evidence["failed_check_count"] == 0
+    assert evidence["passed_check_count"] > 0
+
+    write_acceptance_audit_markdown(markdown, audit)
+    text = markdown.read_text(encoding="utf-8")
+    assert "Resident Registration Fast Path Evidence" in text
+    assert "Status: passed" in text
+    assert "Triangle warp batch frames: 3" in text
 
 
 def test_acceptance_audit_uses_explicit_resident_registration_fastpath_json(
@@ -2816,12 +2831,16 @@ def test_acceptance_audit_uses_explicit_resident_registration_fastpath_json(
 
     checks = {item["name"]: item for item in audit["checks"]}
     fastpath = audit["resident_registration_fastpath"]
+    evidence = audit["release_contract_evidence"]["resident_registration_fastpath"]
     assert audit["passed"] is True
     assert fastpath["source"] == "explicit_resident_artifacts_json"
     assert fastpath["path"] == str(fastpath_run / "resident_artifacts.json")
     assert fastpath["available"] is True
     assert fastpath["resident_registration"]["triangle_descriptor_fit_batch"] is True
     assert checks["contract_resident_registration_fastpath_present"]["passed"] is True
+    assert evidence["status"] == "passed"
+    assert evidence["source"] == "explicit_resident_artifacts_json"
+    assert evidence["path"] == str(fastpath_run / "resident_artifacts.json")
     assert (
         checks[
             "contract_resident_registration_fastpath_value:"
@@ -2863,11 +2882,18 @@ def test_acceptance_audit_blocks_resident_registration_fastpath_regression(tmp_p
     )
 
     checks = {item["name"]: item for item in audit["checks"]}
+    evidence = audit["release_contract_evidence"]["resident_registration_fastpath"]
     failed_check = checks[
         "contract_resident_registration_fastpath_true:"
         "resident_registration.triangle_descriptor_fit_batch"
     ]
     assert audit["passed"] is False
+    assert evidence["status"] == "failed"
+    assert evidence["failed_check_count"] == 1
+    assert (
+        "contract_resident_registration_fastpath_true:"
+        "resident_registration.triangle_descriptor_fit_batch"
+    ) in evidence["failed_checks"]
     assert failed_check["passed"] is False
     assert failed_check["evidence"]["actual"] is False
 

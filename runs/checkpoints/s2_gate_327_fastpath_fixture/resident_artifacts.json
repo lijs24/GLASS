@@ -1,0 +1,36 @@
+{
+  "artifacts": [
+    {
+      "resident_warp_scratch_bytes": 4096,
+      "resident_warp_copy_mode": "default_stream_async_device_to_device",
+      "resident_io_pipeline": {
+        "warp_scratch_bytes": 4096,
+        "warp_copy_mode": "default_stream_async_device_to_device"
+      },
+      "resident_registration": {
+        "mode": "similarity_cuda_triangle",
+        "triangle_descriptor_fit_batch": true,
+        "triangle_descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "triangle_descriptor_fit_reference_device_reuse": true,
+        "triangle_descriptor_fit_reference_device_bytes": 128,
+        "triangle_descriptor_fit_moving_device_reuse": true,
+        "triangle_descriptor_fit_moving_device_bytes": 256,
+        "triangle_descriptor_fit_output_device_reuse": true,
+        "triangle_descriptor_fit_output_device_bytes": 512,
+        "triangle_pixel_refine_batch": true,
+        "triangle_pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "triangle_pixel_refine_batch_metric_mode": "flattened_frame_candidate_grid",
+        "triangle_pixel_refine_workspace_bytes": 1024,
+        "triangle_warp_batch": true,
+        "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+        "triangle_warp_batch_frame_count": 3
+      },
+      "fine_timing": {
+        "registration_component_seconds": {
+          "triangle_descriptor_fit_batch": 0.1,
+          "triangle_pixel_refine_batch": 0.2
+        }
+      }
+    }
+  ]
+}

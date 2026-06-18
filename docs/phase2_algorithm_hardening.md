@@ -5776,6 +5776,26 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 327: Acceptance Resident Registration Fastpath Evidence
+
+- Add `release_contract_evidence.resident_registration_fastpath` to
+  `glass acceptance-audit`.
+- Summarize resident registration fastpath source, path, availability, mode,
+  descriptor-fit batch state, pixel-refine batch state, warp batch state,
+  warp batch frame count, warp copy mode, scratch bytes, passed check count,
+  failed check count, and failed check names.
+- Preserve existing benchmark-contract behavior: fastpath evidence is blocking
+  only when the benchmark contract supplies `resident_registration_fastpath`
+  requirements.
+- Surface the fastpath release evidence in acceptance Markdown.
+- Add focused tests for passing explicit fastpath evidence and failed fastpath
+  contract evidence.
+- Generate Gate327 acceptance artifacts using a small controlled benchmark
+  fixture with resident fastpath contract requirements.
+- Keep this gate audit-surface scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
