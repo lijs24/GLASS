@@ -109,6 +109,27 @@ def _acceptance_check_state(acceptance: dict[str, Any], name: str) -> bool | Non
     return None
 
 
+def _acceptance_check_prefix_summary(
+    acceptance: dict[str, Any], prefix: str
+) -> dict[str, Any]:
+    checks = acceptance.get("checks") if isinstance(acceptance.get("checks"), list) else []
+    rows: list[dict[str, Any]] = []
+    for item in checks:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if name is not None and str(name).startswith(prefix):
+            rows.append(item)
+    failed = [str(item.get("name")) for item in rows if item.get("passed") is not True]
+    return {
+        "check_count": len(rows),
+        "failed_check_count": len(failed),
+        "failed_checks": failed,
+        "passed": bool(rows) and not failed,
+        "checks": {str(item.get("name")): bool(item.get("passed")) for item in rows},
+    }
+
+
 def _warp_quality_handoff_evidence(acceptance: dict[str, Any]) -> dict[str, Any]:
     contract = (
         acceptance.get("warp_quality_contract")
@@ -157,6 +178,106 @@ def _warp_quality_handoff_evidence(acceptance: dict[str, Any]) -> dict[str, Any]
         "failed_checks": contract.get("failed_checks") or [],
         "acceptance_checks": acceptance_checks,
         "failed_acceptance_checks": failed_acceptance_checks,
+    }
+
+
+def _resident_registration_fastpath_handoff_evidence(
+    acceptance: dict[str, Any]
+) -> dict[str, Any]:
+    release_evidence = (
+        acceptance.get("release_contract_evidence")
+        if isinstance(acceptance.get("release_contract_evidence"), dict)
+        else {}
+    )
+    contract_evidence = (
+        release_evidence.get("resident_registration_fastpath")
+        if isinstance(release_evidence.get("resident_registration_fastpath"), dict)
+        else {}
+    )
+    top_level = (
+        acceptance.get("resident_registration_fastpath")
+        if isinstance(acceptance.get("resident_registration_fastpath"), dict)
+        else {}
+    )
+    source = contract_evidence if contract_evidence else top_level
+    check_summary = _acceptance_check_prefix_summary(
+        acceptance, "contract_resident_registration_fastpath"
+    )
+    present = bool(contract_evidence) or bool(top_level) or check_summary["check_count"] > 0
+    required = bool(
+        contract_evidence.get(
+            "required_by_benchmark_contract",
+            top_level.get("required_by_benchmark_contract", False),
+        )
+    ) or check_summary["check_count"] > 0
+    failed_check_count = _int_value(source.get("failed_check_count"))
+    if failed_check_count is None:
+        failed_check_count = int(check_summary["failed_check_count"])
+    passed_check_count = _int_value(source.get("passed_check_count"))
+    if passed_check_count is None and check_summary["check_count"]:
+        passed_check_count = int(check_summary["check_count"]) - int(
+            check_summary["failed_check_count"]
+        )
+    failed_checks = source.get("failed_checks")
+    if not isinstance(failed_checks, list):
+        failed_checks = check_summary["failed_checks"]
+    status_value = source.get("status")
+    status_text = None if status_value is None else str(status_value)
+    source_passed = (
+        status_text == "passed"
+        and source.get("available") is not False
+        and source.get("exists") is not False
+        and failed_check_count == 0
+    )
+    checks_passed = check_summary["passed"] or check_summary["check_count"] == 0
+    if not present:
+        status = "not_available"
+        ready = True
+    elif not required:
+        status = status_text or "not_required"
+        ready = True
+    elif source_passed and checks_passed:
+        status = "passed"
+        ready = True
+    else:
+        status = "failed"
+        ready = False
+    return {
+        "schema_version": 1,
+        "source": source.get("source"),
+        "present": present,
+        "status": status,
+        "ready": ready,
+        "required_by_benchmark_contract": required,
+        "path": source.get("path"),
+        "exists": source.get("exists"),
+        "available": source.get("available"),
+        "resident_registration_mode": source.get(
+            "resident_registration_mode", source.get("mode")
+        ),
+        "descriptor_fit_batch_mode": source.get(
+            "descriptor_fit_batch_mode",
+            source.get("triangle_descriptor_fit_batch_mode"),
+        ),
+        "pixel_refine_batch_mode": source.get(
+            "pixel_refine_batch_mode",
+            source.get("triangle_pixel_refine_batch_mode"),
+        ),
+        "triangle_warp_batch_mode": source.get("triangle_warp_batch_mode"),
+        "triangle_warp_batch_frame_count": source.get(
+            "triangle_warp_batch_frame_count"
+        ),
+        "warp_copy_mode": source.get(
+            "warp_copy_mode",
+            source.get("resident_warp_copy_mode")
+            or source.get("resident_io_pipeline_warp_copy_mode"),
+        ),
+        "passed_check_count": passed_check_count,
+        "failed_check_count": failed_check_count,
+        "failed_checks": failed_checks,
+        "acceptance_check_count": check_summary["check_count"],
+        "failed_acceptance_checks": check_summary["failed_checks"],
+        "acceptance_checks": check_summary["checks"],
     }
 
 
@@ -948,6 +1069,9 @@ def build_release_promotion_decision(
         else {}
     )
     warp_quality_handoff = _warp_quality_handoff_evidence(acceptance)
+    resident_fastpath_handoff = _resident_registration_fastpath_handoff_evidence(
+        acceptance
+    )
 
     checks = [
         _check(
@@ -1052,6 +1176,12 @@ def build_release_promotion_decision(
             "Release requires attached warp-quality acceptance evidence to be present, typed, and passing.",
         ),
         _check(
+            "resident_registration_fastpath_handoff",
+            bool(resident_fastpath_handoff["ready"]),
+            resident_fastpath_handoff,
+            "Release requires resident registration fast-path acceptance evidence to pass when the benchmark contract requires it.",
+        ),
+        _check(
             "stack_engine_release_evidence_passed",
             stack_release_status == "passed" or stack_contract.get("passed") is True,
             {
@@ -1115,6 +1245,7 @@ def build_release_promotion_decision(
         "pipeline_rejection_sample_accounting_passed",
         "pipeline_sample_accounting_closure_passed",
         "warp_quality_contract_handoff",
+        "resident_registration_fastpath_handoff",
         "stack_engine_release_evidence_passed",
         "stack_engine_default_ready",
         "stack_engine_scope_all",
@@ -1169,6 +1300,7 @@ def build_release_promotion_decision(
         "pipeline_sample_closure_release": sample_closure_release,
         "pipeline_resident_winsorized_semantics_release": resident_winsorized_semantics,
         "warp_quality_handoff": warp_quality_handoff,
+        "resident_registration_fastpath_handoff": resident_fastpath_handoff,
         "stack_engine_publication_runtime_default": publication_runtime_default,
         "stack_engine_publication_direct_runtime_evidence": publication_direct_runtime,
         "runtime_repeat": runtime_evidence,
@@ -1220,6 +1352,11 @@ def _markdown(payload: dict[str, Any]) -> str:
         if isinstance(payload.get("warp_quality_handoff"), dict)
         else {}
     )
+    resident_fastpath = (
+        payload.get("resident_registration_fastpath_handoff")
+        if isinstance(payload.get("resident_registration_fastpath_handoff"), dict)
+        else {}
+    )
     publication = (
         payload.get("stack_engine_publication_runtime_default")
         if isinstance(payload.get("stack_engine_publication_runtime_default"), dict)
@@ -1250,6 +1387,30 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Sample closure release scope: `{sample_closure.get('scope')}`, ready `{sample_closure.get('ready')}`, required `{sample_closure.get('required_count')}`, present `{sample_closure.get('present_count')}`",
             f"- Resident winsorized semantics: `{resident_winsorized.get('status')}`, ready `{resident_winsorized.get('ready')}`, required `{resident_winsorized.get('required_count')}`, legacy completions `{resident_winsorized.get('legacy_completion_count')}`",
             f"- Resident winsorized descriptor sources: `{resident_winsorized.get('descriptor_sources')}`",
+            "",
+        ]
+    )
+    lines.extend(
+        [
+            "",
+            "## Resident Registration Fastpath Handoff",
+            "",
+            f"- Present: `{resident_fastpath.get('present')}`",
+            f"- Status: `{resident_fastpath.get('status')}`",
+            f"- Ready: `{resident_fastpath.get('ready')}`",
+            f"- Required: `{resident_fastpath.get('required_by_benchmark_contract')}`",
+            f"- Source: `{resident_fastpath.get('source')}`",
+            f"- Path: `{resident_fastpath.get('path')}`",
+            f"- Mode: `{resident_fastpath.get('resident_registration_mode')}`",
+            f"- Descriptor batch: `{resident_fastpath.get('descriptor_fit_batch_mode')}`",
+            f"- Pixel refine batch: `{resident_fastpath.get('pixel_refine_batch_mode')}`",
+            f"- Triangle warp batch: `{resident_fastpath.get('triangle_warp_batch_mode')}`",
+            f"- Triangle warp batch frames: `{resident_fastpath.get('triangle_warp_batch_frame_count')}`",
+            f"- Warp copy mode: `{resident_fastpath.get('warp_copy_mode')}`",
+            f"- Checks passed: `{resident_fastpath.get('passed_check_count')}`",
+            f"- Checks failed: `{resident_fastpath.get('failed_check_count')}`",
+            f"- Failed checks: `{resident_fastpath.get('failed_checks')}`",
+            f"- Failed acceptance checks: `{resident_fastpath.get('failed_acceptance_checks')}`",
             "",
         ]
     )

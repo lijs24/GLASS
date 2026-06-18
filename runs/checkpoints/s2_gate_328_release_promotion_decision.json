@@ -1,0 +1,526 @@
+{
+  "artifact_type": "release_promotion_decision",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_327_acceptance_audit.json",
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 10.0,
+        "required_min": 2.0
+      },
+      "name": "speedup_threshold",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "pipeline_contract_passed": null,
+        "pipeline_contract_status": null,
+        "release_evidence_status": "passed"
+      },
+      "name": "pipeline_release_evidence_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "audit_type": "pipeline_invariant_contract",
+        "source": "acceptance_pipeline_contract",
+        "status": "passed"
+      },
+      "name": "pipeline_handoff_evidence_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "integration_map_count": 6,
+        "integration_output_count": 1,
+        "source": "acceptance_pipeline_contract"
+      },
+      "name": "pipeline_integration_dq_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "resident_result_contract": true,
+        "stack_result_contract": true
+      },
+      "name": "pipeline_result_contracts_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "descriptor_sources": [],
+        "failed_count": 0,
+        "failed_items": [],
+        "legacy_completion_count": 0,
+        "output_count": 0,
+        "ready": true,
+        "required_count": 0,
+        "rows": [],
+        "schema_version": 1,
+        "scope": "sparse_or_not_supplied",
+        "status": "not_available"
+      },
+      "name": "pipeline_resident_winsorized_semantics_handoff",
+      "note": "Resident winsorized outputs must preserve explicit or same-run backfilled semantics in the pipeline contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": true,
+        "tile_size": 8
+      },
+      "name": "pipeline_pixel_verification_enabled",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "coverage_pixels": true,
+        "dq_pixels": true,
+        "rejection_pixels": true
+      },
+      "name": "pipeline_pixel_verification_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "accounted_output_count": 1,
+        "check": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "ready": true,
+        "required_count": 0,
+        "scope": "not_required",
+        "status": "passed",
+        "verified_count": 1
+      },
+      "name": "pipeline_rejection_sample_accounting_passed",
+      "note": "Release requires the pipeline contract to prove rejection sample accounting passed, or explicitly prove it was not required.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "present_count": 1,
+        "ready": true,
+        "required_count": 1,
+        "scope": "required",
+        "status": "passed"
+      },
+      "name": "pipeline_sample_accounting_closure_passed",
+      "note": "Release requires the pipeline contract to prove sample-closure evidence passed, or explicitly prove it was not required.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_checks": {
+          "warp_quality_contract_passed": true,
+          "warp_quality_contract_present": true,
+          "warp_quality_contract_type": true
+        },
+        "artifact_type": "warp_quality_contract",
+        "check_count": 9,
+        "contract_passed": true,
+        "contract_status": "passed",
+        "exists": true,
+        "failed_acceptance_checks": [],
+        "failed_checks": [],
+        "output_count": 1,
+        "path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+        "present": true,
+        "ready": true,
+        "schema_version": 1,
+        "source": "acceptance_audit",
+        "status": "passed"
+      },
+      "name": "warp_quality_contract_handoff",
+      "note": "Release requires attached warp-quality acceptance evidence to be present, typed, and passing.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_check_count": 23,
+        "acceptance_checks": {
+          "contract_resident_registration_fastpath_component:triangle_descriptor_fit_batch": true,
+          "contract_resident_registration_fastpath_component:triangle_pixel_refine_batch": true,
+          "contract_resident_registration_fastpath_min:resident_registration.triangle_warp_batch_frame_count": true,
+          "contract_resident_registration_fastpath_positive:artifact.resident_warp_scratch_bytes": true,
+          "contract_resident_registration_fastpath_positive:resident_io_pipeline.warp_scratch_bytes": true,
+          "contract_resident_registration_fastpath_positive:resident_registration.triangle_descriptor_fit_moving_device_bytes": true,
+          "contract_resident_registration_fastpath_positive:resident_registration.triangle_descriptor_fit_output_device_bytes": true,
+          "contract_resident_registration_fastpath_positive:resident_registration.triangle_descriptor_fit_reference_device_bytes": true,
+          "contract_resident_registration_fastpath_positive:resident_registration.triangle_pixel_refine_workspace_bytes": true,
+          "contract_resident_registration_fastpath_present": true,
+          "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_batch": true,
+          "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_moving_device_reuse": true,
+          "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_output_device_reuse": true,
+          "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_reference_device_reuse": true,
+          "contract_resident_registration_fastpath_true:resident_registration.triangle_pixel_refine_batch": true,
+          "contract_resident_registration_fastpath_true:resident_registration.triangle_warp_batch": true,
+          "contract_resident_registration_fastpath_value:artifact.resident_warp_copy_mode": true,
+          "contract_resident_registration_fastpath_value:resident_io_pipeline.warp_copy_mode": true,
+          "contract_resident_registration_fastpath_value:resident_registration.mode": true,
+          "contract_resident_registration_fastpath_value:resident_registration.triangle_descriptor_fit_batch_mode": true,
+          "contract_resident_registration_fastpath_value:resident_registration.triangle_pixel_refine_batch_metric_mode": true,
+          "contract_resident_registration_fastpath_value:resident_registration.triangle_pixel_refine_batch_mode": true,
+          "contract_resident_registration_fastpath_value:resident_registration.triangle_warp_batch_mode": true
+        },
+        "available": true,
+        "descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+        "exists": true,
+        "failed_acceptance_checks": [],
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "passed_check_count": 23,
+        "path": "runs\\checkpoints\\s2_gate_327_fastpath_fixture\\resident_artifacts.json",
+        "pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+        "present": true,
+        "ready": true,
+        "required_by_benchmark_contract": true,
+        "resident_registration_mode": "similarity_cuda_triangle",
+        "schema_version": 1,
+        "source": "explicit_resident_artifacts_json",
+        "status": "passed",
+        "triangle_warp_batch_frame_count": 3,
+        "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+        "warp_copy_mode": "default_stream_async_device_to_device"
+      },
+      "name": "resident_registration_fastpath_handoff",
+      "note": "Release requires resident registration fast-path acceptance evidence to pass when the benchmark contract requires it.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "release_evidence_status": "passed",
+        "stack_engine_contract_passed": null,
+        "stack_engine_contract_status": null
+      },
+      "name": "stack_engine_release_evidence_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_release_status": "passed",
+        "contract_default_ready": null
+      },
+      "name": "stack_engine_default_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "all",
+        "required": "all"
+      },
+      "name": "stack_engine_scope_all",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "best_elapsed_s": 99.8,
+        "best_label": "repeat03",
+        "considered_run_count": 3,
+        "elapsed_ratio_vs_best": 1.0140280561122246,
+        "ignored_warmup_labels": [],
+        "ignored_warmup_run_count": 0,
+        "max_elapsed_ratio_vs_best": 1.25,
+        "present": true,
+        "recommendation": "best_observed:repeat03",
+        "required_min_runtime_runs": 3,
+        "run_count": 3,
+        "slowest_elapsed_s": 101.2
+      },
+      "name": "runtime_repeat_evidence_ready",
+      "note": "Default changes require at least two stable runtime observations; release-candidate status can pass without this.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T16:01:08+00:00",
+  "default_change_ready": true,
+  "inputs": {
+    "acceptance_audit": "runs\\checkpoints\\s2_gate_327_acceptance_audit.json",
+    "pipeline_contract": null,
+    "repeat_preflight": null,
+    "runtime_compare": "runs\\checkpoints\\s2_gate_326_runtime_compare.json",
+    "stack_engine_contract": null,
+    "stack_engine_publication_audit": null
+  },
+  "limitations": [
+    "This decision artifact does not change GLASS defaults.",
+    "Release-candidate readiness is based on supplied acceptance and contract artifacts.",
+    "Default-change readiness additionally requires stable repeat/runtime evidence."
+  ],
+  "passed": true,
+  "pipeline_handoff": {
+    "audit_type": "pipeline_invariant_contract",
+    "check_count": 22,
+    "checks": {
+      "integration_coverage_map_pixels_match_dq": true,
+      "integration_dq_contract": true,
+      "integration_dq_map_pixels_match_summary": true,
+      "integration_rejection_map_pixels_match_dq": true,
+      "integration_rejection_sample_counts_match_maps": true,
+      "integration_resident_result_contract": true,
+      "integration_sample_accounting_closure": true,
+      "integration_stack_result_contract": true
+    },
+    "failed_checks": [],
+    "integration_map_count": 6,
+    "integration_output_count": 1,
+    "passed": true,
+    "pixel_verification_enabled": true,
+    "pixel_verification_tile_size": 8,
+    "present": true,
+    "rejection_sample_accounting": {
+      "accounted_output_count": 1,
+      "check_name": "integration_rejection_sample_counts_match_maps",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "pixel_verification_enabled": true,
+      "required_count": 0,
+      "rows": [
+        {
+          "failed_matches": [],
+          "item": "H",
+          "map_rejected_sample_sum": 0,
+          "ok": true,
+          "rejection": "none",
+          "required": false,
+          "semantics": "Low/high rejection count maps store rejected-sample counts; DQ low/high flags store pixels touched by rejection.",
+          "source_counts": [
+            {
+              "count": 0,
+              "name": "dq_provenance_summary.rejected_samples"
+            },
+            {
+              "count": 0,
+              "name": "stack_engine_metrics.low_high_rejected"
+            }
+          ],
+          "status": "verified",
+          "verified": true
+        }
+      ],
+      "status": "passed",
+      "verified_count": 1
+    },
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_required_count": 0,
+    "rejection_sample_accounting_status": "passed",
+    "rejection_sample_accounting_verified_count": 1,
+    "resident_winsorized_semantics": {
+      "descriptor_sources": [],
+      "failed_count": 0,
+      "failed_items": [],
+      "legacy_completion_count": 0,
+      "output_count": 0,
+      "ready": true,
+      "required_count": 0,
+      "rows": [],
+      "schema_version": 1,
+      "scope": "sparse_or_not_supplied",
+      "status": "not_available"
+    },
+    "resident_winsorized_semantics_legacy_completion_count": 0,
+    "resident_winsorized_semantics_required_count": 0,
+    "resident_winsorized_semantics_status": "not_available",
+    "sample_accounting_closure": {
+      "check_name": "integration_sample_accounting_closure",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "present_count": 1,
+      "required_count": 1,
+      "rows": [
+        {
+          "input_invalid_samples_before_rejection": 0,
+          "input_samples": 576,
+          "input_total_match": true,
+          "input_valid_samples_before_rejection": 576,
+          "item": "H",
+          "passed": true,
+          "present": true,
+          "rejected_samples": 0,
+          "required": true,
+          "semantics": "Initial valid input samples close over final valid samples plus low/high rejected samples. Invalid input samples are not rejection samples.",
+          "status": "passed",
+          "valid_rejection_match": true,
+          "valid_samples_after_rejection": 576
+        }
+      ],
+      "status": "passed"
+    },
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 1,
+    "sample_accounting_closure_required_count": 1,
+    "sample_accounting_closure_status": "passed",
+    "source": "acceptance_pipeline_contract",
+    "status": "passed"
+  },
+  "pipeline_rejection_sample_release": {
+    "accounted_output_count": 1,
+    "check": true,
+    "check_present": true,
+    "failed_count": 0,
+    "failed_items": [],
+    "ready": true,
+    "required_count": 0,
+    "scope": "not_required",
+    "status": "passed",
+    "verified_count": 1
+  },
+  "pipeline_resident_winsorized_semantics_release": {
+    "descriptor_sources": [],
+    "failed_count": 0,
+    "failed_items": [],
+    "legacy_completion_count": 0,
+    "output_count": 0,
+    "ready": true,
+    "required_count": 0,
+    "rows": [],
+    "schema_version": 1,
+    "scope": "sparse_or_not_supplied",
+    "status": "not_available"
+  },
+  "pipeline_sample_closure_release": {
+    "check": true,
+    "check_present": true,
+    "failed_count": 0,
+    "failed_items": [],
+    "present_count": 1,
+    "ready": true,
+    "required_count": 1,
+    "scope": "required",
+    "status": "passed"
+  },
+  "recommendation": "promote_default_candidate",
+  "release_candidate_ready": true,
+  "repeat_preflight": {
+    "present": false,
+    "ready_to_execute": null,
+    "recommendation": null
+  },
+  "resident_registration_fastpath_handoff": {
+    "acceptance_check_count": 23,
+    "acceptance_checks": {
+      "contract_resident_registration_fastpath_component:triangle_descriptor_fit_batch": true,
+      "contract_resident_registration_fastpath_component:triangle_pixel_refine_batch": true,
+      "contract_resident_registration_fastpath_min:resident_registration.triangle_warp_batch_frame_count": true,
+      "contract_resident_registration_fastpath_positive:artifact.resident_warp_scratch_bytes": true,
+      "contract_resident_registration_fastpath_positive:resident_io_pipeline.warp_scratch_bytes": true,
+      "contract_resident_registration_fastpath_positive:resident_registration.triangle_descriptor_fit_moving_device_bytes": true,
+      "contract_resident_registration_fastpath_positive:resident_registration.triangle_descriptor_fit_output_device_bytes": true,
+      "contract_resident_registration_fastpath_positive:resident_registration.triangle_descriptor_fit_reference_device_bytes": true,
+      "contract_resident_registration_fastpath_positive:resident_registration.triangle_pixel_refine_workspace_bytes": true,
+      "contract_resident_registration_fastpath_present": true,
+      "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_batch": true,
+      "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_moving_device_reuse": true,
+      "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_output_device_reuse": true,
+      "contract_resident_registration_fastpath_true:resident_registration.triangle_descriptor_fit_reference_device_reuse": true,
+      "contract_resident_registration_fastpath_true:resident_registration.triangle_pixel_refine_batch": true,
+      "contract_resident_registration_fastpath_true:resident_registration.triangle_warp_batch": true,
+      "contract_resident_registration_fastpath_value:artifact.resident_warp_copy_mode": true,
+      "contract_resident_registration_fastpath_value:resident_io_pipeline.warp_copy_mode": true,
+      "contract_resident_registration_fastpath_value:resident_registration.mode": true,
+      "contract_resident_registration_fastpath_value:resident_registration.triangle_descriptor_fit_batch_mode": true,
+      "contract_resident_registration_fastpath_value:resident_registration.triangle_pixel_refine_batch_metric_mode": true,
+      "contract_resident_registration_fastpath_value:resident_registration.triangle_pixel_refine_batch_mode": true,
+      "contract_resident_registration_fastpath_value:resident_registration.triangle_warp_batch_mode": true
+    },
+    "available": true,
+    "descriptor_fit_batch_mode": "native_batch_shared_reference_device",
+    "exists": true,
+    "failed_acceptance_checks": [],
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "passed_check_count": 23,
+    "path": "runs\\checkpoints\\s2_gate_327_fastpath_fixture\\resident_artifacts.json",
+    "pixel_refine_batch_mode": "native_batch_one_seed_per_frame",
+    "present": true,
+    "ready": true,
+    "required_by_benchmark_contract": true,
+    "resident_registration_mode": "similarity_cuda_triangle",
+    "schema_version": 1,
+    "source": "explicit_resident_artifacts_json",
+    "status": "passed",
+    "triangle_warp_batch_frame_count": 3,
+    "triangle_warp_batch_mode": "native_matrix_lanczos3_frames",
+    "warp_copy_mode": "default_stream_async_device_to_device"
+  },
+  "runtime_repeat": {
+    "best_elapsed_s": 99.8,
+    "best_label": "repeat03",
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.0140280561122246,
+    "ignored_warmup_labels": [],
+    "ignored_warmup_run_count": 0,
+    "max_elapsed_ratio_vs_best": 1.25,
+    "present": true,
+    "recommendation": "best_observed:repeat03",
+    "required_min_runtime_runs": 3,
+    "run_count": 3,
+    "slowest_elapsed_s": 101.2
+  },
+  "schema_version": 1,
+  "speedup": {
+    "actual": 10.0,
+    "required_min": 2.0
+  },
+  "stack_engine_publication_direct_runtime_evidence": {
+    "passed": null,
+    "present": false,
+    "status": null
+  },
+  "stack_engine_publication_runtime_default": {
+    "passed": null,
+    "present": false,
+    "status": null
+  },
+  "status": "default_change_ready",
+  "warp_quality_handoff": {
+    "acceptance_checks": {
+      "warp_quality_contract_passed": true,
+      "warp_quality_contract_present": true,
+      "warp_quality_contract_type": true
+    },
+    "artifact_type": "warp_quality_contract",
+    "check_count": 9,
+    "contract_passed": true,
+    "contract_status": "passed",
+    "exists": true,
+    "failed_acceptance_checks": [],
+    "failed_checks": [],
+    "output_count": 1,
+    "path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+    "present": true,
+    "ready": true,
+    "schema_version": 1,
+    "source": "acceptance_audit",
+    "status": "passed"
+  }
+}

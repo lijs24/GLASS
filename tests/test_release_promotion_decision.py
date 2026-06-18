@@ -12,6 +12,7 @@ def _write_acceptance(
     *,
     passed: bool = True,
     warp_quality_passed: bool | None = None,
+    resident_fastpath_passed: bool | None = None,
 ) -> None:
     accounting_status = "passed" if passed else "failed"
     sample_closure_status = "passed" if passed else "failed"
@@ -187,6 +188,61 @@ def _write_acceptance(
                 "evidence": {"failed_checks": failed_checks},
             },
         ]
+    if resident_fastpath_passed is not None:
+        failed_checks = (
+            []
+            if resident_fastpath_passed
+            else ["contract_resident_registration_fastpath_descriptor_batch_mode"]
+        )
+        payload["resident_registration_fastpath"] = {
+            "source": "explicit_resident_artifacts_json",
+            "available": True,
+            "exists": True,
+            "path": "C:/glass_runs/default_resident/resident_artifacts.json",
+            "resident_registration_mode": "resident_triangle_batch",
+        }
+        payload["release_contract_evidence"][
+            "resident_registration_fastpath"
+        ] = {
+            "schema_version": 1,
+            "status": "passed" if resident_fastpath_passed else "failed",
+            "required_by_benchmark_contract": True,
+            "source": "explicit_resident_artifacts_json",
+            "path": "C:/glass_runs/default_resident/resident_artifacts.json",
+            "exists": True,
+            "available": True,
+            "resident_registration_mode": "resident_triangle_batch",
+            "descriptor_fit_batch_mode": "batch_gpu",
+            "pixel_refine_batch_mode": "batch_gpu",
+            "triangle_warp_batch_mode": "batched",
+            "triangle_warp_batch_frame_count": 3,
+            "warp_copy_mode": "device_to_device",
+            "passed_check_count": 3 if resident_fastpath_passed else 2,
+            "failed_check_count": 0 if resident_fastpath_passed else 1,
+            "failed_checks": failed_checks,
+        }
+        checks = payload.setdefault("checks", [])
+        checks.extend(
+            [
+                {
+                    "name": "contract_resident_registration_fastpath_present",
+                    "passed": True,
+                    "evidence": {
+                        "path": "C:/glass_runs/default_resident/resident_artifacts.json"
+                    },
+                },
+                {
+                    "name": "contract_resident_registration_fastpath_descriptor_batch_mode",
+                    "passed": resident_fastpath_passed,
+                    "evidence": {"actual": "batch_gpu", "required": "batch_gpu"},
+                },
+                {
+                    "name": "contract_resident_registration_fastpath_triangle_warp_batch",
+                    "passed": True,
+                    "evidence": {"actual": "batched", "required": "batched"},
+                },
+            ]
+        )
     write_json(path, payload)
 
 
@@ -825,6 +881,72 @@ def test_release_promotion_decision_blocks_failed_warp_quality_handoff(
     assert evidence["failed_acceptance_checks"] == ["warp_quality_contract_passed"]
 
 
+def test_release_promotion_decision_surfaces_resident_fastpath_handoff(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    _write_acceptance(acceptance, resident_fastpath_passed=True)
+    _write_runtime_compare(runtime)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = payload["resident_registration_fastpath_handoff"]
+    assert payload["release_candidate_ready"] is True
+    assert payload["default_change_ready"] is True
+    assert checks["resident_registration_fastpath_handoff"]["passed"] is True
+    assert evidence["status"] == "passed"
+    assert evidence["ready"] is True
+    assert evidence["present"] is True
+    assert evidence["required_by_benchmark_contract"] is True
+    assert evidence["source"] == "explicit_resident_artifacts_json"
+    assert evidence["resident_registration_mode"] == "resident_triangle_batch"
+    assert evidence["descriptor_fit_batch_mode"] == "batch_gpu"
+    assert evidence["triangle_warp_batch_mode"] == "batched"
+    assert evidence["triangle_warp_batch_frame_count"] == 3
+    assert evidence["warp_copy_mode"] == "device_to_device"
+    assert evidence["passed_check_count"] == 3
+    assert evidence["failed_check_count"] == 0
+    assert evidence["failed_acceptance_checks"] == []
+
+
+def test_release_promotion_decision_blocks_failed_resident_fastpath_handoff(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    _write_acceptance(acceptance, resident_fastpath_passed=False)
+    _write_runtime_compare(runtime)
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = payload["resident_registration_fastpath_handoff"]
+    assert payload["passed"] is False
+    assert payload["release_candidate_ready"] is False
+    assert payload["default_change_ready"] is False
+    assert payload["recommendation"] == "fix_release_blockers"
+    assert checks["resident_registration_fastpath_handoff"]["passed"] is False
+    assert evidence["status"] == "failed"
+    assert evidence["ready"] is False
+    assert evidence["failed_check_count"] == 1
+    assert evidence["failed_checks"] == [
+        "contract_resident_registration_fastpath_descriptor_batch_mode"
+    ]
+    assert evidence["failed_acceptance_checks"] == [
+        "contract_resident_registration_fastpath_descriptor_batch_mode"
+    ]
+
+
 def test_release_promotion_decision_accepts_publication_runtime_default(
     tmp_path: Path,
 ) -> None:
@@ -1298,6 +1420,7 @@ def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_pat
     assert "Release Promotion Decision" in markdown_text
     assert "Pipeline DQ Handoff" in markdown_text
     assert "Warp Quality Handoff" in markdown_text
+    assert "Resident Registration Fastpath Handoff" in markdown_text
     assert "StackEngine Publication Runtime Default" in markdown_text
 
     strict = tmp_path / "strict.json"

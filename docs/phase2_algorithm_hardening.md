@@ -5796,6 +5796,28 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 328: Release Decision Resident Fastpath Handoff
+
+- Carry acceptance-level resident registration fastpath evidence into
+  `glass release-promotion-decision`.
+- Add `resident_registration_fastpath_handoff` with source, path,
+  availability, required state, registration mode, descriptor/pixel/warp batch
+  modes, triangle warp batch frame count, warp copy mode, check counts, and
+  failed check names.
+- Add a release-blocking `resident_registration_fastpath_handoff` check only
+  when the acceptance evidence or contract checks say the benchmark required
+  resident registration fastpath behavior.
+- Preserve compatibility for older acceptance artifacts: missing resident
+  fastpath evidence is recorded as `not_available` and does not block release
+  candidate readiness.
+- Surface resident fastpath handoff state in release-promotion Markdown.
+- Add focused tests for passing and failed resident fastpath handoff.
+- Generate Gate328 release-decision artifacts from the Gate327 controlled
+  fastpath acceptance fixture plus Gate326 runtime-repeat evidence.
+- Keep this gate audit-surface scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
