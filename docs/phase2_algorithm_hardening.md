@@ -5920,6 +5920,27 @@ integration where applicable.
   change, no CUDA kernel change, no runtime default change, no package upload,
   no GitHub release creation, and no real-data benchmark rerun.
 
+### S2-Gate 334: Phase2 Publish Preflight Resident Fastpath Handoff
+
+- Carry final `glass windows-publish-preflight` resident fastpath handoff
+  evidence into `glass phase2-status`.
+- Add `windows_publish_preflight_resident_fastpath_handoff_passed` as a Phase2
+  check, requiring plan/matrix/default-promotion readiness, cross-artifact
+  agreement, passed raw statuses, green Phase2 handoff statuses, and nonzero raw
+  check counts.
+- Surface plan, matrix, and default-promotion resident fastpath handoff
+  readiness/status/counts in Phase2 Markdown.
+- Extend `glass phase2-status-compare` so candidates that lose a previously
+  passing publish-preflight resident fastpath handoff are reported as
+  regressed.
+- Add focused tests for missing evidence, failed evidence, passing
+  preservation, and compare regression.
+- Generate Gate334 Phase2 status artifacts from the Gate333 publish-preflight
+  artifact.
+- Keep this gate status/compare scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

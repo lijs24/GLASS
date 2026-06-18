@@ -766,6 +766,8 @@ def _write_publish_preflight(
     direct_publication_guard_ready: bool = True,
     direct_publication_guard_lights: int | None = None,
     include_direct_publication_guard: bool = True,
+    resident_fastpath_handoff_ready: bool = True,
+    include_resident_fastpath_handoff: bool = True,
     stack_publication_audit_ready: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
@@ -811,6 +813,8 @@ def _write_publish_preflight(
         direct_runtime_evidence_ready or not include_direct_runtime_evidence
     ) and (
         direct_publication_guard_passed or not include_direct_publication_guard
+    ) and (
+        resident_fastpath_handoff_ready or not include_resident_fastpath_handoff
     ) and (
         (
             stack_publication_audit_ready
@@ -1265,6 +1269,75 @@ def _write_publish_preflight(
                 "matrix_release_decision_direct_runtime_publication_guard_passed",
                 "default_promotion_release_decision_direct_runtime_publication_guard_passed",
             ]
+    if include_resident_fastpath_handoff:
+        raw_status = "passed" if resident_fastpath_handoff_ready else "failed"
+        phase2_status = (
+            "passed" if resident_fastpath_handoff_ready else "attention_required"
+        )
+        raw_check_count = 31 if resident_fastpath_handoff_ready else 0
+        summary.update(
+            {
+                "github_plan_matrix_resident_fastpath_handoff_ready": (
+                    resident_fastpath_handoff_ready
+                ),
+                "github_plan_matrix_resident_fastpath_handoff_raw_status": raw_status,
+                "github_plan_matrix_resident_fastpath_handoff_phase2_status": (
+                    phase2_status
+                ),
+                "github_plan_matrix_resident_fastpath_handoff_raw_check_count": (
+                    raw_check_count
+                ),
+                "matrix_resident_fastpath_handoff_ready": (
+                    resident_fastpath_handoff_ready
+                ),
+                "matrix_resident_fastpath_handoff_raw_status": raw_status,
+                "matrix_resident_fastpath_handoff_phase2_status": phase2_status,
+                "matrix_resident_fastpath_handoff_raw_check_count": raw_check_count,
+                "default_promotion_resident_fastpath_handoff_ready": (
+                    resident_fastpath_handoff_ready
+                ),
+                "default_promotion_resident_fastpath_handoff_raw_status": raw_status,
+                "default_promotion_resident_fastpath_handoff_phase2_status": (
+                    phase2_status
+                ),
+                "default_promotion_resident_fastpath_handoff_raw_check_count": (
+                    raw_check_count
+                ),
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "github_plan_matrix_resident_fastpath_release_handoff_ready",
+                    "passed": resident_fastpath_handoff_ready,
+                },
+                {
+                    "name": "matrix_resident_fastpath_release_handoff_ready",
+                    "passed": resident_fastpath_handoff_ready,
+                },
+                {
+                    "name": "default_promotion_resident_fastpath_release_handoff_ready",
+                    "passed": resident_fastpath_handoff_ready,
+                },
+                {
+                    "name": "github_plan_matrix_resident_fastpath_handoff_matches_matrix",
+                    "passed": resident_fastpath_handoff_ready,
+                },
+                {
+                    "name": "matrix_resident_fastpath_handoff_matches_default_promotion",
+                    "passed": resident_fastpath_handoff_ready,
+                },
+            ]
+        )
+        if not resident_fastpath_handoff_ready:
+            failed_checks = [
+                *failed_checks,
+                "github_plan_matrix_resident_fastpath_release_handoff_ready",
+                "matrix_resident_fastpath_release_handoff_ready",
+                "default_promotion_resident_fastpath_release_handoff_ready",
+                "github_plan_matrix_resident_fastpath_handoff_matches_matrix",
+                "matrix_resident_fastpath_handoff_matches_default_promotion",
+            ]
     if include_resident_winsorized_sweep:
         status = "passed" if resident_winsorized_sweep_ready else "failed"
         required_frame_passed = resident_winsorized_sweep_ready
@@ -1628,6 +1701,10 @@ def _status_payload(
     publish_preflight_direct_runtime_resident_lights: int = 200,
     publish_preflight_release_direct_publication_guard_ready: bool = True,
     publish_preflight_release_direct_publication_guard_lights: int = 200,
+    publish_preflight_resident_fastpath_handoff_ready: bool = True,
+    publish_preflight_resident_fastpath_handoff_raw_status: str = "passed",
+    publish_preflight_resident_fastpath_handoff_phase2_status: str = "passed",
+    publish_preflight_resident_fastpath_handoff_raw_check_count: int = 31,
     publish_preflight_resident_winsorized_status: str = "passed",
     publish_preflight_resident_winsorized_required_frame_passed: bool = True,
     publish_preflight_resident_winsorized_check_count: int = 27,
@@ -1669,6 +1746,12 @@ def _status_payload(
         publish_preflight_direct_runtime_ready
         and publish_preflight_release_direct_publication_guard_ready
         and publish_preflight_release_direct_publication_guard_lights >= 200
+    )
+    publish_preflight_resident_fastpath_handoff_passed = (
+        publish_preflight_resident_fastpath_handoff_ready
+        and publish_preflight_resident_fastpath_handoff_raw_status == "passed"
+        and publish_preflight_resident_fastpath_handoff_phase2_status == "passed"
+        and publish_preflight_resident_fastpath_handoff_raw_check_count > 0
     )
     return {
         "schema_version": 1,
@@ -2054,6 +2137,57 @@ def _status_payload(
             ),
             "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest": (
                 publish_preflight_release_direct_publication_guard_passed
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_ready": (
+                publish_preflight_resident_fastpath_handoff_ready
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_raw_status": (
+                publish_preflight_resident_fastpath_handoff_raw_status
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_phase2_status": (
+                publish_preflight_resident_fastpath_handoff_phase2_status
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_raw_check_count": (
+                publish_preflight_resident_fastpath_handoff_raw_check_count
+            ),
+            "matrix_resident_fastpath_handoff_ready": (
+                publish_preflight_resident_fastpath_handoff_ready
+            ),
+            "matrix_resident_fastpath_handoff_raw_status": (
+                publish_preflight_resident_fastpath_handoff_raw_status
+            ),
+            "matrix_resident_fastpath_handoff_phase2_status": (
+                publish_preflight_resident_fastpath_handoff_phase2_status
+            ),
+            "matrix_resident_fastpath_handoff_raw_check_count": (
+                publish_preflight_resident_fastpath_handoff_raw_check_count
+            ),
+            "default_promotion_resident_fastpath_handoff_ready": (
+                publish_preflight_resident_fastpath_handoff_ready
+            ),
+            "default_promotion_resident_fastpath_handoff_raw_status": (
+                publish_preflight_resident_fastpath_handoff_raw_status
+            ),
+            "default_promotion_resident_fastpath_handoff_phase2_status": (
+                publish_preflight_resident_fastpath_handoff_phase2_status
+            ),
+            "default_promotion_resident_fastpath_handoff_raw_check_count": (
+                publish_preflight_resident_fastpath_handoff_raw_check_count
+            ),
+            "github_plan_matrix_resident_fastpath_release_handoff_ready": (
+                publish_preflight_resident_fastpath_handoff_passed
+            ),
+            "matrix_resident_fastpath_release_handoff_ready": (
+                publish_preflight_resident_fastpath_handoff_passed
+            ),
+            "default_promotion_resident_fastpath_release_handoff_ready": (
+                publish_preflight_resident_fastpath_handoff_passed
+            ),
+            "github_plan_matrix_resident_fastpath_handoff_matches_matrix": (
+                publish_preflight_resident_fastpath_handoff_passed
+            ),
+            "matrix_resident_fastpath_handoff_matches_default_promotion": (
+                publish_preflight_resident_fastpath_handoff_passed
             ),
             "matrix_resident_winsorized_sweep_audit_passed": (
                 publish_preflight_resident_winsorized_status == "passed"
@@ -4043,6 +4177,89 @@ def test_phase2_status_blocks_failed_publish_preflight_resident_winsorized_sweep
     assert resident_check["evidence"]["matrix_required_frame_check"] is False
 
 
+def test_phase2_status_blocks_missing_publish_preflight_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=334)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        include_resident_fastpath_handoff=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    handoff_check = checks[
+        "windows_publish_preflight_resident_fastpath_handoff_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert handoff_check["passed"] is False
+    assert handoff_check["evidence"]["github_plan_matrix_ready"] is None
+    assert handoff_check["evidence"]["matrix_check"] is None
+
+
+def test_phase2_status_blocks_failed_publish_preflight_resident_fastpath_handoff(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=334)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        resident_fastpath_handoff_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    handoff_check = checks[
+        "windows_publish_preflight_resident_fastpath_handoff_passed"
+    ]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert (
+        status["publish_preflight"][
+            "matrix_resident_fastpath_handoff_raw_status"
+        ]
+        == "failed"
+    )
+    assert handoff_check["passed"] is False
+    assert handoff_check["evidence"]["matrix_check"] is False
+    assert handoff_check["evidence"]["matrix_raw_check_count"] == 0
+
+
 def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -4253,6 +4470,13 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     )
     assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_status_preserved"] is True
+    assert checks["windows_publish_preflight_resident_fastpath_handoff_preserved"] is True
+    assert (
+        checks[
+            "windows_publish_preflight_resident_fastpath_handoff_status_preserved"
+        ]
+        is True
+    )
     assert checks["stack_engine_publication_audit_passed_preserved"] is True
     assert checks["stack_engine_publication_policy_chain_preserved"] is True
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is True
@@ -4318,6 +4542,12 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             publish_preflight_stack_runtime_default_legacy_master_count=1,
             publish_preflight_stack_runtime_default_failed_output_count=1,
             publish_preflight_direct_runtime_ready=False,
+            publish_preflight_resident_fastpath_handoff_ready=False,
+            publish_preflight_resident_fastpath_handoff_raw_status="failed",
+            publish_preflight_resident_fastpath_handoff_phase2_status=(
+                "attention_required"
+            ),
+            publish_preflight_resident_fastpath_handoff_raw_check_count=0,
             stack_publication_passed=False,
             stack_publication_policy_ready=False,
             stack_publication_resident_winsorized_ready=False,
@@ -4396,6 +4626,13 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert (
         checks[
             "windows_publish_preflight_release_direct_publication_guard_status_preserved"
+        ]
+        is False
+    )
+    assert checks["windows_publish_preflight_resident_fastpath_handoff_preserved"] is False
+    assert (
+        checks[
+            "windows_publish_preflight_resident_fastpath_handoff_status_preserved"
         ]
         is False
     )
@@ -5075,6 +5312,51 @@ def test_phase2_status_compare_flags_publish_preflight_release_direct_guard_regr
         ]
         is False
     )
+
+
+def test_phase2_status_compare_flags_publish_preflight_resident_fastpath_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=333))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=334,
+            status="attention_required",
+            publish_preflight_resident_fastpath_handoff_ready=False,
+            publish_preflight_resident_fastpath_handoff_raw_status="failed",
+            publish_preflight_resident_fastpath_handoff_phase2_status=(
+                "attention_required"
+            ),
+            publish_preflight_resident_fastpath_handoff_raw_check_count=0,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    handoff_check = checks[
+        "windows_publish_preflight_resident_fastpath_handoff_preserved"
+    ]
+    assert handoff_check["passed"] is False
+    assert handoff_check["evidence"]["candidate"]["checks_passed"] is False
+    status_check = checks[
+        "windows_publish_preflight_resident_fastpath_handoff_status_preserved"
+    ]
+    assert status_check["passed"] is False
+    candidate_statuses = status_check["evidence"]["candidate"]
+    assert candidate_statuses["matrix_resident_fastpath_handoff_ready"] is False
+    assert (
+        candidate_statuses["matrix_resident_fastpath_handoff_raw_status"]
+        == "failed"
+    )
+    assert candidate_statuses["matrix_resident_fastpath_handoff_raw_check_count"] == 0
 
 
 def test_phase2_status_compare_flags_publish_preflight_resident_winsorized_regression(

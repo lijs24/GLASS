@@ -1214,6 +1214,42 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
         "default_promotion_release_direct_publication_guard_lights": summary.get(
             "default_promotion_release_direct_publication_guard_lights"
         ),
+        "github_plan_matrix_resident_fastpath_handoff_ready": summary.get(
+            "github_plan_matrix_resident_fastpath_handoff_ready"
+        ),
+        "github_plan_matrix_resident_fastpath_handoff_raw_status": summary.get(
+            "github_plan_matrix_resident_fastpath_handoff_raw_status"
+        ),
+        "github_plan_matrix_resident_fastpath_handoff_phase2_status": summary.get(
+            "github_plan_matrix_resident_fastpath_handoff_phase2_status"
+        ),
+        "github_plan_matrix_resident_fastpath_handoff_raw_check_count": summary.get(
+            "github_plan_matrix_resident_fastpath_handoff_raw_check_count"
+        ),
+        "matrix_resident_fastpath_handoff_ready": summary.get(
+            "matrix_resident_fastpath_handoff_ready"
+        ),
+        "matrix_resident_fastpath_handoff_raw_status": summary.get(
+            "matrix_resident_fastpath_handoff_raw_status"
+        ),
+        "matrix_resident_fastpath_handoff_phase2_status": summary.get(
+            "matrix_resident_fastpath_handoff_phase2_status"
+        ),
+        "matrix_resident_fastpath_handoff_raw_check_count": summary.get(
+            "matrix_resident_fastpath_handoff_raw_check_count"
+        ),
+        "default_promotion_resident_fastpath_handoff_ready": summary.get(
+            "default_promotion_resident_fastpath_handoff_ready"
+        ),
+        "default_promotion_resident_fastpath_handoff_raw_status": summary.get(
+            "default_promotion_resident_fastpath_handoff_raw_status"
+        ),
+        "default_promotion_resident_fastpath_handoff_phase2_status": summary.get(
+            "default_promotion_resident_fastpath_handoff_phase2_status"
+        ),
+        "default_promotion_resident_fastpath_handoff_raw_check_count": summary.get(
+            "default_promotion_resident_fastpath_handoff_raw_check_count"
+        ),
         "github_plan_matrix_release_decision_direct_publication_guard_passed": (
             _check_passed(
                 payload,
@@ -1267,6 +1303,26 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 payload,
                 "matrix_default_promotion_release_decision_direct_publication_guard_matches_manifest",
             )
+        ),
+        "github_plan_matrix_resident_fastpath_release_handoff_ready": _check_passed(
+            payload,
+            "github_plan_matrix_resident_fastpath_release_handoff_ready",
+        ),
+        "matrix_resident_fastpath_release_handoff_ready": _check_passed(
+            payload,
+            "matrix_resident_fastpath_release_handoff_ready",
+        ),
+        "default_promotion_resident_fastpath_release_handoff_ready": _check_passed(
+            payload,
+            "default_promotion_resident_fastpath_release_handoff_ready",
+        ),
+        "github_plan_matrix_resident_fastpath_handoff_matches_matrix": _check_passed(
+            payload,
+            "github_plan_matrix_resident_fastpath_handoff_matches_matrix",
+        ),
+        "matrix_resident_fastpath_handoff_matches_default_promotion": _check_passed(
+            payload,
+            "matrix_resident_fastpath_handoff_matches_default_promotion",
         ),
         "failed_checks": payload.get("failed_checks"),
     }
@@ -3246,6 +3302,133 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "windows_publish_preflight_resident_fastpath_handoff_passed",
+                "passed": (
+                    preflight.get(
+                        "github_plan_matrix_resident_fastpath_release_handoff_ready"
+                    )
+                    is True
+                    and preflight.get("matrix_resident_fastpath_release_handoff_ready")
+                    is True
+                    and preflight.get(
+                        "default_promotion_resident_fastpath_release_handoff_ready"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_matches_matrix"
+                    )
+                    is True
+                    and preflight.get(
+                        "matrix_resident_fastpath_handoff_matches_default_promotion"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_ready"
+                    )
+                    is True
+                    and preflight.get("matrix_resident_fastpath_handoff_ready")
+                    is True
+                    and preflight.get(
+                        "default_promotion_resident_fastpath_handoff_ready"
+                    )
+                    is True
+                    and preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_raw_status"
+                    )
+                    == "passed"
+                    and preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_phase2_status"
+                    )
+                    == "passed"
+                    and preflight.get("matrix_resident_fastpath_handoff_raw_status")
+                    == "passed"
+                    and preflight.get("matrix_resident_fastpath_handoff_phase2_status")
+                    == "passed"
+                    and preflight.get(
+                        "default_promotion_resident_fastpath_handoff_raw_status"
+                    )
+                    == "passed"
+                    and preflight.get(
+                        "default_promotion_resident_fastpath_handoff_phase2_status"
+                    )
+                    == "passed"
+                    and _int_or_zero(
+                        preflight.get(
+                            "github_plan_matrix_resident_fastpath_handoff_raw_check_count"
+                        )
+                    )
+                    > 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "matrix_resident_fastpath_handoff_raw_check_count"
+                        )
+                    )
+                    > 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_resident_fastpath_handoff_raw_check_count"
+                        )
+                    )
+                    > 0
+                ),
+                "evidence": {
+                    "github_plan_matrix_ready": preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_ready"
+                    ),
+                    "github_plan_matrix_raw_status": preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_raw_status"
+                    ),
+                    "github_plan_matrix_phase2_status": preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_phase2_status"
+                    ),
+                    "github_plan_matrix_raw_check_count": preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_raw_check_count"
+                    ),
+                    "matrix_ready": preflight.get(
+                        "matrix_resident_fastpath_handoff_ready"
+                    ),
+                    "matrix_raw_status": preflight.get(
+                        "matrix_resident_fastpath_handoff_raw_status"
+                    ),
+                    "matrix_phase2_status": preflight.get(
+                        "matrix_resident_fastpath_handoff_phase2_status"
+                    ),
+                    "matrix_raw_check_count": preflight.get(
+                        "matrix_resident_fastpath_handoff_raw_check_count"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_resident_fastpath_handoff_ready"
+                    ),
+                    "default_promotion_raw_status": preflight.get(
+                        "default_promotion_resident_fastpath_handoff_raw_status"
+                    ),
+                    "default_promotion_phase2_status": preflight.get(
+                        "default_promotion_resident_fastpath_handoff_phase2_status"
+                    ),
+                    "default_promotion_raw_check_count": preflight.get(
+                        "default_promotion_resident_fastpath_handoff_raw_check_count"
+                    ),
+                    "github_plan_matrix_check": preflight.get(
+                        "github_plan_matrix_resident_fastpath_release_handoff_ready"
+                    ),
+                    "matrix_check": preflight.get(
+                        "matrix_resident_fastpath_release_handoff_ready"
+                    ),
+                    "default_promotion_check": preflight.get(
+                        "default_promotion_resident_fastpath_release_handoff_ready"
+                    ),
+                    "github_plan_matrix_match_check": preflight.get(
+                        "github_plan_matrix_resident_fastpath_handoff_matches_matrix"
+                    ),
+                    "matrix_default_promotion_match_check": preflight.get(
+                        "matrix_resident_fastpath_handoff_matches_default_promotion"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
+        checks.append(
+            {
                 "name": "windows_publish_preflight_stack_engine_publication_audit_passed",
                 "passed": (
                     preflight.get("matrix_stack_engine_publication_audit_passed")
@@ -4237,6 +4420,34 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('default_promotion_resident_winsorized_sweep_matches_matrix')}"
                 ),
                 (
+                    "- Resident fastpath handoff: "
+                    "plan-matrix="
+                    f"{preflight.get('github_plan_matrix_resident_fastpath_handoff_ready')}/"
+                    f"{preflight.get('github_plan_matrix_resident_fastpath_handoff_raw_status')}/"
+                    f"{preflight.get('github_plan_matrix_resident_fastpath_handoff_raw_check_count')}, "
+                    "matrix="
+                    f"{preflight.get('matrix_resident_fastpath_handoff_ready')}/"
+                    f"{preflight.get('matrix_resident_fastpath_handoff_raw_status')}/"
+                    f"{preflight.get('matrix_resident_fastpath_handoff_raw_check_count')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_resident_fastpath_handoff_ready')}/"
+                    f"{preflight.get('default_promotion_resident_fastpath_handoff_raw_status')}/"
+                    f"{preflight.get('default_promotion_resident_fastpath_handoff_raw_check_count')}"
+                ),
+                (
+                    "- Resident fastpath handoff checks: "
+                    "plan-matrix="
+                    f"{preflight.get('github_plan_matrix_resident_fastpath_release_handoff_ready')}, "
+                    "matrix="
+                    f"{preflight.get('matrix_resident_fastpath_release_handoff_ready')}, "
+                    "default-promotion="
+                    f"{preflight.get('default_promotion_resident_fastpath_release_handoff_ready')}, "
+                    "plan-matrix-match="
+                    f"{preflight.get('github_plan_matrix_resident_fastpath_handoff_matches_matrix')}, "
+                    "matrix-default-match="
+                    f"{preflight.get('matrix_resident_fastpath_handoff_matches_default_promotion')}"
+                ),
+                (
                     "- StackEngine publication audit statuses: "
                     f"matrix={preflight.get('matrix_stack_engine_publication_audit_status')}/"
                     f"{preflight.get('matrix_stack_engine_publication_audit_ready')}, "
@@ -4847,6 +5058,30 @@ _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_STATUS_FIELDS = (
 )
 
 
+_PUBLISH_PREFLIGHT_RESIDENT_FASTPATH_HANDOFF_CHECK_FIELDS = (
+    "github_plan_matrix_resident_fastpath_release_handoff_ready",
+    "matrix_resident_fastpath_release_handoff_ready",
+    "default_promotion_resident_fastpath_release_handoff_ready",
+    "github_plan_matrix_resident_fastpath_handoff_matches_matrix",
+    "matrix_resident_fastpath_handoff_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_RESIDENT_FASTPATH_HANDOFF_STATUS_FIELDS = (
+    "github_plan_matrix_resident_fastpath_handoff_ready",
+    "github_plan_matrix_resident_fastpath_handoff_raw_status",
+    "github_plan_matrix_resident_fastpath_handoff_phase2_status",
+    "github_plan_matrix_resident_fastpath_handoff_raw_check_count",
+    "matrix_resident_fastpath_handoff_ready",
+    "matrix_resident_fastpath_handoff_raw_status",
+    "matrix_resident_fastpath_handoff_phase2_status",
+    "matrix_resident_fastpath_handoff_raw_check_count",
+    "default_promotion_resident_fastpath_handoff_ready",
+    "default_promotion_resident_fastpath_handoff_raw_status",
+    "default_promotion_resident_fastpath_handoff_phase2_status",
+    "default_promotion_resident_fastpath_handoff_raw_check_count",
+)
+
+
 _PUBLISH_PREFLIGHT_STACK_PUBLICATION_CHECK_FIELDS = (
     "matrix_stack_engine_publication_audit_passed",
     "matrix_stack_engine_publication_policy_chain_passed",
@@ -5196,6 +5431,74 @@ def _publish_preflight_resident_winsorized_statuses_passed(
         > 0
         and _int_or_zero(
             statuses.get("default_promotion_resident_winsorized_sweep_check_count")
+        )
+        > 0
+    )
+
+
+def _publish_preflight_resident_fastpath_handoff_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_RESIDENT_FASTPATH_HANDOFF_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_resident_fastpath_handoff_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_RESIDENT_FASTPATH_HANDOFF_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_resident_fastpath_handoff_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_resident_fastpath_handoff_statuses(payload)
+    return (
+        bool(statuses)
+        and statuses.get("github_plan_matrix_resident_fastpath_handoff_ready")
+        is True
+        and statuses.get("matrix_resident_fastpath_handoff_ready") is True
+        and statuses.get("default_promotion_resident_fastpath_handoff_ready")
+        is True
+        and statuses.get(
+            "github_plan_matrix_resident_fastpath_handoff_raw_status"
+        )
+        == "passed"
+        and statuses.get("matrix_resident_fastpath_handoff_raw_status")
+        == "passed"
+        and statuses.get(
+            "default_promotion_resident_fastpath_handoff_raw_status"
+        )
+        == "passed"
+        and statuses.get(
+            "github_plan_matrix_resident_fastpath_handoff_phase2_status"
+        )
+        == "passed"
+        and statuses.get("matrix_resident_fastpath_handoff_phase2_status")
+        == "passed"
+        and statuses.get(
+            "default_promotion_resident_fastpath_handoff_phase2_status"
+        )
+        == "passed"
+        and _int_or_zero(
+            statuses.get(
+                "github_plan_matrix_resident_fastpath_handoff_raw_check_count"
+            )
+        )
+        > 0
+        and _int_or_zero(
+            statuses.get("matrix_resident_fastpath_handoff_raw_check_count")
+        )
+        > 0
+        and _int_or_zero(
+            statuses.get(
+                "default_promotion_resident_fastpath_handoff_raw_check_count"
+            )
         )
         > 0
     )
@@ -5881,6 +6184,38 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_resident_winsorized_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_resident_fastpath_handoff_preserved",
+            not _publish_preflight_resident_fastpath_handoff_checks_passed(baseline)
+            or _publish_preflight_resident_fastpath_handoff_checks_passed(candidate),
+            baseline={
+                "checks_passed": (
+                    _publish_preflight_resident_fastpath_handoff_checks_passed(
+                        baseline
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_resident_fastpath_handoff_statuses(baseline)
+                ),
+            },
+            candidate={
+                "checks_passed": (
+                    _publish_preflight_resident_fastpath_handoff_checks_passed(
+                        candidate
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_resident_fastpath_handoff_statuses(candidate)
+                ),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_resident_fastpath_handoff_status_preserved",
+            not _publish_preflight_resident_fastpath_handoff_statuses_passed(baseline)
+            or _publish_preflight_resident_fastpath_handoff_statuses_passed(candidate),
+            baseline=_publish_preflight_resident_fastpath_handoff_statuses(baseline),
+            candidate=_publish_preflight_resident_fastpath_handoff_statuses(candidate),
+        ),
+        _compare_check(
             "windows_publish_preflight_stack_publication_audit_preserved",
             not _publish_preflight_stack_publication_checks_passed(baseline)
             or _publish_preflight_stack_publication_checks_passed(candidate),
@@ -6341,6 +6676,9 @@ def build_phase2_status_compare(
             "publish_preflight_resident_winsorized_sweep": (
                 _publish_preflight_resident_winsorized_statuses(baseline)
             ),
+            "publish_preflight_resident_fastpath_handoff": (
+                _publish_preflight_resident_fastpath_handoff_statuses(baseline)
+            ),
             "publish_preflight_stack_publication_audit": (
                 _publish_preflight_stack_publication_statuses(baseline)
             ),
@@ -6411,6 +6749,9 @@ def build_phase2_status_compare(
             ),
             "publish_preflight_resident_winsorized_sweep": (
                 _publish_preflight_resident_winsorized_statuses(candidate)
+            ),
+            "publish_preflight_resident_fastpath_handoff": (
+                _publish_preflight_resident_fastpath_handoff_statuses(candidate)
             ),
             "publish_preflight_stack_publication_audit": (
                 _publish_preflight_stack_publication_statuses(candidate)
