@@ -659,6 +659,8 @@ def _write_release_decision(
     *,
     ready: bool = True,
     warp_quality_ready: bool | None = None,
+    include_runtime_repeat: bool = True,
+    runtime_ratio: float = 1.053,
 ) -> None:
     payload = {
         "schema_version": 1,
@@ -671,17 +673,6 @@ def _write_release_decision(
         if ready
         else "repeat_benchmark_before_default_change",
         "speedup": {"actual": 58.0, "required_min": 2.0},
-        "runtime_repeat": {
-            "present": True,
-            "run_count": 3,
-            "considered_run_count": 3,
-            "best_label": "repeat02",
-            "best_elapsed_s": 22.6,
-            "slowest_elapsed_s": 23.8,
-            "elapsed_ratio_vs_best": 1.053,
-            "max_elapsed_ratio_vs_best": 1.25,
-            "recommendation": "best_observed:repeat02",
-        },
         "pipeline_handoff": {
             "source": "explicit_pipeline_contract",
             "status": "passed",
@@ -689,6 +680,18 @@ def _write_release_decision(
             "pixel_verification_enabled": True,
         },
     }
+    if include_runtime_repeat:
+        payload["runtime_repeat"] = {
+            "present": True,
+            "run_count": 3,
+            "considered_run_count": 3,
+            "best_label": "repeat02",
+            "best_elapsed_s": 22.6,
+            "slowest_elapsed_s": round(22.6 * runtime_ratio, 3),
+            "elapsed_ratio_vs_best": runtime_ratio,
+            "max_elapsed_ratio_vs_best": 1.25,
+            "recommendation": "best_observed:repeat02",
+        }
     if warp_quality_ready is not None:
         payload["warp_quality_handoff"] = {
             "source": "acceptance_audit",
@@ -2680,6 +2683,9 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["release_decision"]["recommendation"] == "promote_default_candidate"
     assert payload["release_decision"]["runtime_repeat_elapsed_ratio_vs_best"] == 1.053
+    assert payload["release_decision_runtime_repeat_closure"]["status"] == "passed"
+    assert payload["release_decision_runtime_repeat_closure"]["ready"] is True
+    assert payload["release_decision_runtime_repeat_closure"]["run_count"] == 3
     checks = {item["name"]: item["passed"] for item in payload["checks"]}
     assert checks["resident_registration_fastpath_contract_passed_for_default"] is True
     assert checks["acceptance_pipeline_integration_engine_policy_passed"] is True
@@ -2710,6 +2716,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         is True
     )
     assert checks["stack_engine_publication_audit_direct_runtime_chain_passed"] is True
+    assert checks["release_decision_runtime_repeat_evidence_ready"] is True
 
 
 def test_phase2_status_surfaces_release_warp_quality_handoff(tmp_path: Path):
@@ -2737,6 +2744,35 @@ def test_phase2_status_surfaces_release_warp_quality_handoff(tmp_path: Path):
     write_phase2_status_markdown(out_md, payload)
     text = out_md.read_text(encoding="utf-8")
     assert "Warp quality handoff: passed ready=True outputs=1 failed=[]" in text
+
+
+def test_phase2_status_blocks_default_change_without_runtime_repeat(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=326)
+    release_decision = tmp_path / "release_decision.json"
+    out_md = tmp_path / "phase2.md"
+    _write_release_decision(release_decision, include_runtime_repeat=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    closure = payload["release_decision_runtime_repeat_closure"]
+    assert payload["status"] == "attention_required"
+    assert checks["release_decision_default_change_ready"]["passed"] is True
+    assert checks["release_decision_runtime_repeat_evidence_ready"]["passed"] is False
+    assert closure["required"] is True
+    assert closure["status"] == "failed"
+    assert closure["ready"] is False
+    assert closure["present"] is False
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert "Runtime repeat closure: failed required=True ready=False" in text
 
 
 def test_phase2_status_blocks_failed_release_warp_quality_handoff(tmp_path: Path):

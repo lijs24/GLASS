@@ -5755,6 +5755,27 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 326: Phase2 Runtime Repeat Closure Guard
+
+- Add a Phase2-level `release_decision_runtime_repeat_closure` summary.
+- When a release decision claims `default_change_ready`, require stable
+  repeat-runtime evidence in the same release decision:
+  - runtime repeat evidence must be present
+  - at least two runs must exist
+  - at least two runs must be considered after warmup filtering
+  - observed slowest/best elapsed ratio must be within the recorded maximum
+- Add `release_decision_runtime_repeat_evidence_ready` as a Phase2 check.
+- Preserve release-candidate compatibility: when a release decision is not
+  default-change ready, repeat-runtime evidence is recorded as not required.
+- Surface runtime-repeat closure status in Phase2 Markdown.
+- Add focused tests for passing default-change evidence and a contradictory
+  default-change decision without repeat-runtime evidence.
+- Generate Gate326 release-decision and Phase2 status artifacts from small
+  controlled checkpoint/runtime fixtures.
+- Keep this gate audit-surface scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

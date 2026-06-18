@@ -2148,6 +2148,61 @@ def _default_change_is_ready(decision: dict[str, Any] | None) -> bool:
     )
 
 
+def _runtime_repeat_closure(decision: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(decision, dict):
+        return {
+            "required": False,
+            "ready": True,
+            "status": "not_supplied",
+            "reason": "release decision was not supplied",
+        }
+    required = _default_change_is_ready(decision)
+    present = decision.get("runtime_repeat_present") is True
+    run_count = _int_or_zero(decision.get("runtime_repeat_run_count"))
+    considered_run_count = _int_or_zero(decision.get("runtime_repeat_considered_run_count"))
+    ratio = _float_or_none(decision.get("runtime_repeat_elapsed_ratio_vs_best"))
+    max_ratio = _float_or_none(decision.get("runtime_repeat_max_elapsed_ratio_vs_best"))
+    if not required:
+        return {
+            "required": False,
+            "ready": True,
+            "status": "not_required",
+            "reason": "release decision is not ready for a default change",
+            "present": present,
+            "run_count": run_count,
+            "considered_run_count": considered_run_count,
+            "elapsed_ratio_vs_best": ratio,
+            "max_elapsed_ratio_vs_best": max_ratio,
+            "recommendation": decision.get("runtime_repeat_recommendation"),
+        }
+    ready = (
+        present
+        and run_count >= 2
+        and considered_run_count >= 2
+        and ratio is not None
+        and max_ratio is not None
+        and ratio <= max_ratio
+    )
+    if ready:
+        status = "passed"
+        reason = "stable repeat-runtime evidence supports the default change"
+    else:
+        status = "failed"
+        reason = "default-change decision lacks sufficient stable repeat-runtime evidence"
+    return {
+        "required": True,
+        "ready": ready,
+        "status": status,
+        "reason": reason,
+        "present": present,
+        "run_count": run_count,
+        "considered_run_count": considered_run_count,
+        "elapsed_ratio_vs_best": ratio,
+        "max_elapsed_ratio_vs_best": max_ratio,
+        "recommendation": decision.get("runtime_repeat_recommendation"),
+    }
+
+
 def _resident_fastpath_contract_passed(acceptance: dict[str, Any] | None) -> bool:
     if not isinstance(acceptance, dict):
         return False
@@ -2213,6 +2268,7 @@ def build_phase2_status(
         resident_winsorized_sweep_audit
     )
     decision = _release_decision_summary(release_decision)
+    runtime_repeat_closure = _runtime_repeat_closure(decision)
     checks = [
         {
             "name": "latest_checkpoint_green",
@@ -3615,6 +3671,13 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "release_decision_runtime_repeat_evidence_ready",
+                "passed": runtime_repeat_closure.get("ready") is True,
+                "evidence": runtime_repeat_closure,
+            }
+        )
         if acceptance is not None and _default_change_is_ready(decision):
             checks.append(
                 {
@@ -3657,6 +3720,7 @@ def build_phase2_status(
         "resident_winsorized_benchmark_audit": winsorized_audit,
         "resident_winsorized_sweep_audit": winsorized_sweep_audit,
         "release_decision": decision,
+        "release_decision_runtime_repeat_closure": runtime_repeat_closure,
         "checks": checks,
     }
 
@@ -3675,6 +3739,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     winsorized_audit = payload.get("resident_winsorized_benchmark_audit") or {}
     winsorized_sweep_audit = payload.get("resident_winsorized_sweep_audit") or {}
     decision = payload.get("release_decision") or {}
+    runtime_repeat_closure = payload.get("release_decision_runtime_repeat_closure") or {}
     lines = [
         "# GLASS Phase 2 Status",
         "",
@@ -4396,6 +4461,14 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{decision.get('runtime_repeat_elapsed_ratio_vs_best')}"
                 ),
                 (
+                    "- Runtime repeat closure: "
+                    f"{runtime_repeat_closure.get('status')} "
+                    f"required={runtime_repeat_closure.get('required')} "
+                    f"ready={runtime_repeat_closure.get('ready')} "
+                    f"runs={runtime_repeat_closure.get('run_count')} "
+                    f"considered={runtime_repeat_closure.get('considered_run_count')}"
+                ),
+                (
                     "- Runtime repeat best: "
                     f"{decision.get('runtime_repeat_best_label')} "
                     f"{decision.get('runtime_repeat_best_elapsed_s')} s"
@@ -4468,6 +4541,13 @@ def _int_or_zero(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _compare_check(
