@@ -181,6 +181,7 @@ def _write_phase2_status(
     default_route_ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
     sample_accounting_closure_ready: bool = True,
+    resident_result_contract_ready: bool = True,
     include_stack_engine_contract: bool = True,
     stack_engine_ready: bool = True,
     stack_engine_gap_count: int = 0,
@@ -228,6 +229,7 @@ def _write_phase2_status(
     )
     pipeline_ready = (
         ready
+        and resident_result_contract_ready
         and rejection_sample_accounting_ready
         and sample_accounting_closure_ready
         and pipeline_policy_chain_ready
@@ -254,6 +256,8 @@ def _write_phase2_status(
         )
     )
     failed_pipeline_checks = []
+    if not resident_result_contract_ready:
+        failed_pipeline_checks.append("integration_resident_result_contract")
     if not rejection_sample_accounting_ready:
         failed_pipeline_checks.append("integration_rejection_sample_counts_match_maps")
     if not sample_accounting_closure_ready:
@@ -328,7 +332,69 @@ def _write_phase2_status(
             "integration_map_count": 6,
             "integration_dq_contract": True,
             "integration_stack_result_contract": True,
-            "integration_resident_result_contract": True,
+            "integration_resident_result_contract": resident_result_contract_ready,
+            "resident_result_contract": {
+                "status": "passed" if resident_result_contract_ready else "failed",
+                "check_present": True,
+                "check_passed": resident_result_contract_ready,
+                "required_count": 1,
+                "failed_count": 0 if resident_result_contract_ready else 1,
+                "failed_check_count": 0 if resident_result_contract_ready else 1,
+                "failed_checks": []
+                if resident_result_contract_ready
+                else ["source_terms_present"],
+                "failed_items": []
+                if resident_result_contract_ready
+                else [
+                    {
+                        "item": "H",
+                        "backend": "cuda_resident_stack",
+                        "memory_mode": "resident",
+                        "status": "failed",
+                        "required": True,
+                        "passed": False,
+                        "failed_checks": [
+                            {
+                                "name": "source_terms_present",
+                                "evidence": {
+                                    "actual": [],
+                                    "available": False,
+                                    "required": True,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+            "integration_resident_result_contract_status": "passed"
+            if resident_result_contract_ready
+            else "failed",
+            "integration_resident_result_contract_check_present": True,
+            "integration_resident_result_contract_check_passed": (
+                resident_result_contract_ready
+            ),
+            "integration_resident_result_contract_required_count": 1,
+            "integration_resident_result_contract_failed_count": 0
+            if resident_result_contract_ready
+            else 1,
+            "integration_resident_result_contract_failed_check_count": 0
+            if resident_result_contract_ready
+            else 1,
+            "integration_resident_result_contract_failed_checks": []
+            if resident_result_contract_ready
+            else ["source_terms_present"],
+            "integration_resident_result_contract_failed_items": []
+            if resident_result_contract_ready
+            else [
+                {
+                    "item": "H",
+                    "backend": "cuda_resident_stack",
+                    "memory_mode": "resident",
+                    "status": "failed",
+                    "required": True,
+                    "passed": False,
+                }
+            ],
             "integration_dq_map_pixels_match_summary": True,
             "integration_coverage_map_pixels_match_dq": True,
             "integration_rejection_map_pixels_match_dq": True,
@@ -399,6 +465,10 @@ def _write_phase2_status(
                 "passed": resident_fastpath_ready
                 if include_resident_fastpath_handoff
                 else False,
+            },
+            {
+                "name": "pipeline_resident_result_contract_passed",
+                "passed": resident_result_contract_ready,
             },
         ],
     }
@@ -883,6 +953,10 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["default_route_acceptance_route_contract_passed"] is True
     assert checks["default_route_acceptance_route_check_count"] is True
     assert checks["pipeline_pixel_maps_match_dq"] is True
+    assert checks["pipeline_resident_result_contract_handoff_passed"] is True
+    assert payload["resident_result_contract"]["ready"] is True
+    assert payload["resident_result_contract"]["phase2_check_passed"] is True
+    assert payload["resident_result_contract"]["failed_count"] == 0
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["release_decision_direct_runtime_publication_guard_passed"] is True
@@ -1183,6 +1257,49 @@ def test_default_promotion_manifest_blocks_rejection_sample_accounting_drift(
     assert "phase2_status_green" in payload["failed_checks"]
     assert "pipeline_contract_passed" in payload["failed_checks"]
     assert "pipeline_rejection_sample_accounting_passed" in payload["failed_checks"]
+
+
+def test_default_promotion_manifest_blocks_resident_result_contract_drift(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(phase2, decision, resident_result_contract_ready=False)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    resident = payload["resident_result_contract"]
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "pipeline_contract_passed" in payload["failed_checks"]
+    assert (
+        "pipeline_stack_and_resident_result_contracts_passed"
+        in payload["failed_checks"]
+    )
+    assert (
+        "pipeline_resident_result_contract_handoff_passed"
+        in payload["failed_checks"]
+    )
+    assert checks["pipeline_resident_result_contract_handoff_passed"][
+        "passed"
+    ] is False
+    assert resident["ready"] is False
+    assert resident["status"] == "failed"
+    assert resident["top_level_check"] is False
+    assert resident["check_present"] is True
+    assert resident["check_passed"] is False
+    assert resident["phase2_check_passed"] is False
+    assert resident["required_count"] == 1
+    assert resident["failed_count"] == 1
+    assert resident["failed_check_count"] == 1
+    assert resident["failed_checks"] == ["source_terms_present"]
+    assert resident["failed_items"][0]["item"] == "H"
 
 
 def test_default_promotion_manifest_blocks_sample_accounting_closure_drift(

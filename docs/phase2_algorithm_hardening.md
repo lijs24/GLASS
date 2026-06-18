@@ -6007,6 +6007,25 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 339: Default Promotion Resident Result-Contract Guard
+
+- Carry Phase2 resident result-contract evidence into
+  `glass default-promotion-manifest`.
+- Add `pipeline_resident_result_contract_handoff_passed` as a default-promotion
+  blocker requiring the pipeline resident result contract to be present, passed,
+  Phase2-checked, required by at least one resident output, and free of failed
+  outputs or nested failed checks.
+- Surface resident result-contract readiness, status, Phase2 check state,
+  required count, failed count, and failed nested check names in default
+  promotion Markdown.
+- Add focused tests for passing promotion artifacts and failed resident
+  result-contract drift.
+- Generate Gate339 default-promotion artifacts from controlled Phase2/release
+  decision fixtures.
+- Keep this gate default-promotion scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
