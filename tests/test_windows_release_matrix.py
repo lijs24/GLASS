@@ -111,6 +111,11 @@ def _default_promotion(
     acceptance_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_check_present: bool = True,
+    include_direct_runtime_evidence: bool = True,
+    direct_acceptance_fastpath_ready: bool = True,
+    direct_acceptance_fastpath_source: str = "explicit_resident_artifacts_json",
+    direct_pipeline_calibration_ready: bool = True,
+    direct_pipeline_calibration_source: str = "resident_artifacts_json_fallback",
 ) -> None:
     acceptance_policy_chain_ready = (
         acceptance_integration_engine_policy_ready
@@ -482,6 +487,45 @@ def _default_promotion(
                 else "failed",
             },
         }
+    if include_direct_runtime_evidence:
+        payload["runtime_default_direct_evidence"] = {
+            "present": True,
+            "ready": direct_acceptance_fastpath_ready
+            and direct_pipeline_calibration_ready,
+            "decision_inputs_present": True,
+            "acceptance_audit_path": "runs/checkpoints/s2_gate_305_acceptance_direct_fastpath_runtime_default.json",
+            "acceptance_audit_exists": True,
+            "acceptance_audit_read_error": None,
+            "acceptance_fastpath_source": direct_acceptance_fastpath_source,
+            "acceptance_fastpath_artifact_path": "C:/glass_runs/default_resident/resident_artifacts.json",
+            "acceptance_fastpath_available": direct_acceptance_fastpath_ready,
+            "acceptance_fastpath_exists": direct_acceptance_fastpath_ready,
+            "acceptance_fastpath_check_count": 24,
+            "acceptance_fastpath_failed_check_count": 0
+            if direct_acceptance_fastpath_ready
+            else 1,
+            "acceptance_fastpath_failed_checks": []
+            if direct_acceptance_fastpath_ready
+            else ["contract_resident_registration_fastpath_present"],
+            "acceptance_direct_fastpath": direct_acceptance_fastpath_ready,
+            "pipeline_contract_path": "runs/checkpoints/s2_gate_304_pipeline_contract_resident_calibration_direct_visibility.json",
+            "pipeline_contract_exists": True,
+            "pipeline_contract_read_error": None,
+            "pipeline_calibration_artifact_source": direct_pipeline_calibration_source,
+            "pipeline_calibration_artifact_exists": direct_pipeline_calibration_ready,
+            "pipeline_calibration_artifact_generated_for_contract": (
+                direct_pipeline_calibration_ready
+            ),
+            "pipeline_calibration_artifact_path_exists": False,
+            "pipeline_calibration_artifact_path": "C:/glass_runs/default_resident/calibration_artifacts.json",
+            "pipeline_resident_native_calibration_artifact": (
+                direct_pipeline_calibration_ready
+            ),
+            "pipeline_resident_calibrated_light_count": 200
+            if direct_pipeline_calibration_ready
+            else 0,
+            "pipeline_direct_resident_calibration": direct_pipeline_calibration_ready,
+        }
     write_json(path, payload)
 
 
@@ -544,6 +588,14 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
         ]
         == 0
     )
+    assert checks["default_promotion_direct_acceptance_fastpath_evidence"] is True
+    assert checks["default_promotion_direct_pipeline_calibration_evidence"] is True
+    assert payload["default_promotion_manifest"][
+        "runtime_default_direct_acceptance_fastpath_source"
+    ] == "explicit_resident_artifacts_json"
+    assert payload["default_promotion_manifest"][
+        "runtime_default_direct_pipeline_calibration_source"
+    ] == "resident_artifacts_json_fallback"
     assert checks["default_promotion_stack_engine_contract_ready"] is True
     assert checks["default_promotion_resident_winsorized_sweep_audit_passed"] is True
     assert checks["default_promotion_resident_winsorized_required_frame_passed"] is True
@@ -933,6 +985,59 @@ def test_windows_release_matrix_blocks_pipeline_runtime_default_drift(
             "reason": "legacy_or_unknown_engine",
         }
     ]
+
+
+def test_windows_release_matrix_blocks_missing_direct_runtime_evidence(tmp_path: Path):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, include_direct_runtime_evidence=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item["passed"] for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["default_promotion_manifest_ready"] is True
+    assert checks["default_promotion_direct_acceptance_fastpath_evidence"] is False
+    assert checks["default_promotion_direct_pipeline_calibration_evidence"] is False
+    assert "default_promotion_direct_acceptance_fastpath_evidence" in payload["failed_checks"]
+    assert "default_promotion_direct_pipeline_calibration_evidence" in payload["failed_checks"]
+
+
+def test_windows_release_matrix_blocks_stale_direct_fastpath_source(tmp_path: Path):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        direct_acceptance_fastpath_source="gate303_handoff_bundle",
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = checks["default_promotion_direct_acceptance_fastpath_evidence"][
+        "evidence"
+    ]
+    assert payload["passed"] is False
+    assert checks["default_promotion_direct_acceptance_fastpath_evidence"][
+        "passed"
+    ] is False
+    assert evidence["source"] == "gate303_handoff_bundle"
 
 
 def test_windows_release_matrix_blocks_missing_stack_engine_contract(tmp_path: Path):

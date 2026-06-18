@@ -20,6 +20,18 @@ def _read_json_object_optional(path: str | Path | None) -> dict[str, Any]:
     return _read_json_object(path)
 
 
+def _read_json_object_if_exists(path: str | Path | None) -> tuple[dict[str, Any], bool, str | None]:
+    if path is None:
+        return {}, False, None
+    target = Path(str(path))
+    if not target.exists():
+        return {}, False, None
+    try:
+        return _read_json_object(target), True, None
+    except (OSError, ValueError) as exc:
+        return {}, True, str(exc)
+
+
 def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
     return {
         "name": name,
@@ -58,6 +70,10 @@ def _status_value(payload: dict[str, Any], *keys: str) -> Any:
 
 def _artifact_type(payload: dict[str, Any]) -> str | None:
     value = payload.get("artifact_type")
+    return None if value is None else str(value)
+
+
+def _path_value(value: Any) -> str | None:
     return None if value is None else str(value)
 
 
@@ -713,6 +729,133 @@ def _stack_engine_runtime_default_summary(
     }
 
 
+def _check_prefix_summary(payload: dict[str, Any], prefix: str) -> dict[str, Any]:
+    rows = [
+        row
+        for row in payload.get("checks") or []
+        if isinstance(row, dict) and str(row.get("name", "")).startswith(prefix)
+    ]
+    failed = [str(row.get("name")) for row in rows if row.get("passed") is not True]
+    return {
+        "check_count": len(rows),
+        "failed_check_count": len(failed),
+        "failed_checks": failed,
+        "passed": bool(rows) and not failed,
+    }
+
+
+def _runtime_default_direct_evidence_summary(
+    decision: dict[str, Any],
+    phase2: dict[str, Any],
+) -> dict[str, Any]:
+    decision_inputs = decision.get("inputs") if isinstance(decision.get("inputs"), dict) else {}
+    phase2_pipeline = (
+        phase2.get("pipeline_contract")
+        if isinstance(phase2.get("pipeline_contract"), dict)
+        else {}
+    )
+    acceptance_path = _path_value(decision_inputs.get("acceptance_audit"))
+    pipeline_path = _path_value(decision_inputs.get("pipeline_contract") or phase2_pipeline.get("path"))
+    acceptance_payload, acceptance_exists, acceptance_read_error = _read_json_object_if_exists(
+        acceptance_path
+    )
+    pipeline_payload, pipeline_exists, pipeline_read_error = _read_json_object_if_exists(
+        pipeline_path
+    )
+    fastpath = (
+        acceptance_payload.get("resident_registration_fastpath")
+        if isinstance(acceptance_payload.get("resident_registration_fastpath"), dict)
+        else {}
+    )
+    fastpath_checks = _check_prefix_summary(
+        acceptance_payload,
+        "contract_resident_registration_fastpath",
+    )
+    pipeline_artifacts = (
+        pipeline_payload.get("artifacts")
+        if isinstance(pipeline_payload.get("artifacts"), dict)
+        else {}
+    )
+    calibration_artifact = (
+        pipeline_artifacts.get("calibration")
+        if isinstance(pipeline_artifacts.get("calibration"), dict)
+        else {}
+    )
+    pipeline_calibration = (
+        pipeline_payload.get("calibration")
+        if isinstance(pipeline_payload.get("calibration"), dict)
+        else {}
+    )
+    resident_light_count = _int_value(
+        pipeline_calibration.get(
+            "calibrated_light_count",
+            phase2_pipeline.get("resident_calibrated_light_count"),
+        )
+    )
+    resident_native_calibration_artifact = (
+        phase2_pipeline.get("resident_native_calibration_artifact")
+        if phase2_pipeline.get("resident_native_calibration_artifact") is not None
+        else any(
+            isinstance(row, dict) and row.get("resident") is True
+            for row in pipeline_calibration.get("calibrated_lights") or []
+        )
+    )
+    acceptance_direct = (
+        acceptance_exists
+        and acceptance_read_error is None
+        and fastpath.get("source") == "explicit_resident_artifacts_json"
+        and fastpath.get("available") is True
+        and fastpath.get("exists") is True
+        and fastpath_checks.get("passed") is True
+    )
+    pipeline_direct = (
+        pipeline_exists
+        and pipeline_read_error is None
+        and calibration_artifact.get("source") == "resident_artifacts_json_fallback"
+        and calibration_artifact.get("exists") is True
+        and calibration_artifact.get("generated_for_pipeline_contract") is True
+        and calibration_artifact.get("path_exists") is False
+        and resident_native_calibration_artifact is True
+        and resident_light_count is not None
+        and resident_light_count > 0
+    )
+    return {
+        "present": bool(acceptance_path or pipeline_path),
+        "ready": acceptance_direct and pipeline_direct,
+        "decision_inputs_present": bool(decision_inputs),
+        "acceptance_audit_path": acceptance_path,
+        "acceptance_audit_exists": acceptance_exists,
+        "acceptance_audit_read_error": acceptance_read_error,
+        "acceptance_fastpath_source": fastpath.get("source"),
+        "acceptance_fastpath_artifact_path": fastpath.get("path"),
+        "acceptance_fastpath_available": fastpath.get("available"),
+        "acceptance_fastpath_exists": fastpath.get("exists"),
+        "acceptance_fastpath_check_count": fastpath_checks.get("check_count"),
+        "acceptance_fastpath_failed_check_count": fastpath_checks.get(
+            "failed_check_count"
+        ),
+        "acceptance_fastpath_failed_checks": fastpath_checks.get("failed_checks"),
+        "acceptance_direct_fastpath": acceptance_direct,
+        "pipeline_contract_path": pipeline_path,
+        "pipeline_contract_exists": pipeline_exists,
+        "pipeline_contract_read_error": pipeline_read_error,
+        "pipeline_calibration_artifact_source": calibration_artifact.get("source"),
+        "pipeline_calibration_artifact_exists": calibration_artifact.get("exists"),
+        "pipeline_calibration_artifact_generated_for_contract": (
+            calibration_artifact.get("generated_for_pipeline_contract")
+        ),
+        "pipeline_calibration_artifact_path_exists": calibration_artifact.get(
+            "path_exists"
+        ),
+        "pipeline_calibration_artifact_path": calibration_artifact.get("path"),
+        "pipeline_resident_native_calibration_artifact": (
+            resident_native_calibration_artifact
+        ),
+        "pipeline_resident_calibrated_light_count": resident_light_count,
+        "pipeline_direct_resident_calibration": pipeline_direct,
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -747,6 +890,10 @@ def build_default_promotion_manifest(
     stack_engine_runtime_default = _stack_engine_runtime_default_summary(
         phase2,
         pipeline,
+    )
+    runtime_default_direct_evidence = _runtime_default_direct_evidence_summary(
+        decision,
+        phase2,
     )
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
@@ -1336,6 +1483,7 @@ def build_default_promotion_manifest(
         "pipeline_contract": pipeline,
         "integration_engine_policy": integration_engine_policy,
         "stack_engine_runtime_default": stack_engine_runtime_default,
+        "runtime_default_direct_evidence": runtime_default_direct_evidence,
         "stack_engine_contract": stack_engine,
         "resident_winsorized_sweep_audit": resident_winsorized_sweep,
         "stack_engine_publication_audit": publication_audit,
@@ -1357,6 +1505,9 @@ def _markdown(payload: dict[str, Any]) -> str:
     pipeline = payload.get("pipeline_contract") or {}
     integration_engine_policy = payload.get("integration_engine_policy") or {}
     stack_engine_runtime_default = payload.get("stack_engine_runtime_default") or {}
+    runtime_default_direct_evidence = (
+        payload.get("runtime_default_direct_evidence") or {}
+    )
     stack_engine = payload.get("stack_engine_contract") or {}
     resident_winsorized_sweep = payload.get("resident_winsorized_sweep_audit") or {}
     release_decision = payload.get("release_decision") or {}
@@ -1432,6 +1583,13 @@ def _markdown(payload: dict[str, Any]) -> str:
         (
             "- StackEngine runtime default ready: "
             f"`{stack_engine_runtime_default.get('ready')}`"
+        ),
+        (
+            "- Direct runtime evidence: "
+            f"ready=`{runtime_default_direct_evidence.get('ready')}` "
+            f"acceptance-source=`{runtime_default_direct_evidence.get('acceptance_fastpath_source')}` "
+            "pipeline-calibration-source="
+            f"`{runtime_default_direct_evidence.get('pipeline_calibration_artifact_source')}`"
         ),
         "",
         "## StackEngine Default Contract",

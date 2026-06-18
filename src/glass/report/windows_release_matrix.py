@@ -90,6 +90,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(payload.get("stack_engine_publication_audit"), dict)
         else {}
     )
+    direct_evidence = (
+        payload.get("runtime_default_direct_evidence")
+        if isinstance(payload.get("runtime_default_direct_evidence"), dict)
+        else {}
+    )
     return {
         "present": True,
         "artifact_type": payload.get("artifact_type"),
@@ -232,6 +237,42 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "pipeline_stack_engine_runtime_default_failed_outputs": (
             stack_engine_runtime_default.get("pipeline_failed_outputs") or []
+        ),
+        "runtime_default_direct_evidence": direct_evidence,
+        "runtime_default_direct_evidence_present": direct_evidence.get("present"),
+        "runtime_default_direct_evidence_ready": direct_evidence.get("ready"),
+        "runtime_default_direct_acceptance_fastpath": direct_evidence.get(
+            "acceptance_direct_fastpath"
+        ),
+        "runtime_default_direct_acceptance_fastpath_source": direct_evidence.get(
+            "acceptance_fastpath_source"
+        ),
+        "runtime_default_direct_acceptance_fastpath_check_count": _int_value(
+            direct_evidence.get("acceptance_fastpath_check_count")
+        ),
+        "runtime_default_direct_acceptance_fastpath_failed_check_count": _int_value(
+            direct_evidence.get("acceptance_fastpath_failed_check_count")
+        ),
+        "runtime_default_direct_acceptance_fastpath_failed_checks": (
+            direct_evidence.get("acceptance_fastpath_failed_checks") or []
+        ),
+        "runtime_default_direct_pipeline_calibration": direct_evidence.get(
+            "pipeline_direct_resident_calibration"
+        ),
+        "runtime_default_direct_pipeline_calibration_source": direct_evidence.get(
+            "pipeline_calibration_artifact_source"
+        ),
+        "runtime_default_direct_pipeline_calibration_generated_for_contract": (
+            direct_evidence.get("pipeline_calibration_artifact_generated_for_contract")
+        ),
+        "runtime_default_direct_pipeline_calibration_path_exists": (
+            direct_evidence.get("pipeline_calibration_artifact_path_exists")
+        ),
+        "runtime_default_direct_pipeline_resident_native_calibration_artifact": (
+            direct_evidence.get("pipeline_resident_native_calibration_artifact")
+        ),
+        "runtime_default_direct_pipeline_resident_calibrated_light_count": (
+            _int_value(direct_evidence.get("pipeline_resident_calibrated_light_count"))
         ),
         "rejection_sample_accounting": rejection_sample_accounting,
         "rejection_sample_accounting_status": pipeline.get("rejection_sample_accounting_status"),
@@ -406,6 +447,7 @@ def build_windows_release_matrix(
     max_runtime_ratio: float = 1.25,
     min_resident_winsorized_sweep_checks: int = 27,
     required_resident_winsorized_sweep_frame_count: int = 200,
+    require_direct_runtime_evidence: bool = True,
 ) -> dict[str, Any]:
     doctor = _read_json_object(doctor_json)
     decision = _read_json_object(release_decision_json)
@@ -792,6 +834,122 @@ def build_windows_release_matrix(
                 "failed_outputs": default_promotion.get(
                     "pipeline_stack_engine_runtime_default_failed_outputs"
                 ),
+            },
+        ),
+        _check(
+            "default_promotion_direct_acceptance_fastpath_evidence",
+            (
+                default_promotion.get("runtime_default_direct_evidence_present")
+                is True
+                and default_promotion.get("runtime_default_direct_acceptance_fastpath")
+                is True
+                and default_promotion.get(
+                    "runtime_default_direct_acceptance_fastpath_source"
+                )
+                == "explicit_resident_artifacts_json"
+                and int(
+                    default_promotion.get(
+                        "runtime_default_direct_acceptance_fastpath_check_count"
+                    )
+                    or 0
+                )
+                > 0
+                and int(
+                    default_promotion.get(
+                        "runtime_default_direct_acceptance_fastpath_failed_check_count"
+                    )
+                    or 0
+                )
+                == 0
+            )
+            if require_default_promotion_ready and require_direct_runtime_evidence
+            else True,
+            {
+                "present": default_promotion.get(
+                    "runtime_default_direct_evidence_present"
+                ),
+                "ready": default_promotion.get(
+                    "runtime_default_direct_evidence_ready"
+                ),
+                "direct_fastpath": default_promotion.get(
+                    "runtime_default_direct_acceptance_fastpath"
+                ),
+                "source": default_promotion.get(
+                    "runtime_default_direct_acceptance_fastpath_source"
+                ),
+                "check_count": default_promotion.get(
+                    "runtime_default_direct_acceptance_fastpath_check_count"
+                ),
+                "failed_check_count": default_promotion.get(
+                    "runtime_default_direct_acceptance_fastpath_failed_check_count"
+                ),
+                "failed_checks": default_promotion.get(
+                    "runtime_default_direct_acceptance_fastpath_failed_checks"
+                ),
+                "required": bool(require_direct_runtime_evidence),
+            },
+        ),
+        _check(
+            "default_promotion_direct_pipeline_calibration_evidence",
+            (
+                default_promotion.get("runtime_default_direct_evidence_present")
+                is True
+                and default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration"
+                )
+                is True
+                and default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration_source"
+                )
+                == "resident_artifacts_json_fallback"
+                and default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration_generated_for_contract"
+                )
+                is True
+                and default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration_path_exists"
+                )
+                is False
+                and default_promotion.get(
+                    "runtime_default_direct_pipeline_resident_native_calibration_artifact"
+                )
+                is True
+                and int(
+                    default_promotion.get(
+                        "runtime_default_direct_pipeline_resident_calibrated_light_count"
+                    )
+                    or 0
+                )
+                > 0
+            )
+            if require_default_promotion_ready and require_direct_runtime_evidence
+            else True,
+            {
+                "present": default_promotion.get(
+                    "runtime_default_direct_evidence_present"
+                ),
+                "ready": default_promotion.get(
+                    "runtime_default_direct_evidence_ready"
+                ),
+                "direct_pipeline_calibration": default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration"
+                ),
+                "source": default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration_source"
+                ),
+                "generated_for_contract": default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration_generated_for_contract"
+                ),
+                "path_exists": default_promotion.get(
+                    "runtime_default_direct_pipeline_calibration_path_exists"
+                ),
+                "resident_native_calibration_artifact": default_promotion.get(
+                    "runtime_default_direct_pipeline_resident_native_calibration_artifact"
+                ),
+                "resident_calibrated_light_count": default_promotion.get(
+                    "runtime_default_direct_pipeline_resident_calibrated_light_count"
+                ),
+                "required": bool(require_direct_runtime_evidence),
             },
         ),
         _check(
@@ -1196,6 +1354,18 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"`{default_promotion.get('pipeline_stack_engine_runtime_default_failed_output_count')}` "
                 "explicit-cuda="
                 f"`{default_promotion.get('pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count')}`"
+            ),
+            (
+                "- Direct runtime evidence: "
+                f"ready=`{default_promotion.get('runtime_default_direct_evidence_ready')}` "
+                "acceptance-source="
+                f"`{default_promotion.get('runtime_default_direct_acceptance_fastpath_source')}` "
+                "acceptance-checks="
+                f"`{default_promotion.get('runtime_default_direct_acceptance_fastpath_check_count')}` "
+                "pipeline-calibration-source="
+                f"`{default_promotion.get('runtime_default_direct_pipeline_calibration_source')}` "
+                "resident-lights="
+                f"`{default_promotion.get('runtime_default_direct_pipeline_resident_calibrated_light_count')}`"
             ),
             (
                 "- StackEngine default contract: "

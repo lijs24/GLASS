@@ -1973,6 +1973,7 @@ def cmd_windows_release_matrix(args: argparse.Namespace) -> int:
         required_resident_winsorized_sweep_frame_count=(
             args.required_resident_winsorized_sweep_frame_count
         ),
+        require_direct_runtime_evidence=not args.allow_missing_direct_runtime_evidence,
     )
     write_windows_release_matrix(args.out, payload, markdown=args.markdown)
     console.print(
@@ -4955,6 +4956,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-missing-default-promotion",
         action="store_true",
         help="do not require a default-promotion-manifest artifact",
+    )
+    windows_release_matrix.add_argument(
+        "--allow-missing-direct-runtime-evidence",
+        action="store_true",
+        help="do not require direct acceptance fastpath and pipeline calibration evidence in the default-promotion manifest",
     )
     windows_release_matrix.add_argument(
         "--fail-on-not-ready",

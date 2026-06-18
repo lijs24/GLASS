@@ -5265,6 +5265,33 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 306: Windows Release Matrix Direct Runtime Evidence
+
+- Carry the Gate304 direct resident calibration visibility and Gate305 direct
+  resident registration fastpath evidence into `default-promotion-manifest` as
+  a first-class `runtime_default_direct_evidence` summary.
+- Require `windows-release-matrix` to block stale default-promotion manifests
+  that still report ready status but omit direct acceptance fastpath evidence or
+  direct resident calibration fallback evidence.
+- Treat acceptance fastpath evidence as direct only when it is sourced from an
+  explicit `resident_artifacts.json` fastpath input and all resident
+  registration fastpath contract checks pass.
+- Treat pipeline calibration evidence as direct only when `pipeline-contract`
+  synthesized calibration visibility from the same run's
+  `resident_artifacts.json` without writing back a fake
+  `calibration_artifacts.json` file.
+- Surface direct evidence readiness, fastpath source/check count, calibration
+  fallback source, resident native calibration status, and resident calibrated
+  light count in JSON and Markdown release-matrix outputs.
+- Add focused tests for passing direct evidence, missing direct evidence, stale
+  fastpath handoff source, and builder-level direct evidence summarization.
+- Generate Gate306 default-promotion and Windows release-matrix artifacts from
+  existing 200-light Gate304/Gate305 evidence and require the matrix to remain
+  `release_matrix_ready`.
+- Keep this gate release-evidence scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,991 @@
+{
+  "artifact_type": "default_promotion_manifest",
+  "checks": [
+    {
+      "evidence": {
+        "actual": "release_promotion_decision",
+        "required": "release_promotion_decision"
+      },
+      "name": "release_decision_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "glass_phase2_status",
+        "required": "glass_phase2_status"
+      },
+      "name": "phase2_status_artifact_type",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "passed": true,
+        "status": "green"
+      },
+      "name": "phase2_status_green",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "gate": 304,
+        "green": true,
+        "status": "Green"
+      },
+      "name": "latest_checkpoint_green",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true,
+        "status": "default_change_ready"
+      },
+      "name": "release_decision_default_change_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "promote_default_candidate",
+        "required": "promote_default_candidate"
+      },
+      "name": "release_decision_recommends_promotion",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "input": "runs\\checkpoints\\s2_gate_305_release_decision_direct_acceptance_fastpath.json",
+        "phase2_release_decision_path": "runs\\checkpoints\\s2_gate_305_release_decision_direct_acceptance_fastpath.json"
+      },
+      "name": "phase2_embeds_same_release_decision",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "phase2_release_decision_default_change_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "promote_default_candidate",
+        "required": "promote_default_candidate"
+      },
+      "name": "phase2_release_decision_recommends_promotion",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_222_default_route_acceptance_audit.json",
+        "status": "passed"
+      },
+      "name": "default_route_acceptance_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "acceptance_passed": true,
+        "passed": true,
+        "status": "passed"
+      },
+      "name": "default_route_acceptance_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "route_contract_passed": true,
+        "route_failed_checks": []
+      },
+      "name": "default_route_acceptance_route_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 4,
+        "required_min": 4
+      },
+      "name": "default_route_acceptance_route_check_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "present": true,
+        "recommendation": "best_observed:gate218_default_repeat02"
+      },
+      "name": "runtime_repeat_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 2
+      },
+      "name": "runtime_repeat_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1.053510511049479,
+        "required_max": 1.25
+      },
+      "name": "runtime_repeat_ratio_within_bound",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "passed": true,
+        "status": "passed"
+      },
+      "name": "pipeline_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "pipeline_dq_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "resident": true,
+        "stack": true
+      },
+      "name": "pipeline_stack_and_resident_result_contracts_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": true,
+        "tile_size": 2048
+      },
+      "name": "pipeline_pixel_verification_enabled",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "coverage": true,
+        "dq": true,
+        "rejection": true
+      },
+      "name": "pipeline_pixel_maps_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "status": "passed"
+      },
+      "name": "pipeline_rejection_sample_accounting_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "present_count": 0,
+        "status": "passed"
+      },
+      "name": "pipeline_sample_accounting_closure_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "acceptance_integration_engine_policy_handoff_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "default_engine_policy": true,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "pipeline_integration_engine_policy_default_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_master_count": 0,
+        "failed_masters": [],
+        "failed_output_count": 0,
+        "failed_outputs": [],
+        "legacy_master_count": 0,
+        "master_count": 3,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "acceptance_stack_engine_runtime_default_handoff_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_master_count": 0,
+        "failed_masters": [],
+        "failed_output_count": 0,
+        "failed_outputs": [],
+        "legacy_master_count": 0,
+        "master_count": 3,
+        "phase2_check_passed": true,
+        "status": "passed"
+      },
+      "name": "pipeline_stack_engine_runtime_default_handoff_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "adoption_gap_count": 0,
+        "adoption_recommendation": "stack_engine_default_ready",
+        "default_promotion_blocker_count": 0,
+        "default_promotion_blockers": [],
+        "default_promotion_ready": true,
+        "default_promotion_status": "ready",
+        "expected_integration_engine": "cuda_resident_stack",
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "scope": "all",
+        "status": "passed"
+      },
+      "name": "phase2_stack_engine_default_contract_ready",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "resident_calibration_artifact_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 200,
+        "required_min": 200
+      },
+      "name": "resident_light_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "status": "passed"
+      },
+      "name": "resident_winsorized_sweep_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_frame_count": 200,
+        "required_frame_count": 200,
+        "required_frame_count_passed": true,
+        "required_frame_master_max_abs": 6.103515625e-05,
+        "required_frame_master_rms": 2.3066304440398834e-05
+      },
+      "name": "resident_winsorized_sweep_required_frame_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 27,
+        "failed_check_count": 0,
+        "required_min": 27
+      },
+      "name": "resident_winsorized_sweep_check_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "passed": true,
+        "phase2_check_passed": true,
+        "present": true,
+        "status": "passed"
+      },
+      "name": "stack_engine_publication_audit_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "phase2_check_passed": true,
+        "phase2_layer": {
+          "gap_count": null,
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "phase2_policy_ready": true,
+        "policy_agreement": true,
+        "publish_preflight_layer": {
+          "gap_count": null,
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "publish_preflight_policy_ready": true
+      },
+      "name": "stack_engine_publication_policy_chain_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "phase2_check_passed": true,
+        "phase2_layer": {
+          "gap_count": null,
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "phase2_resident_winsorized_ready": true,
+        "publish_preflight_layer": {
+          "gap_count": null,
+          "ready": true,
+          "status": "publish_preflight_ready"
+        },
+        "publish_preflight_resident_winsorized_ready": true,
+        "resident_winsorized_agreement": true
+      },
+      "name": "stack_engine_publication_resident_winsorized_chain_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "resident",
+        "required": "resident"
+      },
+      "name": "default_memory_mode_candidate",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "tile",
+        "required": "tile"
+      },
+      "name": "fallback_memory_mode_preserved",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "throughput-v1",
+        "required": "throughput-v1"
+      },
+      "name": "default_runtime_preset_candidate",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "cuda_resident_stack",
+        "required": "cuda_resident_stack"
+      },
+      "name": "integration_engine_candidate",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "present": true,
+        "required": true
+      },
+      "name": "doctor_artifact_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "native_extension_loaded": true,
+        "wrapper_importable": true
+      },
+      "name": "doctor_cuda_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "doctor_native_extension_loaded",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "ordered_try_list": [
+          "cuda13",
+          "cuda12",
+          "cuda11",
+          "cpu"
+        ]
+      },
+      "name": "windows_package_try_list_has_cpu_fallback",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "primary": "cuda13"
+      },
+      "name": "windows_package_primary_present",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T10:40:22+00:00",
+  "default_candidate": {
+    "cpu_only_install_preserved": true,
+    "cuda_optional": true,
+    "fallback_memory_mode": "tile",
+    "integration_engine": "cuda_resident_stack",
+    "memory_mode": "resident",
+    "resident_runtime_preset": "throughput-v1"
+  },
+  "default_change_ready": true,
+  "default_route_acceptance": {
+    "acceptance_passed": true,
+    "active_frames": 193,
+    "benchmark_contract": {
+      "name": "s2_gate_222_default_route_contract",
+      "path": "runs\\tmp_s2_gate_222_default_route_acceptance\\contract.json",
+      "schema_version": 1
+    },
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_222_default_route_acceptance_audit.json",
+    "present": true,
+    "route_check_count": 4,
+    "route_contract_passed": true,
+    "route_failed_checks": [],
+    "speedup_vs_reference": 28.75107894736842,
+    "status": "passed"
+  },
+  "doctor": {
+    "cuda_available": true,
+    "device": {
+      "available_to_glass": true,
+      "compute_capability": "12.0",
+      "device_id": 0,
+      "driver_version": "596.21",
+      "memory_total_mib": 97886,
+      "multi_processor_count": 188,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "native_backend": true
+    },
+    "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+    "native_extension_loaded": true,
+    "ordered_try_list": [
+      "cuda13",
+      "cuda12",
+      "cuda11",
+      "cpu"
+    ],
+    "package_rows": [
+      {
+        "architectures": [
+          "5.0",
+          "5.2",
+          "6.0",
+          "6.1",
+          "7.0",
+          "7.5",
+          "8.0",
+          "8.6"
+        ],
+        "compatible": true,
+        "label": "cuda11",
+        "match": "ptx_jit_forward",
+        "toolkit": "11.8"
+      },
+      {
+        "architectures": [
+          "7.5",
+          "8.0",
+          "8.6",
+          "8.9",
+          "9.0"
+        ],
+        "compatible": true,
+        "label": "cuda12",
+        "match": "ptx_jit_forward",
+        "toolkit": "12.4"
+      },
+      {
+        "architectures": [
+          "8.6",
+          "8.9",
+          "9.0",
+          "10.0",
+          "12.0"
+        ],
+        "compatible": true,
+        "label": "cuda13",
+        "match": "native_cubin",
+        "toolkit": "13.0"
+      }
+    ],
+    "present": true,
+    "primary_package": "cuda13",
+    "probe_skipped": false,
+    "recommendation": "cuda",
+    "schema_version": 1,
+    "wrapper_importable": true
+  },
+  "failed_checks": [],
+  "inputs": {
+    "doctor_json": "runs\\checkpoints\\s2_gate_306_doctor.json",
+    "phase2_status_json": "runs\\checkpoints\\s2_gate_305_phase2_status_direct_acceptance_fastpath.json",
+    "release_decision_json": "runs\\checkpoints\\s2_gate_305_release_decision_direct_acceptance_fastpath.json"
+  },
+  "integration_engine_policy": {
+    "acceptance_check_passed": true,
+    "acceptance_check_present": true,
+    "acceptance_failed_count": 0,
+    "acceptance_failed_items": [],
+    "acceptance_non_resident_count": 0,
+    "acceptance_phase2_check_passed": true,
+    "acceptance_status": "passed",
+    "pipeline_check_passed": true,
+    "pipeline_check_present": true,
+    "pipeline_default_engine_policy": true,
+    "pipeline_failed_count": 0,
+    "pipeline_failed_items": [],
+    "pipeline_non_resident_count": 0,
+    "pipeline_phase2_check_passed": true,
+    "pipeline_status": "passed",
+    "present": true,
+    "ready": true
+  },
+  "limitations": [
+    "This manifest proves readiness for a default promotion; it does not change CLI defaults.",
+    "The resident CUDA default candidate still requires the tile and CPU fallback paths to remain available.",
+    "Runtime evidence is bounded by the supplied repeat artifacts and the current storage/GPU state."
+  ],
+  "passed": true,
+  "phase2_status": {
+    "latest_checkpoint": {
+      "checkpoint_dir": "runs\\checkpoints",
+      "date": "2026-06-18",
+      "exists": true,
+      "gate": 304,
+      "green": true,
+      "path": "runs\\checkpoints\\s2_gate_304_status.md",
+      "scope": "pipeline-contract direct resident calibration visibility",
+      "status": "Green"
+    },
+    "passed": true,
+    "release_decision": {
+      "artifact_type": "release_promotion_decision",
+      "default_change_ready": true,
+      "exists": true,
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_305_release_decision_direct_acceptance_fastpath.json",
+      "pipeline_handoff_passed": true,
+      "pipeline_handoff_pixel_verification_enabled": true,
+      "pipeline_handoff_source": "explicit_pipeline_contract",
+      "pipeline_handoff_status": "passed",
+      "recommendation": "promote_default_candidate",
+      "release_candidate_ready": true,
+      "runtime_repeat_best_elapsed_s": 22.598500299995067,
+      "runtime_repeat_best_label": "gate218_default_repeat02",
+      "runtime_repeat_considered_run_count": 3,
+      "runtime_repeat_elapsed_ratio_vs_best": 1.053510511049479,
+      "runtime_repeat_max_elapsed_ratio_vs_best": 1.25,
+      "runtime_repeat_present": true,
+      "runtime_repeat_recommendation": "best_observed:gate218_default_repeat02",
+      "runtime_repeat_run_count": 3,
+      "runtime_repeat_slowest_elapsed_s": 23.807757599999604,
+      "speedup_actual": 58.099101701945926,
+      "speedup_required_min": 2.0,
+      "status": "default_change_ready"
+    },
+    "status": "green"
+  },
+  "pipeline_contract": {
+    "calibrated_light_count": 200,
+    "check_count": 19,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "integration_coverage_map_pixels_match_dq": true,
+    "integration_default_engine_policy": true,
+    "integration_dq_contract": true,
+    "integration_dq_map_pixels_match_summary": true,
+    "integration_engine_policy": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 0,
+      "output_count": 1,
+      "resident_count": 1,
+      "rows": [
+        {
+          "backend": "cuda_resident_stack",
+          "failures": [],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": true,
+          "required": false,
+          "status": "resident_not_required",
+          "tile_stack_mode": ""
+        }
+      ],
+      "status": "passed",
+      "top_level_default_ok": false,
+      "top_level_present": false
+    },
+    "integration_engine_policy_check_passed": true,
+    "integration_engine_policy_check_present": true,
+    "integration_engine_policy_failed_count": 0,
+    "integration_engine_policy_non_resident_count": 0,
+    "integration_engine_policy_status": "passed",
+    "integration_map_count": 6,
+    "integration_output_count": 1,
+    "integration_rejection_map_pixels_match_dq": true,
+    "integration_rejection_sample_counts_match_maps": true,
+    "integration_resident_result_contract": true,
+    "integration_sample_accounting_closure": true,
+    "integration_stack_result_contract": true,
+    "passed": true,
+    "pixel_verification_enabled": true,
+    "pixel_verification_tile_size": 2048,
+    "present": true,
+    "rejection_sample_accounting": {
+      "accounted_output_count": 1,
+      "check_name": "integration_rejection_sample_counts_match_maps",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "pixel_verification_enabled": true,
+      "required_count": 1,
+      "schema_version": 1,
+      "status": "passed",
+      "verified_count": 1
+    },
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_status": "passed",
+    "resident_calibrated_light_count": 200,
+    "resident_native_calibration_artifact": true,
+    "sample_accounting_closure": {
+      "check_name": "integration_sample_accounting_closure",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "present_count": 0,
+      "required_count": 0,
+      "rows": [
+        {
+          "input_invalid_samples_before_rejection": null,
+          "input_samples": null,
+          "input_total_match": null,
+          "input_valid_samples_before_rejection": null,
+          "item": "H",
+          "passed": true,
+          "present": false,
+          "rejected_samples": null,
+          "required": false,
+          "semantics": null,
+          "status": "missing",
+          "valid_rejection_match": null,
+          "valid_samples_after_rejection": null
+        }
+      ],
+      "schema_version": 1,
+      "status": "passed"
+    },
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 0,
+    "sample_accounting_closure_status": "passed",
+    "stack_engine_runtime_default": {
+      "check_name": "stack_engine_runtime_default_path",
+      "check_passed": true,
+      "check_present": true,
+      "explicit_cuda_fast_path_count": 0,
+      "failed_master_count": 0,
+      "failed_masters": [],
+      "failed_output_count": 0,
+      "failed_outputs": [],
+      "integration_output_count": 1,
+      "integration_resident_count": 1,
+      "integration_stack_engine_default_count": 0,
+      "legacy_master_count": 0,
+      "master_count": 3,
+      "master_resident_count": 3,
+      "master_stack_engine_count": 0,
+      "passed": true,
+      "status": "passed"
+    },
+    "stack_engine_runtime_default_check_passed": true,
+    "stack_engine_runtime_default_check_present": true,
+    "stack_engine_runtime_default_explicit_cuda_fast_path_count": 0,
+    "stack_engine_runtime_default_failed_master_count": 0,
+    "stack_engine_runtime_default_failed_output_count": 0,
+    "stack_engine_runtime_default_legacy_master_count": 0,
+    "stack_engine_runtime_default_master_count": 3,
+    "stack_engine_runtime_default_status": "passed",
+    "status": "passed"
+  },
+  "recommendation": "promote_resident_cuda_default",
+  "release_decision": {
+    "default_change_ready": true,
+    "passed": true,
+    "recommendation": "promote_default_candidate",
+    "release_candidate_ready": true,
+    "resident_winsorized_semantics": {
+      "descriptor_sources": [
+        "resident_artifacts.integration_rejection"
+      ],
+      "failed_count": 0,
+      "failed_items": [],
+      "legacy_completion_count": 1,
+      "output_count": 1,
+      "ready": true,
+      "required_count": 1,
+      "rows": [
+        {
+          "algorithm": "two_stage_winsorized_mean_std_rejection_approximation",
+          "approximation": true,
+          "cpu_baseline_parity": false,
+          "descriptor_source": "resident_artifacts.integration_rejection",
+          "integration_results_descriptor_present": false,
+          "item": "H",
+          "legacy_completion_applied": true,
+          "legacy_completion_source": "fast_approx_algorithm",
+          "parity_status": "known_non_parity_pending_cuda_update",
+          "passed": true,
+          "present": true,
+          "rejection": "winsorized_sigma",
+          "required": true,
+          "resident_artifacts_descriptor_present": true,
+          "resident_winsorized_mode": "fast_approx",
+          "scale_estimator": "mean_std_two_stage_winsorized",
+          "status": "passed"
+        }
+      ],
+      "schema_version": 1,
+      "scope": "passed",
+      "status": "passed"
+    },
+    "speedup": {
+      "actual": 58.099101701945926,
+      "required_min": 2.0
+    },
+    "status": "default_change_ready"
+  },
+  "resident_winsorized_sweep_audit": {
+    "check_count": 27,
+    "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "frame_counts": [
+      8,
+      32,
+      128,
+      200
+    ],
+    "max_hardened_master_rms": 2.3066304440398834e-05,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_269_resident_winsorized_sweep_audit.json",
+    "phase2_check_passed": true,
+    "present": true,
+    "required_frame_count": 200,
+    "required_frame_count_passed": true,
+    "required_frame_cuda_hardened_s": 0.0012743999977828935,
+    "required_frame_master_max_abs": 6.103515625e-05,
+    "required_frame_master_rms": 2.3066304440398834e-05,
+    "run_count": 4,
+    "status": "passed",
+    "sweep_path": "runs\\checkpoints\\s2_gate_268_resident_winsorized_sweep.json"
+  },
+  "runtime_default_direct_evidence": {
+    "acceptance_audit_exists": true,
+    "acceptance_audit_path": "runs\\checkpoints\\s2_gate_305_acceptance_direct_fastpath_runtime_default.json",
+    "acceptance_audit_read_error": null,
+    "acceptance_direct_fastpath": true,
+    "acceptance_fastpath_artifact_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\resident_artifacts.json",
+    "acceptance_fastpath_available": true,
+    "acceptance_fastpath_check_count": 24,
+    "acceptance_fastpath_exists": true,
+    "acceptance_fastpath_failed_check_count": 0,
+    "acceptance_fastpath_failed_checks": [],
+    "acceptance_fastpath_source": "explicit_resident_artifacts_json",
+    "decision_inputs_present": true,
+    "pipeline_calibration_artifact_exists": true,
+    "pipeline_calibration_artifact_generated_for_contract": true,
+    "pipeline_calibration_artifact_path": "C:\\glass_runs\\phase2_s2_gate_181_default_runtime\\default_resident\\calibration_artifacts.json",
+    "pipeline_calibration_artifact_path_exists": false,
+    "pipeline_calibration_artifact_source": "resident_artifacts_json_fallback",
+    "pipeline_contract_exists": true,
+    "pipeline_contract_path": "runs\\checkpoints\\s2_gate_304_pipeline_contract_resident_calibration_direct_visibility.json",
+    "pipeline_contract_read_error": null,
+    "pipeline_direct_resident_calibration": true,
+    "pipeline_resident_calibrated_light_count": 200,
+    "pipeline_resident_native_calibration_artifact": true,
+    "present": true,
+    "ready": true
+  },
+  "runtime_repeat": {
+    "best_elapsed_s": 22.598500299995067,
+    "best_label": "gate218_default_repeat02",
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.053510511049479,
+    "max_elapsed_ratio_vs_best": 1.25,
+    "present": true,
+    "recommendation": "best_observed:gate218_default_repeat02",
+    "required_min_runtime_runs": 2,
+    "run_count": 3,
+    "slowest_elapsed_s": 23.807757599999604
+  },
+  "schema_version": 1,
+  "stack_engine_contract": {
+    "adoption_contract_ready_count": 4,
+    "adoption_cuda_resident_surface_count": 4,
+    "adoption_gap_surfaces": [],
+    "adoption_phase2_stack_engine_default_gap_count": 0,
+    "adoption_recommendation": "stack_engine_default_ready",
+    "adoption_stack_engine_surface_count": 0,
+    "adoption_surface_count": 4,
+    "audit_type": "stack_engine_default_contract",
+    "default_promotion_blocker_count": 0,
+    "default_promotion_blockers": [],
+    "default_promotion_phase2_stack_engine_default_gap_count": 0,
+    "default_promotion_ready": true,
+    "default_promotion_recommendation": "stack_engine_default_ready",
+    "default_promotion_status": "ready",
+    "expected_integration_engine": "cuda_resident_stack",
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_211_stack_engine_contract.json",
+    "phase2_check_passed": true,
+    "present": true,
+    "ready": true,
+    "scope": "all",
+    "status": "passed"
+  },
+  "stack_engine_publication_audit": {
+    "check_count": 28,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_299_stack_engine_publication_runtime_default.json",
+    "phase2_audit_check_passed": true,
+    "phase2_policy_layer": {
+      "gap_count": null,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_policy_ready": true,
+    "phase2_resident_winsorized_layer": {
+      "gap_count": null,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_resident_winsorized_ready": true,
+    "policy_agreement": true,
+    "policy_chain_phase2_check_passed": true,
+    "present": true,
+    "publish_preflight_policy_layer": {
+      "gap_count": null,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_policy_ready": true,
+    "publish_preflight_resident_winsorized_layer": {
+      "gap_count": null,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_resident_winsorized_ready": true,
+    "ready": true,
+    "recommendation": "publication_chain_ready",
+    "resident_winsorized_agreement": true,
+    "resident_winsorized_chain_phase2_check_passed": true,
+    "status": "passed"
+  },
+  "stack_engine_runtime_default": {
+    "acceptance_check_passed": true,
+    "acceptance_check_present": true,
+    "acceptance_explicit_cuda_fast_path_count": 0,
+    "acceptance_failed_master_count": 0,
+    "acceptance_failed_masters": [],
+    "acceptance_failed_output_count": 0,
+    "acceptance_failed_outputs": [],
+    "acceptance_legacy_master_count": 0,
+    "acceptance_master_count": 3,
+    "acceptance_phase2_check_passed": true,
+    "acceptance_status": "passed",
+    "pipeline_check_passed": true,
+    "pipeline_check_present": true,
+    "pipeline_explicit_cuda_fast_path_count": 0,
+    "pipeline_failed_master_count": 0,
+    "pipeline_failed_masters": [],
+    "pipeline_failed_output_count": 0,
+    "pipeline_failed_outputs": [],
+    "pipeline_legacy_master_count": 0,
+    "pipeline_master_count": 3,
+    "pipeline_phase2_check_passed": true,
+    "pipeline_status": "passed",
+    "present": true,
+    "ready": true
+  },
+  "status": "default_promotion_ready"
+}

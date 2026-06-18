@@ -788,6 +788,75 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
 
 
+def test_default_promotion_manifest_summarizes_direct_runtime_evidence(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    acceptance = tmp_path / "acceptance.json"
+    pipeline = tmp_path / "pipeline_contract.json"
+    _write_release_decision(decision)
+    decision_payload = read_json(decision)
+    decision_payload["inputs"] = {
+        "acceptance_audit": str(acceptance),
+        "pipeline_contract": str(pipeline),
+    }
+    write_json(decision, decision_payload)
+    _write_phase2_status(phase2, decision)
+    phase2_payload = read_json(phase2)
+    phase2_payload["pipeline_contract"]["path"] = str(pipeline)
+    write_json(phase2, phase2_payload)
+    write_json(
+        acceptance,
+        {
+            "schema_version": 1,
+            "resident_registration_fastpath": {
+                "source": "explicit_resident_artifacts_json",
+                "available": True,
+                "exists": True,
+                "path": "C:/glass_runs/default_resident/resident_artifacts.json",
+            },
+            "checks": [
+                {
+                    "name": "contract_resident_registration_fastpath_present",
+                    "passed": True,
+                    "evidence": {},
+                }
+            ],
+        },
+    )
+    write_json(
+        pipeline,
+        {
+            "schema_version": 1,
+            "artifacts": {
+                "calibration": {
+                    "exists": True,
+                    "generated_for_pipeline_contract": True,
+                    "path_exists": False,
+                    "source": "resident_artifacts_json_fallback",
+                }
+            },
+            "calibration": {"calibrated_light_count": 200},
+        },
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+        min_runtime_runs=3,
+    )
+
+    evidence = payload["runtime_default_direct_evidence"]
+    assert evidence["ready"] is True
+    assert evidence["acceptance_direct_fastpath"] is True
+    assert evidence["acceptance_fastpath_source"] == "explicit_resident_artifacts_json"
+    assert evidence["acceptance_fastpath_check_count"] == 1
+    assert evidence["pipeline_direct_resident_calibration"] is True
+    assert evidence["pipeline_calibration_artifact_source"] == "resident_artifacts_json_fallback"
+    assert evidence["pipeline_resident_calibrated_light_count"] == 200
+
+
 def test_default_promotion_manifest_blocks_unready_release_decision(tmp_path: Path) -> None:
     decision = tmp_path / "decision.json"
     phase2 = tmp_path / "phase2.json"
