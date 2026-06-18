@@ -4258,6 +4258,27 @@ integration where applicable.
   runtime default change, package build, upload, publish-preflight behavior
   change, or real-data benchmark rerun.
 
+### S2-Gate 254: GitHub Release Plan StackEngine Contract Handoff
+
+- Carry Phase 2 and Windows release-matrix StackEngine default-contract
+  evidence into `glass windows-github-release-plan`.
+- Add `phase2_stack_engine_default_contract_ready` and
+  `windows_release_matrix_stack_engine_contract_ready` so GitHub release plans
+  cannot pass when StackEngine default-contract evidence is missing, stale, or
+  blocked by default gaps.
+- Add `phase2_release_matrix_stack_engine_contract_agree` so supplied Phase 2
+  and Windows release-matrix artifacts must agree on zero StackEngine default
+  gaps and zero blockers.
+- Extend release notes, release-plan Markdown, and the generated PowerShell
+  dry-run script with StackEngine default-contract readiness checks.
+- Add focused tests for ready handoff, Phase2 StackEngine gap blocking, missing
+  release-matrix StackEngine evidence, release-matrix StackEngine gap blocking,
+  and CLI Markdown/notes/script output.
+- Keep this gate GitHub-release-plan scoped: no image math, CUDA kernel,
+  StackEngine audit behavior change, runtime default change, package build,
+  upload, package release, publish-preflight behavior change, or real-data
+  benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

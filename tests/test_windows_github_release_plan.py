@@ -38,12 +38,21 @@ def _phase2_status(
     passed: bool = True,
     gate: int = 204,
     sample_accounting_closure_ready: bool | None = None,
+    stack_engine_ready: bool | None = None,
+    stack_engine_gap_count: int = 0,
 ) -> None:
     accounting_passed = passed
     sample_closure_passed = (
         passed
         if sample_accounting_closure_ready is None
         else sample_accounting_closure_ready
+    )
+    stack_ready = passed if stack_engine_ready is None else stack_engine_ready
+    stack_check_passed = stack_ready and stack_engine_gap_count == 0
+    stack_recommendation = (
+        "stack_engine_default_ready"
+        if stack_check_passed
+        else "stack_engine_contract_gaps_remain"
     )
     write_json(
         path,
@@ -53,6 +62,12 @@ def _phase2_status(
             "status": "green" if passed else "attention_required",
             "passed": passed,
             "latest_checkpoint": {"gate": gate, "status": "green" if passed else "failed", "green": passed},
+            "checks": [
+                {
+                    "name": "stack_engine_default_contract_ready",
+                    "passed": stack_check_passed,
+                }
+            ],
             "acceptance_audit": {
                 "status": "passed" if passed else "failed",
                 "native_guardrails_bundle_status": "present",
@@ -110,6 +125,29 @@ def _phase2_status(
                     "resident_calibration_master_count": 3,
                     "resident_calibrated_light_count": 200,
                 },
+            },
+            "stack_engine_contract": {
+                "audit_type": "stack_engine_default_contract",
+                "status": "passed" if stack_check_passed else "failed",
+                "passed": stack_check_passed,
+                "scope": "all",
+                "default_promotion_ready": stack_check_passed,
+                "default_promotion_status": "ready" if stack_check_passed else "blocked",
+                "adoption_recommendation": stack_recommendation,
+                "default_promotion_recommendation": stack_recommendation,
+                "adoption_phase2_stack_engine_default_gap_count": stack_engine_gap_count,
+                "default_promotion_phase2_stack_engine_default_gap_count": (
+                    stack_engine_gap_count
+                ),
+                "default_promotion_blocker_count": 0 if stack_check_passed else 1,
+                "default_promotion_blockers": []
+                if stack_check_passed
+                else [
+                    {
+                        "name": "phase2_stack_engine_default_gaps",
+                        "gap_count": stack_engine_gap_count,
+                    }
+                ],
             },
             "pipeline_contract": {
                 "status": "passed" if passed else "failed",
@@ -182,9 +220,95 @@ def _release_matrix(
     ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
     sample_accounting_closure_ready: bool = True,
+    include_stack_engine_contract: bool = True,
+    stack_engine_ready: bool = True,
+    stack_engine_gap_count: int = 0,
 ) -> None:
     ordered_try_list = labels if "cpu" in labels else [*labels, "cpu"]
-    matrix_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
+    stack_ready = stack_engine_ready and stack_engine_gap_count == 0
+    matrix_ready = (
+        ready
+        and rejection_sample_accounting_ready
+        and sample_accounting_closure_ready
+        and (stack_ready if include_stack_engine_contract else True)
+    )
+    stack_recommendation = (
+        "stack_engine_default_ready"
+        if stack_ready
+        else "stack_engine_contract_gaps_remain"
+    )
+    stack_contract = {
+        "present": True,
+        "ready": stack_ready,
+        "phase2_check_passed": stack_ready,
+        "status": "passed" if stack_ready else "failed",
+        "passed": stack_ready,
+        "scope": "all",
+        "adoption_recommendation": stack_recommendation,
+        "default_promotion_phase2_stack_engine_default_gap_count": (
+            stack_engine_gap_count
+        ),
+        "default_promotion_blocker_count": 0 if stack_ready else 1,
+        "default_promotion_blockers": []
+        if stack_ready
+        else [
+            {
+                "name": "phase2_stack_engine_default_gaps",
+                "gap_count": stack_engine_gap_count,
+            }
+        ],
+    }
+    default_promotion = {
+        "status": "default_promotion_ready" if matrix_ready else "blocked",
+        "passed": matrix_ready,
+        "default_change_ready": matrix_ready,
+        "default_route_passed": ready,
+        "default_route_route_contract_passed": ready,
+        "default_route_route_check_count": 4 if ready else 2,
+        "default_route_speedup_vs_reference": 28.75,
+        "integration_rejection_sample_counts_match_maps": rejection_sample_accounting_ready,
+        "rejection_sample_accounting_status": "passed"
+        if rejection_sample_accounting_ready
+        else "failed",
+        "rejection_sample_accounting_failed_count": 0
+        if rejection_sample_accounting_ready
+        else 1,
+        "integration_sample_accounting_closure": sample_accounting_closure_ready,
+        "sample_accounting_closure": {
+            "status": "passed" if sample_accounting_closure_ready else "failed",
+            "check_present": True,
+            "present_count": 1,
+            "failed_count": 0 if sample_accounting_closure_ready else 1,
+            "failed_items": []
+            if sample_accounting_closure_ready
+            else [{"output_id": "master_H", "reason": "sample_closure_drift"}],
+        },
+        "sample_accounting_closure_status": "passed"
+        if sample_accounting_closure_ready
+        else "failed",
+        "sample_accounting_closure_present_count": 1,
+        "sample_accounting_closure_failed_count": 0
+        if sample_accounting_closure_ready
+        else 1,
+    }
+    if include_stack_engine_contract:
+        default_promotion.update(
+            {
+                "stack_engine_contract": stack_contract,
+                "stack_engine_contract_present": True,
+                "stack_engine_contract_ready": stack_ready,
+                "stack_engine_contract_phase2_check_passed": stack_ready,
+                "stack_engine_contract_status": stack_contract["status"],
+                "stack_engine_contract_passed": stack_ready,
+                "stack_engine_contract_scope": "all",
+                "stack_engine_contract_adoption_recommendation": stack_recommendation,
+                "stack_engine_contract_default_gap_count": stack_engine_gap_count,
+                "stack_engine_contract_blocker_count": 0 if stack_ready else 1,
+                "stack_engine_contract_blockers": stack_contract[
+                    "default_promotion_blockers"
+                ],
+            }
+        )
     write_json(
         path,
         {
@@ -201,39 +325,7 @@ def _release_matrix(
                 "cuda_available": "cpu" not in labels[:1],
                 "native_extension_loaded": "cpu" not in labels[:1],
             },
-            "default_promotion_manifest": {
-                "status": "default_promotion_ready" if matrix_ready else "blocked",
-                "passed": matrix_ready,
-                "default_change_ready": matrix_ready,
-                "default_route_passed": ready,
-                "default_route_route_contract_passed": ready,
-                "default_route_route_check_count": 4 if ready else 2,
-                "default_route_speedup_vs_reference": 28.75,
-                "integration_rejection_sample_counts_match_maps": rejection_sample_accounting_ready,
-                "rejection_sample_accounting_status": "passed"
-                if rejection_sample_accounting_ready
-                else "failed",
-                "rejection_sample_accounting_failed_count": 0
-                if rejection_sample_accounting_ready
-                else 1,
-                "integration_sample_accounting_closure": sample_accounting_closure_ready,
-                "sample_accounting_closure": {
-                    "status": "passed" if sample_accounting_closure_ready else "failed",
-                    "check_present": True,
-                    "present_count": 1,
-                    "failed_count": 0 if sample_accounting_closure_ready else 1,
-                    "failed_items": []
-                    if sample_accounting_closure_ready
-                    else [{"output_id": "master_H", "reason": "sample_closure_drift"}],
-                },
-                "sample_accounting_closure_status": "passed"
-                if sample_accounting_closure_ready
-                else "failed",
-                "sample_accounting_closure_present_count": 1,
-                "sample_accounting_closure_failed_count": 0
-                if sample_accounting_closure_ready
-                else 1,
-            },
+            "default_promotion_manifest": default_promotion,
             "packages": [
                 {
                     "label": label,
@@ -312,6 +404,10 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["phase2"]["status"]["pipeline_rejection_sample_accounting_status"] == "passed"
     assert payload["phase2"]["status"]["pipeline_integration_sample_accounting_closure"] is True
     assert payload["phase2"]["status"]["pipeline_sample_accounting_closure_status"] == "passed"
+    assert payload["phase2"]["status"]["stack_engine_default_contract_status"] == "passed"
+    assert payload["phase2"]["status"]["stack_engine_default_contract_phase2_check_passed"] is True
+    assert payload["phase2"]["status"]["stack_engine_default_contract_default_gap_count"] == 0
+    assert payload["phase2"]["status"]["stack_engine_default_contract_blocker_count"] == 0
     assert payload["phase2"]["status"]["release_decision_status"] == "default_change_ready"
     assert payload["phase2"]["status"]["release_decision_default_change_ready"] is True
     assert payload["phase2"]["status"]["release_runtime_repeat_elapsed_ratio_vs_best"] == 1.053
@@ -319,16 +415,22 @@ def test_windows_github_release_plan_accepts_phase2_handoff_evidence(tmp_path: P
     assert payload["release_matrix"]["primary_package"] == "cuda13"
     assert payload["release_matrix"]["rejection_sample_accounting_status"] == "passed"
     assert payload["release_matrix"]["sample_accounting_closure_status"] == "passed"
+    assert payload["release_matrix"]["stack_engine_contract_ready"] is True
+    assert payload["release_matrix"]["stack_engine_contract_phase2_check_passed"] is True
+    assert payload["release_matrix"]["stack_engine_contract_default_gap_count"] == 0
     assert checks["phase2_status_present"] is True
     assert checks["phase2_status_green"] is True
     assert checks["phase2_pipeline_rejection_sample_accounting_passed"] is True
     assert checks["phase2_pipeline_sample_accounting_closure_passed"] is True
+    assert checks["phase2_stack_engine_default_contract_ready"] is True
     assert checks["phase2_status_compare_present"] is True
     assert checks["phase2_status_compare_passed"] is True
     assert checks["windows_release_matrix_ready"] is True
     assert checks["windows_release_matrix_default_route_passed"] is True
     assert checks["windows_release_matrix_rejection_sample_accounting_passed"] is True
     assert checks["windows_release_matrix_sample_accounting_closure_passed"] is True
+    assert checks["windows_release_matrix_stack_engine_contract_ready"] is True
+    assert checks["phase2_release_matrix_stack_engine_contract_agree"] is True
 
 
 def test_windows_github_release_plan_blocks_failed_phase2_handoff_evidence(tmp_path: Path):
@@ -355,8 +457,10 @@ def test_windows_github_release_plan_blocks_failed_phase2_handoff_evidence(tmp_p
     assert payload["passed"] is False
     assert payload["publication_ready"] is False
     assert checks["phase2_status_green"] is False
+    assert checks["phase2_stack_engine_default_contract_ready"] is False
     assert checks["phase2_status_compare_passed"] is False
     assert "phase2_status_green" in payload["failed_checks"]
+    assert "phase2_stack_engine_default_contract_ready" in payload["failed_checks"]
     assert "phase2_status_compare_passed" in payload["failed_checks"]
 
 
@@ -388,6 +492,52 @@ def test_windows_github_release_plan_blocks_phase2_sample_closure_drift(tmp_path
         "present_count": 1,
         "failed_count": 1,
         "failed_items": [{"output_id": "master_H", "reason": "sample_closure_drift"}],
+    }
+
+
+def test_windows_github_release_plan_blocks_phase2_stack_engine_contract_gap(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    phase2_status = tmp_path / "phase2_status.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _phase2_status(
+        phase2_status,
+        gate=254,
+        stack_engine_ready=False,
+        stack_engine_gap_count=1,
+    )
+    _release_matrix(matrix, labels=["cuda13"])
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        phase2_status=phase2_status,
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert payload["phase2"]["status"]["stack_engine_default_contract_status"] == "failed"
+    assert checks["phase2_stack_engine_default_contract_ready"]["passed"] is False
+    assert checks["phase2_stack_engine_default_contract_ready"]["evidence"] == {
+        "present": True,
+        "phase2_check_passed": False,
+        "audit_type": "stack_engine_default_contract",
+        "status": "failed",
+        "passed": False,
+        "scope": "all",
+        "default_promotion_ready": False,
+        "default_promotion_status": "blocked",
+        "adoption_recommendation": "stack_engine_contract_gaps_remain",
+        "default_promotion_recommendation": "stack_engine_contract_gaps_remain",
+        "default_gap_count": 1,
+        "blocker_count": 1,
+        "blockers": [{"name": "phase2_stack_engine_default_gaps", "gap_count": 1}],
     }
 
 
@@ -488,6 +638,80 @@ def test_windows_github_release_plan_blocks_release_matrix_sample_closure_drift(
     }
 
 
+def test_windows_github_release_plan_blocks_missing_release_matrix_stack_engine_contract(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(
+        matrix,
+        labels=["cuda13"],
+        include_stack_engine_contract=False,
+    )
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is True
+    assert checks["windows_release_matrix_stack_engine_contract_ready"]["passed"] is False
+    assert checks["windows_release_matrix_stack_engine_contract_ready"]["evidence"] == {
+        "present": None,
+        "ready": None,
+        "phase2_check_passed": None,
+        "status": None,
+        "passed": None,
+        "scope": None,
+        "adoption_recommendation": None,
+        "default_gap_count": None,
+        "blocker_count": None,
+        "blockers": [],
+    }
+
+
+def test_windows_github_release_plan_blocks_release_matrix_stack_engine_contract_gap(
+    tmp_path: Path,
+):
+    zip_file = tmp_path / "GLASS-Portable-win64-cuda13.zip"
+    zip_file.write_bytes(b"zip")
+    manifest = tmp_path / "manifest.json"
+    matrix = tmp_path / "matrix.json"
+    _manifest(manifest, zip_paths={"cuda13": zip_file})
+    _release_matrix(
+        matrix,
+        labels=["cuda13"],
+        stack_engine_ready=False,
+        stack_engine_gap_count=1,
+    )
+
+    payload = build_windows_github_release_plan(
+        manifest_artifact=manifest,
+        tag="v0.1.0-test",
+        windows_release_matrix=matrix,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["publication_ready"] is False
+    assert payload["release_matrix"]["stack_engine_contract_ready"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is False
+    assert checks["windows_release_matrix_stack_engine_contract_ready"]["passed"] is False
+    assert checks["windows_release_matrix_stack_engine_contract_ready"]["evidence"][
+        "default_gap_count"
+    ] == 1
+    assert checks["windows_release_matrix_stack_engine_contract_ready"]["evidence"][
+        "blocker_count"
+    ] == 1
+
+
 def test_windows_github_release_plan_blocks_mixed_sources(tmp_path: Path):
     zip_a = tmp_path / "a.zip"
     zip_b = tmp_path / "b.zip"
@@ -575,6 +799,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Windows Release Matrix Handoff" in markdown_text
     assert "Matrix status: `release_matrix_ready`" in markdown_text
     assert "Default route contract/checks: `True`/`4`" in markdown_text
+    assert "StackEngine default contract: ready=`True` phase2-check=`True` gaps=`0` blockers=`0`" in markdown_text
     assert "Rejection sample accounting: `passed` failed `0`" in markdown_text
     assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text
     assert "Phase 2 Handoff Preflight" in markdown_text
@@ -586,12 +811,14 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Pipeline integration DQ contract: `True`" in markdown_text
     assert "Pipeline rejection sample accounting: `passed`" in markdown_text
     assert "Pipeline sample accounting closure: `passed`" in markdown_text
+    assert "StackEngine default contract: `passed` check `True` gaps `0` blockers `0`" in markdown_text
     assert "Release decision: `default_change_ready`" in markdown_text
     assert "Runtime repeat ratio vs best: `1.053`" in markdown_text
     assert "Recommended Install Order" in notes.read_text(encoding="utf-8")
     notes_text = notes.read_text(encoding="utf-8")
     assert "Windows Release Matrix Evidence" in notes_text
     assert "Default route contract: `True` checks `4`" in notes_text
+    assert "StackEngine default contract: ready `True` phase2-check `True` gaps `0` blockers `0`" in notes_text
     assert "Rejection sample accounting: `passed` failed `0`" in notes_text
     assert "Sample accounting closure: `passed` present `1` failed `0`" in notes_text
     assert "Native resident contract source: `run_default`" in notes_text
@@ -602,6 +829,7 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Pipeline pixel verification: `True`" in notes_text
     assert "Pipeline rejection sample accounting: `passed` check `True` failed `0`" in notes_text
     assert "Pipeline sample accounting closure: `passed` check `True` failed `0`" in notes_text
+    assert "StackEngine default contract: `passed` check `True` gaps `0` blockers `0`" in notes_text
     assert "Default-change decision: `default_change_ready` ready `True`" in notes_text
     assert "Runtime repeat evidence: runs `3`" in notes_text
     script_text = script.read_text(encoding="utf-8")
@@ -611,10 +839,12 @@ def test_windows_github_release_plan_cli_writes_outputs(tmp_path: Path):
     assert "Windows release matrix default-promotion evidence failed" in script_text
     assert "Windows release matrix rejection sample accounting failed" in script_text
     assert "Windows release matrix sample accounting closure failed" in script_text
+    assert "Windows release matrix StackEngine default contract failed" in script_text
     assert "$Phase2StatusFile =" in script_text
     assert "$Phase2StatusCompareFile =" in script_text
     assert "Phase 2 status check failed" in script_text
     assert "Phase 2 sample accounting closure failed" in script_text
+    assert "Phase 2 StackEngine default contract failed" in script_text
     assert "Phase 2 status compare check failed" in script_text
     assert "GitHub CLI authentication check failed" in script_text
     assert "Get-FileHash -LiteralPath $asset.Path -Algorithm SHA256" in script_text

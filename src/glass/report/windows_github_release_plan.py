@@ -31,6 +31,13 @@ def _ps_literal(value: str | None) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _asset_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for row in manifest.get("packages") or []:
@@ -83,11 +90,25 @@ def _phase2_artifact_summary(
         if isinstance(payload.get("pipeline_contract"), dict)
         else None
     )
+    stack_engine_contract = (
+        payload.get("stack_engine_contract")
+        if isinstance(payload.get("stack_engine_contract"), dict)
+        else None
+    )
     release_decision = (
         payload.get("release_decision")
         if isinstance(payload.get("release_decision"), dict)
         else None
     )
+    checks = [item for item in payload.get("checks") or [] if isinstance(item, dict)]
+    check_states = {str(item.get("name")): item.get("passed") for item in checks}
+    stack_gap_count = (stack_engine_contract or {}).get(
+        "default_promotion_phase2_stack_engine_default_gap_count"
+    )
+    if stack_gap_count is None:
+        stack_gap_count = (stack_engine_contract or {}).get(
+            "adoption_phase2_stack_engine_default_gap_count"
+        )
     return {
         "path": str(target),
         "exists": target.exists(),
@@ -215,6 +236,43 @@ def _phase2_artifact_summary(
         "pipeline_sample_accounting_closure_failed_count": (
             pipeline_contract or {}
         ).get("sample_accounting_closure_failed_count"),
+        "stack_engine_contract": stack_engine_contract,
+        "stack_engine_default_contract_present": stack_engine_contract is not None,
+        "stack_engine_default_contract_phase2_check_passed": check_states.get(
+            "stack_engine_default_contract_ready"
+        ),
+        "stack_engine_default_contract_audit_type": (stack_engine_contract or {}).get(
+            "audit_type"
+        ),
+        "stack_engine_default_contract_status": (stack_engine_contract or {}).get(
+            "status"
+        ),
+        "stack_engine_default_contract_passed": (stack_engine_contract or {}).get(
+            "passed"
+        ),
+        "stack_engine_default_contract_scope": (stack_engine_contract or {}).get(
+            "scope"
+        ),
+        "stack_engine_default_contract_default_promotion_ready": (
+            stack_engine_contract or {}
+        ).get("default_promotion_ready"),
+        "stack_engine_default_contract_default_promotion_status": (
+            stack_engine_contract or {}
+        ).get("default_promotion_status"),
+        "stack_engine_default_contract_adoption_recommendation": (
+            stack_engine_contract or {}
+        ).get("adoption_recommendation"),
+        "stack_engine_default_contract_default_promotion_recommendation": (
+            stack_engine_contract or {}
+        ).get("default_promotion_recommendation"),
+        "stack_engine_default_contract_default_gap_count": stack_gap_count,
+        "stack_engine_default_contract_blocker_count": (stack_engine_contract or {}).get(
+            "default_promotion_blocker_count"
+        ),
+        "stack_engine_default_contract_blockers": (stack_engine_contract or {}).get(
+            "default_promotion_blockers"
+        )
+        or [],
         "release_decision": release_decision,
         "release_decision_status": (release_decision or {}).get("status"),
         "release_decision_recommendation": (release_decision or {}).get("recommendation"),
@@ -304,6 +362,30 @@ def _windows_release_matrix_summary(path: str | Path | None) -> dict[str, Any] |
         "sample_accounting_closure_failed_count": default_promotion.get(
             "sample_accounting_closure_failed_count"
         ),
+        "stack_engine_contract": default_promotion.get("stack_engine_contract"),
+        "stack_engine_contract_present": default_promotion.get(
+            "stack_engine_contract_present"
+        ),
+        "stack_engine_contract_ready": default_promotion.get("stack_engine_contract_ready"),
+        "stack_engine_contract_phase2_check_passed": default_promotion.get(
+            "stack_engine_contract_phase2_check_passed"
+        ),
+        "stack_engine_contract_status": default_promotion.get("stack_engine_contract_status"),
+        "stack_engine_contract_passed": default_promotion.get("stack_engine_contract_passed"),
+        "stack_engine_contract_scope": default_promotion.get("stack_engine_contract_scope"),
+        "stack_engine_contract_adoption_recommendation": default_promotion.get(
+            "stack_engine_contract_adoption_recommendation"
+        ),
+        "stack_engine_contract_default_gap_count": default_promotion.get(
+            "stack_engine_contract_default_gap_count"
+        ),
+        "stack_engine_contract_blocker_count": default_promotion.get(
+            "stack_engine_contract_blocker_count"
+        ),
+        "stack_engine_contract_blockers": default_promotion.get(
+            "stack_engine_contract_blockers"
+        )
+        or [],
     }
 
 
@@ -395,6 +477,58 @@ def _has_pipeline_contract_phase2_provenance(phase2_status: dict[str, Any]) -> b
     )
 
 
+def _has_stack_engine_phase2_provenance(phase2_status: dict[str, Any]) -> bool:
+    return any(
+        phase2_status.get(key) is not None
+        for key in (
+            "stack_engine_default_contract_present",
+            "stack_engine_default_contract_phase2_check_passed",
+            "stack_engine_default_contract_status",
+            "stack_engine_default_contract_scope",
+            "stack_engine_default_contract_default_gap_count",
+            "stack_engine_default_contract_blocker_count",
+        )
+    )
+
+
+def _phase2_stack_engine_default_contract_ready(phase2_status: dict[str, Any]) -> bool:
+    return (
+        phase2_status.get("stack_engine_default_contract_present") is True
+        and phase2_status.get("stack_engine_default_contract_phase2_check_passed") is True
+        and phase2_status.get("stack_engine_default_contract_audit_type")
+        == "stack_engine_default_contract"
+        and phase2_status.get("stack_engine_default_contract_status") == "passed"
+        and phase2_status.get("stack_engine_default_contract_passed") is True
+        and phase2_status.get("stack_engine_default_contract_default_promotion_ready") is True
+        and phase2_status.get("stack_engine_default_contract_default_promotion_status") == "ready"
+        and phase2_status.get("stack_engine_default_contract_adoption_recommendation")
+        == "stack_engine_default_ready"
+        and phase2_status.get("stack_engine_default_contract_default_promotion_recommendation")
+        == "stack_engine_default_ready"
+        and _int_or_zero(phase2_status.get("stack_engine_default_contract_default_gap_count"))
+        == 0
+        and _int_or_zero(phase2_status.get("stack_engine_default_contract_blocker_count"))
+        == 0
+    )
+
+
+def _windows_release_matrix_stack_engine_contract_ready(
+    release_matrix: dict[str, Any],
+) -> bool:
+    return (
+        release_matrix.get("stack_engine_contract_present") is True
+        and release_matrix.get("stack_engine_contract_ready") is True
+        and release_matrix.get("stack_engine_contract_phase2_check_passed") is True
+        and release_matrix.get("stack_engine_contract_status") == "passed"
+        and release_matrix.get("stack_engine_contract_passed") is True
+        and release_matrix.get("stack_engine_contract_scope") == "all"
+        and release_matrix.get("stack_engine_contract_adoption_recommendation")
+        == "stack_engine_default_ready"
+        and _int_or_zero(release_matrix.get("stack_engine_contract_default_gap_count")) == 0
+        and _int_or_zero(release_matrix.get("stack_engine_contract_blocker_count")) == 0
+    )
+
+
 def _has_release_decision_phase2_provenance(phase2_status: dict[str, Any]) -> bool:
     return any(
         phase2_status.get(key) is not None
@@ -466,6 +600,14 @@ def _release_notes(payload: dict[str, Any]) -> str:
                     f"`{release_matrix.get('default_route_route_contract_passed')}` "
                     f"checks `{release_matrix.get('default_route_route_check_count')}` "
                     f"speedup `{release_matrix.get('default_route_speedup_vs_reference')}`"
+                ),
+                (
+                    "- StackEngine default contract: "
+                    f"ready `{release_matrix.get('stack_engine_contract_ready')}` "
+                    "phase2-check "
+                    f"`{release_matrix.get('stack_engine_contract_phase2_check_passed')}` "
+                    f"gaps `{release_matrix.get('stack_engine_contract_default_gap_count')}` "
+                    f"blockers `{release_matrix.get('stack_engine_contract_blocker_count')}`"
                 ),
                 (
                     "- Rejection sample accounting: "
@@ -557,6 +699,26 @@ def _release_notes(payload: dict[str, Any]) -> str:
                         "check "
                         f"`{phase2_status.get('pipeline_integration_sample_accounting_closure')}` "
                         f"failed `{phase2_status.get('pipeline_sample_accounting_closure_failed_count')}`"
+                    ),
+                ]
+            )
+        if _has_stack_engine_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    (
+                        "- StackEngine default contract: "
+                        f"`{phase2_status.get('stack_engine_default_contract_status')}` "
+                        "check "
+                        f"`{phase2_status.get('stack_engine_default_contract_phase2_check_passed')}` "
+                        f"gaps `{phase2_status.get('stack_engine_default_contract_default_gap_count')}` "
+                        "blockers "
+                        f"`{phase2_status.get('stack_engine_default_contract_blocker_count')}`"
+                    ),
+                    (
+                        "- StackEngine default recommendation: "
+                        f"`{phase2_status.get('stack_engine_default_contract_adoption_recommendation')}` "
+                        "promotion "
+                        f"`{phase2_status.get('stack_engine_default_contract_default_promotion_recommendation')}`"
                     ),
                 ]
             )
@@ -676,6 +838,9 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "    if ($matrix.default_promotion_manifest.integration_sample_accounting_closure -ne $true -or $matrix.default_promotion_manifest.sample_accounting_closure_status -ne 'passed' -or [int]$matrix.default_promotion_manifest.sample_accounting_closure_failed_count -ne 0) {",
             "        throw \"Windows release matrix sample accounting closure failed: $WindowsReleaseMatrixFile\"",
             "    }",
+            "    if ($matrix.default_promotion_manifest.stack_engine_contract_present -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_ready -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_phase2_check_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_status -ne 'passed' -or $matrix.default_promotion_manifest.stack_engine_contract_passed -ne $true -or $matrix.default_promotion_manifest.stack_engine_contract_scope -ne 'all' -or $matrix.default_promotion_manifest.stack_engine_contract_adoption_recommendation -ne 'stack_engine_default_ready' -or [int]$matrix.default_promotion_manifest.stack_engine_contract_default_gap_count -ne 0 -or [int]$matrix.default_promotion_manifest.stack_engine_contract_blocker_count -ne 0) {",
+            "        throw \"Windows release matrix StackEngine default contract failed: $WindowsReleaseMatrixFile\"",
+            "    }",
             "}",
             "if ($Phase2StatusFile) {",
             "    if (-not (Test-Path -LiteralPath $Phase2StatusFile -PathType Leaf)) {",
@@ -687,6 +852,10 @@ def _powershell_release_script(payload: dict[str, Any]) -> str:
             "    }",
             "    if (-not $phase2Status.pipeline_contract -or $phase2Status.pipeline_contract.integration_sample_accounting_closure -ne $true -or $phase2Status.pipeline_contract.sample_accounting_closure_status -ne 'passed' -or [int]$phase2Status.pipeline_contract.sample_accounting_closure_failed_count -ne 0) {",
             "        throw \"Phase 2 sample accounting closure failed: $Phase2StatusFile\"",
+            "    }",
+            "    $phase2StackCheck = $phase2Status.checks | Where-Object { $_.name -eq 'stack_engine_default_contract_ready' } | Select-Object -First 1",
+            "    if (-not $phase2StackCheck -or $phase2StackCheck.passed -ne $true -or -not $phase2Status.stack_engine_contract -or $phase2Status.stack_engine_contract.audit_type -ne 'stack_engine_default_contract' -or $phase2Status.stack_engine_contract.status -ne 'passed' -or $phase2Status.stack_engine_contract.passed -ne $true -or $phase2Status.stack_engine_contract.default_promotion_ready -ne $true -or $phase2Status.stack_engine_contract.default_promotion_status -ne 'ready' -or $phase2Status.stack_engine_contract.adoption_recommendation -ne 'stack_engine_default_ready' -or $phase2Status.stack_engine_contract.default_promotion_recommendation -ne 'stack_engine_default_ready' -or [int]$phase2Status.stack_engine_contract.default_promotion_phase2_stack_engine_default_gap_count -ne 0 -or [int]$phase2Status.stack_engine_contract.default_promotion_blocker_count -ne 0) {",
+            "        throw \"Phase 2 StackEngine default contract failed: $Phase2StatusFile\"",
             "    }",
             "}",
             "if ($Phase2StatusCompareFile) {",
@@ -886,6 +1055,51 @@ def build_windows_github_release_plan(
                         ).get("failed_items"),
                     },
                 ),
+                _check(
+                    "phase2_stack_engine_default_contract_ready",
+                    _phase2_stack_engine_default_contract_ready(phase2_status_summary),
+                    {
+                        "present": phase2_status_summary.get(
+                            "stack_engine_default_contract_present"
+                        ),
+                        "phase2_check_passed": phase2_status_summary.get(
+                            "stack_engine_default_contract_phase2_check_passed"
+                        ),
+                        "audit_type": phase2_status_summary.get(
+                            "stack_engine_default_contract_audit_type"
+                        ),
+                        "status": phase2_status_summary.get(
+                            "stack_engine_default_contract_status"
+                        ),
+                        "passed": phase2_status_summary.get(
+                            "stack_engine_default_contract_passed"
+                        ),
+                        "scope": phase2_status_summary.get(
+                            "stack_engine_default_contract_scope"
+                        ),
+                        "default_promotion_ready": phase2_status_summary.get(
+                            "stack_engine_default_contract_default_promotion_ready"
+                        ),
+                        "default_promotion_status": phase2_status_summary.get(
+                            "stack_engine_default_contract_default_promotion_status"
+                        ),
+                        "adoption_recommendation": phase2_status_summary.get(
+                            "stack_engine_default_contract_adoption_recommendation"
+                        ),
+                        "default_promotion_recommendation": phase2_status_summary.get(
+                            "stack_engine_default_contract_default_promotion_recommendation"
+                        ),
+                        "default_gap_count": phase2_status_summary.get(
+                            "stack_engine_default_contract_default_gap_count"
+                        ),
+                        "blocker_count": phase2_status_summary.get(
+                            "stack_engine_default_contract_blocker_count"
+                        ),
+                        "blockers": phase2_status_summary.get(
+                            "stack_engine_default_contract_blockers"
+                        ),
+                    },
+                ),
             ]
         )
     if phase2_compare_summary is not None:
@@ -1037,6 +1251,40 @@ def build_windows_github_release_plan(
                     },
                 ),
                 _check(
+                    "windows_release_matrix_stack_engine_contract_ready",
+                    _windows_release_matrix_stack_engine_contract_ready(
+                        release_matrix_for_checks
+                    ),
+                    {
+                        "present": release_matrix_for_checks.get(
+                            "stack_engine_contract_present"
+                        ),
+                        "ready": release_matrix_for_checks.get("stack_engine_contract_ready"),
+                        "phase2_check_passed": release_matrix_for_checks.get(
+                            "stack_engine_contract_phase2_check_passed"
+                        ),
+                        "status": release_matrix_for_checks.get(
+                            "stack_engine_contract_status"
+                        ),
+                        "passed": release_matrix_for_checks.get(
+                            "stack_engine_contract_passed"
+                        ),
+                        "scope": release_matrix_for_checks.get("stack_engine_contract_scope"),
+                        "adoption_recommendation": release_matrix_for_checks.get(
+                            "stack_engine_contract_adoption_recommendation"
+                        ),
+                        "default_gap_count": release_matrix_for_checks.get(
+                            "stack_engine_contract_default_gap_count"
+                        ),
+                        "blocker_count": release_matrix_for_checks.get(
+                            "stack_engine_contract_blocker_count"
+                        ),
+                        "blockers": release_matrix_for_checks.get(
+                            "stack_engine_contract_blockers"
+                        ),
+                    },
+                ),
+                _check(
                     "windows_release_matrix_assets_present",
                     bool(matrix_labels) and not missing_matrix_assets,
                     {
@@ -1051,6 +1299,54 @@ def build_windows_github_release_plan(
                     {"ordered_try_list": release_matrix_for_checks.get("ordered_try_list")},
                 ),
             ]
+        )
+    if phase2_status_summary is not None and release_matrix_summary is not None:
+        checks.append(
+            _check(
+                "phase2_release_matrix_stack_engine_contract_agree",
+                _phase2_stack_engine_default_contract_ready(phase2_status_summary)
+                and _windows_release_matrix_stack_engine_contract_ready(
+                    release_matrix_for_checks
+                )
+                and _int_or_zero(
+                    phase2_status_summary.get(
+                        "stack_engine_default_contract_default_gap_count"
+                    )
+                )
+                == _int_or_zero(
+                    release_matrix_for_checks.get(
+                        "stack_engine_contract_default_gap_count"
+                    )
+                )
+                and _int_or_zero(
+                    phase2_status_summary.get(
+                        "stack_engine_default_contract_blocker_count"
+                    )
+                )
+                == _int_or_zero(
+                    release_matrix_for_checks.get("stack_engine_contract_blocker_count")
+                ),
+                {
+                    "phase2_ready": _phase2_stack_engine_default_contract_ready(
+                        phase2_status_summary
+                    ),
+                    "matrix_ready": _windows_release_matrix_stack_engine_contract_ready(
+                        release_matrix_for_checks
+                    ),
+                    "phase2_gap_count": phase2_status_summary.get(
+                        "stack_engine_default_contract_default_gap_count"
+                    ),
+                    "matrix_gap_count": release_matrix_for_checks.get(
+                        "stack_engine_contract_default_gap_count"
+                    ),
+                    "phase2_blocker_count": phase2_status_summary.get(
+                        "stack_engine_default_contract_blocker_count"
+                    ),
+                    "matrix_blocker_count": release_matrix_for_checks.get(
+                        "stack_engine_contract_blocker_count"
+                    ),
+                },
+            )
         )
 
     failed = [item for item in checks if not item.get("passed")]
@@ -1186,6 +1482,14 @@ def _markdown(payload: dict[str, Any]) -> str:
                     "- Default route contract/checks: "
                     f"`{release_matrix.get('default_route_route_contract_passed')}`/"
                     f"`{release_matrix.get('default_route_route_check_count')}`"
+                ),
+                (
+                    "- StackEngine default contract: "
+                    f"ready=`{release_matrix.get('stack_engine_contract_ready')}` "
+                    "phase2-check="
+                    f"`{release_matrix.get('stack_engine_contract_phase2_check_passed')}` "
+                    f"gaps=`{release_matrix.get('stack_engine_contract_default_gap_count')}` "
+                    f"blockers=`{release_matrix.get('stack_engine_contract_blocker_count')}`"
                 ),
                 (
                     "- Rejection sample accounting: "
@@ -1326,6 +1630,25 @@ def _markdown(payload: dict[str, Any]) -> str:
                         "check "
                         f"`{phase2_status.get('pipeline_integration_sample_accounting_closure')}` "
                         f"failed `{phase2_status.get('pipeline_sample_accounting_closure_failed_count')}`"
+                    ),
+                ]
+            )
+        if _has_stack_engine_phase2_provenance(phase2_status):
+            lines.extend(
+                [
+                    (
+                        "- StackEngine default contract: "
+                        f"`{phase2_status.get('stack_engine_default_contract_status')}` "
+                        "check "
+                        f"`{phase2_status.get('stack_engine_default_contract_phase2_check_passed')}` "
+                        f"gaps `{phase2_status.get('stack_engine_default_contract_default_gap_count')}` "
+                        "blockers "
+                        f"`{phase2_status.get('stack_engine_default_contract_blocker_count')}`"
+                    ),
+                    (
+                        "- StackEngine default recommendations: "
+                        f"`{phase2_status.get('stack_engine_default_contract_adoption_recommendation')}`/"
+                        f"`{phase2_status.get('stack_engine_default_contract_default_promotion_recommendation')}`"
                     ),
                 ]
             )
