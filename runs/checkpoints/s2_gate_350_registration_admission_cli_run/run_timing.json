@@ -1,0 +1,75 @@
+{
+  "backend": "cpu",
+  "backend_requested": "cpu",
+  "command": "audit",
+  "created_at": "2026-06-18T20:12:45+00:00",
+  "execution_default_resolution": {
+    "command": "audit",
+    "cuda_available": true,
+    "default_runtime_preset": "throughput-v1",
+    "effective_backend": "cpu",
+    "effective_memory_mode": "tile",
+    "explicit_backend": true,
+    "explicit_memory_mode": false,
+    "fallback_memory_mode": "tile",
+    "reason": "resident_default_fallback_non_cuda_backend",
+    "requested_backend": "cpu",
+    "requested_memory_mode": "resident",
+    "resident_default_blocker": null,
+    "resident_default_candidate": "resident",
+    "schema_version": 1
+  },
+  "memory_mode": "tile",
+  "memory_mode_requested": "resident",
+  "resident_runtime_preset": "throughput-v1",
+  "resident_runtime_preset_effective": {
+    "applied": {
+      "resident_calibration_batch_frames": 8,
+      "resident_calibration_release_mode": "callback_queue",
+      "resident_calibration_streams": 4,
+      "resident_calibration_wave_frames": 2,
+      "resident_h2d_mode": "pinned_ring",
+      "resident_prefetch_frames": 12,
+      "resident_prefetch_refill_mode": "queued",
+      "resident_prefetch_workers": 7
+    },
+    "explicit_overrides": {},
+    "preset": "throughput-v1"
+  },
+  "schema_version": 1,
+  "stages": [
+    {
+      "elapsed_s": 0.006176199996843934,
+      "stage": "scan",
+      "started_at": "2026-06-18T20:12:45+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.00010130000009667128,
+      "stage": "plan",
+      "started_at": "2026-06-18T20:12:45+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.10937639999610838,
+      "stage": "calibration",
+      "started_at": "2026-06-18T20:12:45+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.01266839999880176,
+      "stage": "quality",
+      "started_at": "2026-06-18T20:12:45+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.0014309999969555065,
+      "error": "registration reference admission blocked: reference=F000004, quality_gate_status=rejected, reason=reference frame failed the quality gate",
+      "stage": "registration",
+      "started_at": "2026-06-18T20:12:45+00:00",
+      "status": "failed"
+    }
+  ],
+  "tile_size": 8,
+  "total_elapsed_s": 0.12975329998880625
+}

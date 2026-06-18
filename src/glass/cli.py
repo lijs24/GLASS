@@ -230,6 +230,11 @@ from glass.models import now_iso
 
 console = Console()
 
+
+class RegistrationAdmissionBlocked(RuntimeError):
+    """Raised when registration policy blocks the selected reference frame."""
+
+
 RESIDENT_RUNTIME_PRESETS: dict[str, dict[str, object]] = {
     "manual": {},
     "throughput-v1": {
@@ -514,6 +519,36 @@ def _timed_stage(run: Path, timing: dict, stage: str, fn):
     return result
 
 
+def _registration_admission_blocked_message(payload: dict[str, Any]) -> str | None:
+    admission = payload.get("reference_admission")
+    if not isinstance(admission, dict) or admission.get("status") != "blocked":
+        return None
+    reference_id = admission.get("reference_frame_id")
+    reason = admission.get("reason") or "reference admission blocked"
+    quality_status = admission.get("quality_gate_status")
+    return (
+        "registration reference admission blocked"
+        f": reference={reference_id}, quality_gate_status={quality_status}, reason={reason}"
+    )
+
+
+def _register_calibrated_frames_or_fail(*args, **kwargs) -> dict[str, Any]:
+    payload = register_calibrated_frames(*args, **kwargs)
+    message = _registration_admission_blocked_message(payload)
+    if message is not None:
+        raise RegistrationAdmissionBlocked(message)
+    return payload
+
+
+def _write_failed_run_state(run: Path, state, stage: str, exc: Exception) -> None:
+    state.current_stage = stage
+    state.failed_stage = stage
+    message = str(exc)
+    if message not in state.errors:
+        state.errors.append(message)
+    write_run_state(run, state)
+
+
 def _write_run_report(
     run: Path,
     report_path: Path,
@@ -579,60 +614,67 @@ def _run_full_pipeline(
     timing: dict | None = None,
 ):
     timing = timing or _new_timing("run", backend, tile_size)
-    state = _timed_stage(
-        out,
-        timing,
-        "calibration",
-        lambda: run_calibration_stages(plan_path, out, backend=backend, tile_size=tile_size),
-    )
-    _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(out, tile_size=tile_size))
-    state.completed_stages.append("quality")
-    state.current_stage = "quality"
-    _timed_stage(
-        out,
-        timing,
-        "registration",
-        lambda: register_calibrated_frames(out, tile_size=tile_size, method=registration_method),
-    )
-    state.completed_stages.append("registration")
-    state.current_stage = "registration"
-    _timed_stage(
-        out,
-        timing,
-        "warp",
-        lambda: warp_registered_frames(out, tile_size=tile_size, interpolation=warp_interpolation),
-    )
-    state.completed_stages.append("warp")
-    state.current_stage = "warp"
-    _timed_stage(
-        out,
-        timing,
-        "local_normalization",
-        lambda: local_normalize_registered_frames(
+    state = initialize_run(out)
+    try:
+        state.current_stage = "calibration"
+        state = _timed_stage(
             out,
-            plan_path=plan_path,
-            backend=backend,
-            tile_size=tile_size,
-            enabled_override=_local_norm_override_from_arg(local_normalization),
-        ),
-    )
-    state.completed_stages.append("local_normalization")
-    state.current_stage = "local_normalization"
-    _timed_stage(
-        out,
-        timing,
-        "integration",
-        lambda: integrate_registered_frames(
+            timing,
+            "calibration",
+            lambda: run_calibration_stages(plan_path, out, backend=backend, tile_size=tile_size),
+        )
+        state.current_stage = "quality"
+        _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(out, tile_size=tile_size))
+        state.completed_stages.append("quality")
+        state.current_stage = "registration"
+        _timed_stage(
             out,
-            plan_path=plan_path,
-            backend=backend,
-            tile_size=tile_size,
-            weighting_override=integration_weighting,
-            rejection_override=integration_rejection,
-        ),
-    )
-    state.completed_stages.append("integration")
-    state.current_stage = "integration"
+            timing,
+            "registration",
+            lambda: _register_calibrated_frames_or_fail(out, tile_size=tile_size, method=registration_method),
+        )
+        state.completed_stages.append("registration")
+        state.current_stage = "warp"
+        _timed_stage(
+            out,
+            timing,
+            "warp",
+            lambda: warp_registered_frames(out, tile_size=tile_size, interpolation=warp_interpolation),
+        )
+        state.completed_stages.append("warp")
+        state.current_stage = "local_normalization"
+        _timed_stage(
+            out,
+            timing,
+            "local_normalization",
+            lambda: local_normalize_registered_frames(
+                out,
+                plan_path=plan_path,
+                backend=backend,
+                tile_size=tile_size,
+                enabled_override=_local_norm_override_from_arg(local_normalization),
+            ),
+        )
+        state.completed_stages.append("local_normalization")
+        state.current_stage = "integration"
+        _timed_stage(
+            out,
+            timing,
+            "integration",
+            lambda: integrate_registered_frames(
+                out,
+                plan_path=plan_path,
+                backend=backend,
+                tile_size=tile_size,
+                weighting_override=integration_weighting,
+                rejection_override=integration_rejection,
+            ),
+        )
+        state.completed_stages.append("integration")
+        state.current_stage = "integration"
+    except RegistrationAdmissionBlocked as exc:
+        _write_failed_run_state(out, state, "registration", exc)
+        raise
     return state
 
 
@@ -679,6 +721,91 @@ def _resume_pipeline(plan_path: Path, out: Path, backend: str = "auto", tile_siz
         )
     state.completed_stages.append("integration")
     state.current_stage = "integration"
+    return state
+
+
+def _run_pipeline_until_stage(args: argparse.Namespace, out: Path, timing: dict):
+    state = initialize_run(out)
+    try:
+        state.current_stage = "calibration"
+        state = _timed_stage(
+            out,
+            timing,
+            "calibration",
+            lambda: run_calibration_stages(
+                args.plan,
+                args.out,
+                backend=args.backend,
+                tile_size=args.tile_size,
+                flat_floor=args.flat_floor,
+            ),
+        )
+        if args.until_stage in {"quality", "registration", "warp", "local_normalization", "integration"}:
+            state.current_stage = "quality"
+            _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(args.out, tile_size=args.tile_size))
+            state.completed_stages.append("quality")
+        if args.until_stage in {"registration", "warp", "local_normalization", "integration"}:
+            state.current_stage = "registration"
+            _timed_stage(
+                out,
+                timing,
+                "registration",
+                lambda: _register_calibrated_frames_or_fail(
+                    args.out,
+                    tile_size=args.tile_size,
+                    preview_max_dimension=args.registration_preview_max_dimension,
+                    method=args.registration_method,
+                    reference_frame_id=args.reference_frame_id,
+                ),
+            )
+            state.completed_stages.append("registration")
+        if args.until_stage in {"warp", "local_normalization", "integration"}:
+            state.current_stage = "warp"
+            _timed_stage(
+                out,
+                timing,
+                "warp",
+                lambda: warp_registered_frames(
+                    args.out,
+                    tile_size=args.tile_size,
+                    interpolation=args.warp_interpolation,
+                ),
+            )
+            state.completed_stages.append("warp")
+        if args.until_stage in {"local_normalization", "integration"}:
+            state.current_stage = "local_normalization"
+            _timed_stage(
+                out,
+                timing,
+                "local_normalization",
+                lambda: local_normalize_registered_frames(
+                    args.out,
+                    plan_path=args.plan,
+                    backend=args.backend,
+                    tile_size=args.tile_size,
+                    enabled_override=_local_norm_override_from_arg(args.local_normalization),
+                ),
+            )
+            state.completed_stages.append("local_normalization")
+        if args.until_stage == "integration":
+            state.current_stage = "integration"
+            _timed_stage(
+                out,
+                timing,
+                "integration",
+                lambda: integrate_registered_frames(
+                    args.out,
+                    plan_path=args.plan,
+                    backend=args.backend,
+                    tile_size=args.tile_size,
+                    weighting_override=args.integration_weighting,
+                    rejection_override=args.integration_rejection,
+                ),
+            )
+            state.completed_stages.append("integration")
+    except RegistrationAdmissionBlocked as exc:
+        _write_failed_run_state(out, state, "registration", exc)
+        raise
     return state
 
 
@@ -875,18 +1002,22 @@ def cmd_audit(args: argparse.Namespace) -> int:
             ),
         )
     elif plan.executable:
-        state = _run_full_pipeline(
-            plan_path,
-            out,
-            args.backend,
-            args.tile_size,
-            args.local_normalization,
-            args.integration_weighting,
-            args.integration_rejection,
-            registration_method=args.registration_method,
-            warp_interpolation=args.warp_interpolation,
-            timing=timing,
-        )
+        try:
+            state = _run_full_pipeline(
+                plan_path,
+                out,
+                args.backend,
+                args.tile_size,
+                args.local_normalization,
+                args.integration_weighting,
+                args.integration_rejection,
+                registration_method=args.registration_method,
+                warp_interpolation=args.warp_interpolation,
+                timing=timing,
+            )
+        except RegistrationAdmissionBlocked as exc:
+            console.print({"status": "failed", "stage": "registration", "error": str(exc), "run": str(out)})
+            return 2
     else:
         state = initialize_run(out)
         state.warnings.append("processing plan is not executable; audit stopped after scan and plan")
@@ -1015,81 +1146,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         out = Path(args.out)
         timing = _new_timing("run", args.backend, args.tile_size)
         _annotate_timing_execution_defaults(timing, args)
-        state = _timed_stage(
-            out,
-            timing,
-            "calibration",
-            lambda: run_calibration_stages(
-                args.plan,
-                args.out,
-                backend=args.backend,
-                tile_size=args.tile_size,
-                flat_floor=args.flat_floor,
-            ),
-        )
-        if args.until_stage in {"quality", "registration", "warp", "local_normalization", "integration"}:
-            _timed_stage(out, timing, "quality", lambda: measure_calibrated_quality(args.out, tile_size=args.tile_size))
-            state.completed_stages.append("quality")
-            state.current_stage = "quality"
-        if args.until_stage in {"registration", "warp", "local_normalization", "integration"}:
-            _timed_stage(
-                out,
-                timing,
-                "registration",
-                lambda: register_calibrated_frames(
-                    args.out,
-                    tile_size=args.tile_size,
-                    preview_max_dimension=args.registration_preview_max_dimension,
-                    method=args.registration_method,
-                    reference_frame_id=args.reference_frame_id,
-                ),
-            )
-            state.completed_stages.append("registration")
-            state.current_stage = "registration"
-        if args.until_stage in {"warp", "local_normalization", "integration"}:
-            _timed_stage(
-                out,
-                timing,
-                "warp",
-                lambda: warp_registered_frames(
-                    args.out,
-                    tile_size=args.tile_size,
-                    interpolation=args.warp_interpolation,
-                ),
-            )
-            state.completed_stages.append("warp")
-            state.current_stage = "warp"
-        if args.until_stage in {"local_normalization", "integration"}:
-            _timed_stage(
-                out,
-                timing,
-                "local_normalization",
-                lambda: local_normalize_registered_frames(
-                    args.out,
-                    plan_path=args.plan,
-                    backend=args.backend,
-                    tile_size=args.tile_size,
-                    enabled_override=_local_norm_override_from_arg(args.local_normalization),
-                ),
-            )
-            state.completed_stages.append("local_normalization")
-            state.current_stage = "local_normalization"
-        if args.until_stage == "integration":
-            _timed_stage(
-                out,
-                timing,
-                "integration",
-                lambda: integrate_registered_frames(
-                    args.out,
-                    plan_path=args.plan,
-                    backend=args.backend,
-                    tile_size=args.tile_size,
-                    weighting_override=args.integration_weighting,
-                    rejection_override=args.integration_rejection,
-                ),
-            )
-            state.completed_stages.append("integration")
-            state.current_stage = "integration"
+        try:
+            state = _run_pipeline_until_stage(args, out, timing)
+        except RegistrationAdmissionBlocked as exc:
+            console.print({"status": "failed", "stage": "registration", "error": str(exc), "run": str(out)})
+            return 2
         write_run_state(args.out, state)
         console.print(f"Run complete through {state.current_stage}: {args.out}")
         return 0

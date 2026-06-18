@@ -1,0 +1,1 @@
+glass audit --root C:\Users\ljs\WORK\astro\gpuwbpp\runs\checkpoints\s2_gate_350_registration_admission_cli_data --out C:\Users\ljs\WORK\astro\gpuwbpp\runs\checkpoints\s2_gate_350_registration_admission_cli_run --backend cpu --tile-size 8

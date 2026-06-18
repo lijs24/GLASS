@@ -6222,6 +6222,23 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 350: Registration Admission Run-State Guard
+
+- Carry registration reference-admission blocking into the CLI run/audit control
+  flow.
+- When `registration_results.json` reports `reference_admission.status=blocked`,
+  `glass run` and `glass audit` now stop at registration, write
+  `run_state.json` with `failed_stage=registration`, record the failed timing
+  stage, and return exit code 2.
+- Prevent the blocked-admission case from falling through to a lower-level warp
+  error or creating integration artifacts.
+- Add CLI smoke coverage for both `audit` and `run --until-stage integration`
+  using a deliberately uniform no-star data set.
+- Keep this gate CLI/run-state scoped: no registration transform math change,
+  no quality metric change, no integration math change, no CUDA kernel change,
+  no runtime default change, no package upload, no GitHub release creation, and
+  no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

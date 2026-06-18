@@ -1,0 +1,32 @@
+{
+  "artifacts": [
+    {
+      "checksum_optional": null,
+      "created_at": "2026-06-18T20:12:45+00:00",
+      "format": "json",
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_350_registration_admission_cli_run\\calibration_artifacts.json",
+      "source_frames": [
+        "F000001",
+        "F000002",
+        "F000003",
+        "F000004"
+      ],
+      "stage": "calibration"
+    }
+  ],
+  "checksums": {},
+  "completed_stages": [
+    "master_calibration",
+    "light_calibration",
+    "quality"
+  ],
+  "created_at": "2026-06-18T20:12:45+00:00",
+  "current_stage": "registration",
+  "errors": [
+    "registration reference admission blocked: reference=F000004, quality_gate_status=rejected, reason=reference frame failed the quality gate"
+  ],
+  "failed_stage": "registration",
+  "resume_supported": true,
+  "run_id": "s2_gate_350_registration_admission_cli_run",
+  "warnings": []
+}

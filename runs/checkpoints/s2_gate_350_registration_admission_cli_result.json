@@ -1,0 +1,20 @@
+{
+  "command": "glass audit --backend cpu --tile-size 8",
+  "current_stage": "registration",
+  "errors": [
+    "registration reference admission blocked: reference=F000004, quality_gate_status=rejected, reason=reference frame failed the quality gate"
+  ],
+  "exit_code": 2,
+  "failed_stage": "registration",
+  "integration_results_exists": false,
+  "registration_admission": {
+    "allow_quality_rejected_reference": false,
+    "quality_gate_enforced": true,
+    "quality_gate_status": "rejected",
+    "reason": "reference frame failed the quality gate",
+    "reference_frame_id": "F000004",
+    "reference_selection_fallback": true,
+    "status": "blocked"
+  },
+  "timing_registration_status": "failed"
+}

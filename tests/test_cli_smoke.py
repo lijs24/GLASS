@@ -22,6 +22,31 @@ def _parse_cli(argv: list[str]):
     return args
 
 
+def _write_uniform_no_star_dataset(root: Path) -> None:
+    shape = (16, 20)
+    specs = [
+        ("bias", "bias_001.fits", 0.0, 100.0),
+        ("dark", "dark_001.fits", 60.0, 110.0),
+        ("flat", "flat_001.fits", 60.0, 1000.0),
+        ("light", "light_001.fits", 60.0, 1200.0),
+    ]
+    for frame_type, name, exposure, value in specs:
+        write_fits_data(
+            root / frame_type / name,
+            np.ones(shape, dtype=np.float32) * value,
+            {
+                "IMAGETYP": frame_type,
+                "FILTER": "H",
+                "EXPTIME": exposure,
+                "GAIN": 100.0,
+                "OFFSET": 20.0,
+                "CCD-TEMP": -10.0,
+                "XBINNING": 1,
+                "YBINNING": 1,
+            },
+        )
+
+
 def test_resident_runtime_preset_applies_gate158_values() -> None:
     args = _parse_cli(
         [
@@ -225,6 +250,53 @@ def test_cli_scan_plan_report_audit_smoke(small_fits_dataset, tmp_path: Path):
     run_command = (audit / "run_command.txt").read_text(encoding="utf-8")
     assert "glass audit" in run_command
     assert "--backend cpu" in run_command
+
+
+def test_cli_audit_and_run_write_state_for_registration_admission_block(tmp_path: Path):
+    data = tmp_path / "uniform"
+    audit = tmp_path / "audit"
+    run = tmp_path / "run"
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    _write_uniform_no_star_dataset(data)
+
+    assert main(["audit", "--root", str(data), "--out", str(audit), "--backend", "cpu", "--tile-size", "8"]) == 2
+    audit_state = read_json(audit / "run_state.json")
+    audit_registration = read_json(audit / "registration_results.json")
+    audit_timing = read_json(audit / "run_timing.json")
+
+    assert audit_state["failed_stage"] == "registration"
+    assert audit_state["current_stage"] == "registration"
+    assert any("registration reference admission blocked" in error for error in audit_state["errors"])
+    assert audit_registration["reference_admission"]["status"] == "blocked"
+    assert not (audit / "integration_results.json").exists()
+    timing_by_stage = {item["stage"]: item for item in audit_timing["stages"]}
+    assert timing_by_stage["registration"]["status"] == "failed"
+
+    assert main(["scan", "--root", str(data), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert (
+        main(
+            [
+                "run",
+                "--plan",
+                str(plan),
+                "--out",
+                str(run),
+                "--backend",
+                "cpu",
+                "--until-stage",
+                "integration",
+                "--tile-size",
+                "8",
+            ]
+        )
+        == 2
+    )
+    run_state = read_json(run / "run_state.json")
+    assert run_state["failed_stage"] == "registration"
+    assert any("registration reference admission blocked" in error for error in run_state["errors"])
+    assert not (run / "integration_results.json").exists()
 
 
 def test_cli_audit_resident_cuda_smoke(small_fits_dataset, tmp_path: Path):
