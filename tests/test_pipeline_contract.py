@@ -671,9 +671,7 @@ def test_pipeline_contract_accepts_resident_calibration_contract(tmp_path: Path)
     assert resident_row["science_contract"]["contract_type"] == "resident_calibration_surface_contract"
 
 
-def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_path: Path):
-    run = tmp_path / "run"
-    _write_resident_pipeline_run(run)
+def _write_resident_native_calibration_source(run: Path) -> None:
     cache_dir = run / "calib_cache" / "resident_masters"
     cache_dir.mkdir(parents=True)
     cache_key = "H_2x2_bias-B_dark-D_flat-F_abc123"
@@ -727,6 +725,12 @@ def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_pat
             ],
         },
     )
+
+
+def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_native_calibration_source(run)
     write_resident_calibration_artifacts(run)
 
     audit = build_pipeline_contract_audit(run)
@@ -740,6 +744,29 @@ def test_pipeline_contract_accepts_resident_native_calibration_artifacts(tmp_pat
     assert checks["resident_calibrated_lights_present"]["passed"] is True
     assert checks["resident_calibrated_light_contract"]["passed"] is True
     assert "calibrated_light_dq_contract" not in checks
+
+
+def test_pipeline_contract_synthesizes_resident_calibration_visibility_from_resident_artifacts(
+    tmp_path: Path,
+):
+    run = tmp_path / "run"
+    _write_resident_pipeline_run(run)
+    _write_resident_native_calibration_source(run)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+
+    assert not (run / "calibration_artifacts.json").exists()
+    assert audit["passed"] is True
+    assert audit["artifacts"]["calibration"]["exists"] is True
+    assert audit["artifacts"]["calibration"]["path_exists"] is False
+    assert audit["artifacts"]["calibration"]["source"] == "resident_artifacts_json_fallback"
+    assert audit["calibration"]["generated_for_pipeline_contract"] is True
+    assert audit["calibration"]["write_back"] is False
+    assert audit["calibration"]["resident_native_calibration_artifact"] is True
+    assert audit["calibration"]["resident_calibrated_light_count"] == 3
+    assert checks["resident_calibrated_lights_present"]["passed"] is True
+    assert checks["resident_calibrated_light_contract"]["passed"] is True
 
 
 def test_pipeline_contract_cli_uses_resident_calibration_contract_json(tmp_path: Path):

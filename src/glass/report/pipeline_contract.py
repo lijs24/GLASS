@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from glass.engine.resident_calibration_artifacts import build_resident_calibration_artifacts
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 from glass.report.dq_map_verify import summarize_count_map_pixels, summarize_dq_map_pixels
@@ -30,6 +31,24 @@ def _load_json_object(path: Path) -> dict[str, Any]:
         return {}
     payload = read_json(path)
     return payload if isinstance(payload, dict) else {}
+
+
+def _resident_calibration_artifact_from_resident_artifacts(run_root: Path) -> dict[str, Any]:
+    resident_path = run_root / "resident_artifacts.json"
+    if not resident_path.exists():
+        return {}
+    resident_payload = _load_json_object(resident_path)
+    if not resident_payload:
+        return {}
+    payload = build_resident_calibration_artifacts(run_root, resident_payload)
+    masters = payload.get("masters") if isinstance(payload.get("masters"), dict) else {}
+    lights = payload.get("calibrated_lights") if isinstance(payload.get("calibrated_lights"), list) else []
+    if not masters and not lights:
+        return {}
+    payload["artifact_source"] = "resident_artifacts_json_fallback"
+    payload["generated_for_pipeline_contract"] = True
+    payload["write_back"] = False
+    return payload
 
 
 def _check(name: str, passed: bool, evidence: dict[str, Any], note: str = "") -> dict[str, Any]:
@@ -1157,6 +1176,10 @@ def build_pipeline_contract_audit(
     local_norm_path = run_root / "local_norm_results.json"
     integration_path = run_root / "integration_results.json"
     calibration = _load_json_object(calibration_path)
+    calibration_path_exists = calibration_path.exists()
+    if not calibration:
+        calibration = _resident_calibration_artifact_from_resident_artifacts(run_root)
+    calibration_artifact_present = bool(calibration)
     warp = _load_json_object(warp_path)
     local_norm = _load_json_object(local_norm_path)
     integration = _load_json_object(integration_path)
@@ -1334,7 +1357,7 @@ def build_pipeline_contract_audit(
             "Sample-closure evidence is optional for old artifacts, but explicit failed closure blocks the pipeline contract.",
         ),
     ]
-    if calibration_path.exists() or resident_calibration_rows:
+    if calibration_artifact_present or resident_calibration_rows:
         checks.extend(
             [
                 _check(
@@ -1373,7 +1396,7 @@ def build_pipeline_contract_audit(
                 ),
             ]
         )
-    if calibration_path.exists() and not resident_native_calibration:
+    if calibration_artifact_present and not resident_native_calibration:
         checks.extend(
             [
                 _check(
@@ -1397,7 +1420,7 @@ def build_pipeline_contract_audit(
                 ),
             ]
         )
-    if calibration_path.exists() and resident_native_calibration:
+    if calibration_artifact_present and resident_native_calibration:
         checks.extend(
             [
                 _check(
@@ -1552,7 +1575,16 @@ def build_pipeline_contract_audit(
         "passed": passed,
         "checks": checks,
         "artifacts": {
-            "calibration": {"path": str(calibration_path), "exists": calibration_path.exists()},
+            "calibration": {
+                "path": str(calibration_path),
+                "exists": calibration_artifact_present,
+                "path_exists": calibration_path_exists,
+                "source": calibration.get("artifact_source")
+                or ("calibration_artifacts_json" if calibration_path_exists else None),
+                "generated_for_pipeline_contract": bool(
+                    calibration.get("generated_for_pipeline_contract")
+                ),
+            },
             "resident_calibration_contract": {
                 "attached": bool(resident_calibration_rows),
                 "artifact_type": resident_calibration_contract.get("artifact_type")
@@ -1568,7 +1600,14 @@ def build_pipeline_contract_audit(
         },
         "calibration": {
             "artifact_path": str(calibration_path),
-            "exists": calibration_path.exists(),
+            "exists": calibration_artifact_present,
+            "path_exists": calibration_path_exists,
+            "source": calibration.get("artifact_source")
+            or ("calibration_artifacts_json" if calibration_path_exists else None),
+            "generated_for_pipeline_contract": bool(
+                calibration.get("generated_for_pipeline_contract")
+            ),
+            "write_back": calibration.get("write_back"),
             "resident_calibration_contract_attached": bool(resident_calibration_rows),
             "resident_native_calibration_artifact": bool(resident_native_calibration),
             "master_count": len(calibration_master_rows),

@@ -5224,6 +5224,26 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 304: Pipeline Resident Calibration Direct Visibility
+
+- Make `pipeline-contract` directly surface resident calibration visibility
+  from `resident_artifacts.json` when a resident-only run has no
+  `calibration_artifacts.json` file on disk.
+- Build the resident calibration summary in memory only; do not write back to
+  the run directory and do not modify image outputs.
+- Preserve release/default-promotion fields in the pipeline contract itself:
+  resident calibration artifact present, resident calibrated light count,
+  resident master surfaces, and resident calibrated-light contracts.
+- Require the real 200-light resident run at
+  `C:\glass_runs\phase2_s2_gate_181_default_runtime\default_resident` to pass
+  `pipeline-contract --pixel-verify` without a Gate303 pipeline handoff bundle.
+- Re-run release-decision, Phase2 status, and default-promotion manifest using
+  the direct Gate304 pipeline contract and require all three to remain ready.
+- Keep this gate pipeline-contract scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun. The acceptance fastpath handoff is
+  intentionally left for a later gate.
+
 ## Gate Rules
 
 Each gate requires:
