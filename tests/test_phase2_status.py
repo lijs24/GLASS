@@ -4,7 +4,11 @@ from pathlib import Path
 
 from glass.cli import main
 from glass.io.json_io import read_json, write_json
-from glass.report.phase2_status import build_phase2_status, build_phase2_status_compare
+from glass.report.phase2_status import (
+    build_phase2_status,
+    build_phase2_status_compare,
+    write_phase2_status_markdown,
+)
 
 
 def _write_checkpoint(path: Path, *, gate: int, status: str = "green") -> Path:
@@ -650,39 +654,60 @@ def _write_stack_engine_contract(
     )
 
 
-def _write_release_decision(path: Path, *, ready: bool = True) -> None:
-    write_json(
-        path,
-        {
-            "schema_version": 1,
-            "artifact_type": "release_promotion_decision",
-            "status": "default_change_ready" if ready else "release_candidate_ready",
-            "passed": True,
-            "release_candidate_ready": True,
-            "default_change_ready": ready,
-            "recommendation": "promote_default_candidate"
-            if ready
-            else "repeat_benchmark_before_default_change",
-            "speedup": {"actual": 58.0, "required_min": 2.0},
-            "runtime_repeat": {
-                "present": True,
-                "run_count": 3,
-                "considered_run_count": 3,
-                "best_label": "repeat02",
-                "best_elapsed_s": 22.6,
-                "slowest_elapsed_s": 23.8,
-                "elapsed_ratio_vs_best": 1.053,
-                "max_elapsed_ratio_vs_best": 1.25,
-                "recommendation": "best_observed:repeat02",
-            },
-            "pipeline_handoff": {
-                "source": "explicit_pipeline_contract",
-                "status": "passed",
-                "passed": True,
-                "pixel_verification_enabled": True,
-            },
+def _write_release_decision(
+    path: Path,
+    *,
+    ready: bool = True,
+    warp_quality_ready: bool | None = None,
+) -> None:
+    payload = {
+        "schema_version": 1,
+        "artifact_type": "release_promotion_decision",
+        "status": "default_change_ready" if ready else "release_candidate_ready",
+        "passed": True,
+        "release_candidate_ready": True,
+        "default_change_ready": ready,
+        "recommendation": "promote_default_candidate"
+        if ready
+        else "repeat_benchmark_before_default_change",
+        "speedup": {"actual": 58.0, "required_min": 2.0},
+        "runtime_repeat": {
+            "present": True,
+            "run_count": 3,
+            "considered_run_count": 3,
+            "best_label": "repeat02",
+            "best_elapsed_s": 22.6,
+            "slowest_elapsed_s": 23.8,
+            "elapsed_ratio_vs_best": 1.053,
+            "max_elapsed_ratio_vs_best": 1.25,
+            "recommendation": "best_observed:repeat02",
         },
-    )
+        "pipeline_handoff": {
+            "source": "explicit_pipeline_contract",
+            "status": "passed",
+            "passed": True,
+            "pixel_verification_enabled": True,
+        },
+    }
+    if warp_quality_ready is not None:
+        payload["warp_quality_handoff"] = {
+            "source": "acceptance_audit",
+            "present": True,
+            "status": "passed" if warp_quality_ready else "failed",
+            "ready": warp_quality_ready,
+            "path": "warp_quality_contract.json",
+            "exists": True,
+            "artifact_type": "warp_quality_contract",
+            "contract_status": "passed" if warp_quality_ready else "failed",
+            "contract_passed": warp_quality_ready,
+            "check_count": 9,
+            "output_count": 1,
+            "failed_checks": [] if warp_quality_ready else ["warp_quality_contract_passed"],
+            "failed_acceptance_checks": []
+            if warp_quality_ready
+            else ["warp_quality_contract_passed"],
+        }
+    write_json(path, payload)
 
 
 def _write_publish_preflight(
@@ -2685,6 +2710,55 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         is True
     )
     assert checks["stack_engine_publication_audit_direct_runtime_chain_passed"] is True
+
+
+def test_phase2_status_surfaces_release_warp_quality_handoff(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=325)
+    release_decision = tmp_path / "release_decision.json"
+    out_md = tmp_path / "phase2.md"
+    _write_release_decision(release_decision, warp_quality_ready=True)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    decision = payload["release_decision"]
+    assert payload["status"] == "green"
+    assert decision["warp_quality_handoff_status"] == "passed"
+    assert decision["warp_quality_handoff_ready"] is True
+    assert decision["warp_quality_handoff_output_count"] == 1
+    assert checks["release_decision_warp_quality_handoff_ready"]["passed"] is True
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert "Warp quality handoff: passed ready=True outputs=1 failed=[]" in text
+
+
+def test_phase2_status_blocks_failed_release_warp_quality_handoff(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=325)
+    release_decision = tmp_path / "release_decision.json"
+    _write_release_decision(release_decision, warp_quality_ready=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "attention_required"
+    assert payload["release_decision"]["warp_quality_handoff_status"] == "failed"
+    assert checks["release_decision_warp_quality_handoff_ready"]["passed"] is False
+    assert checks["release_decision_warp_quality_handoff_ready"]["evidence"][
+        "failed_acceptance_checks"
+    ] == ["warp_quality_contract_passed"]
 
 
 def test_phase2_status_blocks_acceptance_runtime_default_regression(tmp_path: Path):

@@ -1,0 +1,421 @@
+{
+  "acceptance_audit": {
+    "abs_diff_p99": 0.002,
+    "active_frames": 193,
+    "benchmark_contract": null,
+    "contract_bundle_schema_status": "passed",
+    "coverage_fraction": 0.97,
+    "exists": true,
+    "frame_type_counts": {
+      "bias": 20,
+      "dark": 20,
+      "flat": 20,
+      "light": 200
+    },
+    "native_guardrails_bundle": {
+      "bundle_path": "runs\\checkpoints\\s2_gate_321_guardrails\\acceptance_contract_bundle.json",
+      "bundle_status": "passed",
+      "expected_integration_engine": "stack_engine_cpu",
+      "guardrails_summary_json": "runs\\checkpoints\\s2_gate_321_guardrails\\guardrails_summary.json",
+      "resident_calibrated_light_count": 0,
+      "resident_calibration_contract_attached": false,
+      "resident_calibration_contract_json": null,
+      "resident_calibration_master_count": 3,
+      "resident_native_calibration_artifact": false,
+      "resident_result_contract_attached": false,
+      "resident_result_contract_json": null,
+      "resident_result_contract_run_default": false,
+      "resident_result_contract_source": "missing",
+      "run_dir": "runs\\checkpoints\\s2_gate_316_enabled_run",
+      "schema_version": 1,
+      "stack_scope": "all",
+      "status": "present"
+    },
+    "native_guardrails_bundle_status": "present",
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_323_acceptance_audit.json",
+    "pipeline_integration_engine_policy": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 1,
+      "output_count": 1,
+      "resident_count": 0,
+      "rows": [
+        {
+          "backend": "cpu",
+          "failures": [],
+          "item": "H",
+          "memory_mode": null,
+          "passed": true,
+          "required": true,
+          "status": "stack_engine_default",
+          "tile_stack_mode": "stack_engine_cpu"
+        }
+      ],
+      "status": "passed"
+    },
+    "pipeline_integration_engine_policy_check_passed": true,
+    "pipeline_integration_engine_policy_check_present": true,
+    "pipeline_integration_engine_policy_failed_count": 0,
+    "pipeline_integration_engine_policy_non_resident_count": 1,
+    "pipeline_integration_engine_policy_status": "passed",
+    "pipeline_stack_engine_runtime_default": {
+      "check_name": "stack_engine_runtime_default_path",
+      "check_passed": true,
+      "check_present": true,
+      "explicit_cuda_fast_path_count": 0,
+      "failed_master_count": 0,
+      "failed_masters": [],
+      "failed_output_count": 0,
+      "failed_outputs": [],
+      "integration_output_count": 1,
+      "integration_resident_count": 0,
+      "integration_stack_engine_default_count": 1,
+      "legacy_master_count": 0,
+      "master_count": 3,
+      "master_resident_count": 0,
+      "master_stack_engine_count": 3,
+      "status": "passed"
+    },
+    "pipeline_stack_engine_runtime_default_check_passed": true,
+    "pipeline_stack_engine_runtime_default_check_present": true,
+    "pipeline_stack_engine_runtime_default_explicit_cuda_fast_path_count": 0,
+    "pipeline_stack_engine_runtime_default_failed_master_count": 0,
+    "pipeline_stack_engine_runtime_default_failed_output_count": 0,
+    "pipeline_stack_engine_runtime_default_legacy_master_count": 0,
+    "pipeline_stack_engine_runtime_default_master_count": 3,
+    "pipeline_stack_engine_runtime_default_status": "passed",
+    "resident_calibrated_light_count": 0,
+    "resident_calibration_contract_passed": null,
+    "resident_calibration_master_count": 3,
+    "resident_native_calibration_artifact": false,
+    "resident_registration_fastpath": {
+      "artifact_count": 0,
+      "available": false,
+      "contract_check_count": 0,
+      "contract_failed_check_count": 0,
+      "contract_failed_checks": [],
+      "contract_status": "not_requested",
+      "exists": false,
+      "mode": null,
+      "path": "runs\\checkpoints\\s2_gate_294_fixtures\\acceptance\\gp\\resident_artifacts.json",
+      "resident_io_pipeline_warp_copy_mode": null,
+      "resident_io_pipeline_warp_scratch_bytes": null,
+      "resident_warp_copy_mode": null,
+      "resident_warp_scratch_bytes": null,
+      "schema_version": 1,
+      "status": "missing",
+      "triangle_descriptor_fit_batch": null,
+      "triangle_descriptor_fit_batch_mode": null,
+      "triangle_descriptor_fit_device_reuse": {
+        "moving": null,
+        "output": null,
+        "reference": null
+      },
+      "triangle_pixel_refine_batch": null,
+      "triangle_pixel_refine_batch_metric_mode": null,
+      "triangle_pixel_refine_batch_mode": null,
+      "triangle_warp_batch": null,
+      "triangle_warp_batch_frame_count": null,
+      "triangle_warp_batch_mode": null
+    },
+    "resident_registration_fastpath_contract_check_count": 0,
+    "resident_registration_fastpath_contract_failed_check_count": 0,
+    "resident_registration_fastpath_contract_status": "not_requested",
+    "resident_registration_fastpath_mode": null,
+    "resident_registration_fastpath_status": "missing",
+    "resident_result_contract_json": null,
+    "resident_result_contract_passed": null,
+    "resident_result_contract_run_default": false,
+    "resident_result_contract_source": "missing",
+    "resident_warp_copy_mode": null,
+    "resident_warp_scratch_bytes": null,
+    "rms_diff": 0.001,
+    "speedup_vs_reference": 10.0,
+    "status": "passed",
+    "triangle_descriptor_fit_batch": null,
+    "triangle_descriptor_fit_batch_mode": null,
+    "triangle_descriptor_fit_device_reuse": {
+      "moving": null,
+      "output": null,
+      "reference": null
+    },
+    "triangle_pixel_refine_batch": null,
+    "triangle_pixel_refine_batch_metric_mode": null,
+    "triangle_warp_batch": null,
+    "triangle_warp_batch_frame_count": null,
+    "triangle_warp_batch_mode": null,
+    "warp_quality_contract": {
+      "artifact_type": "warp_quality_contract",
+      "audit_type": null,
+      "check_count": 9,
+      "exists": true,
+      "failed_checks": [],
+      "output_count": 1,
+      "passed": true,
+      "path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+      "status": "passed"
+    },
+    "warp_quality_contract_check_count": 9,
+    "warp_quality_contract_failed_checks": [],
+    "warp_quality_contract_output_count": 1,
+    "warp_quality_contract_passed": true,
+    "warp_quality_contract_path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+    "warp_quality_contract_status": "passed"
+  },
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 325,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "speedup_vs_reference": 10.0,
+        "status": "passed"
+      },
+      "name": "acceptance_audit_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "failed_count": 0,
+        "non_resident_count": 1,
+        "status": "passed"
+      },
+      "name": "acceptance_pipeline_integration_engine_policy_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": true,
+        "check_present": true,
+        "explicit_cuda_fast_path_count": 0,
+        "failed_master_count": 0,
+        "failed_output_count": 0,
+        "legacy_master_count": 0,
+        "master_count": 3,
+        "status": "passed"
+      },
+      "name": "acceptance_pipeline_stack_engine_runtime_default_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed_checks": [],
+        "output_count": 1,
+        "passed": true,
+        "path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+        "status": "passed"
+      },
+      "name": "acceptance_warp_quality_contract_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      },
+      "name": "cuda_doctor_available",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "default_change_ready": false,
+        "recommendation": "repeat_benchmark_before_default_change",
+        "release_candidate_ready": true,
+        "runtime_repeat_elapsed_ratio_vs_best": null,
+        "status": "release_candidate_ready"
+      },
+      "name": "release_decision_default_change_ready",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "contract_passed": true,
+        "failed_acceptance_checks": [],
+        "failed_checks": [],
+        "output_count": 1,
+        "path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+        "present": true,
+        "ready": true,
+        "status": "passed"
+      },
+      "name": "release_decision_warp_quality_handoff_ready",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T15:25:59+00:00",
+  "default_route_acceptance": null,
+  "doctor": {
+    "compute_capability": "12.0",
+    "cuda_available": true,
+    "device_count": 1,
+    "driver_version": "596.21",
+    "native_extension_loaded": true,
+    "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "recommendation": "cuda",
+    "vram_mib": 97886,
+    "windows_cuda_packages": {
+      "fallbacks": [
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+      "ordered_try_list": [
+        "cuda13",
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "packages": [
+        {
+          "architectures": [
+            "5.0",
+            "5.2",
+            "6.0",
+            "6.1",
+            "7.0",
+            "7.5",
+            "8.0",
+            "8.6"
+          ],
+          "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+          "label": "cuda11",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "11.8"
+        },
+        {
+          "architectures": [
+            "7.5",
+            "8.0",
+            "8.6",
+            "8.9",
+            "9.0"
+          ],
+          "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+          "label": "cuda12",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "12.4"
+        },
+        {
+          "architectures": [
+            "8.6",
+            "8.9",
+            "9.0",
+            "10.0",
+            "12.0"
+          ],
+          "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+          "label": "cuda13",
+          "match": "native_cubin",
+          "note": "This package contains native GPU code for this compute capability.",
+          "toolkit": "13.0"
+        }
+      ],
+      "primary": "cuda13",
+      "ptx_forward_compatibility": true,
+      "selected_device": {
+        "compute_capability": "12.0",
+        "compute_capability_code": 120,
+        "device_id": 0,
+        "driver_version": "596.21",
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      }
+    },
+    "wrapper_importable": true
+  },
+  "github_release_plan": null,
+  "latest_checkpoint": {
+    "checkpoint_dir": "runs\\checkpoints\\s2_gate_325_phase2_checkpoint_fixture",
+    "date": "2026-06-18",
+    "exists": true,
+    "gate": 325,
+    "green": true,
+    "path": "runs\\checkpoints\\s2_gate_325_phase2_checkpoint_fixture\\s2_gate_325_status.md",
+    "scope": "phase2 status warp quality handoff fixture",
+    "status": "green"
+  },
+  "passed": false,
+  "pipeline_contract": null,
+  "publish_preflight": null,
+  "release_decision": {
+    "artifact_type": "release_promotion_decision",
+    "default_change_ready": false,
+    "exists": true,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_324_release_promotion_decision.json",
+    "pipeline_handoff_passed": true,
+    "pipeline_handoff_pixel_verification_enabled": true,
+    "pipeline_handoff_source": "acceptance_pipeline_contract",
+    "pipeline_handoff_status": "passed",
+    "recommendation": "repeat_benchmark_before_default_change",
+    "release_candidate_ready": true,
+    "runtime_repeat_best_elapsed_s": null,
+    "runtime_repeat_best_label": null,
+    "runtime_repeat_considered_run_count": null,
+    "runtime_repeat_elapsed_ratio_vs_best": null,
+    "runtime_repeat_max_elapsed_ratio_vs_best": null,
+    "runtime_repeat_present": false,
+    "runtime_repeat_recommendation": null,
+    "runtime_repeat_run_count": null,
+    "runtime_repeat_slowest_elapsed_s": null,
+    "speedup_actual": 10.0,
+    "speedup_required_min": 2.0,
+    "status": "release_candidate_ready",
+    "warp_quality_handoff": {
+      "acceptance_checks": {
+        "warp_quality_contract_passed": true,
+        "warp_quality_contract_present": true,
+        "warp_quality_contract_type": true
+      },
+      "artifact_type": "warp_quality_contract",
+      "check_count": 9,
+      "contract_passed": true,
+      "contract_status": "passed",
+      "exists": true,
+      "failed_acceptance_checks": [],
+      "failed_checks": [],
+      "output_count": 1,
+      "path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+      "present": true,
+      "ready": true,
+      "schema_version": 1,
+      "source": "acceptance_audit",
+      "status": "passed"
+    },
+    "warp_quality_handoff_contract_passed": true,
+    "warp_quality_handoff_failed_acceptance_checks": [],
+    "warp_quality_handoff_failed_checks": [],
+    "warp_quality_handoff_output_count": 1,
+    "warp_quality_handoff_path": "runs\\checkpoints\\s2_gate_321_guardrails\\warp_quality_contract.json",
+    "warp_quality_handoff_present": true,
+    "warp_quality_handoff_ready": true,
+    "warp_quality_handoff_status": "passed"
+  },
+  "release_manifest": null,
+  "resident_winsorized_benchmark_audit": null,
+  "resident_winsorized_sweep_audit": null,
+  "schema_version": 1,
+  "stack_engine_contract": null,
+  "stack_engine_publication_audit": null,
+  "status": "attention_required"
+}

@@ -94,6 +94,11 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
     registration_fastpath = _resident_registration_fastpath_summary(payload)
     integration_engine_policy = _acceptance_integration_engine_policy_summary(payload)
     runtime_default = _acceptance_stack_engine_runtime_default_summary(payload)
+    warp_quality_contract = (
+        payload.get("warp_quality_contract")
+        if isinstance(payload.get("warp_quality_contract"), dict)
+        else {}
+    )
     return {
         "path": payload.get("_path"),
         "exists": True,
@@ -240,6 +245,14 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
         "resident_result_contract_passed": (resident_contracts.get("result") or {}).get("passed")
         if isinstance(resident_contracts.get("result"), dict)
         else None,
+        "warp_quality_contract": warp_quality_contract or None,
+        "warp_quality_contract_status": warp_quality_contract.get("status"),
+        "warp_quality_contract_passed": warp_quality_contract.get("passed"),
+        "warp_quality_contract_output_count": warp_quality_contract.get("output_count"),
+        "warp_quality_contract_check_count": warp_quality_contract.get("check_count"),
+        "warp_quality_contract_failed_checks": warp_quality_contract.get("failed_checks")
+        or [],
+        "warp_quality_contract_path": warp_quality_contract.get("path"),
     }
 
 
@@ -2075,6 +2088,11 @@ def _release_decision_summary(path: str | Path | None) -> dict[str, Any] | None:
         if isinstance(payload.get("pipeline_handoff"), dict)
         else {}
     )
+    warp_quality_handoff = (
+        payload.get("warp_quality_handoff")
+        if isinstance(payload.get("warp_quality_handoff"), dict)
+        else {}
+    )
     speedup = payload.get("speedup") if isinstance(payload.get("speedup"), dict) else {}
     return {
         "path": payload.get("_path"),
@@ -2104,6 +2122,20 @@ def _release_decision_summary(path: str | Path | None) -> dict[str, Any] | None:
         "pipeline_handoff_pixel_verification_enabled": pipeline_handoff.get(
             "pixel_verification_enabled"
         ),
+        "warp_quality_handoff": warp_quality_handoff or None,
+        "warp_quality_handoff_present": warp_quality_handoff.get("present"),
+        "warp_quality_handoff_status": warp_quality_handoff.get("status"),
+        "warp_quality_handoff_ready": warp_quality_handoff.get("ready"),
+        "warp_quality_handoff_contract_passed": warp_quality_handoff.get(
+            "contract_passed"
+        ),
+        "warp_quality_handoff_output_count": warp_quality_handoff.get("output_count"),
+        "warp_quality_handoff_failed_checks": warp_quality_handoff.get("failed_checks")
+        or [],
+        "warp_quality_handoff_failed_acceptance_checks": (
+            warp_quality_handoff.get("failed_acceptance_checks") or []
+        ),
+        "warp_quality_handoff_path": warp_quality_handoff.get("path"),
     }
 
 
@@ -2285,6 +2317,27 @@ def build_phase2_status(
                 },
             }
         )
+        if acceptance.get("warp_quality_contract_status") is not None:
+            checks.append(
+                {
+                    "name": "acceptance_warp_quality_contract_passed",
+                    "passed": (
+                        acceptance.get("warp_quality_contract_status") == "passed"
+                        and acceptance.get("warp_quality_contract_passed") is True
+                    ),
+                    "evidence": {
+                        "status": acceptance.get("warp_quality_contract_status"),
+                        "passed": acceptance.get("warp_quality_contract_passed"),
+                        "output_count": acceptance.get(
+                            "warp_quality_contract_output_count"
+                        ),
+                        "failed_checks": acceptance.get(
+                            "warp_quality_contract_failed_checks"
+                        ),
+                        "path": acceptance.get("warp_quality_contract_path"),
+                    },
+                }
+            )
     if default_route_acceptance is not None:
         checks.append(
             {
@@ -3537,6 +3590,31 @@ def build_phase2_status(
                 },
             }
         )
+        checks.append(
+            {
+                "name": "release_decision_warp_quality_handoff_ready",
+                "passed": (
+                    decision.get("warp_quality_handoff_status") in (None, "not_available")
+                    or decision.get("warp_quality_handoff_ready") is True
+                ),
+                "evidence": {
+                    "present": decision.get("warp_quality_handoff_present"),
+                    "status": decision.get("warp_quality_handoff_status"),
+                    "ready": decision.get("warp_quality_handoff_ready"),
+                    "contract_passed": decision.get(
+                        "warp_quality_handoff_contract_passed"
+                    ),
+                    "output_count": decision.get("warp_quality_handoff_output_count"),
+                    "failed_checks": decision.get(
+                        "warp_quality_handoff_failed_checks"
+                    ),
+                    "failed_acceptance_checks": decision.get(
+                        "warp_quality_handoff_failed_acceptance_checks"
+                    ),
+                    "path": decision.get("warp_quality_handoff_path"),
+                },
+            }
+        )
         if acceptance is not None and _default_change_is_ready(decision):
             checks.append(
                 {
@@ -3625,6 +3703,13 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Native calibration artifact: {acceptance.get('resident_native_calibration_artifact')}",
                 f"- Native calibration masters: {acceptance.get('resident_calibration_master_count')}",
                 f"- Native calibrated lights: {acceptance.get('resident_calibrated_light_count')}",
+                (
+                    "- Warp quality contract: "
+                    f"{acceptance.get('warp_quality_contract_status')} "
+                    f"passed={acceptance.get('warp_quality_contract_passed')} "
+                    f"outputs={acceptance.get('warp_quality_contract_output_count')} "
+                    f"failed={acceptance.get('warp_quality_contract_failed_checks')}"
+                ),
                 f"- Registration fast path: {acceptance.get('resident_registration_fastpath_status')}",
                 (
                     "- Registration fast path contract: "
@@ -4319,6 +4404,13 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 (
                     "- Pipeline handoff pixel verification: "
                     f"{decision.get('pipeline_handoff_pixel_verification_enabled')}"
+                ),
+                (
+                    "- Warp quality handoff: "
+                    f"{decision.get('warp_quality_handoff_status')} "
+                    f"ready={decision.get('warp_quality_handoff_ready')} "
+                    f"outputs={decision.get('warp_quality_handoff_output_count')} "
+                    f"failed={decision.get('warp_quality_handoff_failed_checks')}"
                 ),
             ]
         )

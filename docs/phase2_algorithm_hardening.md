@@ -5731,6 +5731,30 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 325: Phase2 Status Warp Quality Handoff
+
+- Carry `warp_quality_contract` and release-level `warp_quality_handoff` into
+  `glass phase2-status`.
+- Add acceptance summary fields for warp-quality status, pass/fail state,
+  output count, check count, failed checks, and path.
+- Add release-decision summary fields for warp-quality handoff presence,
+  status, readiness, contract pass/fail state, output count, failed contract
+  checks, failed acceptance checks, and path.
+- Add compatible Phase2 checks:
+  - `acceptance_warp_quality_contract_passed` only when an acceptance warp
+    contract is present.
+  - `release_decision_warp_quality_handoff_ready`, treating older release
+    decisions without warp evidence as non-blocking.
+- Surface warp-quality acceptance and release-decision handoff state in Phase2
+  Markdown.
+- Add focused tests for passing and failed release-decision warp-quality
+  handoff.
+- Generate Gate325 Phase2 status artifacts from the Gate323/Gate324 handoff
+  chain.
+- Keep this gate audit-surface scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
