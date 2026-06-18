@@ -362,6 +362,96 @@ def _stack_engine_runtime_default_manifest(
     }
 
 
+def _direct_runtime_evidence_flattened(
+    *,
+    ready: bool = True,
+    acceptance_ready: bool = True,
+    acceptance_source: str = "explicit_resident_artifacts_json",
+    pipeline_ready: bool = True,
+    pipeline_source: str = "resident_artifacts_json_fallback",
+) -> dict[str, object]:
+    evidence_ready = ready and acceptance_ready and pipeline_ready
+    return {
+        "runtime_default_direct_evidence": {
+            "present": True,
+            "ready": evidence_ready,
+            "acceptance_direct_fastpath": acceptance_ready,
+            "acceptance_fastpath_source": acceptance_source,
+            "acceptance_fastpath_check_count": 24,
+            "acceptance_fastpath_failed_check_count": 0 if acceptance_ready else 1,
+            "acceptance_fastpath_failed_checks": []
+            if acceptance_ready
+            else ["contract_resident_registration_fastpath_present"],
+            "pipeline_direct_resident_calibration": pipeline_ready,
+            "pipeline_calibration_artifact_source": pipeline_source,
+            "pipeline_calibration_artifact_generated_for_contract": pipeline_ready,
+            "pipeline_calibration_artifact_path_exists": False,
+            "pipeline_resident_native_calibration_artifact": pipeline_ready,
+            "pipeline_resident_calibrated_light_count": 200 if pipeline_ready else 0,
+        },
+        "runtime_default_direct_evidence_present": True,
+        "runtime_default_direct_evidence_ready": evidence_ready,
+        "runtime_default_direct_acceptance_fastpath": acceptance_ready,
+        "runtime_default_direct_acceptance_fastpath_source": acceptance_source,
+        "runtime_default_direct_acceptance_fastpath_check_count": 24,
+        "runtime_default_direct_acceptance_fastpath_failed_check_count": 0
+        if acceptance_ready
+        else 1,
+        "runtime_default_direct_acceptance_fastpath_failed_checks": []
+        if acceptance_ready
+        else ["contract_resident_registration_fastpath_present"],
+        "runtime_default_direct_pipeline_calibration": pipeline_ready,
+        "runtime_default_direct_pipeline_calibration_source": pipeline_source,
+        "runtime_default_direct_pipeline_calibration_generated_for_contract": pipeline_ready,
+        "runtime_default_direct_pipeline_calibration_path_exists": False,
+        "runtime_default_direct_pipeline_resident_native_calibration_artifact": pipeline_ready,
+        "runtime_default_direct_pipeline_resident_calibrated_light_count": 200
+        if pipeline_ready
+        else 0,
+    }
+
+
+def _direct_runtime_evidence_manifest(**kwargs: object) -> dict[str, object]:
+    flattened = _direct_runtime_evidence_flattened(**kwargs)
+    return {
+        "present": flattened["runtime_default_direct_evidence_present"],
+        "ready": flattened["runtime_default_direct_evidence_ready"],
+        "acceptance_direct_fastpath": flattened[
+            "runtime_default_direct_acceptance_fastpath"
+        ],
+        "acceptance_fastpath_source": flattened[
+            "runtime_default_direct_acceptance_fastpath_source"
+        ],
+        "acceptance_fastpath_check_count": flattened[
+            "runtime_default_direct_acceptance_fastpath_check_count"
+        ],
+        "acceptance_fastpath_failed_check_count": flattened[
+            "runtime_default_direct_acceptance_fastpath_failed_check_count"
+        ],
+        "acceptance_fastpath_failed_checks": flattened[
+            "runtime_default_direct_acceptance_fastpath_failed_checks"
+        ],
+        "pipeline_direct_resident_calibration": flattened[
+            "runtime_default_direct_pipeline_calibration"
+        ],
+        "pipeline_calibration_artifact_source": flattened[
+            "runtime_default_direct_pipeline_calibration_source"
+        ],
+        "pipeline_calibration_artifact_generated_for_contract": flattened[
+            "runtime_default_direct_pipeline_calibration_generated_for_contract"
+        ],
+        "pipeline_calibration_artifact_path_exists": flattened[
+            "runtime_default_direct_pipeline_calibration_path_exists"
+        ],
+        "pipeline_resident_native_calibration_artifact": flattened[
+            "runtime_default_direct_pipeline_resident_native_calibration_artifact"
+        ],
+        "pipeline_resident_calibrated_light_count": flattened[
+            "runtime_default_direct_pipeline_resident_calibrated_light_count"
+        ],
+    }
+
+
 def _stack_publication_audit(
     *,
     audit_ready: bool = True,
@@ -477,6 +567,12 @@ def _matrix(
     acceptance_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_check_present: bool = True,
+    include_direct_runtime_evidence: bool = True,
+    direct_runtime_evidence_ready: bool = True,
+    direct_acceptance_fastpath_ready: bool = True,
+    direct_acceptance_fastpath_source: str = "explicit_resident_artifacts_json",
+    direct_pipeline_calibration_ready: bool = True,
+    direct_pipeline_calibration_source: str = "resident_artifacts_json_fallback",
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -521,6 +617,13 @@ def _matrix(
             if isinstance(publication_audit["stack_engine_publication_audit"], dict)
             else {}
         ).get("ready")
+    )
+    direct_evidence = _direct_runtime_evidence_flattened(
+        ready=direct_runtime_evidence_ready,
+        acceptance_ready=direct_acceptance_fastpath_ready,
+        acceptance_source=direct_acceptance_fastpath_source,
+        pipeline_ready=direct_pipeline_calibration_ready,
+        pipeline_source=direct_pipeline_calibration_source,
     )
     matrix_ready = (
         ready
@@ -611,6 +714,8 @@ def _matrix(
         promotion.update(integration_engine_policy)
     if include_stack_engine_runtime_default:
         promotion.update(stack_engine_runtime_default)
+    if include_direct_runtime_evidence:
+        promotion.update(direct_evidence)
     if include_stack_publication_audit:
         promotion.update(publication_audit)
     write_json(
@@ -655,6 +760,12 @@ def _default_promotion(
     acceptance_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_ready: bool = True,
     pipeline_stack_engine_runtime_default_check_present: bool = True,
+    include_direct_runtime_evidence: bool = True,
+    direct_runtime_evidence_ready: bool = True,
+    direct_acceptance_fastpath_ready: bool = True,
+    direct_acceptance_fastpath_source: str = "explicit_resident_artifacts_json",
+    direct_pipeline_calibration_ready: bool = True,
+    direct_pipeline_calibration_source: str = "resident_artifacts_json_fallback",
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -696,6 +807,13 @@ def _default_promotion(
             if isinstance(publication_audit["stack_engine_publication_audit"], dict)
             else {}
         ).get("ready")
+    )
+    direct_evidence = _direct_runtime_evidence_manifest(
+        ready=direct_runtime_evidence_ready,
+        acceptance_ready=direct_acceptance_fastpath_ready,
+        acceptance_source=direct_acceptance_fastpath_source,
+        pipeline_ready=direct_pipeline_calibration_ready,
+        pipeline_source=direct_pipeline_calibration_source,
     )
     manifest_ready = (
         ready
@@ -785,6 +903,8 @@ def _default_promotion(
         payload["integration_engine_policy"] = integration_engine_policy
     if include_stack_engine_runtime_default:
         payload["stack_engine_runtime_default"] = stack_engine_runtime_default
+    if include_direct_runtime_evidence:
+        payload["runtime_default_direct_evidence"] = direct_evidence
     if include_stack_publication_audit:
         payload.update(publication_audit)
     write_json(
@@ -1238,6 +1358,31 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         ]
         == "passed"
     )
+    assert payload["summary"]["matrix_direct_runtime_evidence_ready"] is True
+    assert (
+        payload["summary"]["matrix_direct_runtime_acceptance_source"]
+        == "explicit_resident_artifacts_json"
+    )
+    assert payload["summary"]["matrix_direct_runtime_acceptance_check_count"] == 24
+    assert (
+        payload["summary"]["matrix_direct_runtime_pipeline_calibration_source"]
+        == "resident_artifacts_json_fallback"
+    )
+    assert payload["summary"]["matrix_direct_runtime_pipeline_resident_lights"] == 200
+    assert (
+        payload["summary"]["default_promotion_direct_runtime_evidence_ready"]
+        is True
+    )
+    assert (
+        payload["summary"]["default_promotion_direct_runtime_acceptance_source"]
+        == "explicit_resident_artifacts_json"
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_direct_runtime_pipeline_calibration_source"
+        ]
+        == "resident_artifacts_json_fallback"
+    )
     assert checks["github_plan_phase2_rejection_sample_accounting_passed"] is True
     assert checks["github_plan_matrix_rejection_sample_accounting_passed"] is True
     assert checks["matrix_rejection_sample_accounting_passed"] is True
@@ -1291,6 +1436,11 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         checks["matrix_stack_engine_runtime_default_matches_default_promotion"]
         is True
     )
+    assert checks["windows_release_matrix_direct_acceptance_fastpath_evidence"] is True
+    assert checks["windows_release_matrix_direct_pipeline_calibration_evidence"] is True
+    assert checks["default_promotion_direct_acceptance_fastpath_evidence"] is True
+    assert checks["default_promotion_direct_pipeline_calibration_evidence"] is True
+    assert checks["matrix_direct_runtime_evidence_matches_default_promotion"] is True
     assert checks["github_plan_phase2_stack_engine_default_contract_ready"] is True
     assert checks["github_plan_matrix_stack_engine_contract_ready"] is True
     assert checks["github_plan_stack_engine_contract_agreement_passed"] is True
@@ -1921,6 +2071,100 @@ def test_windows_publish_preflight_blocks_default_promotion_runtime_default_drif
             "reason": "legacy_or_unknown_engine",
         }
     ]
+
+
+def test_windows_publish_preflight_blocks_missing_matrix_direct_runtime_evidence(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, include_direct_runtime_evidence=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is True
+    assert checks["default_promotion_ready"]["passed"] is True
+    assert checks["windows_release_matrix_direct_acceptance_fastpath_evidence"][
+        "passed"
+    ] is False
+    assert checks["windows_release_matrix_direct_pipeline_calibration_evidence"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_direct_acceptance_fastpath_evidence"][
+        "passed"
+    ] is True
+    assert checks["matrix_direct_runtime_evidence_matches_default_promotion"][
+        "passed"
+    ] is False
+    assert checks["windows_release_matrix_direct_acceptance_fastpath_evidence"][
+        "evidence"
+    ] == {
+        "present": None,
+        "ready": None,
+        "acceptance_direct_fastpath": None,
+        "acceptance_source": None,
+        "acceptance_check_count": None,
+        "acceptance_failed_check_count": None,
+        "acceptance_failed_checks": [],
+        "pipeline_direct_calibration": None,
+        "pipeline_calibration_source": None,
+        "pipeline_generated_for_contract": None,
+        "pipeline_path_exists": None,
+        "pipeline_resident_native_calibration_artifact": None,
+        "pipeline_resident_calibrated_light_count": None,
+    }
+
+
+def test_windows_publish_preflight_blocks_stale_default_direct_fastpath_source(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(
+        promotion,
+        direct_acceptance_fastpath_source="gate303_handoff_bundle",
+    )
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_direct_acceptance_fastpath_evidence"][
+        "passed"
+    ] is True
+    assert checks["default_promotion_direct_acceptance_fastpath_evidence"][
+        "passed"
+    ] is False
+    assert checks["matrix_direct_runtime_evidence_matches_default_promotion"][
+        "passed"
+    ] is False
+    assert checks["default_promotion_direct_acceptance_fastpath_evidence"][
+        "evidence"
+    ]["acceptance_source"] == "gate303_handoff_bundle"
 
 
 def test_windows_publish_preflight_blocks_phase2_stack_engine_contract_gap(

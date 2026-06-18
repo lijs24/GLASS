@@ -5292,6 +5292,37 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 307: Windows Publish Preflight Direct Runtime Evidence Handoff
+
+- Carry the Gate306 direct runtime evidence through `windows-publish-preflight`
+  so the final local publication preflight blocks stale release bundles that
+  lost the default runtime proof after the release matrix was generated.
+- Require publish preflight to validate direct acceptance fastpath evidence and
+  direct resident calibration fallback evidence from both the Windows release
+  matrix and the default-promotion manifest.
+- Treat acceptance fastpath evidence as valid only when it comes from an
+  explicit `resident_artifacts.json` fastpath input with all resident
+  registration fastpath contract checks passing.
+- Treat pipeline calibration evidence as valid only when the pipeline contract
+  can identify resident calibration visibility from the same run's
+  `resident_artifacts.json` fallback and a 200-light resident calibration
+  surface.
+- Add a publish-preflight drift check requiring matrix and default-promotion
+  direct runtime evidence summaries to match, so a stale manifest cannot remain
+  ready by carrying older direct-evidence fields.
+- Surface direct runtime evidence readiness, fastpath source/check count,
+  pipeline calibration source, and resident light count in publish-preflight
+  JSON and Markdown.
+- Add focused tests for passing evidence, missing matrix direct evidence, and
+  stale default-promotion fastpath source.
+- Generate Gate307 release-manifest, GitHub release-plan, and
+  publish-preflight artifacts from the existing package suite plus Gate306
+  matrix/default-promotion evidence, using Gate305 Phase2 status for the
+  publication handoff guardrails.
+- Keep this gate publication-preflight scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
