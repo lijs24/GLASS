@@ -6408,6 +6408,26 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 360: Phase2 Quality Metric Compare Handoff
+
+- Add optional `quality-metrics-compare` ingestion to `glass phase2-status` via
+  `--quality-metrics-compare`.
+- Summarize compare status, pass/fail state, baseline/candidate metric counts,
+  compared metric rows, failed checks, and threshold failures in Phase2 status
+  JSON and Markdown.
+- Add a Phase2 status check, `quality_metrics_compare_passed`, so explicitly
+  supplied quality-regression compare artifacts must pass before the Phase2
+  status remains green.
+- Extend `glass phase2-status-compare` with
+  `quality_metrics_compare_passed_preserved`, preventing a candidate status
+  from losing a previously passing quality-regression compare handoff.
+- Add focused build, CLI, Markdown, and compare tests.
+- Keep this gate Phase2 status handoff scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

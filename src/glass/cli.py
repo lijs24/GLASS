@@ -3570,6 +3570,7 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
         stack_engine_contract=args.stack_engine_contract,
         registration_results=args.registration_results,
         quality_results=args.quality_results,
+        quality_metrics_compare=args.quality_metrics_compare,
         resident_winsorized_benchmark_audit=args.resident_winsorized_benchmark_audit,
         resident_winsorized_sweep_audit=args.resident_winsorized_sweep_audit,
         release_decision=args.release_decision,
@@ -3597,6 +3598,11 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
     quality_metrics = (
         payload.get("quality_metrics")
         if isinstance(payload.get("quality_metrics"), dict)
+        else {}
+    )
+    quality_compare = (
+        payload.get("quality_metrics_compare")
+        if isinstance(payload.get("quality_metrics_compare"), dict)
         else {}
     )
     winsorized_audit = (
@@ -3630,6 +3636,8 @@ def cmd_phase2_status(args: argparse.Namespace) -> int:
             ),
             "quality_metrics_status": quality_metrics.get("status"),
             "quality_metrics_count": quality_metrics.get("metric_count"),
+            "quality_metrics_compare_status": quality_compare.get("status"),
+            "quality_metrics_compare_failed_checks": quality_compare.get("failed_check_count"),
             "resident_winsorized_benchmark_audit_status": winsorized_audit.get("status"),
             "resident_winsorized_benchmark_audit_passed": winsorized_audit.get("passed"),
             "resident_winsorized_sweep_audit_status": winsorized_sweep_audit.get("status"),
@@ -3730,6 +3738,10 @@ def build_parser() -> argparse.ArgumentParser:
     phase2_status.add_argument(
         "--quality-results",
         help="optional frame_quality.json artifact used to summarize saturation quality evidence",
+    )
+    phase2_status.add_argument(
+        "--quality-metrics-compare",
+        help="optional quality-metrics-compare JSON artifact used to summarize quality regression evidence",
     )
     phase2_status.add_argument(
         "--resident-winsorized-benchmark-audit",

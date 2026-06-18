@@ -524,6 +524,63 @@ def _quality_metric_summary(path: str | Path | None) -> dict[str, Any] | None:
     }
 
 
+def _quality_metrics_compare_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+            "reason": "quality metrics compare artifact missing",
+        }
+    if payload.get("artifact_type") != "quality_metrics_compare":
+        return {
+            "path": payload.get("_path"),
+            "exists": True,
+            "status": "invalid",
+            "passed": False,
+            "reason": "artifact_type is not quality_metrics_compare",
+        }
+    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    failed_checks = [
+        str(item.get("name"))
+        for item in checks
+        if isinstance(item, dict) and item.get("passed") is not True
+    ]
+    metric_rows = payload.get("metric_rows") if isinstance(payload.get("metric_rows"), list) else []
+    baseline = payload.get("baseline") if isinstance(payload.get("baseline"), dict) else {}
+    candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    threshold_failures: list[dict[str, Any]] = []
+    for item in checks:
+        if not isinstance(item, dict) or item.get("passed") is True:
+            continue
+        if item.get("name") not in {"bad_median_ratio_within_limit", "bad_mean_ratio_within_limit"}:
+            continue
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        for failure in evidence.get("failing_metrics") or []:
+            if isinstance(failure, dict):
+                threshold_failures.append(dict(failure))
+    return {
+        "path": payload.get("_path"),
+        "exists": True,
+        "status": payload.get("status"),
+        "passed": payload.get("passed") is True,
+        "check_count": len(checks),
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "metric_row_count": len(metric_rows),
+        "baseline_metric_count": baseline.get("metric_count"),
+        "candidate_metric_count": candidate.get("metric_count"),
+        "baseline_frame_count": baseline.get("frame_count"),
+        "candidate_frame_count": candidate.get("frame_count"),
+        "threshold_failure_count": len(threshold_failures),
+        "threshold_failures": threshold_failures,
+    }
+
+
 def _resident_registration_fastpath_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
     fastpath = (
         payload.get("resident_registration_fastpath")
@@ -2833,6 +2890,7 @@ def build_phase2_status(
     stack_engine_contract: str | Path | None = None,
     registration_results: str | Path | None = None,
     quality_results: str | Path | None = None,
+    quality_metrics_compare: str | Path | None = None,
     resident_winsorized_benchmark_audit: str | Path | None = None,
     resident_winsorized_sweep_audit: str | Path | None = None,
     release_decision: str | Path | None = None,
@@ -2853,6 +2911,7 @@ def build_phase2_status(
     registration_admission = _registration_admission_summary(registration_results)
     quality_saturation = _quality_saturation_summary(quality_results)
     quality_metrics = _quality_metric_summary(quality_results)
+    quality_compare = _quality_metrics_compare_summary(quality_metrics_compare)
     winsorized_audit = _resident_winsorized_benchmark_audit_summary(
         resident_winsorized_benchmark_audit
     )
@@ -3079,6 +3138,23 @@ def build_phase2_status(
                     "metric_count": quality_metrics.get("metric_count"),
                     "metrics": quality_metrics.get("metrics"),
                     "path": quality_metrics.get("path"),
+                },
+            }
+        )
+    if quality_compare is not None:
+        checks.append(
+            {
+                "name": "quality_metrics_compare_passed",
+                "passed": quality_compare.get("passed") is True,
+                "evidence": {
+                    "status": quality_compare.get("status"),
+                    "check_count": quality_compare.get("check_count"),
+                    "failed_check_count": quality_compare.get("failed_check_count"),
+                    "failed_checks": quality_compare.get("failed_checks"),
+                    "baseline_metric_count": quality_compare.get("baseline_metric_count"),
+                    "candidate_metric_count": quality_compare.get("candidate_metric_count"),
+                    "threshold_failure_count": quality_compare.get("threshold_failure_count"),
+                    "path": quality_compare.get("path"),
                 },
             }
         )
@@ -4784,6 +4860,7 @@ def build_phase2_status(
         "registration_admission": registration_admission,
         "quality_saturation": quality_saturation,
         "quality_metrics": quality_metrics,
+        "quality_metrics_compare": quality_compare,
         "resident_winsorized_benchmark_audit": winsorized_audit,
         "resident_winsorized_sweep_audit": winsorized_sweep_audit,
         "release_decision": decision,
@@ -4806,6 +4883,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     registration_admission = payload.get("registration_admission") or {}
     quality_saturation = payload.get("quality_saturation") or {}
     quality_metrics = payload.get("quality_metrics") or {}
+    quality_compare = payload.get("quality_metrics_compare") or {}
     winsorized_audit = payload.get("resident_winsorized_benchmark_audit") or {}
     winsorized_sweep_audit = payload.get("resident_winsorized_sweep_audit") or {}
     decision = payload.get("release_decision") or {}
@@ -4988,6 +5066,35 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"worst={item.get('worst_frame_id')}({item.get('worst_value')}) "
                 f"bad_direction={item.get('bad_direction')}"
             )
+    if quality_compare:
+        lines.extend(
+            [
+                "",
+                "## Quality Metrics Compare",
+                "",
+                (
+                    "- Quality metrics compare: "
+                    f"{quality_compare.get('status')} "
+                    f"passed={quality_compare.get('passed')}"
+                ),
+                (
+                    "- Metric counts: "
+                    f"baseline={quality_compare.get('baseline_metric_count')} "
+                    f"candidate={quality_compare.get('candidate_metric_count')} "
+                    f"rows={quality_compare.get('metric_row_count')}"
+                ),
+                (
+                    "- Failed checks: "
+                    f"count={quality_compare.get('failed_check_count')} "
+                    f"names={quality_compare.get('failed_checks')}"
+                ),
+                (
+                    "- Threshold failures: "
+                    f"count={quality_compare.get('threshold_failure_count')} "
+                    f"items={quality_compare.get('threshold_failures')}"
+                ),
+            ]
+        )
     if doctor:
         lines.extend(
             [
@@ -7096,6 +7203,49 @@ def build_phase2_status_compare(
             },
         ),
         _compare_check(
+            "quality_metrics_compare_passed_preserved",
+            _status_value(baseline, "quality_metrics_compare", "passed") is not True
+            or _status_value(candidate, "quality_metrics_compare", "passed") is True,
+            baseline={
+                "status": _status_value(baseline, "quality_metrics_compare", "status"),
+                "passed": _status_value(baseline, "quality_metrics_compare", "passed"),
+                "failed_check_count": _status_value(
+                    baseline,
+                    "quality_metrics_compare",
+                    "failed_check_count",
+                ),
+                "failed_checks": _status_value(
+                    baseline,
+                    "quality_metrics_compare",
+                    "failed_checks",
+                ),
+                "threshold_failure_count": _status_value(
+                    baseline,
+                    "quality_metrics_compare",
+                    "threshold_failure_count",
+                ),
+            },
+            candidate={
+                "status": _status_value(candidate, "quality_metrics_compare", "status"),
+                "passed": _status_value(candidate, "quality_metrics_compare", "passed"),
+                "failed_check_count": _status_value(
+                    candidate,
+                    "quality_metrics_compare",
+                    "failed_check_count",
+                ),
+                "failed_checks": _status_value(
+                    candidate,
+                    "quality_metrics_compare",
+                    "failed_checks",
+                ),
+                "threshold_failure_count": _status_value(
+                    candidate,
+                    "quality_metrics_compare",
+                    "threshold_failure_count",
+                ),
+            },
+        ),
+        _compare_check(
             "cuda_available_preserved",
             _status_value(baseline, "doctor", "cuda_available") is not True
             or _status_value(candidate, "doctor", "cuda_available") is True,
@@ -7928,6 +8078,10 @@ def build_phase2_status_compare(
             "registration_admission": _status_value(baseline, "registration_admission"),
             "quality_saturation": _status_value(baseline, "quality_saturation"),
             "quality_metrics": _status_value(baseline, "quality_metrics"),
+            "quality_metrics_compare": _status_value(
+                baseline,
+                "quality_metrics_compare",
+            ),
             "pipeline_contract_status": _status_value(baseline, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(baseline, "pipeline_contract", "passed"),
             "acceptance_pipeline_integration_engine_policy": _status_value(
@@ -8008,6 +8162,10 @@ def build_phase2_status_compare(
             "registration_admission": _status_value(candidate, "registration_admission"),
             "quality_saturation": _status_value(candidate, "quality_saturation"),
             "quality_metrics": _status_value(candidate, "quality_metrics"),
+            "quality_metrics_compare": _status_value(
+                candidate,
+                "quality_metrics_compare",
+            ),
             "pipeline_contract_status": _status_value(candidate, "pipeline_contract", "status"),
             "pipeline_contract_passed": _status_value(candidate, "pipeline_contract", "passed"),
             "acceptance_pipeline_integration_engine_policy": _status_value(

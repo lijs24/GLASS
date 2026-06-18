@@ -336,6 +336,43 @@ def _write_quality_results(path: Path, *, rejected: bool = False) -> None:
     )
 
 
+def _write_quality_metrics_compare(path: Path, *, passed: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "quality_metrics_compare",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "baseline": {"metric_count": 7, "frame_count": 2},
+            "candidate": {"metric_count": 7, "frame_count": 2},
+            "metric_rows": [
+                {
+                    "metric": "fwhm_px",
+                    "bad_median_ratio": 1.0 if passed else 1.4,
+                }
+            ],
+            "checks": [
+                {
+                    "name": "candidate_metric_summary_preserved",
+                    "passed": True,
+                    "evidence": {"missing_metrics": []},
+                },
+                {
+                    "name": "bad_median_ratio_within_limit",
+                    "passed": passed,
+                    "evidence": {
+                        "max_bad_median_ratio": 1.2,
+                        "failing_metrics": []
+                        if passed
+                        else [{"metric": "fwhm_px", "bad_median_ratio": 1.4}],
+                    },
+                },
+            ],
+        },
+    )
+
+
 def _write_resident_winsorized_benchmark_audit(path: Path, *, passed: bool = True) -> None:
     write_json(
         path,
@@ -3403,6 +3440,62 @@ def test_phase2_status_surfaces_quality_metric_summary(tmp_path: Path):
     assert "fwhm_px: median=3.95" in text
 
 
+def test_phase2_status_surfaces_quality_metrics_compare(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=360)
+    compare = tmp_path / "quality_metrics_compare.json"
+    out_md = tmp_path / "phase2.md"
+    _write_quality_metrics_compare(compare)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        quality_metrics_compare=compare,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    summary = payload["quality_metrics_compare"]
+    assert payload["status"] == "green"
+    assert summary["status"] == "passed"
+    assert summary["passed"] is True
+    assert summary["baseline_metric_count"] == 7
+    assert summary["candidate_metric_count"] == 7
+    assert summary["failed_check_count"] == 0
+    assert checks["quality_metrics_compare_passed"]["passed"] is True
+
+    write_phase2_status_markdown(out_md, payload)
+    text = out_md.read_text(encoding="utf-8")
+    assert "Quality Metrics Compare" in text
+    assert "Quality metrics compare: passed passed=True" in text
+
+
+def test_phase2_status_blocks_failed_quality_metrics_compare(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=360)
+    compare = tmp_path / "quality_metrics_compare.json"
+    _write_quality_metrics_compare(compare, passed=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        quality_metrics_compare=compare,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    summary = payload["quality_metrics_compare"]
+    assert payload["status"] == "attention_required"
+    assert summary["status"] == "failed"
+    assert summary["passed"] is False
+    assert summary["failed_check_count"] == 1
+    assert summary["threshold_failure_count"] == 1
+    assert summary["threshold_failures"] == [
+        {"metric": "fwhm_px", "bad_median_ratio": 1.4}
+    ]
+    assert checks["quality_metrics_compare_passed"]["passed"] is False
+
+
 def test_phase2_status_blocks_quality_saturation_rejection(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -3711,6 +3804,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     publication_audit = tmp_path / "stack_engine_publication_audit.json"
     registration_results = tmp_path / "registration_results.json"
     quality_results = tmp_path / "frame_quality.json"
+    quality_metrics_compare = tmp_path / "quality_metrics_compare.json"
     winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
     winsorized_sweep_audit = tmp_path / "resident_winsorized_sweep_audit.json"
     _write_acceptance(acceptance)
@@ -3722,6 +3816,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     _write_stack_engine_publication_audit(publication_audit)
     _write_registration_results(registration_results)
     _write_quality_results(quality_results)
+    _write_quality_metrics_compare(quality_metrics_compare)
     _write_resident_winsorized_benchmark_audit(winsorized_audit)
     _write_resident_winsorized_sweep_audit(winsorized_sweep_audit)
 
@@ -3748,6 +3843,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(registration_results),
             "--quality-results",
             str(quality_results),
+            "--quality-metrics-compare",
+            str(quality_metrics_compare),
             "--resident-winsorized-benchmark-audit",
             str(winsorized_audit),
             "--resident-winsorized-sweep-audit",
@@ -3780,6 +3877,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["quality_saturation"]["quality_gate_saturation_rejected_count"] == 0
     assert payload["quality_metrics"]["status"] == "passed"
     assert payload["quality_metrics"]["metric_count"] == 7
+    assert payload["quality_metrics_compare"]["status"] == "passed"
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
@@ -3790,6 +3888,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Registration admission: accepted passed=True blocked=False" in text
     assert "Quality saturation: passed passed=True" in text
     assert "Quality metrics: passed metrics=7 frames=2" in text
+    assert "Quality metrics compare: passed passed=True" in text
     assert "Triangle warp batch frames: 188" in text
     assert "Default Route Acceptance" in text
     assert "Route contract passed: True" in text
@@ -6025,6 +6124,47 @@ def test_phase2_status_compare_flags_quality_metric_summary_regression(
     assert check["evidence"]["baseline"]["metric_count"] == 7
     assert check["evidence"]["candidate"]["metric_count"] == 0
     assert payload["candidate"]["quality_metrics"]["status"] == "not_available"
+
+
+def test_phase2_status_compare_flags_quality_metrics_compare_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    baseline_payload = _status_payload(gate=359)
+    baseline_payload["quality_metrics_compare"] = {
+        "status": "passed",
+        "passed": True,
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "threshold_failure_count": 0,
+    }
+    candidate_payload = _status_payload(gate=360, status="attention_required")
+    candidate_payload["quality_metrics_compare"] = {
+        "status": "failed",
+        "passed": False,
+        "failed_check_count": 1,
+        "failed_checks": ["bad_median_ratio_within_limit"],
+        "threshold_failure_count": 1,
+    }
+    write_json(baseline, baseline_payload)
+    write_json(candidate, candidate_payload)
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    check = checks["quality_metrics_compare_passed_preserved"]
+    assert payload["status"] == "regressed"
+    assert check["passed"] is False
+    assert check["evidence"]["baseline"]["passed"] is True
+    assert check["evidence"]["candidate"]["passed"] is False
+    assert check["evidence"]["candidate"]["failed_checks"] == [
+        "bad_median_ratio_within_limit"
+    ]
+    assert payload["candidate"]["quality_metrics_compare"]["status"] == "failed"
 
 
 def test_phase2_status_compare_flags_stack_publication_resident_result_regression(
