@@ -1108,6 +1108,56 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 "matrix_stack_engine_runtime_default_matches_default_promotion",
             )
         ),
+        "matrix_direct_runtime_evidence_ready": summary.get(
+            "matrix_direct_runtime_evidence_ready"
+        ),
+        "matrix_direct_runtime_acceptance_source": summary.get(
+            "matrix_direct_runtime_acceptance_source"
+        ),
+        "matrix_direct_runtime_acceptance_check_count": summary.get(
+            "matrix_direct_runtime_acceptance_check_count"
+        ),
+        "matrix_direct_runtime_pipeline_calibration_source": summary.get(
+            "matrix_direct_runtime_pipeline_calibration_source"
+        ),
+        "matrix_direct_runtime_pipeline_resident_lights": summary.get(
+            "matrix_direct_runtime_pipeline_resident_lights"
+        ),
+        "default_promotion_direct_runtime_evidence_ready": summary.get(
+            "default_promotion_direct_runtime_evidence_ready"
+        ),
+        "default_promotion_direct_runtime_acceptance_source": summary.get(
+            "default_promotion_direct_runtime_acceptance_source"
+        ),
+        "default_promotion_direct_runtime_acceptance_check_count": summary.get(
+            "default_promotion_direct_runtime_acceptance_check_count"
+        ),
+        "default_promotion_direct_runtime_pipeline_calibration_source": summary.get(
+            "default_promotion_direct_runtime_pipeline_calibration_source"
+        ),
+        "default_promotion_direct_runtime_pipeline_resident_lights": summary.get(
+            "default_promotion_direct_runtime_pipeline_resident_lights"
+        ),
+        "windows_release_matrix_direct_acceptance_fastpath_evidence": _check_passed(
+            payload,
+            "windows_release_matrix_direct_acceptance_fastpath_evidence",
+        ),
+        "windows_release_matrix_direct_pipeline_calibration_evidence": _check_passed(
+            payload,
+            "windows_release_matrix_direct_pipeline_calibration_evidence",
+        ),
+        "default_promotion_direct_acceptance_fastpath_evidence": _check_passed(
+            payload,
+            "default_promotion_direct_acceptance_fastpath_evidence",
+        ),
+        "default_promotion_direct_pipeline_calibration_evidence": _check_passed(
+            payload,
+            "default_promotion_direct_pipeline_calibration_evidence",
+        ),
+        "matrix_direct_runtime_evidence_matches_default_promotion": _check_passed(
+            payload,
+            "matrix_direct_runtime_evidence_matches_default_promotion",
+        ),
         "failed_checks": payload.get("failed_checks"),
     }
 
@@ -1259,6 +1309,16 @@ def _stack_engine_publication_audit_summary(
                 "phase2_publish_preflight_integration_engine_policy",
             )
         ),
+        "publish_preflight_direct_runtime_evidence": _publication_audit_layer(
+            payload,
+            "publish_preflight_direct_runtime_evidence",
+        ),
+        "phase2_publish_preflight_direct_runtime_evidence": (
+            _publication_audit_layer(
+                payload,
+                "phase2_publish_preflight_direct_runtime_evidence",
+            )
+        ),
         "source_contract_ready": _publication_audit_check(
             payload,
             "source_contract_ready",
@@ -1309,6 +1369,24 @@ def _stack_engine_publication_audit_summary(
             _publication_audit_check(
                 payload,
                 "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight",
+            )
+        ),
+        "publish_preflight_direct_runtime_evidence_ready": (
+            _publication_audit_check(
+                payload,
+                "publish_preflight_direct_runtime_evidence_ready",
+            )
+        ),
+        "phase2_publish_preflight_direct_runtime_evidence_ready": (
+            _publication_audit_check(
+                payload,
+                "phase2_publish_preflight_direct_runtime_evidence_ready",
+            )
+        ),
+        "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight": (
+            _publication_audit_check(
+                payload,
+                "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
             )
         ),
     }
@@ -2560,6 +2638,108 @@ def build_phase2_status(
         )
         checks.append(
             {
+                "name": "windows_publish_preflight_direct_runtime_evidence_passed",
+                "passed": (
+                    preflight.get("windows_release_matrix_direct_acceptance_fastpath_evidence")
+                    is True
+                    and preflight.get("windows_release_matrix_direct_pipeline_calibration_evidence")
+                    is True
+                    and preflight.get("default_promotion_direct_acceptance_fastpath_evidence")
+                    is True
+                    and preflight.get("default_promotion_direct_pipeline_calibration_evidence")
+                    is True
+                    and preflight.get("matrix_direct_runtime_evidence_matches_default_promotion")
+                    is True
+                    and preflight.get("matrix_direct_runtime_evidence_ready") is True
+                    and preflight.get("default_promotion_direct_runtime_evidence_ready")
+                    is True
+                    and preflight.get("matrix_direct_runtime_acceptance_source")
+                    == "explicit_resident_artifacts_json"
+                    and preflight.get("default_promotion_direct_runtime_acceptance_source")
+                    == "explicit_resident_artifacts_json"
+                    and _int_or_zero(
+                        preflight.get("matrix_direct_runtime_acceptance_check_count")
+                    )
+                    > 0
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_direct_runtime_acceptance_check_count"
+                        )
+                    )
+                    > 0
+                    and preflight.get(
+                        "matrix_direct_runtime_pipeline_calibration_source"
+                    )
+                    == "resident_artifacts_json_fallback"
+                    and preflight.get(
+                        "default_promotion_direct_runtime_pipeline_calibration_source"
+                    )
+                    == "resident_artifacts_json_fallback"
+                    and _int_or_zero(
+                        preflight.get(
+                            "matrix_direct_runtime_pipeline_resident_lights"
+                        )
+                    )
+                    >= 200
+                    and _int_or_zero(
+                        preflight.get(
+                            "default_promotion_direct_runtime_pipeline_resident_lights"
+                        )
+                    )
+                    >= 200
+                ),
+                "evidence": {
+                    "matrix_ready": preflight.get(
+                        "matrix_direct_runtime_evidence_ready"
+                    ),
+                    "matrix_acceptance_source": preflight.get(
+                        "matrix_direct_runtime_acceptance_source"
+                    ),
+                    "matrix_acceptance_check_count": preflight.get(
+                        "matrix_direct_runtime_acceptance_check_count"
+                    ),
+                    "matrix_pipeline_calibration_source": preflight.get(
+                        "matrix_direct_runtime_pipeline_calibration_source"
+                    ),
+                    "matrix_pipeline_resident_lights": preflight.get(
+                        "matrix_direct_runtime_pipeline_resident_lights"
+                    ),
+                    "default_promotion_ready": preflight.get(
+                        "default_promotion_direct_runtime_evidence_ready"
+                    ),
+                    "default_promotion_acceptance_source": preflight.get(
+                        "default_promotion_direct_runtime_acceptance_source"
+                    ),
+                    "default_promotion_acceptance_check_count": preflight.get(
+                        "default_promotion_direct_runtime_acceptance_check_count"
+                    ),
+                    "default_promotion_pipeline_calibration_source": preflight.get(
+                        "default_promotion_direct_runtime_pipeline_calibration_source"
+                    ),
+                    "default_promotion_pipeline_resident_lights": preflight.get(
+                        "default_promotion_direct_runtime_pipeline_resident_lights"
+                    ),
+                    "matrix_acceptance_check": preflight.get(
+                        "windows_release_matrix_direct_acceptance_fastpath_evidence"
+                    ),
+                    "matrix_pipeline_check": preflight.get(
+                        "windows_release_matrix_direct_pipeline_calibration_evidence"
+                    ),
+                    "default_promotion_acceptance_check": preflight.get(
+                        "default_promotion_direct_acceptance_fastpath_evidence"
+                    ),
+                    "default_promotion_pipeline_check": preflight.get(
+                        "default_promotion_direct_pipeline_calibration_evidence"
+                    ),
+                    "agreement_check": preflight.get(
+                        "matrix_direct_runtime_evidence_matches_default_promotion"
+                    ),
+                    "failed_checks": preflight.get("failed_checks"),
+                },
+            }
+        )
+        checks.append(
+            {
                 "name": "windows_publish_preflight_resident_winsorized_sweep_passed",
                 "passed": (
                     preflight.get("matrix_resident_winsorized_sweep_audit_passed")
@@ -2830,6 +3010,43 @@ def build_phase2_status(
                     ),
                     "agreement_check": publication_audit.get(
                         "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
+                    ),
+                    "failed_checks": publication_audit.get("failed_checks"),
+                },
+            }
+        )
+        checks.append(
+            {
+                "name": "stack_engine_publication_audit_direct_runtime_chain_passed",
+                "passed": (
+                    publication_audit.get(
+                        "publish_preflight_direct_runtime_evidence_ready"
+                    )
+                    is True
+                    and publication_audit.get(
+                        "phase2_publish_preflight_direct_runtime_evidence_ready"
+                    )
+                    is True
+                    and publication_audit.get(
+                        "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight"
+                    )
+                    is True
+                ),
+                "evidence": {
+                    "raw_layer": publication_audit.get(
+                        "publish_preflight_direct_runtime_evidence"
+                    ),
+                    "phase2_layer": publication_audit.get(
+                        "phase2_publish_preflight_direct_runtime_evidence"
+                    ),
+                    "raw_ready_check": publication_audit.get(
+                        "publish_preflight_direct_runtime_evidence_ready"
+                    ),
+                    "phase2_ready_check": publication_audit.get(
+                        "phase2_publish_preflight_direct_runtime_evidence_ready"
+                    ),
+                    "agreement_check": publication_audit.get(
+                        "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight"
                     ),
                     "failed_checks": publication_audit.get("failed_checks"),
                 },
@@ -3382,6 +3599,34 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('default_promotion_stack_engine_runtime_default_pipeline_failed_output_count')}"
                 ),
                 (
+                    "- Direct runtime evidence: "
+                    f"matrix-ready={preflight.get('matrix_direct_runtime_evidence_ready')} "
+                    f"matrix-source={preflight.get('matrix_direct_runtime_acceptance_source')} "
+                    f"matrix-calibration={preflight.get('matrix_direct_runtime_pipeline_calibration_source')} "
+                    f"matrix-lights={preflight.get('matrix_direct_runtime_pipeline_resident_lights')} "
+                    "default-ready="
+                    f"{preflight.get('default_promotion_direct_runtime_evidence_ready')} "
+                    "default-source="
+                    f"{preflight.get('default_promotion_direct_runtime_acceptance_source')} "
+                    "default-calibration="
+                    f"{preflight.get('default_promotion_direct_runtime_pipeline_calibration_source')} "
+                    "default-lights="
+                    f"{preflight.get('default_promotion_direct_runtime_pipeline_resident_lights')}"
+                ),
+                (
+                    "- Direct runtime checks: "
+                    "matrix-acceptance="
+                    f"{preflight.get('windows_release_matrix_direct_acceptance_fastpath_evidence')}, "
+                    "matrix-calibration="
+                    f"{preflight.get('windows_release_matrix_direct_pipeline_calibration_evidence')}, "
+                    "default-acceptance="
+                    f"{preflight.get('default_promotion_direct_acceptance_fastpath_evidence')}, "
+                    "default-calibration="
+                    f"{preflight.get('default_promotion_direct_pipeline_calibration_evidence')}, "
+                    "agreement="
+                    f"{preflight.get('matrix_direct_runtime_evidence_matches_default_promotion')}"
+                ),
+                (
                     "- Resident winsorized sweep statuses: "
                     f"matrix={preflight.get('matrix_resident_winsorized_sweep_status')}, "
                     "default-promotion="
@@ -3474,6 +3719,19 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"phase2={publication_audit.get('phase2_publish_preflight_integration_engine_policy_ready')}, "
                     "agreement="
                     f"{publication_audit.get('phase2_publish_preflight_integration_engine_policy_matches_publish_preflight')}"
+                ),
+                (
+                    "- Direct runtime layers: "
+                    f"raw={publication_audit.get('publish_preflight_direct_runtime_evidence')}, "
+                    "phase2="
+                    f"{publication_audit.get('phase2_publish_preflight_direct_runtime_evidence')}"
+                ),
+                (
+                    "- Direct runtime checks: "
+                    f"raw={publication_audit.get('publish_preflight_direct_runtime_evidence_ready')}, "
+                    f"phase2={publication_audit.get('phase2_publish_preflight_direct_runtime_evidence_ready')}, "
+                    "agreement="
+                    f"{publication_audit.get('phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight')}"
                 ),
                 (
                     "- Resident winsorized layers: "
@@ -3910,6 +4168,27 @@ _PUBLISH_PREFLIGHT_RUNTIME_DEFAULT_STATUS_FIELDS = (
     "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count",
 )
 
+_PUBLISH_PREFLIGHT_DIRECT_RUNTIME_CHECK_FIELDS = (
+    "windows_release_matrix_direct_acceptance_fastpath_evidence",
+    "windows_release_matrix_direct_pipeline_calibration_evidence",
+    "default_promotion_direct_acceptance_fastpath_evidence",
+    "default_promotion_direct_pipeline_calibration_evidence",
+    "matrix_direct_runtime_evidence_matches_default_promotion",
+)
+
+_PUBLISH_PREFLIGHT_DIRECT_RUNTIME_STATUS_FIELDS = (
+    "matrix_direct_runtime_evidence_ready",
+    "matrix_direct_runtime_acceptance_source",
+    "matrix_direct_runtime_acceptance_check_count",
+    "matrix_direct_runtime_pipeline_calibration_source",
+    "matrix_direct_runtime_pipeline_resident_lights",
+    "default_promotion_direct_runtime_evidence_ready",
+    "default_promotion_direct_runtime_acceptance_source",
+    "default_promotion_direct_runtime_acceptance_check_count",
+    "default_promotion_direct_runtime_pipeline_calibration_source",
+    "default_promotion_direct_runtime_pipeline_resident_lights",
+)
+
 _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_CHECK_FIELDS = (
     "matrix_resident_winsorized_sweep_audit_passed",
     "matrix_resident_winsorized_required_frame_passed",
@@ -4111,6 +4390,59 @@ def _publish_preflight_runtime_default_statuses_passed(
     )
 
 
+def _publish_preflight_direct_runtime_checks_passed(payload: dict[str, Any]) -> bool:
+    return all(
+        _status_value(payload, "publish_preflight", field) is True
+        for field in _PUBLISH_PREFLIGHT_DIRECT_RUNTIME_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_direct_runtime_statuses(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        field: _status_value(payload, "publish_preflight", field)
+        for field in _PUBLISH_PREFLIGHT_DIRECT_RUNTIME_STATUS_FIELDS
+    }
+
+
+def _publish_preflight_direct_runtime_statuses_passed(
+    payload: dict[str, Any],
+) -> bool:
+    statuses = _publish_preflight_direct_runtime_statuses(payload)
+    return (
+        bool(statuses)
+        and statuses.get("matrix_direct_runtime_evidence_ready") is True
+        and statuses.get("default_promotion_direct_runtime_evidence_ready") is True
+        and statuses.get("matrix_direct_runtime_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and statuses.get("default_promotion_direct_runtime_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and _int_or_zero(statuses.get("matrix_direct_runtime_acceptance_check_count"))
+        > 0
+        and _int_or_zero(
+            statuses.get("default_promotion_direct_runtime_acceptance_check_count")
+        )
+        > 0
+        and statuses.get("matrix_direct_runtime_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and statuses.get(
+            "default_promotion_direct_runtime_pipeline_calibration_source"
+        )
+        == "resident_artifacts_json_fallback"
+        and _int_or_zero(
+            statuses.get("matrix_direct_runtime_pipeline_resident_lights")
+        )
+        >= 200
+        and _int_or_zero(
+            statuses.get(
+                "default_promotion_direct_runtime_pipeline_resident_lights"
+            )
+        )
+        >= 200
+    )
+
+
 def _publish_preflight_resident_winsorized_checks_passed(payload: dict[str, Any]) -> bool:
     return all(
         _status_value(payload, "publish_preflight", field) is True
@@ -4221,6 +4553,12 @@ _STACK_PUBLICATION_WINSORIZED_FIELDS = (
     "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
 )
 
+_STACK_PUBLICATION_DIRECT_RUNTIME_FIELDS = (
+    "publish_preflight_direct_runtime_evidence_ready",
+    "phase2_publish_preflight_direct_runtime_evidence_ready",
+    "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
+)
+
 
 def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
     audit = _status_value(payload, "stack_engine_publication_audit")
@@ -4233,6 +4571,7 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
             "failed_check_count": None,
             "policy_checks_passed": False,
             "resident_winsorized_checks_passed": False,
+            "direct_runtime_checks_passed": False,
         }
     policy = {
         field: audit.get(field)
@@ -4241,6 +4580,10 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
     resident_winsorized = {
         field: audit.get(field)
         for field in _STACK_PUBLICATION_WINSORIZED_FIELDS
+    }
+    direct_runtime = {
+        field: audit.get(field)
+        for field in _STACK_PUBLICATION_DIRECT_RUNTIME_FIELDS
     }
     return {
         "present": True,
@@ -4251,9 +4594,13 @@ def _stack_publication_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "failed_check_count": audit.get("failed_check_count"),
         "policy_checks": policy,
         "resident_winsorized_checks": resident_winsorized,
+        "direct_runtime_checks": direct_runtime,
         "policy_checks_passed": all(value is True for value in policy.values()),
         "resident_winsorized_checks_passed": all(
             value is True for value in resident_winsorized.values()
+        ),
+        "direct_runtime_checks_passed": all(
+            value is True for value in direct_runtime.values()
         ),
     }
 
@@ -4732,6 +5079,30 @@ def build_phase2_status_compare(
             candidate=_publish_preflight_runtime_default_statuses(candidate),
         ),
         _compare_check(
+            "windows_publish_preflight_direct_runtime_evidence_preserved",
+            not _publish_preflight_direct_runtime_checks_passed(baseline)
+            or _publish_preflight_direct_runtime_checks_passed(candidate),
+            baseline={
+                "checks_passed": _publish_preflight_direct_runtime_checks_passed(
+                    baseline
+                ),
+                "statuses": _publish_preflight_direct_runtime_statuses(baseline),
+            },
+            candidate={
+                "checks_passed": _publish_preflight_direct_runtime_checks_passed(
+                    candidate
+                ),
+                "statuses": _publish_preflight_direct_runtime_statuses(candidate),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_direct_runtime_status_preserved",
+            not _publish_preflight_direct_runtime_statuses_passed(baseline)
+            or _publish_preflight_direct_runtime_statuses_passed(candidate),
+            baseline=_publish_preflight_direct_runtime_statuses(baseline),
+            candidate=_publish_preflight_direct_runtime_statuses(candidate),
+        ),
+        _compare_check(
             "windows_publish_preflight_resident_winsorized_sweep_preserved",
             not _publish_preflight_resident_winsorized_checks_passed(baseline)
             or _publish_preflight_resident_winsorized_checks_passed(candidate),
@@ -4799,6 +5170,13 @@ def build_phase2_status_compare(
             or candidate_publication.get("resident_winsorized_checks_passed") is True,
             baseline=baseline_publication.get("resident_winsorized_checks"),
             candidate=candidate_publication.get("resident_winsorized_checks"),
+        ),
+        _compare_check(
+            "stack_engine_publication_direct_runtime_chain_preserved",
+            baseline_publication.get("direct_runtime_checks_passed") is not True
+            or candidate_publication.get("direct_runtime_checks_passed") is True,
+            baseline=baseline_publication.get("direct_runtime_checks"),
+            candidate=candidate_publication.get("direct_runtime_checks"),
         ),
         _compare_check(
             "pipeline_contract_passed_preserved",

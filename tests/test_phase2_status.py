@@ -703,6 +703,11 @@ def _write_publish_preflight(
     matrix_stack_runtime_default_ready: bool | None = None,
     default_promotion_stack_runtime_default_ready: bool | None = None,
     include_stack_runtime_default: bool = True,
+    direct_runtime_evidence_ready: bool = True,
+    include_direct_runtime_evidence: bool = True,
+    direct_runtime_acceptance_source: str = "explicit_resident_artifacts_json",
+    direct_runtime_pipeline_calibration_source: str = "resident_artifacts_json_fallback",
+    direct_runtime_pipeline_resident_lights: int = 200,
     stack_publication_audit_ready: bool = True,
     stack_publication_policy_ready: bool = True,
     stack_publication_resident_winsorized_ready: bool = True,
@@ -731,6 +736,8 @@ def _write_publish_preflight(
         integration_engine_policy_ready or not include_integration_engine_policy
     ) and (
         runtime_defaults_ready or not include_stack_runtime_default
+    ) and (
+        direct_runtime_evidence_ready or not include_direct_runtime_evidence
     ) and (
         (
             stack_publication_audit_ready
@@ -1010,6 +1017,86 @@ def _write_publish_preflight(
                 *failed_checks,
                 "matrix_stack_engine_runtime_default_matches_default_promotion",
             ]
+    if include_direct_runtime_evidence:
+        summary.update(
+            {
+                "matrix_direct_runtime_evidence_ready": direct_runtime_evidence_ready,
+                "matrix_direct_runtime_acceptance_source": (
+                    direct_runtime_acceptance_source
+                ),
+                "matrix_direct_runtime_acceptance_check_count": (
+                    24 if direct_runtime_evidence_ready else 0
+                ),
+                "matrix_direct_runtime_pipeline_calibration_source": (
+                    direct_runtime_pipeline_calibration_source
+                ),
+                "matrix_direct_runtime_pipeline_resident_lights": (
+                    direct_runtime_pipeline_resident_lights
+                    if direct_runtime_evidence_ready
+                    else 0
+                ),
+                "default_promotion_direct_runtime_evidence_ready": (
+                    direct_runtime_evidence_ready
+                ),
+                "default_promotion_direct_runtime_acceptance_source": (
+                    direct_runtime_acceptance_source
+                ),
+                "default_promotion_direct_runtime_acceptance_check_count": (
+                    24 if direct_runtime_evidence_ready else 0
+                ),
+                "default_promotion_direct_runtime_pipeline_calibration_source": (
+                    direct_runtime_pipeline_calibration_source
+                ),
+                "default_promotion_direct_runtime_pipeline_resident_lights": (
+                    direct_runtime_pipeline_resident_lights
+                    if direct_runtime_evidence_ready
+                    else 0
+                ),
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "windows_release_matrix_direct_acceptance_fastpath_evidence",
+                    "passed": direct_runtime_evidence_ready
+                    and direct_runtime_acceptance_source
+                    == "explicit_resident_artifacts_json",
+                },
+                {
+                    "name": "windows_release_matrix_direct_pipeline_calibration_evidence",
+                    "passed": direct_runtime_evidence_ready
+                    and direct_runtime_pipeline_calibration_source
+                    == "resident_artifacts_json_fallback"
+                    and direct_runtime_pipeline_resident_lights >= 200,
+                },
+                {
+                    "name": "default_promotion_direct_acceptance_fastpath_evidence",
+                    "passed": direct_runtime_evidence_ready
+                    and direct_runtime_acceptance_source
+                    == "explicit_resident_artifacts_json",
+                },
+                {
+                    "name": "default_promotion_direct_pipeline_calibration_evidence",
+                    "passed": direct_runtime_evidence_ready
+                    and direct_runtime_pipeline_calibration_source
+                    == "resident_artifacts_json_fallback"
+                    and direct_runtime_pipeline_resident_lights >= 200,
+                },
+                {
+                    "name": "matrix_direct_runtime_evidence_matches_default_promotion",
+                    "passed": direct_runtime_evidence_ready,
+                },
+            ]
+        )
+        if not direct_runtime_evidence_ready:
+            failed_checks = [
+                *failed_checks,
+                "windows_release_matrix_direct_acceptance_fastpath_evidence",
+                "windows_release_matrix_direct_pipeline_calibration_evidence",
+                "default_promotion_direct_acceptance_fastpath_evidence",
+                "default_promotion_direct_pipeline_calibration_evidence",
+                "matrix_direct_runtime_evidence_matches_default_promotion",
+            ]
     if include_resident_winsorized_sweep:
         status = "passed" if resident_winsorized_sweep_ready else "failed"
         required_frame_passed = resident_winsorized_sweep_ready
@@ -1170,14 +1257,23 @@ def _write_stack_engine_publication_audit(
     passed: bool = True,
     integration_engine_policy_ready: bool = True,
     resident_winsorized_ready: bool = True,
+    direct_runtime_ready: bool = True,
 ) -> None:
-    artifact_ready = passed and integration_engine_policy_ready and resident_winsorized_ready
+    artifact_ready = (
+        passed
+        and integration_engine_policy_ready
+        and resident_winsorized_ready
+        and direct_runtime_ready
+    )
     status = "passed" if artifact_ready else "blocked"
     policy_status = (
         "publish_preflight_ready" if integration_engine_policy_ready else "blocked"
     )
     winsorized_status = (
         "publish_preflight_ready" if resident_winsorized_ready else "blocked"
+    )
+    direct_runtime_status = (
+        "publish_preflight_ready" if direct_runtime_ready else "blocked"
     )
     failed_checks = []
     if not passed:
@@ -1196,6 +1292,14 @@ def _write_stack_engine_publication_audit(
                 "publish_preflight_resident_winsorized_sweep_ready",
                 "phase2_publish_preflight_resident_winsorized_sweep_ready",
                 "phase2_publish_preflight_resident_winsorized_matches_publish_preflight",
+            ]
+        )
+    if not direct_runtime_ready:
+        failed_checks.extend(
+            [
+                "publish_preflight_direct_runtime_evidence_ready",
+                "phase2_publish_preflight_direct_runtime_evidence_ready",
+                "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
             ]
         )
     checks = [
@@ -1226,6 +1330,18 @@ def _write_stack_engine_publication_audit(
         {
             "name": "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight",
             "passed": integration_engine_policy_ready,
+        },
+        {
+            "name": "publish_preflight_direct_runtime_evidence_ready",
+            "passed": direct_runtime_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_direct_runtime_evidence_ready",
+            "passed": direct_runtime_ready,
+        },
+        {
+            "name": "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
+            "passed": direct_runtime_ready,
         },
     ]
     write_json(
@@ -1271,6 +1387,14 @@ def _write_stack_engine_publication_audit(
                 "phase2_publish_preflight_integration_engine_policy": {
                     "status": policy_status,
                     "ready": integration_engine_policy_ready,
+                },
+                "publish_preflight_direct_runtime_evidence": {
+                    "status": direct_runtime_status,
+                    "ready": direct_runtime_ready,
+                },
+                "phase2_publish_preflight_direct_runtime_evidence": {
+                    "status": direct_runtime_status,
+                    "ready": direct_runtime_ready,
                 },
             },
             "checks": checks,
@@ -1330,6 +1454,10 @@ def _status_payload(
     publish_preflight_stack_runtime_default_ready: bool = True,
     publish_preflight_stack_runtime_default_legacy_master_count: int = 0,
     publish_preflight_stack_runtime_default_failed_output_count: int = 0,
+    publish_preflight_direct_runtime_ready: bool = True,
+    publish_preflight_direct_runtime_acceptance_source: str = "explicit_resident_artifacts_json",
+    publish_preflight_direct_runtime_pipeline_source: str = "resident_artifacts_json_fallback",
+    publish_preflight_direct_runtime_resident_lights: int = 200,
     publish_preflight_resident_winsorized_status: str = "passed",
     publish_preflight_resident_winsorized_required_frame_passed: bool = True,
     publish_preflight_resident_winsorized_check_count: int = 27,
@@ -1627,6 +1755,65 @@ def _status_payload(
                 and publish_preflight_stack_runtime_default_legacy_master_count == 0
                 and publish_preflight_stack_runtime_default_failed_output_count == 0
             ),
+            "matrix_direct_runtime_evidence_ready": (
+                publish_preflight_direct_runtime_ready
+            ),
+            "matrix_direct_runtime_acceptance_source": (
+                publish_preflight_direct_runtime_acceptance_source
+            ),
+            "matrix_direct_runtime_acceptance_check_count": (
+                24 if publish_preflight_direct_runtime_ready else 0
+            ),
+            "matrix_direct_runtime_pipeline_calibration_source": (
+                publish_preflight_direct_runtime_pipeline_source
+            ),
+            "matrix_direct_runtime_pipeline_resident_lights": (
+                publish_preflight_direct_runtime_resident_lights
+                if publish_preflight_direct_runtime_ready
+                else 0
+            ),
+            "default_promotion_direct_runtime_evidence_ready": (
+                publish_preflight_direct_runtime_ready
+            ),
+            "default_promotion_direct_runtime_acceptance_source": (
+                publish_preflight_direct_runtime_acceptance_source
+            ),
+            "default_promotion_direct_runtime_acceptance_check_count": (
+                24 if publish_preflight_direct_runtime_ready else 0
+            ),
+            "default_promotion_direct_runtime_pipeline_calibration_source": (
+                publish_preflight_direct_runtime_pipeline_source
+            ),
+            "default_promotion_direct_runtime_pipeline_resident_lights": (
+                publish_preflight_direct_runtime_resident_lights
+                if publish_preflight_direct_runtime_ready
+                else 0
+            ),
+            "windows_release_matrix_direct_acceptance_fastpath_evidence": (
+                publish_preflight_direct_runtime_ready
+                and publish_preflight_direct_runtime_acceptance_source
+                == "explicit_resident_artifacts_json"
+            ),
+            "windows_release_matrix_direct_pipeline_calibration_evidence": (
+                publish_preflight_direct_runtime_ready
+                and publish_preflight_direct_runtime_pipeline_source
+                == "resident_artifacts_json_fallback"
+                and publish_preflight_direct_runtime_resident_lights >= 200
+            ),
+            "default_promotion_direct_acceptance_fastpath_evidence": (
+                publish_preflight_direct_runtime_ready
+                and publish_preflight_direct_runtime_acceptance_source
+                == "explicit_resident_artifacts_json"
+            ),
+            "default_promotion_direct_pipeline_calibration_evidence": (
+                publish_preflight_direct_runtime_ready
+                and publish_preflight_direct_runtime_pipeline_source
+                == "resident_artifacts_json_fallback"
+                and publish_preflight_direct_runtime_resident_lights >= 200
+            ),
+            "matrix_direct_runtime_evidence_matches_default_promotion": (
+                publish_preflight_direct_runtime_ready
+            ),
             "matrix_resident_winsorized_sweep_audit_passed": (
                 publish_preflight_resident_winsorized_status == "passed"
             ),
@@ -1721,6 +1908,15 @@ def _status_payload(
             ),
             "phase2_publish_preflight_resident_winsorized_matches_publish_preflight": (
                 stack_publication_resident_winsorized_ready
+            ),
+            "publish_preflight_direct_runtime_evidence_ready": (
+                publish_preflight_direct_runtime_ready
+            ),
+            "phase2_publish_preflight_direct_runtime_evidence_ready": (
+                publish_preflight_direct_runtime_ready
+            ),
+            "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight": (
+                publish_preflight_direct_runtime_ready
             ),
         },
         "pipeline_contract": {
@@ -1974,6 +2170,18 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         ]
         is True
     )
+    assert (
+        payload["stack_engine_publication_audit"][
+            "publish_preflight_direct_runtime_evidence_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["stack_engine_publication_audit"][
+            "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight"
+        ]
+        is True
+    )
     assert payload["publish_preflight"]["asset_count"] == 4
     assert payload["publish_preflight"]["primary_package"] == "cuda13"
     assert (
@@ -2097,6 +2305,55 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert (
         payload["publish_preflight"][
             "matrix_stack_engine_runtime_default_matches_default_promotion"
+        ]
+        is True
+    )
+    assert payload["publish_preflight"]["matrix_direct_runtime_evidence_ready"] is True
+    assert (
+        payload["publish_preflight"]["matrix_direct_runtime_acceptance_source"]
+        == "explicit_resident_artifacts_json"
+    )
+    assert payload["publish_preflight"]["matrix_direct_runtime_acceptance_check_count"] == 24
+    assert (
+        payload["publish_preflight"][
+            "matrix_direct_runtime_pipeline_calibration_source"
+        ]
+        == "resident_artifacts_json_fallback"
+    )
+    assert payload["publish_preflight"]["matrix_direct_runtime_pipeline_resident_lights"] == 200
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_direct_runtime_evidence_ready"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "windows_release_matrix_direct_acceptance_fastpath_evidence"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "windows_release_matrix_direct_pipeline_calibration_evidence"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_direct_acceptance_fastpath_evidence"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "default_promotion_direct_pipeline_calibration_evidence"
+        ]
+        is True
+    )
+    assert (
+        payload["publish_preflight"][
+            "matrix_direct_runtime_evidence_matches_default_promotion"
         ]
         is True
     )
@@ -2229,6 +2486,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["windows_publish_preflight_integration_engine_policy_passed"] is True
     assert checks["windows_publish_preflight_stack_engine_default_contract_ready"] is True
     assert checks["windows_publish_preflight_stack_engine_runtime_default_passed"] is True
+    assert checks["windows_publish_preflight_direct_runtime_evidence_passed"] is True
     assert checks["windows_publish_preflight_resident_winsorized_sweep_passed"] is True
     assert (
         checks["windows_publish_preflight_stack_engine_publication_audit_passed"]
@@ -2240,6 +2498,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
         checks["stack_engine_publication_audit_resident_winsorized_chain_passed"]
         is True
     )
+    assert checks["stack_engine_publication_audit_direct_runtime_chain_passed"] is True
 
 
 def test_phase2_status_blocks_acceptance_runtime_default_regression(tmp_path: Path):
@@ -3161,6 +3420,82 @@ def test_phase2_status_blocks_failed_publish_preflight_default_runtime_default(
     assert runtime_check["evidence"]["agreement_check"] is False
 
 
+def test_phase2_status_blocks_missing_publish_preflight_direct_runtime_evidence(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=308)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        include_direct_runtime_evidence=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    direct_check = checks["windows_publish_preflight_direct_runtime_evidence_passed"]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert checks["windows_publish_preflight_ready"]["passed"] is True
+    assert direct_check["passed"] is False
+    assert direct_check["evidence"]["matrix_ready"] is None
+    assert direct_check["evidence"]["matrix_acceptance_check"] is None
+    assert direct_check["evidence"]["agreement_check"] is None
+
+
+def test_phase2_status_blocks_stale_publish_preflight_direct_fastpath_source(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=308)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(pipeline_contract)
+    _write_release_decision(release_decision)
+    _write_publish_preflight(
+        publish_preflight,
+        direct_runtime_acceptance_source="phase2_status_handoff",
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        publish_preflight=publish_preflight,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    direct_check = checks["windows_publish_preflight_direct_runtime_evidence_passed"]
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "publish_preflight_ready"
+    assert direct_check["passed"] is False
+    assert direct_check["evidence"]["matrix_ready"] is True
+    assert direct_check["evidence"]["matrix_acceptance_source"] == "phase2_status_handoff"
+    assert direct_check["evidence"]["matrix_acceptance_check"] is False
+    assert direct_check["evidence"]["matrix_pipeline_check"] is True
+
+
 def test_phase2_status_blocks_missing_publish_preflight_resident_winsorized_sweep(
     tmp_path: Path,
 ):
@@ -3428,11 +3763,20 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
         ]
         is True
     )
+    assert (
+        checks["windows_publish_preflight_direct_runtime_evidence_preserved"]
+        is True
+    )
+    assert (
+        checks["windows_publish_preflight_direct_runtime_status_preserved"]
+        is True
+    )
     assert checks["windows_publish_preflight_resident_winsorized_sweep_preserved"] is True
     assert checks["windows_publish_preflight_resident_winsorized_status_preserved"] is True
     assert checks["stack_engine_publication_audit_passed_preserved"] is True
     assert checks["stack_engine_publication_policy_chain_preserved"] is True
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is True
+    assert checks["stack_engine_publication_direct_runtime_chain_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is True
     assert (
@@ -3493,6 +3837,7 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             publish_preflight_stack_runtime_default_ready=False,
             publish_preflight_stack_runtime_default_legacy_master_count=1,
             publish_preflight_stack_runtime_default_failed_output_count=1,
+            publish_preflight_direct_runtime_ready=False,
             stack_publication_passed=False,
             stack_publication_policy_ready=False,
             stack_publication_resident_winsorized_ready=False,
@@ -3554,9 +3899,18 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
         ]
         is False
     )
+    assert (
+        checks["windows_publish_preflight_direct_runtime_evidence_preserved"]
+        is False
+    )
+    assert (
+        checks["windows_publish_preflight_direct_runtime_status_preserved"]
+        is False
+    )
     assert checks["stack_engine_publication_audit_passed_preserved"] is False
     assert checks["stack_engine_publication_policy_chain_preserved"] is False
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is False
+    assert checks["stack_engine_publication_direct_runtime_chain_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is False
     assert (
@@ -4146,6 +4500,44 @@ def test_phase2_status_compare_flags_publish_preflight_runtime_default_regressio
         ]
         == "failed"
     )
+
+
+def test_phase2_status_compare_flags_publish_preflight_direct_runtime_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=307))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=308,
+            status="attention_required",
+            publish_preflight_direct_runtime_ready=False,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["windows_publish_preflight_direct_runtime_evidence_preserved"][
+        "passed"
+    ] is False
+    assert checks["windows_publish_preflight_direct_runtime_evidence_preserved"][
+        "evidence"
+    ]["candidate"]["checks_passed"] is False
+    assert checks["windows_publish_preflight_direct_runtime_status_preserved"][
+        "passed"
+    ] is False
+    candidate_statuses = checks[
+        "windows_publish_preflight_direct_runtime_status_preserved"
+    ]["evidence"]["candidate"]
+    assert candidate_statuses["matrix_direct_runtime_evidence_ready"] is False
+    assert candidate_statuses["matrix_direct_runtime_acceptance_check_count"] == 0
 
 
 def test_phase2_status_compare_flags_publish_preflight_resident_winsorized_regression(

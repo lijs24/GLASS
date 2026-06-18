@@ -764,6 +764,187 @@ def _runtime_default_summaries_match(
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
 
 
+def _direct_runtime_summary_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("matrix_ready") is True
+        and summary.get("default_promotion_ready") is True
+        and summary.get("matrix_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and summary.get("default_promotion_acceptance_source")
+        == "explicit_resident_artifacts_json"
+        and _int_or_zero(summary.get("matrix_acceptance_check_count")) > 0
+        and _int_or_zero(summary.get("default_promotion_acceptance_check_count")) > 0
+        and summary.get("matrix_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and summary.get("default_promotion_pipeline_calibration_source")
+        == "resident_artifacts_json_fallback"
+        and _int_or_zero(summary.get("matrix_pipeline_resident_lights")) >= 200
+        and _int_or_zero(summary.get("default_promotion_pipeline_resident_lights"))
+        >= 200
+        and _all_true(
+            [
+                summary.get("matrix_acceptance_passed"),
+                summary.get("matrix_pipeline_passed"),
+                summary.get("default_promotion_acceptance_passed"),
+                summary.get("default_promotion_pipeline_passed"),
+                summary.get("matches_default_promotion"),
+            ]
+        )
+    )
+
+
+def _publish_preflight_direct_runtime_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "matrix_ready": summary.get("matrix_direct_runtime_evidence_ready"),
+        "matrix_acceptance_source": summary.get(
+            "matrix_direct_runtime_acceptance_source"
+        ),
+        "matrix_acceptance_check_count": summary.get(
+            "matrix_direct_runtime_acceptance_check_count"
+        ),
+        "matrix_pipeline_calibration_source": summary.get(
+            "matrix_direct_runtime_pipeline_calibration_source"
+        ),
+        "matrix_pipeline_resident_lights": summary.get(
+            "matrix_direct_runtime_pipeline_resident_lights"
+        ),
+        "default_promotion_ready": summary.get(
+            "default_promotion_direct_runtime_evidence_ready"
+        ),
+        "default_promotion_acceptance_source": summary.get(
+            "default_promotion_direct_runtime_acceptance_source"
+        ),
+        "default_promotion_acceptance_check_count": summary.get(
+            "default_promotion_direct_runtime_acceptance_check_count"
+        ),
+        "default_promotion_pipeline_calibration_source": summary.get(
+            "default_promotion_direct_runtime_pipeline_calibration_source"
+        ),
+        "default_promotion_pipeline_resident_lights": summary.get(
+            "default_promotion_direct_runtime_pipeline_resident_lights"
+        ),
+        "matrix_acceptance_passed": _check_passed(
+            payload,
+            "windows_release_matrix_direct_acceptance_fastpath_evidence",
+        ),
+        "matrix_pipeline_passed": _check_passed(
+            payload,
+            "windows_release_matrix_direct_pipeline_calibration_evidence",
+        ),
+        "default_promotion_acceptance_passed": _check_passed(
+            payload,
+            "default_promotion_direct_acceptance_fastpath_evidence",
+        ),
+        "default_promotion_pipeline_passed": _check_passed(
+            payload,
+            "default_promotion_direct_pipeline_calibration_evidence",
+        ),
+        "matches_default_promotion": _check_passed(
+            payload,
+            "matrix_direct_runtime_evidence_matches_default_promotion",
+        ),
+    }
+    result["ready"] = _direct_runtime_summary_ready(result)
+    return result
+
+
+def _phase2_publish_preflight_direct_runtime_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "matrix_ready": preflight.get("matrix_direct_runtime_evidence_ready"),
+        "matrix_acceptance_source": preflight.get(
+            "matrix_direct_runtime_acceptance_source"
+        ),
+        "matrix_acceptance_check_count": preflight.get(
+            "matrix_direct_runtime_acceptance_check_count"
+        ),
+        "matrix_pipeline_calibration_source": preflight.get(
+            "matrix_direct_runtime_pipeline_calibration_source"
+        ),
+        "matrix_pipeline_resident_lights": preflight.get(
+            "matrix_direct_runtime_pipeline_resident_lights"
+        ),
+        "default_promotion_ready": preflight.get(
+            "default_promotion_direct_runtime_evidence_ready"
+        ),
+        "default_promotion_acceptance_source": preflight.get(
+            "default_promotion_direct_runtime_acceptance_source"
+        ),
+        "default_promotion_acceptance_check_count": preflight.get(
+            "default_promotion_direct_runtime_acceptance_check_count"
+        ),
+        "default_promotion_pipeline_calibration_source": preflight.get(
+            "default_promotion_direct_runtime_pipeline_calibration_source"
+        ),
+        "default_promotion_pipeline_resident_lights": preflight.get(
+            "default_promotion_direct_runtime_pipeline_resident_lights"
+        ),
+        "matrix_acceptance_passed": preflight.get(
+            "windows_release_matrix_direct_acceptance_fastpath_evidence"
+        ),
+        "matrix_pipeline_passed": preflight.get(
+            "windows_release_matrix_direct_pipeline_calibration_evidence"
+        ),
+        "default_promotion_acceptance_passed": preflight.get(
+            "default_promotion_direct_acceptance_fastpath_evidence"
+        ),
+        "default_promotion_pipeline_passed": preflight.get(
+            "default_promotion_direct_pipeline_calibration_evidence"
+        ),
+        "matches_default_promotion": preflight.get(
+            "matrix_direct_runtime_evidence_matches_default_promotion"
+        ),
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_direct_runtime_evidence_passed",
+        ),
+    }
+    result["ready"] = (
+        _direct_runtime_summary_ready(result)
+        and result.get("phase2_check_passed") is True
+    )
+    return result
+
+
+def _direct_runtime_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "matrix_ready",
+        "matrix_acceptance_source",
+        "matrix_acceptance_check_count",
+        "matrix_pipeline_calibration_source",
+        "matrix_pipeline_resident_lights",
+        "default_promotion_ready",
+        "default_promotion_acceptance_source",
+        "default_promotion_acceptance_check_count",
+        "default_promotion_pipeline_calibration_source",
+        "default_promotion_pipeline_resident_lights",
+        "matrix_acceptance_passed",
+        "matrix_pipeline_passed",
+        "default_promotion_acceptance_passed",
+        "default_promotion_pipeline_passed",
+        "matches_default_promotion",
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
 def _publication_audit_summary_ready(summary: dict[str, Any]) -> bool:
     return (
         summary.get("matrix_status") == "passed"
@@ -991,6 +1172,12 @@ def build_stack_engine_publication_audit(
     phase2_preflight_runtime_default = (
         _phase2_publish_preflight_runtime_default_summary(phase2_payload)
     )
+    preflight_direct_runtime = _publish_preflight_direct_runtime_summary(
+        preflight_payload
+    )
+    phase2_preflight_direct_runtime = (
+        _phase2_publish_preflight_direct_runtime_summary(phase2_payload)
+    )
     preflight_publication_audit = _publish_preflight_publication_audit_summary(
         preflight_payload
     )
@@ -1017,6 +1204,10 @@ def build_stack_engine_publication_audit(
         "publish_preflight_stack_engine_runtime_default": preflight_runtime_default,
         "phase2_publish_preflight_stack_engine_runtime_default": (
             phase2_preflight_runtime_default
+        ),
+        "publish_preflight_direct_runtime_evidence": preflight_direct_runtime,
+        "phase2_publish_preflight_direct_runtime_evidence": (
+            phase2_preflight_direct_runtime
         ),
         "publish_preflight_publication_audit": preflight_publication_audit,
         "phase2_publish_preflight_publication_audit": (
@@ -1161,6 +1352,27 @@ def build_stack_engine_publication_audit(
             {
                 "phase2_publish_preflight": phase2_preflight_runtime_default,
                 "publish_preflight": preflight_runtime_default,
+            },
+        ),
+        _check(
+            "publish_preflight_direct_runtime_evidence_ready",
+            preflight_direct_runtime.get("ready") is True,
+            preflight_direct_runtime,
+        ),
+        _check(
+            "phase2_publish_preflight_direct_runtime_evidence_ready",
+            phase2_preflight_direct_runtime.get("ready") is True,
+            phase2_preflight_direct_runtime,
+        ),
+        _check(
+            "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
+            _direct_runtime_summaries_match(
+                phase2_preflight_direct_runtime,
+                preflight_direct_runtime,
+            ),
+            {
+                "phase2_publish_preflight": phase2_preflight_direct_runtime,
+                "publish_preflight": preflight_direct_runtime,
             },
         ),
         _check(

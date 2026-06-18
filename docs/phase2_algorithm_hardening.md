@@ -5323,6 +5323,32 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 308: Phase2 Status Direct Runtime Publication Handoff
+
+- Carry the Gate307 direct runtime publish-preflight evidence back into
+  `phase2-status` as a first-class check named
+  `windows_publish_preflight_direct_runtime_evidence_passed`.
+- Require Phase2 status to block old or stale publish-preflight artifacts that
+  still report `publish_preflight_ready` but omit direct acceptance fastpath
+  evidence, direct resident calibration fallback evidence, source provenance,
+  or 200-light resident calibration counts.
+- Extend `phase2-status-compare` so a candidate cannot regress from a baseline
+  that had direct runtime publish-preflight checks/statuses.
+- Extend `stack-engine-publication-audit` with raw-vs-Phase2 direct runtime
+  evidence layers and a match check, so the final publication audit cannot pass
+  if Phase2 drops Gate307 direct evidence.
+- Surface direct runtime publication handoff readiness, explicit fastpath
+  source, calibration fallback source, and resident light counts in JSON and
+  Markdown where applicable.
+- Add focused tests for passing direct evidence, missing direct evidence,
+  stale fastpath source, Phase2/raw direct evidence mismatch, and compare
+  regression.
+- Generate Gate308 Phase2 status and StackEngine publication-audit artifacts
+  from existing Gate304/Gate305/Gate306/Gate307 200-light evidence.
+- Keep this gate status/audit scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
