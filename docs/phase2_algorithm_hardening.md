@@ -5045,6 +5045,29 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 296: Windows Release Matrix StackEngine Runtime Default Guard
+
+- Carry the S2-Gate 295 default-promotion StackEngine runtime-default evidence
+  into `glass windows-release-matrix`.
+- Require Windows CUDA release-matrix readiness to preserve both
+  acceptance-side and direct pipeline runtime-default handoff evidence from the
+  default-promotion manifest.
+- Block stale default-promotion manifests that still report ready status but do
+  not contain Gate295 runtime-default summaries and checks.
+- Block acceptance-side legacy master drift, pipeline-side failed integration
+  runtime-default rows, missing runtime-default checks, and failed
+  default-promotion runtime-default handoff checks before Windows release
+  readiness can remain green.
+- Surface runtime-default readiness, acceptance/pipeline status, legacy master
+  counts, failed master/output counts, explicit CUDA fast-path counts, and
+  failed row details in release-matrix JSON and Markdown.
+- Add focused release-matrix tests for ready evidence, missing stale
+  runtime-default evidence, acceptance-side legacy-master drift,
+  pipeline-side failed runtime-default output drift, and CLI Markdown output.
+- Keep this gate release-matrix scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

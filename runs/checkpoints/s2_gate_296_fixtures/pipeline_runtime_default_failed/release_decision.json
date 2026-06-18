@@ -1,0 +1,15 @@
+{
+  "artifact_type": "release_promotion_decision",
+  "default_change_ready": true,
+  "recommendation": "promote_default_candidate",
+  "release_candidate_ready": true,
+  "runtime_repeat": {
+    "considered_run_count": 3,
+    "elapsed_ratio_vs_best": 1.0140343433372492,
+    "present": true,
+    "recommendation": "best_observed:repeat02",
+    "run_count": 3
+  },
+  "schema_version": 1,
+  "status": "default_change_ready"
+}
