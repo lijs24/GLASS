@@ -168,6 +168,45 @@ def _write_resident_winsorized_benchmark_audit(path: Path, *, passed: bool = Tru
     )
 
 
+def _write_resident_winsorized_sweep_audit(path: Path, *, passed: bool = True) -> None:
+    write_json(
+        path,
+        {
+            "schema_version": 1,
+            "artifact_type": "resident_winsorized_sweep_audit",
+            "status": "passed" if passed else "failed",
+            "passed": passed,
+            "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+            "contract_path": "benchmarks/resident_winsorized_sweep_contract.json",
+            "sweep_path": "runs/checkpoints/s2_gate_268_resident_winsorized_sweep.json",
+            "failed_checks": [] if passed else ["frame_200_hardened_master_rms_within_contract"],
+            "checks": [
+                {"name": "artifact_type_matches", "passed": True},
+                {"name": "sweep_passed", "passed": passed},
+                {"name": "required_frame_count_passed", "passed": passed},
+                {"name": "frame_200_hardened_master_rms_within_contract", "passed": passed},
+            ],
+            "summary": {
+                "frame_counts": [8, 32, 128, 200],
+                "run_count": 4,
+                "required_frame_count": 200,
+                "required_frame_count_passed": passed,
+                "required_frame_master": {
+                    "rms": 2.3e-5 if passed else 8.0e-5,
+                    "max_abs": 6.1e-5,
+                    "p99_abs": 4.9e-5,
+                },
+                "required_frame_timing_s": {
+                    "cpu_baseline": 0.012,
+                    "cuda_fast_approx": 0.001,
+                    "cuda_hardened": 0.002,
+                },
+                "max_hardened_master_rms": 2.3e-5 if passed else 8.0e-5,
+            },
+        },
+    )
+
+
 def _write_pipeline_contract(
     path: Path,
     *,
@@ -1029,6 +1068,49 @@ def test_phase2_status_blocks_failed_resident_winsorized_benchmark_audit(tmp_pat
     ]
 
 
+def test_phase2_status_summarizes_resident_winsorized_sweep_audit(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=270)
+    sweep_audit = tmp_path / "resident_winsorized_sweep_audit.json"
+    _write_resident_winsorized_sweep_audit(sweep_audit)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        resident_winsorized_sweep_audit=sweep_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "green"
+    assert payload["resident_winsorized_sweep_audit"]["status"] == "passed"
+    assert payload["resident_winsorized_sweep_audit"]["required_frame_count"] == 200
+    assert payload["resident_winsorized_sweep_audit"]["required_frame_master_rms"] == 2.3e-5
+    assert checks["resident_winsorized_sweep_audit_passed"]["passed"] is True
+
+
+def test_phase2_status_blocks_failed_resident_winsorized_sweep_audit(tmp_path: Path):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=270)
+    sweep_audit = tmp_path / "resident_winsorized_sweep_audit.json"
+    _write_resident_winsorized_sweep_audit(sweep_audit, passed=False)
+
+    payload = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        resident_winsorized_sweep_audit=sweep_audit,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "attention_required"
+    assert payload["resident_winsorized_sweep_audit"]["failed_check_count"] == 1
+    assert checks["resident_winsorized_sweep_audit_passed"]["passed"] is False
+    assert checks["resident_winsorized_sweep_audit_passed"]["evidence"]["failed_checks"] == [
+        "frame_200_hardened_master_rms_within_contract"
+    ]
+
+
 def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -1042,6 +1124,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     release_decision = tmp_path / "release_decision.json"
     publish_preflight = tmp_path / "publish_preflight.json"
     winsorized_audit = tmp_path / "resident_winsorized_benchmark_audit.json"
+    winsorized_sweep_audit = tmp_path / "resident_winsorized_sweep_audit.json"
     _write_acceptance(acceptance)
     _write_default_route_acceptance(default_route_acceptance)
     _write_pipeline_contract(pipeline_contract)
@@ -1049,6 +1132,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     _write_release_decision(release_decision)
     _write_publish_preflight(publish_preflight)
     _write_resident_winsorized_benchmark_audit(winsorized_audit)
+    _write_resident_winsorized_sweep_audit(winsorized_sweep_audit)
 
     result = main(
         [
@@ -1069,6 +1153,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
             str(publish_preflight),
             "--resident-winsorized-benchmark-audit",
             str(winsorized_audit),
+            "--resident-winsorized-sweep-audit",
+            str(winsorized_sweep_audit),
             "--out",
             str(out),
             "--markdown",
@@ -1087,6 +1173,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
     assert payload["stack_engine_contract"]["default_promotion_ready"] is True
     assert payload["resident_winsorized_benchmark_audit"]["passed"] is True
+    assert payload["resident_winsorized_sweep_audit"]["passed"] is True
     assert payload["release_decision"]["default_change_ready"] is True
     assert payload["publish_preflight"]["status"] == "publish_preflight_ready"
     text = markdown.read_text(encoding="utf-8")
@@ -1103,6 +1190,8 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     assert "Integration DQ contract: True" in text
     assert "Resident Winsorized Benchmark Audit" in text
     assert "Hardened master RMS: 5e-06" in text
+    assert "Resident Winsorized Sweep Audit" in text
+    assert "Required frame count: 200" in text
     assert "DQ pixels match summary: True" in text
     assert "Rejection sample counts match maps: True" in text
     assert "Rejection sample accounting: passed failed=0" in text

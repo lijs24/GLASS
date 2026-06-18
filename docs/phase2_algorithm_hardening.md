@@ -4538,6 +4538,21 @@ integration where applicable.
   package build/upload, release update, status handoff, status-compare change,
   or real-data benchmark rerun.
 
+### S2-Gate 270: Phase 2 Resident Winsorized Sweep Audit Status Handoff
+
+- Carry `glass resident-winsorized-sweep-audit` evidence into
+  `glass phase2-status`.
+- Add an optional `--resident-winsorized-sweep-audit` input and a
+  `resident_winsorized_sweep_audit_passed` status check when the artifact is
+  supplied.
+- Surface contract name, sweep path, check count, failed checks, frame-count
+  rows, required 200-frame row status, hardened-vs-CPU difference metrics, and
+  required-row timing summary in Phase 2 JSON/Markdown status outputs.
+- Add focused API and CLI tests for passing and failed audit handoff.
+- Keep this gate status-handoff scoped: no image math, CUDA kernel, runtime
+  default, package build/upload, release update, status-compare change, or
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

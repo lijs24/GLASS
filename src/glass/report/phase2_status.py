@@ -364,6 +364,58 @@ def _resident_winsorized_benchmark_audit_summary(path: str | Path | None) -> dic
     }
 
 
+def _resident_winsorized_sweep_audit_summary(path: str | Path | None) -> dict[str, Any] | None:
+    payload = _read_json_optional(path)
+    if payload is None:
+        return None
+    if not payload.get("_exists", payload.get("exists", False)):
+        return {
+            "path": str(path),
+            "exists": False,
+            "status": "missing",
+            "passed": False,
+            "failed_checks": ["artifact_missing"],
+            "check_count": 0,
+            "failed_check_count": 1,
+        }
+    checks = payload.get("checks") if isinstance(payload.get("checks"), list) else []
+    failed_checks = payload.get("failed_checks") if isinstance(payload.get("failed_checks"), list) else []
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    required_master = (
+        summary.get("required_frame_master")
+        if isinstance(summary.get("required_frame_master"), dict)
+        else {}
+    )
+    required_timing = (
+        summary.get("required_frame_timing_s")
+        if isinstance(summary.get("required_frame_timing_s"), dict)
+        else {}
+    )
+    return {
+        "schema_version": 1,
+        "path": payload.get("_path"),
+        "exists": True,
+        "status": payload.get("status"),
+        "passed": payload.get("passed") is True,
+        "contract_name": payload.get("contract_name"),
+        "contract_path": payload.get("contract_path"),
+        "sweep_path": payload.get("sweep_path"),
+        "failed_checks": [str(item) for item in failed_checks],
+        "check_count": len(checks),
+        "failed_check_count": len(failed_checks),
+        "frame_counts": summary.get("frame_counts"),
+        "run_count": summary.get("run_count"),
+        "required_frame_count": summary.get("required_frame_count"),
+        "required_frame_count_passed": summary.get("required_frame_count_passed"),
+        "required_frame_master_rms": required_master.get("rms"),
+        "required_frame_master_max_abs": required_master.get("max_abs"),
+        "max_hardened_master_rms": summary.get("max_hardened_master_rms"),
+        "required_frame_cpu_baseline_s": required_timing.get("cpu_baseline"),
+        "required_frame_cuda_fast_approx_s": required_timing.get("cuda_fast_approx"),
+        "required_frame_cuda_hardened_s": required_timing.get("cuda_hardened"),
+    }
+
+
 def _native_guardrails_summary(payload: dict[str, Any]) -> dict[str, Any] | None:
     native_guardrails_bundle = (
         payload.get("native_guardrails_bundle")
@@ -1035,6 +1087,7 @@ def build_phase2_status(
     pipeline_contract: str | Path | None = None,
     stack_engine_contract: str | Path | None = None,
     resident_winsorized_benchmark_audit: str | Path | None = None,
+    resident_winsorized_sweep_audit: str | Path | None = None,
     release_decision: str | Path | None = None,
     doctor_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1049,6 +1102,9 @@ def build_phase2_status(
     stack_engine = _stack_engine_contract_summary(stack_engine_contract)
     winsorized_audit = _resident_winsorized_benchmark_audit_summary(
         resident_winsorized_benchmark_audit
+    )
+    winsorized_sweep_audit = _resident_winsorized_sweep_audit_summary(
+        resident_winsorized_sweep_audit
     )
     decision = _release_decision_summary(release_decision)
     checks = [
@@ -1433,6 +1489,33 @@ def build_phase2_status(
                 },
             }
         )
+    if winsorized_sweep_audit is not None:
+        checks.append(
+            {
+                "name": "resident_winsorized_sweep_audit_passed",
+                "passed": winsorized_sweep_audit.get("passed") is True,
+                "evidence": {
+                    "status": winsorized_sweep_audit.get("status"),
+                    "contract_name": winsorized_sweep_audit.get("contract_name"),
+                    "check_count": winsorized_sweep_audit.get("check_count"),
+                    "failed_check_count": winsorized_sweep_audit.get("failed_check_count"),
+                    "failed_checks": winsorized_sweep_audit.get("failed_checks"),
+                    "required_frame_count": winsorized_sweep_audit.get("required_frame_count"),
+                    "required_frame_count_passed": winsorized_sweep_audit.get(
+                        "required_frame_count_passed"
+                    ),
+                    "required_frame_master_rms": winsorized_sweep_audit.get(
+                        "required_frame_master_rms"
+                    ),
+                    "required_frame_master_max_abs": winsorized_sweep_audit.get(
+                        "required_frame_master_max_abs"
+                    ),
+                    "max_hardened_master_rms": winsorized_sweep_audit.get(
+                        "max_hardened_master_rms"
+                    ),
+                },
+            }
+        )
     if decision is not None:
         checks.append(
             {
@@ -1488,6 +1571,7 @@ def build_phase2_status(
         "pipeline_contract": pipeline,
         "stack_engine_contract": stack_engine,
         "resident_winsorized_benchmark_audit": winsorized_audit,
+        "resident_winsorized_sweep_audit": winsorized_sweep_audit,
         "release_decision": decision,
         "checks": checks,
     }
@@ -1504,6 +1588,7 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
     pipeline = payload.get("pipeline_contract") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
     winsorized_audit = payload.get("resident_winsorized_benchmark_audit") or {}
+    winsorized_sweep_audit = payload.get("resident_winsorized_sweep_audit") or {}
     decision = payload.get("release_decision") or {}
     lines = [
         "# GLASS Phase 2 Status",
@@ -1854,6 +1939,43 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{winsorized_audit.get('fast_approx_master_rms')}"
                 ),
                 f"- CUDA hardened seconds: {winsorized_audit.get('cuda_hardened_s')}",
+            ]
+        )
+    if winsorized_sweep_audit:
+        lines.extend(
+            [
+                "",
+                "## Resident Winsorized Sweep Audit",
+                "",
+                f"- Status: {winsorized_sweep_audit.get('status')}",
+                f"- Passed: {winsorized_sweep_audit.get('passed')}",
+                f"- Contract: {winsorized_sweep_audit.get('contract_name')}",
+                f"- Sweep: {winsorized_sweep_audit.get('sweep_path')}",
+                f"- Check count: {winsorized_sweep_audit.get('check_count')}",
+                f"- Failed checks: {winsorized_sweep_audit.get('failed_checks')}",
+                f"- Frame counts: {winsorized_sweep_audit.get('frame_counts')}",
+                f"- Run count: {winsorized_sweep_audit.get('run_count')}",
+                f"- Required frame count: {winsorized_sweep_audit.get('required_frame_count')}",
+                (
+                    "- Required frame count passed: "
+                    f"{winsorized_sweep_audit.get('required_frame_count_passed')}"
+                ),
+                (
+                    "- Required frame master RMS: "
+                    f"{winsorized_sweep_audit.get('required_frame_master_rms')}"
+                ),
+                (
+                    "- Required frame master max abs: "
+                    f"{winsorized_sweep_audit.get('required_frame_master_max_abs')}"
+                ),
+                (
+                    "- Max hardened master RMS: "
+                    f"{winsorized_sweep_audit.get('max_hardened_master_rms')}"
+                ),
+                (
+                    "- Required frame hardened CUDA seconds: "
+                    f"{winsorized_sweep_audit.get('required_frame_cuda_hardened_s')}"
+                ),
             ]
         )
     if decision:
