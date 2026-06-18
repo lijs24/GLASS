@@ -273,6 +273,41 @@ def _default_route_acceptance_summary(phase2: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resident_winsorized_sweep_summary(phase2: dict[str, Any]) -> dict[str, Any]:
+    sweep = (
+        phase2.get("resident_winsorized_sweep_audit")
+        if isinstance(phase2.get("resident_winsorized_sweep_audit"), dict)
+        else {}
+    )
+    return {
+        "present": bool(sweep),
+        "path": sweep.get("path"),
+        "status": sweep.get("status"),
+        "passed": sweep.get("passed"),
+        "phase2_check_passed": _phase2_check_passed(
+            phase2,
+            "resident_winsorized_sweep_audit_passed",
+        ),
+        "contract_name": sweep.get("contract_name"),
+        "sweep_path": sweep.get("sweep_path"),
+        "check_count": _int_value(sweep.get("check_count")),
+        "failed_check_count": _int_value(sweep.get("failed_check_count")),
+        "failed_checks": sweep.get("failed_checks") or [],
+        "frame_counts": sweep.get("frame_counts") or [],
+        "run_count": _int_value(sweep.get("run_count")),
+        "required_frame_count": _int_value(sweep.get("required_frame_count")),
+        "required_frame_count_passed": sweep.get("required_frame_count_passed"),
+        "required_frame_master_rms": _number(sweep.get("required_frame_master_rms")),
+        "required_frame_master_max_abs": _number(
+            sweep.get("required_frame_master_max_abs")
+        ),
+        "max_hardened_master_rms": _number(sweep.get("max_hardened_master_rms")),
+        "required_frame_cuda_hardened_s": _number(
+            sweep.get("required_frame_cuda_hardened_s")
+        ),
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -285,6 +320,8 @@ def build_default_promotion_manifest(
     min_runtime_runs: int = 2,
     max_runtime_ratio: float = 1.25,
     min_resident_lights: int = 200,
+    min_resident_winsorized_sweep_checks: int = 27,
+    required_resident_winsorized_sweep_frame_count: int = 200,
     require_doctor: bool = False,
 ) -> dict[str, Any]:
     decision = _read_json_object(release_decision_json)
@@ -294,6 +331,7 @@ def build_default_promotion_manifest(
     pipeline = _pipeline_summary(phase2)
     stack_engine = _stack_engine_summary(phase2)
     default_route = _default_route_acceptance_summary(phase2)
+    resident_winsorized_sweep = _resident_winsorized_sweep_summary(phase2)
     doctor_info = _doctor_summary(doctor)
     phase2_decision = (
         phase2.get("release_decision") if isinstance(phase2.get("release_decision"), dict) else {}
@@ -514,6 +552,58 @@ def build_default_promotion_manifest(
             {"actual": resident_light_count, "required_min": int(min_resident_lights)},
         ),
         _check(
+            "resident_winsorized_sweep_audit_passed",
+            resident_winsorized_sweep.get("present") is True
+            and resident_winsorized_sweep.get("passed") is True
+            and resident_winsorized_sweep.get("status") == "passed"
+            and resident_winsorized_sweep.get("phase2_check_passed") is True,
+            {
+                "present": resident_winsorized_sweep.get("present"),
+                "status": resident_winsorized_sweep.get("status"),
+                "passed": resident_winsorized_sweep.get("passed"),
+                "phase2_check_passed": resident_winsorized_sweep.get(
+                    "phase2_check_passed"
+                ),
+                "failed_checks": resident_winsorized_sweep.get("failed_checks"),
+            },
+        ),
+        _check(
+            "resident_winsorized_sweep_required_frame_passed",
+            resident_winsorized_sweep.get("required_frame_count")
+            == int(required_resident_winsorized_sweep_frame_count)
+            and resident_winsorized_sweep.get("required_frame_count_passed") is True,
+            {
+                "actual_frame_count": resident_winsorized_sweep.get(
+                    "required_frame_count"
+                ),
+                "required_frame_count": int(
+                    required_resident_winsorized_sweep_frame_count
+                ),
+                "required_frame_count_passed": resident_winsorized_sweep.get(
+                    "required_frame_count_passed"
+                ),
+                "required_frame_master_rms": resident_winsorized_sweep.get(
+                    "required_frame_master_rms"
+                ),
+                "required_frame_master_max_abs": resident_winsorized_sweep.get(
+                    "required_frame_master_max_abs"
+                ),
+            },
+        ),
+        _check(
+            "resident_winsorized_sweep_check_count",
+            resident_winsorized_sweep.get("check_count") is not None
+            and resident_winsorized_sweep.get("check_count")
+            >= int(min_resident_winsorized_sweep_checks),
+            {
+                "actual": resident_winsorized_sweep.get("check_count"),
+                "required_min": int(min_resident_winsorized_sweep_checks),
+                "failed_check_count": resident_winsorized_sweep.get(
+                    "failed_check_count"
+                ),
+            },
+        ),
+        _check(
             "default_memory_mode_candidate",
             default_memory_mode == "resident",
             {"actual": default_memory_mode, "required": "resident"},
@@ -610,6 +700,7 @@ def build_default_promotion_manifest(
         "default_route_acceptance": default_route,
         "pipeline_contract": pipeline,
         "stack_engine_contract": stack_engine,
+        "resident_winsorized_sweep_audit": resident_winsorized_sweep,
         "doctor": doctor_info,
         "checks": checks,
         "failed_checks": [str(item.get("name")) for item in failed],
@@ -627,6 +718,7 @@ def _markdown(payload: dict[str, Any]) -> str:
     default_route = payload.get("default_route_acceptance") or {}
     pipeline = payload.get("pipeline_contract") or {}
     stack_engine = payload.get("stack_engine_contract") or {}
+    resident_winsorized_sweep = payload.get("resident_winsorized_sweep_audit") or {}
     doctor = payload.get("doctor") or {}
     device = doctor.get("device") if isinstance(doctor, dict) else {}
     lines = [
@@ -679,6 +771,27 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{stack_engine.get('default_promotion_status')}` "
             f"ready=`{stack_engine.get('default_promotion_ready')}` "
             f"blockers=`{stack_engine.get('default_promotion_blocker_count')}`"
+        ),
+        "",
+        "## Resident Winsorized Sweep",
+        "",
+        f"- Present: `{resident_winsorized_sweep.get('present')}`",
+        f"- Status: `{resident_winsorized_sweep.get('status')}`",
+        f"- Passed: `{resident_winsorized_sweep.get('passed')}`",
+        f"- Phase2 check passed: `{resident_winsorized_sweep.get('phase2_check_passed')}`",
+        f"- Check count: `{resident_winsorized_sweep.get('check_count')}`",
+        f"- Required frame count: `{resident_winsorized_sweep.get('required_frame_count')}`",
+        (
+            "- Required frame count passed: "
+            f"`{resident_winsorized_sweep.get('required_frame_count_passed')}`"
+        ),
+        (
+            "- Required frame master RMS: "
+            f"`{resident_winsorized_sweep.get('required_frame_master_rms')}`"
+        ),
+        (
+            "- Required frame hardened CUDA seconds: "
+            f"`{resident_winsorized_sweep.get('required_frame_cuda_hardened_s')}`"
         ),
         "",
         "## Release Machine",

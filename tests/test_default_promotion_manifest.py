@@ -49,9 +49,23 @@ def _write_phase2_status(
     include_stack_engine_contract: bool = True,
     stack_engine_ready: bool = True,
     stack_engine_gap_count: int = 0,
+    include_resident_winsorized_sweep: bool = True,
+    resident_winsorized_sweep_ready: bool = True,
+    resident_winsorized_sweep_required_frame_ready: bool = True,
+    resident_winsorized_sweep_check_count: int = 27,
+    resident_winsorized_sweep_required_frame_count: int = 200,
 ) -> None:
     pipeline_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
-    phase2_ready = pipeline_ready and (stack_engine_ready if include_stack_engine_contract else True)
+    phase2_ready = (
+        pipeline_ready
+        and (stack_engine_ready if include_stack_engine_contract else True)
+        and (
+            resident_winsorized_sweep_ready
+            and resident_winsorized_sweep_required_frame_ready
+            if include_resident_winsorized_sweep
+            else True
+        )
+    )
     failed_pipeline_checks = []
     if not rejection_sample_accounting_ready:
         failed_pipeline_checks.append("integration_rejection_sample_counts_match_maps")
@@ -162,9 +176,38 @@ def _write_phase2_status(
             {
                 "name": "stack_engine_default_contract_ready",
                 "passed": stack_engine_ready if include_stack_engine_contract else False,
-            }
+            },
         ],
     }
+    if include_resident_winsorized_sweep:
+        payload["resident_winsorized_sweep_audit"] = {
+            "schema_version": 1,
+            "path": "C:/glass_runs/run/resident_winsorized_sweep_audit.json",
+            "status": "passed" if resident_winsorized_sweep_ready else "failed",
+            "passed": resident_winsorized_sweep_ready,
+            "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+            "contract_path": "benchmarks/resident_winsorized_sweep_contract.json",
+            "sweep_path": "runs/checkpoints/s2_gate_268_resident_winsorized_sweep.json",
+            "check_count": resident_winsorized_sweep_check_count,
+            "failed_check_count": 0 if resident_winsorized_sweep_ready else 1,
+            "failed_checks": []
+            if resident_winsorized_sweep_ready
+            else ["frame_200_hardened_master_rms_within_contract"],
+            "frame_counts": [8, 32, 128, 200],
+            "run_count": 4,
+            "required_frame_count": resident_winsorized_sweep_required_frame_count,
+            "required_frame_count_passed": resident_winsorized_sweep_required_frame_ready,
+            "required_frame_master_rms": 2.3e-5,
+            "required_frame_master_max_abs": 6.1e-5,
+            "max_hardened_master_rms": 2.3e-5,
+            "required_frame_cuda_hardened_s": 0.0012,
+        }
+        payload["checks"].append(
+            {
+                "name": "resident_winsorized_sweep_audit_passed",
+                "passed": resident_winsorized_sweep_ready,
+            }
+        )
     if include_stack_engine_contract:
         payload["stack_engine_contract"] = {
             "path": "C:/glass_runs/run/stack_engine_contract.json",
@@ -284,6 +327,10 @@ def test_default_promotion_manifest_passes_ready_artifacts(tmp_path: Path) -> No
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
     assert checks["phase2_stack_engine_default_contract_ready"] is True
+    assert checks["resident_winsorized_sweep_audit_passed"] is True
+    assert checks["resident_winsorized_sweep_required_frame_passed"] is True
+    assert checks["resident_winsorized_sweep_check_count"] is True
+    assert payload["resident_winsorized_sweep_audit"]["required_frame_count"] == 200
     assert checks["windows_package_try_list_has_cpu_fallback"] is True
 
 
@@ -465,6 +512,71 @@ def test_default_promotion_manifest_blocks_stack_engine_default_gap(
     ] == "blocked"
 
 
+def test_default_promotion_manifest_blocks_missing_resident_winsorized_sweep(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(phase2, decision, include_resident_winsorized_sweep=False)
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" not in payload["failed_checks"]
+    assert "resident_winsorized_sweep_audit_passed" in payload["failed_checks"]
+    assert "resident_winsorized_sweep_required_frame_passed" in payload["failed_checks"]
+    assert "resident_winsorized_sweep_check_count" in payload["failed_checks"]
+    assert payload["resident_winsorized_sweep_audit"]["present"] is False
+    assert checks["resident_winsorized_sweep_audit_passed"]["evidence"] == {
+        "present": False,
+        "status": None,
+        "passed": None,
+        "phase2_check_passed": None,
+        "failed_checks": [],
+    }
+
+
+def test_default_promotion_manifest_blocks_failed_resident_winsorized_sweep(
+    tmp_path: Path,
+) -> None:
+    decision = tmp_path / "decision.json"
+    phase2 = tmp_path / "phase2.json"
+    _write_release_decision(decision)
+    _write_phase2_status(
+        phase2,
+        decision,
+        resident_winsorized_sweep_ready=False,
+        resident_winsorized_sweep_required_frame_ready=False,
+        resident_winsorized_sweep_check_count=26,
+    )
+
+    payload = build_default_promotion_manifest(
+        release_decision_json=decision,
+        phase2_status_json=phase2,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert "phase2_status_green" in payload["failed_checks"]
+    assert "resident_winsorized_sweep_audit_passed" in payload["failed_checks"]
+    assert "resident_winsorized_sweep_required_frame_passed" in payload["failed_checks"]
+    assert "resident_winsorized_sweep_check_count" in payload["failed_checks"]
+    assert checks["resident_winsorized_sweep_required_frame_passed"]["evidence"] == {
+        "actual_frame_count": 200,
+        "required_frame_count": 200,
+        "required_frame_count_passed": False,
+        "required_frame_master_rms": 2.3e-05,
+        "required_frame_master_max_abs": 6.1e-05,
+    }
+
+
 def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path) -> None:
     decision = tmp_path / "decision.json"
     phase2 = tmp_path / "phase2.json"
@@ -506,4 +618,6 @@ def test_default_promotion_manifest_cli_writes_json_and_markdown(tmp_path: Path)
     assert "StackEngine Default Contract" in markdown_text
     assert "Adoption recommendation: `stack_engine_default_ready`" in markdown_text
     assert "Default promotion: `ready` ready=`True` blockers=`0`" in markdown_text
+    assert "Resident Winsorized Sweep" in markdown_text
+    assert "Required frame count: `200`" in markdown_text
     assert "Route contract passed: `True`" in markdown_text

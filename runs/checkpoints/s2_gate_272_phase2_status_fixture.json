@@ -1,0 +1,155 @@
+{
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "name": "stack_engine_default_contract_ready",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_count": 27,
+        "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "max_hardened_master_rms": 2.3066304440398834e-05,
+        "required_frame_count": 200,
+        "required_frame_count_passed": true,
+        "required_frame_master_max_abs": 6.103515625e-05,
+        "required_frame_master_rms": 2.3066304440398834e-05,
+        "status": "passed"
+      },
+      "name": "resident_winsorized_sweep_audit_passed",
+      "passed": true
+    }
+  ],
+  "default_route_acceptance": {
+    "acceptance_passed": true,
+    "active_frames": 193,
+    "benchmark_contract": {
+      "name": "gate272_default_route_fixture"
+    },
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_272_default_route_acceptance_fixture.json",
+    "route_check_count": 4,
+    "route_contract_passed": true,
+    "route_failed_checks": [],
+    "speedup_vs_reference": 58.099101701945926,
+    "status": "passed"
+  },
+  "latest_checkpoint": {
+    "checkpoint_dir": "runs\\checkpoints",
+    "date": "2026-06-18",
+    "exists": true,
+    "gate": 272,
+    "green": true,
+    "path": "runs\\checkpoints\\s2_gate_272_status.md",
+    "scope": "Default Promotion Resident Winsorized Sweep Guard",
+    "status": "green"
+  },
+  "passed": true,
+  "pipeline_contract": {
+    "audit_type": "pipeline_invariant_contract",
+    "check_count": 15,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "integration_coverage_map_pixels_match_dq": true,
+    "integration_dq_contract": true,
+    "integration_dq_map_pixels_match_summary": true,
+    "integration_map_count": 6,
+    "integration_output_count": 1,
+    "integration_rejection_map_pixels_match_dq": true,
+    "integration_rejection_sample_counts_match_maps": true,
+    "integration_resident_result_contract": true,
+    "integration_sample_accounting_closure": true,
+    "integration_stack_result_contract": true,
+    "passed": true,
+    "pixel_verification_enabled": true,
+    "pixel_verification_tile_size": 2048,
+    "rejection_sample_accounting": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "status": "passed"
+    },
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_status": "passed",
+    "resident_calibrated_light_count": 200,
+    "resident_native_calibration_artifact": true,
+    "sample_accounting_closure": {
+      "check_passed": true,
+      "check_present": true,
+      "failed_count": 0,
+      "failed_items": [],
+      "present_count": 1,
+      "status": "passed"
+    },
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 1,
+    "sample_accounting_closure_status": "passed",
+    "status": "passed"
+  },
+  "release_decision": {
+    "artifact_type": "release_promotion_decision",
+    "default_change_ready": true,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_218_release_promotion_decision.json",
+    "recommendation": "promote_default_candidate",
+    "release_candidate_ready": true,
+    "runtime_repeat_considered_run_count": 3,
+    "runtime_repeat_elapsed_ratio_vs_best": 1.053510511049479,
+    "runtime_repeat_present": true,
+    "status": "default_change_ready"
+  },
+  "resident_winsorized_sweep_audit": {
+    "check_count": 27,
+    "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+    "contract_path": "benchmarks\\resident_winsorized_sweep_contract.json",
+    "exists": true,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "frame_counts": [
+      8,
+      32,
+      128,
+      200
+    ],
+    "max_hardened_master_rms": 2.3066304440398834e-05,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_269_resident_winsorized_sweep_audit.json",
+    "required_frame_count": 200,
+    "required_frame_count_passed": true,
+    "required_frame_cpu_baseline_s": 0.01229839999723481,
+    "required_frame_cuda_fast_approx_s": 0.0002525999952922575,
+    "required_frame_cuda_hardened_s": 0.0012743999977828935,
+    "required_frame_master_max_abs": 6.103515625e-05,
+    "required_frame_master_rms": 2.3066304440398834e-05,
+    "run_count": 4,
+    "schema_version": 1,
+    "status": "passed",
+    "sweep_path": "runs\\checkpoints\\s2_gate_268_resident_winsorized_sweep.json"
+  },
+  "schema_version": 1,
+  "stack_engine_contract": {
+    "adoption_contract_ready_count": 4,
+    "adoption_cuda_resident_surface_count": 0,
+    "adoption_gap_surfaces": [],
+    "adoption_phase2_stack_engine_default_gap_count": 0,
+    "adoption_recommendation": "stack_engine_default_ready",
+    "adoption_stack_engine_surface_count": 4,
+    "adoption_surface_count": 4,
+    "audit_type": "stack_engine_default_contract",
+    "default_promotion_blocker_count": 0,
+    "default_promotion_blockers": [],
+    "default_promotion_phase2_stack_engine_default_gap_count": 0,
+    "default_promotion_ready": true,
+    "default_promotion_recommendation": "stack_engine_default_ready",
+    "default_promotion_status": "ready",
+    "expected_integration_engine": "stack_engine_cpu",
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_272_stack_engine_contract_fixture.json",
+    "scope": "all",
+    "status": "passed"
+  },
+  "status": "green"
+}

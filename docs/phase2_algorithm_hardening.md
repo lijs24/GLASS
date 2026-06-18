@@ -4566,6 +4566,22 @@ integration where applicable.
   default, package build/upload, release update, release-promotion change, or
   real-data benchmark rerun.
 
+### S2-Gate 272: Default Promotion Resident Winsorized Sweep Guard
+
+- Carry the S2-Gate 270 `resident_winsorized_sweep_audit` summary into
+  `glass default-promotion-manifest`.
+- Require the supplied Phase 2 status to contain a passing resident winsorized
+  sweep audit, a passing required 200-frame row, and a sweep-audit check count
+  at or above the default contract count.
+- Surface the resident winsorized sweep evidence in default-promotion JSON and
+  Markdown so hardened winsorized 200-frame parity is a blocker for default
+  route promotion, not only a status note.
+- Add focused manifest and CLI tests for ready, missing, and failed sweep
+  evidence.
+- Keep this gate promotion-guard scoped: no image math, CUDA kernel, runtime
+  default, package build/upload, release update, release-promotion decision
+  change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

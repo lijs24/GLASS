@@ -1932,6 +1932,10 @@ def cmd_default_promotion_manifest(args: argparse.Namespace) -> int:
         min_runtime_runs=args.min_runtime_runs,
         max_runtime_ratio=args.max_runtime_ratio,
         min_resident_lights=args.min_resident_lights,
+        min_resident_winsorized_sweep_checks=args.min_resident_winsorized_sweep_checks,
+        required_resident_winsorized_sweep_frame_count=(
+            args.required_resident_winsorized_sweep_frame_count
+        ),
         require_doctor=args.require_doctor,
     )
     write_default_promotion_manifest(args.out, payload, markdown=args.markdown)
@@ -4843,6 +4847,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=200,
         help="minimum resident calibrated light count required in the pipeline contract",
+    )
+    default_promotion_manifest.add_argument(
+        "--min-resident-winsorized-sweep-checks",
+        type=int,
+        default=27,
+        help="minimum passed resident winsorized sweep audit check count required for promotion",
+    )
+    default_promotion_manifest.add_argument(
+        "--required-resident-winsorized-sweep-frame-count",
+        type=int,
+        default=200,
+        help="required resident winsorized sweep frame-count row for default promotion",
     )
     default_promotion_manifest.add_argument(
         "--require-doctor",
