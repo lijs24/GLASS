@@ -1,0 +1,158 @@
+{
+  "artifacts": {
+    "acceptance_contract_bundle": "runs\\checkpoints\\s2_gate_318_guardrails\\acceptance_contract_bundle.json",
+    "local_norm_contract": "runs\\checkpoints\\s2_gate_318_guardrails\\local_norm_contract.json",
+    "local_norm_contract_markdown": "runs\\checkpoints\\s2_gate_318_guardrails\\local_norm_contract.md",
+    "pipeline_contract": "runs\\checkpoints\\s2_gate_318_guardrails\\pipeline_contract.json",
+    "pipeline_contract_markdown": "runs\\checkpoints\\s2_gate_318_guardrails\\pipeline_contract.md",
+    "registration_quality_contract": "runs\\checkpoints\\s2_gate_318_guardrails\\registration_quality_contract.json",
+    "registration_quality_contract_markdown": "runs\\checkpoints\\s2_gate_318_guardrails\\registration_quality_contract.md",
+    "report": "runs\\checkpoints\\s2_gate_318_guardrails\\report.html",
+    "resident_calibration_contract": null,
+    "resident_result_contract": null,
+    "stack_engine_contract": "runs\\checkpoints\\s2_gate_318_guardrails\\stack_engine_contract.json",
+    "stack_engine_contract_markdown": "runs\\checkpoints\\s2_gate_318_guardrails\\stack_engine_contract.md"
+  },
+  "audit_type": "glass_guardrails",
+  "checks": [
+    {
+      "failed": [],
+      "name": "stack_engine_contract",
+      "passed": true,
+      "status": "passed"
+    },
+    {
+      "failed": [],
+      "name": "pipeline_contract",
+      "passed": true,
+      "status": "passed"
+    },
+    {
+      "blockers": [],
+      "name": "stack_default_promotion",
+      "passed": true,
+      "ready": true,
+      "required": true,
+      "status": "ready"
+    },
+    {
+      "failed": [],
+      "failed_outputs": [],
+      "name": "local_norm_contract",
+      "passed": true,
+      "required": true,
+      "status": "passed"
+    },
+    {
+      "contract_passed": true,
+      "enabled": true,
+      "local_norm_results_present": true,
+      "name": "local_norm_enabled_requirement",
+      "passed": true,
+      "required": true,
+      "status": "passed"
+    },
+    {
+      "failed_output_count": 0,
+      "max_abs": 0.0,
+      "max_abs_threshold": null,
+      "max_rms": 0.0,
+      "max_rms_threshold": null,
+      "name": "local_norm_residual_quality",
+      "output_count": 1,
+      "passed": true,
+      "required": false,
+      "status": "passed"
+    },
+    {
+      "accepted_count": 1,
+      "failed": [],
+      "failed_count": 2,
+      "max_rms_px": 0.0,
+      "min_inliers": 5,
+      "name": "registration_quality",
+      "output_count": 3,
+      "passed": true,
+      "required": true,
+      "status": "passed"
+    }
+  ],
+  "created_at": "2026-06-18T13:58:19+00:00",
+  "expected_integration_engine": "stack_engine_cpu",
+  "local_norm_contract_attached": true,
+  "local_norm_contract_enabled": true,
+  "local_norm_contract_required": true,
+  "local_norm_contract_status": "passed",
+  "local_norm_residual_quality": {
+    "failed_output_count": 0,
+    "max_abs": 0.0,
+    "max_rms": 0.0,
+    "output_count": 1,
+    "outputs": [
+      {
+        "failed_checks": [],
+        "frame_id": "F000010",
+        "max_abs": 0.0,
+        "passed": true,
+        "rms": 0.0,
+        "valid_pixels": 576
+      }
+    ],
+    "total_valid_pixels": 576,
+    "valid_output_count": 1,
+    "zero_valid_output_count": 0
+  },
+  "max_local_normalization_max_abs": null,
+  "max_local_normalization_rms": null,
+  "max_registration_rms_px": 0.1,
+  "min_registration_inliers": 5,
+  "out_dir": "runs\\checkpoints\\s2_gate_318_guardrails",
+  "passed": true,
+  "pixel_verify": true,
+  "registration_quality": {
+    "accepted_count": 1,
+    "failed_count": 2,
+    "max_rms_px": 0.0,
+    "method": "auto",
+    "min_inliers": 5,
+    "output_count": 3,
+    "quality_gate_rejected_frames": 2,
+    "reference_frame_id": "F000010",
+    "transform_model": "translation"
+  },
+  "registration_quality_required": true,
+  "registration_quality_status": "passed",
+  "require_local_normalization_enabled": true,
+  "require_registration_all_accepted": false,
+  "require_stack_default_ready": true,
+  "resident_calibration_contract_attached": false,
+  "resident_calibration_contract_json": null,
+  "resident_native_calibration": {
+    "artifact_present": false,
+    "master_count": 3,
+    "resident_calibrated_light_count": 0,
+    "resident_calibration_contract_attached": false
+  },
+  "resident_result_contract_attached": false,
+  "resident_result_contract_json": null,
+  "resident_result_contract_source": "missing",
+  "run_dir": "runs\\checkpoints\\s2_gate_316_enabled_run",
+  "schema_version": 1,
+  "stack_default_promotion": {
+    "actual_scope": "all",
+    "blocker_count": 0,
+    "blockers": [],
+    "calibration_surface_count": 3,
+    "integration_surface_count": 1,
+    "phase2_stack_engine_default_gap_count": 0,
+    "ready": true,
+    "recommendation": "stack_engine_default_ready",
+    "required_scope": "all",
+    "schema_version": 1,
+    "status": "ready",
+    "surface_count": 4,
+    "target_engine": "stack_engine_cpu"
+  },
+  "stack_scope": "all",
+  "status": "passed"
+}

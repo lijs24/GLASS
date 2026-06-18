@@ -5570,6 +5570,32 @@ integration where applicable.
   kernel change, no runtime default change, no package build/upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 318: Registration Quality Guardrail
+
+- Add a `registration_quality_contract.json` artifact generated from
+  `registration_results.json`.
+- Summarize registration output count, accepted count, rejected/skipped count,
+  maximum accepted RMS, minimum accepted inliers, method, transform model, and
+  quality-gate rejection counts.
+- Add `glass guardrails --max-registration-rms-px`,
+  `--min-registration-inliers`, and `--require-registration-all-accepted`.
+- Treat registration thresholds as opt-in acceptance checks: guardrails fail
+  when required registration evidence is missing, no accepted outputs exist,
+  accepted outputs exceed RMS/inlier thresholds, or all-accepted mode sees any
+  rejected/skipped output.
+- Preserve default compatibility: registration quality is reported when
+  registration artifacts exist, but it does not block unless a threshold or
+  all-accepted requirement is supplied.
+- Surface registration quality paths, status, thresholds, and summaries in
+  `guardrails_summary.json`, `acceptance_contract_bundle.json`, Markdown, and
+  the HTML report.
+- Add focused tests for standalone registration quality contract aggregation,
+  passing guardrail thresholds, threshold failure, and all-accepted failure.
+- Generate Gate318 guardrail artifacts from a small CPU validation run.
+- Keep this gate diagnostic/guardrail scoped: no image math change, no CUDA
+  kernel change, no runtime default change, no package build/upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

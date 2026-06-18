@@ -1,0 +1,158 @@
+{
+  "artifact_type": "registration_quality_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\registration_results.json",
+        "required": true
+      },
+      "name": "registration_results_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "output_count": 3
+      },
+      "name": "registration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "accepted_count": 1,
+        "required": true
+      },
+      "name": "accepted_registration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "max_observed_rms_px": 0.0,
+        "max_rms_px": 0.1
+      },
+      "name": "accepted_registration_rms_within_threshold",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "min_inliers": 5,
+        "min_observed_inliers": 5
+      },
+      "name": "accepted_registration_inliers_meet_threshold",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T13:58:19+00:00",
+  "failed_checks": [],
+  "failed_outputs": [
+    {
+      "accepted": false,
+      "frame_id": "F000011",
+      "inliers": 0,
+      "matched_stars": 0,
+      "quality_gate_status": "rejected",
+      "reference_frame_id": "F000010",
+      "rms_px": null,
+      "solution_source": "quality_gate",
+      "status": "quality_rejected",
+      "transform_model": "translation",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    },
+    {
+      "accepted": false,
+      "frame_id": "F000012",
+      "inliers": 0,
+      "matched_stars": 0,
+      "quality_gate_status": "rejected",
+      "reference_frame_id": "F000010",
+      "rms_px": null,
+      "solution_source": "quality_gate",
+      "status": "quality_rejected",
+      "transform_model": "translation",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    }
+  ],
+  "outputs": [
+    {
+      "accepted": true,
+      "frame_id": "F000010",
+      "inliers": 5,
+      "matched_stars": 5,
+      "quality_gate_status": "rejected",
+      "reference_frame_id": "F000010",
+      "rms_px": 0.0,
+      "solution_source": "streaming_star_detector",
+      "status": "reference",
+      "transform_model": "translation",
+      "warnings": [
+        "reference frame failed quality gate but is required as registration reference"
+      ]
+    },
+    {
+      "accepted": false,
+      "frame_id": "F000011",
+      "inliers": 0,
+      "matched_stars": 0,
+      "quality_gate_status": "rejected",
+      "reference_frame_id": "F000010",
+      "rms_px": null,
+      "solution_source": "quality_gate",
+      "status": "quality_rejected",
+      "transform_model": "translation",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    },
+    {
+      "accepted": false,
+      "frame_id": "F000012",
+      "inliers": 0,
+      "matched_stars": 0,
+      "quality_gate_status": "rejected",
+      "reference_frame_id": "F000010",
+      "rms_px": null,
+      "solution_source": "quality_gate",
+      "status": "quality_rejected",
+      "transform_model": "translation",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    }
+  ],
+  "passed": true,
+  "registration_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\registration_results.json",
+  "required": true,
+  "run_dir": "runs\\checkpoints\\s2_gate_316_enabled_run",
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "accepted_count": 1,
+    "failed_count": 2,
+    "max_rms_px": 0.0,
+    "method": "auto",
+    "min_inliers": 5,
+    "output_count": 3,
+    "quality_gate_rejected_frames": 2,
+    "reference_frame_id": "F000010",
+    "transform_model": "translation"
+  },
+  "thresholds": {
+    "max_rms_px": 0.1,
+    "min_inliers": 5,
+    "require_all_accepted": false
+  }
+}

@@ -1,0 +1,1507 @@
+{
+  "artifacts": {
+    "calibration": {
+      "exists": true,
+      "generated_for_pipeline_contract": false,
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calibration_artifacts.json",
+      "path_exists": true,
+      "source": "calibration_artifacts_json"
+    },
+    "integration": {
+      "exists": true,
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration_results.json"
+    },
+    "local_norm": {
+      "exists": true,
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\local_norm_results.json"
+    },
+    "local_norm_contract": {
+      "artifact_type": "local_norm_contract",
+      "attached": true,
+      "failed_output_count": 0,
+      "output_count": 1,
+      "passed": true,
+      "status": "passed"
+    },
+    "resident_calibration_contract": {
+      "artifact_type": null,
+      "attached": false,
+      "passed": null
+    },
+    "warp": {
+      "exists": true,
+      "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\warp_results.json"
+    }
+  },
+  "audit_type": "pipeline_invariant_contract",
+  "calibration": {
+    "artifact_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calibration_artifacts.json",
+    "calibrated_light_count": 3,
+    "calibrated_lights": [
+      {
+        "backend": "cpu",
+        "contract_ok": true,
+        "dq_contract_ok": true,
+        "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\dq\\dq_calibrated_F000010.fits",
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000010",
+        "index": 0,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\calibrated\\calibrated_F000010.fits",
+        "path_exists": true,
+        "resident": false,
+        "resident_contract_ok": false,
+        "resident_output_index": null,
+        "resident_stack_index": null,
+        "source_stage": null,
+        "status": null,
+        "tile_count": 9,
+        "tile_size": 8
+      },
+      {
+        "backend": "cpu",
+        "contract_ok": true,
+        "dq_contract_ok": true,
+        "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\dq\\dq_calibrated_F000011.fits",
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000011",
+        "index": 1,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\calibrated\\calibrated_F000011.fits",
+        "path_exists": true,
+        "resident": false,
+        "resident_contract_ok": false,
+        "resident_output_index": null,
+        "resident_stack_index": null,
+        "source_stage": null,
+        "status": null,
+        "tile_count": 9,
+        "tile_size": 8
+      },
+      {
+        "backend": "cpu",
+        "contract_ok": true,
+        "dq_contract_ok": true,
+        "dq_mask_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\dq\\dq_calibrated_F000012.fits",
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000012",
+        "index": 2,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\calibrated\\calibrated_F000012.fits",
+        "path_exists": true,
+        "resident": false,
+        "resident_contract_ok": false,
+        "resident_output_index": null,
+        "resident_stack_index": null,
+        "source_stage": null,
+        "status": null,
+        "tile_count": 9,
+        "tile_size": 8
+      }
+    ],
+    "exists": true,
+    "generated_for_pipeline_contract": false,
+    "local_calibrated_light_count": 3,
+    "local_master_count": 3,
+    "master_count": 3,
+    "masters": [
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "name": "G409bfdf826",
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_dark_G409bfdf826.fits",
+        "path_exists": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_dark_G409bfdf826.fits"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 2025.7490234375,
+                  "mean": 1041.3527510960896,
+                  "median": 1024.1392042371963,
+                  "min": 1017.2991943359375,
+                  "std": 96.19414916781047
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "dark"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 8
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_dark_includes_bias": true
+                    },
+                    "name": "dark_bias_semantics_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "bias_subtracted_from_source": false
+                    },
+                    "name": "dark_source_bias_subtraction_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "dark",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "dark"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 8
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_dark_includes_bias": true
+                },
+                "name": "dark_bias_semantics_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "bias_subtracted_from_source": false
+                },
+                "name": "dark_source_bias_subtraction_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "dark",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 2025.7490234375,
+              "mean": 1041.3527510960896,
+              "median": 1024.1392042371963,
+              "min": 1017.2991943359375,
+              "std": 96.19414916781047
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 8,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "dark"
+      },
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "name": "G9e8d28c798",
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_flat_G9e8d28c798.fits",
+        "path_exists": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_flat_G9e8d28c798.fits"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 1.070944905281067,
+                  "mean": 1.0000486090365384,
+                  "median": 1.0000192787912157,
+                  "min": 0.9305070042610168,
+                  "std": 0.032395267786598486
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "flat"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 8
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "normalization": "median"
+                    },
+                    "name": "flat_normalization_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "normalization_stage": "per_flat"
+                    },
+                    "name": "flat_normalization_stage_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "flat_floor": 1e-06
+                    },
+                    "name": "flat_floor_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "count": 3
+                    },
+                    "name": "per_flat_normalization_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "flat",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "flat"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 8
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "normalization": "median"
+                },
+                "name": "flat_normalization_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "normalization_stage": "per_flat"
+                },
+                "name": "flat_normalization_stage_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "flat_floor": 1e-06
+                },
+                "name": "flat_floor_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "count": 3
+                },
+                "name": "per_flat_normalization_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "flat",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 1.070944905281067,
+              "mean": 1.0000486090365384,
+              "median": 1.0000192787912157,
+              "min": 0.9305070042610168,
+              "std": 0.032395267786598486
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 8,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "stack_engine_cpu_per_flat_normalized",
+        "type": "flat"
+      },
+      {
+        "contract_ok": true,
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "name": "Ga8f40c9e17",
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_bias_Ga8f40c9e17.fits",
+        "path_exists": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\calib_cache\\masters\\master_bias_Ga8f40c9e17.fits"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 1005.453125,
+                  "mean": 999.8807636896769,
+                  "median": 999.8793402777778,
+                  "min": 995.1305541992188,
+                  "std": 1.746991620802354
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "bias"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 8
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "bias",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "bias"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 8
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "bias",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 1005.453125,
+              "mean": 999.8807636896769,
+              "median": 999.8793402777778,
+              "min": 995.1305541992188,
+              "std": 1.746991620802354
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 8,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "stats_present": true,
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "bias"
+      }
+    ],
+    "path_exists": true,
+    "resident_calibrated_light_count": 0,
+    "resident_calibrated_lights": [],
+    "resident_calibration_contract_attached": false,
+    "resident_master_count": 0,
+    "resident_masters": [],
+    "resident_native_calibration_artifact": false,
+    "source": "calibration_artifacts_json",
+    "write_back": null
+  },
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "non_resident_count": 1,
+        "output_count": 1,
+        "resident_count": 0,
+        "top_level_default_ok": true,
+        "top_level_present": true
+      },
+      "name": "integration_default_engine_policy",
+      "note": "Non-resident integration must default to StackEngine unless the CUDA fast path is explicitly requested.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "explicit_cuda_fast_path_count": 0,
+        "failed_masters": [],
+        "failed_outputs": [],
+        "integration_output_count": 1,
+        "integration_resident_count": 0,
+        "integration_stack_engine_default_count": 1,
+        "legacy_master_count": 0,
+        "master_count": 3,
+        "master_resident_count": 0,
+        "master_stack_engine_count": 3,
+        "resident_result_contract_failures": [],
+        "stack_result_contract_failures": []
+      },
+      "name": "stack_engine_runtime_default_path",
+      "note": "Runtime artifacts must preserve StackEngine master calibration and StackEngine/resident integration defaults.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "map_count": 6
+      },
+      "name": "integration_output_maps_available",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_dq_contract",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 1
+      },
+      "name": "integration_stack_result_contract",
+      "note": "CPU StackEngine integration outputs must carry an embedded passing result contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "required_count": 0
+      },
+      "name": "integration_resident_result_contract",
+      "note": "Resident CUDA integration outputs must satisfy the resident result-contract audit.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1,
+        "present_count": 1
+      },
+      "name": "integration_sample_accounting_closure",
+      "note": "Sample-closure evidence is optional for old artifacts, but explicit failed closure blocks the pipeline contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 1
+      },
+      "name": "calibration_master_surfaces_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 3
+      },
+      "name": "calibration_master_surface_contract",
+      "note": "Master calibration surfaces must expose stats, semantics, and StackEngine result contracts.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "required": false,
+        "resident_surface_count": 0
+      },
+      "name": "resident_calibration_surface_contract",
+      "note": "Resident CUDA calibration surfaces must pass their resident calibration contract.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 1
+      },
+      "name": "calibrated_lights_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "light_count": 3
+      },
+      "name": "calibrated_light_dq_contract",
+      "note": "Calibrated light records must carry a calibrated image path, DQ map path, DQ summary, and tile metadata.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_dq_map_pixels_match_summary",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_coverage_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "tolerance_pixels": 0,
+        "verified_records": 2
+      },
+      "name": "integration_rejection_map_pixels_match_dq",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "required_records": 0,
+        "tolerance_pixels": 0,
+        "verified_records": 1
+      },
+      "name": "integration_rejection_sample_counts_match_maps",
+      "note": "Rejection maps count samples; DQ rejection flags count touched pixels.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "warp_output_count": 1
+      },
+      "name": "warp_outputs_have_dq_and_coverage",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "skipped_count": 2
+      },
+      "name": "warp_skipped_frames_are_explained",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "enabled": true,
+        "failed": [],
+        "row_count": 1,
+        "top_level_crop_box_recorded": true
+      },
+      "name": "local_normalization_contract",
+      "note": "LN rows must record crop_box and DQ state; enabled LN rows must record coefficient grids.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "artifact_type": "local_norm_contract",
+        "enabled": true,
+        "failed_checks": [],
+        "failed_contract_rows": [],
+        "failed_output_count": 0,
+        "failed_outputs": [],
+        "output_count": 1,
+        "pipeline_row_count": 1,
+        "status": "passed"
+      },
+      "name": "local_normalization_continuous_contract_audit",
+      "note": "Attached LN continuous coefficient-field audit must pass before run-level acceptance.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T13:58:19+00:00",
+  "integration": {
+    "engine_policy": {
+      "failed": [],
+      "non_resident_count": 1,
+      "output_count": 1,
+      "outputs": [
+        {
+          "backend": "cpu",
+          "failures": [],
+          "item": "H",
+          "memory_mode": null,
+          "passed": true,
+          "required": true,
+          "selection_actual_backend": "cpu",
+          "selection_allow_cuda_fast_path": false,
+          "selection_backend": "cpu",
+          "selection_default_engine": "stack_engine_cpu",
+          "selection_explicit_cuda_fast_path": false,
+          "selection_present": true,
+          "selection_use_stack_engine": true,
+          "status": "stack_engine_default",
+          "tile_stack_mode": "stack_engine_cpu",
+          "top_level_default_engine": "stack_engine_cpu",
+          "top_level_default_ok": true,
+          "top_level_present": true
+        }
+      ],
+      "passed": true,
+      "resident_count": 0,
+      "top_level": {
+        "actual_backend": "cpu",
+        "allow_cuda_streaming_accumulator_fast_path": false,
+        "backend": "cpu",
+        "cuda_available": false,
+        "cuda_fast_path_eligible": false,
+        "default_engine": "stack_engine_cpu",
+        "explicit_cuda_fast_path": false,
+        "reason": "stack_engine_default",
+        "rejection": "none",
+        "tile_stack_mode": "stack_engine_cpu",
+        "use_stack_engine": true
+      },
+      "top_level_default_ok": true,
+      "top_level_present": true
+    },
+    "maps": [
+      {
+        "exists": true,
+        "item": "H",
+        "map": "master",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\master_H.fits",
+        "path_key": "master_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "weight",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\weight_map_H.fits",
+        "path_key": "weight_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "coverage",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\coverage_map_H.fits",
+        "path_key": "coverage_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "dq",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\dq_map_H.fits",
+        "path_key": "dq_map_path",
+        "policy_skipped": false,
+        "required": true,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "low_rejection",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\low_rejection_H.fits",
+        "path_key": "low_rejection_map_path",
+        "policy_skipped": false,
+        "required": false,
+        "surface": "integration"
+      },
+      {
+        "exists": true,
+        "item": "H",
+        "map": "high_rejection",
+        "ok": true,
+        "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\high_rejection_H.fits",
+        "path_key": "high_rejection_map_path",
+        "policy_skipped": false,
+        "required": false,
+        "surface": "integration"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cpu",
+        "dq_contract_ok": true,
+        "dq_map_exists": true,
+        "dq_map_path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\dq_map_H.fits",
+        "dq_provenance_engine": "stack_engine_cpu",
+        "dq_provenance_summary_present": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "engine_selection": {
+          "actual_backend": "cpu",
+          "allow_cuda_streaming_accumulator_fast_path": false,
+          "backend": "cpu",
+          "cuda_available": false,
+          "cuda_fast_path_eligible": false,
+          "default_engine": "stack_engine_cpu",
+          "explicit_cuda_fast_path": false,
+          "reason": "stack_engine_default",
+          "rejection": "none",
+          "tile_stack_mode": "stack_engine_cpu",
+          "use_stack_engine": true
+        },
+        "frame_count": 1,
+        "item": "H",
+        "memory_mode": null,
+        "rejection": "none",
+        "resident_result_contract": {
+          "check_count": 0,
+          "contract_type": null,
+          "passed": false,
+          "present": false,
+          "required": false,
+          "status": "not_required"
+        },
+        "sample_accounting_closure": {
+          "input_invalid_samples_before_rejection": 0,
+          "input_samples": 576,
+          "input_total_match": true,
+          "input_valid_samples_before_rejection": 576,
+          "passed": true,
+          "present": true,
+          "rejected_samples": 0,
+          "required": true,
+          "semantics": "Initial valid input samples close over final valid samples plus low/high rejected samples. Invalid input samples are not rejection samples.",
+          "status": "passed",
+          "valid_rejection_match": true,
+          "valid_samples_after_rejection": 576
+        },
+        "stack_engine_enabled": true,
+        "stack_result_contract": {
+          "check_count": 19,
+          "contract_type": "stack_engine_result_contract",
+          "passed": true,
+          "present": true,
+          "required": true,
+          "status": "passed"
+        },
+        "tile_stack_mode": "stack_engine_cpu"
+      }
+    ]
+  },
+  "local_normalization": {
+    "contract_audit_attached": true,
+    "contract_audit_passed": true,
+    "contract_audit_status": "passed",
+    "contract_audit_summary": {
+      "coefficient_field_model": "bilinear_tile_center_v1",
+      "enabled": true,
+      "failed_output_count": 0,
+      "output_count": 1,
+      "reference_frame_id": "F000010",
+      "residual_quality": {
+        "failed_output_count": 0,
+        "max_abs": 0.0,
+        "max_rms": 0.0,
+        "output_count": 1,
+        "outputs": [
+          {
+            "failed_checks": [],
+            "frame_id": "F000010",
+            "max_abs": 0.0,
+            "passed": true,
+            "rms": 0.0,
+            "valid_pixels": 576
+          }
+        ],
+        "total_valid_pixels": 576,
+        "valid_output_count": 1,
+        "zero_valid_output_count": 0
+      }
+    },
+    "crop_box": null,
+    "enabled": true,
+    "outputs": [
+      {
+        "coefficient_grid_exists": true,
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "crop_box": null,
+        "crop_box_recorded": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_present": true,
+        "enabled": true,
+        "frame_id": "F000010",
+        "model": "bilinear_tile_center_v1",
+        "normalized_path_exists": true,
+        "status": "reference"
+      }
+    ],
+    "reference_frame_id": "F000010"
+  },
+  "passed": true,
+  "pixel_verification": {
+    "enabled": true,
+    "integration_outputs": [
+      {
+        "count_maps": {
+          "coverage": {
+            "count_integrity": {
+              "fractional_pixels": 0,
+              "negative_pixels": 0,
+              "nonfinite_pixels": 0,
+              "passed": true
+            },
+            "ok": true,
+            "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\coverage_map_H.fits",
+            "required": true,
+            "result": {
+              "finite_pixels": 576,
+              "fractional_pixels": 0,
+              "height": 24,
+              "max": 1.0,
+              "min": 1.0,
+              "negative_pixels": 0,
+              "nonfinite_pixels": 0,
+              "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\coverage_map_H.fits",
+              "positive_pixels": 576,
+              "positive_threshold": 0.0,
+              "rounded_sum": 576,
+              "schema_version": 1,
+              "sum": 576.0,
+              "tile_size": 8,
+              "total_pixels": 576,
+              "width": 24,
+              "zero_or_less_pixels": 0
+            },
+            "status": "verified",
+            "summary_match": {
+              "no_data": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "high_rejection": {
+            "count_integrity": {
+              "fractional_pixels": 0,
+              "negative_pixels": 0,
+              "nonfinite_pixels": 0,
+              "passed": true
+            },
+            "ok": true,
+            "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\high_rejection_H.fits",
+            "required": false,
+            "result": {
+              "finite_pixels": 576,
+              "fractional_pixels": 0,
+              "height": 24,
+              "max": 0.0,
+              "min": 0.0,
+              "negative_pixels": 0,
+              "nonfinite_pixels": 0,
+              "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\high_rejection_H.fits",
+              "positive_pixels": 0,
+              "positive_threshold": 0.0,
+              "rounded_sum": 0,
+              "schema_version": 1,
+              "sum": 0.0,
+              "tile_size": 8,
+              "total_pixels": 576,
+              "width": 24,
+              "zero_or_less_pixels": 576
+            },
+            "status": "verified",
+            "summary_match": {
+              "high_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          },
+          "low_rejection": {
+            "count_integrity": {
+              "fractional_pixels": 0,
+              "negative_pixels": 0,
+              "nonfinite_pixels": 0,
+              "passed": true
+            },
+            "ok": true,
+            "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\low_rejection_H.fits",
+            "required": false,
+            "result": {
+              "finite_pixels": 576,
+              "fractional_pixels": 0,
+              "height": 24,
+              "max": 0.0,
+              "min": 0.0,
+              "negative_pixels": 0,
+              "nonfinite_pixels": 0,
+              "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\low_rejection_H.fits",
+              "positive_pixels": 0,
+              "positive_threshold": 0.0,
+              "rounded_sum": 0,
+              "schema_version": 1,
+              "sum": 0.0,
+              "tile_size": 8,
+              "total_pixels": 576,
+              "width": 24,
+              "zero_or_less_pixels": 576
+            },
+            "status": "verified",
+            "summary_match": {
+              "low_rejected": {
+                "actual": 0,
+                "delta": 0,
+                "passed": true,
+                "summary": 0
+              }
+            },
+            "verified": true
+          }
+        },
+        "dq": {
+          "ok": true,
+          "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\dq_map_H.fits",
+          "required": true,
+          "result": {
+            "counts": {
+              "high_rejected": 0,
+              "low_rejected": 0,
+              "no_data": 0,
+              "valid": 576,
+              "warp_edge": 0
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "no_data": 1,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 24,
+            "path": "runs\\checkpoints\\s2_gate_316_enabled_run\\integration\\dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 8,
+            "total_pixels": 576,
+            "unknown_flags": [],
+            "width": 24
+          },
+          "status": "verified",
+          "summary_matches": {
+            "high_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "low_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "no_data": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "valid": {
+              "actual": 576,
+              "delta": 0,
+              "passed": true,
+              "summary": 576
+            },
+            "warp_edge": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            }
+          },
+          "verified": true
+        },
+        "item": "H",
+        "rejection_sample_accounting": {
+          "map_integrity": {
+            "high_rejection": {
+              "count_integrity": {
+                "fractional_pixels": 0,
+                "negative_pixels": 0,
+                "nonfinite_pixels": 0,
+                "passed": true
+              },
+              "ok": true,
+              "positive_pixels": 0,
+              "required": false,
+              "rounded_sum": 0,
+              "verified": true
+            },
+            "low_rejection": {
+              "count_integrity": {
+                "fractional_pixels": 0,
+                "negative_pixels": 0,
+                "nonfinite_pixels": 0,
+                "passed": true
+              },
+              "ok": true,
+              "positive_pixels": 0,
+              "required": false,
+              "rounded_sum": 0,
+              "verified": true
+            }
+          },
+          "map_rejected_sample_sum": 0,
+          "ok": true,
+          "rejection": "none",
+          "required": false,
+          "semantics": "Low/high rejection count maps store rejected-sample counts; DQ low/high flags store pixels touched by rejection.",
+          "source_counts": [
+            {
+              "count": 0,
+              "name": "dq_provenance_summary.rejected_samples"
+            },
+            {
+              "count": 0,
+              "name": "stack_engine_metrics.low_high_rejected"
+            }
+          ],
+          "source_matches": [
+            {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "source": "dq_provenance_summary.rejected_samples",
+              "summary": 0
+            },
+            {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "source": "stack_engine_metrics.low_high_rejected",
+              "summary": 0
+            }
+          ],
+          "status": "verified",
+          "verified": true
+        }
+      }
+    ],
+    "tile_size": 8,
+    "tolerance_pixels": 0
+  },
+  "run_dir": "runs\\checkpoints\\s2_gate_316_enabled_run",
+  "schema_version": 1,
+  "stack_engine_runtime_default": {
+    "explicit_cuda_fast_path_count": 0,
+    "failed_masters": [],
+    "failed_outputs": [],
+    "integration_output_count": 1,
+    "integration_required": true,
+    "integration_resident_count": 0,
+    "integration_stack_engine_default_count": 1,
+    "legacy_master_count": 0,
+    "master_count": 3,
+    "master_required": true,
+    "master_resident_count": 0,
+    "master_stack_engine_count": 3,
+    "masters": [
+      {
+        "contract_ok": true,
+        "failures": [],
+        "name": "G409bfdf826",
+        "path_exists": true,
+        "stack_engine_enabled": true,
+        "status": "passed",
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "dark"
+      },
+      {
+        "contract_ok": true,
+        "failures": [],
+        "name": "G9e8d28c798",
+        "path_exists": true,
+        "stack_engine_enabled": true,
+        "status": "passed",
+        "tile_stack_mode": "stack_engine_cpu_per_flat_normalized",
+        "type": "flat"
+      },
+      {
+        "contract_ok": true,
+        "failures": [],
+        "name": "Ga8f40c9e17",
+        "path_exists": true,
+        "stack_engine_enabled": true,
+        "status": "passed",
+        "tile_stack_mode": "stack_engine_cpu",
+        "type": "bias"
+      }
+    ],
+    "outputs": [
+      {
+        "backend": "cpu",
+        "failures": [],
+        "item": "H",
+        "memory_mode": null,
+        "passed": true,
+        "required": true,
+        "status": "stack_engine_default",
+        "tile_stack_mode": "stack_engine_cpu"
+      }
+    ],
+    "passed": true,
+    "resident_result_contract_failures": [],
+    "semantics": "Master calibration surfaces must use StackEngine CPU or resident CUDA calibration contracts. Non-resident integration defaults to StackEngine CPU; the older CUDA streaming accumulator remains acceptable only when explicitly requested and recorded by integration_engine_policy.",
+    "stack_result_contract_failures": [],
+    "status": "passed"
+  },
+  "status": "passed",
+  "warp": {
+    "outputs": [
+      {
+        "contract_ok": true,
+        "coverage_path_exists": true,
+        "dq_mask_path_exists": true,
+        "dq_summary_has_valid": true,
+        "dq_summary_present": true,
+        "frame_id": "F000010",
+        "interpolation": "bilinear",
+        "registered_path_exists": true
+      }
+    ],
+    "skipped_frames": [
+      {
+        "contract_ok": true,
+        "frame_id": "F000011",
+        "has_reason": true,
+        "status": "quality_rejected"
+      },
+      {
+        "contract_ok": true,
+        "frame_id": "F000012",
+        "has_reason": true,
+        "status": "quality_rejected"
+      }
+    ]
+  }
+}

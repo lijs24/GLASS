@@ -34,6 +34,7 @@ _REPORT_SECTIONS = [
     ("xisf-input-cache", "XISF input cache"),
     ("frame-quality-table", "Frame quality table"),
     ("registration-table", "Registration table"),
+    ("registration-quality-contract", "Registration quality contract"),
     ("local-normalization-summary", "Local normalization summary"),
     ("local-normalization-contract", "Local normalization contract"),
     ("integration-summary", "Integration summary"),
@@ -1358,6 +1359,66 @@ def _pipeline_contract_local_norm_rows(contract: dict[str, Any] | None) -> list[
     return rows
 
 
+def _registration_quality_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not contract:
+        return []
+    summary = contract.get("summary") if isinstance(contract.get("summary"), dict) else {}
+    thresholds = contract.get("thresholds") if isinstance(contract.get("thresholds"), dict) else {}
+    return [
+        {
+            "status": contract.get("status"),
+            "passed": contract.get("passed"),
+            "required": contract.get("required"),
+            "output_count": summary.get("output_count"),
+            "accepted_count": summary.get("accepted_count"),
+            "failed_count": summary.get("failed_count"),
+            "max_rms_px": summary.get("max_rms_px"),
+            "min_inliers": summary.get("min_inliers"),
+            "threshold_max_rms_px": thresholds.get("max_rms_px"),
+            "threshold_min_inliers": thresholds.get("min_inliers"),
+            "require_all_accepted": thresholds.get("require_all_accepted"),
+            "source": contract.get("_report_source_path"),
+        }
+    ]
+
+
+def _registration_quality_failure_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("checks") or []:
+        if not isinstance(item, dict) or item.get("passed"):
+            continue
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        rows.append(
+            {
+                "check": item.get("name"),
+                "note": item.get("note"),
+                "evidence": ", ".join(f"{key}={value}" for key, value in evidence.items()),
+            }
+        )
+    return rows
+
+
+def _registration_quality_output_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in (contract or {}).get("outputs") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "status": item.get("status"),
+                "accepted": item.get("accepted"),
+                "rms_px": item.get("rms_px"),
+                "inliers": item.get("inliers"),
+                "matched_stars": item.get("matched_stars"),
+                "quality_gate_status": item.get("quality_gate_status"),
+                "solution_source": item.get("solution_source"),
+                "transform_model": item.get("transform_model"),
+            }
+        )
+    return rows
+
+
 def _local_norm_contract_summary_rows(contract: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not contract:
         return []
@@ -1629,6 +1690,7 @@ def write_html_report(
     stack_engine_contract: dict[str, Any] | None = None,
     pipeline_contract: dict[str, Any] | None = None,
     local_norm_contract: dict[str, Any] | None = None,
+    registration_quality: dict[str, Any] | None = None,
     title: str = "GLASS Report",
     run_root: str | Path | None = None,
 ) -> None:
@@ -1759,6 +1821,9 @@ def write_html_report(
     pipeline_contract_calibrated_light_rows = _pipeline_contract_calibrated_light_rows(pipeline_contract)
     pipeline_contract_map_rows = _pipeline_contract_map_rows(pipeline_contract)
     pipeline_contract_local_norm_rows = _pipeline_contract_local_norm_rows(pipeline_contract)
+    registration_quality_summary_rows = _registration_quality_summary_rows(registration_quality)
+    registration_quality_failure_rows = _registration_quality_failure_rows(registration_quality)
+    registration_quality_output_rows = _registration_quality_output_rows(registration_quality)
     local_norm_contract_summary_rows = _local_norm_contract_summary_rows(local_norm_contract)
     local_norm_contract_failure_rows = _local_norm_contract_failure_rows(local_norm_contract)
     local_norm_contract_output_rows = _local_norm_contract_output_rows(local_norm_contract)
@@ -1848,6 +1913,12 @@ def write_html_report(
   <p>Reference frame: <code>{escape(str((quality or {}).get("reference_frame_id", "pending")))}</code></p>
   {_h2("registration-table", "Registration table")}
   {_limited_table(registration_results, label="registration rows", artifact="registration_results.json")}
+  {_h2("registration-quality-contract", "Registration quality contract")}
+  <p>The registration quality contract summarizes accepted/rejected alignment
+  rows and optional inlier/RMS acceptance thresholds.</p>
+  {_table(registration_quality_summary_rows)}
+  {_table(registration_quality_failure_rows)}
+  {_limited_table(registration_quality_output_rows, label="registration quality rows", artifact="registration_quality_contract.json")}
   {_h2("local-normalization-summary", "Local normalization summary")}
   <p>Enabled: <code>{escape(str((local_norm or {}).get("enabled", "pending")))}</code>.
   Reference frame: <code>{escape(str((local_norm or {}).get("reference_frame_id", "pending")))}</code>.</p>

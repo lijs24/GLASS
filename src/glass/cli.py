@@ -168,6 +168,10 @@ from glass.report.resident_tile_contribution import (
 )
 from glass.report.pipeline_contract import build_pipeline_contract_audit, write_pipeline_contract_audit
 from glass.report.local_norm_contract import build_local_norm_contract, write_local_norm_contract
+from glass.report.registration_quality import (
+    build_registration_quality_contract,
+    write_registration_quality_contract,
+)
 from glass.report.tile_local_policy import build_tile_local_policy_proposal, write_tile_local_policy_proposal
 from glass.report.tile_local_frame_family_search import (
     build_tile_local_frame_family_search,
@@ -305,6 +309,15 @@ def _report_local_norm_contract_path(run: Path, explicit: str | Path | None = No
     if explicit:
         return Path(explicit)
     return _newest_matching_json(run, ["*local_norm_contract*.json", "*local-norm-contract*.json"])
+
+
+def _report_registration_quality_path(run: Path, explicit: str | Path | None = None) -> Path | None:
+    if explicit:
+        return Path(explicit)
+    return _newest_matching_json(
+        run,
+        ["*registration_quality_contract*.json", "*registration-quality-contract*.json"],
+    )
 
 
 def _local_norm_override_from_arg(value: str) -> bool | None:
@@ -505,6 +518,7 @@ def _write_run_report(
     stack_engine_contract: str | Path | None = None,
     pipeline_contract: str | Path | None = None,
     local_norm_contract: str | Path | None = None,
+    registration_quality: str | Path | None = None,
 ) -> None:
     write_html_report(
         report_path,
@@ -526,6 +540,9 @@ def _write_run_report(
         pipeline_contract=_read_report_json_if_exists(_report_pipeline_contract_path(run, pipeline_contract)),
         local_norm_contract=_read_report_json_if_exists(
             _report_local_norm_contract_path(run, local_norm_contract)
+        ),
+        registration_quality=_read_report_json_if_exists(
+            _report_registration_quality_path(run, registration_quality)
         ),
         run_root=run,
     )
@@ -732,6 +749,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     local_norm_contract_payload = _read_report_json_if_exists(
         _report_local_norm_contract_path(run, args.local_norm_contract)
     )
+    registration_quality_payload = _read_report_json_if_exists(
+        _report_registration_quality_path(run, args.registration_quality)
+    )
     write_html_report(
         args.out,
         manifest=manifest,
@@ -749,6 +769,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         stack_engine_contract=stack_contract_payload,
         pipeline_contract=pipeline_contract_payload,
         local_norm_contract=local_norm_contract_payload,
+        registration_quality=registration_quality_payload,
         run_root=run,
     )
     console.print(f"Wrote report: {args.out}")
@@ -2700,6 +2721,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     pipeline_markdown = out_dir / "pipeline_contract.md"
     local_norm_contract_path = out_dir / "local_norm_contract.json"
     local_norm_contract_markdown = out_dir / "local_norm_contract.md"
+    registration_quality_path = out_dir / "registration_quality_contract.json"
+    registration_quality_markdown = out_dir / "registration_quality_contract.md"
     report_path = Path(args.report) if args.report else out_dir / "report.html"
     bundle_path = out_dir / "acceptance_contract_bundle.json"
     summary_path = out_dir / "guardrails_summary.json"
@@ -2723,6 +2746,28 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             local_norm_contract_path,
             local_norm_contract,
             markdown=local_norm_contract_markdown,
+        )
+    max_registration_rms_px = getattr(args, "max_registration_rms_px", None)
+    min_registration_inliers = getattr(args, "min_registration_inliers", None)
+    require_registration_all_accepted = bool(getattr(args, "require_registration_all_accepted", False))
+    registration_quality_required = (
+        max_registration_rms_px is not None
+        or min_registration_inliers is not None
+        or require_registration_all_accepted
+    )
+    registration_quality_present = (run / "registration_results.json").exists() or registration_quality_required
+    registration_quality_contract = None
+    if registration_quality_present:
+        registration_quality_contract = build_registration_quality_contract(
+            run,
+            max_rms_px=max_registration_rms_px,
+            min_inliers=min_registration_inliers,
+            require_all_accepted=require_registration_all_accepted,
+        )
+        write_registration_quality_contract(
+            registration_quality_path,
+            registration_quality_contract,
+            markdown=registration_quality_markdown,
         )
 
     stack_audit = build_stack_engine_contract_audit(
@@ -2756,6 +2801,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         stack_engine_contract=stack_path,
         pipeline_contract=pipeline_path,
         local_norm_contract=local_norm_contract_path if local_norm_results_present else None,
+        registration_quality=registration_quality_path if registration_quality_present else None,
     )
     stack_default_promotion = (
         stack_audit.get("default_promotion") if isinstance(stack_audit.get("default_promotion"), dict) else {}
@@ -2817,6 +2863,23 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             and local_norm_residual_max_abs_condition
         )
     )
+    registration_quality_condition = (
+        not registration_quality_required
+        or (
+            isinstance(registration_quality_contract, dict)
+            and bool(registration_quality_contract.get("passed"))
+        )
+    )
+    registration_quality_summary = (
+        registration_quality_contract.get("summary")
+        if isinstance(registration_quality_contract, dict)
+        else {}
+    )
+    registration_quality_status = (
+        registration_quality_contract.get("status")
+        if isinstance(registration_quality_contract, dict)
+        else "not_present"
+    )
     pipeline_calibration = (
         pipeline_audit.get("calibration") if isinstance(pipeline_audit.get("calibration"), dict) else {}
     )
@@ -2835,6 +2898,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         and local_norm_contract_condition
         and local_norm_enabled_condition
         and local_norm_residual_condition
+        and registration_quality_condition
     )
     summary = {
         "schema_version": 1,
@@ -2851,6 +2915,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "require_local_normalization_enabled": local_norm_enabled_required,
         "max_local_normalization_rms": max_local_norm_rms,
         "max_local_normalization_max_abs": max_local_norm_max_abs,
+        "max_registration_rms_px": max_registration_rms_px,
+        "min_registration_inliers": min_registration_inliers,
+        "require_registration_all_accepted": require_registration_all_accepted,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -2861,6 +2928,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "local_norm_contract_status": local_norm_contract_status,
         "local_norm_contract_enabled": local_norm_contract_enabled,
         "local_norm_residual_quality": local_norm_residual_quality,
+        "registration_quality_required": registration_quality_required,
+        "registration_quality_status": registration_quality_status,
+        "registration_quality": registration_quality_summary,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2871,6 +2941,12 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "local_norm_contract": str(local_norm_contract_path) if local_norm_results_present else None,
             "local_norm_contract_markdown": str(local_norm_contract_markdown)
             if local_norm_results_present
+            else None,
+            "registration_quality_contract": str(registration_quality_path)
+            if registration_quality_present
+            else None,
+            "registration_quality_contract_markdown": str(registration_quality_markdown)
+            if registration_quality_present
             else None,
             "acceptance_contract_bundle": str(bundle_path),
             "report": str(report_path),
@@ -2949,6 +3025,32 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "status": "passed" if local_norm_residual_condition else "threshold_failed_or_missing",
         }
     )
+    summary["checks"].append(
+        {
+            "name": "registration_quality",
+            "passed": registration_quality_condition,
+            "required": registration_quality_required,
+            "status": registration_quality_status,
+            "output_count": registration_quality_summary.get("output_count")
+            if isinstance(registration_quality_summary, dict)
+            else None,
+            "accepted_count": registration_quality_summary.get("accepted_count")
+            if isinstance(registration_quality_summary, dict)
+            else None,
+            "failed_count": registration_quality_summary.get("failed_count")
+            if isinstance(registration_quality_summary, dict)
+            else None,
+            "max_rms_px": registration_quality_summary.get("max_rms_px")
+            if isinstance(registration_quality_summary, dict)
+            else None,
+            "min_inliers": registration_quality_summary.get("min_inliers")
+            if isinstance(registration_quality_summary, dict)
+            else None,
+            "failed": (registration_quality_contract or {}).get("failed_checks", [])
+            if isinstance(registration_quality_contract, dict)
+            else [],
+        }
+    )
     bundle = {
         "schema_version": 1,
         "created_at": now_iso(),
@@ -2965,6 +3067,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "require_local_normalization_enabled": local_norm_enabled_required,
         "max_local_normalization_rms": max_local_norm_rms,
         "max_local_normalization_max_abs": max_local_norm_max_abs,
+        "max_registration_rms_px": max_registration_rms_px,
+        "min_registration_inliers": min_registration_inliers,
+        "require_registration_all_accepted": require_registration_all_accepted,
         "resident_calibration_contract_json": args.resident_calibration_contract_json,
         "resident_result_contract_json": resident_result_contract_path,
         "resident_result_contract_source": resident_result_contract_source,
@@ -2975,6 +3080,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "local_norm_contract_status": local_norm_contract_status,
         "local_norm_contract_enabled": local_norm_contract_enabled,
         "local_norm_residual_quality": local_norm_residual_quality,
+        "registration_quality_required": registration_quality_required,
+        "registration_quality_status": registration_quality_status,
+        "registration_quality": registration_quality_summary,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2986,6 +3094,12 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "local_norm_contract": str(local_norm_contract_path) if local_norm_results_present else None,
             "local_norm_contract_markdown": str(local_norm_contract_markdown)
             if local_norm_results_present
+            else None,
+            "registration_quality_contract": str(registration_quality_path)
+            if registration_quality_present
+            else None,
+            "registration_quality_contract_markdown": str(registration_quality_markdown)
+            if registration_quality_present
             else None,
             "report": str(report_path),
             "resident_calibration_contract": args.resident_calibration_contract_json,
@@ -3017,6 +3131,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "require_local_normalization_enabled": local_norm_enabled_required,
             "max_local_normalization_rms": max_local_norm_rms,
             "max_local_normalization_max_abs": max_local_norm_max_abs,
+            "max_registration_rms_px": max_registration_rms_px,
+            "min_registration_inliers": min_registration_inliers,
+            "require_registration_all_accepted": require_registration_all_accepted,
             "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
@@ -3025,6 +3142,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "local_norm_contract_required": local_norm_results_present,
             "local_norm_contract_enabled": local_norm_contract_enabled,
             "local_norm_residual_quality": local_norm_residual_quality,
+            "registration_quality_status": registration_quality_status,
+            "registration_quality_required": registration_quality_required,
             "resident_native_calibration": resident_native_calibration,
         }
     )
@@ -3732,6 +3851,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--stack-engine-contract", help="optional StackEngine contract audit JSON to summarize")
     report.add_argument("--pipeline-contract", help="optional pipeline invariant contract audit JSON to summarize")
     report.add_argument("--local-norm-contract", help="optional local-normalization contract JSON to summarize")
+    report.add_argument("--registration-quality", help="optional registration quality contract JSON to summarize")
     report.set_defaults(func=cmd_report)
 
     audit = sub.add_parser("audit", help="scan, plan, and report in one command")
@@ -5978,6 +6098,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-local-normalization-max-abs",
         type=float,
         help="fail guardrails when enabled local-normalization residual max absolute error exceeds this threshold",
+    )
+    guardrails.add_argument(
+        "--max-registration-rms-px",
+        type=float,
+        help="fail guardrails when accepted registration outputs exceed this RMS threshold",
+    )
+    guardrails.add_argument(
+        "--min-registration-inliers",
+        type=int,
+        help="fail guardrails when accepted registration outputs have fewer inliers than this threshold",
+    )
+    guardrails.add_argument(
+        "--require-registration-all-accepted",
+        action="store_true",
+        help="fail guardrails when any registration output is rejected or skipped",
     )
     guardrails.add_argument(
         "--pixel-verify",

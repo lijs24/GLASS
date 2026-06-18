@@ -432,6 +432,7 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     stack_contract = read_json(out_dir / "stack_engine_contract.json")
     pipeline_contract = read_json(out_dir / "pipeline_contract.json")
     local_norm_contract = read_json(out_dir / "local_norm_contract.json")
+    registration_quality = read_json(out_dir / "registration_quality_contract.json")
     assert summary["passed"] is True
     assert summary["pixel_verify"] is True
     assert summary["require_stack_default_ready"] is True
@@ -440,12 +441,15 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["local_norm_contract_attached"] is True
     assert summary["local_norm_contract_status"] == "passed"
     assert summary["local_norm_contract_enabled"] is False
+    assert summary["registration_quality_required"] is False
+    assert summary["registration_quality_status"] == "passed"
     assert summary["resident_calibration_contract_json"] == str(resident_calibration)
     assert summary["resident_result_contract_json"] == str(resident_result)
     assert summary["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
     assert summary["artifacts"]["resident_result_contract"] == str(resident_result)
     assert summary["artifacts"]["local_norm_contract"] == str(out_dir / "local_norm_contract.json")
     assert summary["artifacts"]["local_norm_contract_markdown"] == str(out_dir / "local_norm_contract.md")
+    assert summary["artifacts"]["registration_quality_contract"] == str(out_dir / "registration_quality_contract.json")
     assert summary["artifacts"]["acceptance_contract_bundle"] == str(out_dir / "acceptance_contract_bundle.json")
     assert bundle["artifact_type"] == "glass_acceptance_contract_bundle"
     assert bundle["passed"] is True
@@ -455,12 +459,15 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert bundle["local_norm_contract_attached"] is True
     assert bundle["local_norm_contract_status"] == "passed"
     assert bundle["local_norm_contract_enabled"] is False
+    assert bundle["registration_quality_required"] is False
+    assert bundle["registration_quality_status"] == "passed"
     assert bundle["resident_calibration_contract_json"] == str(resident_calibration)
     assert bundle["resident_result_contract_json"] == str(resident_result)
     assert bundle["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
     assert bundle["artifacts"]["resident_result_contract"] == str(resident_result)
     assert bundle["artifacts"]["local_norm_contract"] == str(out_dir / "local_norm_contract.json")
     assert bundle["artifacts"]["local_norm_contract_markdown"] == str(out_dir / "local_norm_contract.md")
+    assert bundle["artifacts"]["registration_quality_contract"] == str(out_dir / "registration_quality_contract.json")
     assert bundle["acceptance_audit_arguments"] == [
         "--pipeline-contract-json",
         str(out_dir / "pipeline_contract.json"),
@@ -480,6 +487,7 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["checks"][4]["name"] == "local_norm_enabled_requirement"
     assert summary["checks"][4]["passed"] is True
     assert summary["checks"][4]["required"] is False
+    assert {item["name"] for item in summary["checks"]} >= {"registration_quality"}
     assert stack_contract["passed"] is True
     assert stack_contract["default_promotion"]["ready"] is True
     assert pipeline_contract["passed"] is True
@@ -489,9 +497,12 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert pipeline_contract["artifacts"]["local_norm_contract"]["passed"] is True
     assert local_norm_contract["artifact_type"] == "local_norm_contract"
     assert local_norm_contract["passed"] is True
+    assert registration_quality["artifact_type"] == "registration_quality_contract"
+    assert registration_quality["passed"] is True
     assert (out_dir / "stack_engine_contract.md").exists()
     assert (out_dir / "pipeline_contract.md").exists()
     assert (out_dir / "local_norm_contract.md").exists()
+    assert (out_dir / "registration_quality_contract.md").exists()
     assert (out_dir / "report.html").exists()
     html = (out_dir / "report.html").read_text(encoding="utf-8")
     assert "StackEngine contract audit" in html
@@ -504,6 +515,8 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert "Local normalization contract" in html
     assert "local_norm_contract.json" in html
     assert "disabled_passthrough" in html
+    assert "Registration quality contract" in html
+    assert "registration_quality_contract.json" in html
 
 
 def test_cli_guardrails_require_enabled_local_normalization(small_fits_dataset, tmp_path: Path):
@@ -677,6 +690,90 @@ def test_cli_guardrails_local_norm_residual_thresholds(small_fits_dataset, tmp_p
     assert failing_checks["local_norm_residual_quality"]["max_rms"] == 0.5
     assert failing_checks["local_norm_residual_quality"]["max_abs"] == 2.0
     assert failing_checks["local_norm_residual_quality"]["status"] == "threshold_failed_or_missing"
+
+
+def test_cli_guardrails_registration_quality_thresholds(small_fits_dataset, tmp_path: Path):
+    run = tmp_path / "run"
+    passing_out = tmp_path / "passing_guardrails"
+    failing_out = tmp_path / "failing_guardrails"
+
+    assert main(["audit", "--root", str(small_fits_dataset), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(passing_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--max-registration-rms-px",
+                "0.1",
+                "--min-registration-inliers",
+                "0",
+            ]
+        )
+        == 0
+    )
+    passing_summary = read_json(passing_out / "guardrails_summary.json")
+    passing_contract = read_json(passing_out / "registration_quality_contract.json")
+    passing_checks = {item["name"]: item for item in passing_summary["checks"]}
+    html = (passing_out / "report.html").read_text(encoding="utf-8")
+    assert passing_summary["passed"] is True
+    assert passing_summary["registration_quality_required"] is True
+    assert passing_checks["registration_quality"]["passed"] is True
+    assert passing_contract["required"] is True
+    assert passing_contract["summary"]["accepted_count"] >= 1
+    assert "Registration quality contract" in html
+    assert "registration_quality_contract.json" in html
+
+    registration = read_json(run / "registration_results.json")
+    registration["registration_results"].append(
+        {
+            "frame_id": "F_REJECTED",
+            "status": "quality_rejected",
+            "inliers": 0,
+            "matched_stars": 0,
+            "rms_px": None,
+            "reference_frame_id": registration.get("reference_frame_id"),
+            "transform_model": "translation",
+            "registration_validation": {"accepted": False, "rms_px": None, "inliers": 0},
+            "warnings": ["fixture rejected row"],
+        }
+    )
+    write_json(run / "registration_results.json", registration)
+
+    assert (
+        main(
+            [
+                "guardrails",
+                "--run",
+                str(run),
+                "--out-dir",
+                str(failing_out),
+                "--expected-integration-engine",
+                "stack_engine_cpu",
+                "--max-registration-rms-px",
+                "0.1",
+                "--min-registration-inliers",
+                "1",
+                "--require-registration-all-accepted",
+            ]
+        )
+        == 2
+    )
+    failing_summary = read_json(failing_out / "guardrails_summary.json")
+    failing_bundle = read_json(failing_out / "acceptance_contract_bundle.json")
+    failing_contract = read_json(failing_out / "registration_quality_contract.json")
+    failing_checks = {item["name"]: item for item in failing_summary["checks"]}
+    contract_checks = {item["name"]: item for item in failing_contract["checks"]}
+    assert failing_summary["passed"] is False
+    assert failing_bundle["passed"] is False
+    assert failing_checks["registration_quality"]["passed"] is False
+    assert contract_checks["accepted_registration_inliers_meet_threshold"]["passed"] is False
+    assert contract_checks["all_registration_outputs_accepted"]["passed"] is False
+    assert failing_contract["summary"]["failed_count"] >= 1
 
 
 def test_cli_guardrails_auto_discovers_run_resident_result_contract(tmp_path: Path):

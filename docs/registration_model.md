@@ -494,3 +494,37 @@ selected resident CUDA matrix warp. This still downloads compact
 catalogs/diagnostics, so it is not the final fully resident descriptor
 primitive, but it avoids materializing calibrated or registered full frames on
 the host.
+
+## S2-Gate 318 Registration Quality Contract
+
+S2-Gate 318 adds a metadata-only registration quality contract derived from
+`registration_results.json`. The contract records:
+
+- registration output count
+- accepted registration output count
+- rejected or skipped output count
+- maximum RMS among accepted outputs
+- minimum inliers among accepted outputs
+- method, transform model, reference frame, and quality-gate rejection count
+- per-frame status, accepted flag, RMS, inliers, matched stars, solution source,
+  and quality-gate status
+
+`glass guardrails` can enforce the contract with:
+
+```text
+--max-registration-rms-px VALUE
+--min-registration-inliers VALUE
+--require-registration-all-accepted
+```
+
+The thresholds are opt-in. If no registration threshold is supplied,
+registration quality is reported when `registration_results.json` exists, but
+it does not block guardrails. When a threshold or all-accepted requirement is
+supplied, guardrails fail if registration evidence is missing, no accepted
+outputs exist, an accepted output exceeds the RMS threshold, an accepted output
+has too few inliers, or all-accepted mode sees any rejected/skipped output.
+
+This gate does not change registration math. It promotes existing alignment
+diagnostics into a reusable acceptance contract so future 200-light benchmark
+runs can set explicit registration tolerances instead of relying on visual
+inspection or scattered JSON fields.
