@@ -5116,6 +5116,30 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 299: StackEngine Publication Audit Runtime Default Handoff
+
+- Carry the S2-Gate 298 Phase 2 publish-preflight StackEngine
+  runtime-default handoff back into `glass stack-engine-publication-audit`.
+- Require final StackEngine publication-audit readiness to preserve both raw
+  Windows publish-preflight runtime-default evidence and the matching Phase 2
+  status handoff evidence.
+- Block stale publish-preflight or Phase 2 status artifacts that still report
+  ready/green status but do not contain Gate297/Gate298 runtime-default summary
+  and check fields.
+- Cross-check matrix/default-promotion runtime-default readiness,
+  acceptance/pipeline statuses, legacy master drift counters, failed output
+  counters, and matrix/default-promotion agreement between raw publish-preflight
+  and Phase 2 status.
+- Surface the new publish-preflight runtime-default and Phase 2 handoff layers
+  in StackEngine publication-audit JSON and Markdown.
+- Add focused publication-audit tests for ready evidence, missing raw
+  publish-preflight runtime-default evidence, failed raw runtime-default
+  evidence, missing Phase 2 runtime-default evidence, failed Phase 2 handoff
+  evidence, and CLI Markdown output.
+- Keep this gate publication-audit scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

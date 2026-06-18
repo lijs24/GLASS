@@ -41,6 +41,10 @@ def _write_chain(
     phase2_integration_engine_policy_ready: bool | None = None,
     include_integration_engine_policy: bool = True,
     include_phase2_integration_engine_policy: bool = True,
+    runtime_default_ready: bool = True,
+    phase2_runtime_default_ready: bool | None = None,
+    include_runtime_default: bool = True,
+    include_phase2_runtime_default: bool = True,
     publication_audit_ready: bool = True,
     phase2_publication_audit_ready: bool | None = None,
     include_publication_audit: bool = True,
@@ -58,6 +62,11 @@ def _write_chain(
         if phase2_integration_engine_policy_ready is None
         else phase2_integration_engine_policy_ready
     )
+    phase2_runtime_ready = (
+        runtime_default_ready
+        if phase2_runtime_default_ready is None
+        else phase2_runtime_default_ready
+    )
     phase2_publication_ready = (
         publication_audit_ready
         if phase2_publication_audit_ready is None
@@ -69,6 +78,8 @@ def _write_chain(
     phase2_engine_policy_status = (
         "passed" if phase2_engine_policy_ready else "failed"
     )
+    runtime_default_status = "passed" if runtime_default_ready else "failed"
+    phase2_runtime_status = "passed" if phase2_runtime_ready else "failed"
     publication_audit_status = "passed" if publication_audit_ready else "failed"
     phase2_publication_audit_status = (
         "passed" if phase2_publication_ready else "failed"
@@ -78,6 +89,7 @@ def _write_chain(
         and matrix_fields["ready"]
         and phase2_winsorized_ready
         and (phase2_engine_policy_ready if include_phase2_integration_engine_policy else True)
+        and (phase2_runtime_ready if include_phase2_runtime_default else True)
         and (phase2_publication_ready if include_phase2_publication_audit else True)
     )
     paths = {
@@ -268,6 +280,60 @@ def _write_chain(
                 "passed": phase2_engine_policy_ready,
             }
         )
+    if include_phase2_runtime_default:
+        phase2_payload["publish_preflight"].update(
+            {
+                "matrix_stack_engine_runtime_default_ready": phase2_runtime_ready,
+                "matrix_acceptance_stack_engine_runtime_default_status": (
+                    phase2_runtime_status
+                ),
+                "matrix_pipeline_stack_engine_runtime_default_status": (
+                    phase2_runtime_status
+                ),
+                "matrix_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                    0 if phase2_runtime_ready else 1
+                ),
+                "matrix_stack_engine_runtime_default_pipeline_failed_output_count": (
+                    0 if phase2_runtime_ready else 1
+                ),
+                "default_promotion_stack_engine_runtime_default_ready": (
+                    phase2_runtime_ready
+                ),
+                "default_promotion_acceptance_stack_engine_runtime_default_status": (
+                    phase2_runtime_status
+                ),
+                "default_promotion_pipeline_stack_engine_runtime_default_status": (
+                    phase2_runtime_status
+                ),
+                "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                    0 if phase2_runtime_ready else 1
+                ),
+                "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count": (
+                    0 if phase2_runtime_ready else 1
+                ),
+                "windows_release_matrix_acceptance_stack_engine_runtime_default_passed": (
+                    phase2_runtime_ready
+                ),
+                "windows_release_matrix_pipeline_stack_engine_runtime_default_passed": (
+                    phase2_runtime_ready
+                ),
+                "default_promotion_acceptance_stack_engine_runtime_default_passed": (
+                    phase2_runtime_ready
+                ),
+                "default_promotion_pipeline_stack_engine_runtime_default_passed": (
+                    phase2_runtime_ready
+                ),
+                "matrix_stack_engine_runtime_default_matches_default_promotion": (
+                    phase2_runtime_ready
+                ),
+            }
+        )
+        phase2_payload["checks"].append(
+            {
+                "name": "windows_publish_preflight_stack_engine_runtime_default_passed",
+                "passed": phase2_runtime_ready,
+            }
+        )
     if include_phase2_publication_audit:
         phase2_payload["publish_preflight"].update(
             {
@@ -418,6 +484,7 @@ def _write_chain(
                     if include_integration_engine_policy
                     else True
                 )
+                and (runtime_default_ready if include_runtime_default else True)
                 and (publication_audit_ready if include_publication_audit else True)
             )
             else "blocked",
@@ -429,6 +496,7 @@ def _write_chain(
                     if include_integration_engine_policy
                     else True
                 )
+                and (runtime_default_ready if include_runtime_default else True)
                 and (publication_audit_ready if include_publication_audit else True)
             ),
             "summary": {
@@ -447,6 +515,34 @@ def _write_chain(
                 ],
                 "default_promotion_stack_engine_contract_default_gap_count": (
                     source_fields["gap_count"]
+                ),
+                "matrix_stack_engine_runtime_default_ready": runtime_default_ready,
+                "matrix_acceptance_stack_engine_runtime_default_status": (
+                    runtime_default_status
+                ),
+                "matrix_pipeline_stack_engine_runtime_default_status": (
+                    runtime_default_status
+                ),
+                "matrix_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                    0 if runtime_default_ready else 1
+                ),
+                "matrix_stack_engine_runtime_default_pipeline_failed_output_count": (
+                    0 if runtime_default_ready else 1
+                ),
+                "default_promotion_stack_engine_runtime_default_ready": (
+                    runtime_default_ready
+                ),
+                "default_promotion_acceptance_stack_engine_runtime_default_status": (
+                    runtime_default_status
+                ),
+                "default_promotion_pipeline_stack_engine_runtime_default_status": (
+                    runtime_default_status
+                ),
+                "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count": (
+                    0 if runtime_default_ready else 1
+                ),
+                "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count": (
+                    0 if runtime_default_ready else 1
                 ),
                 "matrix_resident_winsorized_sweep_status": resident_status,
                 "matrix_resident_winsorized_sweep_required_frame_count": 200,
@@ -491,6 +587,26 @@ def _write_chain(
                     "passed": source_fields["ready"] and matrix_fields["ready"],
                 },
                 {
+                    "name": "windows_release_matrix_acceptance_stack_engine_runtime_default_passed",
+                    "passed": runtime_default_ready,
+                },
+                {
+                    "name": "windows_release_matrix_pipeline_stack_engine_runtime_default_passed",
+                    "passed": runtime_default_ready,
+                },
+                {
+                    "name": "default_promotion_acceptance_stack_engine_runtime_default_passed",
+                    "passed": runtime_default_ready,
+                },
+                {
+                    "name": "default_promotion_pipeline_stack_engine_runtime_default_passed",
+                    "passed": runtime_default_ready,
+                },
+                {
+                    "name": "matrix_stack_engine_runtime_default_matches_default_promotion",
+                    "passed": runtime_default_ready,
+                },
+                {
                     "name": "matrix_resident_winsorized_sweep_audit_passed",
                     "passed": resident_winsorized_ready,
                 },
@@ -518,6 +634,33 @@ def _write_chain(
         },
     )
     preflight_payload = read_json(paths["preflight"])
+    if not include_runtime_default:
+        for key in (
+            "matrix_stack_engine_runtime_default_ready",
+            "matrix_acceptance_stack_engine_runtime_default_status",
+            "matrix_pipeline_stack_engine_runtime_default_status",
+            "matrix_stack_engine_runtime_default_acceptance_legacy_master_count",
+            "matrix_stack_engine_runtime_default_pipeline_failed_output_count",
+            "default_promotion_stack_engine_runtime_default_ready",
+            "default_promotion_acceptance_stack_engine_runtime_default_status",
+            "default_promotion_pipeline_stack_engine_runtime_default_status",
+            "default_promotion_stack_engine_runtime_default_acceptance_legacy_master_count",
+            "default_promotion_stack_engine_runtime_default_pipeline_failed_output_count",
+        ):
+            preflight_payload["summary"].pop(key, None)
+        preflight_payload["checks"] = [
+            item
+            for item in preflight_payload["checks"]
+            if item.get("name")
+            not in {
+                "windows_release_matrix_acceptance_stack_engine_runtime_default_passed",
+                "windows_release_matrix_pipeline_stack_engine_runtime_default_passed",
+                "default_promotion_acceptance_stack_engine_runtime_default_passed",
+                "default_promotion_pipeline_stack_engine_runtime_default_passed",
+                "matrix_stack_engine_runtime_default_matches_default_promotion",
+            }
+        ]
+        write_json(paths["preflight"], preflight_payload)
     if include_integration_engine_policy:
         preflight_payload["summary"].update(
             {
@@ -650,6 +793,11 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     assert checks["phase2_publish_preflight_resident_winsorized_sweep_ready"] is True
     assert checks["publish_preflight_integration_engine_policy_ready"] is True
     assert checks["phase2_publish_preflight_integration_engine_policy_ready"] is True
+    assert checks["publish_preflight_stack_engine_runtime_default_ready"] is True
+    assert (
+        checks["phase2_publish_preflight_stack_engine_runtime_default_ready"]
+        is True
+    )
     assert checks["publish_preflight_publication_audit_ready"] is True
     assert checks["phase2_publish_preflight_publication_audit_ready"] is True
     assert (
@@ -661,6 +809,12 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     assert (
         checks[
             "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight"
         ]
         is True
     )
@@ -792,6 +946,137 @@ def test_stack_engine_publication_audit_blocks_failed_publish_preflight_engine_p
     assert checks["publish_preflight_integration_engine_policy_ready"]["evidence"][
         "matrix_acceptance_status"
     ] == "failed"
+
+
+def test_stack_engine_publication_audit_blocks_missing_publish_preflight_runtime_default(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, include_runtime_default=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert payload["passed"] is False
+    assert checks["publish_preflight_stack_engine_ready"]["passed"] is True
+    assert (
+        checks["publish_preflight_stack_engine_runtime_default_ready"]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight"
+        ]["passed"]
+        is False
+    )
+    assert checks["publish_preflight_stack_engine_runtime_default_ready"][
+        "evidence"
+    ]["matrix_ready"] is None
+
+
+def test_stack_engine_publication_audit_blocks_failed_publish_preflight_runtime_default(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, runtime_default_ready=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert payload["passed"] is False
+    runtime_check = checks["publish_preflight_stack_engine_runtime_default_ready"]
+    phase2_check = checks["phase2_publish_preflight_stack_engine_runtime_default_ready"]
+    assert runtime_check["passed"] is False
+    assert phase2_check["passed"] is False
+    assert runtime_check["evidence"]["matrix_acceptance_status"] == "failed"
+    assert runtime_check["evidence"]["matrix_acceptance_legacy_master_count"] == 1
+    assert runtime_check["evidence"]["matrix_pipeline_failed_output_count"] == 1
+
+
+def test_stack_engine_publication_audit_blocks_phase2_runtime_default_mismatch(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        runtime_default_ready=True,
+        phase2_runtime_default_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_stack_engine_runtime_default_ready"][
+        "passed"
+    ] is True
+    assert checks["phase2_publish_preflight_stack_engine_runtime_default_ready"][
+        "passed"
+    ] is False
+    assert (
+        checks[
+            "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight"
+        ]["passed"]
+        is False
+    )
+    evidence = checks[
+        "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight"
+    ]["evidence"]["phase2_publish_preflight"]
+    assert evidence["matrix_acceptance_status"] == "failed"
+    assert evidence["matrix_acceptance_legacy_master_count"] == 1
+
+
+def test_stack_engine_publication_audit_blocks_missing_phase2_runtime_default(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, include_phase2_runtime_default=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_stack_engine_runtime_default_ready"][
+        "passed"
+    ] is True
+    assert checks["phase2_publish_preflight_stack_engine_runtime_default_ready"][
+        "passed"
+    ] is False
+    assert checks["phase2_publish_preflight_stack_engine_runtime_default_ready"][
+        "evidence"
+    ]["phase2_check_passed"] is None
+    assert (
+        checks[
+            "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight"
+        ]["passed"]
+        is False
+    )
 
 
 def test_stack_engine_publication_audit_blocks_matrix_gap(tmp_path: Path):
@@ -945,4 +1230,5 @@ def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
     assert "phase2_publish_preflight_stack_engine_ready" in text
     assert "publish_preflight_resident_winsorized_sweep_ready" in text
     assert "publish_preflight_integration_engine_policy_ready" in text
+    assert "publish_preflight_stack_engine_runtime_default_ready" in text
     assert "publish_preflight_publication_audit_ready" in text
