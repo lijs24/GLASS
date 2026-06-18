@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "audit_type": "pipeline_invariant_contract",
+  "status": "failed",
+  "passed": false,
+  "checks": [
+    {"name": "integration_resident_result_contract", "passed": false}
+  ],
+  "integration": {
+    "outputs": [
+      {
+        "item": "H",
+        "backend": "cuda_resident_stack",
+        "memory_mode": "resident",
+        "resident_result_contract": {
+          "required": true,
+          "passed": false,
+          "status": "failed",
+          "contract": {
+            "schema_version": 1,
+            "status": "failed",
+            "passed": false,
+            "checks": [
+              {
+                "name": "source_terms_present",
+                "passed": false,
+                "note": "resident output lost source term provenance",
+                "evidence": {
+                  "available": false,
+                  "required": true,
+                  "actual": []
+                }
+              },
+              {"name": "required_maps_exist", "passed": true}
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

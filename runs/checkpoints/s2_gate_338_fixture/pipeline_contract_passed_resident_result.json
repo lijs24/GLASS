@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "audit_type": "pipeline_invariant_contract",
+  "status": "passed",
+  "passed": true,
+  "checks": [
+    {"name": "integration_resident_result_contract", "passed": true}
+  ],
+  "integration": {
+    "outputs": [
+      {
+        "item": "H",
+        "backend": "cuda_resident_stack",
+        "memory_mode": "resident",
+        "resident_result_contract": {
+          "required": true,
+          "passed": true,
+          "status": "passed",
+          "contract": {
+            "schema_version": 1,
+            "status": "passed",
+            "passed": true,
+            "checks": [
+              {
+                "name": "source_terms_present",
+                "passed": true,
+                "evidence": {
+                  "available": true,
+                  "required": true,
+                  "actual": ["coverage", "weight", "rejection"]
+                }
+              },
+              {"name": "required_maps_exist", "passed": true}
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

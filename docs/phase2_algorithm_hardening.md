@@ -5987,6 +5987,26 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 338: Phase2 Resident Result-Contract Handoff
+
+- Carry resident CUDA result-contract rows from `pipeline_contract` into
+  `glass phase2-status`.
+- Add `pipeline_resident_result_contract_passed` as a Phase2 check requiring
+  resident result-contract status to pass with zero failed outputs and zero
+  failed nested checks when resident result-contract evidence is required.
+- Surface resident result-contract status, check state, required output count,
+  failed output count, and failed nested check names in Phase2 Markdown.
+- Extend `glass phase2-status-compare` so candidates cannot drop a previously
+  present resident result-contract check, regress a previously passing result
+  contract, or increase resident result-contract failure count.
+- Add focused tests for direct pipeline resident result-contract failure,
+  green preservation, and compare regression.
+- Generate Gate338 Phase2 status/compare artifacts from controlled resident
+  result-contract fixtures.
+- Keep this gate status/compare scoped: no registration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

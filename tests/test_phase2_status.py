@@ -316,6 +316,7 @@ def _write_pipeline_contract(
     path: Path,
     *,
     passed: bool = True,
+    resident_result_contract_passed: bool = True,
     rejection_sample_accounting_passed: bool = True,
     sample_accounting_closure_passed: bool = True,
     integration_engine_policy_passed: bool = True,
@@ -323,11 +324,29 @@ def _write_pipeline_contract(
 ) -> None:
     pipeline_passed = (
         passed
+        and resident_result_contract_passed
         and rejection_sample_accounting_passed
         and sample_accounting_closure_passed
         and integration_engine_policy_passed
         and runtime_default_passed
     )
+    resident_result_checks = [
+        {
+            "name": "source_terms_present",
+            "passed": resident_result_contract_passed,
+            "note": ""
+            if resident_result_contract_passed
+            else "resident output lost source term provenance",
+            "evidence": {
+                "available": resident_result_contract_passed,
+                "required": True,
+                "actual": ["coverage", "weight", "rejection"]
+                if resident_result_contract_passed
+                else [],
+            },
+        },
+        {"name": "required_maps_exist", "passed": True},
+    ]
     engine_policy_failed = []
     if not integration_engine_policy_passed:
         engine_policy_failed = [
@@ -373,7 +392,10 @@ def _write_pipeline_contract(
                 {"name": "integration_output_maps_available", "passed": passed},
                 {"name": "integration_dq_contract", "passed": passed},
                 {"name": "integration_stack_result_contract", "passed": passed},
-                {"name": "integration_resident_result_contract", "passed": passed},
+                {
+                    "name": "integration_resident_result_contract",
+                    "passed": resident_result_contract_passed,
+                },
                 {"name": "integration_dq_map_pixels_match_summary", "passed": passed},
                 {"name": "integration_coverage_map_pixels_match_dq", "passed": passed},
                 {"name": "integration_rejection_map_pixels_match_dq", "passed": passed},
@@ -503,6 +525,23 @@ def _write_pipeline_contract(
                 "outputs": [
                     {
                         "item": "H",
+                        "backend": "cuda_resident_stack",
+                        "memory_mode": "resident",
+                        "resident_result_contract": {
+                            "required": True,
+                            "passed": resident_result_contract_passed,
+                            "status": "passed"
+                            if resident_result_contract_passed
+                            else "failed",
+                            "contract": {
+                                "schema_version": 1,
+                                "status": "passed"
+                                if resident_result_contract_passed
+                                else "failed",
+                                "passed": resident_result_contract_passed,
+                                "checks": resident_result_checks,
+                            },
+                        },
                         "sample_accounting_closure": {
                             "present": True,
                             "required": True,
@@ -1727,6 +1766,10 @@ def _status_payload(
     pipeline_runtime_default_check_present: bool = True,
     pipeline_runtime_default_status: str = "passed",
     pipeline_runtime_default_legacy_master_count: int = 0,
+    pipeline_resident_result_check_present: bool = True,
+    pipeline_resident_result_status: str = "passed",
+    pipeline_resident_result_failed_count: int = 0,
+    pipeline_resident_result_failed_checks: list[str] | None = None,
     stack_engine_ready: bool = True,
     stack_engine_status: str = "passed",
     stack_engine_gap_count: int = 0,
@@ -1742,6 +1785,7 @@ def _status_payload(
         if stack_engine_ready and stack_engine_gap_count == 0
         else "stack_engine_contract_gaps_remain"
     )
+    resident_result_failed_checks = pipeline_resident_result_failed_checks or []
     publish_preflight_release_direct_publication_guard_passed = (
         publish_preflight_direct_runtime_ready
         and publish_preflight_release_direct_publication_guard_ready
@@ -2354,6 +2398,38 @@ def _status_payload(
                 "failed_outputs": [],
             },
             "integration_dq_contract": pipeline_dq_contract,
+            "integration_resident_result_contract": (
+                pipeline_resident_result_status == "passed"
+            )
+            if pipeline_resident_result_check_present
+            else None,
+            "resident_result_contract": {
+                "status": pipeline_resident_result_status,
+                "check_present": pipeline_resident_result_check_present,
+                "check_passed": (pipeline_resident_result_status == "passed")
+                if pipeline_resident_result_check_present
+                else None,
+                "required_count": 1 if pipeline_resident_result_check_present else 0,
+                "failed_count": pipeline_resident_result_failed_count,
+                "failed_check_count": len(resident_result_failed_checks),
+                "failed_checks": resident_result_failed_checks,
+                "failed_items": []
+                if pipeline_resident_result_failed_count == 0
+                else [
+                    {
+                        "item": "H",
+                        "backend": "cuda_resident_stack",
+                        "memory_mode": "resident",
+                        "status": pipeline_resident_result_status,
+                        "required": True,
+                        "passed": False,
+                        "failed_checks": [
+                            {"name": name, "evidence": {"required": True}}
+                            for name in resident_result_failed_checks
+                        ],
+                    }
+                ],
+            },
             "pixel_verification_enabled": pixel_verification,
             "integration_rejection_sample_counts_match_maps": (
                 pipeline_rejection_sample_status == "passed"
@@ -2810,6 +2886,12 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     )
     assert payload["pipeline_contract"]["status"] == "passed"
     assert payload["pipeline_contract"]["integration_dq_contract"] is True
+    assert payload["pipeline_contract"]["integration_resident_result_contract"] is True
+    resident_result = payload["pipeline_contract"]["resident_result_contract"]
+    assert resident_result["status"] == "passed"
+    assert resident_result["check_present"] is True
+    assert resident_result["failed_count"] == 0
+    assert resident_result["failed_check_count"] == 0
     assert payload["pipeline_contract"]["integration_default_engine_policy"] is True
     assert payload["pipeline_contract"]["integration_engine_policy_status"] == "passed"
     assert payload["pipeline_contract"]["integration_engine_policy_check_present"] is True
@@ -2854,6 +2936,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert checks["default_route_acceptance_passed"] is True
     assert checks["default_route_acceptance_route_contract_passed"] is True
     assert checks["pipeline_integration_engine_policy_passed"] is True
+    assert checks["pipeline_resident_result_contract_passed"] is True
     assert checks["pipeline_stack_engine_runtime_default_passed"] is True
     assert checks["pipeline_rejection_sample_accounting_passed"] is True
     assert checks["pipeline_sample_accounting_closure_passed"] is True
@@ -4297,6 +4380,46 @@ def test_phase2_status_blocks_pipeline_rejection_sample_drift(tmp_path: Path):
     }
 
 
+def test_phase2_status_blocks_pipeline_resident_result_contract_failure(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=338)
+    acceptance = tmp_path / "acceptance.json"
+    pipeline_contract = tmp_path / "pipeline_contract.json"
+    release_decision = tmp_path / "release_decision.json"
+    _write_acceptance(acceptance)
+    _write_pipeline_contract(
+        pipeline_contract,
+        resident_result_contract_passed=False,
+    )
+    _write_release_decision(release_decision)
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        acceptance_audit=acceptance,
+        pipeline_contract=pipeline_contract,
+        release_decision=release_decision,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    resident = status["pipeline_contract"]["resident_result_contract"]
+    assert status["status"] == "attention_required"
+    assert checks["pipeline_contract_passed"]["passed"] is False
+    assert checks["pipeline_resident_result_contract_passed"]["passed"] is False
+    assert resident["status"] == "failed"
+    assert resident["check_present"] is True
+    assert resident["check_passed"] is False
+    assert resident["required_count"] == 1
+    assert resident["failed_count"] == 1
+    assert resident["failed_check_count"] == 1
+    assert resident["failed_checks"] == ["source_terms_present"]
+    assert resident["failed_items"][0]["item"] == "H"
+    assert resident["failed_items"][0]["backend"] == "cuda_resident_stack"
+
+
 def test_phase2_status_blocks_pipeline_sample_closure_drift(tmp_path: Path):
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
@@ -4482,6 +4605,12 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is True
     assert checks["stack_engine_publication_direct_runtime_chain_preserved"] is True
     assert checks["pipeline_contract_passed_preserved"] is True
+    assert checks["pipeline_resident_result_contract_check_preserved"] is True
+    assert checks["pipeline_resident_result_contract_passed_preserved"] is True
+    assert (
+        checks["pipeline_resident_result_contract_failure_count_not_increased"]
+        is True
+    )
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is True
     assert (
         checks[
@@ -4557,6 +4686,10 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
             pipeline_engine_policy_status="failed",
             pipeline_runtime_default_status="failed",
             pipeline_runtime_default_legacy_master_count=1,
+            pipeline_resident_result_check_present=False,
+            pipeline_resident_result_status="failed",
+            pipeline_resident_result_failed_count=1,
+            pipeline_resident_result_failed_checks=["source_terms_present"],
             pipeline_rejection_sample_status="failed",
             pipeline_sample_closure_status="failed",
             default_change_ready=False,
@@ -4641,6 +4774,12 @@ def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):
     assert checks["stack_engine_publication_resident_winsorized_chain_preserved"] is False
     assert checks["stack_engine_publication_direct_runtime_chain_preserved"] is False
     assert checks["pipeline_contract_passed_preserved"] is False
+    assert checks["pipeline_resident_result_contract_check_preserved"] is False
+    assert checks["pipeline_resident_result_contract_passed_preserved"] is False
+    assert (
+        checks["pipeline_resident_result_contract_failure_count_not_increased"]
+        is False
+    )
     assert checks["acceptance_pipeline_integration_engine_policy_preserved"] is False
     assert (
         checks[

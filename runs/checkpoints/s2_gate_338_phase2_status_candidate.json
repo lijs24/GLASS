@@ -1,0 +1,431 @@
+{
+  "acceptance_audit": null,
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 338,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": false,
+        "primary_gpu": null
+      },
+      "name": "cuda_doctor_available",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "failed_check_count": 1,
+        "integration_dq_contract": null,
+        "pixel_verification_enabled": null,
+        "status": "failed"
+      },
+      "name": "pipeline_contract_passed",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "check_passed": false,
+        "check_present": true,
+        "failed_check_count": 1,
+        "failed_checks": [
+          "source_terms_present"
+        ],
+        "failed_count": 1,
+        "failed_items": [
+          {
+            "backend": "cuda_resident_stack",
+            "check_count": 2,
+            "contract_available": true,
+            "failed_check_count": 1,
+            "failed_checks": [
+              {
+                "evidence": {
+                  "actual": [],
+                  "available": false,
+                  "required": true
+                },
+                "name": "source_terms_present",
+                "note": "resident output lost source term provenance"
+              }
+            ],
+            "item": "H",
+            "memory_mode": "resident",
+            "passed": false,
+            "required": true,
+            "status": "failed"
+          }
+        ],
+        "required_count": 1,
+        "status": "failed"
+      },
+      "name": "pipeline_resident_result_contract_passed",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "non_resident_count": 0,
+        "status": "not_available"
+      },
+      "name": "pipeline_integration_engine_policy_passed",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "check_passed": null,
+        "check_present": false,
+        "explicit_cuda_fast_path_count": null,
+        "failed_master_count": 0,
+        "failed_output_count": 0,
+        "legacy_master_count": null,
+        "status": "not_available"
+      },
+      "name": "pipeline_stack_engine_runtime_default_passed",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "accounted_output_count": 0,
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "pixel_verification_enabled": false,
+        "status": "not_available"
+      },
+      "name": "pipeline_rejection_sample_accounting_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_passed": null,
+        "check_present": false,
+        "failed_count": 0,
+        "failed_items": [],
+        "present_count": 0,
+        "required_count": 0,
+        "status": "not_available"
+      },
+      "name": "pipeline_sample_accounting_closure_passed",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T17:57:23+00:00",
+  "default_route_acceptance": null,
+  "doctor": {
+    "compute_capability": null,
+    "cuda_available": false,
+    "device_count": 0,
+    "driver_version": null,
+    "native_extension_loaded": false,
+    "primary_gpu": null,
+    "recommendation": "cpu; install a GLASS CUDA wheel and update the NVIDIA driver to enable GPU acceleration",
+    "vram_mib": null,
+    "windows_cuda_packages": {
+      "fallbacks": [],
+      "guidance": "No NVIDIA compute capability was detected. Use the CPU package or run on the target GPU machine.",
+      "ordered_try_list": [
+        "cpu"
+      ],
+      "packages": [
+        {
+          "architectures": [
+            "5.0",
+            "5.2",
+            "6.0",
+            "6.1",
+            "7.0",
+            "7.5",
+            "8.0",
+            "8.6"
+          ],
+          "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+          "compatible": null,
+          "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+          "label": "cuda11",
+          "match": "unknown_device",
+          "note": "GPU compute capability is unknown; run glass-doctor on the target machine.",
+          "toolkit": "11.8"
+        },
+        {
+          "architectures": [
+            "7.5",
+            "8.0",
+            "8.6",
+            "8.9",
+            "9.0"
+          ],
+          "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+          "compatible": null,
+          "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+          "label": "cuda12",
+          "match": "unknown_device",
+          "note": "GPU compute capability is unknown; run glass-doctor on the target machine.",
+          "toolkit": "12.4"
+        },
+        {
+          "architectures": [
+            "8.6",
+            "8.9",
+            "9.0",
+            "10.0",
+            "12.0"
+          ],
+          "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+          "compatible": null,
+          "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+          "label": "cuda13",
+          "match": "unknown_device",
+          "note": "GPU compute capability is unknown; run glass-doctor on the target machine.",
+          "toolkit": "13.0"
+        }
+      ],
+      "primary": "cpu",
+      "ptx_forward_compatibility": true,
+      "selected_device": null
+    },
+    "wrapper_importable": true
+  },
+  "github_release_plan": null,
+  "latest_checkpoint": {
+    "checkpoint_dir": "runs\\checkpoints\\s2_gate_338_fixture\\checkpoints",
+    "date": "2026-06-19",
+    "exists": true,
+    "gate": 338,
+    "green": true,
+    "path": "runs\\checkpoints\\s2_gate_338_fixture\\checkpoints\\s2_gate_338_status.md",
+    "scope": "fixture checkpoint for Phase2 resident result-contract handoff artifacts",
+    "status": "green"
+  },
+  "passed": false,
+  "pipeline_contract": {
+    "audit_type": "pipeline_invariant_contract",
+    "calibrated_light_count": null,
+    "calibration_master_count": null,
+    "check_count": 1,
+    "exists": true,
+    "failed_check_count": 1,
+    "failed_checks": [
+      "integration_resident_result_contract"
+    ],
+    "integration_coverage_map_pixels_match_dq": null,
+    "integration_default_engine_policy": null,
+    "integration_dq_contract": null,
+    "integration_dq_map_pixels_match_summary": null,
+    "integration_engine_policy": {
+      "check_name": "integration_default_engine_policy",
+      "check_passed": null,
+      "check_present": false,
+      "failed_count": 0,
+      "failed_items": [],
+      "non_resident_count": 0,
+      "output_count": 0,
+      "resident_count": 0,
+      "rows": [],
+      "status": "not_available",
+      "top_level_default_ok": null,
+      "top_level_present": null
+    },
+    "integration_engine_policy_check_present": false,
+    "integration_engine_policy_failed_count": 0,
+    "integration_engine_policy_non_resident_count": 0,
+    "integration_engine_policy_status": "not_available",
+    "integration_map_count": 0,
+    "integration_output_count": 1,
+    "integration_output_maps_available": null,
+    "integration_rejection_map_pixels_match_dq": null,
+    "integration_rejection_sample_counts_match_maps": null,
+    "integration_resident_result_contract": false,
+    "integration_resident_result_contract_check_passed": false,
+    "integration_resident_result_contract_check_present": true,
+    "integration_resident_result_contract_failed_check_count": 1,
+    "integration_resident_result_contract_failed_checks": [
+      "source_terms_present"
+    ],
+    "integration_resident_result_contract_failed_count": 1,
+    "integration_resident_result_contract_failed_items": [
+      {
+        "backend": "cuda_resident_stack",
+        "check_count": 2,
+        "contract_available": true,
+        "failed_check_count": 1,
+        "failed_checks": [
+          {
+            "evidence": {
+              "actual": [],
+              "available": false,
+              "required": true
+            },
+            "name": "source_terms_present",
+            "note": "resident output lost source term provenance"
+          }
+        ],
+        "item": "H",
+        "memory_mode": "resident",
+        "passed": false,
+        "required": true,
+        "status": "failed"
+      }
+    ],
+    "integration_resident_result_contract_required_count": 1,
+    "integration_resident_result_contract_status": "failed",
+    "integration_sample_accounting_closure": null,
+    "integration_stack_result_contract": null,
+    "passed": false,
+    "path": "runs\\checkpoints\\s2_gate_338_fixture\\pipeline_contract_failed_resident_result.json",
+    "pixel_verification_enabled": null,
+    "pixel_verification_tile_size": null,
+    "pixel_verification_tolerance_pixels": null,
+    "rejection_sample_accounting": {
+      "accounted_output_count": 0,
+      "check_name": "integration_rejection_sample_counts_match_maps",
+      "check_passed": null,
+      "check_present": false,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 0,
+      "pixel_verification_enabled": false,
+      "required_count": 0,
+      "schema_version": 1,
+      "status": "not_available",
+      "verified_count": 0
+    },
+    "rejection_sample_accounting_check_present": false,
+    "rejection_sample_accounting_failed_count": 0,
+    "rejection_sample_accounting_status": "not_available",
+    "resident_calibrated_light_count": null,
+    "resident_native_calibration_artifact": null,
+    "resident_result_contract": {
+      "check_name": "integration_resident_result_contract",
+      "check_passed": false,
+      "check_present": true,
+      "contract_count": 1,
+      "failed_check_count": 1,
+      "failed_checks": [
+        "source_terms_present"
+      ],
+      "failed_count": 1,
+      "failed_items": [
+        {
+          "backend": "cuda_resident_stack",
+          "check_count": 2,
+          "contract_available": true,
+          "failed_check_count": 1,
+          "failed_checks": [
+            {
+              "evidence": {
+                "actual": [],
+                "available": false,
+                "required": true
+              },
+              "name": "source_terms_present",
+              "note": "resident output lost source term provenance"
+            }
+          ],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": false,
+          "required": true,
+          "status": "failed"
+        }
+      ],
+      "output_count": 1,
+      "passed_count": 0,
+      "required_count": 1,
+      "rows": [
+        {
+          "backend": "cuda_resident_stack",
+          "check_count": 2,
+          "contract_available": true,
+          "failed_check_count": 1,
+          "failed_checks": [
+            {
+              "evidence": {
+                "actual": [],
+                "available": false,
+                "required": true
+              },
+              "name": "source_terms_present",
+              "note": "resident output lost source term provenance"
+            }
+          ],
+          "item": "H",
+          "memory_mode": "resident",
+          "passed": false,
+          "required": true,
+          "status": "failed"
+        }
+      ],
+      "schema_version": 1,
+      "status": "failed"
+    },
+    "sample_accounting_closure": {
+      "check_name": "integration_sample_accounting_closure",
+      "check_passed": null,
+      "check_present": false,
+      "failed_count": 0,
+      "failed_items": [],
+      "output_count": 1,
+      "present_count": 0,
+      "required_count": 0,
+      "rows": [],
+      "schema_version": 1,
+      "status": "not_available"
+    },
+    "sample_accounting_closure_check_present": false,
+    "sample_accounting_closure_failed_count": 0,
+    "sample_accounting_closure_present_count": 0,
+    "sample_accounting_closure_status": "not_available",
+    "stack_engine_runtime_default": {
+      "check_name": "stack_engine_runtime_default_path",
+      "check_passed": null,
+      "check_present": false,
+      "explicit_cuda_fast_path_count": null,
+      "failed_master_count": 0,
+      "failed_masters": [],
+      "failed_output_count": 0,
+      "failed_outputs": [],
+      "integration_output_count": null,
+      "integration_resident_count": null,
+      "integration_stack_engine_default_count": null,
+      "legacy_master_count": null,
+      "master_count": null,
+      "master_resident_count": null,
+      "master_stack_engine_count": null,
+      "passed": null,
+      "status": "not_available"
+    },
+    "stack_engine_runtime_default_check_passed": null,
+    "stack_engine_runtime_default_check_present": false,
+    "stack_engine_runtime_default_explicit_cuda_fast_path_count": null,
+    "stack_engine_runtime_default_failed_master_count": 0,
+    "stack_engine_runtime_default_failed_output_count": 0,
+    "stack_engine_runtime_default_legacy_master_count": null,
+    "stack_engine_runtime_default_status": "not_available",
+    "status": "failed"
+  },
+  "publish_preflight": null,
+  "release_decision": null,
+  "release_decision_runtime_repeat_closure": {
+    "ready": true,
+    "reason": "release decision was not supplied",
+    "required": false,
+    "status": "not_supplied"
+  },
+  "release_manifest": null,
+  "resident_winsorized_benchmark_audit": null,
+  "resident_winsorized_sweep_audit": null,
+  "schema_version": 1,
+  "stack_engine_contract": null,
+  "stack_engine_publication_audit": null,
+  "status": "attention_required"
+}

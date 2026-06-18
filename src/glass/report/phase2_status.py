@@ -1705,6 +1705,92 @@ def _sample_accounting_closure_summary(payload: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _resident_result_contract_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    check_name = "integration_resident_result_contract"
+    check = _check_by_name(payload, check_name)
+    integration = payload.get("integration") if isinstance(payload.get("integration"), dict) else {}
+    integration_outputs = integration.get("outputs")
+    if not isinstance(integration_outputs, list):
+        integration_outputs = []
+
+    rows: list[dict[str, Any]] = []
+    failed_rows: list[dict[str, Any]] = []
+    failed_check_names: set[str] = set()
+    for output in integration_outputs:
+        if not isinstance(output, dict):
+            continue
+        resident = output.get("resident_result_contract")
+        if not isinstance(resident, dict):
+            continue
+        resident_contract = resident.get("contract")
+        contract_checks = (
+            resident_contract.get("checks")
+            if isinstance(resident_contract, dict)
+            else []
+        )
+        if not isinstance(contract_checks, list):
+            contract_checks = []
+        failed_checks = [
+            item
+            for item in contract_checks
+            if isinstance(item, dict) and not item.get("passed")
+        ]
+        failed_check_names.update(str(item.get("name")) for item in failed_checks)
+        row = {
+            "item": output.get("item"),
+            "backend": output.get("backend"),
+            "memory_mode": output.get("memory_mode"),
+            "status": resident.get("status"),
+            "required": bool(resident.get("required")),
+            "passed": resident.get("passed") is True,
+            "contract_available": isinstance(resident_contract, dict),
+            "check_count": len(contract_checks),
+            "failed_check_count": len(failed_checks),
+            "failed_checks": [
+                {
+                    "name": item.get("name"),
+                    "note": item.get("note", ""),
+                    "evidence": item.get("evidence")
+                    if isinstance(item.get("evidence"), dict)
+                    else {},
+                }
+                for item in failed_checks
+            ],
+        }
+        rows.append(row)
+        if failed_checks or (row["required"] and row["passed"] is not True):
+            if not failed_checks:
+                failed_check_names.add("resident_result_contract_missing_or_failed")
+            failed_rows.append(row)
+
+    check_present = isinstance(check, dict)
+    check_passed = check.get("passed") is True if check_present else None
+    if check_present:
+        status = "passed" if check_passed else "failed"
+    elif rows:
+        status = "passed" if not failed_rows else "failed"
+    else:
+        status = "not_available"
+    return {
+        "schema_version": 1,
+        "status": status,
+        "check_name": check_name,
+        "check_present": check_present,
+        "check_passed": check_passed,
+        "output_count": len(integration_outputs),
+        "contract_count": len(rows),
+        "required_count": sum(1 for row in rows if row.get("required")),
+        "passed_count": sum(1 for row in rows if row.get("passed")),
+        "failed_count": len(failed_rows),
+        "failed_check_count": sum(
+            int(row.get("failed_check_count") or 0) for row in failed_rows
+        ),
+        "failed_checks": sorted(failed_check_names),
+        "failed_items": failed_rows,
+        "rows": rows,
+    }
+
+
 def _integration_engine_policy_summary(payload: dict[str, Any]) -> dict[str, Any]:
     check_name = "integration_default_engine_policy"
     checks = [item for item in payload.get("checks") or [] if isinstance(item, dict)]
@@ -1936,6 +2022,7 @@ def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None
     )
     rejection_sample_accounting = _rejection_sample_accounting_summary(payload)
     sample_accounting_closure = _sample_accounting_closure_summary(payload)
+    resident_result_contract = _resident_result_contract_summary(payload)
     integration_engine_policy = _integration_engine_policy_summary(payload)
     runtime_default = _stack_engine_runtime_default_summary(payload)
     return {
@@ -1961,6 +2048,31 @@ def _pipeline_contract_summary(path: str | Path | None) -> dict[str, Any] | None
         "integration_resident_result_contract": _check_passed(
             payload,
             "integration_resident_result_contract",
+        ),
+        "resident_result_contract": resident_result_contract,
+        "integration_resident_result_contract_status": (
+            resident_result_contract.get("status")
+        ),
+        "integration_resident_result_contract_check_present": (
+            resident_result_contract.get("check_present")
+        ),
+        "integration_resident_result_contract_check_passed": (
+            resident_result_contract.get("check_passed")
+        ),
+        "integration_resident_result_contract_required_count": (
+            resident_result_contract.get("required_count")
+        ),
+        "integration_resident_result_contract_failed_count": (
+            resident_result_contract.get("failed_count")
+        ),
+        "integration_resident_result_contract_failed_check_count": (
+            resident_result_contract.get("failed_check_count")
+        ),
+        "integration_resident_result_contract_failed_checks": (
+            resident_result_contract.get("failed_checks")
+        ),
+        "integration_resident_result_contract_failed_items": (
+            resident_result_contract.get("failed_items")
         ),
         "integration_dq_map_pixels_match_summary": _check_passed(
             payload,
@@ -3680,6 +3792,37 @@ def build_phase2_status(
                 },
             }
         )
+        resident_result = (
+            pipeline.get("resident_result_contract")
+            if isinstance(pipeline.get("resident_result_contract"), dict)
+            else {}
+        )
+        requires_resident_result = (
+            pipeline.get("integration_resident_result_contract") is not None
+            or resident_result.get("check_present") is True
+            or _int_or_zero(resident_result.get("required_count")) > 0
+        )
+        resident_result_passed = (
+            resident_result.get("status") == "passed"
+            and _int_or_zero(resident_result.get("failed_count")) == 0
+            and _int_or_zero(resident_result.get("failed_check_count")) == 0
+        )
+        checks.append(
+            {
+                "name": "pipeline_resident_result_contract_passed",
+                "passed": (not requires_resident_result) or resident_result_passed,
+                "evidence": {
+                    "status": resident_result.get("status"),
+                    "check_present": resident_result.get("check_present"),
+                    "check_passed": resident_result.get("check_passed"),
+                    "required_count": resident_result.get("required_count"),
+                    "failed_count": resident_result.get("failed_count"),
+                    "failed_check_count": resident_result.get("failed_check_count"),
+                    "failed_checks": resident_result.get("failed_checks"),
+                    "failed_items": resident_result.get("failed_items"),
+                },
+            }
+        )
         engine_policy = (
             pipeline.get("integration_engine_policy")
             if isinstance(pipeline.get("integration_engine_policy"), dict)
@@ -4558,6 +4701,15 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 (
                     "- Integration resident result contract: "
                     f"{pipeline.get('integration_resident_result_contract')}"
+                ),
+                (
+                    "- Integration resident result detail: "
+                    f"{pipeline.get('integration_resident_result_contract_status')} "
+                    f"check={pipeline.get('integration_resident_result_contract_check_passed')} "
+                    f"required={pipeline.get('integration_resident_result_contract_required_count')} "
+                    f"failed={pipeline.get('integration_resident_result_contract_failed_count')} "
+                    "failed_checks="
+                    f"{pipeline.get('integration_resident_result_contract_failed_checks')}"
                 ),
                 (
                     "- Integration engine policy: "
@@ -5689,6 +5841,60 @@ def build_phase2_status_compare(
         "resident_winsorized_sweep_audit",
         "required_frame_count",
     )
+    baseline_resident_result_status = _status_value(
+        baseline,
+        "pipeline_contract",
+        "resident_result_contract",
+        "status",
+    )
+    candidate_resident_result_status = _status_value(
+        candidate,
+        "pipeline_contract",
+        "resident_result_contract",
+        "status",
+    )
+    baseline_resident_result_check_present = _status_value(
+        baseline,
+        "pipeline_contract",
+        "resident_result_contract",
+        "check_present",
+    )
+    candidate_resident_result_check_present = _status_value(
+        candidate,
+        "pipeline_contract",
+        "resident_result_contract",
+        "check_present",
+    )
+    baseline_resident_result_passed = (
+        baseline_resident_result_status == "passed"
+        or _status_value(
+            baseline,
+            "pipeline_contract",
+            "integration_resident_result_contract",
+        )
+        is True
+    )
+    candidate_resident_result_passed = (
+        candidate_resident_result_status == "passed"
+        or _status_value(
+            candidate,
+            "pipeline_contract",
+            "integration_resident_result_contract",
+        )
+        is True
+    )
+    baseline_resident_result_failed_count = _int_status_value(
+        baseline,
+        "pipeline_contract",
+        "resident_result_contract",
+        "failed_count",
+    )
+    candidate_resident_result_failed_count = _int_status_value(
+        candidate,
+        "pipeline_contract",
+        "resident_result_contract",
+        "failed_count",
+    )
     checks = [
         _compare_check(
             "baseline_artifact_type",
@@ -6273,6 +6479,50 @@ def build_phase2_status_compare(
             or _status_value(candidate, "pipeline_contract", "passed") is True,
             baseline=_status_value(baseline, "pipeline_contract", "passed"),
             candidate=_status_value(candidate, "pipeline_contract", "passed"),
+        ),
+        _compare_check(
+            "pipeline_resident_result_contract_check_preserved",
+            baseline_resident_result_check_present is not True
+            or candidate_resident_result_check_present is True,
+            baseline=baseline_resident_result_check_present,
+            candidate=candidate_resident_result_check_present,
+        ),
+        _compare_check(
+            "pipeline_resident_result_contract_passed_preserved",
+            not baseline_resident_result_passed or candidate_resident_result_passed,
+            baseline={
+                "status": baseline_resident_result_status,
+                "check_present": baseline_resident_result_check_present,
+                "failed_count": baseline_resident_result_failed_count,
+                "failed_checks": _status_value(
+                    baseline,
+                    "pipeline_contract",
+                    "resident_result_contract",
+                    "failed_checks",
+                ),
+            },
+            candidate={
+                "status": candidate_resident_result_status,
+                "check_present": candidate_resident_result_check_present,
+                "failed_count": candidate_resident_result_failed_count,
+                "failed_checks": _status_value(
+                    candidate,
+                    "pipeline_contract",
+                    "resident_result_contract",
+                    "failed_checks",
+                ),
+            },
+        ),
+        _compare_check(
+            "pipeline_resident_result_contract_failure_count_not_increased",
+            baseline_resident_result_failed_count is None
+            or (
+                candidate_resident_result_failed_count is not None
+                and candidate_resident_result_failed_count
+                <= baseline_resident_result_failed_count
+            ),
+            baseline=baseline_resident_result_failed_count,
+            candidate=candidate_resident_result_failed_count,
         ),
         _compare_check(
             "pipeline_integration_dq_contract_preserved",
