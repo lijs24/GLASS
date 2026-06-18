@@ -4791,6 +4791,27 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 284: Windows Publish Preflight Integration Engine Policy Guard
+
+- Carry the S2-Gate 283 release-matrix integration engine-policy evidence into
+  `glass windows-publish-preflight`.
+- Require final Windows publish preflight readiness to preserve both
+  release-matrix and default-promotion integration engine-policy evidence.
+- Block stale release-matrix or default-promotion artifacts that still report
+  ready status but do not contain the Gate282/Gate283 policy summaries.
+- Cross-check acceptance-side status, pipeline-side status, required check
+  presence, check pass state, Phase 2 pass state, non-resident counts, and
+  failed rows between the release matrix and the default-promotion manifest.
+- Surface integration engine-policy readiness and status in preflight JSON and
+  Markdown so publication handoff reviewers can see the resident default-route
+  policy chain without opening lower-level artifacts.
+- Add focused publish-preflight tests for ready evidence, missing stale matrix
+  policy evidence, failed default-promotion policy evidence, and Markdown
+  output.
+- Keep this gate publish-preflight scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -80,6 +80,127 @@ def _resident_winsorized_sweep(
     }
 
 
+def _integration_engine_policy_flattened(
+    *,
+    acceptance_ready: bool = True,
+    pipeline_ready: bool = True,
+    pipeline_check_present: bool = True,
+) -> dict[str, object]:
+    pipeline_chain_ready = pipeline_ready and pipeline_check_present
+    policy_ready = acceptance_ready and pipeline_chain_ready
+    acceptance_failed_items = (
+        []
+        if acceptance_ready
+        else [{"artifact": "phase2_status", "reason": "non_resident_engine"}]
+    )
+    pipeline_failed_items = (
+        []
+        if pipeline_chain_ready
+        else [{"artifact": "pipeline_contract", "reason": "non_resident_engine"}]
+    )
+    return {
+        "integration_engine_policy": {
+            "ready": policy_ready,
+            "acceptance_status": "passed" if acceptance_ready else "failed",
+            "pipeline_status": "passed" if pipeline_chain_ready else "failed",
+        },
+        "integration_engine_policy_ready": policy_ready,
+        "acceptance_integration_engine_policy_status": "passed"
+        if acceptance_ready
+        else "failed",
+        "acceptance_integration_engine_policy_check_present": True,
+        "acceptance_integration_engine_policy_check_passed": acceptance_ready,
+        "acceptance_integration_engine_policy_phase2_check_passed": acceptance_ready,
+        "acceptance_integration_engine_policy_non_resident_count": 0
+        if acceptance_ready
+        else 1,
+        "acceptance_integration_engine_policy_failed_count": 0
+        if acceptance_ready
+        else 1,
+        "acceptance_integration_engine_policy_failed_items": acceptance_failed_items,
+        "pipeline_integration_engine_policy_status": "passed"
+        if pipeline_chain_ready
+        else "failed",
+        "pipeline_integration_engine_policy_check_present": pipeline_check_present,
+        "pipeline_integration_engine_policy_check_passed": pipeline_ready
+        if pipeline_check_present
+        else None,
+        "pipeline_integration_engine_policy_phase2_check_passed": (
+            pipeline_chain_ready
+        ),
+        "pipeline_integration_engine_policy_default_engine_policy": pipeline_ready
+        if pipeline_check_present
+        else None,
+        "pipeline_integration_engine_policy_non_resident_count": 0
+        if pipeline_chain_ready
+        else 1,
+        "pipeline_integration_engine_policy_failed_count": 0
+        if pipeline_chain_ready
+        else 1,
+        "pipeline_integration_engine_policy_failed_items": pipeline_failed_items,
+    }
+
+
+def _integration_engine_policy_manifest(
+    *,
+    acceptance_ready: bool = True,
+    pipeline_ready: bool = True,
+    pipeline_check_present: bool = True,
+) -> dict[str, object]:
+    flattened = _integration_engine_policy_flattened(
+        acceptance_ready=acceptance_ready,
+        pipeline_ready=pipeline_ready,
+        pipeline_check_present=pipeline_check_present,
+    )
+    return {
+        "present": True,
+        "ready": flattened["integration_engine_policy_ready"],
+        "acceptance_status": flattened[
+            "acceptance_integration_engine_policy_status"
+        ],
+        "acceptance_check_present": flattened[
+            "acceptance_integration_engine_policy_check_present"
+        ],
+        "acceptance_check_passed": flattened[
+            "acceptance_integration_engine_policy_check_passed"
+        ],
+        "acceptance_phase2_check_passed": flattened[
+            "acceptance_integration_engine_policy_phase2_check_passed"
+        ],
+        "acceptance_non_resident_count": flattened[
+            "acceptance_integration_engine_policy_non_resident_count"
+        ],
+        "acceptance_failed_count": flattened[
+            "acceptance_integration_engine_policy_failed_count"
+        ],
+        "acceptance_failed_items": flattened[
+            "acceptance_integration_engine_policy_failed_items"
+        ],
+        "pipeline_status": flattened["pipeline_integration_engine_policy_status"],
+        "pipeline_check_present": flattened[
+            "pipeline_integration_engine_policy_check_present"
+        ],
+        "pipeline_check_passed": flattened[
+            "pipeline_integration_engine_policy_check_passed"
+        ],
+        "pipeline_phase2_check_passed": flattened[
+            "pipeline_integration_engine_policy_phase2_check_passed"
+        ],
+        "pipeline_default_engine_policy": flattened[
+            "pipeline_integration_engine_policy_default_engine_policy"
+        ],
+        "pipeline_non_resident_count": flattened[
+            "pipeline_integration_engine_policy_non_resident_count"
+        ],
+        "pipeline_failed_count": flattened[
+            "pipeline_integration_engine_policy_failed_count"
+        ],
+        "pipeline_failed_items": flattened[
+            "pipeline_integration_engine_policy_failed_items"
+        ],
+    }
+
+
 def _matrix(
     path: Path,
     *,
@@ -94,6 +215,10 @@ def _matrix(
     resident_winsorized_sweep_ready: bool = True,
     resident_winsorized_required_frame_count: int = 200,
     resident_winsorized_check_count: int = 27,
+    include_integration_engine_policy: bool = True,
+    acceptance_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_check_present: bool = True,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -110,6 +235,14 @@ def _matrix(
         and int(resident_sweep["resident_winsorized_sweep_check_count"]) > 0
         and int(resident_sweep["resident_winsorized_sweep_failed_check_count"]) == 0
     )
+    integration_engine_policy = _integration_engine_policy_flattened(
+        acceptance_ready=acceptance_integration_engine_policy_ready,
+        pipeline_ready=pipeline_integration_engine_policy_ready,
+        pipeline_check_present=pipeline_integration_engine_policy_check_present,
+    )
+    integration_engine_policy_ready = bool(
+        integration_engine_policy["integration_engine_policy_ready"]
+    )
     matrix_ready = (
         ready
         and rejection_sample_accounting_ready
@@ -120,6 +253,11 @@ def _matrix(
             else True
         )
         and (resident_sweep_ready if include_resident_winsorized_sweep else True)
+        and (
+            integration_engine_policy_ready
+            if include_integration_engine_policy
+            else True
+        )
     )
     promotion = {
         "status": "default_promotion_ready" if matrix_ready else "blocked",
@@ -184,6 +322,8 @@ def _matrix(
         )
     if include_resident_winsorized_sweep:
         promotion.update(resident_sweep)
+    if include_integration_engine_policy:
+        promotion.update(integration_engine_policy)
     write_json(
         path,
         {
@@ -214,6 +354,10 @@ def _default_promotion(
     resident_winsorized_sweep_ready: bool = True,
     resident_winsorized_required_frame_count: int = 200,
     resident_winsorized_check_count: int = 27,
+    include_integration_engine_policy: bool = True,
+    acceptance_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_ready: bool = True,
+    pipeline_integration_engine_policy_check_present: bool = True,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -230,6 +374,12 @@ def _default_promotion(
         and int(resident_sweep["resident_winsorized_sweep_check_count"]) > 0
         and int(resident_sweep["resident_winsorized_sweep_failed_check_count"]) == 0
     )
+    integration_engine_policy = _integration_engine_policy_manifest(
+        acceptance_ready=acceptance_integration_engine_policy_ready,
+        pipeline_ready=pipeline_integration_engine_policy_ready,
+        pipeline_check_present=pipeline_integration_engine_policy_check_present,
+    )
+    integration_engine_policy_ready = bool(integration_engine_policy["ready"])
     manifest_ready = (
         ready
         and rejection_sample_accounting_ready
@@ -240,6 +390,11 @@ def _default_promotion(
             else True
         )
         and (resident_sweep_ready if include_resident_winsorized_sweep else True)
+        and (
+            integration_engine_policy_ready
+            if include_integration_engine_policy
+            else True
+        )
     )
     payload = {
         "schema_version": 1,
@@ -303,6 +458,8 @@ def _default_promotion(
         payload["stack_engine_contract"] = stack_contract
     if include_resident_winsorized_sweep:
         payload.update(resident_sweep)
+    if include_integration_engine_policy:
+        payload["integration_engine_policy"] = integration_engine_policy
     write_json(
         path,
         payload,
@@ -629,6 +786,31 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert payload["summary"]["github_plan_matrix_sample_accounting_closure_status"] == "passed"
     assert payload["summary"]["matrix_sample_accounting_closure_status"] == "passed"
     assert payload["summary"]["default_promotion_sample_accounting_closure_status"] == "passed"
+    assert payload["summary"]["matrix_integration_engine_policy_ready"] is True
+    assert (
+        payload["summary"]["matrix_acceptance_integration_engine_policy_status"]
+        == "passed"
+    )
+    assert (
+        payload["summary"]["matrix_pipeline_integration_engine_policy_status"]
+        == "passed"
+    )
+    assert (
+        payload["summary"]["default_promotion_integration_engine_policy_ready"]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_acceptance_integration_engine_policy_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_pipeline_integration_engine_policy_status"
+        ]
+        == "passed"
+    )
     assert payload["summary"]["github_plan_phase2_stack_engine_contract_status"] == "passed"
     assert payload["summary"]["github_plan_matrix_stack_engine_contract_status"] == "passed"
     assert payload["summary"]["matrix_stack_engine_contract_status"] == "passed"
@@ -675,6 +857,25 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert checks["matrix_sample_accounting_closure_passed"] is True
     assert checks["default_promotion_sample_accounting_closure_passed"] is True
     assert checks["github_plan_matrix_sample_closure_matches_matrix"] is True
+    assert (
+        checks[
+            "windows_release_matrix_acceptance_integration_engine_policy_passed"
+        ]
+        is True
+    )
+    assert (
+        checks["windows_release_matrix_pipeline_integration_engine_policy_passed"]
+        is True
+    )
+    assert (
+        checks["default_promotion_acceptance_integration_engine_policy_passed"]
+        is True
+    )
+    assert (
+        checks["default_promotion_pipeline_integration_engine_policy_passed"]
+        is True
+    )
+    assert checks["matrix_integration_engine_policy_matches_default_promotion"] is True
     assert checks["github_plan_phase2_stack_engine_default_contract_ready"] is True
     assert checks["github_plan_matrix_stack_engine_contract_ready"] is True
     assert checks["github_plan_stack_engine_contract_agreement_passed"] is True
@@ -953,6 +1154,137 @@ def test_windows_publish_preflight_blocks_plan_matrix_sample_closure_mismatch(
     ] is False
     assert checks["matrix_sample_accounting_closure_passed"]["passed"] is True
     assert checks["github_plan_matrix_sample_closure_matches_matrix"]["passed"] is False
+
+
+def test_windows_publish_preflight_blocks_missing_matrix_integration_engine_policy(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, include_integration_engine_policy=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is True
+    assert (
+        checks[
+            "windows_release_matrix_acceptance_integration_engine_policy_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks["windows_release_matrix_pipeline_integration_engine_policy_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["default_promotion_acceptance_integration_engine_policy_passed"][
+            "passed"
+        ]
+        is True
+    )
+    assert (
+        checks["default_promotion_pipeline_integration_engine_policy_passed"]["passed"]
+        is True
+    )
+    assert (
+        checks["matrix_integration_engine_policy_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+    assert checks[
+        "windows_release_matrix_acceptance_integration_engine_policy_passed"
+    ]["evidence"] == {
+        "ready": None,
+        "status": None,
+        "check_present": None,
+        "check_passed": None,
+        "phase2_check_passed": None,
+        "non_resident_count": None,
+        "failed_count": None,
+        "failed_items": [],
+    }
+
+
+def test_windows_publish_preflight_blocks_failed_default_promotion_integration_engine_policy(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(
+        promotion,
+        acceptance_integration_engine_policy_ready=False,
+        pipeline_integration_engine_policy_ready=False,
+    )
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is True
+    assert checks["default_promotion_ready"]["passed"] is False
+    assert (
+        checks[
+            "windows_release_matrix_acceptance_integration_engine_policy_passed"
+        ]["passed"]
+        is True
+    )
+    assert (
+        checks["windows_release_matrix_pipeline_integration_engine_policy_passed"][
+            "passed"
+        ]
+        is True
+    )
+    assert (
+        checks["default_promotion_acceptance_integration_engine_policy_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["default_promotion_pipeline_integration_engine_policy_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["matrix_integration_engine_policy_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["default_promotion_pipeline_integration_engine_policy_passed"][
+            "evidence"
+        ]["non_resident_count"]
+        == 1
+    )
 
 
 def test_windows_publish_preflight_blocks_phase2_stack_engine_contract_gap(
@@ -1274,6 +1606,10 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     assert "Default route checks/speedup: `4`/`28.75`" in markdown_text
     assert "Rejection sample accounting: phase2 `passed`" in markdown_text
     assert "Sample accounting closure: phase2 `passed`" in markdown_text
+    assert (
+        "Integration engine policy: matrix `True`/`passed`/`passed`, "
+        "default-promotion `True`/`passed`/`passed`"
+    ) in markdown_text
     assert "StackEngine default contract: phase2 `passed`" in markdown_text
     assert "StackEngine default gaps: matrix `0`, default-promotion `0`" in markdown_text
     assert (

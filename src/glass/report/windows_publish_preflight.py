@@ -101,6 +101,88 @@ def _resident_winsorized_sweep_summary(source: dict[str, Any]) -> dict[str, Any]
     }
 
 
+_INTEGRATION_ENGINE_POLICY_FIELDS = (
+    "integration_engine_policy_ready",
+    "acceptance_integration_engine_policy_status",
+    "acceptance_integration_engine_policy_check_present",
+    "acceptance_integration_engine_policy_check_passed",
+    "acceptance_integration_engine_policy_phase2_check_passed",
+    "acceptance_integration_engine_policy_non_resident_count",
+    "acceptance_integration_engine_policy_failed_count",
+    "acceptance_integration_engine_policy_failed_items",
+    "pipeline_integration_engine_policy_status",
+    "pipeline_integration_engine_policy_check_present",
+    "pipeline_integration_engine_policy_check_passed",
+    "pipeline_integration_engine_policy_phase2_check_passed",
+    "pipeline_integration_engine_policy_default_engine_policy",
+    "pipeline_integration_engine_policy_non_resident_count",
+    "pipeline_integration_engine_policy_failed_count",
+    "pipeline_integration_engine_policy_failed_items",
+)
+
+
+def _integration_engine_policy_evidence(
+    summary: dict[str, Any],
+    prefix: str,
+) -> dict[str, Any]:
+    evidence = {
+        "status": summary.get(f"{prefix}_integration_engine_policy_status"),
+        "check_present": summary.get(
+            f"{prefix}_integration_engine_policy_check_present"
+        ),
+        "check_passed": summary.get(
+            f"{prefix}_integration_engine_policy_check_passed"
+        ),
+        "phase2_check_passed": summary.get(
+            f"{prefix}_integration_engine_policy_phase2_check_passed"
+        ),
+        "non_resident_count": summary.get(
+            f"{prefix}_integration_engine_policy_non_resident_count"
+        ),
+        "failed_count": summary.get(
+            f"{prefix}_integration_engine_policy_failed_count"
+        ),
+        "failed_items": summary.get(
+            f"{prefix}_integration_engine_policy_failed_items"
+        )
+        or [],
+    }
+    if prefix == "pipeline":
+        evidence["default_engine_policy"] = summary.get(
+            "pipeline_integration_engine_policy_default_engine_policy"
+        )
+    return evidence
+
+
+def _integration_engine_policy_side_passed(
+    summary: dict[str, Any],
+    prefix: str,
+) -> bool:
+    evidence = _integration_engine_policy_evidence(summary, prefix)
+    passed = (
+        evidence.get("status") == "passed"
+        and evidence.get("check_present") is True
+        and evidence.get("check_passed") is True
+        and evidence.get("phase2_check_passed") is True
+        and _int_or_zero(evidence.get("non_resident_count")) == 0
+        and _int_or_zero(evidence.get("failed_count")) == 0
+        and not evidence.get("failed_items")
+    )
+    if prefix == "pipeline":
+        passed = passed and evidence.get("default_engine_policy") is True
+    return passed
+
+
+def _integration_engine_policy_matches(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> bool:
+    return all(
+        left.get(field) == right.get(field)
+        for field in _INTEGRATION_ENGINE_POLICY_FIELDS
+    )
+
+
 def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
     machine = payload.get("current_machine") if isinstance(payload.get("current_machine"), dict) else {}
     promotion = (
@@ -153,6 +235,57 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "sample_accounting_closure_failed_count": promotion.get(
             "sample_accounting_closure_failed_count"
         ),
+        "integration_engine_policy": promotion.get("integration_engine_policy"),
+        "integration_engine_policy_ready": promotion.get(
+            "integration_engine_policy_ready"
+        ),
+        "acceptance_integration_engine_policy_status": promotion.get(
+            "acceptance_integration_engine_policy_status"
+        ),
+        "acceptance_integration_engine_policy_check_present": promotion.get(
+            "acceptance_integration_engine_policy_check_present"
+        ),
+        "acceptance_integration_engine_policy_check_passed": promotion.get(
+            "acceptance_integration_engine_policy_check_passed"
+        ),
+        "acceptance_integration_engine_policy_phase2_check_passed": promotion.get(
+            "acceptance_integration_engine_policy_phase2_check_passed"
+        ),
+        "acceptance_integration_engine_policy_non_resident_count": promotion.get(
+            "acceptance_integration_engine_policy_non_resident_count"
+        ),
+        "acceptance_integration_engine_policy_failed_count": promotion.get(
+            "acceptance_integration_engine_policy_failed_count"
+        ),
+        "acceptance_integration_engine_policy_failed_items": promotion.get(
+            "acceptance_integration_engine_policy_failed_items"
+        )
+        or [],
+        "pipeline_integration_engine_policy_status": promotion.get(
+            "pipeline_integration_engine_policy_status"
+        ),
+        "pipeline_integration_engine_policy_check_present": promotion.get(
+            "pipeline_integration_engine_policy_check_present"
+        ),
+        "pipeline_integration_engine_policy_check_passed": promotion.get(
+            "pipeline_integration_engine_policy_check_passed"
+        ),
+        "pipeline_integration_engine_policy_phase2_check_passed": promotion.get(
+            "pipeline_integration_engine_policy_phase2_check_passed"
+        ),
+        "pipeline_integration_engine_policy_default_engine_policy": promotion.get(
+            "pipeline_integration_engine_policy_default_engine_policy"
+        ),
+        "pipeline_integration_engine_policy_non_resident_count": promotion.get(
+            "pipeline_integration_engine_policy_non_resident_count"
+        ),
+        "pipeline_integration_engine_policy_failed_count": promotion.get(
+            "pipeline_integration_engine_policy_failed_count"
+        ),
+        "pipeline_integration_engine_policy_failed_items": promotion.get(
+            "pipeline_integration_engine_policy_failed_items"
+        )
+        or [],
         "stack_engine_contract": promotion.get("stack_engine_contract"),
         "stack_engine_contract_present": promotion.get("stack_engine_contract_present"),
         "stack_engine_contract_ready": promotion.get("stack_engine_contract_ready"),
@@ -201,6 +334,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(payload.get("stack_engine_contract"), dict)
         else {}
     )
+    integration_engine_policy = (
+        payload.get("integration_engine_policy")
+        if isinstance(payload.get("integration_engine_policy"), dict)
+        else {}
+    )
     return {
         "artifact_type": payload.get("artifact_type"),
         "status": payload.get("status"),
@@ -236,6 +374,53 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "sample_accounting_closure_failed_count": pipeline.get(
             "sample_accounting_closure_failed_count"
+        ),
+        "integration_engine_policy": integration_engine_policy,
+        "integration_engine_policy_ready": integration_engine_policy.get("ready"),
+        "acceptance_integration_engine_policy_status": integration_engine_policy.get(
+            "acceptance_status"
+        ),
+        "acceptance_integration_engine_policy_check_present": (
+            integration_engine_policy.get("acceptance_check_present")
+        ),
+        "acceptance_integration_engine_policy_check_passed": (
+            integration_engine_policy.get("acceptance_check_passed")
+        ),
+        "acceptance_integration_engine_policy_phase2_check_passed": (
+            integration_engine_policy.get("acceptance_phase2_check_passed")
+        ),
+        "acceptance_integration_engine_policy_non_resident_count": (
+            integration_engine_policy.get("acceptance_non_resident_count")
+        ),
+        "acceptance_integration_engine_policy_failed_count": (
+            integration_engine_policy.get("acceptance_failed_count")
+        ),
+        "acceptance_integration_engine_policy_failed_items": (
+            integration_engine_policy.get("acceptance_failed_items") or []
+        ),
+        "pipeline_integration_engine_policy_status": integration_engine_policy.get(
+            "pipeline_status"
+        ),
+        "pipeline_integration_engine_policy_check_present": (
+            integration_engine_policy.get("pipeline_check_present")
+        ),
+        "pipeline_integration_engine_policy_check_passed": (
+            integration_engine_policy.get("pipeline_check_passed")
+        ),
+        "pipeline_integration_engine_policy_phase2_check_passed": (
+            integration_engine_policy.get("pipeline_phase2_check_passed")
+        ),
+        "pipeline_integration_engine_policy_default_engine_policy": (
+            integration_engine_policy.get("pipeline_default_engine_policy")
+        ),
+        "pipeline_integration_engine_policy_non_resident_count": (
+            integration_engine_policy.get("pipeline_non_resident_count")
+        ),
+        "pipeline_integration_engine_policy_failed_count": (
+            integration_engine_policy.get("pipeline_failed_count")
+        ),
+        "pipeline_integration_engine_policy_failed_items": (
+            integration_engine_policy.get("pipeline_failed_items") or []
         ),
         "stack_engine_contract": stack_engine,
         "stack_engine_contract_present": stack_engine.get("present"),
@@ -903,6 +1088,70 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "windows_release_matrix_acceptance_integration_engine_policy_passed",
+            matrix_info.get("integration_engine_policy_ready") is True
+            and _integration_engine_policy_side_passed(matrix_info, "acceptance"),
+            {
+                "ready": matrix_info.get("integration_engine_policy_ready"),
+                **_integration_engine_policy_evidence(matrix_info, "acceptance"),
+            },
+        ),
+        _check(
+            "windows_release_matrix_pipeline_integration_engine_policy_passed",
+            matrix_info.get("integration_engine_policy_ready") is True
+            and _integration_engine_policy_side_passed(matrix_info, "pipeline"),
+            {
+                "ready": matrix_info.get("integration_engine_policy_ready"),
+                **_integration_engine_policy_evidence(matrix_info, "pipeline"),
+            },
+        ),
+        _check(
+            "default_promotion_acceptance_integration_engine_policy_passed",
+            promotion_info.get("integration_engine_policy_ready") is True
+            and _integration_engine_policy_side_passed(promotion_info, "acceptance"),
+            {
+                "ready": promotion_info.get("integration_engine_policy_ready"),
+                **_integration_engine_policy_evidence(promotion_info, "acceptance"),
+            },
+        ),
+        _check(
+            "default_promotion_pipeline_integration_engine_policy_passed",
+            promotion_info.get("integration_engine_policy_ready") is True
+            and _integration_engine_policy_side_passed(promotion_info, "pipeline"),
+            {
+                "ready": promotion_info.get("integration_engine_policy_ready"),
+                **_integration_engine_policy_evidence(promotion_info, "pipeline"),
+            },
+        ),
+        _check(
+            "matrix_integration_engine_policy_matches_default_promotion",
+            _integration_engine_policy_matches(matrix_info, promotion_info),
+            {
+                "windows_release_matrix": {
+                    "ready": matrix_info.get("integration_engine_policy_ready"),
+                    "acceptance": _integration_engine_policy_evidence(
+                        matrix_info,
+                        "acceptance",
+                    ),
+                    "pipeline": _integration_engine_policy_evidence(
+                        matrix_info,
+                        "pipeline",
+                    ),
+                },
+                "default_promotion": {
+                    "ready": promotion_info.get("integration_engine_policy_ready"),
+                    "acceptance": _integration_engine_policy_evidence(
+                        promotion_info,
+                        "acceptance",
+                    ),
+                    "pipeline": _integration_engine_policy_evidence(
+                        promotion_info,
+                        "pipeline",
+                    ),
+                },
+            },
+        ),
+        _check(
             "github_plan_phase2_stack_engine_default_contract_ready",
             _stack_engine_plan_phase2_ready(plan_stack_engine),
             {
@@ -1283,6 +1532,24 @@ def build_windows_publish_preflight(
             "default_promotion_sample_accounting_closure_status": promotion_info.get(
                 "sample_accounting_closure_status"
             ),
+            "matrix_integration_engine_policy_ready": matrix_info.get(
+                "integration_engine_policy_ready"
+            ),
+            "matrix_acceptance_integration_engine_policy_status": matrix_info.get(
+                "acceptance_integration_engine_policy_status"
+            ),
+            "matrix_pipeline_integration_engine_policy_status": matrix_info.get(
+                "pipeline_integration_engine_policy_status"
+            ),
+            "default_promotion_integration_engine_policy_ready": promotion_info.get(
+                "integration_engine_policy_ready"
+            ),
+            "default_promotion_acceptance_integration_engine_policy_status": (
+                promotion_info.get("acceptance_integration_engine_policy_status")
+            ),
+            "default_promotion_pipeline_integration_engine_policy_status": (
+                promotion_info.get("pipeline_integration_engine_policy_status")
+            ),
             "github_plan_phase2_stack_engine_contract_status": (
                 plan_stack_engine.get("phase2_status")
             ),
@@ -1387,6 +1654,16 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"plan-matrix `{summary.get('github_plan_matrix_sample_accounting_closure_status')}`, "
             f"matrix `{summary.get('matrix_sample_accounting_closure_status')}`, "
             f"default-promotion `{summary.get('default_promotion_sample_accounting_closure_status')}`"
+        ),
+        (
+            "- Integration engine policy: "
+            f"matrix `{summary.get('matrix_integration_engine_policy_ready')}`/"
+            f"`{summary.get('matrix_acceptance_integration_engine_policy_status')}`/"
+            f"`{summary.get('matrix_pipeline_integration_engine_policy_status')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_integration_engine_policy_ready')}`/"
+            f"`{summary.get('default_promotion_acceptance_integration_engine_policy_status')}`/"
+            f"`{summary.get('default_promotion_pipeline_integration_engine_policy_status')}`"
         ),
         (
             "- StackEngine default contract: "
