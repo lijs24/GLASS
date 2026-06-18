@@ -1,0 +1,32 @@
+{
+  "frame_quality": [
+    {
+      "background_median": 0.0,
+      "background_rms": 0.0,
+      "frame_id": "ref",
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 0 below min_stars=8"
+      ],
+      "star_count": 0
+    },
+    {
+      "background_median": 0.0,
+      "background_rms": 0.0,
+      "frame_id": "moving",
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 0 below min_stars=8"
+      ],
+      "star_count": 0
+    }
+  ],
+  "quality_gate_summary": {
+    "accepted_count": 0,
+    "fallback_used": true,
+    "rejected_count": 2
+  },
+  "reference_frame_id": "ref",
+  "reference_selection_fallback": true,
+  "schema_version": 1
+}

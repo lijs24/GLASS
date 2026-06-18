@@ -1,0 +1,136 @@
+{
+  "method": "auto",
+  "quality_gate_enforced": true,
+  "quality_gate_rejected_frames": 2,
+  "quality_gate_summary": {
+    "accepted_count": 0,
+    "fallback_used": true,
+    "rejected_count": 2
+  },
+  "quality_reference_frame_id": "ref",
+  "reference_admission": {
+    "allow_quality_rejected_reference": false,
+    "quality_gate_enforced": true,
+    "quality_gate_status": "rejected",
+    "reason": "reference frame failed the quality gate",
+    "reference_frame_id": "ref",
+    "reference_selection_fallback": true,
+    "status": "blocked"
+  },
+  "reference_frame_id": "ref",
+  "registration_image_source": "quality_reference_admission",
+  "registration_results": [
+    {
+      "frame_id": "ref",
+      "inliers": 0,
+      "matched_stars": 0,
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "preview_scale": null,
+      "preview_shape": null,
+      "quality_gate_enforced": true,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 0 below min_stars=8"
+      ],
+      "reference_frame_id": "ref",
+      "registration_image_source": "quality_reference_admission",
+      "registration_solution_source": "quality_reference_admission",
+      "registration_validation": {
+        "accepted": false,
+        "inliers": 0,
+        "max_rms_px": 2.0,
+        "min_inliers": 6,
+        "model": "translation",
+        "requires_star_inliers": false,
+        "rms_px": null,
+        "solution_source": "quality_reference_admission",
+        "warnings": [
+          "reference frame failed the quality gate"
+        ]
+      },
+      "rms_px": NaN,
+      "status": "quality_rejected",
+      "tile_count": 0,
+      "tile_size": 8,
+      "transform_model": "translation",
+      "warnings": [
+        "registration blocked because the selected reference frame failed quality admission",
+        "star_count 0 below min_stars=8"
+      ]
+    },
+    {
+      "frame_id": "moving",
+      "inliers": 0,
+      "matched_stars": 0,
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "preview_scale": null,
+      "preview_shape": null,
+      "quality_gate_enforced": true,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 0 below min_stars=8"
+      ],
+      "reference_frame_id": "ref",
+      "registration_image_source": "quality_reference_admission",
+      "registration_solution_source": "quality_reference_admission",
+      "registration_validation": {
+        "accepted": false,
+        "inliers": 0,
+        "max_rms_px": 2.0,
+        "min_inliers": 6,
+        "model": "translation",
+        "requires_star_inliers": false,
+        "rms_px": null,
+        "solution_source": "quality_reference_admission",
+        "warnings": [
+          "reference frame failed the quality gate"
+        ]
+      },
+      "rms_px": NaN,
+      "status": "quality_rejected",
+      "tile_count": 0,
+      "tile_size": 8,
+      "transform_model": "translation",
+      "warnings": [
+        "registration blocked because the selected reference frame failed quality admission",
+        "star_count 0 below min_stars=8"
+      ]
+    }
+  ],
+  "requested_reference_frame_id": null,
+  "schema_version": 1,
+  "tile_size": 8,
+  "transform_model": "translation"
+}

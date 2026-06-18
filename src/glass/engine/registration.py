@@ -124,6 +124,130 @@ def _policy_bool(policy: dict[str, Any], key: str, default: bool) -> bool:
     return bool(value)
 
 
+def _reference_admission_state(
+    *,
+    reference_id: str | None,
+    quality: dict[str, Any],
+    quality_by_id: dict[str, dict[str, Any]],
+    quality_gate_enforced: bool,
+    registration_policy: dict[str, Any],
+) -> dict[str, Any]:
+    reference_quality = quality_by_id.get(str(reference_id), {}) if reference_id is not None else {}
+    quality_gate_status = str(reference_quality.get("quality_gate_status") or "unknown")
+    fallback_used = bool(quality.get("reference_selection_fallback"))
+    allow_quality_rejected_reference = _policy_bool(
+        registration_policy,
+        "allow_quality_rejected_reference",
+        False,
+    )
+    blocked = (
+        quality_gate_enforced
+        and quality_gate_status == "rejected"
+        and not allow_quality_rejected_reference
+    )
+    if blocked:
+        status = "blocked"
+        reason = "reference frame failed the quality gate"
+    elif quality_gate_status == "rejected":
+        status = "allowed_quality_rejected_reference"
+        reason = "quality-rejected reference explicitly allowed by registration policy"
+    else:
+        status = "accepted"
+        reason = None
+    return {
+        "status": status,
+        "reference_frame_id": reference_id,
+        "quality_gate_status": quality_gate_status,
+        "quality_gate_enforced": quality_gate_enforced,
+        "reference_selection_fallback": fallback_used,
+        "allow_quality_rejected_reference": allow_quality_rejected_reference,
+        "reason": reason,
+    }
+
+
+def _blocked_reference_registration_payload(
+    *,
+    run: Path,
+    out_path: str | Path | None,
+    calibrated: dict[str, dict[str, Any]],
+    quality: dict[str, Any],
+    quality_by_id: dict[str, dict[str, Any]],
+    reference_id: str | None,
+    requested_reference_frame_id: str | None,
+    reference_admission: dict[str, Any],
+    transform_model: str,
+    method: str,
+    tile_size: int,
+    registration_policy: dict[str, Any],
+) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
+    for frame_id in calibrated:
+        quality_row = quality_by_id.get(frame_id, {})
+        quality_gate_status = str(quality_row.get("quality_gate_status") or "unknown")
+        quality_gate_warnings = [str(warning) for warning in quality_row.get("quality_gate_warnings", [])]
+        warnings = [
+            "registration blocked because the selected reference frame failed quality admission"
+        ]
+        warnings.extend(quality_gate_warnings)
+        row = to_jsonable(
+            RegistrationResult(
+                frame_id=frame_id,
+                reference_frame_id=str(reference_id or ""),
+                transform_model=transform_model,
+                matrix=translation_matrix(0.0, 0.0),
+                matched_stars=0,
+                inliers=0,
+                rms_px=float("nan"),
+                status="quality_rejected",
+                warnings=warnings,
+            )
+        )
+        row.update(
+            {
+                "registration_image_source": "quality_reference_admission",
+                "registration_solution_source": "quality_reference_admission",
+                "preview_scale": None,
+                "preview_shape": None,
+                "tile_size": tile_size,
+                "tile_count": 0,
+                "quality_gate_status": quality_gate_status,
+                "quality_gate_warnings": quality_gate_warnings,
+                "quality_gate_enforced": True,
+                "registration_validation": {
+                    "accepted": False,
+                    "model": transform_model,
+                    "solution_source": "quality_reference_admission",
+                    "requires_star_inliers": False,
+                    "min_inliers": int(registration_policy.get("min_inliers") or 6),
+                    "max_rms_px": float(registration_policy.get("max_rms_px") or 2.0),
+                    "inliers": 0,
+                    "rms_px": None,
+                    "warnings": [str(reference_admission.get("reason") or "reference admission blocked")],
+                },
+            }
+        )
+        results.append(row)
+    payload = {
+        "schema_version": 1,
+        "reference_frame_id": reference_id,
+        "transform_model": transform_model,
+        "method": method,
+        "registration_image_source": "quality_reference_admission",
+        "reference_admission": reference_admission,
+        "quality_reference_frame_id": quality.get("reference_frame_id"),
+        "requested_reference_frame_id": requested_reference_frame_id,
+        "tile_size": tile_size,
+        "quality_gate_enforced": True,
+        "quality_gate_rejected_frames": sum(
+            1 for item in results if item.get("quality_gate_status") == "rejected"
+        ),
+        "quality_gate_summary": quality.get("quality_gate_summary"),
+        "registration_results": results,
+    }
+    write_json(out_path or (run / "registration_results.json"), payload)
+    return payload
+
+
 def _policy_optional_float(policy: dict[str, Any], key: str, default: float | None) -> float | None:
     value = policy.get(key)
     if value is None:
@@ -660,14 +784,37 @@ def register_calibrated_frames(
         reference_frame_id,
         plan_frames,
     )
+    quality_by_id = {item["frame_id"]: item for item in quality.get("frame_quality", [])}
+    quality_gate_enforced = _policy_bool(registration_policy, "reject_quality_gate_failed_frames", True)
     if reference_id not in calibrated:
         raise ValueError("reference frame is missing from calibrated cache")
+    reference_admission = _reference_admission_state(
+        reference_id=reference_id,
+        quality=quality,
+        quality_by_id=quality_by_id,
+        quality_gate_enforced=quality_gate_enforced,
+        registration_policy=registration_policy,
+    )
+    if reference_admission["status"] == "blocked":
+        return _blocked_reference_registration_payload(
+            run=run,
+            out_path=out_path,
+            calibrated=calibrated,
+            quality=quality,
+            quality_by_id=quality_by_id,
+            reference_id=reference_id,
+            requested_reference_frame_id=reference_frame_id,
+            reference_admission=reference_admission,
+            transform_model=transform_model,
+            method=method,
+            tile_size=tile_size,
+            registration_policy=registration_policy,
+        )
     reference_preview, reference_scale, reference_tile_count = _registration_preview(
         calibrated[reference_id]["path"],
         tile_size=tile_size,
         max_dimension=preview_max_dimension,
     )
-    quality_by_id = {item["frame_id"]: item for item in quality.get("frame_quality", [])}
     reference_quality = quality_by_id.get(reference_id, {})
     reference_stars = detect_stars_streaming(
         calibrated[reference_id]["path"],
@@ -675,7 +822,6 @@ def register_calibrated_frames(
         float(reference_quality.get("noise_mad") or reference_quality.get("background_rms") or 0.0),
         tile_size=tile_size,
     )
-    quality_gate_enforced = _policy_bool(registration_policy, "reject_quality_gate_failed_frames", True)
     quality_gate_rejected_frames = 0
 
     results = []
@@ -697,7 +843,10 @@ def register_calibrated_frames(
             preview_scale = reference_scale
             preview_shape = list(reference_preview.shape)
             if quality_gate_enforced and quality_gate_status == "rejected":
-                warnings.append("reference frame failed quality gate but is required as registration reference")
+                if reference_admission["status"] == "allowed_quality_rejected_reference":
+                    warnings.append("quality-rejected reference frame explicitly allowed by registration policy")
+                else:
+                    warnings.append("reference frame failed quality gate but is required as registration reference")
             if method == "cuda_catalog":
                 row_source = "cuda_catalog_similarity_preview"
             elif method == "cuda_triangle":
@@ -929,6 +1078,7 @@ def register_calibrated_frames(
         "requested_reference_frame_id": reference_frame_id,
         "tile_size": tile_size,
         "quality_gate_enforced": quality_gate_enforced,
+        "reference_admission": reference_admission,
         "quality_gate_rejected_frames": quality_gate_rejected_frames,
         "quality_gate_summary": quality.get("quality_gate_summary"),
         "registration_results": results,

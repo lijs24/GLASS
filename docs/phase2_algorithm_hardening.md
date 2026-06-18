@@ -6196,6 +6196,32 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 349: Registration Reference Admission Policy
+
+- Move the all-quality-rejected reference fallback edge case from downstream
+  frame-accounting failure into an explicit registration-stage admission
+  policy.
+- Add `reference_admission` metadata to `registration_results.json`.
+- Default behavior: when quality-gate rejection is enforced, a reference frame
+  whose `quality_gate_status` is `rejected` is blocked from becoming a
+  `reference`/`ok` registration output.
+- Preserve an explicit override,
+  `registration_policy.allow_quality_rejected_reference=true`, for diagnostic
+  experiments that intentionally keep the old fallback behavior.
+- Ensure blocked reference fallback writes diagnostic registration rows with
+  `status=quality_rejected`, no accepted transforms, and enough validation
+  evidence for warp to stop before integration.
+- Keep tiny synthetic benchmark frames useful by generating fewer, separated
+  stars for sub-64-pixel images instead of overcrowding them with the full-size
+  default star count.
+- Add tests proving the blocked path prevents warp from accepting any frame and
+  the explicit override path remains auditable, plus a small synthetic
+  detectability regression test.
+- Keep this gate registration-admission and synthetic-fixture scoped: no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -31,8 +31,18 @@ def _stars(width: int, height: int, seed: int, count: int = 24) -> np.ndarray:
     rng = np.random.default_rng(seed)
     margin_x = min(10.0, max(1.0, (width - 1) / 4.0))
     margin_y = min(10.0, max(1.0, (height - 1) / 4.0))
-    xs = rng.uniform(margin_x, max(margin_x + 1.0, width - margin_x), size=count)
-    ys = rng.uniform(margin_y, max(margin_y + 1.0, height - margin_y), size=count)
+    if min(width, height) < 64:
+        count = min(count, max(3, int(round(width * height / 128))))
+        cols = int(np.ceil(np.sqrt(count)))
+        rows = int(np.ceil(count / cols))
+        xs_grid = np.linspace(margin_x, max(margin_x + 1.0, width - margin_x), cols, dtype=np.float32)
+        ys_grid = np.linspace(margin_y, max(margin_y + 1.0, height - margin_y), rows, dtype=np.float32)
+        points = [(float(x), float(y)) for y in ys_grid for x in xs_grid][:count]
+        xs = np.asarray([point[0] for point in points], dtype=np.float32)
+        ys = np.asarray([point[1] for point in points], dtype=np.float32)
+    else:
+        xs = rng.uniform(margin_x, max(margin_x + 1.0, width - margin_x), size=count)
+        ys = rng.uniform(margin_y, max(margin_y + 1.0, height - margin_y), size=count)
     flux = rng.uniform(500, 2500, size=count)
     return np.stack([xs, ys, flux], axis=1)
 

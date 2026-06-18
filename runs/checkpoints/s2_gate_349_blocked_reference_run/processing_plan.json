@@ -1,0 +1,6 @@
+{
+  "registration_policy": {
+    "reject_quality_gate_failed_frames": true
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,13 @@
+{
+  "calibrated_lights": [
+    {
+      "frame_id": "ref",
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_349_blocked_reference_run\\calibrated_cache\\ref.fits"
+    },
+    {
+      "frame_id": "moving",
+      "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_349_blocked_reference_run\\calibrated_cache\\moving.fits"
+    }
+  ],
+  "schema_version": 1
+}

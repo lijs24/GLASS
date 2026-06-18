@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from glass.cpu.registration import (
     estimate_astroalign_transform,
@@ -13,8 +14,9 @@ from glass.cpu.star_detect import detect_stars
 from glass.cpu.star_detect import Star
 from glass.engine.registration import _registration_preview
 from glass.engine.registration import register_calibrated_frames
+from glass.engine.warp import warp_registered_frames
 from glass.io.fits_io import write_fits_data
-from glass.io.json_io import write_json
+from glass.io.json_io import read_json, write_json
 from tests.conftest import astroalign_or_skip
 
 
@@ -416,6 +418,120 @@ def test_register_calibrated_frames_skips_quality_rejected_frames(tmp_path):
     assert moving_result["tile_count"] == 0
     assert moving_result["quality_gate_status"] == "rejected"
     assert any("saturation_fraction" in warning for warning in moving_result["warnings"])
+
+
+def test_register_calibrated_frames_blocks_quality_rejected_reference_fallback(tmp_path):
+    run = tmp_path / "run"
+    cache = run / "calibrated_cache"
+    cache.mkdir(parents=True)
+    ref_path = cache / "ref.fits"
+    moving_path = cache / "moving.fits"
+    write_fits_data(ref_path, np.zeros((24, 24), dtype=np.float32))
+    write_fits_data(moving_path, np.zeros((24, 24), dtype=np.float32))
+    write_json(
+        run / "calibration_artifacts.json",
+        {
+            "schema_version": 1,
+            "calibrated_lights": [
+                {"frame_id": "ref", "path": str(ref_path)},
+                {"frame_id": "moving", "path": str(moving_path)},
+            ],
+        },
+    )
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "ref",
+            "reference_selection_fallback": True,
+            "quality_gate_summary": {"accepted_count": 0, "rejected_count": 2, "fallback_used": True},
+            "frame_quality": [
+                {
+                    "frame_id": "ref",
+                    "background_median": 0.0,
+                    "background_rms": 0.0,
+                    "star_count": 0,
+                    "quality_gate_status": "rejected",
+                    "quality_gate_warnings": ["star_count 0 below min_stars=8"],
+                },
+                {
+                    "frame_id": "moving",
+                    "background_median": 0.0,
+                    "background_rms": 0.0,
+                    "star_count": 0,
+                    "quality_gate_status": "rejected",
+                    "quality_gate_warnings": ["star_count 0 below min_stars=8"],
+                },
+            ],
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {"schema_version": 1, "registration_policy": {"reject_quality_gate_failed_frames": True}},
+    )
+
+    payload = register_calibrated_frames(run, tile_size=8, preview_max_dimension=64, method="auto")
+
+    assert payload["reference_admission"]["status"] == "blocked"
+    assert payload["reference_admission"]["reference_selection_fallback"] is True
+    assert payload["reference_admission"]["allow_quality_rejected_reference"] is False
+    assert payload["quality_gate_rejected_frames"] == 2
+    assert {item["status"] for item in payload["registration_results"]} == {"quality_rejected"}
+    assert all(item["registration_solution_source"] == "quality_reference_admission" for item in payload["registration_results"])
+    assert all(item["registration_validation"]["accepted"] is False for item in payload["registration_results"])
+    written = read_json(run / "registration_results.json")
+    assert written["reference_admission"]["status"] == "blocked"
+    with pytest.raises(ValueError, match="no accepted frames"):
+        warp_registered_frames(run, tile_size=8)
+
+
+def test_register_calibrated_frames_can_explicitly_allow_quality_rejected_reference(tmp_path):
+    run = tmp_path / "run"
+    cache = run / "calibrated_cache"
+    cache.mkdir(parents=True)
+    ref_path = cache / "ref.fits"
+    write_fits_data(ref_path, np.zeros((24, 24), dtype=np.float32))
+    write_json(
+        run / "calibration_artifacts.json",
+        {"schema_version": 1, "calibrated_lights": [{"frame_id": "ref", "path": str(ref_path)}]},
+    )
+    write_json(
+        run / "frame_quality.json",
+        {
+            "schema_version": 1,
+            "reference_frame_id": "ref",
+            "reference_selection_fallback": True,
+            "quality_gate_summary": {"accepted_count": 0, "rejected_count": 1, "fallback_used": True},
+            "frame_quality": [
+                {
+                    "frame_id": "ref",
+                    "background_median": 0.0,
+                    "background_rms": 0.0,
+                    "star_count": 0,
+                    "quality_gate_status": "rejected",
+                    "quality_gate_warnings": ["star_count 0 below min_stars=8"],
+                }
+            ],
+        },
+    )
+    write_json(
+        run / "processing_plan.json",
+        {
+            "schema_version": 1,
+            "registration_policy": {
+                "reject_quality_gate_failed_frames": True,
+                "allow_quality_rejected_reference": True,
+            },
+        },
+    )
+
+    payload = register_calibrated_frames(run, tile_size=8, preview_max_dimension=64, method="auto")
+    reference = payload["registration_results"][0]
+
+    assert payload["reference_admission"]["status"] == "allowed_quality_rejected_reference"
+    assert payload["reference_admission"]["allow_quality_rejected_reference"] is True
+    assert reference["status"] == "reference"
+    assert any("explicitly allowed" in warning for warning in reference["warnings"])
 
 
 def test_register_calibrated_frames_records_astroalign_failure(tmp_path, monkeypatch):
