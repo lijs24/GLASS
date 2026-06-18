@@ -92,11 +92,22 @@ def _default_promotion(
     ready: bool = True,
     rejection_sample_accounting_ready: bool = True,
     sample_accounting_closure_ready: bool = True,
+    include_stack_engine_contract: bool = True,
+    stack_engine_ready: bool = True,
+    stack_engine_gap_count: int = 0,
 ) -> None:
-    manifest_ready = ready and rejection_sample_accounting_ready and sample_accounting_closure_ready
-    write_json(
-        path,
-        {
+    manifest_ready = (
+        ready
+        and rejection_sample_accounting_ready
+        and sample_accounting_closure_ready
+        and (stack_engine_ready if include_stack_engine_contract else True)
+    )
+    stack_recommendation = (
+        "stack_engine_default_ready"
+        if stack_engine_ready and stack_engine_gap_count == 0
+        else "stack_engine_contract_gaps_remain"
+    )
+    payload = {
             "schema_version": 1,
             "artifact_type": "default_promotion_manifest",
             "status": "default_promotion_ready" if manifest_ready else "blocked",
@@ -175,8 +186,30 @@ def _default_promotion(
                 if sample_accounting_closure_ready
                 else 1,
             },
-        },
-    )
+        }
+    if include_stack_engine_contract:
+        payload["stack_engine_contract"] = {
+            "present": True,
+            "ready": stack_engine_ready,
+            "phase2_check_passed": stack_engine_ready,
+            "status": "passed",
+            "passed": True,
+            "scope": "all",
+            "adoption_recommendation": stack_recommendation,
+            "default_promotion_phase2_stack_engine_default_gap_count": (
+                stack_engine_gap_count
+            ),
+            "default_promotion_blocker_count": 0 if stack_engine_ready else 1,
+            "default_promotion_blockers": []
+            if stack_engine_ready
+            else [
+                {
+                    "name": "phase2_stack_engine_default_gaps",
+                    "gap_count": stack_engine_gap_count,
+                }
+            ],
+        }
+    write_json(path, payload)
 
 
 def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
@@ -208,6 +241,7 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert checks["default_promotion_default_route_passed"] is True
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
     assert checks["default_promotion_sample_accounting_closure_passed"] is True
+    assert checks["default_promotion_stack_engine_contract_ready"] is True
     assert checks["required_cuda_package_compatible:cuda13"] is True
     assert checks["required_cuda_package_compatible:cuda12"] is True
     assert checks["required_cuda_package_compatible:cuda11"] is True
@@ -273,6 +307,7 @@ def test_windows_release_matrix_blocks_failed_default_promotion_manifest(tmp_pat
     assert checks["default_promotion_default_route_passed"] is False
     assert checks["default_promotion_rejection_sample_accounting_passed"] is True
     assert checks["default_promotion_sample_accounting_closure_passed"] is True
+    assert checks["default_promotion_stack_engine_contract_ready"] is True
 
 
 def test_windows_release_matrix_blocks_rejection_sample_accounting_drift(tmp_path: Path):
@@ -356,6 +391,72 @@ def test_windows_release_matrix_blocks_sample_accounting_closure_drift(tmp_path:
     }
 
 
+def test_windows_release_matrix_blocks_missing_stack_engine_contract(tmp_path: Path):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion, include_stack_engine_contract=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_ready"]["passed"] is True
+    assert checks["default_promotion_stack_engine_contract_ready"]["passed"] is False
+    assert checks["default_promotion_stack_engine_contract_ready"]["evidence"] == {
+        "present": None,
+        "ready": None,
+        "phase2_check_passed": None,
+        "status": None,
+        "passed": None,
+        "scope": None,
+        "adoption_recommendation": None,
+        "default_gap_count": None,
+        "blocker_count": None,
+        "blockers": [],
+    }
+
+
+def test_windows_release_matrix_blocks_stack_engine_contract_gap(tmp_path: Path):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        stack_engine_ready=False,
+        stack_engine_gap_count=1,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_manifest_ready"]["passed"] is False
+    assert checks["default_promotion_stack_engine_contract_ready"]["passed"] is False
+    assert checks["default_promotion_stack_engine_contract_ready"]["evidence"][
+        "default_gap_count"
+    ] == 1
+    assert checks["default_promotion_stack_engine_contract_ready"]["evidence"][
+        "blocker_count"
+    ] == 1
+
+
 def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     doctor = tmp_path / "doctor.json"
     decision = tmp_path / "decision.json"
@@ -394,3 +495,7 @@ def test_windows_release_matrix_cli_writes_json_and_markdown(tmp_path: Path):
     assert "Default route contract/checks: `True`/`4`" in markdown_text
     assert "Rejection sample accounting: `passed` failed=`0`" in markdown_text
     assert "Sample accounting closure: `passed` present=`1` failed=`0`" in markdown_text
+    assert (
+        "StackEngine default contract: ready=`True` phase2-check=`True` gaps=`0` blockers=`0`"
+        in markdown_text
+    )

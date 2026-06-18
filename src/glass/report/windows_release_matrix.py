@@ -56,6 +56,11 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(pipeline.get("sample_accounting_closure"), dict)
         else {}
     )
+    stack_engine = (
+        payload.get("stack_engine_contract")
+        if isinstance(payload.get("stack_engine_contract"), dict)
+        else {}
+    )
     return {
         "present": True,
         "artifact_type": payload.get("artifact_type"),
@@ -93,6 +98,28 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "sample_accounting_closure_failed_count": pipeline.get(
             "sample_accounting_closure_failed_count"
         ),
+        "stack_engine_contract": stack_engine,
+        "stack_engine_contract_present": stack_engine.get("present"),
+        "stack_engine_contract_ready": stack_engine.get("ready"),
+        "stack_engine_contract_phase2_check_passed": stack_engine.get(
+            "phase2_check_passed"
+        ),
+        "stack_engine_contract_status": stack_engine.get("status"),
+        "stack_engine_contract_passed": stack_engine.get("passed"),
+        "stack_engine_contract_scope": stack_engine.get("scope"),
+        "stack_engine_contract_adoption_recommendation": stack_engine.get(
+            "adoption_recommendation"
+        ),
+        "stack_engine_contract_default_gap_count": stack_engine.get(
+            "default_promotion_phase2_stack_engine_default_gap_count"
+        ),
+        "stack_engine_contract_blocker_count": stack_engine.get(
+            "default_promotion_blocker_count"
+        ),
+        "stack_engine_contract_blockers": stack_engine.get(
+            "default_promotion_blockers"
+        )
+        or [],
     }
 
 
@@ -312,6 +339,48 @@ def build_windows_release_matrix(
             },
         ),
         _check(
+            "default_promotion_stack_engine_contract_ready",
+            (
+                default_promotion.get("stack_engine_contract_present") is True
+                and default_promotion.get("stack_engine_contract_ready") is True
+                and default_promotion.get("stack_engine_contract_phase2_check_passed")
+                is True
+                and default_promotion.get("stack_engine_contract_status") == "passed"
+                and default_promotion.get("stack_engine_contract_passed") is True
+                and default_promotion.get("stack_engine_contract_scope") == "all"
+                and default_promotion.get(
+                    "stack_engine_contract_adoption_recommendation"
+                )
+                == "stack_engine_default_ready"
+                and int(default_promotion.get("stack_engine_contract_default_gap_count") or 0)
+                == 0
+                and int(default_promotion.get("stack_engine_contract_blocker_count") or 0)
+                == 0
+            )
+            if require_default_promotion_ready
+            else True,
+            {
+                "present": default_promotion.get("stack_engine_contract_present"),
+                "ready": default_promotion.get("stack_engine_contract_ready"),
+                "phase2_check_passed": default_promotion.get(
+                    "stack_engine_contract_phase2_check_passed"
+                ),
+                "status": default_promotion.get("stack_engine_contract_status"),
+                "passed": default_promotion.get("stack_engine_contract_passed"),
+                "scope": default_promotion.get("stack_engine_contract_scope"),
+                "adoption_recommendation": default_promotion.get(
+                    "stack_engine_contract_adoption_recommendation"
+                ),
+                "default_gap_count": default_promotion.get(
+                    "stack_engine_contract_default_gap_count"
+                ),
+                "blocker_count": default_promotion.get(
+                    "stack_engine_contract_blocker_count"
+                ),
+                "blockers": default_promotion.get("stack_engine_contract_blockers"),
+            },
+        ),
+        _check(
             "default_runtime_preset",
             default_runtime_preset == "throughput-v1",
             {"actual": default_runtime_preset, "required": "throughput-v1"},
@@ -443,6 +512,13 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"`{default_promotion.get('sample_accounting_closure_status')}` "
                 f"present=`{default_promotion.get('sample_accounting_closure_present_count')}` "
                 f"failed=`{default_promotion.get('sample_accounting_closure_failed_count')}`"
+            ),
+            (
+                "- StackEngine default contract: "
+                f"ready=`{default_promotion.get('stack_engine_contract_ready')}` "
+                f"phase2-check=`{default_promotion.get('stack_engine_contract_phase2_check_passed')}` "
+                f"gaps=`{default_promotion.get('stack_engine_contract_default_gap_count')}` "
+                f"blockers=`{default_promotion.get('stack_engine_contract_blocker_count')}`"
             ),
             "",
             "## Packages",

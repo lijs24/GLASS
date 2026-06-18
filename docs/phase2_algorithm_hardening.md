@@ -4242,6 +4242,22 @@ integration where applicable.
   runtime default change, package build, upload, package release, release-matrix
   behavior change, or real-data benchmark rerun.
 
+### S2-Gate 253: Windows Release Matrix StackEngine Contract Handoff
+
+- Carry default-promotion `stack_engine_contract` evidence into
+  `glass windows-release-matrix`.
+- Add `default_promotion_stack_engine_contract_ready` so Windows release
+  matrices cannot pass when default-promotion manifests lost StackEngine
+  default-contract evidence, when default gaps remain, or when StackEngine
+  blockers exist.
+- Extend Windows release matrix Markdown with StackEngine default-contract
+  readiness, Phase2 check state, gap count, and blocker count.
+- Add focused tests for ready manifests, missing StackEngine evidence,
+  StackEngine default-gap blocking, and CLI Markdown output.
+- Keep this gate Windows-release-matrix scoped: no image math, CUDA kernel,
+  runtime default change, package build, upload, publish-preflight behavior
+  change, or real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
