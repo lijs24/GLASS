@@ -6386,6 +6386,28 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 359: Quality Metric Compare Artifact
+
+- Add `glass quality-metrics-compare` for baseline/candidate
+  `frame_quality.json` artifacts.
+- Emit JSON and optional Markdown comparing metric availability, frame counts,
+  quality-gate status counts, median/mean deltas, bad-direction ratios, and
+  worst-frame ids for `star_count`, `fwhm_px`, `eccentricity`,
+  `background_rms`, `snr`, `quality_score`, and `weight`.
+- Default checks require both artifacts to be readable and require candidate
+  quality metric summaries to preserve metrics available in the baseline.
+- Add optional `--max-bad-median-ratio` and `--max-bad-mean-ratio` thresholds
+  for controlled experiments and future benchmark contracts, disabled by
+  default until real-data evidence justifies specific limits.
+- Add CLI `--fail-on-failed` so CI/release gates can fail on quality-regression
+  artifacts when thresholds or required metric preservation checks fail.
+- Add focused module and CLI tests.
+- Keep this gate quality-regression artifact scoped: no quality metric math
+  change, no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

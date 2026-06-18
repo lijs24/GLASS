@@ -118,6 +118,10 @@ from glass.report.phase2_status import (
     write_phase2_status,
     write_phase2_status_compare,
 )
+from glass.report.quality_metrics_compare import (
+    build_quality_metrics_compare,
+    write_quality_metrics_compare,
+)
 from glass.report.default_promotion_manifest import (
     build_default_promotion_manifest,
     write_default_promotion_manifest,
@@ -3657,6 +3661,31 @@ def cmd_phase2_status_compare(args: argparse.Namespace) -> int:
     return 0 if payload.get("passed") or not args.fail_on_regression else 2
 
 
+def cmd_quality_metrics_compare(args: argparse.Namespace) -> int:
+    payload = build_quality_metrics_compare(
+        args.baseline,
+        args.candidate,
+        max_bad_median_ratio=args.max_bad_median_ratio,
+        max_bad_mean_ratio=args.max_bad_mean_ratio,
+    )
+    write_quality_metrics_compare(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "status": payload.get("status"),
+            "baseline_metric_count": (payload.get("baseline") or {}).get("metric_count"),
+            "candidate_metric_count": (payload.get("candidate") or {}).get("metric_count"),
+            "failed_checks": [
+                item.get("name")
+                for item in payload.get("checks") or []
+                if isinstance(item, dict) and item.get("passed") is not True
+            ],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 0 if payload.get("passed") or not args.fail_on_failed else 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="glass")
     parser.add_argument("--version", action="version", version="glass 0.1.0")
@@ -3739,6 +3768,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if the candidate regresses relative to the baseline",
     )
     phase2_status_compare.set_defaults(func=cmd_phase2_status_compare)
+
+    quality_metrics_compare = sub.add_parser(
+        "quality-metrics-compare",
+        help="compare baseline and candidate frame_quality.json metric distributions",
+    )
+    quality_metrics_compare.add_argument("--baseline", required=True, help="baseline frame_quality.json")
+    quality_metrics_compare.add_argument("--candidate", required=True, help="candidate frame_quality.json")
+    quality_metrics_compare.add_argument("--out", required=True, help="output quality metrics compare JSON")
+    quality_metrics_compare.add_argument("--markdown", help="optional Markdown summary")
+    quality_metrics_compare.add_argument(
+        "--max-bad-median-ratio",
+        type=float,
+        help="optional limit for worse-direction median ratio; disabled by default",
+    )
+    quality_metrics_compare.add_argument(
+        "--max-bad-mean-ratio",
+        type=float,
+        help="optional limit for worse-direction mean ratio; disabled by default",
+    )
+    quality_metrics_compare.add_argument(
+        "--fail-on-failed",
+        action="store_true",
+        help="return exit code 2 when compare checks fail",
+    )
+    quality_metrics_compare.set_defaults(func=cmd_quality_metrics_compare)
 
     scan = sub.add_parser("scan", help="scan FITS/FIT/XISF metadata")
     scan.add_argument("--root", required=True)

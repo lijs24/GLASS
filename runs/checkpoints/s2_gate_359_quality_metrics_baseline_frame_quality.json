@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "frame_quality": [
+    {
+      "frame_id": "F001",
+      "quality_gate_status": "accepted",
+      "star_count": 100,
+      "fwhm_px": 2.0,
+      "eccentricity": 0.4,
+      "background_rms": 20.0,
+      "snr": 50.0,
+      "quality_score": 900.0,
+      "weight": 0.9
+    },
+    {
+      "frame_id": "F002",
+      "quality_gate_status": "accepted",
+      "star_count": 80,
+      "fwhm_px": 3.0,
+      "eccentricity": 0.4,
+      "background_rms": 30.0,
+      "snr": 40.0,
+      "quality_score": 700.0,
+      "weight": 0.7
+    }
+  ]
+}
