@@ -167,3 +167,26 @@ For enabled local normalization, the contract requires:
 For disabled local normalization, the contract requires an explicit
 `disabled_passthrough` artifact so downstream integration and report stages can
 distinguish "LN deliberately off" from "LN silently skipped".
+
+## S2-Gate 314 Guardrail Handoff
+
+S2-Gate 314 makes the S2-Gate 313 contract consumable by run-level guardrails.
+`glass pipeline-contract` accepts `--local-norm-contract-json` and, when
+supplied, adds the run-level check
+`local_normalization_continuous_contract_audit`. This check requires the
+attached artifact to be a passing `local_norm_contract`, match the run's
+enabled state and coefficient-field model, match the pipeline LN row count, and
+report zero failed LN outputs.
+
+`glass guardrails` now generates `local_norm_contract.json` and
+`local_norm_contract.md` automatically when the audited run contains
+`local_norm_results.json`. The generated audit is passed into the pipeline
+contract and recorded in `guardrails_summary.json` plus
+`acceptance_contract_bundle.json`. Runs that intentionally stop before local
+normalization remain compatible: if `local_norm_results.json` is absent, the LN
+contract is marked not required rather than failed.
+
+This handoff does not change local-normalization math or read additional FITS
+pixels. It only promotes existing LN metadata into the acceptance contract path
+so continuous coefficient-field regressions cannot disappear between a manual
+LN audit and final guardrail evidence.

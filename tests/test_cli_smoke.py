@@ -382,6 +382,7 @@ def test_cli_help_commands():
         "resident-runtime-repeat-preflight",
         "stack-engine-contract",
         "pipeline-contract",
+        "local-norm-contract",
         "guardrails",
         "blackbox-package",
         "blackbox-finalize",
@@ -430,21 +431,32 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     bundle = read_json(out_dir / "acceptance_contract_bundle.json")
     stack_contract = read_json(out_dir / "stack_engine_contract.json")
     pipeline_contract = read_json(out_dir / "pipeline_contract.json")
+    local_norm_contract = read_json(out_dir / "local_norm_contract.json")
     assert summary["passed"] is True
     assert summary["pixel_verify"] is True
     assert summary["require_stack_default_ready"] is True
+    assert summary["local_norm_contract_required"] is True
+    assert summary["local_norm_contract_attached"] is True
+    assert summary["local_norm_contract_status"] == "passed"
     assert summary["resident_calibration_contract_json"] == str(resident_calibration)
     assert summary["resident_result_contract_json"] == str(resident_result)
     assert summary["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
     assert summary["artifacts"]["resident_result_contract"] == str(resident_result)
+    assert summary["artifacts"]["local_norm_contract"] == str(out_dir / "local_norm_contract.json")
+    assert summary["artifacts"]["local_norm_contract_markdown"] == str(out_dir / "local_norm_contract.md")
     assert summary["artifacts"]["acceptance_contract_bundle"] == str(out_dir / "acceptance_contract_bundle.json")
     assert bundle["artifact_type"] == "glass_acceptance_contract_bundle"
     assert bundle["passed"] is True
     assert bundle["purpose"] == "acceptance_audit_contract_inputs"
+    assert bundle["local_norm_contract_required"] is True
+    assert bundle["local_norm_contract_attached"] is True
+    assert bundle["local_norm_contract_status"] == "passed"
     assert bundle["resident_calibration_contract_json"] == str(resident_calibration)
     assert bundle["resident_result_contract_json"] == str(resident_result)
     assert bundle["artifacts"]["resident_calibration_contract"] == str(resident_calibration)
     assert bundle["artifacts"]["resident_result_contract"] == str(resident_result)
+    assert bundle["artifacts"]["local_norm_contract"] == str(out_dir / "local_norm_contract.json")
+    assert bundle["artifacts"]["local_norm_contract_markdown"] == str(out_dir / "local_norm_contract.md")
     assert bundle["acceptance_audit_arguments"] == [
         "--pipeline-contract-json",
         str(out_dir / "pipeline_contract.json"),
@@ -459,11 +471,20 @@ def test_cli_guardrails_generates_contracts_and_report(small_fits_dataset, tmp_p
     assert summary["stack_default_promotion"]["ready"] is True
     assert summary["checks"][2]["name"] == "stack_default_promotion"
     assert summary["checks"][2]["ready"] is True
+    assert summary["checks"][3]["name"] == "local_norm_contract"
+    assert summary["checks"][3]["passed"] is True
     assert stack_contract["passed"] is True
     assert stack_contract["default_promotion"]["ready"] is True
     assert pipeline_contract["passed"] is True
+    pipeline_checks = {item["name"]: item for item in pipeline_contract["checks"]}
+    assert pipeline_checks["local_normalization_continuous_contract_audit"]["passed"] is True
+    assert pipeline_contract["artifacts"]["local_norm_contract"]["attached"] is True
+    assert pipeline_contract["artifacts"]["local_norm_contract"]["passed"] is True
+    assert local_norm_contract["artifact_type"] == "local_norm_contract"
+    assert local_norm_contract["passed"] is True
     assert (out_dir / "stack_engine_contract.md").exists()
     assert (out_dir / "pipeline_contract.md").exists()
+    assert (out_dir / "local_norm_contract.md").exists()
     assert (out_dir / "report.html").exists()
     html = (out_dir / "report.html").read_text(encoding="utf-8")
     assert "StackEngine contract audit" in html

@@ -1,0 +1,29 @@
+{
+  "background_mask_policy": "sigma",
+  "coefficient_field_model": "disabled_passthrough",
+  "crop_box": null,
+  "enabled": false,
+  "local_norm_results": [
+    {
+      "backend": "passthrough",
+      "coefficient_field_model": "disabled_passthrough",
+      "coverage_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\coverage_cache\\coverage_F000010.fits",
+      "crop_box": null,
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\dq_cache\\dq_warp_F000010.fits",
+      "dq_summary": {
+        "valid": 576
+      },
+      "frame_id": "F000010",
+      "input_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\registered_cache\\registered_F000010.fits",
+      "normalized_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\registered_cache\\registered_F000010.fits",
+      "status": "disabled_passthrough",
+      "tile_count": 0,
+      "warnings": []
+    }
+  ],
+  "outlier_policy": "clip",
+  "output_dir": "runs\\checkpoints\\s2_gate_314_cpu_run\\registered_cache",
+  "reference_frame_id": "F000010",
+  "schema_version": 1,
+  "tile_radius": 64
+}

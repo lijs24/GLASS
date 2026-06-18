@@ -5481,6 +5481,29 @@ integration where applicable.
 - Keep this gate LN-contract scoped: no package build/upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 314: Local Normalization Contract Guardrail Handoff
+
+- Carry the S2-Gate 313 `local-norm-contract` audit into `pipeline-contract` as
+  an optional attached contract named
+  `local_normalization_continuous_contract_audit`.
+- Extend `glass pipeline-contract` with `--local-norm-contract-json`, preserving
+  backwards compatibility when no local-normalization contract is supplied.
+- Extend `glass guardrails` so runs that contain `local_norm_results.json`
+  automatically emit `local_norm_contract.json` and `local_norm_contract.md`,
+  pass that audit into the pipeline contract, and include it in
+  `guardrails_summary.json` plus `acceptance_contract_bundle.json`.
+- Keep minimal/integration-only run guardrails compatible by marking the LN
+  contract not required when no `local_norm_results.json` exists.
+- Surface local-normalization contract attachment, status, output counts, and
+  failed checks in pipeline-contract JSON.
+- Add focused tests for explicit pipeline-contract attachment, guardrails
+  auto-generation, acceptance bundle propagation, and the integration-only
+  compatibility path.
+- Generate Gate314 guardrail handoff artifacts from a small CPU validation run.
+- Keep this gate handoff scoped: no image math change, no CUDA kernel change,
+  no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

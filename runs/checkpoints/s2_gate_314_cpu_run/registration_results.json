@@ -1,0 +1,218 @@
+{
+  "astroalign": {
+    "available": false,
+    "detection_sigma": 5.0,
+    "license": "MIT",
+    "max_control_points": 50,
+    "min_area": 5
+  },
+  "cuda_catalog": {
+    "available": false,
+    "model": "cuda_catalog_similarity_preview",
+    "native_cuda_required": true,
+    "pixel_refine_default": true
+  },
+  "cuda_triangle": {
+    "available": false,
+    "descriptor": "triangle_similarity",
+    "model": "cuda_triangle_descriptor_similarity_preview",
+    "native_cuda_required": true
+  },
+  "max_rms_px": 2.0,
+  "method": "auto",
+  "min_inliers": 6,
+  "preview_max_dimension": 1024,
+  "quality_gate_enforced": true,
+  "quality_gate_rejected_frames": 2,
+  "quality_gate_summary": {
+    "accepted_count": 0,
+    "fallback_used": true,
+    "policy": {
+      "max_saturation_fraction": 0.02,
+      "min_quality_score": 0.0,
+      "min_stars": 8,
+      "require_fwhm": true
+    },
+    "reference_candidate_count": 0,
+    "rejected_count": 3,
+    "rejection_reason_counts": {
+      "star_count": 3
+    }
+  },
+  "quality_reference_frame_id": "F000010",
+  "reference_frame_id": "F000010",
+  "registration_image_source": "streaming_star_detector",
+  "registration_results": [
+    {
+      "frame_id": "F000010",
+      "inliers": 5,
+      "matched_stars": 5,
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "preview_scale": 1,
+      "preview_shape": [
+        24,
+        24
+      ],
+      "quality_gate_enforced": true,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 5 below min_stars=8"
+      ],
+      "reference_frame_id": "F000010",
+      "registration_image_source": "streaming_preview",
+      "registration_solution_source": "streaming_star_detector",
+      "registration_validation": {
+        "accepted": true,
+        "determinant": 1.0,
+        "inliers": 5,
+        "max_rms_px": 2.0,
+        "min_inliers": 6,
+        "model": "translation",
+        "requires_star_inliers": true,
+        "rms_px": 0.0,
+        "solution_source": "streaming_star_detector",
+        "warnings": []
+      },
+      "rms_px": 0.0,
+      "status": "reference",
+      "tile_count": 9,
+      "tile_size": 8,
+      "transform_model": "translation",
+      "warnings": [
+        "reference frame failed quality gate but is required as registration reference"
+      ]
+    },
+    {
+      "frame_id": "F000011",
+      "inliers": 0,
+      "matched_stars": 0,
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "preview_scale": 1,
+      "preview_shape": [
+        24,
+        24
+      ],
+      "quality_gate_enforced": true,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 5 below min_stars=8"
+      ],
+      "reference_frame_id": "F000010",
+      "registration_image_source": "streaming_preview",
+      "registration_solution_source": "quality_gate",
+      "registration_validation": {
+        "accepted": false,
+        "determinant": 1.0,
+        "inliers": 0,
+        "max_rms_px": 2.0,
+        "min_inliers": 6,
+        "model": "translation",
+        "requires_star_inliers": true,
+        "rms_px": null,
+        "solution_source": "quality_gate",
+        "warnings": []
+      },
+      "rms_px": NaN,
+      "status": "quality_rejected",
+      "tile_count": 0,
+      "tile_size": 8,
+      "transform_model": "translation",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    },
+    {
+      "frame_id": "F000012",
+      "inliers": 0,
+      "matched_stars": 0,
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "preview_scale": 1,
+      "preview_shape": [
+        24,
+        24
+      ],
+      "quality_gate_enforced": true,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 5 below min_stars=8"
+      ],
+      "reference_frame_id": "F000010",
+      "registration_image_source": "streaming_preview",
+      "registration_solution_source": "quality_gate",
+      "registration_validation": {
+        "accepted": false,
+        "determinant": 1.0,
+        "inliers": 0,
+        "max_rms_px": 2.0,
+        "min_inliers": 6,
+        "model": "translation",
+        "requires_star_inliers": true,
+        "rms_px": null,
+        "solution_source": "quality_gate",
+        "warnings": []
+      },
+      "rms_px": NaN,
+      "status": "quality_rejected",
+      "tile_count": 0,
+      "tile_size": 8,
+      "transform_model": "translation",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    }
+  ],
+  "requested_reference_frame_id": null,
+  "schema_version": 1,
+  "tile_size": 8,
+  "transform_model": "translation"
+}

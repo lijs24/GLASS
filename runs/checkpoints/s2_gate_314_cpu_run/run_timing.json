@@ -1,0 +1,98 @@
+{
+  "backend": "cpu",
+  "backend_requested": "cpu",
+  "command": "audit",
+  "created_at": "2026-06-18T13:09:12+00:00",
+  "execution_default_resolution": {
+    "command": "audit",
+    "cuda_available": true,
+    "default_runtime_preset": "throughput-v1",
+    "effective_backend": "cpu",
+    "effective_memory_mode": "tile",
+    "explicit_backend": true,
+    "explicit_memory_mode": false,
+    "fallback_memory_mode": "tile",
+    "reason": "resident_default_fallback_non_cuda_backend",
+    "requested_backend": "cpu",
+    "requested_memory_mode": "resident",
+    "resident_default_blocker": null,
+    "resident_default_candidate": "resident",
+    "schema_version": 1
+  },
+  "memory_mode": "tile",
+  "memory_mode_requested": "resident",
+  "resident_runtime_preset": "throughput-v1",
+  "resident_runtime_preset_effective": {
+    "applied": {
+      "resident_calibration_batch_frames": 8,
+      "resident_calibration_release_mode": "callback_queue",
+      "resident_calibration_streams": 4,
+      "resident_calibration_wave_frames": 2,
+      "resident_h2d_mode": "pinned_ring",
+      "resident_prefetch_frames": 12,
+      "resident_prefetch_refill_mode": "queued",
+      "resident_prefetch_workers": 7
+    },
+    "explicit_overrides": {},
+    "preset": "throughput-v1"
+  },
+  "schema_version": 1,
+  "stages": [
+    {
+      "elapsed_s": 0.021573799996986054,
+      "stage": "scan",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.00013349999790079892,
+      "stage": "plan",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.16065010000602342,
+      "stage": "calibration",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.037186799992923625,
+      "stage": "quality",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.00530929998785723,
+      "stage": "registration",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.01545609999448061,
+      "stage": "warp",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.005164300004253164,
+      "stage": "local_normalization",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.03408320000744425,
+      "stage": "integration",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    },
+    {
+      "elapsed_s": 0.015829399999347515,
+      "stage": "report",
+      "started_at": "2026-06-18T13:09:12+00:00",
+      "status": "ok"
+    }
+  ],
+  "tile_size": 8,
+  "total_elapsed_s": 0.29538649998721667
+}

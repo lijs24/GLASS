@@ -1,0 +1,45 @@
+{
+  "artifacts": [
+    {
+      "checksum_optional": null,
+      "created_at": "2026-06-18T13:09:12+00:00",
+      "format": "json",
+      "path": "runs\\checkpoints\\s2_gate_314_cpu_run\\calibration_artifacts.json",
+      "source_frames": [
+        "F000001",
+        "F000002",
+        "F000003",
+        "F000004",
+        "F000005",
+        "F000006",
+        "F000007",
+        "F000008",
+        "F000009",
+        "F000010",
+        "F000011",
+        "F000012"
+      ],
+      "stage": "calibration"
+    }
+  ],
+  "checksums": {},
+  "completed_stages": [
+    "scan",
+    "plan",
+    "master_calibration",
+    "light_calibration",
+    "quality",
+    "registration",
+    "warp",
+    "local_normalization",
+    "integration",
+    "report"
+  ],
+  "created_at": "2026-06-18T13:09:12+00:00",
+  "current_stage": "report",
+  "errors": [],
+  "failed_stage": null,
+  "resume_supported": true,
+  "run_id": "s2_gate_314_cpu_run",
+  "warnings": []
+}

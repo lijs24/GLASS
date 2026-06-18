@@ -1120,6 +1120,93 @@ def _local_norm_rows(local_norm: dict[str, Any], run_root: Path) -> list[dict[st
     return rows
 
 
+def _local_norm_contract_state(
+    payload: dict[str, Any] | None,
+    *,
+    local_norm: dict[str, Any],
+    local_norm_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "attached": False,
+            "passed": None,
+            "status": "not_attached",
+            "artifact_type": None,
+            "enabled": None,
+            "output_count": None,
+            "failed_output_count": None,
+            "summary": {},
+            "failed_checks": [],
+            "failed_outputs": [],
+            "check_rows": [],
+        }
+
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    output_count = _optional_rounded_int(summary.get("output_count"))
+    failed_output_count = _optional_rounded_int(summary.get("failed_output_count"))
+    failed_checks = [
+        str(item.get("name"))
+        for item in payload.get("checks") or []
+        if isinstance(item, dict) and not item.get("passed")
+    ]
+    failed_outputs = payload.get("failed_outputs") if isinstance(payload.get("failed_outputs"), list) else []
+    enabled_expected = bool(local_norm.get("enabled")) if local_norm else None
+    top_level_model = local_norm.get("coefficient_field_model") if local_norm else None
+    check_rows = [
+        _check(
+            "artifact_type_is_local_norm_contract",
+            payload.get("artifact_type") == "local_norm_contract",
+            {"artifact_type": payload.get("artifact_type")},
+        ),
+        _check(
+            "contract_status_passed",
+            payload.get("status") == "passed" and payload.get("passed") is True,
+            {"status": payload.get("status"), "passed": payload.get("passed")},
+        ),
+        _check(
+            "enabled_state_matches_run",
+            enabled_expected is None or payload.get("enabled") == enabled_expected,
+            {"contract_enabled": payload.get("enabled"), "run_enabled": enabled_expected},
+        ),
+        _check(
+            "output_count_matches_pipeline_rows",
+            output_count == len(local_norm_rows),
+            {"contract_output_count": output_count, "pipeline_row_count": len(local_norm_rows)},
+        ),
+        _check(
+            "failed_output_count_zero",
+            failed_output_count == 0,
+            {"failed_output_count": failed_output_count},
+        ),
+        _check(
+            "top_level_failed_checks_empty",
+            not failed_checks,
+            {"failed_checks": failed_checks},
+        ),
+        _check(
+            "coefficient_field_model_matches_run",
+            top_level_model is None or payload.get("coefficient_field_model") == top_level_model,
+            {
+                "contract_coefficient_field_model": payload.get("coefficient_field_model"),
+                "run_coefficient_field_model": top_level_model,
+            },
+        ),
+    ]
+    return {
+        "attached": True,
+        "passed": all(row["passed"] for row in check_rows),
+        "status": payload.get("status"),
+        "artifact_type": payload.get("artifact_type"),
+        "enabled": payload.get("enabled"),
+        "output_count": output_count,
+        "failed_output_count": failed_output_count,
+        "summary": summary,
+        "failed_checks": failed_checks,
+        "failed_outputs": failed_outputs,
+        "check_rows": check_rows,
+    }
+
+
 def _warp_rows(warp: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in warp.get("warp_results") or []:
@@ -1169,6 +1256,7 @@ def build_pipeline_contract_audit(
     pixel_verify_tile_size: int = 2048,
     pixel_tolerance: int = 0,
     resident_calibration_contract: dict[str, Any] | None = None,
+    local_norm_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_root = Path(run_dir)
     calibration_path = run_root / "calibration_artifacts.json"
@@ -1197,6 +1285,11 @@ def build_pipeline_contract_audit(
     warp_rows = _warp_rows(warp, run_root)
     skipped_warp_rows = _skipped_warp_rows(warp)
     local_norm_rows = _local_norm_rows(local_norm, run_root)
+    local_norm_contract_state = _local_norm_contract_state(
+        local_norm_contract,
+        local_norm=local_norm,
+        local_norm_rows=local_norm_rows,
+    )
     integration_rows = _integration_rows(integration, run_root)
     integration_map_rows = _integration_map_rows(integration, run_root)
     integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
@@ -1564,6 +1657,29 @@ def build_pipeline_contract_audit(
                 "LN rows must record crop_box and DQ state; enabled LN rows must record coefficient grids.",
             )
         )
+    if local_norm_contract_state["attached"]:
+        checks.append(
+            _check(
+                "local_normalization_continuous_contract_audit",
+                bool(local_norm_contract_state["passed"]),
+                {
+                    "status": local_norm_contract_state["status"],
+                    "artifact_type": local_norm_contract_state["artifact_type"],
+                    "enabled": local_norm_contract_state["enabled"],
+                    "output_count": local_norm_contract_state["output_count"],
+                    "pipeline_row_count": len(local_norm_rows),
+                    "failed_output_count": local_norm_contract_state["failed_output_count"],
+                    "failed_checks": local_norm_contract_state["failed_checks"],
+                    "failed_outputs": local_norm_contract_state["failed_outputs"],
+                    "failed_contract_rows": [
+                        row["name"]
+                        for row in local_norm_contract_state["check_rows"]
+                        if not row["passed"]
+                    ],
+                },
+                "Attached LN continuous coefficient-field audit must pass before run-level acceptance.",
+            )
+        )
 
     passed = all(check["passed"] for check in checks)
     return {
@@ -1593,6 +1709,14 @@ def build_pipeline_contract_audit(
                 "passed": resident_calibration_contract.get("passed")
                 if isinstance(resident_calibration_contract, dict)
                 else None,
+            },
+            "local_norm_contract": {
+                "attached": bool(local_norm_contract_state["attached"]),
+                "artifact_type": local_norm_contract_state["artifact_type"],
+                "passed": local_norm_contract_state["passed"],
+                "status": local_norm_contract_state["status"],
+                "output_count": local_norm_contract_state["output_count"],
+                "failed_output_count": local_norm_contract_state["failed_output_count"],
             },
             "warp": {"path": str(warp_path), "exists": warp_path.exists()},
             "local_norm": {"path": str(local_norm_path), "exists": local_norm_path.exists()},
@@ -1626,6 +1750,10 @@ def build_pipeline_contract_audit(
             "enabled": bool(local_norm.get("enabled")) if local_norm else None,
             "reference_frame_id": local_norm.get("reference_frame_id") if local_norm else None,
             "crop_box": local_norm.get("crop_box") if local_norm else None,
+            "contract_audit_attached": bool(local_norm_contract_state["attached"]),
+            "contract_audit_status": local_norm_contract_state["status"],
+            "contract_audit_passed": local_norm_contract_state["passed"],
+            "contract_audit_summary": local_norm_contract_state["summary"],
             "outputs": local_norm_rows,
         },
         "integration": {

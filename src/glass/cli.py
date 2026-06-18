@@ -2629,6 +2629,11 @@ def cmd_pipeline_contract(args: argparse.Namespace) -> int:
         if getattr(args, "resident_calibration_contract_json", None)
         else None
     )
+    local_norm_contract = (
+        read_json(args.local_norm_contract_json)
+        if getattr(args, "local_norm_contract_json", None)
+        else None
+    )
     audit = build_pipeline_contract_audit(
         args.run,
         pixel_verify=args.pixel_verify,
@@ -2637,6 +2642,7 @@ def cmd_pipeline_contract(args: argparse.Namespace) -> int:
         resident_calibration_contract=resident_calibration_contract
         if isinstance(resident_calibration_contract, dict)
         else None,
+        local_norm_contract=local_norm_contract if isinstance(local_norm_contract, dict) else None,
     )
     write_pipeline_contract_audit(args.out, audit, markdown=args.markdown)
     console.print(
@@ -2645,6 +2651,9 @@ def cmd_pipeline_contract(args: argparse.Namespace) -> int:
             "out": args.out,
             "markdown": args.markdown,
             "pixel_verify": args.pixel_verify,
+            "local_norm_contract_attached": (audit.get("artifacts") or {})
+            .get("local_norm_contract", {})
+            .get("attached"),
         }
     )
     return 0 if audit["passed"] else 2
@@ -2675,6 +2684,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     stack_markdown = out_dir / "stack_engine_contract.md"
     pipeline_path = out_dir / "pipeline_contract.json"
     pipeline_markdown = out_dir / "pipeline_contract.md"
+    local_norm_contract_path = out_dir / "local_norm_contract.json"
+    local_norm_contract_markdown = out_dir / "local_norm_contract.md"
     report_path = Path(args.report) if args.report else out_dir / "report.html"
     bundle_path = out_dir / "acceptance_contract_bundle.json"
     summary_path = out_dir / "guardrails_summary.json"
@@ -2690,6 +2701,15 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             default_name="resident_result_contract.json",
         )
     )
+    local_norm_results_present = (run / "local_norm_results.json").exists()
+    local_norm_contract = None
+    if local_norm_results_present:
+        local_norm_contract = build_local_norm_contract(run)
+        write_local_norm_contract(
+            local_norm_contract_path,
+            local_norm_contract,
+            markdown=local_norm_contract_markdown,
+        )
 
     stack_audit = build_stack_engine_contract_audit(
         run,
@@ -2711,6 +2731,7 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         resident_calibration_contract=resident_calibration_contract
         if isinstance(resident_calibration_contract, dict)
         else None,
+        local_norm_contract=local_norm_contract if isinstance(local_norm_contract, dict) else None,
     )
     write_pipeline_contract_audit(pipeline_path, pipeline_audit, markdown=pipeline_markdown)
     _write_run_report(
@@ -2727,6 +2748,13 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
     stack_default_ready = bool(stack_default_promotion.get("ready"))
     stack_default_required = bool(getattr(args, "require_stack_default_ready", False))
     stack_default_condition = (not stack_default_required) or stack_default_ready
+    local_norm_contract_condition = (
+        not local_norm_results_present
+        or (isinstance(local_norm_contract, dict) and bool(local_norm_contract.get("passed")))
+    )
+    local_norm_contract_status = (
+        local_norm_contract.get("status") if isinstance(local_norm_contract, dict) else "not_present"
+    )
     pipeline_calibration = (
         pipeline_audit.get("calibration") if isinstance(pipeline_audit.get("calibration"), dict) else {}
     )
@@ -2738,7 +2766,12 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             pipeline_calibration.get("resident_calibration_contract_attached")
         ),
     }
-    passed = bool(stack_audit.get("passed")) and bool(pipeline_audit.get("passed")) and stack_default_condition
+    passed = (
+        bool(stack_audit.get("passed"))
+        and bool(pipeline_audit.get("passed"))
+        and stack_default_condition
+        and local_norm_contract_condition
+    )
     summary = {
         "schema_version": 1,
         "created_at": now_iso(),
@@ -2756,6 +2789,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "resident_result_contract_source": resident_result_contract_source,
         "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
+        "local_norm_contract_required": local_norm_results_present,
+        "local_norm_contract_attached": isinstance(local_norm_contract, dict),
+        "local_norm_contract_status": local_norm_contract_status,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2763,6 +2799,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "stack_engine_contract_markdown": str(stack_markdown),
             "pipeline_contract": str(pipeline_path),
             "pipeline_contract_markdown": str(pipeline_markdown),
+            "local_norm_contract": str(local_norm_contract_path) if local_norm_results_present else None,
+            "local_norm_contract_markdown": str(local_norm_contract_markdown)
+            if local_norm_results_present
+            else None,
             "acceptance_contract_bundle": str(bundle_path),
             "report": str(report_path),
             "resident_calibration_contract": args.resident_calibration_contract_json,
@@ -2799,6 +2839,22 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             },
         ],
     }
+    summary["checks"].append(
+        {
+            "name": "local_norm_contract",
+            "passed": local_norm_contract_condition,
+            "required": local_norm_results_present,
+            "status": local_norm_contract_status,
+            "failed": [
+                item.get("name")
+                for item in (local_norm_contract or {}).get("checks", [])
+                if isinstance(item, dict) and not item.get("passed")
+            ],
+            "failed_outputs": (local_norm_contract or {}).get("failed_outputs", [])
+            if isinstance(local_norm_contract, dict)
+            else [],
+        }
+    )
     bundle = {
         "schema_version": 1,
         "created_at": now_iso(),
@@ -2817,6 +2873,9 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
         "resident_result_contract_source": resident_result_contract_source,
         "resident_calibration_contract_attached": stack_audit.get("resident_calibration_contract_attached"),
         "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
+        "local_norm_contract_required": local_norm_results_present,
+        "local_norm_contract_attached": isinstance(local_norm_contract, dict),
+        "local_norm_contract_status": local_norm_contract_status,
         "resident_native_calibration": resident_native_calibration,
         "stack_default_promotion": stack_default_promotion,
         "artifacts": {
@@ -2825,6 +2884,10 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "stack_engine_contract_markdown": str(stack_markdown),
             "pipeline_contract": str(pipeline_path),
             "pipeline_contract_markdown": str(pipeline_markdown),
+            "local_norm_contract": str(local_norm_contract_path) if local_norm_results_present else None,
+            "local_norm_contract_markdown": str(local_norm_contract_markdown)
+            if local_norm_results_present
+            else None,
             "report": str(report_path),
             "resident_calibration_contract": args.resident_calibration_contract_json,
             "resident_result_contract": resident_result_contract_path,
@@ -2856,6 +2919,8 @@ def cmd_guardrails(args: argparse.Namespace) -> int:
             "resident_result_contract_attached": stack_audit.get("resident_result_contract_attached"),
             "resident_result_contract_json": resident_result_contract_path,
             "resident_result_contract_source": resident_result_contract_source,
+            "local_norm_contract_status": local_norm_contract_status,
+            "local_norm_contract_required": local_norm_results_present,
             "resident_native_calibration": resident_native_calibration,
         }
     )
@@ -5741,6 +5806,10 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline_contract.add_argument(
         "--resident-calibration-contract-json",
         help="optional resident CUDA calibration contract JSON used to prove resident calibration surface invariants",
+    )
+    pipeline_contract.add_argument(
+        "--local-norm-contract-json",
+        help="optional local-normalization contract JSON used to prove continuous LN coefficient-field invariants",
     )
     pipeline_contract.set_defaults(func=cmd_pipeline_contract)
 

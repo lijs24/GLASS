@@ -1,0 +1,72 @@
+{
+  "interpolation": "bilinear",
+  "interpolator_registry": [
+    "nearest",
+    "bilinear",
+    "bicubic",
+    "lanczos3"
+  ],
+  "schema_version": 1,
+  "skipped_frames": [
+    {
+      "frame_id": "F000011",
+      "reason": "registration did not produce an accepted transform",
+      "status": "quality_rejected",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    },
+    {
+      "frame_id": "F000012",
+      "reason": "registration did not produce an accepted transform",
+      "status": "quality_rejected",
+      "warnings": [
+        "registration skipped because frame failed the quality gate",
+        "star_count 5 below min_stars=8"
+      ]
+    }
+  ],
+  "warp_results": [
+    {
+      "coverage_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\coverage_cache\\coverage_F000010.fits",
+      "dq_mask_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\dq_cache\\dq_warp_F000010.fits",
+      "dq_summary": {
+        "valid": 576
+      },
+      "dx": 0.0,
+      "dy": 0.0,
+      "frame_id": "F000010",
+      "interpolation": "bilinear",
+      "interpolator_registry": [
+        "nearest",
+        "bilinear",
+        "bicubic",
+        "lanczos3"
+      ],
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "registered_path": "runs\\checkpoints\\s2_gate_314_cpu_run\\registered_cache\\registered_F000010.fits",
+      "registration_status": "reference",
+      "tile_count": 9,
+      "tile_size": 8,
+      "valid_pixels": 576,
+      "warp_model": "integer_translation_nearest"
+    }
+  ]
+}

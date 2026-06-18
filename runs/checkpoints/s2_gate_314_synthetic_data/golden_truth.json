@@ -1,0 +1,28 @@
+{
+  "bias_level": 1000.0,
+  "dark_current": 0.4,
+  "dark_exposure_s": 60.0,
+  "expected_master_statistics": {
+    "master_bias_mean": 1000.0,
+    "master_dark_mean": 1024.0,
+    "master_flat_median": 1.0
+  },
+  "filter": "H",
+  "height": 24,
+  "known_transforms": {
+    "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_000.fits": {
+      "dx": -2.0,
+      "dy": -2.0
+    },
+    "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_001.fits": {
+      "dx": -1.0,
+      "dy": -2.0
+    },
+    "runs\\checkpoints\\s2_gate_314_synthetic_data\\light\\light_002.fits": {
+      "dx": 0.0,
+      "dy": -2.0
+    }
+  },
+  "light_exposure_s": 60.0,
+  "width": 24
+}

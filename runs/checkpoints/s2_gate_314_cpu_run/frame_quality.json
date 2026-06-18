@@ -1,0 +1,165 @@
+{
+  "frame_quality": [
+    {
+      "background_mad": 50.59562683105469,
+      "background_mean": 936.4339508480496,
+      "background_median": 250.3268814086914,
+      "background_rms": 1172.3607589121384,
+      "eccentricity": 0.5605933666229248,
+      "filter": null,
+      "frame_id": "F000010",
+      "fwhm_px": 5.228486061096191,
+      "median_method": "median_scratch_memmap",
+      "metric_source": "streaming_tile_reader",
+      "noise_mad": 75.01307633972168,
+      "pixel_count": 576,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 5 below min_stars=8"
+      ],
+      "quality_score": 0.007915128755409116,
+      "reference_candidate": false,
+      "saturation_fraction": 0.0,
+      "snr": 258.1781921386719,
+      "star_count": 5,
+      "star_detector": "robust_local_maximum_moments_v1",
+      "star_metrics": {
+        "eccentricity_median": 0.5605933666229248,
+        "fwhm_iqr_px": 0.36203432083129883,
+        "fwhm_median_px": 5.228486061096191,
+        "star_flux_median": 169871.015625,
+        "star_snr_median": 258.1781921386719
+      },
+      "tile_count": 9,
+      "tile_size": 8,
+      "warnings": [],
+      "weight": 0.007915128755409116,
+      "weight_components": {
+        "eccentricity_penalty": 0.4394066333770752,
+        "fwhm_penalty": 0.03658036974546631,
+        "noise_penalty": 0.0008529797610489146,
+        "saturation_penalty": 1.0,
+        "sqrt_star_count": 2.23606797749979,
+        "star_snr": 258.1781921386719
+      },
+      "weight_source": "combined_psf_snr_v1"
+    },
+    {
+      "background_mad": 51.68060302734375,
+      "background_mean": 936.3669045766195,
+      "background_median": 250.58878326416016,
+      "background_rms": 1171.9243039757523,
+      "eccentricity": 0.5594537854194641,
+      "filter": null,
+      "frame_id": "F000011",
+      "fwhm_px": 5.229766368865967,
+      "median_method": "median_scratch_memmap",
+      "metric_source": "streaming_tile_reader",
+      "noise_mad": 76.62166204833984,
+      "pixel_count": 576,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 5 below min_stars=8"
+      ],
+      "quality_score": 0.007763571217205114,
+      "reference_candidate": false,
+      "saturation_fraction": 0.0,
+      "snr": 252.60922241210938,
+      "star_count": 5,
+      "star_detector": "robust_local_maximum_moments_v1",
+      "star_metrics": {
+        "eccentricity_median": 0.5594537854194641,
+        "fwhm_iqr_px": 0.3644595146179199,
+        "fwhm_median_px": 5.229766368865967,
+        "star_flux_median": 169845.71875,
+        "star_snr_median": 252.60922241210938
+      },
+      "tile_count": 9,
+      "tile_size": 8,
+      "warnings": [],
+      "weight": 0.007763571217205114,
+      "weight_components": {
+        "eccentricity_penalty": 0.4405462145805359,
+        "fwhm_penalty": 0.036562461335976175,
+        "noise_penalty": 0.0008532974327842684,
+        "saturation_penalty": 1.0,
+        "sqrt_star_count": 2.23606797749979,
+        "star_snr": 252.60922241210938
+      },
+      "weight_source": "combined_psf_snr_v1"
+    },
+    {
+      "background_mad": 53.721343994140625,
+      "background_mean": 935.9591140217251,
+      "background_median": 253.61280059814453,
+      "background_rms": 1172.0742148561053,
+      "eccentricity": 0.5967504978179932,
+      "filter": null,
+      "frame_id": "F000012",
+      "fwhm_px": 5.2288360595703125,
+      "median_method": "median_scratch_memmap",
+      "metric_source": "streaming_tile_reader",
+      "noise_mad": 79.64726460571289,
+      "pixel_count": 576,
+      "quality_gate_status": "rejected",
+      "quality_gate_warnings": [
+        "star_count 5 below min_stars=8"
+      ],
+      "quality_score": 0.0070568426863619315,
+      "reference_candidate": false,
+      "saturation_fraction": 0.0,
+      "snr": 250.7937774658203,
+      "star_count": 5,
+      "star_detector": "robust_local_maximum_moments_v1",
+      "star_metrics": {
+        "eccentricity_median": 0.5967504978179932,
+        "fwhm_iqr_px": 0.4244704246520996,
+        "fwhm_median_px": 5.2288360595703125,
+        "star_flux_median": 169493.828125,
+        "star_snr_median": 250.7937774658203
+      },
+      "tile_count": 9,
+      "tile_size": 8,
+      "warnings": [],
+      "weight": 0.0070568426863619315,
+      "weight_components": {
+        "eccentricity_penalty": 0.40324950218200684,
+        "fwhm_penalty": 0.03657547280666264,
+        "noise_penalty": 0.0008531882941582921,
+        "saturation_penalty": 1.0,
+        "sqrt_star_count": 2.23606797749979,
+        "star_snr": 250.7937774658203
+      },
+      "weight_source": "combined_psf_snr_v1"
+    }
+  ],
+  "metric_source": "streaming_tile_reader",
+  "quality_gate_policy": {
+    "max_saturation_fraction": 0.02,
+    "min_quality_score": 0.0,
+    "min_stars": 8,
+    "require_fwhm": true
+  },
+  "quality_gate_summary": {
+    "accepted_count": 0,
+    "fallback_used": true,
+    "policy": {
+      "max_saturation_fraction": 0.02,
+      "min_quality_score": 0.0,
+      "min_stars": 8,
+      "require_fwhm": true
+    },
+    "reference_candidate_count": 0,
+    "rejected_count": 3,
+    "rejection_reason_counts": {
+      "star_count": 3
+    }
+  },
+  "reference_frame_id": "F000010",
+  "reference_selection": "quality_gate accepted frames, then max star_count, max combined quality, min FWHM/eccentricity/background_rms",
+  "reference_selection_fallback": true,
+  "schema_version": 1,
+  "star_detector": "robust_local_maximum_moments_v1",
+  "tile_size": 8,
+  "weight_source": "combined_psf_snr_v1"
+}

@@ -217,12 +217,41 @@ def _write_nonresident_cuda_fast_path_pipeline_run(path: Path, *, explicit: bool
 def test_pipeline_contract_passes_for_cpu_audit_run(tmp_path: Path):
     data = tmp_path / "data"
     run = tmp_path / "run"
+    local_norm_contract = tmp_path / "local_norm_contract.json"
     out = tmp_path / "pipeline_contract.json"
     markdown = tmp_path / "pipeline_contract.md"
     generate_synthetic_dataset(data, frames=3, width=24, height=24)
 
     assert main(["audit", "--root", str(data), "--out", str(run), "--backend", "cpu", "--tile-size", "8"]) == 0
-    assert main(["pipeline-contract", "--run", str(run), "--out", str(out), "--markdown", str(markdown)]) == 0
+    assert (
+        main(
+            [
+                "local-norm-contract",
+                "--run",
+                str(run),
+                "--out",
+                str(local_norm_contract),
+                "--fail-on-failed",
+            ]
+        )
+        == 0
+    )
+    assert (
+        main(
+            [
+                "pipeline-contract",
+                "--run",
+                str(run),
+                "--out",
+                str(out),
+                "--markdown",
+                str(markdown),
+                "--local-norm-contract-json",
+                str(local_norm_contract),
+            ]
+        )
+        == 0
+    )
 
     audit = read_json(out)
     assert audit["passed"] is True
@@ -234,7 +263,12 @@ def test_pipeline_contract_passes_for_cpu_audit_run(tmp_path: Path):
     assert checks["calibration_master_surface_contract"]["passed"] is True
     assert checks["calibrated_light_dq_contract"]["passed"] is True
     assert checks["local_normalization_contract"]["passed"] is True
+    assert checks["local_normalization_continuous_contract_audit"]["passed"] is True
     assert checks["warp_outputs_have_dq_and_coverage"]["passed"] is True
+    assert audit["artifacts"]["local_norm_contract"]["attached"] is True
+    assert audit["artifacts"]["local_norm_contract"]["passed"] is True
+    assert audit["local_normalization"]["contract_audit_attached"] is True
+    assert audit["local_normalization"]["contract_audit_passed"] is True
     assert audit["integration"]["engine_policy"]["top_level"]["default_engine"] == "stack_engine_cpu"
     assert all(
         item["status"] == "stack_engine_default"
