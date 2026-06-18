@@ -111,6 +111,70 @@ def _write_resident_pipeline_run(
     )
 
 
+def _write_nonresident_cuda_fast_path_pipeline_run(path: Path, *, explicit: bool) -> None:
+    integration_dir = path / "integration"
+    integration_dir.mkdir(parents=True)
+    master = np.ones((2, 2), dtype=np.float32)
+    weight = np.ones((2, 2), dtype=np.float32)
+    coverage = np.ones((2, 2), dtype=np.float32)
+    dq = np.zeros((2, 2), dtype=np.float32)
+    for name, data in {
+        "master_H.fits": master,
+        "weight_H.fits": weight,
+        "coverage_H.fits": coverage,
+        "dq_H.fits": dq,
+    }.items():
+        write_fits_data(integration_dir / name, data)
+    engine_selection = {
+        "default_engine": "stack_engine_cpu",
+        "actual_backend": "cuda",
+        "use_stack_engine": False,
+        "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+        "backend": "auto",
+        "cuda_available": True,
+        "cuda_fast_path_eligible": True,
+        "explicit_cuda_fast_path": explicit,
+        "allow_cuda_streaming_accumulator_fast_path": explicit,
+        "rejection": "none",
+        "reason": "explicit_cuda_fast_path_requested"
+        if explicit
+        else "legacy_implicit_cuda_fast_path_fixture",
+    }
+    write_json(
+        path / "integration_results.json",
+        {
+            "rejection": "none",
+            "integration_engine_policy": engine_selection,
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda",
+                    "frame_count": 3,
+                    "master_path": str(integration_dir / "master_H.fits"),
+                    "weight_map_path": str(integration_dir / "weight_H.fits"),
+                    "coverage_map_path": str(integration_dir / "coverage_H.fits"),
+                    "dq_map_path": str(integration_dir / "dq_H.fits"),
+                    "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+                    "stack_engine_enabled": False,
+                    "engine_selection": engine_selection,
+                    "dq_summary": {"valid": 4, "no_data": 0},
+                    "dq_provenance_summary": {
+                        "source_schema": "cuda_streaming_accumulator_dq_provenance",
+                        "stage": "integration",
+                        "engine": "cuda_streaming_accumulator_fast_path",
+                        "output_dq_summary": {"valid": 4, "no_data": 0},
+                    },
+                    "output_map_policy": {
+                        "available": ["master", "weight", "coverage", "dq"],
+                        "written": ["master", "weight", "coverage", "dq"],
+                        "skipped": ["low_rejection", "high_rejection"],
+                    },
+                }
+            ],
+        },
+    )
+
+
 def test_pipeline_contract_passes_for_cpu_audit_run(tmp_path: Path):
     data = tmp_path / "data"
     run = tmp_path / "run"
@@ -126,15 +190,23 @@ def test_pipeline_contract_passes_for_cpu_audit_run(tmp_path: Path):
     checks = {item["name"]: item for item in audit["checks"]}
     assert checks["integration_output_maps_available"]["passed"] is True
     assert checks["integration_dq_contract"]["passed"] is True
+    assert checks["integration_default_engine_policy"]["passed"] is True
     assert checks["calibration_master_surface_contract"]["passed"] is True
     assert checks["calibrated_light_dq_contract"]["passed"] is True
     assert checks["local_normalization_contract"]["passed"] is True
     assert checks["warp_outputs_have_dq_and_coverage"]["passed"] is True
+    assert audit["integration"]["engine_policy"]["top_level"]["default_engine"] == "stack_engine_cpu"
+    assert all(
+        item["status"] == "stack_engine_default"
+        for item in audit["integration"]["engine_policy"]["outputs"]
+        if item["required"]
+    )
     assert audit["calibration"]["master_count"] >= 3
     assert audit["calibration"]["calibrated_light_count"] >= 3
     assert all(item["contract_ok"] for item in audit["calibration"]["masters"])
     assert all(item["contract_ok"] for item in audit["calibration"]["calibrated_lights"])
     assert "GLASS Pipeline Invariant Contract Audit" in markdown.read_text(encoding="utf-8")
+    assert "Integration Engine Policy" in markdown.read_text(encoding="utf-8")
 
 
 def test_pipeline_contract_pixel_verification_passes_for_cpu_audit_run(tmp_path: Path):
@@ -234,6 +306,44 @@ def test_pipeline_contract_passes_resident_result_contract(tmp_path: Path):
     assert resident_contract["required"] is True
     assert resident_contract["passed"] is True
     assert resident_contract["contract"]["contract_type"] == "resident_cuda_result_contract"
+
+
+def test_pipeline_contract_allows_explicit_nonresident_cuda_fast_path(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_nonresident_cuda_fast_path_pipeline_run(run, explicit=True)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    engine_policy = audit["integration"]["engine_policy"]
+
+    assert audit["passed"] is True
+    assert checks["integration_default_engine_policy"]["passed"] is True
+    assert engine_policy["non_resident_count"] == 1
+    assert engine_policy["failed"] == []
+    assert engine_policy["outputs"][0]["status"] == "explicit_cuda_fast_path"
+
+
+def test_pipeline_contract_blocks_implicit_nonresident_cuda_fast_path(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_nonresident_cuda_fast_path_pipeline_run(run, explicit=False)
+
+    audit = build_pipeline_contract_audit(run)
+    checks = {item["name"]: item for item in audit["checks"]}
+    engine_policy = audit["integration"]["engine_policy"]
+
+    assert audit["passed"] is False
+    assert checks["integration_default_engine_policy"]["passed"] is False
+    assert checks["integration_default_engine_policy"]["evidence"]["failed"] == [
+        {
+            "item": "H",
+            "status": "implicit_cuda_fast_path",
+            "backend": "cuda",
+            "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+            "failures": ["cuda_fast_path_not_explicit"],
+        }
+    ]
+    assert engine_policy["failed"][0]["status"] == "implicit_cuda_fast_path"
+    assert engine_policy["outputs"][0]["selection_explicit_cuda_fast_path"] is False
 
 
 def test_pipeline_contract_surfaces_sample_accounting_closure(tmp_path: Path):

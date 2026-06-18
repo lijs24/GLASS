@@ -1,0 +1,155 @@
+{
+  "artifact_type": "s2_gate_279_pipeline_contract_engine_policy_fixture",
+  "clean_room": {
+    "external_source_used": false,
+    "notes": "Generated from GLASS synthetic 2x2 arrays and GLASS-owned pipeline-contract code only.",
+    "user_image_data_used": false
+  },
+  "created_at": "2026-06-18T05:06:02+00:00",
+  "explicit_cuda_fast_path": {
+    "audit_passed": true,
+    "check": {
+      "evidence": {
+        "failed": [],
+        "non_resident_count": 1,
+        "output_count": 1,
+        "resident_count": 0,
+        "top_level_default_ok": true,
+        "top_level_present": true
+      },
+      "name": "integration_default_engine_policy",
+      "note": "Non-resident integration must default to StackEngine unless the CUDA fast path is explicitly requested.",
+      "passed": true
+    },
+    "engine_policy": {
+      "failed": [],
+      "non_resident_count": 1,
+      "output_count": 1,
+      "outputs": [
+        {
+          "backend": "cuda",
+          "failures": [],
+          "item": "H",
+          "memory_mode": null,
+          "passed": true,
+          "required": true,
+          "selection_actual_backend": "cuda",
+          "selection_allow_cuda_fast_path": true,
+          "selection_backend": "auto",
+          "selection_default_engine": "stack_engine_cpu",
+          "selection_explicit_cuda_fast_path": true,
+          "selection_present": true,
+          "selection_use_stack_engine": false,
+          "status": "explicit_cuda_fast_path",
+          "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+          "top_level_default_engine": "stack_engine_cpu",
+          "top_level_default_ok": true,
+          "top_level_present": true
+        }
+      ],
+      "passed": true,
+      "resident_count": 0,
+      "top_level": {
+        "actual_backend": "cuda",
+        "allow_cuda_streaming_accumulator_fast_path": true,
+        "backend": "auto",
+        "cuda_available": true,
+        "cuda_fast_path_eligible": true,
+        "default_engine": "stack_engine_cpu",
+        "explicit_cuda_fast_path": true,
+        "reason": "explicit_cuda_fast_path_requested",
+        "rejection": "none",
+        "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+        "use_stack_engine": false
+      },
+      "top_level_default_ok": true,
+      "top_level_present": true
+    }
+  },
+  "fixture": "temporary synthetic 2x2 FITS integration maps with non-resident CUDA fast-path metadata",
+  "implicit_cuda_fast_path": {
+    "audit_passed": false,
+    "check": {
+      "evidence": {
+        "failed": [
+          {
+            "backend": "cuda",
+            "failures": [
+              "cuda_fast_path_not_explicit"
+            ],
+            "item": "H",
+            "status": "implicit_cuda_fast_path",
+            "tile_stack_mode": "cuda_streaming_accumulator_fast_path"
+          }
+        ],
+        "non_resident_count": 1,
+        "output_count": 1,
+        "resident_count": 0,
+        "top_level_default_ok": true,
+        "top_level_present": true
+      },
+      "name": "integration_default_engine_policy",
+      "note": "Non-resident integration must default to StackEngine unless the CUDA fast path is explicitly requested.",
+      "passed": false
+    },
+    "engine_policy": {
+      "failed": [
+        {
+          "backend": "cuda",
+          "failures": [
+            "cuda_fast_path_not_explicit"
+          ],
+          "item": "H",
+          "status": "implicit_cuda_fast_path",
+          "tile_stack_mode": "cuda_streaming_accumulator_fast_path"
+        }
+      ],
+      "non_resident_count": 1,
+      "output_count": 1,
+      "outputs": [
+        {
+          "backend": "cuda",
+          "failures": [
+            "cuda_fast_path_not_explicit"
+          ],
+          "item": "H",
+          "memory_mode": null,
+          "passed": false,
+          "required": true,
+          "selection_actual_backend": "cuda",
+          "selection_allow_cuda_fast_path": false,
+          "selection_backend": "auto",
+          "selection_default_engine": "stack_engine_cpu",
+          "selection_explicit_cuda_fast_path": false,
+          "selection_present": true,
+          "selection_use_stack_engine": false,
+          "status": "implicit_cuda_fast_path",
+          "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+          "top_level_default_engine": "stack_engine_cpu",
+          "top_level_default_ok": true,
+          "top_level_present": true
+        }
+      ],
+      "passed": false,
+      "resident_count": 0,
+      "top_level": {
+        "actual_backend": "cuda",
+        "allow_cuda_streaming_accumulator_fast_path": false,
+        "backend": "auto",
+        "cuda_available": true,
+        "cuda_fast_path_eligible": true,
+        "default_engine": "stack_engine_cpu",
+        "explicit_cuda_fast_path": false,
+        "reason": "legacy_implicit_cuda_fast_path_fixture",
+        "rejection": "none",
+        "tile_stack_mode": "cuda_streaming_accumulator_fast_path",
+        "use_stack_engine": false
+      },
+      "top_level_default_ok": true,
+      "top_level_present": true
+    },
+    "failed_checks": [
+      "integration_default_engine_policy"
+    ]
+  }
+}

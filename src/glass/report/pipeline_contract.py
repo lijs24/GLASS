@@ -743,6 +743,126 @@ def _resident_result_contract_state(
     }
 
 
+def _is_resident_integration_row(row: dict[str, Any]) -> bool:
+    return row.get("backend") == "cuda_resident_stack" or row.get("memory_mode") == "resident"
+
+
+def _nonempty_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _integration_engine_policy_state(
+    integration: dict[str, Any],
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    top_level = _nonempty_dict(integration.get("integration_engine_policy"))
+    top_level_present = isinstance(integration.get("integration_engine_policy"), dict)
+    top_level_default_ok = top_level.get("default_engine") == "stack_engine_cpu"
+    output_states: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+
+    for row in rows:
+        selection = _nonempty_dict(row.get("engine_selection"))
+        selection_present = isinstance(row.get("engine_selection"), dict)
+        tile_mode = str(row.get("tile_stack_mode") or selection.get("tile_stack_mode") or "")
+        backend = row.get("backend") or selection.get("actual_backend")
+        state = {
+            "item": row.get("item"),
+            "backend": backend,
+            "memory_mode": row.get("memory_mode"),
+            "tile_stack_mode": tile_mode,
+            "top_level_present": top_level_present,
+            "top_level_default_engine": top_level.get("default_engine"),
+            "top_level_default_ok": top_level_default_ok,
+            "selection_present": selection_present,
+            "selection_default_engine": selection.get("default_engine"),
+            "selection_actual_backend": selection.get("actual_backend"),
+            "selection_use_stack_engine": selection.get("use_stack_engine"),
+            "selection_explicit_cuda_fast_path": selection.get("explicit_cuda_fast_path"),
+            "selection_allow_cuda_fast_path": selection.get(
+                "allow_cuda_streaming_accumulator_fast_path"
+            ),
+            "selection_backend": selection.get("backend"),
+            "required": not _is_resident_integration_row(row),
+            "passed": True,
+            "status": "resident_not_required",
+            "failures": [],
+        }
+        if not state["required"]:
+            output_states.append(state)
+            continue
+
+        failures: list[str] = []
+        if not top_level_present:
+            failures.append("missing_top_level_integration_engine_policy")
+        if top_level_present and not top_level_default_ok:
+            failures.append("top_level_default_engine_not_stack_engine_cpu")
+        if not selection_present:
+            failures.append("missing_output_engine_selection")
+        if selection_present and selection.get("default_engine") != "stack_engine_cpu":
+            failures.append("output_default_engine_not_stack_engine_cpu")
+
+        if tile_mode == "stack_engine_cpu":
+            if selection_present and selection.get("use_stack_engine") is not True:
+                failures.append("stack_engine_output_selection_not_enabled")
+            if selection_present and selection.get("actual_backend") != "cpu":
+                failures.append("stack_engine_output_actual_backend_not_cpu")
+            status = "stack_engine_default"
+        elif tile_mode == "cuda_streaming_accumulator_fast_path":
+            explicit_flag = selection.get("explicit_cuda_fast_path") is True
+            explicit_source = (
+                selection.get("allow_cuda_streaming_accumulator_fast_path") is True
+                or selection.get("backend") == "cuda"
+            )
+            if selection_present and selection.get("use_stack_engine") is not False:
+                failures.append("cuda_fast_path_selection_still_uses_stack_engine")
+            if selection_present and selection.get("actual_backend") != "cuda":
+                failures.append("cuda_fast_path_actual_backend_not_cuda")
+            if not explicit_flag:
+                failures.append("cuda_fast_path_not_explicit")
+            if explicit_flag and not explicit_source:
+                failures.append("cuda_fast_path_explicit_source_missing")
+            status = "explicit_cuda_fast_path" if explicit_flag and explicit_source else "implicit_cuda_fast_path"
+        elif tile_mode:
+            failures.append("unsupported_non_resident_tile_stack_mode")
+            status = "unsupported_non_resident_tile_stack_mode"
+        else:
+            failures.append("missing_non_resident_tile_stack_mode")
+            status = "missing_non_resident_tile_stack_mode"
+
+        state["status"] = status
+        state["failures"] = failures
+        state["passed"] = not failures
+        output_states.append(state)
+        if failures:
+            failed.append(
+                {
+                    "item": state["item"],
+                    "status": status,
+                    "backend": backend,
+                    "tile_stack_mode": tile_mode,
+                    "failures": failures,
+                }
+            )
+
+    non_resident_count = sum(1 for state in output_states if state["required"])
+    return {
+        "top_level": top_level,
+        "top_level_present": top_level_present,
+        "top_level_default_ok": top_level_default_ok,
+        "output_count": len(rows),
+        "non_resident_count": non_resident_count,
+        "resident_count": len(rows) - non_resident_count,
+        "outputs": output_states,
+        "failed": failed,
+        "passed": bool(rows)
+        and (
+            non_resident_count == 0
+            or (top_level_present and top_level_default_ok and not failed)
+        ),
+    }
+
+
 def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, output in enumerate(integration.get("outputs") or []):
@@ -764,10 +884,14 @@ def _integration_rows(integration: dict[str, Any], run_root: Path) -> list[dict[
             {
                 "item": item,
                 "backend": output.get("backend"),
+                "memory_mode": output.get("memory_mode"),
                 "rejection": _integration_rejection_mode(integration, output),
                 "frame_count": output.get("frame_count"),
                 "tile_stack_mode": output.get("tile_stack_mode"),
                 "stack_engine_enabled": bool(output.get("stack_engine_enabled")),
+                "engine_selection": output.get("engine_selection")
+                if isinstance(output.get("engine_selection"), dict)
+                else {},
                 "dq_map_path": output.get("dq_map_path"),
                 "dq_map_exists": _path_exists(output.get("dq_map_path"), run_root),
                 "dq_summary_present": isinstance(dq_summary, dict),
@@ -902,6 +1026,7 @@ def build_pipeline_contract_audit(
     local_norm_rows = _local_norm_rows(local_norm, run_root)
     integration_rows = _integration_rows(integration, run_root)
     integration_map_rows = _integration_map_rows(integration, run_root)
+    integration_engine_policy = _integration_engine_policy_state(integration, integration_rows)
     pixel_verification_rows = (
         _integration_pixel_verification_rows(
             integration,
@@ -919,6 +1044,19 @@ def build_pipeline_contract_audit(
             "integration_outputs_present",
             bool(integration_rows),
             {"actual": len(integration_rows), "required_min": 1},
+        ),
+        _check(
+            "integration_default_engine_policy",
+            bool(integration_rows) and bool(integration_engine_policy["passed"]),
+            {
+                "output_count": integration_engine_policy["output_count"],
+                "non_resident_count": integration_engine_policy["non_resident_count"],
+                "resident_count": integration_engine_policy["resident_count"],
+                "top_level_present": integration_engine_policy["top_level_present"],
+                "top_level_default_ok": integration_engine_policy["top_level_default_ok"],
+                "failed": integration_engine_policy["failed"],
+            },
+            "Non-resident integration must default to StackEngine unless the CUDA fast path is explicitly requested.",
         ),
         _check(
             "integration_output_maps_available",
@@ -1261,7 +1399,11 @@ def build_pipeline_contract_audit(
             "crop_box": local_norm.get("crop_box") if local_norm else None,
             "outputs": local_norm_rows,
         },
-        "integration": {"outputs": integration_rows, "maps": integration_map_rows},
+        "integration": {
+            "outputs": integration_rows,
+            "maps": integration_map_rows,
+            "engine_policy": integration_engine_policy,
+        },
         "pixel_verification": {
             "enabled": bool(pixel_verify),
             "tile_size": max(1, int(pixel_verify_tile_size)),
@@ -1284,6 +1426,25 @@ def write_pipeline_contract_markdown(path: str | Path, audit: dict[str, Any]) ->
     for item in audit.get("checks") or []:
         marker = "PASS" if item.get("passed") else "FAIL"
         lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
+    lines.extend(["", "## Integration Engine Policy", ""])
+    engine_policy = (audit.get("integration") or {}).get("engine_policy") or {}
+    lines.append(
+        "- "
+        f"top-level present `{engine_policy.get('top_level_present')}`, "
+        f"default `{(engine_policy.get('top_level') or {}).get('default_engine')}`, "
+        f"non-resident outputs `{engine_policy.get('non_resident_count')}`, "
+        f"passed `{engine_policy.get('passed')}`"
+    )
+    for row in engine_policy.get("outputs") or []:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            "- "
+            f"{row.get('item')}: mode `{row.get('tile_stack_mode')}`, "
+            f"backend `{row.get('backend')}`, "
+            f"status `{row.get('status')}`, "
+            f"passed `{row.get('passed')}`"
+        )
     lines.extend(["", "## Integration Sample Accounting Closure", ""])
     for row in ((audit.get("integration") or {}).get("outputs") or []):
         closure = row.get("sample_accounting_closure") if isinstance(row, dict) else {}

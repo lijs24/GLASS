@@ -4694,6 +4694,26 @@ integration where applicable.
   kernel change, no package build/upload, no publication handoff change, and no
   real-data benchmark rerun.
 
+### S2-Gate 279: Pipeline Contract Integration Engine Policy Guard
+
+- Carry the S2-Gate 278 non-resident integration engine-selection policy into
+  `glass pipeline-contract`.
+- Add a pipeline-contract blocker requiring non-resident integration artifacts
+  to record top-level `integration_engine_policy`, per-output
+  `engine_selection`, and `default_engine=stack_engine_cpu`.
+- Accept non-resident CUDA streaming accumulator outputs only when the artifact
+  proves the fast path was explicitly requested by policy or by an explicit
+  CUDA backend selection.
+- Keep resident CUDA stack outputs exempt from the non-resident default-engine
+  guard so the resident all-VRAM path remains governed by its resident result
+  contract.
+- Surface engine-policy evidence in pipeline-contract JSON and Markdown, and
+  add focused tests for CPU StackEngine defaults, explicit CUDA fast-path
+  opt-in, and blocked implicit CUDA fast-path artifacts.
+- Keep this gate audit-contract scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no publication
+  handoff change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
