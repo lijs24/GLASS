@@ -101,6 +101,93 @@ def _resident_winsorized_sweep_summary(source: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _stack_engine_publication_audit_summary(source: dict[str, Any]) -> dict[str, Any]:
+    audit = (
+        source.get("stack_engine_publication_audit")
+        if isinstance(source.get("stack_engine_publication_audit"), dict)
+        else {}
+    )
+
+    def field(flattened_name: str, audit_name: str | None = None) -> Any:
+        flattened = source.get(flattened_name)
+        if flattened is not None:
+            return flattened
+        return audit.get(audit_name or flattened_name)
+
+    return {
+        "stack_engine_publication_audit": audit,
+        "stack_engine_publication_audit_present": field(
+            "stack_engine_publication_audit_present",
+            "present",
+        ),
+        "stack_engine_publication_audit_ready": field(
+            "stack_engine_publication_audit_ready",
+            "ready",
+        ),
+        "stack_engine_publication_audit_status": field(
+            "stack_engine_publication_audit_status",
+            "status",
+        ),
+        "stack_engine_publication_audit_passed": field(
+            "stack_engine_publication_audit_passed",
+            "passed",
+        ),
+        "stack_engine_publication_audit_phase2_check_passed": field(
+            "stack_engine_publication_audit_phase2_check_passed",
+            "phase2_audit_check_passed",
+        ),
+        "stack_engine_publication_audit_recommendation": field(
+            "stack_engine_publication_audit_recommendation",
+            "recommendation",
+        ),
+        "stack_engine_publication_audit_check_count": field(
+            "stack_engine_publication_audit_check_count",
+            "check_count",
+        ),
+        "stack_engine_publication_audit_failed_check_count": field(
+            "stack_engine_publication_audit_failed_check_count",
+            "failed_check_count",
+        ),
+        "stack_engine_publication_audit_failed_checks": field(
+            "stack_engine_publication_audit_failed_checks",
+            "failed_checks",
+        )
+        or [],
+        "stack_engine_publication_policy_chain_phase2_check_passed": field(
+            "stack_engine_publication_policy_chain_phase2_check_passed",
+            "policy_chain_phase2_check_passed",
+        ),
+        "stack_engine_publication_publish_preflight_policy_ready": field(
+            "stack_engine_publication_publish_preflight_policy_ready",
+            "publish_preflight_policy_ready",
+        ),
+        "stack_engine_publication_phase2_policy_ready": field(
+            "stack_engine_publication_phase2_policy_ready",
+            "phase2_policy_ready",
+        ),
+        "stack_engine_publication_policy_agreement": field(
+            "stack_engine_publication_policy_agreement",
+            "policy_agreement",
+        ),
+        "stack_engine_publication_resident_winsorized_chain_phase2_check_passed": field(
+            "stack_engine_publication_resident_winsorized_chain_phase2_check_passed",
+            "resident_winsorized_chain_phase2_check_passed",
+        ),
+        "stack_engine_publication_publish_preflight_resident_winsorized_ready": field(
+            "stack_engine_publication_publish_preflight_resident_winsorized_ready",
+            "publish_preflight_resident_winsorized_ready",
+        ),
+        "stack_engine_publication_phase2_resident_winsorized_ready": field(
+            "stack_engine_publication_phase2_resident_winsorized_ready",
+            "phase2_resident_winsorized_ready",
+        ),
+        "stack_engine_publication_resident_winsorized_agreement": field(
+            "stack_engine_publication_resident_winsorized_agreement",
+            "resident_winsorized_agreement",
+        ),
+    }
+
+
 _INTEGRATION_ENGINE_POLICY_FIELDS = (
     "integration_engine_policy_ready",
     "acceptance_integration_engine_policy_status",
@@ -307,6 +394,7 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "stack_engine_contract_blockers": promotion.get("stack_engine_contract_blockers")
         or [],
         **_resident_winsorized_sweep_summary(promotion),
+        **_stack_engine_publication_audit_summary(promotion),
     }
 
 
@@ -443,6 +531,7 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "stack_engine_contract_blockers": stack_engine.get("default_promotion_blockers")
         or [],
         **_resident_winsorized_sweep_summary(payload),
+        **_stack_engine_publication_audit_summary(payload),
     }
 
 
@@ -685,6 +774,139 @@ def _resident_winsorized_sweep_evidence(summary: dict[str, Any]) -> dict[str, An
         "path": summary.get("resident_winsorized_sweep_path"),
         "sweep_path": summary.get("resident_winsorized_sweep_sweep_path"),
     }
+
+
+def _stack_engine_publication_audit_passed(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("stack_engine_publication_audit_present") is True
+        and summary.get("stack_engine_publication_audit_ready") is True
+        and summary.get("stack_engine_publication_audit_status") == "passed"
+        and summary.get("stack_engine_publication_audit_passed") is True
+        and summary.get("stack_engine_publication_audit_phase2_check_passed") is True
+        and _int_or_zero(
+            summary.get("stack_engine_publication_audit_failed_check_count")
+        )
+        == 0
+        and not summary.get("stack_engine_publication_audit_failed_checks")
+    )
+
+
+def _stack_engine_publication_policy_chain_passed(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("stack_engine_publication_policy_chain_phase2_check_passed")
+        is True
+        and summary.get("stack_engine_publication_publish_preflight_policy_ready")
+        is True
+        and summary.get("stack_engine_publication_phase2_policy_ready") is True
+        and summary.get("stack_engine_publication_policy_agreement") is True
+    )
+
+
+def _stack_engine_publication_resident_winsorized_chain_passed(
+    summary: dict[str, Any],
+) -> bool:
+    return (
+        summary.get(
+            "stack_engine_publication_resident_winsorized_chain_phase2_check_passed"
+        )
+        is True
+        and summary.get(
+            "stack_engine_publication_publish_preflight_resident_winsorized_ready"
+        )
+        is True
+        and summary.get("stack_engine_publication_phase2_resident_winsorized_ready")
+        is True
+        and summary.get("stack_engine_publication_resident_winsorized_agreement")
+        is True
+    )
+
+
+def _stack_engine_publication_audit_evidence(
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "present": summary.get("stack_engine_publication_audit_present"),
+        "ready": summary.get("stack_engine_publication_audit_ready"),
+        "status": summary.get("stack_engine_publication_audit_status"),
+        "passed": summary.get("stack_engine_publication_audit_passed"),
+        "phase2_check_passed": summary.get(
+            "stack_engine_publication_audit_phase2_check_passed"
+        ),
+        "recommendation": summary.get(
+            "stack_engine_publication_audit_recommendation"
+        ),
+        "check_count": summary.get("stack_engine_publication_audit_check_count"),
+        "failed_check_count": summary.get(
+            "stack_engine_publication_audit_failed_check_count"
+        ),
+        "failed_checks": summary.get("stack_engine_publication_audit_failed_checks"),
+    }
+
+
+def _stack_engine_publication_policy_chain_evidence(
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "phase2_check_passed": summary.get(
+            "stack_engine_publication_policy_chain_phase2_check_passed"
+        ),
+        "publish_preflight_policy_ready": summary.get(
+            "stack_engine_publication_publish_preflight_policy_ready"
+        ),
+        "phase2_policy_ready": summary.get(
+            "stack_engine_publication_phase2_policy_ready"
+        ),
+        "policy_agreement": summary.get("stack_engine_publication_policy_agreement"),
+    }
+
+
+def _stack_engine_publication_resident_winsorized_chain_evidence(
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "phase2_check_passed": summary.get(
+            "stack_engine_publication_resident_winsorized_chain_phase2_check_passed"
+        ),
+        "publish_preflight_resident_winsorized_ready": summary.get(
+            "stack_engine_publication_publish_preflight_resident_winsorized_ready"
+        ),
+        "phase2_resident_winsorized_ready": summary.get(
+            "stack_engine_publication_phase2_resident_winsorized_ready"
+        ),
+        "resident_winsorized_agreement": summary.get(
+            "stack_engine_publication_resident_winsorized_agreement"
+        ),
+    }
+
+
+_STACK_ENGINE_PUBLICATION_AUDIT_MATCH_FIELDS = (
+    "stack_engine_publication_audit_present",
+    "stack_engine_publication_audit_ready",
+    "stack_engine_publication_audit_status",
+    "stack_engine_publication_audit_passed",
+    "stack_engine_publication_audit_phase2_check_passed",
+    "stack_engine_publication_audit_failed_check_count",
+    "stack_engine_publication_policy_chain_phase2_check_passed",
+    "stack_engine_publication_publish_preflight_policy_ready",
+    "stack_engine_publication_phase2_policy_ready",
+    "stack_engine_publication_policy_agreement",
+    "stack_engine_publication_resident_winsorized_chain_phase2_check_passed",
+    "stack_engine_publication_publish_preflight_resident_winsorized_ready",
+    "stack_engine_publication_phase2_resident_winsorized_ready",
+    "stack_engine_publication_resident_winsorized_agreement",
+)
+
+
+def _stack_engine_publication_audit_matches(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> bool:
+    return all(
+        left.get(field) == right.get(field)
+        for field in _STACK_ENGINE_PUBLICATION_AUDIT_MATCH_FIELDS
+    ) and left.get("stack_engine_publication_audit_failed_checks") == right.get(
+        "stack_engine_publication_audit_failed_checks"
+    )
 
 
 def build_windows_publish_preflight(
@@ -1447,6 +1669,72 @@ def build_windows_publish_preflight(
             },
         ),
         _check(
+            "matrix_stack_engine_publication_audit_passed",
+            _stack_engine_publication_audit_passed(matrix_info),
+            _stack_engine_publication_audit_evidence(matrix_info),
+        ),
+        _check(
+            "matrix_stack_engine_publication_policy_chain_passed",
+            _stack_engine_publication_policy_chain_passed(matrix_info),
+            _stack_engine_publication_policy_chain_evidence(matrix_info),
+        ),
+        _check(
+            "matrix_stack_engine_publication_resident_winsorized_chain_passed",
+            _stack_engine_publication_resident_winsorized_chain_passed(matrix_info),
+            _stack_engine_publication_resident_winsorized_chain_evidence(matrix_info),
+        ),
+        _check(
+            "default_promotion_stack_engine_publication_audit_passed",
+            _stack_engine_publication_audit_passed(promotion_info),
+            _stack_engine_publication_audit_evidence(promotion_info),
+        ),
+        _check(
+            "default_promotion_stack_engine_publication_policy_chain_passed",
+            _stack_engine_publication_policy_chain_passed(promotion_info),
+            _stack_engine_publication_policy_chain_evidence(promotion_info),
+        ),
+        _check(
+            "default_promotion_stack_engine_publication_resident_winsorized_chain_passed",
+            _stack_engine_publication_resident_winsorized_chain_passed(
+                promotion_info
+            ),
+            _stack_engine_publication_resident_winsorized_chain_evidence(
+                promotion_info
+            ),
+        ),
+        _check(
+            "matrix_stack_engine_publication_audit_matches_default_promotion",
+            _stack_engine_publication_audit_matches(matrix_info, promotion_info),
+            {
+                "windows_release_matrix": {
+                    "audit": _stack_engine_publication_audit_evidence(matrix_info),
+                    "policy_chain": (
+                        _stack_engine_publication_policy_chain_evidence(matrix_info)
+                    ),
+                    "resident_winsorized_chain": (
+                        _stack_engine_publication_resident_winsorized_chain_evidence(
+                            matrix_info
+                        )
+                    ),
+                },
+                "default_promotion": {
+                    "audit": _stack_engine_publication_audit_evidence(
+                        promotion_info
+                    ),
+                    "policy_chain": (
+                        _stack_engine_publication_policy_chain_evidence(
+                            promotion_info
+                        )
+                    ),
+                    "resident_winsorized_chain": (
+                        _stack_engine_publication_resident_winsorized_chain_evidence(
+                            promotion_info
+                        )
+                    ),
+                },
+            },
+        ),
+        _check(
             "manifest_assets_match_github_plan",
             not missing_assets and not mismatched_assets,
             {
@@ -1596,6 +1884,34 @@ def build_windows_publish_preflight(
             "default_promotion_resident_winsorized_sweep_check_count": (
                 promotion_info.get("resident_winsorized_sweep_check_count")
             ),
+            "matrix_stack_engine_publication_audit_status": matrix_info.get(
+                "stack_engine_publication_audit_status"
+            ),
+            "matrix_stack_engine_publication_audit_ready": matrix_info.get(
+                "stack_engine_publication_audit_ready"
+            ),
+            "matrix_stack_engine_publication_policy_agreement": matrix_info.get(
+                "stack_engine_publication_policy_agreement"
+            ),
+            "matrix_stack_engine_publication_resident_winsorized_agreement": (
+                matrix_info.get(
+                    "stack_engine_publication_resident_winsorized_agreement"
+                )
+            ),
+            "default_promotion_stack_engine_publication_audit_status": (
+                promotion_info.get("stack_engine_publication_audit_status")
+            ),
+            "default_promotion_stack_engine_publication_audit_ready": (
+                promotion_info.get("stack_engine_publication_audit_ready")
+            ),
+            "default_promotion_stack_engine_publication_policy_agreement": (
+                promotion_info.get("stack_engine_publication_policy_agreement")
+            ),
+            "default_promotion_stack_engine_publication_resident_winsorized_agreement": (
+                promotion_info.get(
+                    "stack_engine_publication_resident_winsorized_agreement"
+                )
+            ),
         },
         "release_manifest": {
             "status": manifest.get("status"),
@@ -1689,6 +2005,18 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{summary.get('default_promotion_resident_winsorized_sweep_required_frame_count')}`/"
             f"`{summary.get('default_promotion_resident_winsorized_sweep_required_frame_count_passed')}`/"
             f"`{summary.get('default_promotion_resident_winsorized_sweep_check_count')}`"
+        ),
+        (
+            "- StackEngine publication audit: "
+            f"matrix `{summary.get('matrix_stack_engine_publication_audit_status')}`/"
+            f"`{summary.get('matrix_stack_engine_publication_audit_ready')}`/"
+            f"`{summary.get('matrix_stack_engine_publication_policy_agreement')}`/"
+            f"`{summary.get('matrix_stack_engine_publication_resident_winsorized_agreement')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_stack_engine_publication_audit_status')}`/"
+            f"`{summary.get('default_promotion_stack_engine_publication_audit_ready')}`/"
+            f"`{summary.get('default_promotion_stack_engine_publication_policy_agreement')}`/"
+            f"`{summary.get('default_promotion_stack_engine_publication_resident_winsorized_agreement')}`"
         ),
         "",
         "## Inputs",

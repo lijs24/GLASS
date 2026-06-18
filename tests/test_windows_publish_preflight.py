@@ -201,6 +201,95 @@ def _integration_engine_policy_manifest(
     }
 
 
+def _stack_publication_audit(
+    *,
+    audit_ready: bool = True,
+    policy_ready: bool = True,
+    resident_winsorized_ready: bool = True,
+    flattened: bool = False,
+) -> dict[str, object]:
+    failed_checks = []
+    if not audit_ready:
+        failed_checks.append("stack_engine_publication_audit_passed")
+    if not policy_ready:
+        failed_checks.append("stack_engine_publication_audit_policy_chain_passed")
+    if not resident_winsorized_ready:
+        failed_checks.append(
+            "stack_engine_publication_audit_resident_winsorized_chain_passed"
+        )
+    publication_ready = audit_ready and policy_ready and resident_winsorized_ready
+    audit = {
+        "present": True,
+        "ready": publication_ready,
+        "path": "runs/checkpoints/s2_gate_286_stack_engine_publication_audit.json",
+        "status": "passed" if publication_ready else "failed",
+        "passed": publication_ready,
+        "recommendation": "publish_stack_engine_default"
+        if publication_ready
+        else "fix_stack_engine_publication_blockers",
+        "check_count": 18,
+        "failed_check_count": len(failed_checks),
+        "failed_checks": failed_checks,
+        "phase2_audit_check_passed": audit_ready,
+        "policy_chain_phase2_check_passed": policy_ready,
+        "resident_winsorized_chain_phase2_check_passed": resident_winsorized_ready,
+        "publish_preflight_policy_ready": policy_ready,
+        "phase2_policy_ready": policy_ready,
+        "policy_agreement": policy_ready,
+        "publish_preflight_resident_winsorized_ready": resident_winsorized_ready,
+        "phase2_resident_winsorized_ready": resident_winsorized_ready,
+        "resident_winsorized_agreement": resident_winsorized_ready,
+    }
+    payload: dict[str, object] = {"stack_engine_publication_audit": audit}
+    if flattened:
+        payload.update(
+            {
+                "stack_engine_publication_audit_present": audit["present"],
+                "stack_engine_publication_audit_ready": audit["ready"],
+                "stack_engine_publication_audit_status": audit["status"],
+                "stack_engine_publication_audit_passed": audit["passed"],
+                "stack_engine_publication_audit_phase2_check_passed": audit[
+                    "phase2_audit_check_passed"
+                ],
+                "stack_engine_publication_audit_recommendation": audit[
+                    "recommendation"
+                ],
+                "stack_engine_publication_audit_check_count": audit["check_count"],
+                "stack_engine_publication_audit_failed_check_count": audit[
+                    "failed_check_count"
+                ],
+                "stack_engine_publication_audit_failed_checks": audit[
+                    "failed_checks"
+                ],
+                "stack_engine_publication_policy_chain_phase2_check_passed": audit[
+                    "policy_chain_phase2_check_passed"
+                ],
+                "stack_engine_publication_publish_preflight_policy_ready": audit[
+                    "publish_preflight_policy_ready"
+                ],
+                "stack_engine_publication_phase2_policy_ready": audit[
+                    "phase2_policy_ready"
+                ],
+                "stack_engine_publication_policy_agreement": audit[
+                    "policy_agreement"
+                ],
+                "stack_engine_publication_resident_winsorized_chain_phase2_check_passed": audit[
+                    "resident_winsorized_chain_phase2_check_passed"
+                ],
+                "stack_engine_publication_publish_preflight_resident_winsorized_ready": audit[
+                    "publish_preflight_resident_winsorized_ready"
+                ],
+                "stack_engine_publication_phase2_resident_winsorized_ready": audit[
+                    "phase2_resident_winsorized_ready"
+                ],
+                "stack_engine_publication_resident_winsorized_agreement": audit[
+                    "resident_winsorized_agreement"
+                ],
+            }
+        )
+    return payload
+
+
 def _matrix(
     path: Path,
     *,
@@ -219,6 +308,10 @@ def _matrix(
     acceptance_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_check_present: bool = True,
+    include_stack_publication_audit: bool = True,
+    stack_publication_audit_ready: bool = True,
+    stack_publication_policy_ready: bool = True,
+    stack_publication_resident_winsorized_ready: bool = True,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -243,6 +336,19 @@ def _matrix(
     integration_engine_policy_ready = bool(
         integration_engine_policy["integration_engine_policy_ready"]
     )
+    publication_audit = _stack_publication_audit(
+        audit_ready=stack_publication_audit_ready,
+        policy_ready=stack_publication_policy_ready,
+        resident_winsorized_ready=stack_publication_resident_winsorized_ready,
+        flattened=True,
+    )
+    publication_audit_ready = bool(
+        (
+            publication_audit["stack_engine_publication_audit"]
+            if isinstance(publication_audit["stack_engine_publication_audit"], dict)
+            else {}
+        ).get("ready")
+    )
     matrix_ready = (
         ready
         and rejection_sample_accounting_ready
@@ -258,6 +364,7 @@ def _matrix(
             if include_integration_engine_policy
             else True
         )
+        and (publication_audit_ready if include_stack_publication_audit else True)
     )
     promotion = {
         "status": "default_promotion_ready" if matrix_ready else "blocked",
@@ -324,6 +431,8 @@ def _matrix(
         promotion.update(resident_sweep)
     if include_integration_engine_policy:
         promotion.update(integration_engine_policy)
+    if include_stack_publication_audit:
+        promotion.update(publication_audit)
     write_json(
         path,
         {
@@ -358,6 +467,10 @@ def _default_promotion(
     acceptance_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_ready: bool = True,
     pipeline_integration_engine_policy_check_present: bool = True,
+    include_stack_publication_audit: bool = True,
+    stack_publication_audit_ready: bool = True,
+    stack_publication_policy_ready: bool = True,
+    stack_publication_resident_winsorized_ready: bool = True,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -380,6 +493,18 @@ def _default_promotion(
         pipeline_check_present=pipeline_integration_engine_policy_check_present,
     )
     integration_engine_policy_ready = bool(integration_engine_policy["ready"])
+    publication_audit = _stack_publication_audit(
+        audit_ready=stack_publication_audit_ready,
+        policy_ready=stack_publication_policy_ready,
+        resident_winsorized_ready=stack_publication_resident_winsorized_ready,
+    )
+    publication_audit_ready = bool(
+        (
+            publication_audit["stack_engine_publication_audit"]
+            if isinstance(publication_audit["stack_engine_publication_audit"], dict)
+            else {}
+        ).get("ready")
+    )
     manifest_ready = (
         ready
         and rejection_sample_accounting_ready
@@ -395,6 +520,7 @@ def _default_promotion(
             if include_integration_engine_policy
             else True
         )
+        and (publication_audit_ready if include_stack_publication_audit else True)
     )
     payload = {
         "schema_version": 1,
@@ -460,6 +586,8 @@ def _default_promotion(
         payload.update(resident_sweep)
     if include_integration_engine_policy:
         payload["integration_engine_policy"] = integration_engine_policy
+    if include_stack_publication_audit:
+        payload.update(publication_audit)
     write_json(
         path,
         payload,
@@ -847,6 +975,43 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
         payload["summary"]["default_promotion_resident_winsorized_sweep_check_count"]
         == 27
     )
+    assert (
+        payload["summary"]["matrix_stack_engine_publication_audit_status"]
+        == "passed"
+    )
+    assert payload["summary"]["matrix_stack_engine_publication_audit_ready"] is True
+    assert (
+        payload["summary"]["matrix_stack_engine_publication_policy_agreement"]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "matrix_stack_engine_publication_resident_winsorized_agreement"
+        ]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_stack_engine_publication_audit_status"
+        ]
+        == "passed"
+    )
+    assert (
+        payload["summary"]["default_promotion_stack_engine_publication_audit_ready"]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_stack_engine_publication_policy_agreement"
+        ]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_stack_engine_publication_resident_winsorized_agreement"
+        ]
+        is True
+    )
     assert checks["github_plan_phase2_rejection_sample_accounting_passed"] is True
     assert checks["github_plan_matrix_rejection_sample_accounting_passed"] is True
     assert checks["matrix_rejection_sample_accounting_passed"] is True
@@ -890,6 +1055,27 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert checks["default_promotion_resident_winsorized_required_frame_passed"] is True
     assert (
         checks["default_promotion_resident_winsorized_sweep_matches_matrix"] is True
+    )
+    assert checks["matrix_stack_engine_publication_audit_passed"] is True
+    assert checks["matrix_stack_engine_publication_policy_chain_passed"] is True
+    assert (
+        checks["matrix_stack_engine_publication_resident_winsorized_chain_passed"]
+        is True
+    )
+    assert checks["default_promotion_stack_engine_publication_audit_passed"] is True
+    assert (
+        checks["default_promotion_stack_engine_publication_policy_chain_passed"]
+        is True
+    )
+    assert (
+        checks[
+            "default_promotion_stack_engine_publication_resident_winsorized_chain_passed"
+        ]
+        is True
+    )
+    assert (
+        checks["matrix_stack_engine_publication_audit_matches_default_promotion"]
+        is True
     )
     assert checks["manifest_assets_match_github_plan"] is True
     assert checks["matrix_packages_match_manifest"] is True
@@ -1574,6 +1760,177 @@ def test_windows_publish_preflight_blocks_resident_winsorized_check_count_mismat
     )
 
 
+def test_windows_publish_preflight_blocks_missing_matrix_stack_publication_audit(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels, include_stack_publication_audit=False)
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is True
+    assert checks["matrix_stack_engine_publication_audit_passed"]["passed"] is False
+    assert (
+        checks["matrix_stack_engine_publication_policy_chain_passed"]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "matrix_stack_engine_publication_resident_winsorized_chain_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks["default_promotion_stack_engine_publication_audit_passed"]["passed"]
+        is True
+    )
+    assert (
+        checks["matrix_stack_engine_publication_audit_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+    assert checks["matrix_stack_engine_publication_audit_passed"]["evidence"] == {
+        "present": None,
+        "ready": None,
+        "status": None,
+        "passed": None,
+        "phase2_check_passed": None,
+        "recommendation": None,
+        "check_count": None,
+        "failed_check_count": None,
+        "failed_checks": [],
+    }
+
+
+def test_windows_publish_preflight_blocks_default_promotion_publication_policy_chain(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(promotion, stack_publication_policy_ready=False)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["default_promotion_ready"]["passed"] is False
+    assert checks["matrix_stack_engine_publication_audit_passed"]["passed"] is True
+    assert (
+        checks["default_promotion_stack_engine_publication_audit_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks["default_promotion_stack_engine_publication_policy_chain_passed"][
+            "passed"
+        ]
+        is False
+    )
+    assert (
+        checks[
+            "default_promotion_stack_engine_publication_resident_winsorized_chain_passed"
+        ]["passed"]
+        is True
+    )
+    assert (
+        checks["matrix_stack_engine_publication_audit_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+    assert checks[
+        "default_promotion_stack_engine_publication_policy_chain_passed"
+    ]["evidence"] == {
+        "phase2_check_passed": False,
+        "publish_preflight_policy_ready": False,
+        "phase2_policy_ready": False,
+        "policy_agreement": False,
+    }
+
+
+def test_windows_publish_preflight_blocks_stack_publication_winsorized_mismatch(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(
+        matrix,
+        labels=labels,
+        stack_publication_resident_winsorized_ready=False,
+    )
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert checks["windows_release_matrix_ready"]["passed"] is False
+    assert checks["matrix_stack_engine_publication_policy_chain_passed"]["passed"] is True
+    assert (
+        checks[
+            "matrix_stack_engine_publication_resident_winsorized_chain_passed"
+        ]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "default_promotion_stack_engine_publication_resident_winsorized_chain_passed"
+        ]["passed"]
+        is True
+    )
+    assert (
+        checks["matrix_stack_engine_publication_audit_matches_default_promotion"][
+            "passed"
+        ]
+        is False
+    )
+    assert checks[
+        "matrix_stack_engine_publication_resident_winsorized_chain_passed"
+    ]["evidence"] == {
+        "phase2_check_passed": False,
+        "publish_preflight_resident_winsorized_ready": False,
+        "phase2_resident_winsorized_ready": False,
+        "resident_winsorized_agreement": False,
+    }
+
+
 def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     manifest, plan, matrix, promotion = _bundle(tmp_path)
     out = tmp_path / "publish_preflight.json"
@@ -1616,6 +1973,11 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
         "Resident winsorized sweep: matrix `passed`/`200`/`True`/`27`, "
         "default-promotion `passed`/`200`/`True`/`27`"
     ) in markdown_text
+    assert (
+        "StackEngine publication audit: matrix `passed`/`True`/`True`/`True`, "
+        "default-promotion `passed`/`True`/`True`/`True`"
+    ) in markdown_text
     assert "manifest_assets_match_github_plan" in markdown_text
     assert "github_plan_phase2_stack_engine_default_contract_ready" in markdown_text
     assert "matrix_resident_winsorized_sweep_audit_passed" in markdown_text
+    assert "matrix_stack_engine_publication_audit_passed" in markdown_text

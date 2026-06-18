@@ -4912,6 +4912,30 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 290: Windows Publish Preflight StackEngine Publication Audit Guard
+
+- Carry the S2-Gate 289 release-matrix StackEngine publication-audit evidence
+  and S2-Gate 288 default-promotion publication-audit evidence into
+  `glass windows-publish-preflight`.
+- Require final Windows publish-preflight readiness to preserve the
+  publication-audit artifact, its integration engine-policy chain, and its
+  resident winsorized sweep chain across both release-matrix and
+  default-promotion handoffs.
+- Block stale release-matrix or default-promotion artifacts that still report
+  ready status but do not contain Gate288/Gate289 publication-audit summaries
+  and checks.
+- Cross-check release-matrix and default-promotion publication-audit status,
+  failed checks, policy-chain agreement, and resident winsorized-chain agreement.
+- Surface publication-audit readiness and agreement in preflight JSON and
+  Markdown so final publication reviewers can audit the StackEngine default
+  publication chain without opening lower-level artifacts.
+- Add focused publish-preflight tests for ready evidence, missing stale matrix
+  evidence, failed default-promotion policy-chain evidence, matrix/default
+  resident winsorized-chain mismatch, and CLI Markdown output.
+- Keep this gate publish-preflight scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
