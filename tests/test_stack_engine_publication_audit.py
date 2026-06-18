@@ -37,6 +37,10 @@ def _write_chain(
     matrix_gap_count: int = 0,
     resident_winsorized_ready: bool = True,
     phase2_resident_winsorized_ready: bool | None = None,
+    integration_engine_policy_ready: bool = True,
+    phase2_integration_engine_policy_ready: bool | None = None,
+    include_integration_engine_policy: bool = True,
+    include_phase2_integration_engine_policy: bool = True,
 ) -> dict[str, Path]:
     source_fields = _stack_fields(ready=source_ready)
     matrix_fields = _stack_fields(ready=matrix_ready, gap_count=matrix_gap_count)
@@ -45,8 +49,23 @@ def _write_chain(
         if phase2_resident_winsorized_ready is None
         else phase2_resident_winsorized_ready
     )
+    phase2_engine_policy_ready = (
+        integration_engine_policy_ready
+        if phase2_integration_engine_policy_ready is None
+        else phase2_integration_engine_policy_ready
+    )
     resident_status = "passed" if resident_winsorized_ready else "failed"
     phase2_resident_status = "passed" if phase2_winsorized_ready else "failed"
+    engine_policy_status = "passed" if integration_engine_policy_ready else "failed"
+    phase2_engine_policy_status = (
+        "passed" if phase2_engine_policy_ready else "failed"
+    )
+    phase2_status_ready = (
+        source_fields["ready"]
+        and matrix_fields["ready"]
+        and phase2_winsorized_ready
+        and (phase2_engine_policy_ready if include_phase2_integration_engine_policy else True)
+    )
     paths = {
         "stack": tmp_path / "stack_engine_contract.json",
         "phase2": tmp_path / "phase2_status.json",
@@ -83,8 +102,8 @@ def _write_chain(
         paths["phase2"],
         {
             "artifact_type": "glass_phase2_status",
-            "status": "green" if source_fields["ready"] and matrix_fields["ready"] else "attention_required",
-            "passed": source_fields["ready"] and matrix_fields["ready"],
+            "status": "green" if phase2_status_ready else "attention_required",
+            "passed": phase2_status_ready,
             "stack_engine_contract": {
                 "status": source_fields["status"],
                 "passed": source_fields["passed"],
@@ -192,6 +211,50 @@ def _write_chain(
             ],
         },
     )
+    phase2_payload = read_json(paths["phase2"])
+    if include_phase2_integration_engine_policy:
+        phase2_payload["publish_preflight"].update(
+            {
+                "matrix_integration_engine_policy_ready": phase2_engine_policy_ready,
+                "matrix_acceptance_integration_engine_policy_status": (
+                    phase2_engine_policy_status
+                ),
+                "matrix_pipeline_integration_engine_policy_status": (
+                    phase2_engine_policy_status
+                ),
+                "default_promotion_integration_engine_policy_ready": (
+                    phase2_engine_policy_ready
+                ),
+                "default_promotion_acceptance_integration_engine_policy_status": (
+                    phase2_engine_policy_status
+                ),
+                "default_promotion_pipeline_integration_engine_policy_status": (
+                    phase2_engine_policy_status
+                ),
+                "windows_release_matrix_acceptance_integration_engine_policy_passed": (
+                    phase2_engine_policy_ready
+                ),
+                "windows_release_matrix_pipeline_integration_engine_policy_passed": (
+                    phase2_engine_policy_ready
+                ),
+                "default_promotion_acceptance_integration_engine_policy_passed": (
+                    phase2_engine_policy_ready
+                ),
+                "default_promotion_pipeline_integration_engine_policy_passed": (
+                    phase2_engine_policy_ready
+                ),
+                "matrix_integration_engine_policy_matches_default_promotion": (
+                    phase2_engine_policy_ready
+                ),
+            }
+        )
+        phase2_payload["checks"].append(
+            {
+                "name": "windows_publish_preflight_integration_engine_policy_passed",
+                "passed": phase2_engine_policy_ready,
+            }
+        )
+        write_json(paths["phase2"], phase2_payload)
     write_json(
         paths["promotion"],
         {
@@ -277,9 +340,25 @@ def _write_chain(
         {
             "artifact_type": "windows_publish_preflight",
             "status": "publish_preflight_ready"
-            if matrix_fields["ready"] and resident_winsorized_ready
+            if (
+                matrix_fields["ready"]
+                and resident_winsorized_ready
+                and (
+                    integration_engine_policy_ready
+                    if include_integration_engine_policy
+                    else True
+                )
+            )
             else "blocked",
-            "passed": matrix_fields["ready"] and resident_winsorized_ready,
+            "passed": (
+                matrix_fields["ready"]
+                and resident_winsorized_ready
+                and (
+                    integration_engine_policy_ready
+                    if include_integration_engine_policy
+                    else True
+                )
+            ),
             "summary": {
                 "github_plan_phase2_stack_engine_contract_status": source_fields[
                     "status"
@@ -366,6 +445,53 @@ def _write_chain(
             ],
         },
     )
+    preflight_payload = read_json(paths["preflight"])
+    if include_integration_engine_policy:
+        preflight_payload["summary"].update(
+            {
+                "matrix_integration_engine_policy_ready": integration_engine_policy_ready,
+                "matrix_acceptance_integration_engine_policy_status": (
+                    engine_policy_status
+                ),
+                "matrix_pipeline_integration_engine_policy_status": (
+                    engine_policy_status
+                ),
+                "default_promotion_integration_engine_policy_ready": (
+                    integration_engine_policy_ready
+                ),
+                "default_promotion_acceptance_integration_engine_policy_status": (
+                    engine_policy_status
+                ),
+                "default_promotion_pipeline_integration_engine_policy_status": (
+                    engine_policy_status
+                ),
+            }
+        )
+        preflight_payload["checks"].extend(
+            [
+                {
+                    "name": "windows_release_matrix_acceptance_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "windows_release_matrix_pipeline_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "default_promotion_acceptance_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "default_promotion_pipeline_integration_engine_policy_passed",
+                    "passed": integration_engine_policy_ready,
+                },
+                {
+                    "name": "matrix_integration_engine_policy_matches_default_promotion",
+                    "passed": integration_engine_policy_ready,
+                },
+            ]
+        )
+        write_json(paths["preflight"], preflight_payload)
     return paths
 
 
@@ -388,6 +514,14 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     assert checks["phase2_publish_preflight_stack_engine_ready"] is True
     assert checks["publish_preflight_resident_winsorized_sweep_ready"] is True
     assert checks["phase2_publish_preflight_resident_winsorized_sweep_ready"] is True
+    assert checks["publish_preflight_integration_engine_policy_ready"] is True
+    assert checks["phase2_publish_preflight_integration_engine_policy_ready"] is True
+    assert (
+        checks[
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
+        ]
+        is True
+    )
     assert (
         checks[
             "phase2_publish_preflight_resident_winsorized_matches_publish_preflight"
@@ -396,6 +530,63 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
     )
     assert checks["phase2_publish_preflight_matches_publish_preflight"] is True
     assert checks["stack_engine_gap_counts_zero"] is True
+
+
+def test_stack_engine_publication_audit_blocks_missing_publish_preflight_engine_policy(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, include_integration_engine_policy=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert payload["passed"] is False
+    assert checks["publish_preflight_stack_engine_ready"]["passed"] is True
+    assert checks["publish_preflight_integration_engine_policy_ready"]["passed"] is False
+    assert (
+        checks[
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
+        ]["passed"]
+        is False
+    )
+    assert checks["publish_preflight_integration_engine_policy_ready"]["evidence"][
+        "matrix_ready"
+    ] is None
+
+
+def test_stack_engine_publication_audit_blocks_failed_publish_preflight_engine_policy(
+    tmp_path: Path,
+):
+    paths = _write_chain(tmp_path, integration_engine_policy_ready=False)
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert payload["passed"] is False
+    assert checks["publish_preflight_integration_engine_policy_ready"]["passed"] is False
+    assert (
+        checks["phase2_publish_preflight_integration_engine_policy_ready"]["passed"]
+        is False
+    )
+    assert checks["publish_preflight_integration_engine_policy_ready"]["evidence"][
+        "matrix_acceptance_status"
+    ] == "failed"
 
 
 def test_stack_engine_publication_audit_blocks_matrix_gap(tmp_path: Path):
@@ -476,6 +667,42 @@ def test_stack_engine_publication_audit_blocks_phase2_resident_winsorized_mismat
     ]["evidence"]["phase2_publish_preflight"]["matrix_status"] == "failed"
 
 
+def test_stack_engine_publication_audit_blocks_phase2_engine_policy_mismatch(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        integration_engine_policy_ready=True,
+        phase2_integration_engine_policy_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert checks["publish_preflight_integration_engine_policy_ready"]["passed"] is True
+    assert (
+        checks["phase2_publish_preflight_integration_engine_policy_ready"]["passed"]
+        is False
+    )
+    assert (
+        checks[
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
+        ]["passed"]
+        is False
+    )
+    assert checks[
+        "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
+    ]["evidence"]["phase2_publish_preflight"]["matrix_acceptance_status"] == "failed"
+
+
 def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
     paths = _write_chain(tmp_path)
     out = tmp_path / "audit.json"
@@ -512,3 +739,4 @@ def test_stack_engine_publication_audit_cli_writes_outputs(tmp_path: Path):
     assert "GLASS StackEngine Publication Audit" in text
     assert "phase2_publish_preflight_stack_engine_ready" in text
     assert "publish_preflight_resident_winsorized_sweep_ready" in text
+    assert "publish_preflight_integration_engine_policy_ready" in text

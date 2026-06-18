@@ -4831,6 +4831,27 @@ integration where applicable.
   change, no runtime default change, no package build/upload, no GitHub release
   publication change, and no real-data benchmark rerun.
 
+### S2-Gate 286: StackEngine Publication Audit Integration Engine Policy Guard
+
+- Carry the S2-Gate 285 Phase 2 status handoff and S2-Gate 284 raw
+  publish-preflight integration engine-policy evidence into
+  `glass stack-engine-publication-audit`.
+- Require StackEngine publication readiness to preserve both the raw
+  publish-preflight policy checks and the Phase 2 status transcription of those
+  checks.
+- Block stale publish-preflight artifacts that still report ready status but do
+  not contain Gate284 integration engine-policy summaries.
+- Block Phase 2 status artifacts whose publish-preflight policy transcription
+  is missing, failed, or no longer matches the raw publish-preflight artifact.
+- Surface raw and Phase 2 publish-preflight policy layers in publication-audit
+  JSON and Markdown.
+- Add focused publication-audit tests for ready evidence, missing raw policy
+  evidence, failed policy evidence, Phase 2 transcription mismatch, and CLI
+  Markdown output.
+- Keep this gate publication-audit scoped: no image math change, no CUDA kernel
+  change, no runtime default change, no package build/upload, no GitHub release
+  publication change, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

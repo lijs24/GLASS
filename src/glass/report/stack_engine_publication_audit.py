@@ -308,6 +308,75 @@ def _publish_preflight_resident_winsorized_summary(
     return result
 
 
+def _engine_policy_summary_ready(summary: dict[str, Any]) -> bool:
+    return (
+        summary.get("matrix_ready") is True
+        and summary.get("default_promotion_ready") is True
+        and summary.get("matrix_acceptance_status") == "passed"
+        and summary.get("matrix_pipeline_status") == "passed"
+        and summary.get("default_promotion_acceptance_status") == "passed"
+        and summary.get("default_promotion_pipeline_status") == "passed"
+        and _all_true(
+            [
+                summary.get("matrix_acceptance_passed"),
+                summary.get("matrix_pipeline_passed"),
+                summary.get("default_promotion_acceptance_passed"),
+                summary.get("default_promotion_pipeline_passed"),
+                summary.get("matches_default_promotion"),
+            ]
+        )
+    )
+
+
+def _publish_preflight_engine_policy_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": payload.get("status"),
+        "passed": payload.get("passed"),
+        "matrix_ready": summary.get("matrix_integration_engine_policy_ready"),
+        "matrix_acceptance_status": summary.get(
+            "matrix_acceptance_integration_engine_policy_status"
+        ),
+        "matrix_pipeline_status": summary.get(
+            "matrix_pipeline_integration_engine_policy_status"
+        ),
+        "default_promotion_ready": summary.get(
+            "default_promotion_integration_engine_policy_ready"
+        ),
+        "default_promotion_acceptance_status": summary.get(
+            "default_promotion_acceptance_integration_engine_policy_status"
+        ),
+        "default_promotion_pipeline_status": summary.get(
+            "default_promotion_pipeline_integration_engine_policy_status"
+        ),
+        "matrix_acceptance_passed": _check_passed(
+            payload,
+            "windows_release_matrix_acceptance_integration_engine_policy_passed",
+        ),
+        "matrix_pipeline_passed": _check_passed(
+            payload,
+            "windows_release_matrix_pipeline_integration_engine_policy_passed",
+        ),
+        "default_promotion_acceptance_passed": _check_passed(
+            payload,
+            "default_promotion_acceptance_integration_engine_policy_passed",
+        ),
+        "default_promotion_pipeline_passed": _check_passed(
+            payload,
+            "default_promotion_pipeline_integration_engine_policy_passed",
+        ),
+        "matches_default_promotion": _check_passed(
+            payload,
+            "matrix_integration_engine_policy_matches_default_promotion",
+        ),
+    }
+    result["ready"] = _engine_policy_summary_ready(result)
+    return result
+
+
 def _phase2_publish_preflight_summary(payload: dict[str, Any]) -> dict[str, Any]:
     preflight = (
         payload.get("publish_preflight")
@@ -353,6 +422,60 @@ def _phase2_publish_preflight_summary(payload: dict[str, Any]) -> dict[str, Any]
             "windows_publish_preflight_stack_engine_default_contract_ready",
         ),
     }
+
+
+def _phase2_publish_preflight_engine_policy_summary(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    preflight = (
+        payload.get("publish_preflight")
+        if isinstance(payload.get("publish_preflight"), dict)
+        else {}
+    )
+    result = {
+        "artifact_type": payload.get("artifact_type"),
+        "status": preflight.get("status"),
+        "matrix_ready": preflight.get("matrix_integration_engine_policy_ready"),
+        "matrix_acceptance_status": preflight.get(
+            "matrix_acceptance_integration_engine_policy_status"
+        ),
+        "matrix_pipeline_status": preflight.get(
+            "matrix_pipeline_integration_engine_policy_status"
+        ),
+        "default_promotion_ready": preflight.get(
+            "default_promotion_integration_engine_policy_ready"
+        ),
+        "default_promotion_acceptance_status": preflight.get(
+            "default_promotion_acceptance_integration_engine_policy_status"
+        ),
+        "default_promotion_pipeline_status": preflight.get(
+            "default_promotion_pipeline_integration_engine_policy_status"
+        ),
+        "matrix_acceptance_passed": preflight.get(
+            "windows_release_matrix_acceptance_integration_engine_policy_passed"
+        ),
+        "matrix_pipeline_passed": preflight.get(
+            "windows_release_matrix_pipeline_integration_engine_policy_passed"
+        ),
+        "default_promotion_acceptance_passed": preflight.get(
+            "default_promotion_acceptance_integration_engine_policy_passed"
+        ),
+        "default_promotion_pipeline_passed": preflight.get(
+            "default_promotion_pipeline_integration_engine_policy_passed"
+        ),
+        "matches_default_promotion": preflight.get(
+            "matrix_integration_engine_policy_matches_default_promotion"
+        ),
+        "phase2_check_passed": _check_passed(
+            payload,
+            "windows_publish_preflight_integration_engine_policy_passed",
+        ),
+    }
+    result["ready"] = (
+        _engine_policy_summary_ready(result)
+        and result.get("phase2_check_passed") is True
+    )
+    return result
 
 
 def _phase2_publish_preflight_resident_winsorized_summary(
@@ -440,6 +563,27 @@ def _resident_winsorized_summaries_match(
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
 
 
+def _engine_policy_summaries_match(
+    phase2_summary: dict[str, Any],
+    preflight_summary: dict[str, Any],
+) -> bool:
+    fields = (
+        "matrix_ready",
+        "matrix_acceptance_status",
+        "matrix_pipeline_status",
+        "default_promotion_ready",
+        "default_promotion_acceptance_status",
+        "default_promotion_pipeline_status",
+        "matrix_acceptance_passed",
+        "matrix_pipeline_passed",
+        "default_promotion_acceptance_passed",
+        "default_promotion_pipeline_passed",
+        "matches_default_promotion",
+        "ready",
+    )
+    return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
+
+
 def _all_true(values: list[Any]) -> bool:
     return all(value is True for value in values)
 
@@ -481,6 +625,12 @@ def build_stack_engine_publication_audit(
     phase2_preflight_winsorized = (
         _phase2_publish_preflight_resident_winsorized_summary(phase2_payload)
     )
+    preflight_engine_policy = _publish_preflight_engine_policy_summary(
+        preflight_payload
+    )
+    phase2_preflight_engine_policy = (
+        _phase2_publish_preflight_engine_policy_summary(phase2_payload)
+    )
 
     layers = {
         "source_contract": source,
@@ -493,6 +643,10 @@ def build_stack_engine_publication_audit(
         "publish_preflight_resident_winsorized_sweep": preflight_winsorized,
         "phase2_publish_preflight_resident_winsorized_sweep": (
             phase2_preflight_winsorized
+        ),
+        "publish_preflight_integration_engine_policy": preflight_engine_policy,
+        "phase2_publish_preflight_integration_engine_policy": (
+            phase2_preflight_engine_policy
         ),
     }
     direct_gap_counts = [
@@ -591,6 +745,27 @@ def build_stack_engine_publication_audit(
             {
                 "phase2_publish_preflight": phase2_preflight_winsorized,
                 "publish_preflight": preflight_winsorized,
+            },
+        ),
+        _check(
+            "publish_preflight_integration_engine_policy_ready",
+            preflight_engine_policy.get("ready") is True,
+            preflight_engine_policy,
+        ),
+        _check(
+            "phase2_publish_preflight_integration_engine_policy_ready",
+            phase2_preflight_engine_policy.get("ready") is True,
+            phase2_preflight_engine_policy,
+        ),
+        _check(
+            "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight",
+            _engine_policy_summaries_match(
+                phase2_preflight_engine_policy,
+                preflight_engine_policy,
+            ),
+            {
+                "phase2_publish_preflight": phase2_preflight_engine_policy,
+                "publish_preflight": preflight_engine_policy,
             },
         ),
         _check(
