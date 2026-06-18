@@ -703,6 +703,10 @@ def _status_payload(
     stack_engine_ready: bool = True,
     stack_engine_status: str = "passed",
     stack_engine_gap_count: int = 0,
+    resident_winsorized_sweep_passed: bool = True,
+    resident_winsorized_sweep_required_frame_passed: bool = True,
+    resident_winsorized_sweep_check_count: int = 27,
+    resident_winsorized_sweep_required_frame_count: int = 200,
     default_change_ready: bool = True,
     release_recommendation: str = "promote_default_candidate",
 ) -> dict:
@@ -879,6 +883,25 @@ def _status_payload(
                 stack_engine_gap_count
             ),
             "default_promotion_blocker_count": 0 if stack_engine_ready else 1,
+        },
+        "resident_winsorized_sweep_audit": {
+            "schema_version": 1,
+            "status": "passed" if resident_winsorized_sweep_passed else "failed",
+            "passed": resident_winsorized_sweep_passed,
+            "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+            "sweep_path": "runs/checkpoints/s2_gate_268_resident_winsorized_sweep.json",
+            "check_count": resident_winsorized_sweep_check_count,
+            "failed_check_count": 0 if resident_winsorized_sweep_passed else 1,
+            "failed_checks": []
+            if resident_winsorized_sweep_passed
+            else ["frame_200_hardened_master_rms_within_contract"],
+            "frame_counts": [8, 32, 128, 200],
+            "run_count": 4,
+            "required_frame_count": resident_winsorized_sweep_required_frame_count,
+            "required_frame_count_passed": resident_winsorized_sweep_required_frame_passed,
+            "required_frame_master_rms": 2.3e-5,
+            "required_frame_master_max_abs": 6.1e-5,
+            "max_hardened_master_rms": 2.3e-5,
         },
         "release_decision": {
             "status": "default_change_ready" if default_change_ready else "release_candidate_ready",
@@ -1960,6 +1983,39 @@ def test_phase2_status_compare_flags_publish_preflight_stack_engine_regression(
     assert checks["windows_publish_preflight_stack_engine_status_preserved"][
         "evidence"
     ]["candidate"]["matrix_stack_engine_contract_status"] == "failed"
+
+
+def test_phase2_status_compare_flags_resident_winsorized_sweep_regression(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=270))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=271,
+            resident_winsorized_sweep_passed=False,
+            resident_winsorized_sweep_required_frame_passed=False,
+            resident_winsorized_sweep_check_count=26,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["resident_winsorized_sweep_audit_passed_preserved"]["passed"] is False
+    assert checks["resident_winsorized_sweep_required_frame_preserved"]["passed"] is False
+    assert checks["resident_winsorized_sweep_check_count_not_decreased"]["passed"] is False
+    assert checks["resident_winsorized_sweep_required_frame_preserved"]["evidence"][
+        "candidate"
+    ] == {"required_frame_count": 200, "required_frame_count_passed": False}
+    assert payload["baseline"]["resident_winsorized_sweep_audit"]["check_count"] == 27
+    assert payload["candidate"]["resident_winsorized_sweep_audit"]["check_count"] == 26
 
 
 def test_cli_phase2_status_compare_writes_outputs_and_returns_failure(tmp_path: Path):

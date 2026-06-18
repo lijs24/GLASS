@@ -4553,6 +4553,19 @@ integration where applicable.
   default, package build/upload, release update, status-compare change, or
   real-data benchmark rerun.
 
+### S2-Gate 271: Phase 2 Resident Winsorized Sweep Status-Compare Guard
+
+- Carry the S2-Gate 270 `resident_winsorized_sweep_audit` summary into
+  `glass phase2-status-compare` baseline/candidate summaries.
+- Add regression checks so a candidate status cannot lose a previously passing
+  resident winsorized sweep audit, lose the required 200-frame row pass, or
+  reduce the supplied sweep-audit check count.
+- Add focused tests for passing compare fixtures and failed sweep-audit
+  regression detection.
+- Keep this gate compare-guard scoped: no image math, CUDA kernel, runtime
+  default, package build/upload, release update, release-promotion change, or
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

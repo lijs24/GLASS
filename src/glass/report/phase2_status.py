@@ -2045,6 +2045,16 @@ def _status_value(payload: dict[str, Any], *keys: str) -> Any:
     return current
 
 
+def _int_status_value(payload: dict[str, Any], *keys: str) -> int | None:
+    value = _status_value(payload, *keys)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _compare_check(
     name: str,
     passed: bool,
@@ -2221,6 +2231,26 @@ def build_phase2_status_compare(
     candidate_stack_engine = _stack_engine_status_summary(candidate)
     baseline_stack_gap_count = _stack_engine_gap_count(baseline)
     candidate_stack_gap_count = _stack_engine_gap_count(candidate)
+    baseline_sweep_check_count = _int_status_value(
+        baseline,
+        "resident_winsorized_sweep_audit",
+        "check_count",
+    )
+    candidate_sweep_check_count = _int_status_value(
+        candidate,
+        "resident_winsorized_sweep_audit",
+        "check_count",
+    )
+    baseline_sweep_required_frame_count = _int_status_value(
+        baseline,
+        "resident_winsorized_sweep_audit",
+        "required_frame_count",
+    )
+    candidate_sweep_required_frame_count = _int_status_value(
+        candidate,
+        "resident_winsorized_sweep_audit",
+        "required_frame_count",
+    )
     checks = [
         _compare_check(
             "baseline_artifact_type",
@@ -2586,6 +2616,56 @@ def build_phase2_status_compare(
             ),
         ),
         _compare_check(
+            "resident_winsorized_sweep_audit_passed_preserved",
+            _status_value(baseline, "resident_winsorized_sweep_audit", "passed")
+            is not True
+            or _status_value(candidate, "resident_winsorized_sweep_audit", "passed")
+            is True,
+            baseline=_status_value(baseline, "resident_winsorized_sweep_audit", "passed"),
+            candidate=_status_value(candidate, "resident_winsorized_sweep_audit", "passed"),
+        ),
+        _compare_check(
+            "resident_winsorized_sweep_required_frame_preserved",
+            _status_value(
+                baseline,
+                "resident_winsorized_sweep_audit",
+                "required_frame_count_passed",
+            )
+            is not True
+            or _status_value(
+                candidate,
+                "resident_winsorized_sweep_audit",
+                "required_frame_count_passed",
+            )
+            is True,
+            baseline={
+                "required_frame_count": baseline_sweep_required_frame_count,
+                "required_frame_count_passed": _status_value(
+                    baseline,
+                    "resident_winsorized_sweep_audit",
+                    "required_frame_count_passed",
+                ),
+            },
+            candidate={
+                "required_frame_count": candidate_sweep_required_frame_count,
+                "required_frame_count_passed": _status_value(
+                    candidate,
+                    "resident_winsorized_sweep_audit",
+                    "required_frame_count_passed",
+                ),
+            },
+        ),
+        _compare_check(
+            "resident_winsorized_sweep_check_count_not_decreased",
+            baseline_sweep_check_count is None
+            or (
+                candidate_sweep_check_count is not None
+                and candidate_sweep_check_count >= baseline_sweep_check_count
+            ),
+            baseline=baseline_sweep_check_count,
+            candidate=candidate_sweep_check_count,
+        ),
+        _compare_check(
             "stack_engine_default_contract_ready_preserved",
             not baseline_stack_engine.get("ready") or candidate_stack_engine.get("ready") is True,
             baseline=baseline_stack_engine,
@@ -2662,6 +2742,10 @@ def build_phase2_status_compare(
                 "sample_accounting_closure",
                 "status",
             ),
+            "resident_winsorized_sweep_audit": _status_value(
+                baseline,
+                "resident_winsorized_sweep_audit",
+            ),
             "stack_engine_default_contract": baseline_stack_engine,
             "release_decision_status": _status_value(baseline, "release_decision", "status"),
             "default_change_ready": _status_value(
@@ -2704,6 +2788,10 @@ def build_phase2_status_compare(
                 "pipeline_contract",
                 "sample_accounting_closure",
                 "status",
+            ),
+            "resident_winsorized_sweep_audit": _status_value(
+                candidate,
+                "resident_winsorized_sweep_audit",
             ),
             "stack_engine_default_contract": candidate_stack_engine,
             "release_decision_status": _status_value(candidate, "release_decision", "status"),

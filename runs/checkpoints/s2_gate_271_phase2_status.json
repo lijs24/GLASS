@@ -1,0 +1,212 @@
+{
+  "acceptance_audit": null,
+  "artifact_type": "glass_phase2_status",
+  "checks": [
+    {
+      "evidence": {
+        "gate": 271,
+        "status": "green"
+      },
+      "name": "latest_checkpoint_green",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "cuda_available": true,
+        "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      },
+      "name": "cuda_doctor_available",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_count": 21,
+        "contract_name": "s2_gate_266_default_resident_winsorized_microbenchmark",
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "fast_approx_master_rms": 0.566935986706338,
+        "hardened_master_max_abs": 1.52587890625e-05,
+        "hardened_master_rms": 5.781343294611998e-06,
+        "status": "passed"
+      },
+      "name": "resident_winsorized_benchmark_audit_passed",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_count": 27,
+        "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+        "failed_check_count": 0,
+        "failed_checks": [],
+        "max_hardened_master_rms": 2.3066304440398834e-05,
+        "required_frame_count": 200,
+        "required_frame_count_passed": true,
+        "required_frame_master_max_abs": 6.103515625e-05,
+        "required_frame_master_rms": 2.3066304440398834e-05,
+        "status": "passed"
+      },
+      "name": "resident_winsorized_sweep_audit_passed",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-18T03:45:57+00:00",
+  "default_route_acceptance": null,
+  "doctor": {
+    "compute_capability": "12.0",
+    "cuda_available": true,
+    "device_count": 1,
+    "driver_version": "596.21",
+    "native_extension_loaded": true,
+    "primary_gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "recommendation": "cuda",
+    "vram_mib": 97886,
+    "windows_cuda_packages": {
+      "fallbacks": [
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "guidance": "Try cuda13 first for native performance; if it fails to load, try cuda12, cuda11, cpu. Newer GPUs may run older CUDA packages through PTX JIT.",
+      "ordered_try_list": [
+        "cuda13",
+        "cuda12",
+        "cuda11",
+        "cpu"
+      ],
+      "packages": [
+        {
+          "architectures": [
+            "5.0",
+            "5.2",
+            "6.0",
+            "6.1",
+            "7.0",
+            "7.5",
+            "8.0",
+            "8.6"
+          ],
+          "audience": "Maxwell through Ampere, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 11.8",
+          "label": "cuda11",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "11.8"
+        },
+        {
+          "architectures": [
+            "7.5",
+            "8.0",
+            "8.6",
+            "8.9",
+            "9.0"
+          ],
+          "audience": "Turing, Ampere, Ada, Hopper, and newer GPUs as a compatibility fallback",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 12.4",
+          "label": "cuda12",
+          "match": "ptx_jit_forward",
+          "note": "This package is expected to run through CUDA PTX forward JIT when the installed NVIDIA driver supports the bundled CUDA runtime. First launch may be slower and performance can be below a native cubin build.",
+          "toolkit": "12.4"
+        },
+        {
+          "architectures": [
+            "8.6",
+            "8.9",
+            "9.0",
+            "10.0",
+            "12.0"
+          ],
+          "audience": "Recent NVIDIA GPUs, including Blackwell targets",
+          "compatible": true,
+          "driver_hint": "NVIDIA driver new enough for CUDA 13.x",
+          "label": "cuda13",
+          "match": "native_cubin",
+          "note": "This package contains native GPU code for this compute capability.",
+          "toolkit": "13.0"
+        }
+      ],
+      "primary": "cuda13",
+      "ptx_forward_compatibility": true,
+      "selected_device": {
+        "compute_capability": "12.0",
+        "compute_capability_code": 120,
+        "device_id": 0,
+        "driver_version": "596.21",
+        "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition"
+      }
+    },
+    "wrapper_importable": true
+  },
+  "github_release_plan": null,
+  "latest_checkpoint": {
+    "checkpoint_dir": "runs\\checkpoints",
+    "date": "2026-06-18",
+    "exists": true,
+    "gate": 271,
+    "green": true,
+    "path": "runs\\checkpoints\\s2_gate_271_status.md",
+    "scope": "Phase 2 resident winsorized sweep status-compare guard",
+    "status": "green"
+  },
+  "passed": true,
+  "pipeline_contract": null,
+  "publish_preflight": null,
+  "release_decision": null,
+  "release_manifest": null,
+  "resident_winsorized_benchmark_audit": {
+    "benchmark_path": "runs\\checkpoints\\s2_gate_265_resident_winsorized_benchmark.json",
+    "check_count": 21,
+    "contract_name": "s2_gate_266_default_resident_winsorized_microbenchmark",
+    "contract_path": "benchmarks\\resident_winsorized_microbenchmark_contract.json",
+    "cpu_baseline_s": 0.014615500003856141,
+    "cuda_fast_approx_s": 0.0008526000019628555,
+    "cuda_hardened_s": 0.000185800003237091,
+    "exists": true,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "fast_approx_master_rms": 0.566935986706338,
+    "frame_count": 8,
+    "hardened_master_max_abs": 1.52587890625e-05,
+    "hardened_master_rms": 5.781343294611998e-06,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_266_resident_winsorized_benchmark_audit.json",
+    "schema_version": 1,
+    "shape": [
+      16,
+      16
+    ],
+    "status": "passed"
+  },
+  "resident_winsorized_sweep_audit": {
+    "check_count": 27,
+    "contract_name": "s2_gate_269_default_resident_winsorized_sweep",
+    "contract_path": "benchmarks\\resident_winsorized_sweep_contract.json",
+    "exists": true,
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "frame_counts": [
+      8,
+      32,
+      128,
+      200
+    ],
+    "max_hardened_master_rms": 2.3066304440398834e-05,
+    "passed": true,
+    "path": "runs\\checkpoints\\s2_gate_269_resident_winsorized_sweep_audit.json",
+    "required_frame_count": 200,
+    "required_frame_count_passed": true,
+    "required_frame_cpu_baseline_s": 0.01229839999723481,
+    "required_frame_cuda_fast_approx_s": 0.0002525999952922575,
+    "required_frame_cuda_hardened_s": 0.0012743999977828935,
+    "required_frame_master_max_abs": 6.103515625e-05,
+    "required_frame_master_rms": 2.3066304440398834e-05,
+    "run_count": 4,
+    "schema_version": 1,
+    "status": "passed",
+    "sweep_path": "runs\\checkpoints\\s2_gate_268_resident_winsorized_sweep.json"
+  },
+  "schema_version": 1,
+  "stack_engine_contract": null,
+  "status": "green"
+}
