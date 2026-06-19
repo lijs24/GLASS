@@ -1,0 +1,86 @@
+{
+  "acceptance": {
+    "failed_check_count": 0,
+    "failed_checks": [],
+    "passed": true,
+    "path": "C:\\glass_runs\\phase2_s2_gate_454_200\\contract_parity_20260620\\phase2_contract_acceptance_audit_s2_gate_454.json"
+  },
+  "compare": {
+    "abs_diff_p99": 0.0004577991180121921,
+    "coverage_fraction": 0.9608632110972698,
+    "coverage_max": 193.0,
+    "coverage_median": 192.0,
+    "rms_diff": 0.0017072972418336416,
+    "shape_match": true
+  },
+  "conclusions": [
+    "Resident source-DQ execution contract passed on real 200-light run.",
+    "Execution route is resident_in_memory_mask_streaming and does not materialize calibrated+DQ cache.",
+    "Real 200-light acceptance remained green with 193 integrated frames and zero failed checks.",
+    "Runtime improved versus Gate452 contract-parity baseline; no unexplained speed regression observed."
+  ],
+  "contracts": {
+    "pipeline_contract": "C:\\glass_runs\\phase2_s2_gate_454_200\\contract_parity_20260620\\pipeline_contract_s2_gate_454.json",
+    "resident_calibration_contract": "C:\\glass_runs\\phase2_s2_gate_454_200\\contract_parity_20260620\\resident_calibration_contract_s2_gate_454.json",
+    "resident_result_contract": "C:\\glass_runs\\phase2_s2_gate_454_200\\contract_parity_20260620\\resident_result_contract_s2_gate_454.json",
+    "stack_engine_contract": "C:\\glass_runs\\phase2_s2_gate_454_200\\contract_parity_20260620\\stack_engine_contract_s2_gate_454.json"
+  },
+  "frame_accounting_summary": {
+    "calibrated_frames": 0,
+    "calibration_artifact_type": "resident_cuda_calibration_artifacts",
+    "calibration_master_count": 3,
+    "exception_frames": 7,
+    "final_status_counts": {
+      "integrated": 193,
+      "quality_rejected": 7
+    },
+    "input_light_frames": 200,
+    "integrated_frames": 193,
+    "integration_conflict_frames": 0,
+    "integration_status_counts": {
+      "used": 193,
+      "zero_weight": 7
+    },
+    "not_integrated_frames": 0,
+    "quality_accepted_frames": 0,
+    "quality_rejected_frames": 7,
+    "registration_accepted_frames": 193,
+    "resident_calibrated_frames": 200,
+    "resident_calibrated_light_ledger_rows": 200,
+    "resident_frame_mask_active_frames": 193,
+    "resident_frame_mask_masked_frames": 7,
+    "resident_frame_mask_unaudited_frames": 0,
+    "resident_native_calibration_artifact": true,
+    "warp_accepted_frames": 0,
+    "warp_skipped_frames": 0,
+    "zero_weight_frames": 7
+  },
+  "gate": "S2-Gate454",
+  "objective": "Resident source-DQ execution contract for in-memory mask streaming.",
+  "resident_source_dq_execution_summary": {
+    "applied_frame_count": 0,
+    "applied_invalid_samples": 0,
+    "estimated_all_frame_mask_bytes": 12330240000,
+    "estimated_peak_batch_mask_bytes": 493209600,
+    "execution_routes": [
+      "resident_in_memory_mask_streaming"
+    ],
+    "failed_groups": [],
+    "frame_count": 200,
+    "frame_with_invalid_count": 0,
+    "group_count": 1,
+    "input_invalid_samples_before_rejection": 0,
+    "materializes_calibrated_dq_cache": false,
+    "passed": true,
+    "schema_version": 1,
+    "status": "passed"
+  },
+  "run": "C:\\glass_runs\\phase2_s2_gate_454_200\\contract_parity_20260620",
+  "schema_version": 1,
+  "timing": {
+    "gate452_contract_parity_baseline_s": 30.900435400020797,
+    "speedup_vs_wbpp": 52.2222074258167,
+    "total_elapsed_s": 20.921003800001927,
+    "wbpp_blackbox_elapsed_s": 1092.541
+  }
+}

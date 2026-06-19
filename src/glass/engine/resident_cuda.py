@@ -42,10 +42,13 @@ from glass.engine.resident_master_cache import (
 )
 from glass.engine.resident_source_dq import (
     apply_resident_source_invalid_mask,
+    build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
     source_invalid_mask_from_array,
     source_invalid_mask_from_sidecar_path,
+    summarize_resident_source_dq_execution_groups,
+    validate_resident_source_dq_execution_group,
 )
 from glass.engine.resident_registration_quality import (
     DEFAULT_RESIDENT_REGISTRATION_QUALITY_MIN_INLIERS,
@@ -3345,6 +3348,7 @@ def run_resident_calibration_integration(
     registration_quality_decisions_by_frame: dict[str, dict[str, Any]] = {}
     resident_frame_mask_contract_groups: list[dict[str, Any]] = []
     resident_dq_pixel_closure_groups: list[dict[str, Any]] = []
+    resident_source_dq_execution_groups: list[dict[str, Any]] = []
     resident_master_cache_groups: list[dict[str, Any]] = []
     local_norm_groups: list[dict[str, Any]] = []
     tile_local_policy_any_enabled = False
@@ -7237,6 +7241,16 @@ def run_resident_calibration_integration(
                 height=height,
                 width=width,
             )
+            group_source_dq_execution = build_resident_source_dq_execution_group(
+                source_dq_summary,
+                filter_name=filter_name,
+                frame_count=len(light_frames),
+                height=height,
+                width=width,
+                resident_calibration_batch_frames=resident_calibration_batch_frames,
+            )
+            validate_resident_source_dq_execution_group(group_source_dq_execution)
+            resident_source_dq_execution_groups.append(group_source_dq_execution)
             tile_local_apply_enabled = False
             tile_local_target_mask = None
             tile_local_extents = None
@@ -7835,6 +7849,20 @@ def run_resident_calibration_integration(
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
                     "source_dq_summary": source_dq_summary,
+                    "source_dq_execution": {
+                        "path": str(run / "resident_source_dq_execution.json"),
+                        "summary": {
+                            "passed": group_source_dq_execution["passed"],
+                            "status": group_source_dq_execution["status"],
+                            "execution_route": group_source_dq_execution["execution_route"],
+                            "materializes_calibrated_dq_cache": group_source_dq_execution[
+                                "materializes_calibrated_dq_cache"
+                            ],
+                            "estimated_batch_mask_bytes": group_source_dq_execution[
+                                "streaming_memory"
+                            ]["estimated_batch_mask_bytes"],
+                        },
+                    },
                     "source_dq_calibration_artifact_index": calibration_dq_sidecar_index,
                     "stack_engine_surface_contract": stack_surface_contract,
                     "dq_flag_bits": {
@@ -8873,6 +8901,20 @@ def run_resident_calibration_integration(
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
                     "source_dq_summary": source_dq_summary,
+                    "source_dq_execution": {
+                        "path": str(run / "resident_source_dq_execution.json"),
+                        "summary": {
+                            "passed": group_source_dq_execution["passed"],
+                            "status": group_source_dq_execution["status"],
+                            "execution_route": group_source_dq_execution["execution_route"],
+                            "materializes_calibrated_dq_cache": group_source_dq_execution[
+                                "materializes_calibrated_dq_cache"
+                            ],
+                            "estimated_batch_mask_bytes": group_source_dq_execution[
+                                "streaming_memory"
+                            ]["estimated_batch_mask_bytes"],
+                        },
+                    },
                     "source_dq_calibration_artifact_index": calibration_dq_sidecar_index,
                     "stack_engine_surface_contract": stack_surface_contract,
                     "geometric_warp_coverage": {
@@ -8948,6 +8990,7 @@ def run_resident_calibration_integration(
         registration_quality_path = run / "resident_registration_quality.json"
         resident_frame_masks_path = run / "resident_frame_masks.json"
         resident_dq_pixel_closure_path = run / "resident_dq_pixel_closure.json"
+        resident_source_dq_execution_path = run / "resident_source_dq_execution.json"
         resident_master_cache_path = run / "resident_master_cache.json"
         resident_frame_mask_payload = {
             "schema_version": 1,
@@ -8977,6 +9020,18 @@ def run_resident_calibration_integration(
             failed = ", ".join(resident_dq_pixel_closure_payload["summary"].get("failed_groups") or [])
             raise RuntimeError(f"resident DQ pixel closure failed for group(s): {failed}")
         write_json(resident_dq_pixel_closure_path, resident_dq_pixel_closure_payload)
+        resident_source_dq_execution_payload = {
+            "schema_version": 1,
+            "artifact": "resident_source_dq_execution",
+            "source_stage": "resident_calibrated_stack",
+            "backend": "cuda_resident_stack",
+            "summary": summarize_resident_source_dq_execution_groups(resident_source_dq_execution_groups),
+            "groups": resident_source_dq_execution_groups,
+        }
+        if not resident_source_dq_execution_payload["summary"]["passed"]:
+            failed = ", ".join(resident_source_dq_execution_payload["summary"].get("failed_groups") or [])
+            raise RuntimeError(f"resident source-DQ execution failed for group(s): {failed}")
+        write_json(resident_source_dq_execution_path, resident_source_dq_execution_payload)
         resident_master_cache_payload = {
             "schema_version": 1,
             "artifact": "resident_master_cache",
@@ -9124,6 +9179,8 @@ def run_resident_calibration_integration(
                 "resident_frame_mask_contract_summary": resident_frame_mask_payload["summary"],
                 "resident_dq_pixel_closure_path": str(resident_dq_pixel_closure_path),
                 "resident_dq_pixel_closure_summary": resident_dq_pixel_closure_payload["summary"],
+                "resident_source_dq_execution_path": str(resident_source_dq_execution_path),
+                "resident_source_dq_execution_summary": resident_source_dq_execution_payload["summary"],
                 "resident_master_cache_path": str(resident_master_cache_path),
                 "resident_master_cache_summary": resident_master_cache_payload["summary"],
                 "warnings": integration_warnings,
@@ -9184,6 +9241,15 @@ def run_resident_calibration_integration(
             PipelineArtifact(
                 stage="resident_dq_pixel_closure",
                 path=str(resident_dq_pixel_closure_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_source_dq_execution",
+                path=str(resident_source_dq_execution_path),
                 format="json",
                 created_at=now_iso(),
                 source_frames=list(frames.keys()),

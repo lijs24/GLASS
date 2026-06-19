@@ -380,3 +380,141 @@ def build_resident_source_dq_summary(
             "the CPU StackEngine valid-sample contract."
         ),
     }
+
+
+def _execution_check(name: str, passed: bool, details: dict[str, Any]) -> dict[str, Any]:
+    return {"name": name, "passed": bool(passed), "details": details}
+
+
+def build_resident_source_dq_execution_group(
+    source_dq_summary: dict[str, Any],
+    *,
+    filter_name: str | None,
+    frame_count: int,
+    height: int,
+    width: int,
+    resident_calibration_batch_frames: int = 1,
+) -> dict[str, Any]:
+    batch_frames = max(1, int(resident_calibration_batch_frames or 1))
+    per_frame_mask_bytes = int(height) * int(width)
+    batch_mask_bytes = per_frame_mask_bytes * batch_frames
+    all_frame_mask_bytes = per_frame_mask_bytes * int(frame_count)
+    input_invalid = int(source_dq_summary.get("input_invalid_samples_before_rejection") or 0)
+    applied_invalid = int(source_dq_summary.get("applied_invalid_samples") or 0)
+    unsupported = int(source_dq_summary.get("unsupported_frame_count") or 0)
+    native_missing = int(source_dq_summary.get("native_missing_frame_count") or 0)
+    summary_passed = bool(source_dq_summary.get("passed"))
+    checks = [
+        _execution_check(
+            "source_dq_summary_passed",
+            summary_passed,
+            {"passed": summary_passed},
+        ),
+        _execution_check(
+            "invalid_samples_applied",
+            applied_invalid == input_invalid,
+            {"applied_invalid_samples": applied_invalid, "input_invalid_samples": input_invalid},
+        ),
+        _execution_check(
+            "no_unsupported_frames",
+            unsupported == 0,
+            {"unsupported_frame_count": unsupported},
+        ),
+        _execution_check(
+            "native_method_available",
+            native_missing == 0,
+            {"native_missing_frame_count": native_missing},
+        ),
+        _execution_check(
+            "no_calibrated_dq_disk_cache_required",
+            True,
+            {
+                "materializes_calibrated_dq_cache": False,
+                "execution_route": "resident_in_memory_mask_streaming",
+            },
+        ),
+    ]
+    passed = all(item["passed"] for item in checks)
+    return {
+        "schema_version": 1,
+        "artifact": "resident_source_dq_execution_group",
+        "filter": filter_name,
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "execution_route": "resident_in_memory_mask_streaming",
+        "native_method": source_dq_summary.get("native_method"),
+        "materializes_calibrated_dq_cache": False,
+        "frame_count": int(frame_count),
+        "height": int(height),
+        "width": int(width),
+        "frame_with_invalid_count": int(source_dq_summary.get("frame_with_invalid_count") or 0),
+        "applied_frame_count": int(source_dq_summary.get("applied_frame_count") or 0),
+        "input_invalid_samples_before_rejection": input_invalid,
+        "applied_invalid_samples": applied_invalid,
+        "input_flagged_samples": int(source_dq_summary.get("input_flagged_samples") or 0),
+        "input_nonfinite_samples": int(source_dq_summary.get("input_nonfinite_samples") or 0),
+        "source_dq_flag_counts": dict(source_dq_summary.get("source_dq_flag_counts") or {}),
+        "source_counts": dict(source_dq_summary.get("source_counts") or {}),
+        "status_counts": dict(source_dq_summary.get("status_counts") or {}),
+        "sidecar_source_counts": dict(source_dq_summary.get("sidecar_source_counts") or {}),
+        "streaming_memory": {
+            "invalid_mask_bytes_per_pixel": 1,
+            "estimated_per_frame_mask_bytes": per_frame_mask_bytes,
+            "batch_frames": batch_frames,
+            "estimated_batch_mask_bytes": batch_mask_bytes,
+            "estimated_all_frame_mask_bytes": all_frame_mask_bytes,
+        },
+        "checks": checks,
+        "semantics": (
+            "Source-DQ invalid samples are applied to resident calibrated frames in memory "
+            "with ResidentCalibratedStack.apply_invalid_mask_frame, so resident integration "
+            "skips those samples without requiring a calibrated+DQ disk cache."
+        ),
+    }
+
+
+def validate_resident_source_dq_execution_group(group: dict[str, Any]) -> None:
+    if not group.get("passed"):
+        failed = [str(item.get("name")) for item in group.get("checks", []) if not item.get("passed")]
+        raise RuntimeError(f"resident source-DQ execution contract failed: {', '.join(failed)}")
+
+
+def summarize_resident_source_dq_execution_groups(groups: list[dict[str, Any]]) -> dict[str, Any]:
+    failed = [str(group.get("filter") or "unknown") for group in groups if not group.get("passed")]
+    return {
+        "schema_version": 1,
+        "passed": not failed,
+        "status": "passed" if not failed else "failed",
+        "group_count": len(groups),
+        "failed_groups": failed,
+        "frame_count": int(sum(int(group.get("frame_count") or 0) for group in groups)),
+        "frame_with_invalid_count": int(
+            sum(int(group.get("frame_with_invalid_count") or 0) for group in groups)
+        ),
+        "applied_frame_count": int(sum(int(group.get("applied_frame_count") or 0) for group in groups)),
+        "input_invalid_samples_before_rejection": int(
+            sum(int(group.get("input_invalid_samples_before_rejection") or 0) for group in groups)
+        ),
+        "applied_invalid_samples": int(
+            sum(int(group.get("applied_invalid_samples") or 0) for group in groups)
+        ),
+        "materializes_calibrated_dq_cache": any(
+            bool(group.get("materializes_calibrated_dq_cache")) for group in groups
+        ),
+        "execution_routes": sorted({str(group.get("execution_route") or "unknown") for group in groups}),
+        "estimated_peak_batch_mask_bytes": int(
+            max(
+                (
+                    int((group.get("streaming_memory") or {}).get("estimated_batch_mask_bytes") or 0)
+                    for group in groups
+                ),
+                default=0,
+            )
+        ),
+        "estimated_all_frame_mask_bytes": int(
+            sum(
+                int((group.get("streaming_memory") or {}).get("estimated_all_frame_mask_bytes") or 0)
+                for group in groups
+            )
+        ),
+    }

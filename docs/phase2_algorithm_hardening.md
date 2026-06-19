@@ -9061,6 +9061,45 @@ Completed in Gate446:
   - `runs/checkpoints/s2_gate_453_real_source_dq_strategy.json`;
   - `runs/checkpoints/s2_gate_453_status.md`.
 
+### S2-Gate 454: Resident Source-DQ Execution Contract
+
+- Convert the Gate453 source-DQ strategy from a planning artifact into an
+  execution contract emitted by resident CUDA runs.
+- Required work:
+  - write `resident_source_dq_execution.json` from the actual resident
+    source-DQ rows produced during calibration/integration;
+  - prove the execution route is `resident_in_memory_mask_streaming`;
+  - prove invalid samples are applied through
+    `ResidentCalibratedStack.apply_invalid_mask_frame` and do not require a
+    calibrated+DQ disk cache;
+  - attach the execution summary to resident artifacts, integration results,
+    and run state;
+  - add CPU-only source-DQ execution tests and resident CUDA synthetic
+    end-to-end assertions;
+  - run the real 200-light contract-parity benchmark and verify acceptance
+    remains green without a speed or numerical regression.
+- Completed in S2-Gate454:
+  - added resident source-DQ execution group/summary validation in
+    `glass.engine.resident_source_dq`;
+  - resident CUDA now writes `resident_source_dq_execution.json` and registers
+    it as a `resident_source_dq_execution` pipeline artifact;
+  - each resident output and resident artifact carries a source-DQ execution
+    summary with route, native method, cache-materialization status, and
+    estimated mask streaming bytes;
+  - synthetic tests prove finite source-DQ flags are still excluded from the
+    resident master/weight output and that the execution contract reports
+    `resident_in_memory_mask_streaming`;
+  - real 200-light contract-parity run passed acceptance with `193/200`
+    integrated frames, `20.921004 s` total runtime, and `52.222207x` speedup
+    versus the WBPP black-box timing `1092.541 s`;
+  - comparison remained inside the 200-light contract: shape matched, coverage
+    fraction `0.960863`, RMS diff `0.00170730`, and P99 abs diff
+    `0.000457799`.
+- Artifacts:
+  - `C:\glass_runs\phase2_s2_gate_454_200\contract_parity_20260620`;
+  - `runs/checkpoints/s2_gate_454_real_regression_summary.json`;
+  - `runs/checkpoints/s2_gate_454_status.md`.
+
 ## Gate Rules
 
 Each gate requires:

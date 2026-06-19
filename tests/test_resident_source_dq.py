@@ -4,11 +4,13 @@ import numpy as np
 
 from glass.engine.contracts import DQFlag
 from glass.engine.resident_source_dq import (
+    build_resident_source_dq_execution_group,
     build_resident_source_dq_summary,
     combine_source_invalid_masks,
     source_invalid_mask_from_array,
     source_invalid_mask_from_dq_mask,
     source_invalid_mask_from_sidecar_path,
+    summarize_resident_source_dq_execution_groups,
 )
 from glass.io.fits_io import write_fits_data
 
@@ -122,3 +124,52 @@ def test_resident_source_dq_summary_matches_stackengine_input_sample_closure():
     assert summary["input_nonfinite_samples"] == 0
     assert summary["source_dq_flag_counts"] == {"hot_pixel": 1, "no_data": 1}
     assert summary["passed"] is True
+
+
+def test_resident_source_dq_execution_group_proves_streaming_route_without_cache():
+    summary = build_resident_source_dq_summary(
+        [
+            {
+                "frame_id": "f0",
+                "status": "no_invalid_samples",
+                "source": "test",
+                "invalid_samples": 0,
+                "flagged_samples": 0,
+                "nonfinite_samples": 0,
+                "flag_counts": {},
+                "applied": False,
+            },
+            {
+                "frame_id": "f1",
+                "status": "applied",
+                "source": "test",
+                "invalid_samples": 2,
+                "flagged_samples": 2,
+                "nonfinite_samples": 0,
+                "flag_counts": {"hot_pixel": 2},
+                "applied": True,
+            },
+        ],
+        frame_count=2,
+        height=4,
+        width=5,
+    )
+
+    group = build_resident_source_dq_execution_group(
+        summary,
+        filter_name="H",
+        frame_count=2,
+        height=4,
+        width=5,
+        resident_calibration_batch_frames=3,
+    )
+    aggregate = summarize_resident_source_dq_execution_groups([group])
+
+    assert group["passed"] is True
+    assert group["execution_route"] == "resident_in_memory_mask_streaming"
+    assert group["materializes_calibrated_dq_cache"] is False
+    assert group["streaming_memory"]["estimated_per_frame_mask_bytes"] == 20
+    assert group["streaming_memory"]["estimated_batch_mask_bytes"] == 60
+    assert aggregate["passed"] is True
+    assert aggregate["materializes_calibrated_dq_cache"] is False
+    assert aggregate["estimated_peak_batch_mask_bytes"] == 60

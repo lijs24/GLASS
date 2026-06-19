@@ -1424,6 +1424,8 @@ def test_cli_resident_cuda_run_applies_plan_source_dq_sidecar(tmp_path: Path):
     weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
     resident = read_json(run / "resident_artifacts.json")
     source_dq = resident["artifacts"][0]["source_dq_summary"]
+    source_dq_execution = read_json(run / "resident_source_dq_execution.json")
+    source_dq_execution_summary = source_dq_execution["summary"]
 
     assert np.allclose(master, expected, rtol=2e-5, atol=2e-5)
     assert weight[4, 5] == pytest.approx(1.0)
@@ -1435,6 +1437,13 @@ def test_cli_resident_cuda_run_applies_plan_source_dq_sidecar(tmp_path: Path):
     assert source_dq["source_dq_flag_counts"] == {"hot_pixel": 1}
     assert source_dq["status_counts"]["applied"] == 1
     assert source_dq["status_counts"]["no_invalid_samples"] == 1
+    assert source_dq_execution_summary["passed"] is True
+    assert source_dq_execution_summary["execution_routes"] == ["resident_in_memory_mask_streaming"]
+    assert source_dq_execution_summary["materializes_calibrated_dq_cache"] is False
+    assert source_dq_execution_summary["input_invalid_samples_before_rejection"] == 1
+    assert source_dq_execution["groups"][0]["streaming_memory"]["estimated_batch_mask_bytes"] == 512
+    assert integration["resident_source_dq_execution_summary"]["passed"] is True
+    assert any(item["stage"] == "resident_source_dq_execution" for item in read_json(run / "run_state.json")["artifacts"])
     applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
     assert applied_rows[0]["sidecar_paths"] == [str(sidecar)]
 
