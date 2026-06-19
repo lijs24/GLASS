@@ -6852,6 +6852,26 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 382: Phase2 Publish Preflight Release Quality Final Evidence
+
+- Carry Gate381 publish-preflight final release quality evidence into
+  `glass phase2-status`.
+- Preserve legacy compatibility when publish-preflight artifacts omit the new
+  final evidence fields, while requiring ready/match/raw/Phase2 final evidence
+  to pass when present.
+- Extend `glass phase2-status-compare` so candidates cannot drop a previously
+  passing publish-preflight final evidence handoff while keeping the older final
+  check names.
+- Surface matrix, matrix-default, and default-promotion final evidence in
+  Phase2 status JSON, Markdown, and comparison evidence.
+- Add focused tests for green evidence surfacing, compatible-missing final
+  evidence, failed final evidence, and candidate final-evidence loss.
+- Keep this gate Phase2 status scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
