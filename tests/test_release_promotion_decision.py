@@ -642,6 +642,10 @@ def _write_publication_audit(
     include_release_quality_guard: bool = True,
     release_quality_guard_ready: bool = True,
     phase2_release_quality_guard_ready: bool | None = None,
+    release_quality_guard_final_checks_ready: bool | None = None,
+    phase2_release_quality_guard_final_checks_ready: bool | None = None,
+    include_release_quality_guard_final_checks: bool = True,
+    include_phase2_release_quality_guard_final_checks: bool = True,
 ) -> None:
     phase2_direct_runtime_ready = (
         direct_runtime_ready
@@ -658,6 +662,24 @@ def _write_publication_audit(
         if phase2_release_quality_guard_ready is None
         else phase2_release_quality_guard_ready
     )
+    release_quality_final_checks_ready = (
+        release_quality_guard_ready
+        if release_quality_guard_final_checks_ready is None
+        else release_quality_guard_final_checks_ready
+    )
+    phase2_release_quality_final_checks_ready = (
+        phase2_release_quality_guard_ready
+        if phase2_release_quality_guard_final_checks_ready is None
+        else phase2_release_quality_guard_final_checks_ready
+    )
+    release_quality_chain_ready = release_quality_guard_ready and (
+        release_quality_final_checks_ready
+        or not include_release_quality_guard_final_checks
+    )
+    phase2_release_quality_chain_ready = phase2_release_quality_guard_ready and (
+        phase2_release_quality_final_checks_ready
+        or not include_phase2_release_quality_guard_final_checks
+    )
     artifact_passed = (
         passed
         and (raw_ready and phase2_ready if include_runtime_default else True)
@@ -667,7 +689,7 @@ def _write_publication_audit(
             else True
         )
         and (
-            release_quality_guard_ready and phase2_release_quality_guard_ready
+            release_quality_chain_ready and phase2_release_quality_chain_ready
             if include_release_quality_guard
             else True
         )
@@ -886,11 +908,11 @@ def _write_publication_audit(
                 "publish_preflight_release_quality_publication_guard": {
                     "artifact_type": "windows_publish_preflight",
                     "status": "publish_preflight_ready"
-                    if release_quality_guard_ready
+                    if release_quality_chain_ready
                     else "blocked",
-                    "passed": release_quality_guard_ready,
+                    "passed": release_quality_chain_ready,
                     "present": True,
-                    "ready": release_quality_guard_ready,
+                    "ready": release_quality_chain_ready,
                     "matrix_present": True,
                     "matrix_ready": release_quality_guard_ready,
                     "matrix_check_passed": release_quality_guard_ready,
@@ -919,11 +941,11 @@ def _write_publication_audit(
                 "phase2_publish_preflight_release_quality_publication_guard": {
                     "artifact_type": "glass_phase2_status",
                     "status": "publish_preflight_ready"
-                    if phase2_release_quality_guard_ready
+                    if phase2_release_quality_chain_ready
                     else "blocked",
                     "present": True,
-                    "ready": phase2_release_quality_guard_ready,
-                    "phase2_check_passed": phase2_release_quality_guard_ready,
+                    "ready": phase2_release_quality_chain_ready,
+                    "phase2_check_passed": phase2_release_quality_chain_ready,
                     "matrix_present": True,
                     "matrix_ready": phase2_release_quality_guard_ready,
                     "matrix_check_passed": phase2_release_quality_guard_ready,
@@ -961,17 +983,57 @@ def _write_publication_audit(
                 },
             }
         )
+        if include_release_quality_guard_final_checks:
+            layers["publish_preflight_release_quality_publication_guard"].update(
+                {
+                    "release_matrix_check": release_quality_final_checks_ready,
+                    "release_matrix_default_check": (
+                        release_quality_final_checks_ready
+                    ),
+                    "release_default_promotion_check": (
+                        release_quality_final_checks_ready
+                    ),
+                    "release_matrix_default_match_check": (
+                        release_quality_final_checks_ready
+                    ),
+                    "release_matrix_manifest_match_check": (
+                        release_quality_final_checks_ready
+                    ),
+                }
+            )
+        if include_phase2_release_quality_guard_final_checks:
+            layers[
+                "phase2_publish_preflight_release_quality_publication_guard"
+            ].update(
+                {
+                    "release_matrix_check": (
+                        phase2_release_quality_final_checks_ready
+                    ),
+                    "release_matrix_default_check": (
+                        phase2_release_quality_final_checks_ready
+                    ),
+                    "release_default_promotion_check": (
+                        phase2_release_quality_final_checks_ready
+                    ),
+                    "release_matrix_default_match_check": (
+                        phase2_release_quality_final_checks_ready
+                    ),
+                    "release_matrix_manifest_match_check": (
+                        phase2_release_quality_final_checks_ready
+                    ),
+                }
+            )
         checks.extend(
             [
                 {
                     "name": "publish_preflight_release_quality_publication_guard_ready",
-                    "passed": release_quality_guard_ready,
+                    "passed": release_quality_chain_ready,
                 },
                 {
                     "name": (
                         "phase2_publish_preflight_release_quality_publication_guard_ready"
                     ),
-                    "passed": phase2_release_quality_guard_ready,
+                    "passed": phase2_release_quality_chain_ready,
                 },
                 {
                     "name": (
@@ -979,8 +1041,12 @@ def _write_publication_audit(
                         "matches_publish_preflight"
                     ),
                     "passed": (
-                        release_quality_guard_ready
-                        and phase2_release_quality_guard_ready
+                        release_quality_chain_ready
+                        and phase2_release_quality_chain_ready
+                        and (
+                            include_release_quality_guard_final_checks
+                            == include_phase2_release_quality_guard_final_checks
+                        )
                     ),
                 },
             ]
@@ -1418,6 +1484,42 @@ def test_release_promotion_decision_allows_missing_publication_release_quality_g
     }
 
 
+def test_release_promotion_decision_allows_legacy_publication_release_quality_guard_without_final_checks(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(
+        publication,
+        include_release_quality_guard_final_checks=False,
+        include_phase2_release_quality_guard_final_checks=False,
+    )
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    release_quality = payload["stack_engine_publication_release_quality_guard"]
+    assert payload["release_candidate_ready"] is True
+    assert checks["stack_engine_publication_release_quality_guard_passed"][
+        "passed"
+    ] is True
+    assert release_quality["ready"] is True
+    assert release_quality["final_checks_compatible_missing"] is True
+    assert release_quality["final_checks_ready"] is True
+    assert release_quality["raw_final_checks_present"] is False
+    assert release_quality["phase2_final_checks_present"] is False
+    assert release_quality["raw_release_matrix_check"] is None
+    assert release_quality["phase2_release_matrix_check"] is None
+
+
 def test_release_promotion_decision_blocks_failed_publication_release_quality_guard(
     tmp_path: Path,
 ) -> None:
@@ -1452,6 +1554,45 @@ def test_release_promotion_decision_blocks_failed_publication_release_quality_gu
     )
     assert release_quality["raw_matrix_raw_status"] == "failed"
     assert release_quality["raw_matrix_phase2_status"] == "attention_required"
+
+
+def test_release_promotion_decision_blocks_failed_publication_release_quality_final_checks(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(
+        publication,
+        release_quality_guard_final_checks_ready=False,
+        phase2_release_quality_guard_final_checks_ready=False,
+    )
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    release_quality = payload["stack_engine_publication_release_quality_guard"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_release_quality_guard_passed"][
+        "passed"
+    ] is False
+    assert release_quality["ready"] is False
+    assert release_quality["raw_matrix_ready"] is True
+    assert release_quality["phase2_matrix_ready"] is True
+    assert release_quality["raw_final_checks_present"] is True
+    assert release_quality["phase2_final_checks_present"] is True
+    assert release_quality["raw_final_checks_ready"] is False
+    assert release_quality["phase2_final_checks_ready"] is False
+    assert release_quality["final_checks_ready"] is False
+    assert release_quality["raw_release_matrix_check"] is False
+    assert release_quality["phase2_release_matrix_check"] is False
 
 
 def test_release_promotion_decision_blocks_phase2_publication_release_quality_mismatch(
@@ -1494,6 +1635,46 @@ def test_release_promotion_decision_blocks_phase2_publication_release_quality_mi
         is False
     )
     assert release_quality["phase2_matrix_raw_status"] == "failed"
+
+
+def test_release_promotion_decision_blocks_missing_phase2_publication_release_quality_final_checks(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    runtime = tmp_path / "runtime_compare.json"
+    publication = tmp_path / "publication_audit.json"
+    _write_acceptance(acceptance)
+    _write_runtime_compare(runtime)
+    _write_publication_audit(
+        publication,
+        include_phase2_release_quality_guard_final_checks=False,
+    )
+
+    payload = build_release_promotion_decision(
+        acceptance_audit=acceptance,
+        runtime_compare=runtime,
+        stack_engine_publication_audit=publication,
+        min_runtime_runs=3,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    release_quality = payload["stack_engine_publication_release_quality_guard"]
+    assert payload["release_candidate_ready"] is False
+    assert checks["stack_engine_publication_release_quality_guard_passed"][
+        "passed"
+    ] is False
+    assert release_quality["raw_final_checks_present"] is True
+    assert release_quality["phase2_final_checks_present"] is False
+    assert release_quality["final_checks_match"] is False
+    assert release_quality["final_checks_ready"] is False
+    assert release_quality["raw_release_matrix_check"] is True
+    assert release_quality["phase2_release_matrix_check"] is None
+    assert (
+        release_quality["checks"][
+            "phase2_publish_preflight_release_quality_publication_guard_matches_publish_preflight"
+        ]
+        is False
+    )
 
 
 def test_release_promotion_decision_blocks_missing_publication_direct_runtime(

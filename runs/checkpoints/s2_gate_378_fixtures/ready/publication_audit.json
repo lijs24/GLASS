@@ -1,0 +1,218 @@
+{
+  "artifact_type": "stack_engine_publication_audit",
+  "checks": [
+    {
+      "name": "publish_preflight_stack_engine_runtime_default_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_stack_engine_runtime_default_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_stack_engine_runtime_default_matches_publish_preflight",
+      "passed": true
+    },
+    {
+      "name": "publish_preflight_direct_runtime_evidence_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_direct_runtime_evidence_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_direct_runtime_evidence_matches_publish_preflight",
+      "passed": true
+    },
+    {
+      "name": "publish_preflight_quality_metrics_compare_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_quality_metrics_compare_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_quality_metrics_compare_matches_publish_preflight",
+      "passed": true
+    },
+    {
+      "name": "publish_preflight_release_quality_publication_guard_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_release_quality_publication_guard_ready",
+      "passed": true
+    },
+    {
+      "name": "phase2_publish_preflight_release_quality_publication_guard_matches_publish_preflight",
+      "passed": true
+    }
+  ],
+  "failed_checks": [],
+  "layers": {
+    "phase2_publish_preflight_direct_runtime_evidence": {
+      "artifact_type": "glass_phase2_status",
+      "default_promotion_acceptance_check_count": 24,
+      "default_promotion_acceptance_passed": true,
+      "default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "default_promotion_pipeline_passed": true,
+      "default_promotion_pipeline_resident_lights": 200,
+      "default_promotion_ready": true,
+      "matches_default_promotion": true,
+      "matrix_acceptance_check_count": 24,
+      "matrix_acceptance_passed": true,
+      "matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "matrix_pipeline_passed": true,
+      "matrix_pipeline_resident_lights": 200,
+      "matrix_ready": true,
+      "phase2_check_passed": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_publish_preflight_quality_metrics_compare": {
+      "artifact_type": "glass_phase2_status",
+      "default_promotion_failed_check_count": 0,
+      "default_promotion_handoff_passed": true,
+      "default_promotion_present": true,
+      "default_promotion_ready": true,
+      "default_promotion_status": "passed",
+      "matches_default_promotion": true,
+      "matrix_failed_check_count": 0,
+      "matrix_handoff_passed": true,
+      "matrix_present": true,
+      "matrix_ready": true,
+      "matrix_status": "passed",
+      "phase2_check_passed": true,
+      "present": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_publish_preflight_release_quality_publication_guard": {
+      "artifact_type": "glass_phase2_status",
+      "default_promotion_check": true,
+      "default_promotion_check_passed": true,
+      "default_promotion_layers_ready": true,
+      "default_promotion_phase2_status": "passed",
+      "default_promotion_present": true,
+      "default_promotion_raw_status": "passed",
+      "default_promotion_ready": true,
+      "matrix_check": true,
+      "matrix_check_passed": true,
+      "matrix_default_check": true,
+      "matrix_default_match_check": true,
+      "matrix_default_phase2_status": "passed",
+      "matrix_default_raw_status": "passed",
+      "matrix_default_ready": true,
+      "matrix_layers_ready": true,
+      "matrix_manifest_match_check": true,
+      "matrix_phase2_status": "passed",
+      "matrix_present": true,
+      "matrix_raw_status": "passed",
+      "matrix_ready": true,
+      "phase2_check_passed": true,
+      "present": true,
+      "ready": true,
+      "release_default_promotion_check": true,
+      "release_matrix_check": true,
+      "release_matrix_default_check": true,
+      "release_matrix_default_match_check": true,
+      "release_matrix_manifest_match_check": true,
+      "status": "publish_preflight_ready"
+    },
+    "phase2_publish_preflight_stack_engine_runtime_default": {
+      "matrix_acceptance_legacy_master_count": 0,
+      "matrix_acceptance_status": "passed",
+      "matrix_pipeline_failed_output_count": 0,
+      "matrix_pipeline_status": "passed",
+      "phase2_check_passed": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_direct_runtime_evidence": {
+      "artifact_type": "windows_publish_preflight",
+      "default_promotion_acceptance_check_count": 24,
+      "default_promotion_acceptance_passed": true,
+      "default_promotion_acceptance_source": "explicit_resident_artifacts_json",
+      "default_promotion_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "default_promotion_pipeline_passed": true,
+      "default_promotion_pipeline_resident_lights": 200,
+      "default_promotion_ready": true,
+      "matches_default_promotion": true,
+      "matrix_acceptance_check_count": 24,
+      "matrix_acceptance_passed": true,
+      "matrix_acceptance_source": "explicit_resident_artifacts_json",
+      "matrix_pipeline_calibration_source": "resident_artifacts_json_fallback",
+      "matrix_pipeline_passed": true,
+      "matrix_pipeline_resident_lights": 200,
+      "matrix_ready": true,
+      "passed": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_quality_metrics_compare": {
+      "artifact_type": "windows_publish_preflight",
+      "default_promotion_failed_check_count": 0,
+      "default_promotion_handoff_passed": true,
+      "default_promotion_present": true,
+      "default_promotion_ready": true,
+      "default_promotion_status": "passed",
+      "matches_default_promotion": true,
+      "matrix_failed_check_count": 0,
+      "matrix_handoff_passed": true,
+      "matrix_present": true,
+      "matrix_ready": true,
+      "matrix_status": "passed",
+      "passed": true,
+      "present": true,
+      "ready": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_release_quality_publication_guard": {
+      "artifact_type": "windows_publish_preflight",
+      "default_promotion_check": true,
+      "default_promotion_check_passed": true,
+      "default_promotion_layers_ready": true,
+      "default_promotion_phase2_status": "passed",
+      "default_promotion_present": true,
+      "default_promotion_raw_status": "passed",
+      "default_promotion_ready": true,
+      "matrix_check": true,
+      "matrix_check_passed": true,
+      "matrix_default_check": true,
+      "matrix_default_match_check": true,
+      "matrix_default_phase2_status": "passed",
+      "matrix_default_raw_status": "passed",
+      "matrix_default_ready": true,
+      "matrix_layers_ready": true,
+      "matrix_manifest_match_check": true,
+      "matrix_phase2_status": "passed",
+      "matrix_present": true,
+      "matrix_raw_status": "passed",
+      "matrix_ready": true,
+      "passed": true,
+      "present": true,
+      "ready": true,
+      "release_default_promotion_check": true,
+      "release_matrix_check": true,
+      "release_matrix_default_check": true,
+      "release_matrix_default_match_check": true,
+      "release_matrix_manifest_match_check": true,
+      "status": "publish_preflight_ready"
+    },
+    "publish_preflight_stack_engine_runtime_default": {
+      "matrix_acceptance_legacy_master_count": 0,
+      "matrix_acceptance_status": "passed",
+      "matrix_pipeline_failed_output_count": 0,
+      "matrix_pipeline_status": "passed",
+      "ready": true,
+      "status": "publish_preflight_ready"
+    }
+  },
+  "passed": true,
+  "recommendation": "publication_chain_ready",
+  "status": "passed"
+}

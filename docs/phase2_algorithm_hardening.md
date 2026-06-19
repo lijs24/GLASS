@@ -6772,6 +6772,25 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 378: Release Decision Publication-Audit Release Quality Guard
+
+- Carry StackEngine publication-audit final release quality publication checks
+  into `glass release-promotion-decision`.
+- Keep legacy publication-audit artifacts without final check names compatible
+  when both raw publish-preflight and Phase2 layers omit them and the older
+  guard chain is passing.
+- Require final raw and Phase2 release quality checks to be present on both
+  sides, passing, and matching when either side carries final-check evidence.
+- Surface raw/Phase2 final-check presence, readiness, match status, and each
+  final check value in release-decision evidence.
+- Add focused tests for legacy-compatible omission, failed final checks, and
+  missing Phase2 final-check evidence.
+- Keep this gate release-decision scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
