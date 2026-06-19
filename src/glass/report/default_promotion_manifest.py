@@ -5,6 +5,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.release_quality_evidence import (
     FINAL_EVIDENCE_DETAIL_FIELDS as _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS,
     FINAL_EVIDENCE_LEGACY_FIELDS as _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_LEGACY_FIELDS,
@@ -390,13 +391,30 @@ def _default_route_acceptance_summary(phase2: dict[str, Any]) -> dict[str, Any]:
         if isinstance(phase2.get("default_route_acceptance"), dict)
         else {}
     )
+    contract = (
+        default_route.get("benchmark_contract")
+        if isinstance(default_route.get("benchmark_contract"), dict)
+        else {}
+    )
     return {
         "present": bool(default_route),
         "path": default_route.get("path"),
         "status": default_route.get("status"),
         "passed": default_route.get("passed"),
         "acceptance_passed": default_route.get("acceptance_passed"),
-        "benchmark_contract": default_route.get("benchmark_contract"),
+        "benchmark_contract": contract,
+        "benchmark_contract_source": default_route.get("benchmark_contract_source")
+        or contract.get("source"),
+        "benchmark_contract_path": default_route.get("benchmark_contract_path")
+        or contract.get("path"),
+        "benchmark_contract_profile": default_route.get("benchmark_contract_profile")
+        or contract.get("profile"),
+        "benchmark_contract_name": default_route.get("benchmark_contract_name")
+        or contract.get("name"),
+        "benchmark_contract_schema_version": default_route.get(
+            "benchmark_contract_schema_version"
+        )
+        or contract.get("schema_version"),
         "speedup_vs_reference": _number(default_route.get("speedup_vs_reference")),
         "active_frames": _int_value(default_route.get("active_frames")),
         "route_contract_passed": default_route.get("route_contract_passed"),
@@ -1620,6 +1638,85 @@ def _release_decision_release_quality_publication_guard(
     }
 
 
+def _benchmark_contract_profile_handoff_summary(
+    decision: dict[str, Any],
+    phase2: dict[str, Any],
+    default_route: dict[str, Any],
+) -> dict[str, Any]:
+    decision_contract = (
+        decision.get("acceptance_benchmark_contract")
+        if isinstance(decision.get("acceptance_benchmark_contract"), dict)
+        else {}
+    )
+    phase2_acceptance = (
+        phase2.get("acceptance_audit")
+        if isinstance(phase2.get("acceptance_audit"), dict)
+        else {}
+    )
+    required_profile = RESIDENT_CUDA_DQ_PROFILE_NAME
+    decision_profile = decision_contract.get("profile")
+    phase2_profile = phase2_acceptance.get("benchmark_contract_profile")
+    default_route_profile = default_route.get("benchmark_contract_profile")
+    decision_check = _decision_check_passed(
+        decision, "acceptance_benchmark_contract_profile"
+    )
+    decision_ready = (
+        bool(decision_contract)
+        and decision_profile == required_profile
+        and decision_check is True
+        and decision_contract.get("ready") is not False
+    )
+    phase2_ready = phase2_profile == required_profile
+    default_route_ready = (
+        default_route.get("present") is True
+        and default_route_profile == required_profile
+    )
+    profiles_agree = (
+        decision_profile == phase2_profile == default_route_profile == required_profile
+    )
+    return {
+        "schema_version": 1,
+        "ready": bool(
+            decision_ready and phase2_ready and default_route_ready and profiles_agree
+        ),
+        "required_profile": required_profile,
+        "profiles_agree": profiles_agree,
+        "decision": {
+            "present": bool(decision_contract),
+            "ready": decision_ready,
+            "check_passed": decision_check,
+            "source": decision_contract.get("source"),
+            "path": decision_contract.get("path"),
+            "profile": decision_profile,
+            "name": decision_contract.get("name"),
+            "schema_version": decision_contract.get("contract_schema_version")
+            or decision_contract.get("schema_version"),
+        },
+        "phase2_acceptance": {
+            "present": bool(phase2_acceptance),
+            "ready": phase2_ready,
+            "source": phase2_acceptance.get("benchmark_contract_source"),
+            "path": phase2_acceptance.get("benchmark_contract_path"),
+            "profile": phase2_profile,
+            "name": phase2_acceptance.get("benchmark_contract_name"),
+            "schema_version": phase2_acceptance.get(
+                "benchmark_contract_schema_version"
+            ),
+        },
+        "default_route": {
+            "present": default_route.get("present"),
+            "ready": default_route_ready,
+            "source": default_route.get("benchmark_contract_source"),
+            "path": default_route.get("benchmark_contract_path"),
+            "profile": default_route_profile,
+            "name": default_route.get("benchmark_contract_name"),
+            "schema_version": default_route.get(
+                "benchmark_contract_schema_version"
+            ),
+        },
+    }
+
+
 def build_default_promotion_manifest(
     *,
     release_decision_json: str | Path,
@@ -1648,6 +1745,11 @@ def build_default_promotion_manifest(
     )
     stack_engine = _stack_engine_summary(phase2)
     default_route = _default_route_acceptance_summary(phase2)
+    benchmark_profile_handoff = _benchmark_contract_profile_handoff_summary(
+        decision,
+        phase2,
+        default_route,
+    )
     quality_metrics_compare = _quality_metrics_compare_summary(phase2)
     resident_winsorized_sweep = _resident_winsorized_sweep_summary(phase2)
     publication_audit = _publication_audit_summary(phase2)
@@ -1729,6 +1831,16 @@ def build_default_promotion_manifest(
             "release_decision_recommends_promotion",
             decision.get("recommendation") == "promote_default_candidate",
             {"actual": decision.get("recommendation"), "required": "promote_default_candidate"},
+        ),
+        _check(
+            "release_benchmark_contract_profile_handoff_passed",
+            benchmark_profile_handoff.get("ready") is True,
+            benchmark_profile_handoff,
+            note=(
+                "Default promotion requires the release decision, Phase2 "
+                "acceptance summary, and default-route acceptance to carry the "
+                "resident CUDA DQ benchmark contract profile."
+            ),
         ),
         _check(
             "phase2_embeds_same_release_decision",
@@ -2287,6 +2399,9 @@ def build_default_promotion_manifest(
             "default_change_ready": decision.get("default_change_ready"),
             "recommendation": decision.get("recommendation"),
             "speedup": decision.get("speedup"),
+            "acceptance_benchmark_contract": benchmark_profile_handoff.get(
+                "decision"
+            ),
             "resident_winsorized_semantics": release_resident_winsorized,
             "direct_runtime_publication_guard": release_direct_publication_guard,
             "quality_compare_publication_guard": release_quality_publication_guard,
@@ -2301,6 +2416,7 @@ def build_default_promotion_manifest(
             "release_decision": phase2_decision,
         },
         "runtime_repeat": runtime,
+        "benchmark_contract_profile_handoff": benchmark_profile_handoff,
         "default_route_acceptance": default_route,
         "quality_metrics_compare": quality_metrics_compare,
         "pipeline_contract": pipeline,
@@ -2337,6 +2453,7 @@ def build_default_promotion_manifest(
 def _markdown(payload: dict[str, Any]) -> str:
     default_candidate = payload.get("default_candidate") or {}
     runtime = payload.get("runtime_repeat") or {}
+    benchmark_profile_handoff = payload.get("benchmark_contract_profile_handoff") or {}
     default_route = payload.get("default_route_acceptance") or {}
     quality_metrics_compare = payload.get("quality_metrics_compare") or {}
     pipeline = payload.get("pipeline_contract") or {}
@@ -2389,6 +2506,21 @@ def _markdown(payload: dict[str, Any]) -> str:
         "",
         "## Default Route Evidence",
         "",
+        (
+            "- Benchmark contract profile handoff: "
+            f"ready=`{benchmark_profile_handoff.get('ready')}` "
+            f"required=`{benchmark_profile_handoff.get('required_profile')}` "
+            f"agreement=`{benchmark_profile_handoff.get('profiles_agree')}`"
+        ),
+        (
+            "- Benchmark contract profiles: "
+            "decision="
+            f"`{(benchmark_profile_handoff.get('decision') or {}).get('profile')}` "
+            "phase2="
+            f"`{(benchmark_profile_handoff.get('phase2_acceptance') or {}).get('profile')}` "
+            "default-route="
+            f"`{(benchmark_profile_handoff.get('default_route') or {}).get('profile')}`"
+        ),
         f"- Present: `{default_route.get('present')}`",
         f"- Status: `{default_route.get('status')}`",
         f"- Passed: `{default_route.get('passed')}`",

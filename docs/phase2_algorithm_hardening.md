@@ -7309,6 +7309,25 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 407: Default Promotion Benchmark Profile Handoff
+
+- Carry the release decision's acceptance benchmark contract profile into
+  `default-promotion-manifest`.
+- Require the release decision, Phase2 acceptance summary, and default-route
+  acceptance summary to agree on `resident_cuda_dq_v1` before default promotion
+  can pass.
+- Add the release-blocking
+  `release_benchmark_contract_profile_handoff_passed` check.
+- Surface the benchmark profile handoff in default-promotion Markdown.
+- Validate the ready path and a legacy/wrong-profile blocker with focused
+  default-promotion tests.
+- Keep this gate default-promotion-policy scoped: no runtime execution change,
+  no benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
