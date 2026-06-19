@@ -7537,6 +7537,27 @@ integration where applicable.
   change, no new public release artifact, and no modification of user input
   directories.
 
+### S2-Gate 418: Resident Registration Matrix Compare
+
+- Add a reusable matrix-compare artifact for CPU/external registration results
+  versus resident CUDA registration results.
+- Compare per-frame presence, status, reference frame, transform model,
+  translation vector, 3x3 matrix Frobenius delta, RMS, inliers, and matched-star
+  counts.
+- Expose `glass resident-registration-matrix-compare` with explicit thresholds
+  for translation delta and matrix delta, optional Markdown output, and
+  fail-on-failure behavior for future benchmark contracts.
+- Validate two synthetic outcomes from the S2-Gate 414-417 artifacts:
+  - external CPU-transform resident handoff exactly matches CPU registration
+    matrices and passes strict thresholds;
+  - quality-reference resident triangle registration matches reference/frame
+    accounting but still exceeds a strict 0.1 px matrix/translation delta,
+    narrowing the remaining parity blocker to resident transform refinement or
+    downstream warp/rejection sensitivity.
+- Keep this gate diagnostic/runtime-validation scoped: no registration formula
+  change, no CUDA kernel change, no integration math change, no package upload,
+  no GitHub release creation, and no modification of user input directories.
+
 ## Gate Rules
 
 Each gate requires:

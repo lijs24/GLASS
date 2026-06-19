@@ -1,0 +1,1184 @@
+{
+  "artifact_type": "resident_registration_matrix_compare",
+  "baseline_label": "cpu_tile",
+  "baseline_reference_frame_id": "F000016",
+  "baseline_registration": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\registration_results.json",
+  "baseline_transform_model": "translation",
+  "candidate_label": "cuda_resident_triangle_quality_reference",
+  "candidate_reference_frame_id": "F000016",
+  "candidate_registration": "runs\\checkpoints\\s2_gate_417_quality_reference_cuda_hardened\\registration_results.json",
+  "candidate_transform_model": "similarity_cuda_triangle",
+  "checks": [
+    {
+      "details": {
+        "baseline_reference_frame_id": "F000016",
+        "candidate_reference_frame_id": "F000016"
+      },
+      "name": "reference_frame_match",
+      "passed": true
+    },
+    {
+      "details": {
+        "baseline_row_count": 16,
+        "candidate_row_count": 16
+      },
+      "name": "row_count_match",
+      "passed": true
+    },
+    {
+      "details": {
+        "missing_frame_count": 0
+      },
+      "name": "missing_frame_rows",
+      "passed": true
+    },
+    {
+      "details": {
+        "status_mismatch_count": 0
+      },
+      "name": "status_rows_match",
+      "passed": true
+    },
+    {
+      "details": {
+        "reference_mismatch_count": 0
+      },
+      "name": "reference_rows_match",
+      "passed": true
+    },
+    {
+      "details": {
+        "max_translation_delta_px": 0.18305392208191398,
+        "threshold": 0.5
+      },
+      "name": "translation_delta_within_limit",
+      "passed": true
+    },
+    {
+      "details": {
+        "max_matrix_delta_frobenius": 0.18305392208191398,
+        "threshold": 0.5
+      },
+      "name": "matrix_delta_within_limit",
+      "passed": true
+    }
+  ],
+  "failed_checks": [],
+  "passed": true,
+  "recommendation": {
+    "next_target": "continue with warp, DQ, rejection, and image parity validation",
+    "status": "registration_matrices_ready"
+  },
+  "rows": [
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.03976333969204295,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.9999893529665655,
+        "y": -0.00874004648784421
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.875,
+        "y": 0.125
+      },
+      "frame_id": "F000013",
+      "linear_delta_frobenius": 8.142188468565683e-18,
+      "matrix_delta_frobenius": 0.18305392208191398,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18305392208191398
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.022269141795840646,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.000117269395446,
+        "y": 0.0002545627357690705
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 1.875,
+        "y": 0.125
+      },
+      "frame_id": "F000014",
+      "linear_delta_frobenius": 4.18562150331221e-17,
+      "matrix_delta_frobenius": 0.17667980987995419,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17667980987995419
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.021330577336375195,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.9987398822904368,
+        "y": 8.278444315124034e-05
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 0.875,
+        "y": 0.125
+      },
+      "frame_id": "F000015",
+      "linear_delta_frobenius": 4.18562150331221e-17,
+      "matrix_delta_frobenius": 0.17582909091423796,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17582909091423796
+    },
+    {
+      "baseline_inliers": 25,
+      "baseline_matched_stars": 25,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.0,
+      "baseline_status": "reference",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "candidate_inliers": 1,
+      "candidate_matched_stars": 1,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "reference",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "frame_id": "F000016",
+      "linear_delta_frobenius": 0.0,
+      "matrix_delta_frobenius": 0.0,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.0
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02347925492047684,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": -0.9975822748075416,
+        "y": -0.005071361523704354
+      },
+      "candidate_inliers": 21,
+      "candidate_matched_stars": 21,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.2182178944349289,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.875,
+        "y": 0.125
+      },
+      "frame_id": "F000017",
+      "linear_delta_frobenius": 1.357031469918116e-17,
+      "matrix_delta_frobenius": 0.17873156740101015,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17873156740101015
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.017541951177749492,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.9992375289487185,
+        "y": -1.0058746536013246
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.875,
+        "y": -0.875
+      },
+      "frame_id": "F000018",
+      "linear_delta_frobenius": 6.510966533370629e-16,
+      "matrix_delta_frobenius": 0.18045259364872085,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18045259364872085
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.021260251459594478,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 1.9937828574277567,
+        "y": -1.0008331969108326
+      },
+      "candidate_inliers": 21,
+      "candidate_matched_stars": 21,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.30860671401023865,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 1.875,
+        "y": -0.875
+      },
+      "frame_id": "F000019",
+      "linear_delta_frobenius": 6.371445816593555e-16,
+      "matrix_delta_frobenius": 0.17304149983025216,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17304149983025216
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.019561726178349833,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 1.001482614433698,
+        "y": -1.0021881404596655
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 0.875,
+        "y": -0.875
+      },
+      "frame_id": "F000020",
+      "linear_delta_frobenius": 9.789575915129814e-17,
+      "matrix_delta_frobenius": 0.17937300473474568,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17937300473474568
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02173355285108584,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.0005259830282682287,
+        "y": -1.0014606036755467
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.125,
+        "y": -0.875
+      },
+      "frame_id": "F000021",
+      "linear_delta_frobenius": 1.8591330541275068e-16,
+      "matrix_delta_frobenius": 0.17818264982089801,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17818264982089801
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.019769361541452243,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": -1.0019108026609658,
+        "y": -0.9967875957707761
+      },
+      "candidate_inliers": 21,
+      "candidate_matched_stars": 21,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.2182178944349289,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.875,
+        "y": -0.875
+      },
+      "frame_id": "F000022",
+      "linear_delta_frobenius": 1.0034315149234653e-16,
+      "matrix_delta_frobenius": 0.1758936335279835,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.1758936335279835
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.03371976840502728,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 3.0057964306162717,
+        "y": -2.0040055775341443
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 3.125,
+        "y": -1.875
+      },
+      "frame_id": "F000023",
+      "linear_delta_frobenius": 1.0279054383339493e-16,
+      "matrix_delta_frobenius": 0.17564717472461508,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17564717472461508
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.03492732353658076,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.00135529484578,
+        "y": -2.00867664335766
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.125,
+        "y": -1.875
+      },
+      "frame_id": "F000024",
+      "linear_delta_frobenius": 1.6827189618683418e-16,
+      "matrix_delta_frobenius": 0.18209189463577177,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18209189463577177
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.04705328545869281,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 1.0002634187507908,
+        "y": -1.9989933762887304
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 0.875,
+        "y": -1.875
+      },
+      "frame_id": "F000025",
+      "linear_delta_frobenius": 9.789575915129814e-17,
+      "matrix_delta_frobenius": 0.17625345795363753,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17625345795363753
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02271422935874267,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.0013415540097980738,
+        "y": -2.0042446745784233
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.125,
+        "y": -1.875
+      },
+      "frame_id": "F000026",
+      "linear_delta_frobenius": 1.655578433073643e-16,
+      "matrix_delta_frobenius": 0.18073841367150828,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18073841367150828
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.024299601021954904,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": -0.99870567562564,
+        "y": -2.002513467237115
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.22360679507255554,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -1.125,
+        "y": -1.875
+      },
+      "frame_id": "F000027",
+      "linear_delta_frobenius": 1.6012971883146387e-16,
+      "matrix_delta_frobenius": 0.17947128097834178,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17947128097834178
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.018388000917621182,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.997876111271836,
+        "y": -3.000762274540527
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.22360679507255554,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 3.125,
+        "y": -2.875
+      },
+      "frame_id": "F000028",
+      "linear_delta_frobenius": 8.810618042862422e-17,
+      "matrix_delta_frobenius": 0.1788201129151236,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.1788201129151236
+    }
+  ],
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "baseline_row_count": 16,
+    "candidate_row_count": 16,
+    "common_row_count": 16,
+    "matrix_delta_frobenius": {
+      "count": 16,
+      "max": 0.18305392208191398,
+      "mean": 0.16714125666991966,
+      "p95": 0.18233240149730734
+    },
+    "missing_frame_count": 0,
+    "reference_mismatch_count": 0,
+    "status_mismatch_count": 0,
+    "translation_delta_px": {
+      "count": 16,
+      "max": 0.18305392208191398,
+      "mean": 0.16714125666991966,
+      "p95": 0.18233240149730734
+    }
+  },
+  "thresholds": {
+    "max_matrix_delta_frobenius": 0.5,
+    "max_translation_delta_px": 0.5
+  },
+  "worst_matrix_rows": [
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.03976333969204295,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.9999893529665655,
+        "y": -0.00874004648784421
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.875,
+        "y": 0.125
+      },
+      "frame_id": "F000013",
+      "linear_delta_frobenius": 8.142188468565683e-18,
+      "matrix_delta_frobenius": 0.18305392208191398,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18305392208191398
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.03492732353658076,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.00135529484578,
+        "y": -2.00867664335766
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.125,
+        "y": -1.875
+      },
+      "frame_id": "F000024",
+      "linear_delta_frobenius": 1.6827189618683418e-16,
+      "matrix_delta_frobenius": 0.18209189463577177,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18209189463577177
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02271422935874267,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.0013415540097980738,
+        "y": -2.0042446745784233
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.125,
+        "y": -1.875
+      },
+      "frame_id": "F000026",
+      "linear_delta_frobenius": 1.655578433073643e-16,
+      "matrix_delta_frobenius": 0.18073841367150828,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18073841367150828
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.017541951177749492,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.9992375289487185,
+        "y": -1.0058746536013246
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.875,
+        "y": -0.875
+      },
+      "frame_id": "F000018",
+      "linear_delta_frobenius": 6.510966533370629e-16,
+      "matrix_delta_frobenius": 0.18045259364872085,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18045259364872085
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.024299601021954904,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": -0.99870567562564,
+        "y": -2.002513467237115
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.22360679507255554,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -1.125,
+        "y": -1.875
+      },
+      "frame_id": "F000027",
+      "linear_delta_frobenius": 1.6012971883146387e-16,
+      "matrix_delta_frobenius": 0.17947128097834178,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17947128097834178
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.019561726178349833,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 1.001482614433698,
+        "y": -1.0021881404596655
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 0.875,
+        "y": -0.875
+      },
+      "frame_id": "F000020",
+      "linear_delta_frobenius": 9.789575915129814e-17,
+      "matrix_delta_frobenius": 0.17937300473474568,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17937300473474568
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.018388000917621182,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.997876111271836,
+        "y": -3.000762274540527
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.22360679507255554,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 3.125,
+        "y": -2.875
+      },
+      "frame_id": "F000028",
+      "linear_delta_frobenius": 8.810618042862422e-17,
+      "matrix_delta_frobenius": 0.1788201129151236,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.1788201129151236
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02347925492047684,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": -0.9975822748075416,
+        "y": -0.005071361523704354
+      },
+      "candidate_inliers": 21,
+      "candidate_matched_stars": 21,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.2182178944349289,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.875,
+        "y": 0.125
+      },
+      "frame_id": "F000017",
+      "linear_delta_frobenius": 1.357031469918116e-17,
+      "matrix_delta_frobenius": 0.17873156740101015,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17873156740101015
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02173355285108584,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.0005259830282682287,
+        "y": -1.0014606036755467
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.125,
+        "y": -0.875
+      },
+      "frame_id": "F000021",
+      "linear_delta_frobenius": 1.8591330541275068e-16,
+      "matrix_delta_frobenius": 0.17818264982089801,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17818264982089801
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.022269141795840646,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.000117269395446,
+        "y": 0.0002545627357690705
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 1.875,
+        "y": 0.125
+      },
+      "frame_id": "F000014",
+      "linear_delta_frobenius": 4.18562150331221e-17,
+      "matrix_delta_frobenius": 0.17667980987995419,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17667980987995419
+    }
+  ],
+  "worst_translation_rows": [
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.03976333969204295,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.9999893529665655,
+        "y": -0.00874004648784421
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.875,
+        "y": 0.125
+      },
+      "frame_id": "F000013",
+      "linear_delta_frobenius": 8.142188468565683e-18,
+      "matrix_delta_frobenius": 0.18305392208191398,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18305392208191398
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.03492732353658076,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.00135529484578,
+        "y": -2.00867664335766
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.125,
+        "y": -1.875
+      },
+      "frame_id": "F000024",
+      "linear_delta_frobenius": 1.6827189618683418e-16,
+      "matrix_delta_frobenius": 0.18209189463577177,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18209189463577177
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02271422935874267,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.0013415540097980738,
+        "y": -2.0042446745784233
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.125,
+        "y": -1.875
+      },
+      "frame_id": "F000026",
+      "linear_delta_frobenius": 1.655578433073643e-16,
+      "matrix_delta_frobenius": 0.18073841367150828,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18073841367150828
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.017541951177749492,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.9992375289487185,
+        "y": -1.0058746536013246
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 2.875,
+        "y": -0.875
+      },
+      "frame_id": "F000018",
+      "linear_delta_frobenius": 6.510966533370629e-16,
+      "matrix_delta_frobenius": 0.18045259364872085,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.18045259364872085
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.024299601021954904,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": -0.99870567562564,
+        "y": -2.002513467237115
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.22360679507255554,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -1.125,
+        "y": -1.875
+      },
+      "frame_id": "F000027",
+      "linear_delta_frobenius": 1.6012971883146387e-16,
+      "matrix_delta_frobenius": 0.17947128097834178,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17947128097834178
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.019561726178349833,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 1.001482614433698,
+        "y": -1.0021881404596655
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 0.875,
+        "y": -0.875
+      },
+      "frame_id": "F000020",
+      "linear_delta_frobenius": 9.789575915129814e-17,
+      "matrix_delta_frobenius": 0.17937300473474568,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17937300473474568
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.018388000917621182,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.997876111271836,
+        "y": -3.000762274540527
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.22360679507255554,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 3.125,
+        "y": -2.875
+      },
+      "frame_id": "F000028",
+      "linear_delta_frobenius": 8.810618042862422e-17,
+      "matrix_delta_frobenius": 0.1788201129151236,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.1788201129151236
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02347925492047684,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": -0.9975822748075416,
+        "y": -0.005071361523704354
+      },
+      "candidate_inliers": 21,
+      "candidate_matched_stars": 21,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.2182178944349289,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.875,
+        "y": 0.125
+      },
+      "frame_id": "F000017",
+      "linear_delta_frobenius": 1.357031469918116e-17,
+      "matrix_delta_frobenius": 0.17873156740101015,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17873156740101015
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.02173355285108584,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 0.0005259830282682287,
+        "y": -1.0014606036755467
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": -0.125,
+        "y": -0.875
+      },
+      "frame_id": "F000021",
+      "linear_delta_frobenius": 1.8591330541275068e-16,
+      "matrix_delta_frobenius": 0.17818264982089801,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17818264982089801
+    },
+    {
+      "baseline_inliers": 24,
+      "baseline_matched_stars": 24,
+      "baseline_reference_frame_id": "F000016",
+      "baseline_rms_px": 0.022269141795840646,
+      "baseline_status": "ok",
+      "baseline_transform_model": "translation",
+      "baseline_translation": {
+        "x": 2.000117269395446,
+        "y": 0.0002545627357690705
+      },
+      "candidate_inliers": 20,
+      "candidate_matched_stars": 20,
+      "candidate_reference_frame_id": "F000016",
+      "candidate_rms_px": 0.0,
+      "candidate_status": "ok",
+      "candidate_transform_model": "similarity_cuda_triangle",
+      "candidate_translation": {
+        "x": 1.875,
+        "y": 0.125
+      },
+      "frame_id": "F000014",
+      "linear_delta_frobenius": 4.18562150331221e-17,
+      "matrix_delta_frobenius": 0.17667980987995419,
+      "present_in_baseline": true,
+      "present_in_candidate": true,
+      "reference_match": true,
+      "status_match": true,
+      "translation_delta_px": 0.17667980987995419
+    }
+  ]
+}

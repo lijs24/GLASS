@@ -63,6 +63,10 @@ from glass.report.resident_registration_compare import (
     build_resident_registration_compare,
     write_resident_registration_compare,
 )
+from glass.report.resident_registration_matrix_compare import (
+    build_resident_registration_matrix_compare,
+    write_resident_registration_matrix_compare,
+)
 from glass.report.resident_runtime_compare import (
     build_resident_runtime_compare,
     write_resident_runtime_compare,
@@ -2447,6 +2451,30 @@ def cmd_resident_registration_compare(args: argparse.Namespace) -> int:
         }
     )
     return 2 if args.fail_on_missing_audits and payload["missing_audit_count"] else 0
+
+
+def cmd_resident_registration_matrix_compare(args: argparse.Namespace) -> int:
+    payload = build_resident_registration_matrix_compare(
+        args.baseline_registration,
+        args.candidate_registration,
+        baseline_label=args.baseline_label,
+        candidate_label=args.candidate_label,
+        max_translation_delta_px=args.max_translation_delta_px,
+        max_matrix_delta_frobenius=args.max_matrix_delta_frobenius,
+    )
+    write_resident_registration_matrix_compare(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload["artifact_type"],
+            "status": payload["status"],
+            "passed": payload["passed"],
+            "failed_checks": payload["failed_checks"],
+            "recommendation": payload["recommendation"]["status"],
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload["passed"] else 0
 
 
 def _label_path_pairs(values: list[str]) -> list[tuple[str, str]]:
@@ -6153,6 +6181,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 if any sweep variant is missing a candidate audit",
     )
     resident_reg_compare.set_defaults(func=cmd_resident_registration_compare)
+
+    resident_reg_matrix = sub.add_parser(
+        "resident-registration-matrix-compare",
+        help="compare CPU/external registration matrices against resident CUDA registration matrices",
+    )
+    resident_reg_matrix.add_argument(
+        "--baseline-registration",
+        required=True,
+        help="baseline registration_results.json or run directory",
+    )
+    resident_reg_matrix.add_argument(
+        "--candidate-registration",
+        required=True,
+        help="candidate registration_results.json or run directory",
+    )
+    resident_reg_matrix.add_argument("--out", required=True, help="output matrix-compare JSON")
+    resident_reg_matrix.add_argument("--markdown", help="optional output Markdown summary")
+    resident_reg_matrix.add_argument("--baseline-label", default="baseline", help="label for baseline rows")
+    resident_reg_matrix.add_argument("--candidate-label", default="candidate", help="label for candidate rows")
+    resident_reg_matrix.add_argument(
+        "--max-translation-delta-px",
+        type=float,
+        default=0.5,
+        help="maximum allowed per-frame translation-vector delta",
+    )
+    resident_reg_matrix.add_argument(
+        "--max-matrix-delta-frobenius",
+        type=float,
+        default=0.05,
+        help="maximum allowed per-frame 3x3 matrix Frobenius delta",
+    )
+    resident_reg_matrix.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 if any matrix-compare check fails",
+    )
+    resident_reg_matrix.set_defaults(func=cmd_resident_registration_matrix_compare)
 
     resident_runtime_compare = sub.add_parser(
         "resident-runtime-compare",
