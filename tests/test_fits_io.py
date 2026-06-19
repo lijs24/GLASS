@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from astropy.io import fits
 
+from glass.io.fits_fast import FastFitsUnsupported, read_simple_fits_image, simple_fits_image_spec
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
-from glass.engine.resident_cuda import _write_resident_outputs
+from glass.engine.resident_cuda import _read_light_timed, _write_resident_outputs
 
 
 def test_fits_image_reader_applies_bscale_bzero_per_tile(tmp_path):
@@ -20,6 +22,59 @@ def test_fits_image_reader_applies_bscale_bzero_per_tile(tmp_path):
         assert reader.shape == (4, 4)
         assert np.allclose(reader.read_tile(1, 3, 1, 4), expected[1:3, 1:4])
     assert np.allclose(read_fits_data(path), expected)
+
+
+def test_fast_fits_reader_matches_astropy_scaled_primary_image(tmp_path):
+    path = tmp_path / "scaled_fast.fits"
+    raw = np.arange(20, dtype=np.int16).reshape(4, 5)
+    hdu = fits.PrimaryHDU(raw)
+    hdu.header["BSCALE"] = 1.5
+    hdu.header["BZERO"] = 42.0
+    hdu.writeto(path)
+
+    spec = simple_fits_image_spec(path)
+    fast = read_simple_fits_image(path)
+    expected = read_fits_data(path)
+
+    assert spec.shape == (4, 5)
+    assert spec.bitpix == 16
+    assert np.allclose(fast, expected)
+
+
+def test_fast_fits_reader_maps_blank_to_nan(tmp_path):
+    path = tmp_path / "blank_fast.fits"
+    raw = np.arange(9, dtype=np.int16).reshape(3, 3)
+    raw[1, 1] = -999
+    hdu = fits.PrimaryHDU(raw)
+    hdu.header["BLANK"] = -999
+    hdu.writeto(path)
+
+    fast = read_simple_fits_image(path)
+
+    assert np.isnan(fast[1, 1])
+    assert fast[0, 0] == 0
+
+
+def test_fast_fits_reader_rejects_non_2d_primary(tmp_path):
+    path = tmp_path / "cube.fits"
+    fits.PrimaryHDU(np.zeros((2, 3, 4), dtype=np.float32)).writeto(path)
+
+    with pytest.raises(FastFitsUnsupported, match="2D primary"):
+        read_simple_fits_image(path)
+
+
+def test_resident_light_timed_records_fast_or_legacy_backend(tmp_path):
+    path = tmp_path / "light.fits"
+    data = np.arange(12, dtype=np.float32).reshape(3, 4)
+    fits.PrimaryHDU(data).writeto(path)
+
+    fast, fast_profile = _read_light_timed(path, fits_read_mode="auto")
+    legacy, legacy_profile = _read_light_timed(path, fits_read_mode="astropy")
+
+    assert np.allclose(fast, legacy)
+    assert fast_profile["fits_reader_backend"] == "fast_simple"
+    assert legacy_profile["fits_reader_backend"] == "astropy_scaled_memmap"
+    assert fast_profile["fits_fast_fallback_reason"] == ""
 
 
 def test_fits_image_reader_maps_blank_to_nan(tmp_path):

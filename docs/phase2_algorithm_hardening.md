@@ -8354,15 +8354,72 @@ integration where applicable.
 - Continue from Gate437 with a substantive runtime gate only.
 - Target the profiled dominant component: warm-cache consumer read/decode wait,
   not blind prefetch growth.
-- Required work:
-  - inspect the FITS read path used by resident prefetch workers;
-  - add a bounded alternative or diagnostic probe that reduces per-frame
-    materialize/decode overhead without changing calibrated pixels;
-  - compare the alternative against Gate437 throughput-v1 warm with shared
-    master-cache hit, DQ closure pass, `193 active`/`7 masked`, and zero output
-    delta;
-  - avoid changing registration defaults, fused warp, rejection semantics, or
-    package/release evidence.
+- Completed work:
+  - added `src/glass/io/fits_fast.py`, a bounded simple-primary FITS reader for
+    2D uncompressed primary images with common `BITPIX`, `BSCALE`, `BZERO`, and
+    `BLANK` handling;
+  - added resident `--resident-fits-read-mode astropy|auto|fast`;
+  - kept `astropy` as the conservative default because the real benchmark does
+    not justify default promotion;
+  - recorded `fits_read_mode`, `fits_backend_counts`, and
+    `fits_fast_fallback_reason_counts` in resident I/O overlap and pipeline
+    artifacts;
+  - added unit and resident artifact tests.
+- Formal real 200-light runs:
+  - fast-auto probe:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate438_fastfits_warm_20260619_212912`;
+  - same-code astropy control:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate438_astropy_control_warm_20260619_213148`;
+  - Gate437 profiled warm reference:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate437_profiled_warm_v1_20260619_210732`.
+- Real benchmark result:
+  - fast-auto used `fast_simple` for `200/200` light frames with no fallback;
+  - fast-auto total elapsed: `17.602828 s`;
+  - astropy-control total elapsed: `17.288359 s`;
+  - fast-auto light pipeline: `6.563764 s`;
+  - astropy-control light pipeline: `6.624954 s`;
+  - fast-auto consumer read wait: `3.832019 s`;
+  - astropy-control consumer read wait: `3.939295 s`;
+  - fast-auto reduced the same-code light bucket by about `0.061190 s` and
+    consumer wait by about `0.107277 s`, but total runtime was slower by about
+    `0.314469 s` due to run-to-run output/write and scheduling variance.
+- Scientific and contract invariants:
+  - shared master-cache hit passed;
+  - DQ pixel closure passed;
+  - frame-mask summary remained `193 active`, `7 masked`,
+    `0 unaudited zero-weight`;
+  - fast-auto vs Gate437 and fast-auto vs same-code astropy-control both
+    produced shape-match true, RMS `0.0`, relative RMS `0.0`, max absolute
+    delta `0.0`, and p99.9 absolute delta `0.0`;
+  - registration defaults, fused warp, rejection semantics, and release/package
+    evidence were not changed.
+- Decision:
+  - Gate438 is a useful diagnostic and bounded read-path probe;
+  - do not promote `auto` or `fast` as the default reader;
+  - keep `astropy` default until a direct decode/upload path improves total
+    runtime, not just one overlapped bucket.
+- Focused tests:
+  `tests/test_fits_io.py`,
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_uses_planner_matching_master_sets`,
+  `tests/test_resident_light_pipeline_profile.py`, and
+  `tests/test_cli_smoke.py` passed together.
+
+### S2-Gate 439: Resident Direct Decode/Upload Path Probe
+
+- Continue from Gate438 with a substantive runtime gate only.
+- Target the remaining resident light bucket without changing image math:
+  - avoid extra host copies or avoid pageable/pinned conversion churn where
+    possible;
+  - test direct decode into reusable pinned host buffers or a native-assisted
+    byteswap/scale path for simple FITS inputs;
+  - preserve `astropy` as the default unless a same-code 200-light run improves
+    total runtime and keeps zero output delta;
+  - record backend, copy/decode, H2D, and calibration timing separately.
+- Required validation:
+  - focused tests;
+  - full `python -m pytest -q`;
+  - real M38 H 200-light warm-cache run against Gate438 astropy control;
+  - DQ closure pass, `193 active`/`7 masked`, and zero output delta.
 
 ## Gate Rules
 

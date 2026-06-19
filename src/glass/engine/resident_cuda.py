@@ -46,6 +46,7 @@ from glass.engine.resident_registration_quality import (
     resident_registration_quality_warning_fields,
     summarize_resident_registration_quality,
 )
+from glass.io.fits_fast import FastFitsUnsupported, read_simple_fits_image_timed
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
@@ -137,8 +138,32 @@ def _add_elapsed(buckets: dict[str, float], key: str, elapsed: float) -> None:
     buckets[key] = float(buckets.get(key, 0.0) + float(elapsed))
 
 
-def _read_light_timed(path: str | Path, output: np.ndarray | None = None) -> tuple[np.ndarray, dict[str, float]]:
+def _value_counts(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[str(value)] = counts.get(str(value), 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _read_light_timed(
+    path: str | Path,
+    output: np.ndarray | None = None,
+    fits_read_mode: str = "astropy",
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if fits_read_mode not in {"auto", "fast", "astropy"}:
+        raise ValueError("fits_read_mode must be auto, fast, or astropy")
     total_start = perf_counter()
+    fallback_reason = ""
+    if fits_read_mode in {"auto", "fast"}:
+        try:
+            data, profile = read_simple_fits_image_timed(path, dtype=np.float32, output=output)
+            profile["fits_read_mode_requested"] = fits_read_mode
+            profile["fits_fast_fallback_reason"] = ""
+            return data, profile
+        except FastFitsUnsupported as exc:
+            if fits_read_mode == "fast":
+                raise
+            fallback_reason = str(exc)
     open_start = perf_counter()
     with FitsImageReader(path) as reader:
         open_elapsed = perf_counter() - open_start
@@ -153,6 +178,10 @@ def _read_light_timed(path: str | Path, output: np.ndarray | None = None) -> tup
         "total": total_elapsed,
         "fits_open": open_elapsed,
         "fits_materialize_decode": materialize_elapsed,
+        "fits_reader_backend": "astropy_scaled_memmap",
+        "fits_read_mode_requested": fits_read_mode,
+        "fits_fast_supported": False,
+        "fits_fast_fallback_reason": fallback_reason,
     }
 
 
@@ -166,6 +195,7 @@ class _LightPrefetcher:
         height: int | None = None,
         width: int | None = None,
         release_refill_mode: str = "immediate",
+        fits_read_mode: str = "astropy",
     ):
         self.light_frames = light_frames
         self.depth = max(0, int(depth))
@@ -173,7 +203,10 @@ class _LightPrefetcher:
         self.pinned_ring = bool(pinned_ring and self.depth > 0)
         if release_refill_mode not in {"immediate", "queued", "deferred"}:
             raise ValueError("release_refill_mode must be immediate, queued, or deferred")
+        if fits_read_mode not in {"auto", "fast", "astropy"}:
+            raise ValueError("fits_read_mode must be auto, fast, or astropy")
         self.release_refill_mode = release_refill_mode
+        self.fits_read_mode = fits_read_mode
         self.height = height
         self.width = width
         self.executor: ThreadPoolExecutor | None = None
@@ -246,7 +279,12 @@ class _LightPrefetcher:
                     slot_id = self.free_slots.pop()
                     slot = self.pinned_slots[slot_id]
                 frame = self.light_frames[self.next_submit]
-                self.pending[self.next_submit] = self.executor.submit(_read_light_timed, frame["path"], slot)
+                self.pending[self.next_submit] = self.executor.submit(
+                    _read_light_timed,
+                    frame["path"],
+                    slot,
+                    self.fits_read_mode,
+                )
                 if slot_id is not None:
                     self.inflight_slots[self.next_submit] = slot_id
                     self.max_inflight_slots = max(self.max_inflight_slots, len(self.inflight_slots))
@@ -282,9 +320,12 @@ class _LightPrefetcher:
             self._fill()
             self.release_refill_deferred_count = 0
 
-    def result(self, index: int) -> tuple[np.ndarray, dict[str, float], float]:
+    def result(self, index: int) -> tuple[np.ndarray, dict[str, Any], float]:
         if self.executor is None:
-            data, read_profile = _read_light_timed(self.light_frames[index]["path"])
+            data, read_profile = _read_light_timed(
+                self.light_frames[index]["path"],
+                fits_read_mode=self.fits_read_mode,
+            )
             return data, read_profile, read_profile["total"]
         with self.lock:
             future = self.pending.pop(index, None)
@@ -2711,6 +2752,7 @@ def run_resident_calibration_integration(
     resident_master_cache_dir: str | Path | None = None,
     resident_output_maps: str = "audit",
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
+    resident_fits_read_mode: str = "astropy",
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -2720,6 +2762,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_output_maps must be audit, science, or minimal")
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
         raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
+    if resident_fits_read_mode not in {"auto", "fast", "astropy"}:
+        raise ValueError("resident_fits_read_mode must be auto, fast, or astropy")
     if resident_registration not in {
         "off",
         "translation_preview",
@@ -3046,6 +3090,8 @@ def run_resident_calibration_integration(
             per_frame_read_worker_s: list[float] = []
             per_frame_fits_open_s: list[float] = []
             per_frame_fits_materialize_decode_s: list[float] = []
+            per_frame_fits_backend: list[str] = []
+            per_frame_fits_fallback_reason: list[str] = []
             per_frame_calibrate_s: list[float] = []
             per_frame_host_copy_s: list[float] = []
             per_frame_h2d_s: list[float] = []
@@ -3172,6 +3218,7 @@ def run_resident_calibration_integration(
                 height=height,
                 width=width,
                 release_refill_mode=resident_prefetch_refill_mode,
+                fits_read_mode=resident_fits_read_mode,
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
                 if calibration_batch_enabled:
@@ -3228,6 +3275,10 @@ def run_resident_calibration_integration(
                             per_frame_fits_materialize_decode_s.append(
                                 float(read_profile.get("fits_materialize_decode", 0.0))
                             )
+                            per_frame_fits_backend.append(str(read_profile.get("fits_reader_backend", "unknown")))
+                            fallback_reason = str(read_profile.get("fits_fast_fallback_reason", "") or "")
+                            if fallback_reason:
+                                per_frame_fits_fallback_reason.append(fallback_reason)
                             per_frame_read_s.append(read_wait_elapsed)
                             batch_items.append((index, frame, light, float(frame.get("exposure_s") or 0.0)))
                             batch_frame_starts.append(frame_start)
@@ -3432,6 +3483,10 @@ def run_resident_calibration_integration(
                         per_frame_fits_materialize_decode_s.append(
                             float(read_profile.get("fits_materialize_decode", 0.0))
                         )
+                        per_frame_fits_backend.append(str(read_profile.get("fits_reader_backend", "unknown")))
+                        fallback_reason = str(read_profile.get("fits_fast_fallback_reason", "") or "")
+                        if fallback_reason:
+                            per_frame_fits_fallback_reason.append(fallback_reason)
                         per_frame_read_s.append(read_wait_elapsed)
                         calibrate_start = perf_counter()
                         try:
@@ -7050,6 +7105,8 @@ def run_resident_calibration_integration(
             read_worker_timing = _timing_summary(per_frame_read_worker_s)
             fits_open_timing = _timing_summary(per_frame_fits_open_s)
             fits_materialize_decode_timing = _timing_summary(per_frame_fits_materialize_decode_s)
+            fits_backend_counts = _value_counts(per_frame_fits_backend)
+            fits_fallback_reason_counts = _value_counts(per_frame_fits_fallback_reason)
             calibrate_timing = _timing_summary(per_frame_calibrate_s)
             host_copy_timing = _timing_summary(per_frame_host_copy_s)
             h2d_timing = _timing_summary(per_frame_h2d_s)
@@ -7097,6 +7154,9 @@ def run_resident_calibration_integration(
                 "prefetch_enabled": bool(resident_prefetch_frames > 0),
                 "prefetch_frames": int(resident_prefetch_frames),
                 "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
+                "fits_read_mode": resident_fits_read_mode,
+                "fits_backend_counts": fits_backend_counts,
+                "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -7123,6 +7183,9 @@ def run_resident_calibration_integration(
                 "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                 "prefetch_refill_mode": resident_prefetch_refill_mode,
                 "h2d_mode": resident_h2d_mode,
+                "fits_read_mode": resident_fits_read_mode,
+                "fits_backend_counts": fits_backend_counts,
+                "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                 "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
                 "calibration_batch_requested_streams": int(resident_calibration_streams),
                 "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
@@ -7336,6 +7399,9 @@ def run_resident_calibration_integration(
                         "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                         "prefetch_refill_mode": resident_prefetch_refill_mode,
                         "h2d_mode": resident_h2d_mode,
+                        "fits_read_mode": resident_fits_read_mode,
+                        "fits_backend_counts": fits_backend_counts,
+                        "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
                         "calibration_event_reuse": bool(

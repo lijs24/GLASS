@@ -3366,18 +3366,25 @@ def test_cli_resident_cuda_uses_planner_matching_master_sets(tmp_path: Path):
             "none",
             "--resident-registration",
             "off",
+            "--resident-fits-read-mode",
+            "auto",
             "--flat-floor",
             "0.05",
         ]
     ) == 0
 
     resident = read_json(run / "resident_artifacts.json")
-    master_stats = resident["artifacts"][0]["master_stats"]
+    artifact = resident["artifacts"][0]
+    master_stats = artifact["master_stats"]
+    io_pipeline = artifact["resident_io_pipeline"]
 
     assert master_stats["calibration_group_policy"] == "planner_matching_groups_per_light"
     assert master_stats["set_count"] == 2
     assert {item["dark_count"] for item in master_stats["sets"].values()} == {1}
     assert len({item["dark_group"] for item in master_stats["sets"].values()}) == 2
+    assert io_pipeline["fits_read_mode"] == "auto"
+    assert io_pipeline["fits_backend_counts"]["fast_simple"] >= 1
+    assert io_pipeline["fits_fast_fallback_reason_counts"] == {}
 
 
 def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path):

@@ -1066,6 +1066,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
                 resident_winsorized_mode=args.resident_winsorized_mode,
+                resident_fits_read_mode=args.resident_fits_read_mode,
             ),
         )
     elif plan.executable:
@@ -1190,6 +1191,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_master_cache_dir=args.resident_master_cache_dir,
                 resident_output_maps=args.resident_output_maps,
                 resident_winsorized_mode=args.resident_winsorized_mode,
+                resident_fits_read_mode=args.resident_fits_read_mode,
             ),
         )
         write_run_state(args.out, state)
@@ -4196,6 +4198,15 @@ def build_parser() -> argparse.ArgumentParser:
             "mean/std approximation, hardened_cpu_parity opts into the Gate261 median/IQR parity prototype"
         ),
     )
+    run.add_argument(
+        "--resident-fits-read-mode",
+        choices=["auto", "fast", "astropy"],
+        default="astropy",
+        help=(
+            "resident light FITS reader: astropy is the conservative default; auto tries the bounded "
+            "simple-primary fast path and falls back to astropy; fast requires the bounded path"
+        ),
+    )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
     run.add_argument(
         "--integration-weighting",
@@ -4589,6 +4600,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "resident CUDA winsorized_sigma implementation for audit: fast_approx keeps the current "
             "optimized approximation, hardened_cpu_parity opts into the Gate261 median/IQR parity prototype"
+        ),
+    )
+    audit.add_argument(
+        "--resident-fits-read-mode",
+        choices=["auto", "fast", "astropy"],
+        default="astropy",
+        help=(
+            "resident audit light FITS reader; astropy is the conservative default, auto tries bounded "
+            "fast primary-image reading with astropy fallback"
         ),
     )
     audit.add_argument(
