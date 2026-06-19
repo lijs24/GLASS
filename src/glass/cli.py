@@ -79,6 +79,10 @@ from glass.report.resident_fits_auto_regression import (
     build_resident_fits_auto_regression,
     write_resident_fits_auto_regression,
 )
+from glass.report.resident_fits_default_matrix import (
+    build_resident_fits_default_matrix,
+    write_resident_fits_default_matrix,
+)
 from glass.report.resident_parity_summary import (
     build_resident_parity_summary,
     write_resident_parity_summary,
@@ -2633,6 +2637,22 @@ def cmd_resident_fits_auto_regression(args: argparse.Namespace) -> int:
             "status": payload.get("status"),
             "passed": payload.get("passed"),
             "failed_checks": payload.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload.get("passed") else 0
+
+
+def cmd_resident_fits_default_matrix(args: argparse.Namespace) -> int:
+    payload = build_resident_fits_default_matrix(args.cases)
+    write_resident_fits_default_matrix(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "failed_cases": payload.get("failed_cases"),
             "out": args.out,
             "markdown": args.markdown,
         }
@@ -6585,6 +6605,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 when the guarded-auto regression contract fails",
     )
     resident_fits_auto_regression.set_defaults(func=cmd_resident_fits_auto_regression)
+
+    resident_fits_default_matrix = sub.add_parser(
+        "resident-fits-default-matrix",
+        help="audit resident FITS default/fallback compatibility across run artifacts",
+    )
+    resident_fits_default_matrix.add_argument("--cases", required=True, help="matrix case JSON")
+    resident_fits_default_matrix.add_argument("--out", required=True, help="output matrix JSON")
+    resident_fits_default_matrix.add_argument("--markdown", help="optional Markdown summary")
+    resident_fits_default_matrix.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 when any compatibility matrix case fails",
+    )
+    resident_fits_default_matrix.set_defaults(func=cmd_resident_fits_default_matrix)
 
     resident_parity = sub.add_parser(
         "resident-parity-summary",

@@ -7,6 +7,7 @@ import pytest
 
 from glass.cli import _apply_resident_runtime_preset
 from glass.cli import _resolve_execution_defaults
+from glass.cli import _resolve_resident_fits_read_mode_default
 from glass.cli import build_parser
 from glass.cli import main
 from glass.engine.contracts import DQFlag
@@ -209,6 +210,19 @@ def test_audit_backend_cpu_keeps_tile_fallback() -> None:
     assert args.memory_mode == "tile"
     assert resolution["reason"] == "resident_default_fallback_non_cuda_backend"
     assert resolution["requested_memory_mode"] == "resident"
+
+
+def test_cpu_tile_path_keeps_resident_fits_default_unused() -> None:
+    args = _parse_cli(["run", "--plan", "plan.json", "--out", "run", "--backend", "cpu"])
+
+    _resolve_execution_defaults(args, {"cuda_available": True}, command="run")
+    resolution = _resolve_resident_fits_read_mode_default(args, command="run")
+
+    assert args.backend == "cpu"
+    assert args.memory_mode == "tile"
+    assert args.resident_fits_read_mode == "astropy"
+    assert resolution["source"] == "unused_non_resident"
+    assert resolution["effective"] == "astropy"
 
 
 def test_audit_defaults_fallback_to_tile_for_unsupported_weighting() -> None:

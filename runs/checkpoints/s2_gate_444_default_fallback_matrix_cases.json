@@ -1,0 +1,66 @@
+{
+  "cases": [
+    {
+      "name": "default_compatible_u16",
+      "run": "runs/checkpoints/s2_gate_444_matrix_work/compatible_u16/run_default",
+      "expect": {
+        "resident": true,
+        "resolution_source": "resident_cuda_guarded_auto_default",
+        "fits_read_mode_requested": "auto",
+        "fits_read_mode_effective": "native_u16_gpu",
+        "raw_gpu_selected": true,
+        "raw_gpu_checked": true,
+        "raw_gpu_eligible": true,
+        "raw_gpu_decode_enabled": true,
+        "fallback_reason_counts": {},
+        "backend_count_min": {
+          "native_u16be_raw": 2
+        }
+      }
+    },
+    {
+      "name": "default_incompatible_float32",
+      "run": "runs/checkpoints/s2_gate_444_matrix_work/incompatible_float32/run_default",
+      "expect": {
+        "resident": true,
+        "resolution_source": "resident_cuda_guarded_auto_default",
+        "fits_read_mode_requested": "auto",
+        "fits_read_mode_effective": "auto",
+        "raw_gpu_selected": false,
+        "raw_gpu_checked": true,
+        "raw_gpu_eligible": false,
+        "raw_gpu_decode_enabled": false,
+        "fallback_reason_min": {
+          "bitpix_not_16:-32": 2
+        },
+        "backend_count_min": {
+          "fast_simple": 2
+        }
+      }
+    },
+    {
+      "name": "explicit_astropy_escape_hatch",
+      "run": "runs/checkpoints/s2_gate_444_matrix_work/compatible_u16/run_explicit_astropy",
+      "expect": {
+        "resident": true,
+        "resolution_source": "explicit",
+        "fits_read_mode_requested": "astropy",
+        "fits_read_mode_effective": "astropy",
+        "raw_gpu_selected": false,
+        "raw_gpu_checked": false,
+        "raw_gpu_decode_enabled": false,
+        "backend_count_min": {
+          "astropy_scaled_memmap": 2
+        }
+      }
+    },
+    {
+      "name": "cpu_tile_unaffected",
+      "run": "runs/checkpoints/s2_gate_444_matrix_work/cpu_tile/run_calibration",
+      "expect": {
+        "resident": false,
+        "resolution_source": "unused_non_resident"
+      }
+    }
+  ]
+}

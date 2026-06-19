@@ -3649,6 +3649,62 @@ def test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto(tmp_path: Path
     )
 
 
+def test_cli_resident_cuda_default_fits_read_mode_falls_back_for_float32_group(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_dark_group_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_default_guarded_auto_float32"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+    selection = io_pipeline["resident_fits_auto_selection"]
+    mode_resolution = io_pipeline["fits_read_mode_resolution"]
+
+    assert io_pipeline["fits_read_mode"] == "auto"
+    assert io_pipeline["fits_read_mode_requested"] == "auto"
+    assert io_pipeline["fits_read_mode_effective"] == "auto"
+    assert io_pipeline["fits_backend_counts"]["fast_simple"] >= 1
+    assert io_pipeline["raw_gpu_decode_enabled"] is False
+    assert mode_resolution["source"] == "resident_cuda_guarded_auto_default"
+    assert selection["fallback_mode"] == "auto"
+    assert selection["fallback_reason"] == "raw_u16_gpu_group_ineligible"
+    assert selection["raw_u16_gpu"]["checked"] is True
+    assert selection["raw_u16_gpu"]["selected"] is False
+    assert selection["raw_u16_gpu"]["eligible"] is False
+    assert selection["raw_u16_gpu"]["fallback_reason_counts"]["bitpix_not_16:-32"] == 2
+
+
 def test_cli_resident_cuda_explicit_astropy_fits_read_mode_is_preserved(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _u16_gpu_decode_dataset(tmp_path)

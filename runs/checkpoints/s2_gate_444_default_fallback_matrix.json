@@ -1,0 +1,552 @@
+{
+  "artifact_type": "resident_fits_default_matrix",
+  "case_count": 4,
+  "cases": [
+    {
+      "checks": [
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true
+          },
+          "name": "resident_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "resident_cuda_guarded_auto_default",
+            "expected": "resident_cuda_guarded_auto_default"
+          },
+          "name": "resolution_source_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "auto",
+            "expected": "auto"
+          },
+          "name": "fits_read_mode_requested_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "native_u16_gpu",
+            "expected": "native_u16_gpu"
+          },
+          "name": "fits_read_mode_effective_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true
+          },
+          "name": "raw_gpu_decode_enabled_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true,
+            "raw_u16_gpu": {
+              "checked": true,
+              "checked_frame_count": 2,
+              "eligible": true,
+              "eligible_frame_count": 2,
+              "fallback_reason_counts": {},
+              "runtime_eligible": true,
+              "selected": true
+            }
+          },
+          "name": "raw_gpu_checked_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true,
+            "raw_u16_gpu": {
+              "checked": true,
+              "checked_frame_count": 2,
+              "eligible": true,
+              "eligible_frame_count": 2,
+              "fallback_reason_counts": {},
+              "runtime_eligible": true,
+              "selected": true
+            }
+          },
+          "name": "raw_gpu_selected_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true,
+            "raw_u16_gpu": {
+              "checked": true,
+              "checked_frame_count": 2,
+              "eligible": true,
+              "eligible_frame_count": 2,
+              "fallback_reason_counts": {},
+              "runtime_eligible": true,
+              "selected": true
+            }
+          },
+          "name": "raw_gpu_eligible_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": {},
+            "expected": {}
+          },
+          "name": "fallback_reason_counts_match",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 2,
+            "backend_counts": {
+              "native_u16be_raw": 2
+            },
+            "required_min": 2
+          },
+          "name": "backend_native_u16be_raw_count_min",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "failed_checks": [],
+      "name": "default_compatible_u16",
+      "passed": true,
+      "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default",
+      "summary": {
+        "backend_counts": {
+          "native_u16be_raw": 2
+        },
+        "fits_read_mode": "auto",
+        "fits_read_mode_effective": "native_u16_gpu",
+        "fits_read_mode_requested": "auto",
+        "fits_read_mode_resolution": {
+          "command": "run",
+          "default": "auto",
+          "effective": "auto",
+          "escape_hatch": "--resident-fits-read-mode astropy",
+          "explicit": false,
+          "fallback": "astropy",
+          "reason": "resident_cuda_default_uses_guarded_auto_reader",
+          "requested": null,
+          "schema_version": 1,
+          "source": "resident_cuda_guarded_auto_default"
+        },
+        "name": "default_compatible_u16",
+        "raw_gpu_decode_enabled": true,
+        "raw_u16_gpu": {
+          "checked": true,
+          "checked_frame_count": 2,
+          "eligible": true,
+          "eligible_frame_count": 2,
+          "fallback_reason_counts": {},
+          "runtime_eligible": true,
+          "selected": true
+        },
+        "resident": true,
+        "resident_artifact_count": 1,
+        "resolution_explicit": false,
+        "resolution_source": "resident_cuda_guarded_auto_default",
+        "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_default",
+        "run_timing_present": true
+      }
+    },
+    {
+      "checks": [
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true
+          },
+          "name": "resident_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "resident_cuda_guarded_auto_default",
+            "expected": "resident_cuda_guarded_auto_default"
+          },
+          "name": "resolution_source_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "auto",
+            "expected": "auto"
+          },
+          "name": "fits_read_mode_requested_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "auto",
+            "expected": "auto"
+          },
+          "name": "fits_read_mode_effective_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": false,
+            "expected": false
+          },
+          "name": "raw_gpu_decode_enabled_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true,
+            "raw_u16_gpu": {
+              "checked": true,
+              "checked_frame_count": 2,
+              "eligible": false,
+              "eligible_frame_count": 0,
+              "fallback_reason_counts": {
+                "bitpix_not_16:-32": 2
+              },
+              "runtime_eligible": true,
+              "selected": false
+            }
+          },
+          "name": "raw_gpu_checked_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": false,
+            "expected": false,
+            "raw_u16_gpu": {
+              "checked": true,
+              "checked_frame_count": 2,
+              "eligible": false,
+              "eligible_frame_count": 0,
+              "fallback_reason_counts": {
+                "bitpix_not_16:-32": 2
+              },
+              "runtime_eligible": true,
+              "selected": false
+            }
+          },
+          "name": "raw_gpu_selected_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": false,
+            "expected": false,
+            "raw_u16_gpu": {
+              "checked": true,
+              "checked_frame_count": 2,
+              "eligible": false,
+              "eligible_frame_count": 0,
+              "fallback_reason_counts": {
+                "bitpix_not_16:-32": 2
+              },
+              "runtime_eligible": true,
+              "selected": false
+            }
+          },
+          "name": "raw_gpu_eligible_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 2,
+            "backend_counts": {
+              "fast_simple": 2
+            },
+            "required_min": 2
+          },
+          "name": "backend_fast_simple_count_min",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 2,
+            "fallback_reason_counts": {
+              "bitpix_not_16:-32": 2
+            },
+            "required_min": 2
+          },
+          "name": "fallback_reason_bitpix_not_16:-32_count_min",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "failed_checks": [],
+      "name": "default_incompatible_float32",
+      "passed": true,
+      "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\incompatible_float32\\run_default",
+      "summary": {
+        "backend_counts": {
+          "fast_simple": 2
+        },
+        "fits_read_mode": "auto",
+        "fits_read_mode_effective": "auto",
+        "fits_read_mode_requested": "auto",
+        "fits_read_mode_resolution": {
+          "command": "run",
+          "default": "auto",
+          "effective": "auto",
+          "escape_hatch": "--resident-fits-read-mode astropy",
+          "explicit": false,
+          "fallback": "astropy",
+          "reason": "resident_cuda_default_uses_guarded_auto_reader",
+          "requested": null,
+          "schema_version": 1,
+          "source": "resident_cuda_guarded_auto_default"
+        },
+        "name": "default_incompatible_float32",
+        "raw_gpu_decode_enabled": false,
+        "raw_u16_gpu": {
+          "checked": true,
+          "checked_frame_count": 2,
+          "eligible": false,
+          "eligible_frame_count": 0,
+          "fallback_reason_counts": {
+            "bitpix_not_16:-32": 2
+          },
+          "runtime_eligible": true,
+          "selected": false
+        },
+        "resident": true,
+        "resident_artifact_count": 1,
+        "resolution_explicit": false,
+        "resolution_source": "resident_cuda_guarded_auto_default",
+        "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\incompatible_float32\\run_default",
+        "run_timing_present": true
+      }
+    },
+    {
+      "checks": [
+        {
+          "evidence": {
+            "actual": true,
+            "expected": true
+          },
+          "name": "resident_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "explicit",
+            "expected": "explicit"
+          },
+          "name": "resolution_source_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "astropy",
+            "expected": "astropy"
+          },
+          "name": "fits_read_mode_requested_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "astropy",
+            "expected": "astropy"
+          },
+          "name": "fits_read_mode_effective_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": false,
+            "expected": false
+          },
+          "name": "raw_gpu_decode_enabled_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": false,
+            "expected": false,
+            "raw_u16_gpu": {
+              "checked": false,
+              "checked_frame_count": 0,
+              "eligible": false,
+              "eligible_frame_count": 0,
+              "fallback_reason_counts": {},
+              "runtime_eligible": true,
+              "selected": false
+            }
+          },
+          "name": "raw_gpu_checked_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": false,
+            "expected": false,
+            "raw_u16_gpu": {
+              "checked": false,
+              "checked_frame_count": 0,
+              "eligible": false,
+              "eligible_frame_count": 0,
+              "fallback_reason_counts": {},
+              "runtime_eligible": true,
+              "selected": false
+            }
+          },
+          "name": "raw_gpu_selected_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": 2,
+            "backend_counts": {
+              "astropy_scaled_memmap": 2
+            },
+            "required_min": 2
+          },
+          "name": "backend_astropy_scaled_memmap_count_min",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "failed_checks": [],
+      "name": "explicit_astropy_escape_hatch",
+      "passed": true,
+      "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_explicit_astropy",
+      "summary": {
+        "backend_counts": {
+          "astropy_scaled_memmap": 2
+        },
+        "fits_read_mode": "astropy",
+        "fits_read_mode_effective": "astropy",
+        "fits_read_mode_requested": "astropy",
+        "fits_read_mode_resolution": {
+          "command": "run",
+          "default": "auto",
+          "effective": "astropy",
+          "escape_hatch": "--resident-fits-read-mode astropy",
+          "explicit": true,
+          "fallback": "astropy",
+          "reason": "user_explicit_resident_fits_read_mode",
+          "requested": "astropy",
+          "schema_version": 1,
+          "source": "explicit"
+        },
+        "name": "explicit_astropy_escape_hatch",
+        "raw_gpu_decode_enabled": false,
+        "raw_u16_gpu": {
+          "checked": false,
+          "checked_frame_count": 0,
+          "eligible": false,
+          "eligible_frame_count": 0,
+          "fallback_reason_counts": {},
+          "runtime_eligible": true,
+          "selected": false
+        },
+        "resident": true,
+        "resident_artifact_count": 1,
+        "resolution_explicit": true,
+        "resolution_source": "explicit",
+        "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\compatible_u16\\run_explicit_astropy",
+        "run_timing_present": true
+      }
+    },
+    {
+      "checks": [
+        {
+          "evidence": {
+            "actual": false,
+            "expected": false
+          },
+          "name": "resident_matches",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": "unused_non_resident",
+            "expected": "unused_non_resident"
+          },
+          "name": "resolution_source_matches",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "failed_checks": [],
+      "name": "cpu_tile_unaffected",
+      "passed": true,
+      "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\cpu_tile\\run_calibration",
+      "summary": {
+        "backend_counts": {},
+        "fits_read_mode": null,
+        "fits_read_mode_effective": null,
+        "fits_read_mode_requested": null,
+        "fits_read_mode_resolution": {
+          "command": "run",
+          "default": "auto",
+          "effective": "astropy",
+          "escape_hatch": "--resident-fits-read-mode astropy",
+          "explicit": false,
+          "fallback": "astropy",
+          "reason": "non_resident_path_keeps_compatible_placeholder",
+          "requested": null,
+          "schema_version": 1,
+          "source": "unused_non_resident"
+        },
+        "name": "cpu_tile_unaffected",
+        "raw_gpu_decode_enabled": null,
+        "raw_u16_gpu": {
+          "checked": null,
+          "checked_frame_count": 0,
+          "eligible": null,
+          "eligible_frame_count": 0,
+          "fallback_reason_counts": {},
+          "runtime_eligible": null,
+          "selected": null
+        },
+        "resident": false,
+        "resident_artifact_count": 0,
+        "resolution_explicit": false,
+        "resolution_source": "unused_non_resident",
+        "run": "runs\\checkpoints\\s2_gate_444_matrix_work\\cpu_tile\\run_calibration",
+        "run_timing_present": true
+      }
+    }
+  ],
+  "cases_path": "runs\\checkpoints\\s2_gate_444_default_fallback_matrix_cases.json",
+  "created_at": "2026-06-19T15:51:06+00:00",
+  "failed_cases": [],
+  "passed": true,
+  "schema_version": 1,
+  "status": "passed"
+}

@@ -8684,6 +8684,54 @@ Completed in Gate443:
   another full 200-light benchmark unless the fallback implementation changes
   resident image math.
 
+Completed in Gate444:
+
+- Added `glass resident-fits-default-matrix`, a compact compatibility audit
+  that consumes GLASS run artifacts and verifies expected resident/default FITS
+  routing per case.
+- Added matrix checks for:
+  - resident CUDA default on compatible `BITPIX=16`, `BSCALE=1`,
+    `BZERO=32768`, no-`BLANK` light groups selecting `native_u16_gpu`;
+  - resident CUDA default on incompatible simple `float32` FITS lights staying
+    in guarded `auto` and recording `bitpix_not_16:-32` fallback reasons;
+  - explicit `--resident-fits-read-mode astropy` preserving the conservative
+    escape hatch;
+  - CPU/tile runs remaining non-resident with
+    `source=unused_non_resident`.
+- Added focused tests for the matrix builder/CLI, actual resident CUDA default
+  fallback on small `float32` lights, actual default raw-u16 selection, explicit
+  astropy preservation, and CPU/tile default parsing.
+- Small synthetic CUDA validation artifacts:
+  - cases:
+    `runs/checkpoints/s2_gate_444_default_fallback_matrix_cases.json`;
+  - matrix JSON:
+    `runs/checkpoints/s2_gate_444_default_fallback_matrix.json`;
+  - matrix Markdown:
+    `runs/checkpoints/s2_gate_444_default_fallback_matrix.md`.
+- Matrix result: 4/4 cases passed with failed cases `none`.
+- This gate did not change image math. The 200-light benchmark was not rerun
+  because the implementation adds an artifact audit and compatibility tests
+  around the Gate443 default route rather than changing the resident
+  calibration, registration, warp, rejection, or integration kernels.
+
+### S2-Gate 445: StackEngine Default Path Audit And Gap Closure
+
+- Return from FITS-reader runtime compatibility to the core Phase 2 objective:
+  StackEngine should become the default master-frame and light-integration path
+  with DQ/mask contracts preserved.
+- Audit current default paths for:
+  - master bias/dark/flat StackEngine usage and strict fallback behavior;
+  - CPU/tiled light integration StackEngine usage;
+  - resident CUDA integration surfaces that remain outside StackEngine or only
+    emulate the StackEngine contract;
+  - DQ/mask artifact parity between CPU StackEngine and resident CUDA.
+- Add a machine-readable audit or strengthen the existing StackEngine contract
+  so default-path gaps are explicit and fail when they regress.
+- Use small synthetic CPU/resident fixtures for numerical/map parity; run the
+  200-light benchmark only if this gate changes default image math or resident
+  frame admission.
+- Do not add release/default-promotion/report-handoff gates under this number.
+
 ## Gate Rules
 
 Each gate requires:
