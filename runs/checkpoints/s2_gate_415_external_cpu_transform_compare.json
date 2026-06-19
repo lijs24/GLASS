@@ -1,0 +1,121 @@
+{
+  "abs_diff_p50": 0.001373291015625,
+  "abs_diff_p90": 0.06415557861328125,
+  "abs_diff_p99": 0.1982856750488282,
+  "abs_diff_p999": 1.163089218139676,
+  "candidate_transform": {
+    "applied": false,
+    "clip_high": null,
+    "clip_low": null,
+    "offset": 0.0,
+    "scale": 1.0
+  },
+  "comparison_region": {
+    "compared_pixels": 246016,
+    "compared_shape": [
+      496,
+      496
+    ],
+    "coverage_fraction": 1.0,
+    "coverage_max": 16.0,
+    "coverage_median": 16.0,
+    "coverage_min": 10.0,
+    "coverage_p1": 15.0,
+    "coverage_valid_pixels": 246016,
+    "full_shape": [
+      512,
+      512
+    ],
+    "glass_coverage_map": "runs\\checkpoints\\s2_gate_415_runtime_validation_cuda_external_cpu_transform\\integration\\resident_coverage_map_H.fits",
+    "ignore_border_px": 8,
+    "min_coverage": 1.0
+  },
+  "diagnostics": {
+    "abs_diff_preview_png": "runs\\checkpoints\\s2_gate_415_external_cpu_transform_compare_diagnostics\\abs_diff_preview.png",
+    "directory": "runs\\checkpoints\\s2_gate_415_external_cpu_transform_compare_diagnostics",
+    "glass_preview_png": "runs\\checkpoints\\s2_gate_415_external_cpu_transform_compare_diagnostics\\glass_preview.png",
+    "hotspot_tile_size": 512,
+    "hotspots": [
+      {
+        "max_abs_diff": 3.240325927734375,
+        "mean_diff": -0.001323979755397886,
+        "p99_abs_diff": 0.19981597900390646,
+        "pixels": 262144,
+        "rms_diff": 0.0690680213665226,
+        "x0": 0,
+        "x1": 512,
+        "y0": 0,
+        "y1": 512
+      }
+    ],
+    "hotspots_json": "runs\\checkpoints\\s2_gate_415_external_cpu_transform_compare_diagnostics\\hotspots.json",
+    "preview_max_size": 1024,
+    "reference_preview_png": "runs\\checkpoints\\s2_gate_415_external_cpu_transform_compare_diagnostics\\reference_preview.png",
+    "signed_diff_preview_png": "runs\\checkpoints\\s2_gate_415_external_cpu_transform_compare_diagnostics\\signed_diff_preview.png"
+  },
+  "full_frame_stats": {
+    "abs_diff_p50": 0.001373291015625,
+    "abs_diff_p90": 0.06287689208984393,
+    "abs_diff_p99": 0.19981597900390646,
+    "abs_diff_p999": 1.1513213195800898,
+    "max_abs_diff": 3.240325927734375,
+    "mean_diff": -0.001323979755397886,
+    "relative_rms_diff": 0.0003144438223566105,
+    "rms_diff": 0.0690680213665226
+  },
+  "glass_format": "fits",
+  "linear_fit_to_reference": {
+    "available": true,
+    "offset": -0.0004229651804621426,
+    "scale": 1.0000075205997854,
+    "stats": {
+      "abs_diff_p50": 0.0001755118291555391,
+      "abs_diff_p90": 0.06409226214984187,
+      "abs_diff_p99": 0.1980561184164816,
+      "abs_diff_p999": 1.1642560484156976,
+      "max_abs_diff": 2.648590667044516,
+      "mean_diff": -2.032528383084311e-14,
+      "relative_rms_diff": 0.0003118104779570944,
+      "rms_diff": 0.0685755269239061
+    }
+  },
+  "max_abs_diff": 2.6473541259765625,
+  "mean_diff": -0.0012068876862898082,
+  "reference_format": "fits",
+  "relative_rms_diff": 0.0003118613896233379,
+  "rms_diff": 0.06858672377130552,
+  "robust_linear_fit_to_reference": {
+    "available": true,
+    "fit_fraction": 0.9899396787200833,
+    "fit_pixels": 243541,
+    "offset": -0.006141474859560958,
+    "scale": 1.0000341929762078,
+    "stats_all_pixels": {
+      "abs_diff_p50": 0.0003238509812462098,
+      "abs_diff_p90": 0.06407148331686585,
+      "abs_diff_p99": 0.19798107586786964,
+      "abs_diff_p999": 1.1655644410536237,
+      "max_abs_diff": 2.6487577218943557,
+      "mean_diff": 6.18868870099622e-05,
+      "relative_rms_diff": 0.00031184363281445027,
+      "rms_diff": 0.06858281857051196
+    },
+    "stats_fit_pixels": {
+      "abs_diff_p50": 0.00031958799209519384,
+      "abs_diff_p90": 0.06416353445277423,
+      "abs_diff_p99": 0.19807978257251763,
+      "abs_diff_p999": 1.1648279075341712,
+      "max_abs_diff": 2.6487577218943557,
+      "mean_diff": 8.923031042201069e-15,
+      "relative_rms_diff": 0.0003185599073558111,
+      "rms_diff": 0.0685924747518144
+    }
+  },
+  "shape_match": true,
+  "timing": {
+    "glass_label": "cuda_resident_external_cpu_transform",
+    "glass_time_seconds": null,
+    "reference_label": "cpu_tile",
+    "reference_time_seconds": null
+  }
+}

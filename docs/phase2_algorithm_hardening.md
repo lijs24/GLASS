@@ -7478,6 +7478,25 @@ integration where applicable.
   release creation, no default-promotion/report-only handoff work, and no
   change to user input directories.
 
+### S2-Gate 415: Resident Parity Summary Artifact
+
+- Add a reusable `glass resident-parity-summary` command that reads a CPU tiled
+  run, a CUDA resident run, and a GLASS compare JSON artifact.
+- Summarize timing, frame counts, reference frame, registration row count,
+  transform models, DQ/rejection sample counts, output map paths, compare
+  metrics, and resident result-contract status.
+- Separate `parity_passed` from top-level `passed` so numerical parity can be
+  identified even when the resident result contract remains failed.
+- Validate two important synthetic outcomes:
+  - resident triangle registration/reference mismatch yields large image
+    differences and fails parity;
+  - resident `external_matrix` using CPU registration results plus hardened
+    winsorized rejection yields near-parity, while still exposing any resident
+    result-contract blocker.
+- Keep this gate runtime-validation scoped: no default-promotion/report-only
+  handoff work, no package upload, no GitHub release creation, no CUDA kernel
+  change, and no modification of user input directories.
+
 ## Gate Rules
 
 Each gate requires:

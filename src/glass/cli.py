@@ -67,6 +67,10 @@ from glass.report.resident_runtime_compare import (
     build_resident_runtime_compare,
     write_resident_runtime_compare,
 )
+from glass.report.resident_parity_summary import (
+    build_resident_parity_summary,
+    write_resident_parity_summary,
+)
 from glass.report.resident_winsorized_benchmark import (
     build_resident_winsorized_benchmark,
     write_resident_winsorized_benchmark,
@@ -2476,6 +2480,34 @@ def cmd_resident_runtime_compare(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def cmd_resident_parity_summary(args: argparse.Namespace) -> int:
+    payload = build_resident_parity_summary(
+        cpu_run=args.cpu_run,
+        resident_run=args.resident_run,
+        compare_json=args.compare_json,
+        cpu_label=args.cpu_label,
+        resident_label=args.resident_label,
+        max_rms_diff=args.max_rms_diff,
+        max_relative_rms_diff=args.max_relative_rms_diff,
+        max_rejected_sample_delta=args.max_rejected_sample_delta,
+        require_resident_contract=not args.ignore_resident_contract,
+    )
+    write_resident_parity_summary(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "parity_passed": payload.get("parity_passed"),
+            "recommendation": payload.get("recommendation"),
+            "failed_checks": payload.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload.get("passed") else 0
 
 
 def cmd_resident_winsorized_benchmark(args: argparse.Namespace) -> int:
@@ -6139,6 +6171,32 @@ def build_parser() -> argparse.ArgumentParser:
     resident_runtime_compare.add_argument("--out", required=True, help="output runtime comparison JSON")
     resident_runtime_compare.add_argument("--markdown", help="optional output Markdown summary")
     resident_runtime_compare.set_defaults(func=cmd_resident_runtime_compare)
+
+    resident_parity = sub.add_parser(
+        "resident-parity-summary",
+        help="summarize CPU tiled vs CUDA resident parity from run and compare artifacts",
+    )
+    resident_parity.add_argument("--cpu-run", required=True, help="CPU tiled GLASS run directory")
+    resident_parity.add_argument("--resident-run", required=True, help="CUDA resident GLASS run directory")
+    resident_parity.add_argument("--compare-json", required=True, help="GLASS compare JSON for resident vs CPU master")
+    resident_parity.add_argument("--out", required=True, help="output resident parity JSON")
+    resident_parity.add_argument("--markdown", help="optional output Markdown summary")
+    resident_parity.add_argument("--cpu-label", default="cpu_tile")
+    resident_parity.add_argument("--resident-label", default="cuda_resident")
+    resident_parity.add_argument("--max-rms-diff", type=float, default=0.1)
+    resident_parity.add_argument("--max-relative-rms-diff", type=float, default=0.001)
+    resident_parity.add_argument("--max-rejected-sample-delta", type=int, default=64)
+    resident_parity.add_argument(
+        "--ignore-resident-contract",
+        action="store_true",
+        help="report resident_result_contract failures without making the summary fail",
+    )
+    resident_parity.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless parity and required contracts pass",
+    )
+    resident_parity.set_defaults(func=cmd_resident_parity_summary)
 
     resident_winsorized_benchmark = sub.add_parser(
         "resident-winsorized-benchmark",
