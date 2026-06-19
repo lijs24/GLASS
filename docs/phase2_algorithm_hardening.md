@@ -6809,6 +6809,28 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 380: Windows Release Matrix Release Quality Final Guard
+
+- Carry Gate379 default-promotion final release quality publication evidence
+  into `glass windows-release-matrix`.
+- Preserve legacy compatibility when release-decision and default-promotion
+  artifacts explicitly omit raw/Phase2 final-check evidence, while requiring
+  default promotion to carry final checks once release decision supplies them.
+- Block Windows release readiness when direct release-decision final checks fail,
+  default-promotion final checks fail, or default promotion drops final-check
+  evidence that was present in release decision.
+- Surface final-check compatible-missing, ready, match, raw, Phase2, and
+  release-matrix/default-promotion check values in release matrix JSON and
+  Markdown.
+- Add focused tests for ready evidence, compatible missing final checks, failed
+  direct final checks, missing default-promotion final checks, and failed
+  default-promotion final checks.
+- Keep this gate Windows release-matrix scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

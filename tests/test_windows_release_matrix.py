@@ -78,6 +78,10 @@ def _release_decision(
     release_quality_publication_guard_ready: bool = True,
     release_quality_guard_present: bool = True,
     phase2_release_quality_publication_guard_ready: bool | None = None,
+    release_quality_publication_final_checks_ready: bool | None = None,
+    phase2_release_quality_publication_final_checks_ready: bool | None = None,
+    include_release_quality_publication_final_checks: bool = True,
+    include_phase2_release_quality_publication_final_checks: bool = True,
 ) -> None:
     phase2_quality_publication_guard_ready = (
         quality_publication_guard_ready
@@ -88,6 +92,16 @@ def _release_decision(
         release_quality_publication_guard_ready
         if phase2_release_quality_publication_guard_ready is None
         else phase2_release_quality_publication_guard_ready
+    )
+    release_quality_publication_final_checks_ready = (
+        release_quality_publication_guard_ready
+        if release_quality_publication_final_checks_ready is None
+        else release_quality_publication_final_checks_ready
+    )
+    phase2_release_quality_publication_final_checks_ready = (
+        phase2_release_quality_publication_guard_ready
+        if phase2_release_quality_publication_final_checks_ready is None
+        else phase2_release_quality_publication_final_checks_ready
     )
     direct_guard = {
         "ready": direct_publication_guard_ready,
@@ -194,26 +208,63 @@ def _release_decision(
         if phase2_release_quality_publication_guard_ready
         else "attention_required"
     )
+    release_quality_final_checks_compatible_missing = (
+        not include_release_quality_publication_final_checks
+        and not include_phase2_release_quality_publication_final_checks
+    )
+    release_quality_final_checks_match = (
+        include_release_quality_publication_final_checks
+        == include_phase2_release_quality_publication_final_checks
+        and (
+            release_quality_final_checks_compatible_missing
+            or release_quality_publication_final_checks_ready
+            == phase2_release_quality_publication_final_checks_ready
+        )
+    )
+    release_quality_final_checks_ready = release_quality_final_checks_compatible_missing or (
+        include_release_quality_publication_final_checks
+        and include_phase2_release_quality_publication_final_checks
+        and release_quality_publication_final_checks_ready
+        and phase2_release_quality_publication_final_checks_ready
+        and release_quality_final_checks_match
+    )
+    release_quality_guard_chain_ready = (
+        release_quality_publication_guard_ready
+        and phase2_release_quality_publication_guard_ready
+        and release_quality_final_checks_ready
+    )
     release_quality_guard = (
         {
             "present": True,
-            "ready": (
-                release_quality_publication_guard_ready
-                and phase2_release_quality_publication_guard_ready
-            ),
+            "ready": release_quality_guard_chain_ready,
             "status": "passed"
-            if release_quality_publication_guard_ready
+            if release_quality_guard_chain_ready
             else "blocked",
-            "passed": (
-                release_quality_publication_guard_ready
-                and phase2_release_quality_publication_guard_ready
-            ),
-            "checks_passed": (
-                release_quality_publication_guard_ready
-                and phase2_release_quality_publication_guard_ready
-            ),
+            "passed": release_quality_guard_chain_ready,
+            "checks_passed": release_quality_guard_chain_ready,
             "compatible_missing": not release_quality_guard_present,
             "release_quality_guard_present": release_quality_guard_present,
+            "final_checks_compatible_missing": (
+                release_quality_final_checks_compatible_missing
+            ),
+            "final_checks_ready": release_quality_final_checks_ready,
+            "final_checks_match": release_quality_final_checks_match,
+            "raw_final_checks_present": (
+                include_release_quality_publication_final_checks
+            ),
+            "raw_final_checks_ready": (
+                release_quality_publication_final_checks_ready
+                if include_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_final_checks_present": (
+                include_phase2_release_quality_publication_final_checks
+            ),
+            "phase2_final_checks_ready": (
+                phase2_release_quality_publication_final_checks_ready
+                if include_phase2_release_quality_publication_final_checks
+                else None
+            ),
             "raw_present": release_quality_guard_present,
             "raw_ready": release_quality_publication_guard_ready,
             "raw_matrix_raw_status": release_quality_raw_status,
@@ -236,6 +287,31 @@ def _release_decision(
             ),
             "raw_matrix_manifest_match_check": (
                 release_quality_publication_guard_ready
+            ),
+            "raw_release_matrix_check": (
+                release_quality_publication_final_checks_ready
+                if include_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_matrix_default_check": (
+                release_quality_publication_final_checks_ready
+                if include_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_default_promotion_check": (
+                release_quality_publication_final_checks_ready
+                if include_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_matrix_default_match_check": (
+                release_quality_publication_final_checks_ready
+                if include_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_matrix_manifest_match_check": (
+                release_quality_publication_final_checks_ready
+                if include_release_quality_publication_final_checks
+                else None
             ),
             "phase2_present": release_quality_guard_present,
             "phase2_ready": phase2_release_quality_publication_guard_ready,
@@ -275,11 +351,33 @@ def _release_decision(
             "phase2_matrix_manifest_match_check": (
                 phase2_release_quality_publication_guard_ready
             ),
+            "phase2_release_matrix_check": (
+                phase2_release_quality_publication_final_checks_ready
+                if include_phase2_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_matrix_default_check": (
+                phase2_release_quality_publication_final_checks_ready
+                if include_phase2_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_default_promotion_check": (
+                phase2_release_quality_publication_final_checks_ready
+                if include_phase2_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_matrix_default_match_check": (
+                phase2_release_quality_publication_final_checks_ready
+                if include_phase2_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_matrix_manifest_match_check": (
+                phase2_release_quality_publication_final_checks_ready
+                if include_phase2_release_quality_publication_final_checks
+                else None
+            ),
             "failed_checks": []
-            if (
-                release_quality_publication_guard_ready
-                and phase2_release_quality_publication_guard_ready
-            )
+            if release_quality_guard_chain_ready
             else ["stack_engine_publication_release_quality_guard_passed"],
         }
         if include_release_quality_publication_guard
@@ -289,10 +387,7 @@ def _release_decision(
         checks.append(
             {
                 "name": "stack_engine_publication_release_quality_guard_passed",
-                "passed": (
-                    release_quality_publication_guard_ready
-                    and phase2_release_quality_publication_guard_ready
-                ),
+                "passed": release_quality_guard_chain_ready,
             }
         )
     write_json(
@@ -370,6 +465,10 @@ def _default_promotion(
     release_decision_release_quality_publication_guard_ready: bool = True,
     release_decision_release_quality_guard_present: bool = True,
     phase2_release_decision_release_quality_publication_guard_ready: bool | None = None,
+    release_decision_release_quality_publication_final_checks_ready: bool | None = None,
+    phase2_release_decision_release_quality_publication_final_checks_ready: bool | None = None,
+    include_release_decision_release_quality_publication_final_checks: bool = True,
+    include_phase2_release_decision_release_quality_publication_final_checks: bool = True,
     resident_fastpath_release_handoff_ready: bool = True,
     include_quality_metrics_compare: bool = True,
     quality_metrics_compare_ready: bool = True,
@@ -383,6 +482,44 @@ def _default_promotion(
         release_decision_release_quality_publication_guard_ready
         if phase2_release_decision_release_quality_publication_guard_ready is None
         else phase2_release_decision_release_quality_publication_guard_ready
+    )
+    release_decision_release_quality_publication_final_checks_ready = (
+        release_decision_release_quality_publication_guard_ready
+        if release_decision_release_quality_publication_final_checks_ready is None
+        else release_decision_release_quality_publication_final_checks_ready
+    )
+    phase2_release_decision_release_quality_publication_final_checks_ready = (
+        phase2_release_decision_release_quality_publication_guard_ready
+        if phase2_release_decision_release_quality_publication_final_checks_ready is None
+        else phase2_release_decision_release_quality_publication_final_checks_ready
+    )
+    release_decision_release_quality_final_checks_compatible_missing = (
+        not include_release_decision_release_quality_publication_final_checks
+        and not include_phase2_release_decision_release_quality_publication_final_checks
+    )
+    release_decision_release_quality_final_checks_match = (
+        include_release_decision_release_quality_publication_final_checks
+        == include_phase2_release_decision_release_quality_publication_final_checks
+        and (
+            release_decision_release_quality_final_checks_compatible_missing
+            or release_decision_release_quality_publication_final_checks_ready
+            == phase2_release_decision_release_quality_publication_final_checks_ready
+        )
+    )
+    release_decision_release_quality_final_checks_ready = (
+        release_decision_release_quality_final_checks_compatible_missing
+        or (
+            include_release_decision_release_quality_publication_final_checks
+            and include_phase2_release_decision_release_quality_publication_final_checks
+            and release_decision_release_quality_publication_final_checks_ready
+            and phase2_release_decision_release_quality_publication_final_checks_ready
+            and release_decision_release_quality_final_checks_match
+        )
+    )
+    release_decision_release_quality_chain_ready = (
+        release_decision_release_quality_publication_guard_ready
+        and phase2_release_decision_release_quality_publication_guard_ready
+        and release_decision_release_quality_final_checks_ready
     )
     acceptance_policy_chain_ready = (
         acceptance_integration_engine_policy_ready
@@ -430,8 +567,7 @@ def _default_promotion(
             else True
         )
         and (
-            release_decision_release_quality_publication_guard_ready
-            and phase2_release_decision_release_quality_publication_guard_ready
+            release_decision_release_quality_chain_ready
             if include_release_decision_release_quality_publication_guard
             else True
         )
@@ -942,25 +1078,13 @@ def _default_promotion(
         )
         payload["release_decision_release_quality_publication_guard"] = {
             "present": release_decision_release_quality_publication_present,
-            "ready": (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
-            ),
-            "decision_check_passed": (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
-            ),
+            "ready": release_decision_release_quality_chain_ready,
+            "decision_check_passed": release_decision_release_quality_chain_ready,
             "status": "passed"
-            if release_decision_release_quality_publication_guard_ready
+            if release_decision_release_quality_chain_ready
             else "blocked",
-            "passed": (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
-            ),
-            "checks_passed": (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
-            ),
+            "passed": release_decision_release_quality_chain_ready,
+            "checks_passed": release_decision_release_quality_chain_ready,
             "compatible_missing": (
                 not release_decision_release_quality_publication_present
                 or not release_decision_release_quality_guard_present
@@ -968,18 +1092,34 @@ def _default_promotion(
             "release_quality_guard_present": (
                 release_decision_release_quality_guard_present
             ),
-            "decision_check_ready": (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
+            "final_fields_present": (
+                include_release_decision_release_quality_publication_final_checks
+                or include_phase2_release_decision_release_quality_publication_final_checks
             ),
-            "checks_ready": (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
+            "final_checks_compatible_missing": (
+                release_decision_release_quality_final_checks_compatible_missing
             ),
-            "layers_ready": (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
+            "final_checks_ready": release_decision_release_quality_final_checks_ready,
+            "final_checks_match": release_decision_release_quality_final_checks_match,
+            "raw_final_checks_present": (
+                include_release_decision_release_quality_publication_final_checks
             ),
+            "raw_final_checks_ready": (
+                release_decision_release_quality_publication_final_checks_ready
+                if include_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_final_checks_present": (
+                include_phase2_release_decision_release_quality_publication_final_checks
+            ),
+            "phase2_final_checks_ready": (
+                phase2_release_decision_release_quality_publication_final_checks_ready
+                if include_phase2_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "decision_check_ready": release_decision_release_quality_chain_ready,
+            "checks_ready": release_decision_release_quality_chain_ready,
+            "layers_ready": release_decision_release_quality_chain_ready,
             "raw_present": release_decision_release_quality_guard_present,
             "raw_ready": release_decision_release_quality_publication_guard_ready,
             "raw_matrix_raw_status": release_quality_raw_status,
@@ -1012,6 +1152,31 @@ def _default_promotion(
             ),
             "raw_matrix_manifest_match_check": (
                 release_decision_release_quality_publication_guard_ready
+            ),
+            "raw_release_matrix_check": (
+                release_decision_release_quality_publication_final_checks_ready
+                if include_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_matrix_default_check": (
+                release_decision_release_quality_publication_final_checks_ready
+                if include_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_default_promotion_check": (
+                release_decision_release_quality_publication_final_checks_ready
+                if include_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_matrix_default_match_check": (
+                release_decision_release_quality_publication_final_checks_ready
+                if include_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "raw_release_matrix_manifest_match_check": (
+                release_decision_release_quality_publication_final_checks_ready
+                if include_release_decision_release_quality_publication_final_checks
+                else None
             ),
             "phase2_present": release_decision_release_quality_guard_present,
             "phase2_ready": (
@@ -1055,11 +1220,33 @@ def _default_promotion(
             "phase2_matrix_manifest_match_check": (
                 phase2_release_decision_release_quality_publication_guard_ready
             ),
+            "phase2_release_matrix_check": (
+                phase2_release_decision_release_quality_publication_final_checks_ready
+                if include_phase2_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_matrix_default_check": (
+                phase2_release_decision_release_quality_publication_final_checks_ready
+                if include_phase2_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_default_promotion_check": (
+                phase2_release_decision_release_quality_publication_final_checks_ready
+                if include_phase2_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_matrix_default_match_check": (
+                phase2_release_decision_release_quality_publication_final_checks_ready
+                if include_phase2_release_decision_release_quality_publication_final_checks
+                else None
+            ),
+            "phase2_release_matrix_manifest_match_check": (
+                phase2_release_decision_release_quality_publication_final_checks_ready
+                if include_phase2_release_decision_release_quality_publication_final_checks
+                else None
+            ),
             "failed_checks": []
-            if (
-                release_decision_release_quality_publication_guard_ready
-                and phase2_release_decision_release_quality_publication_guard_ready
-            )
+            if release_decision_release_quality_chain_ready
             else ["stack_engine_publication_release_quality_guard_passed"],
         }
     fastpath_failed_checks = (
@@ -1231,6 +1418,15 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert payload["release_decision_release_quality_publication_guard"][
         "raw_matrix_raw_status"
     ] == "passed"
+    assert payload["release_decision_release_quality_publication_guard"][
+        "final_checks_ready"
+    ] is True
+    assert payload["release_decision_release_quality_publication_guard"][
+        "raw_release_matrix_check"
+    ] is True
+    assert payload["release_decision_release_quality_publication_guard"][
+        "phase2_release_matrix_check"
+    ] is True
     assert payload["default_promotion_manifest"][
         "runtime_default_direct_acceptance_fastpath_source"
     ] == "explicit_resident_artifacts_json"
@@ -1255,6 +1451,15 @@ def test_windows_release_matrix_passes_blackwell_default(tmp_path: Path):
     assert payload["default_promotion_manifest"][
         "release_decision_release_quality_publication_guard_raw_matrix_raw_status"
     ] == "passed"
+    assert payload["default_promotion_manifest"][
+        "release_decision_release_quality_publication_guard_final_checks_ready"
+    ] is True
+    assert payload["default_promotion_manifest"][
+        "release_decision_release_quality_publication_guard_raw_release_matrix_check"
+    ] is True
+    assert payload["default_promotion_manifest"][
+        "release_decision_release_quality_publication_guard_phase2_release_matrix_check"
+    ] is True
     assert payload["default_promotion_manifest"][
         "resident_registration_fastpath_release_handoff_ready"
     ] is True
@@ -1370,6 +1575,51 @@ def test_windows_release_matrix_allows_missing_release_quality_publication_guard
     ] is True
 
 
+def test_windows_release_matrix_allows_compatible_missing_release_quality_final_checks(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(
+        decision,
+        include_release_quality_publication_final_checks=False,
+        include_phase2_release_quality_publication_final_checks=False,
+    )
+    _default_promotion(
+        default_promotion,
+        include_release_decision_release_quality_publication_final_checks=False,
+        include_phase2_release_decision_release_quality_publication_final_checks=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is True
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is True
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is True
+    assert guard["final_checks_compatible_missing"] is True
+    assert guard["raw_final_checks_present"] is False
+    assert guard["phase2_final_checks_present"] is False
+    assert evidence["final_checks_compatible_missing"] is True
+    assert evidence["raw_final_checks_present"] is False
+    assert evidence["phase2_final_checks_present"] is False
+
+
 def test_windows_release_matrix_blocks_failed_release_quality_guard(
     tmp_path: Path,
 ):
@@ -1430,6 +1680,40 @@ def test_windows_release_matrix_blocks_failed_release_quality_publication_guard(
     assert guard["failed_checks"] == [
         "stack_engine_publication_release_quality_guard_passed"
     ]
+    assert guard["final_checks_ready"] is False
+
+
+def test_windows_release_matrix_blocks_failed_release_quality_final_checks(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(
+        decision,
+        release_quality_publication_final_checks_ready=False,
+        phase2_release_quality_publication_final_checks_ready=False,
+    )
+    _default_promotion(default_promotion)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    assert payload["passed"] is False
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert guard["ready"] is False
+    assert guard["final_checks_ready"] is False
+    assert guard["raw_final_checks_ready"] is False
+    assert guard["phase2_final_checks_ready"] is False
 
 
 def test_windows_release_matrix_blocks_failed_default_promotion_quality_guard(
@@ -1562,6 +1846,76 @@ def test_windows_release_matrix_blocks_failed_default_promotion_release_quality_
     assert evidence["ready"] is False
     assert evidence["raw_matrix_raw_status"] == "failed"
     assert evidence["raw_matrix_check_passed"] is False
+    assert evidence["final_checks_ready"] is False
+
+
+def test_windows_release_matrix_blocks_missing_default_promotion_release_quality_final_checks(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        include_release_decision_release_quality_publication_final_checks=False,
+        include_phase2_release_decision_release_quality_publication_final_checks=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is False
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is False
+    assert evidence["direct_final_fields_present"] is True
+    assert evidence["final_checks_compatible_missing"] is True
+    assert evidence["raw_final_checks_present"] is False
+    assert evidence["phase2_final_checks_present"] is False
+
+
+def test_windows_release_matrix_blocks_failed_default_promotion_release_quality_final_checks(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(
+        default_promotion,
+        release_decision_release_quality_publication_final_checks_ready=False,
+        phase2_release_decision_release_quality_publication_final_checks_ready=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is False
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is False
+    assert evidence["final_checks_ready"] is False
+    assert evidence["raw_final_checks_ready"] is False
+    assert evidence["phase2_final_checks_ready"] is False
 
 
 def test_windows_release_matrix_blocks_default_promotion_release_quality_mismatch(

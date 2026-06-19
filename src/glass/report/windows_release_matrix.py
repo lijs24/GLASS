@@ -217,6 +217,46 @@ def _release_quality_publication_guard_from_decision(
     present = bool(guard)
     compatible_missing = not present or guard.get("compatible_missing") is True
     release_quality_guard_present = guard.get("release_quality_guard_present") is True
+    final_field_names = (
+        "final_checks_compatible_missing",
+        "final_checks_ready",
+        "final_checks_match",
+        "raw_final_checks_present",
+        "raw_final_checks_ready",
+        "phase2_final_checks_present",
+        "phase2_final_checks_ready",
+        "raw_release_matrix_check",
+        "raw_release_matrix_default_check",
+        "raw_release_default_promotion_check",
+        "raw_release_matrix_default_match_check",
+        "raw_release_matrix_manifest_match_check",
+        "phase2_release_matrix_check",
+        "phase2_release_matrix_default_check",
+        "phase2_release_default_promotion_check",
+        "phase2_release_matrix_default_match_check",
+        "phase2_release_matrix_manifest_match_check",
+    )
+    final_fields_present = any(guard.get(field) is not None for field in final_field_names)
+    final_checks_compatible_missing = (
+        guard.get("final_checks_compatible_missing") is True
+        or not final_fields_present
+    )
+    final_checks_ready = (
+        guard.get("final_checks_ready") is True
+        or final_checks_compatible_missing
+    )
+    final_checks_match = (
+        guard.get("final_checks_match") is True
+        or final_checks_compatible_missing
+    )
+    raw_final_checks_ready = (
+        guard.get("raw_final_checks_ready") is True
+        or final_checks_compatible_missing
+    )
+    phase2_final_checks_ready = (
+        guard.get("phase2_final_checks_ready") is True
+        or final_checks_compatible_missing
+    )
     decision_check_ready = check_passed is True or (
         check_passed is None and compatible_missing and not release_quality_guard_present
     )
@@ -228,6 +268,10 @@ def _release_quality_publication_guard_from_decision(
             and guard.get("phase2_present") is True
             and guard.get("raw_ready") is True
             and guard.get("phase2_ready") is True
+            and final_checks_ready
+            and final_checks_match
+            and raw_final_checks_ready
+            and phase2_final_checks_ready
         )
     )
     ready = not present or (
@@ -245,6 +289,14 @@ def _release_quality_publication_guard_from_decision(
         "checks_passed": guard.get("checks_passed"),
         "compatible_missing": compatible_missing,
         "release_quality_guard_present": release_quality_guard_present,
+        "final_fields_present": final_fields_present,
+        "final_checks_compatible_missing": final_checks_compatible_missing,
+        "final_checks_ready": final_checks_ready,
+        "final_checks_match": final_checks_match,
+        "raw_final_checks_present": guard.get("raw_final_checks_present"),
+        "raw_final_checks_ready": guard.get("raw_final_checks_ready"),
+        "phase2_final_checks_present": guard.get("phase2_final_checks_present"),
+        "phase2_final_checks_ready": guard.get("phase2_final_checks_ready"),
         "decision_check_ready": decision_check_ready,
         "checks_ready": checks_ready,
         "layers_ready": layers_ready,
@@ -275,6 +327,19 @@ def _release_quality_publication_guard_from_decision(
         "raw_matrix_manifest_match_check": guard.get(
             "raw_matrix_manifest_match_check"
         ),
+        "raw_release_matrix_check": guard.get("raw_release_matrix_check"),
+        "raw_release_matrix_default_check": guard.get(
+            "raw_release_matrix_default_check"
+        ),
+        "raw_release_default_promotion_check": guard.get(
+            "raw_release_default_promotion_check"
+        ),
+        "raw_release_matrix_default_match_check": guard.get(
+            "raw_release_matrix_default_match_check"
+        ),
+        "raw_release_matrix_manifest_match_check": guard.get(
+            "raw_release_matrix_manifest_match_check"
+        ),
         "phase2_present": guard.get("phase2_present"),
         "phase2_ready": guard.get("phase2_ready"),
         "phase2_check_passed": guard.get("phase2_check_passed"),
@@ -302,6 +367,19 @@ def _release_quality_publication_guard_from_decision(
         ),
         "phase2_matrix_manifest_match_check": guard.get(
             "phase2_matrix_manifest_match_check"
+        ),
+        "phase2_release_matrix_check": guard.get("phase2_release_matrix_check"),
+        "phase2_release_matrix_default_check": guard.get(
+            "phase2_release_matrix_default_check"
+        ),
+        "phase2_release_default_promotion_check": guard.get(
+            "phase2_release_default_promotion_check"
+        ),
+        "phase2_release_matrix_default_match_check": guard.get(
+            "phase2_release_matrix_default_match_check"
+        ),
+        "phase2_release_matrix_manifest_match_check": guard.get(
+            "phase2_release_matrix_manifest_match_check"
         ),
         "failed_checks": guard.get("failed_checks") or [],
     }
@@ -805,6 +883,55 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
                 "raw_matrix_manifest_match_check"
             )
         ),
+        "release_decision_release_quality_publication_guard_final_fields_present": (
+            release_quality_guard_publication_guard.get("final_fields_present")
+        ),
+        "release_decision_release_quality_publication_guard_final_checks_compatible_missing": (
+            release_quality_guard_publication_guard.get(
+                "final_checks_compatible_missing"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_final_checks_ready": (
+            release_quality_guard_publication_guard.get("final_checks_ready")
+        ),
+        "release_decision_release_quality_publication_guard_final_checks_match": (
+            release_quality_guard_publication_guard.get("final_checks_match")
+        ),
+        "release_decision_release_quality_publication_guard_raw_final_checks_present": (
+            release_quality_guard_publication_guard.get("raw_final_checks_present")
+        ),
+        "release_decision_release_quality_publication_guard_raw_final_checks_ready": (
+            release_quality_guard_publication_guard.get("raw_final_checks_ready")
+        ),
+        "release_decision_release_quality_publication_guard_phase2_final_checks_present": (
+            release_quality_guard_publication_guard.get("phase2_final_checks_present")
+        ),
+        "release_decision_release_quality_publication_guard_phase2_final_checks_ready": (
+            release_quality_guard_publication_guard.get("phase2_final_checks_ready")
+        ),
+        "release_decision_release_quality_publication_guard_raw_release_matrix_check": (
+            release_quality_guard_publication_guard.get("raw_release_matrix_check")
+        ),
+        "release_decision_release_quality_publication_guard_raw_release_matrix_default_check": (
+            release_quality_guard_publication_guard.get(
+                "raw_release_matrix_default_check"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_raw_release_default_promotion_check": (
+            release_quality_guard_publication_guard.get(
+                "raw_release_default_promotion_check"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_raw_release_matrix_default_match_check": (
+            release_quality_guard_publication_guard.get(
+                "raw_release_matrix_default_match_check"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_raw_release_matrix_manifest_match_check": (
+            release_quality_guard_publication_guard.get(
+                "raw_release_matrix_manifest_match_check"
+            )
+        ),
         "release_decision_release_quality_publication_guard_phase2_present": (
             release_quality_guard_publication_guard.get("phase2_present")
         ),
@@ -873,6 +1000,29 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "release_decision_release_quality_publication_guard_phase2_matrix_manifest_match_check": (
             release_quality_guard_publication_guard.get(
                 "phase2_matrix_manifest_match_check"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_phase2_release_matrix_check": (
+            release_quality_guard_publication_guard.get("phase2_release_matrix_check")
+        ),
+        "release_decision_release_quality_publication_guard_phase2_release_matrix_default_check": (
+            release_quality_guard_publication_guard.get(
+                "phase2_release_matrix_default_check"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_phase2_release_default_promotion_check": (
+            release_quality_guard_publication_guard.get(
+                "phase2_release_default_promotion_check"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_phase2_release_matrix_default_match_check": (
+            release_quality_guard_publication_guard.get(
+                "phase2_release_matrix_default_match_check"
+            )
+        ),
+        "release_decision_release_quality_publication_guard_phase2_release_matrix_manifest_match_check": (
+            release_quality_guard_publication_guard.get(
+                "phase2_release_matrix_manifest_match_check"
             )
         ),
         "release_decision_release_quality_publication_guard_failed_checks": (
@@ -1952,6 +2102,57 @@ def build_windows_release_matrix(
                         "release_decision_release_quality_publication_guard_phase2_matrix_manifest_match_check"
                     )
                     is True
+                    and (
+                        (
+                            not release_quality_guard_publication_guard.get(
+                                "final_fields_present"
+                            )
+                            and not default_promotion.get(
+                                "release_decision_release_quality_publication_guard_final_fields_present"
+                            )
+                        )
+                        or (
+                            not release_quality_guard_publication_guard.get(
+                                "final_fields_present"
+                            )
+                            and default_promotion.get(
+                                "release_decision_release_quality_publication_guard_final_checks_compatible_missing"
+                            )
+                            is True
+                        )
+                        or (
+                            default_promotion.get(
+                                "release_decision_release_quality_publication_guard_final_checks_compatible_missing"
+                            )
+                            is True
+                            and release_quality_guard_publication_guard.get(
+                                "raw_final_checks_present"
+                            )
+                            is not True
+                            and release_quality_guard_publication_guard.get(
+                                "phase2_final_checks_present"
+                            )
+                            is not True
+                        )
+                        or (
+                            default_promotion.get(
+                                "release_decision_release_quality_publication_guard_final_checks_ready"
+                            )
+                            is True
+                            and default_promotion.get(
+                                "release_decision_release_quality_publication_guard_final_checks_match"
+                            )
+                            is True
+                            and default_promotion.get(
+                                "release_decision_release_quality_publication_guard_raw_final_checks_ready"
+                            )
+                            is True
+                            and default_promotion.get(
+                                "release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+                            )
+                            is True
+                        )
+                    )
                 )
             )
             if require_default_promotion_ready
@@ -2016,6 +2217,47 @@ def build_windows_release_matrix(
                 ),
                 "phase2_matrix_manifest_match_check": default_promotion.get(
                     "release_decision_release_quality_publication_guard_phase2_matrix_manifest_match_check"
+                ),
+                "direct_final_fields_present": (
+                    release_quality_guard_publication_guard.get(
+                        "final_fields_present"
+                    )
+                ),
+                "final_fields_present": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_final_fields_present"
+                ),
+                "final_checks_compatible_missing": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_final_checks_compatible_missing"
+                ),
+                "final_checks_ready": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_final_checks_ready"
+                ),
+                "final_checks_match": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_final_checks_match"
+                ),
+                "raw_final_checks_present": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_raw_final_checks_present"
+                ),
+                "raw_final_checks_ready": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_raw_final_checks_ready"
+                ),
+                "phase2_final_checks_present": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_phase2_final_checks_present"
+                ),
+                "phase2_final_checks_ready": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+                ),
+                "raw_release_matrix_check": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_raw_release_matrix_check"
+                ),
+                "raw_release_matrix_manifest_match_check": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_raw_release_matrix_manifest_match_check"
+                ),
+                "phase2_release_matrix_check": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_phase2_release_matrix_check"
+                ),
+                "phase2_release_matrix_manifest_match_check": default_promotion.get(
+                    "release_decision_release_quality_publication_guard_phase2_release_matrix_manifest_match_check"
                 ),
                 "failed_checks": default_promotion.get(
                     "release_decision_release_quality_publication_guard_failed_checks"
@@ -2652,6 +2894,13 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"compatible-missing=`{release_quality_publication_guard.get('compatible_missing')}`"
             ),
             (
+                "- Release quality publication final checks: "
+                f"ready=`{release_quality_publication_guard.get('final_checks_ready')}` "
+                f"match=`{release_quality_publication_guard.get('final_checks_match')}` "
+                f"raw=`{release_quality_publication_guard.get('raw_final_checks_ready')}` "
+                f"phase2=`{release_quality_publication_guard.get('phase2_final_checks_ready')}`"
+            ),
+            (
                 "- Default promotion direct publication guard: "
                 "ready="
                 f"`{default_promotion.get('release_decision_direct_runtime_publication_guard_ready')}` "
@@ -2685,6 +2934,17 @@ def _markdown(payload: dict[str, Any]) -> str:
                 f"`{default_promotion.get('release_decision_release_quality_publication_guard_raw_matrix_raw_status')}` "
                 "phase2="
                 f"`{default_promotion.get('release_decision_release_quality_publication_guard_phase2_matrix_raw_status')}`"
+            ),
+            (
+                "- Default promotion release quality final checks: "
+                "ready="
+                f"`{default_promotion.get('release_decision_release_quality_publication_guard_final_checks_ready')}` "
+                "match="
+                f"`{default_promotion.get('release_decision_release_quality_publication_guard_final_checks_match')}` "
+                "raw="
+                f"`{default_promotion.get('release_decision_release_quality_publication_guard_raw_final_checks_ready')}` "
+                "phase2="
+                f"`{default_promotion.get('release_decision_release_quality_publication_guard_phase2_final_checks_ready')}`"
             ),
             (
                 "- Resident fastpath release handoff: "
