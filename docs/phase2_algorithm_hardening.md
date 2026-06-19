@@ -8421,6 +8421,59 @@ integration where applicable.
   - real M38 H 200-light warm-cache run against Gate438 astropy control;
   - DQ closure pass, `193 active`/`7 masked`, and zero output delta.
 
+Completed in Gate439:
+
+- Added a native CUDA-extension FITS decode entry point,
+  `read_simple_fits_into_f32`, and Python/resident wrappers for
+  `--resident-fits-read-mode native_direct`.
+- The direct reader decodes simple primary FITS data into the caller-provided
+  float32 buffer, including reusable pinned host buffers used by the resident
+  prefetch ring.
+- Added fast paths for the real benchmark's common `BITPIX=16, BZERO=32768`
+  unsigned-FITS convention, while keeping the generic BSCALE/BZERO/BLANK path.
+- Resident artifacts now record native file-read, native decode, native total,
+  and native bytes-read timings alongside the existing read/decode and H2D
+  buckets.
+- Focused validation passed:
+  `tests/test_fits_io.py`,
+  `tests/test_resident_cuda_run.py::test_cli_resident_cuda_records_native_direct_fits_backend`,
+  `tests/test_cli_smoke.py`,
+  `tests/test_cuda_resident_stack.py`, and
+  `tests/test_gpu_calibration_vs_cpu.py`.
+- Real M38 H 200-light native-direct fastpath run:
+  `C:\glass_runs\final_m38_h_200\glass_s2_gate439_native_direct_fastpath_warm_20260619_215910`.
+- Same-code comparison against Gate438 astropy control is bitwise identical:
+  `rms_diff=0`, `relative_rms_diff=0`, `max_abs_diff=0`, shape match true.
+- DQ/mask closure remains green: `193 active`, `7 masked`,
+  `unknown_zero_weight=0`, and pixel closure passed.
+- Performance conclusion: native-direct fastpath is correct but not promoted.
+  It hit `native_direct_simple=200/200`, but
+  `light_read_upload_calibrate` was `6.818247 s` versus Gate438 astropy
+  control `6.624954 s`, and read wait was `4.769937 s` versus `3.939295 s`.
+  Default reader remains `astropy`; native-direct is an explicit probe.
+- Checkpoint summary:
+  `runs/checkpoints/s2_gate_439_native_direct_summary.json`.
+
+### S2-Gate 440: Fused Native Decode-To-Upload Probe
+
+- Continue on the runtime main line only; do not add release, report-contract,
+  or default-promotion gates unless they directly block this work.
+- Target the real bottleneck exposed by Gate439:
+  native decode still writes a full expanded float32 host buffer before H2D.
+- Prototype a fused path that reduces host-side float32 materialization cost:
+  - for `BITPIX=16, BZERO=32768` light frames, decode into an upload staging
+    lane with less per-frame host memory traffic, or
+  - upload compact uint16/raw chunks and apply BSCALE/BZERO in a CUDA staging
+    kernel before calibration, preserving the same calibrated float32 math.
+- Preserve `astropy` as the default unless the same-code 200-light benchmark
+  improves total runtime and keeps zero output delta.
+- Required validation:
+  - focused CUDA/native tests for decode parity and calibration parity;
+  - full `python -m pytest -q`;
+  - real M38 H 200-light warm-cache benchmark against Gate438 astropy control
+    and Gate439 native-direct fastpath;
+  - DQ closure pass, `193 active`/`7 masked`, and zero output delta.
+
 ## Gate Rules
 
 Each gate requires:

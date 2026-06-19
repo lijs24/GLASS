@@ -3387,6 +3387,57 @@ def test_cli_resident_cuda_uses_planner_matching_master_sets(tmp_path: Path):
     assert io_pipeline["fits_fast_fallback_reason_counts"] == {}
 
 
+def test_cli_resident_cuda_records_native_direct_fits_backend(tmp_path: Path):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "read_simple_fits_into_f32"):
+        pytest.skip("native direct FITS decoder is not available")
+    dataset = _two_dark_group_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_native_direct_fits"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "native_direct",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+    timing = artifact["timing_s"]
+
+    assert io_pipeline["fits_read_mode"] == "native_direct"
+    assert io_pipeline["fits_backend_counts"]["native_direct_simple"] >= 1
+    assert io_pipeline["fits_native_bytes_read"] > 0
+    assert io_pipeline["fits_native_decode_cumulative_s"] >= 0.0
+    assert timing["light_fits_native_file_read"] >= 0.0
+    assert timing["light_fits_native_decode"] >= 0.0
+
+
 def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_dark_group_dataset(tmp_path)

@@ -4200,11 +4200,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--resident-fits-read-mode",
-        choices=["auto", "fast", "astropy"],
+        choices=["auto", "fast", "astropy", "native_direct"],
         default="astropy",
         help=(
             "resident light FITS reader: astropy is the conservative default; auto tries the bounded "
-            "simple-primary fast path and falls back to astropy; fast requires the bounded path"
+            "simple-primary fast path and falls back to astropy; fast requires the bounded path; "
+            "native_direct decodes simple FITS directly into the resident host buffer"
         ),
     )
     run.add_argument("--local-normalization", choices=["auto", "on", "off"], default="auto")
@@ -4604,11 +4605,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     audit.add_argument(
         "--resident-fits-read-mode",
-        choices=["auto", "fast", "astropy"],
+        choices=["auto", "fast", "astropy", "native_direct"],
         default="astropy",
         help=(
             "resident audit light FITS reader; astropy is the conservative default, auto tries bounded "
-            "fast primary-image reading with astropy fallback"
+            "fast primary-image reading with astropy fallback, and native_direct decodes into the resident host buffer"
         ),
     )
     audit.add_argument(

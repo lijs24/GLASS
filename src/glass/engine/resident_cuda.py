@@ -46,7 +46,11 @@ from glass.engine.resident_registration_quality import (
     resident_registration_quality_warning_fields,
     summarize_resident_registration_quality,
 )
-from glass.io.fits_fast import FastFitsUnsupported, read_simple_fits_image_timed
+from glass.io.fits_fast import (
+    FastFitsUnsupported,
+    read_simple_fits_image_native_direct_timed,
+    read_simple_fits_image_timed,
+)
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
@@ -150,10 +154,15 @@ def _read_light_timed(
     output: np.ndarray | None = None,
     fits_read_mode: str = "astropy",
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    if fits_read_mode not in {"auto", "fast", "astropy"}:
-        raise ValueError("fits_read_mode must be auto, fast, or astropy")
+    if fits_read_mode not in {"auto", "fast", "astropy", "native_direct"}:
+        raise ValueError("fits_read_mode must be auto, fast, astropy, or native_direct")
     total_start = perf_counter()
     fallback_reason = ""
+    if fits_read_mode == "native_direct":
+        data, profile = read_simple_fits_image_native_direct_timed(path, dtype=np.float32, output=output)
+        profile["fits_read_mode_requested"] = fits_read_mode
+        profile["fits_fast_fallback_reason"] = ""
+        return data, profile
     if fits_read_mode in {"auto", "fast"}:
         try:
             data, profile = read_simple_fits_image_timed(path, dtype=np.float32, output=output)
@@ -203,8 +212,8 @@ class _LightPrefetcher:
         self.pinned_ring = bool(pinned_ring and self.depth > 0)
         if release_refill_mode not in {"immediate", "queued", "deferred"}:
             raise ValueError("release_refill_mode must be immediate, queued, or deferred")
-        if fits_read_mode not in {"auto", "fast", "astropy"}:
-            raise ValueError("fits_read_mode must be auto, fast, or astropy")
+        if fits_read_mode not in {"auto", "fast", "astropy", "native_direct"}:
+            raise ValueError("fits_read_mode must be auto, fast, astropy, or native_direct")
         self.release_refill_mode = release_refill_mode
         self.fits_read_mode = fits_read_mode
         self.height = height
@@ -2762,8 +2771,8 @@ def run_resident_calibration_integration(
         raise ValueError("resident_output_maps must be audit, science, or minimal")
     if resident_winsorized_mode not in _RESIDENT_WINSORIZED_MODES:
         raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
-    if resident_fits_read_mode not in {"auto", "fast", "astropy"}:
-        raise ValueError("resident_fits_read_mode must be auto, fast, or astropy")
+    if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct"}:
+        raise ValueError("resident_fits_read_mode must be auto, fast, astropy, or native_direct")
     if resident_registration not in {
         "off",
         "translation_preview",
@@ -3092,6 +3101,10 @@ def run_resident_calibration_integration(
             per_frame_fits_materialize_decode_s: list[float] = []
             per_frame_fits_backend: list[str] = []
             per_frame_fits_fallback_reason: list[str] = []
+            per_frame_fits_native_file_read_s: list[float] = []
+            per_frame_fits_native_decode_s: list[float] = []
+            per_frame_fits_native_total_s: list[float] = []
+            per_frame_fits_native_bytes_read: list[int] = []
             per_frame_calibrate_s: list[float] = []
             per_frame_host_copy_s: list[float] = []
             per_frame_h2d_s: list[float] = []
@@ -3279,6 +3292,22 @@ def run_resident_calibration_integration(
                             fallback_reason = str(read_profile.get("fits_fast_fallback_reason", "") or "")
                             if fallback_reason:
                                 per_frame_fits_fallback_reason.append(fallback_reason)
+                            if "fits_native_file_read_s" in read_profile:
+                                per_frame_fits_native_file_read_s.append(
+                                    float(read_profile.get("fits_native_file_read_s", 0.0))
+                                )
+                            if "fits_native_decode_s" in read_profile:
+                                per_frame_fits_native_decode_s.append(
+                                    float(read_profile.get("fits_native_decode_s", 0.0))
+                                )
+                            if "fits_native_total_s" in read_profile:
+                                per_frame_fits_native_total_s.append(
+                                    float(read_profile.get("fits_native_total_s", 0.0))
+                                )
+                            if "fits_native_bytes_read" in read_profile:
+                                per_frame_fits_native_bytes_read.append(
+                                    int(read_profile.get("fits_native_bytes_read", 0) or 0)
+                                )
                             per_frame_read_s.append(read_wait_elapsed)
                             batch_items.append((index, frame, light, float(frame.get("exposure_s") or 0.0)))
                             batch_frame_starts.append(frame_start)
@@ -3487,6 +3516,22 @@ def run_resident_calibration_integration(
                         fallback_reason = str(read_profile.get("fits_fast_fallback_reason", "") or "")
                         if fallback_reason:
                             per_frame_fits_fallback_reason.append(fallback_reason)
+                        if "fits_native_file_read_s" in read_profile:
+                            per_frame_fits_native_file_read_s.append(
+                                float(read_profile.get("fits_native_file_read_s", 0.0))
+                            )
+                        if "fits_native_decode_s" in read_profile:
+                            per_frame_fits_native_decode_s.append(
+                                float(read_profile.get("fits_native_decode_s", 0.0))
+                            )
+                        if "fits_native_total_s" in read_profile:
+                            per_frame_fits_native_total_s.append(
+                                float(read_profile.get("fits_native_total_s", 0.0))
+                            )
+                        if "fits_native_bytes_read" in read_profile:
+                            per_frame_fits_native_bytes_read.append(
+                                int(read_profile.get("fits_native_bytes_read", 0) or 0)
+                            )
                         per_frame_read_s.append(read_wait_elapsed)
                         calibrate_start = perf_counter()
                         try:
@@ -7107,6 +7152,10 @@ def run_resident_calibration_integration(
             fits_materialize_decode_timing = _timing_summary(per_frame_fits_materialize_decode_s)
             fits_backend_counts = _value_counts(per_frame_fits_backend)
             fits_fallback_reason_counts = _value_counts(per_frame_fits_fallback_reason)
+            fits_native_file_read_timing = _timing_summary(per_frame_fits_native_file_read_s)
+            fits_native_decode_timing = _timing_summary(per_frame_fits_native_decode_s)
+            fits_native_total_timing = _timing_summary(per_frame_fits_native_total_s)
+            fits_native_bytes_read = int(sum(per_frame_fits_native_bytes_read))
             calibrate_timing = _timing_summary(per_frame_calibrate_s)
             host_copy_timing = _timing_summary(per_frame_host_copy_s)
             h2d_timing = _timing_summary(per_frame_h2d_s)
@@ -7157,6 +7206,10 @@ def run_resident_calibration_integration(
                 "fits_read_mode": resident_fits_read_mode,
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
+                "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],
+                "fits_native_decode_cumulative_s": fits_native_decode_timing["total"],
+                "fits_native_total_cumulative_s": fits_native_total_timing["total"],
+                "fits_native_bytes_read": fits_native_bytes_read,
                 "note": (
                     "worker_* values are cumulative read-thread time and can exceed wall-clock time "
                     "when prefetch overlaps FITS decode with GPU upload/calibration."
@@ -7186,6 +7239,10 @@ def run_resident_calibration_integration(
                 "fits_read_mode": resident_fits_read_mode,
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
+                "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],
+                "fits_native_decode_cumulative_s": fits_native_decode_timing["total"],
+                "fits_native_total_cumulative_s": fits_native_total_timing["total"],
+                "fits_native_bytes_read": fits_native_bytes_read,
                 "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
                 "calibration_batch_requested_streams": int(resident_calibration_streams),
                 "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
@@ -7208,6 +7265,9 @@ def run_resident_calibration_integration(
                     "light_read_decode_worker_total": read_worker_total,
                     "light_fits_open_total": fits_open_timing["total"],
                     "light_fits_materialize_decode_total": fits_materialize_decode_timing["total"],
+                    "light_fits_native_file_read_total": fits_native_file_read_timing["total"],
+                    "light_fits_native_decode_total": fits_native_decode_timing["total"],
+                    "light_fits_native_total": fits_native_total_timing["total"],
                     "light_read_overlap_saved": read_overlap_saved,
                     "light_host_copy_to_pinned_total": host_copy_timing["total"],
                     "light_h2d_total": h2d_timing["total"],
@@ -7229,6 +7289,9 @@ def run_resident_calibration_integration(
                     "read_decode_worker": read_worker_timing,
                     "fits_open": fits_open_timing,
                     "fits_materialize_decode": fits_materialize_decode_timing,
+                    "fits_native_file_read": fits_native_file_read_timing,
+                    "fits_native_decode": fits_native_decode_timing,
+                    "fits_native_total": fits_native_total_timing,
                     "host_copy_to_pinned": host_copy_timing,
                     "h2d": h2d_timing,
                     "calibrate_store": calibrate_store_timing,
@@ -7346,6 +7409,9 @@ def run_resident_calibration_integration(
                         "light_fits_open_worker_cumulative": fits_open_timing["total"],
                         "light_fits_materialize_decode": fits_materialize_decode_timing["total"],
                         "light_fits_materialize_decode_worker_cumulative": fits_materialize_decode_timing["total"],
+                        "light_fits_native_file_read": fits_native_file_read_timing["total"],
+                        "light_fits_native_decode": fits_native_decode_timing["total"],
+                        "light_fits_native_total": fits_native_total_timing["total"],
                         "light_read_overlap_saved": read_overlap_saved,
                         "light_host_copy_to_pinned": host_copy_timing["total"],
                         "light_h2d": h2d_timing["total"],
@@ -7402,6 +7468,10 @@ def run_resident_calibration_integration(
                         "fits_read_mode": resident_fits_read_mode,
                         "fits_backend_counts": fits_backend_counts,
                         "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
+                        "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],
+                        "fits_native_decode_cumulative_s": fits_native_decode_timing["total"],
+                        "fits_native_total_cumulative_s": fits_native_total_timing["total"],
+                        "fits_native_bytes_read": fits_native_bytes_read,
                         "calibration_event_mode": calibration_event_mode,
                         "calibration_event_modes": unique_calibration_event_modes,
                         "calibration_event_reuse": bool(

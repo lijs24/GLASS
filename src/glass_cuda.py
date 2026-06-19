@@ -218,6 +218,39 @@ def host_pinned_empty_f32(height: int, width: int) -> np.ndarray:
     return np.asarray(native.host_pinned_empty_f32(int(height), int(width)), dtype=np.float32)
 
 
+def read_simple_fits_into_f32(
+    path: Any,
+    data_offset: int,
+    height: int,
+    width: int,
+    bitpix: int,
+    bscale: float,
+    bzero: float,
+    blank: Any,
+    output: Any,
+) -> dict[str, Any]:
+    native = _native()
+    if native is None or not hasattr(native, "read_simple_fits_into_f32"):
+        raise RuntimeError("native CUDA backend with read_simple_fits_into_f32 is not available")
+    output_array = np.asarray(output)
+    if output_array.dtype != np.float32:
+        raise ValueError("native FITS direct decode output must be float32")
+    if not output_array.flags.c_contiguous:
+        raise ValueError("native FITS direct decode output must be C-contiguous")
+    result = native.read_simple_fits_into_f32(
+        str(path),
+        int(data_offset),
+        int(height),
+        int(width),
+        int(bitpix),
+        float(bscale),
+        float(bzero),
+        None if blank is None else int(blank),
+        output_array,
+    )
+    return dict(result)
+
+
 def smoke_add_f32(a: Any, b: Any) -> np.ndarray:
     native = _native()
     if native is not None:

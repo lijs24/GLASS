@@ -14,6 +14,8 @@
 #include <utility>
 #include <chrono>
 #include <cstring>
+#include <cstdint>
+#include <fstream>
 #include <memory>
 
 namespace py = pybind11;
@@ -1409,6 +1411,245 @@ py::array_t<float> host_pinned_empty_f32(std::size_t height, std::size_t width) 
       {static_cast<py::ssize_t>(width * sizeof(float)), static_cast<py::ssize_t>(sizeof(float))},
       ptr,
       owner);
+}
+
+int bytes_per_fits_sample(int bitpix) {
+  switch (bitpix) {
+    case 8:
+      return 1;
+    case 16:
+      return 2;
+    case 32:
+    case -32:
+      return 4;
+    case 64:
+    case -64:
+      return 8;
+    default:
+      throw std::invalid_argument("unsupported FITS BITPIX for native direct decode");
+  }
+}
+
+std::uint16_t read_be_u16(const unsigned char* p) {
+  return static_cast<std::uint16_t>((static_cast<std::uint16_t>(p[0]) << 8) |
+                                    static_cast<std::uint16_t>(p[1]));
+}
+
+std::uint32_t read_be_u32(const unsigned char* p) {
+  return (static_cast<std::uint32_t>(p[0]) << 24) |
+         (static_cast<std::uint32_t>(p[1]) << 16) |
+         (static_cast<std::uint32_t>(p[2]) << 8) |
+         static_cast<std::uint32_t>(p[3]);
+}
+
+std::uint64_t read_be_u64(const unsigned char* p) {
+  return (static_cast<std::uint64_t>(p[0]) << 56) |
+         (static_cast<std::uint64_t>(p[1]) << 48) |
+         (static_cast<std::uint64_t>(p[2]) << 40) |
+         (static_cast<std::uint64_t>(p[3]) << 32) |
+         (static_cast<std::uint64_t>(p[4]) << 24) |
+         (static_cast<std::uint64_t>(p[5]) << 16) |
+         (static_cast<std::uint64_t>(p[6]) << 8) |
+         static_cast<std::uint64_t>(p[7]);
+}
+
+std::int16_t signed_from_u16_bits(std::uint16_t bits) {
+  std::int16_t value = 0;
+  std::memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+std::int32_t signed_from_u32_bits(std::uint32_t bits) {
+  std::int32_t value = 0;
+  std::memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+std::int64_t signed_from_u64_bits(std::uint64_t bits) {
+  std::int64_t value = 0;
+  std::memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+float decode_fits_sample_f32(
+    const unsigned char* p,
+    int bitpix,
+    double bscale,
+    double bzero,
+    bool has_blank,
+    long long blank) {
+  if (bitpix == 8) {
+    const long long raw = static_cast<long long>(p[0]);
+    if (has_blank && raw == blank) {
+      return std::numeric_limits<float>::quiet_NaN();
+    }
+    return static_cast<float>(static_cast<double>(raw) * bscale + bzero);
+  }
+  if (bitpix == 16) {
+    const auto raw = static_cast<long long>(signed_from_u16_bits(read_be_u16(p)));
+    if (has_blank && raw == blank) {
+      return std::numeric_limits<float>::quiet_NaN();
+    }
+    return static_cast<float>(static_cast<double>(raw) * bscale + bzero);
+  }
+  if (bitpix == 32) {
+    const auto raw = static_cast<long long>(signed_from_u32_bits(read_be_u32(p)));
+    if (has_blank && raw == blank) {
+      return std::numeric_limits<float>::quiet_NaN();
+    }
+    return static_cast<float>(static_cast<double>(raw) * bscale + bzero);
+  }
+  if (bitpix == 64) {
+    const auto raw = static_cast<long long>(signed_from_u64_bits(read_be_u64(p)));
+    if (has_blank && raw == blank) {
+      return std::numeric_limits<float>::quiet_NaN();
+    }
+    return static_cast<float>(static_cast<double>(raw) * bscale + bzero);
+  }
+  if (bitpix == -32) {
+    const std::uint32_t bits = read_be_u32(p);
+    float value = 0.0f;
+    std::memcpy(&value, &bits, sizeof(float));
+    return static_cast<float>(static_cast<double>(value) * bscale + bzero);
+  }
+  if (bitpix == -64) {
+    const std::uint64_t bits = read_be_u64(p);
+    double value = 0.0;
+    std::memcpy(&value, &bits, sizeof(double));
+    return static_cast<float>(value * bscale + bzero);
+  }
+  throw std::invalid_argument("unsupported FITS BITPIX for native direct decode");
+}
+
+void decode_fits_chunk_f32(
+    const unsigned char* raw,
+    float* out,
+    std::size_t count,
+    int bitpix,
+    double bscale,
+    double bzero,
+    bool has_blank,
+    long long blank) {
+  if (bitpix == 16 && !has_blank && bscale == 1.0 && bzero == 32768.0) {
+    for (std::size_t i = 0; i < count; ++i) {
+      const std::uint16_t bits = read_be_u16(raw + i * 2u);
+      out[i] = static_cast<float>(bits ^ 0x8000u);
+    }
+    return;
+  }
+  if (bitpix == 16) {
+    for (std::size_t i = 0; i < count; ++i) {
+      const std::uint16_t bits = read_be_u16(raw + i * 2u);
+      const auto sample = static_cast<long long>(signed_from_u16_bits(bits));
+      if (has_blank && sample == blank) {
+        out[i] = std::numeric_limits<float>::quiet_NaN();
+      } else {
+        out[i] = static_cast<float>(static_cast<double>(sample) * bscale + bzero);
+      }
+    }
+    return;
+  }
+  if (bitpix == -32 && !has_blank && bscale == 1.0 && bzero == 0.0) {
+    for (std::size_t i = 0; i < count; ++i) {
+      const std::uint32_t bits = read_be_u32(raw + i * 4u);
+      float value = 0.0f;
+      std::memcpy(&value, &bits, sizeof(float));
+      out[i] = value;
+    }
+    return;
+  }
+  for (std::size_t i = 0; i < count; ++i) {
+    out[i] = decode_fits_sample_f32(
+        raw + i * static_cast<std::size_t>(bytes_per_fits_sample(bitpix)),
+        bitpix,
+        bscale,
+        bzero,
+        has_blank,
+        blank);
+  }
+}
+
+py::dict read_simple_fits_into_f32(
+    const std::string& path,
+    unsigned long long data_offset,
+    std::size_t height,
+    std::size_t width,
+    int bitpix,
+    double bscale,
+    double bzero,
+    py::object blank_obj,
+    py::array_t<float, py::array::c_style> output) {
+  if (height == 0 || width == 0) {
+    throw std::invalid_argument("FITS output dimensions must be non-empty");
+  }
+  const py::buffer_info info = output.request();
+  if (info.ndim != 2 ||
+      static_cast<std::size_t>(info.shape[0]) != height ||
+      static_cast<std::size_t>(info.shape[1]) != width) {
+    throw std::invalid_argument("output shape does not match FITS image shape");
+  }
+  const bool has_blank = !blank_obj.is_none();
+  const long long blank = has_blank ? py::cast<long long>(blank_obj) : 0LL;
+  float* out = static_cast<float*>(info.ptr);
+  const std::size_t pixel_count = height * width;
+  const int bytes_per_sample = bytes_per_fits_sample(bitpix);
+  constexpr std::size_t chunk_pixels = 1u << 20;
+  std::vector<unsigned char> raw(chunk_pixels * static_cast<std::size_t>(bytes_per_sample));
+
+  using Clock = std::chrono::steady_clock;
+  const auto total_start = Clock::now();
+  const auto open_start = Clock::now();
+  std::ifstream stream(path, std::ios::binary);
+  if (!stream) {
+    throw std::runtime_error("failed to open FITS image for native direct decode: " + path);
+  }
+  stream.seekg(static_cast<std::streamoff>(data_offset), std::ios::beg);
+  if (!stream) {
+    throw std::runtime_error("failed to seek FITS image data offset");
+  }
+  const auto open_stop = Clock::now();
+  double read_s = 0.0;
+  double decode_s = 0.0;
+  unsigned long long bytes_read = 0;
+
+  {
+    py::gil_scoped_release release;
+    std::size_t done = 0;
+    while (done < pixel_count) {
+      const std::size_t count = std::min(chunk_pixels, pixel_count - done);
+      const std::size_t byte_count = count * static_cast<std::size_t>(bytes_per_sample);
+      const auto read_start = Clock::now();
+      stream.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(byte_count));
+      const auto read_stop = Clock::now();
+      if (stream.gcount() != static_cast<std::streamsize>(byte_count)) {
+        throw std::runtime_error("truncated FITS image data during native direct decode");
+      }
+      read_s += std::chrono::duration<double>(read_stop - read_start).count();
+      bytes_read += static_cast<unsigned long long>(byte_count);
+
+      const auto decode_start = Clock::now();
+      decode_fits_chunk_f32(raw.data(), out + done, count, bitpix, bscale, bzero, has_blank, blank);
+      const auto decode_stop = Clock::now();
+      decode_s += std::chrono::duration<double>(decode_stop - decode_start).count();
+      done += count;
+    }
+  }
+
+  const auto total_stop = Clock::now();
+  py::dict result;
+  result["schema_version"] = 1;
+  result["backend"] = "native_direct_simple";
+  result["bitpix"] = bitpix;
+  result["height"] = static_cast<unsigned long long>(height);
+  result["width"] = static_cast<unsigned long long>(width);
+  result["bytes_read"] = bytes_read;
+  result["file_open_s"] = std::chrono::duration<double>(open_stop - open_start).count();
+  result["file_read_s"] = read_s;
+  result["decode_s"] = decode_s;
+  result["total_s"] = std::chrono::duration<double>(total_stop - total_start).count();
+  result["applied_scale"] = (bscale != 1.0 || bzero != 0.0);
+  result["applied_blank"] = has_blank;
+  return result;
 }
 
 class ResidentCalibratedStack {
@@ -10979,6 +11220,18 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
   m.def("list_devices", &list_devices);
   m.def("get_device_info", &get_device_info);
   m.def("host_pinned_empty_f32", &host_pinned_empty_f32, py::arg("height"), py::arg("width"));
+  m.def(
+      "read_simple_fits_into_f32",
+      &read_simple_fits_into_f32,
+      py::arg("path"),
+      py::arg("data_offset"),
+      py::arg("height"),
+      py::arg("width"),
+      py::arg("bitpix"),
+      py::arg("bscale"),
+      py::arg("bzero"),
+      py::arg("blank"),
+      py::arg("output"));
   m.def("smoke_add_f32", &smoke_add_f32);
   m.def("reduce_mean_tile_f32", &reduce_mean_tile_f32);
   m.def("calibrate_tile_f32", &calibrate_tile_f32);

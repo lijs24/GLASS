@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "gate": "S2-Gate439",
+  "runs": {
+    "gate438_astropy_control": {
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate438_astropy_control_warm_20260619_213148",
+      "run_elapsed_s": 17.28835899999831,
+      "master_build_or_load_s": 0.41212279998580925,
+      "light_read_upload_calibrate_s": 6.624953699996695,
+      "light_read_wait_wall_s": 3.9392954999930225,
+      "worker_read_cumulative_s": 37.972014999977546,
+      "fits_open_cumulative_s": 0.25657540015527047,
+      "fits_materialize_decode_cumulative_s": 33.797578599856934,
+      "fits_native_decode_cumulative_s": null,
+      "fits_native_file_read_cumulative_s": null,
+      "fits_native_total_cumulative_s": null,
+      "fits_native_bytes_read": null,
+      "native_h2d_calibrate_store_s": 1.9584481999999999,
+      "registration_accounted_s": 3.597217500693219,
+      "registration_warp_s": 1.6375085999607109,
+      "integration_s": 0.28844780000508763,
+      "output_write_s": 2.2511336999887135,
+      "fits_read_mode": "astropy",
+      "fits_backend_counts": {
+        "astropy_scaled_memmap": 200
+      },
+      "fallback_counts": {},
+      "overlap_efficiency": 0.8962579283718456,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "unknown_zero_weight": 0,
+        "passed": true
+      },
+      "dq_passed": true,
+      "master_cache": {
+        "passed": true,
+        "hit": 1,
+        "miss": 0
+      }
+    },
+    "gate438_fast_auto": {
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate438_fastfits_warm_20260619_212912",
+      "run_elapsed_s": 17.602828299975954,
+      "master_build_or_load_s": 0.41915509998216294,
+      "light_read_upload_calibrate_s": 6.563764000020456,
+      "light_read_wait_wall_s": 3.832018800196238,
+      "worker_read_cumulative_s": 37.58191009997972,
+      "fits_open_cumulative_s": 0.12888380003278144,
+      "fits_materialize_decode_cumulative_s": 37.452886999963084,
+      "fits_native_decode_cumulative_s": null,
+      "fits_native_file_read_cumulative_s": null,
+      "fits_native_total_cumulative_s": null,
+      "fits_native_bytes_read": null,
+      "native_h2d_calibrate_store_s": 2.0012115,
+      "registration_accounted_s": 3.596565499566319,
+      "registration_warp_s": 1.634971499821404,
+      "integration_s": 0.28894989998661913,
+      "output_write_s": 2.5443719000031706,
+      "fits_read_mode": "auto",
+      "fits_backend_counts": {
+        "fast_simple": 200
+      },
+      "fallback_counts": {},
+      "overlap_efficiency": 0.8980355498163383,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "unknown_zero_weight": 0,
+        "passed": true
+      },
+      "dq_passed": true,
+      "master_cache": {
+        "passed": true,
+        "hit": 1,
+        "miss": 0
+      }
+    },
+    "gate439_native_direct_scalar_probe": {
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate439_native_direct_warm_20260619_215452",
+      "run_elapsed_s": 63.83713619998889,
+      "master_build_or_load_s": 0.2754770000174176,
+      "light_read_upload_calibrate_s": 52.2443312999967,
+      "light_read_wait_wall_s": 50.45022770011565,
+      "worker_read_cumulative_s": 340.6123098000244,
+      "fits_open_cumulative_s": 0.13882749998684749,
+      "fits_materialize_decode_cumulative_s": 340.32633699999997,
+      "fits_native_decode_cumulative_s": 325.03499810000005,
+      "fits_native_file_read_cumulative_s": 15.2913389,
+      "fits_native_total_cumulative_s": 340.3442364,
+      "fits_native_bytes_read": 24660480000,
+      "native_h2d_calibrate_store_s": 1.2046454999999998,
+      "registration_accounted_s": 3.596740900623331,
+      "registration_warp_s": 1.6340599000395741,
+      "integration_s": 0.289996900013648,
+      "output_write_s": 2.5272876999806613,
+      "fits_read_mode": "native_direct",
+      "fits_backend_counts": {
+        "native_direct_simple": 200
+      },
+      "fallback_counts": {},
+      "overlap_efficiency": 0.8518837216137747,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "unknown_zero_weight": 0,
+        "passed": true
+      },
+      "dq_passed": true,
+      "master_cache": {
+        "passed": true,
+        "hit": 1,
+        "miss": 0
+      }
+    },
+    "gate439_native_direct_fastpath": {
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate439_native_direct_fastpath_warm_20260619_215910",
+      "run_elapsed_s": 17.857872099993983,
+      "master_build_or_load_s": 0.3086933000013232,
+      "light_read_upload_calibrate_s": 6.818247299990617,
+      "light_read_wait_wall_s": 4.769937200209824,
+      "worker_read_cumulative_s": 41.957217300107004,
+      "fits_open_cumulative_s": 0.1553291001112152,
+      "fits_materialize_decode_cumulative_s": 41.5880915,
+      "fits_native_decode_cumulative_s": 23.034659599999998,
+      "fits_native_file_read_cumulative_s": 18.5534319,
+      "fits_native_total_cumulative_s": 41.66713489999999,
+      "fits_native_bytes_read": 24660480000,
+      "native_h2d_calibrate_store_s": 1.4008385000000003,
+      "registration_accounted_s": 3.606557599420365,
+      "registration_warp_s": 1.6409333000774495,
+      "integration_s": 0.29076740000164136,
+      "output_write_s": 2.519136199989589,
+      "fits_read_mode": "native_direct",
+      "fits_backend_counts": {
+        "native_direct_simple": 200
+      },
+      "fallback_counts": {},
+      "overlap_efficiency": 0.8863142623093438,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "unknown_zero_weight": 0,
+        "passed": true
+      },
+      "dq_passed": true,
+      "master_cache": {
+        "passed": true,
+        "hit": 1,
+        "miss": 0
+      }
+    }
+  },
+  "comparisons": {
+    "gate439_native_direct_fastpath_vs_gate438_astropy_control": {
+      "shape_match": true,
+      "rms_diff": 0.0,
+      "relative_rms_diff": 0.0,
+      "max_abs_diff": 0.0,
+      "abs_diff_p999": 0.0
+    }
+  },
+  "interpretation": {
+    "native_direct_backend_hit_count": 200,
+    "native_direct_changed_pixels": false,
+    "native_direct_light_pipeline_delta_s_vs_astropy_control": 0.19329359999392182,
+    "native_direct_read_wait_delta_s_vs_astropy_control": 0.8306417002168018,
+    "native_direct_worker_decode_delta_s_vs_astropy_control": 7.790512900143064,
+    "default_promotion": "no",
+    "reason": "same-code 200-light output is bitwise identical but native_direct fastpath is still slower than astropy control in the light read/upload/calibrate bucket.",
+    "next_gate": "fused native decode-to-upload or GPU-side decode staging to avoid writing expanded float32 host buffers before H2D."
+  },
+  "artifacts": {
+    "report_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate439_native_direct_fastpath_warm_20260619_215910\\report.html",
+    "compare_html": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate439_native_direct_fastpath_warm_20260619_215910\\gate439_native_direct_fastpath_vs_gate438_astropy.html",
+    "compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate439_native_direct_fastpath_warm_20260619_215910\\gate439_native_direct_fastpath_vs_gate438_astropy.json",
+    "slow_scalar_probe_run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate439_native_direct_warm_20260619_215452"
+  }
+}

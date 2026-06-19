@@ -4,9 +4,15 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
-from glass.io.fits_fast import FastFitsUnsupported, read_simple_fits_image, simple_fits_image_spec
+from glass.io.fits_fast import (
+    FastFitsUnsupported,
+    read_simple_fits_image,
+    read_simple_fits_image_native_direct_timed,
+    simple_fits_image_spec,
+)
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.engine.resident_cuda import _read_light_timed, _write_resident_outputs
+from tests.conftest import cuda_module_or_skip
 
 
 def test_fits_image_reader_applies_bscale_bzero_per_tile(tmp_path):
@@ -75,6 +81,30 @@ def test_resident_light_timed_records_fast_or_legacy_backend(tmp_path):
     assert fast_profile["fits_reader_backend"] == "fast_simple"
     assert legacy_profile["fits_reader_backend"] == "astropy_scaled_memmap"
     assert fast_profile["fits_fast_fallback_reason"] == ""
+
+
+def test_native_direct_fits_reader_decodes_into_pinned_output(tmp_path):
+    module = cuda_module_or_skip()
+    if not hasattr(module, "read_simple_fits_into_f32"):
+        pytest.skip("native direct FITS decoder is not available")
+    path = tmp_path / "native_direct_scaled_blank.fits"
+    raw = np.arange(16, dtype=np.int16).reshape(4, 4)
+    raw[2, 1] = -999
+    hdu = fits.PrimaryHDU(raw)
+    hdu.header["BSCALE"] = 2.5
+    hdu.header["BZERO"] = 100.0
+    hdu.header["BLANK"] = -999
+    hdu.writeto(path)
+    output = module.host_pinned_empty_f32(4, 4)
+
+    decoded, profile = read_simple_fits_image_native_direct_timed(path, output=output)
+    expected = read_fits_data(path)
+
+    assert decoded is output
+    assert profile["fits_reader_backend"] == "native_direct_simple"
+    assert profile["fits_native_bytes_read"] == raw.size * raw.dtype.itemsize
+    assert profile["fits_native_decode_s"] >= 0.0
+    assert np.allclose(decoded, expected, equal_nan=True)
 
 
 def test_fits_image_reader_maps_blank_to_nan(tmp_path):

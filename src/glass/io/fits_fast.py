@@ -217,3 +217,59 @@ def read_simple_fits_image_timed(
         "fits_fast_bitpix": int(spec.bitpix),
         "fits_fast_scaled": bool(spec.bscale != 1.0 or spec.bzero != 0.0 or spec.blank is not None),
     }
+
+
+def read_simple_fits_image_native_direct_timed(
+    path: str | Path,
+    dtype: Any = np.float32,
+    output: np.ndarray | None = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    if np.dtype(dtype) != np.dtype(np.float32):
+        raise ValueError("native direct FITS decode currently supports float32 output only")
+    total_start = perf_counter()
+    open_start = perf_counter()
+    spec = simple_fits_image_spec(path)
+    header_elapsed = perf_counter() - open_start
+    if output is None:
+        data = np.empty(spec.shape, dtype=np.float32)
+    else:
+        if output.shape != spec.shape:
+            raise ValueError("output shape does not match FITS image shape")
+        if output.dtype != np.float32:
+            raise ValueError("native direct FITS read into an output buffer requires float32")
+        if not output.flags.c_contiguous:
+            raise ValueError("native direct FITS output buffer must be C-contiguous")
+        data = output
+
+    import glass_cuda
+
+    native = glass_cuda.read_simple_fits_into_f32(
+        spec.path,
+        spec.data_offset,
+        spec.height,
+        spec.width,
+        spec.bitpix,
+        spec.bscale,
+        spec.bzero,
+        spec.blank,
+        data,
+    )
+    native_read_s = float(native.get("file_read_s", 0.0) or 0.0)
+    native_decode_s = float(native.get("decode_s", 0.0) or 0.0)
+    native_open_s = float(native.get("file_open_s", 0.0) or 0.0)
+    total_elapsed = perf_counter() - total_start
+    return data, {
+        "total": total_elapsed,
+        "fits_open": header_elapsed + native_open_s,
+        "fits_materialize_decode": native_read_s + native_decode_s,
+        "fits_reader_backend": "native_direct_simple",
+        "fits_fast_supported": True,
+        "fits_fast_bitpix": int(spec.bitpix),
+        "fits_fast_scaled": bool(spec.bscale != 1.0 or spec.bzero != 0.0 or spec.blank is not None),
+        "fits_native_file_open_s": native_open_s,
+        "fits_native_file_read_s": native_read_s,
+        "fits_native_decode_s": native_decode_s,
+        "fits_native_total_s": float(native.get("total_s", 0.0) or 0.0),
+        "fits_native_bytes_read": int(native.get("bytes_read", 0) or 0),
+        "fits_native_backend": str(native.get("backend", "native_direct_simple")),
+    }
