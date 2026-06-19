@@ -7108,6 +7108,22 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub
   release creation, and no real-data benchmark rerun.
 
+### S2-Gate 394: Release Quality Evidence Shared Contract
+
+- Extract the release-quality final-evidence field contract and detail-readiness
+  evaluator into a shared report helper.
+- Move the Windows publish-preflight final-evidence detail readiness check onto
+  that shared helper without changing JSON field names, Markdown output,
+  pass/fail semantics, or legacy `final_checks_*` compatibility.
+- Add focused helper tests for field-list uniqueness, compatible-missing legacy
+  behavior, all-prefix detail readiness, missing-prefix blocking, explicit false
+  blocking, and existing false summary preservation.
+- Keep this gate report-contract scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
