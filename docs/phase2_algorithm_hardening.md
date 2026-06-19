@@ -7168,6 +7168,22 @@ integration where applicable.
   kernel change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 398: Publication Audit Shared Evidence Readiness
+
+- Move StackEngine publication-audit release-quality final-evidence detail
+  readiness onto the shared helper.
+- Promote publication-audit release-quality field groups to local constants so
+  present checks, legacy readiness, and detail readiness share the same field
+  contract.
+- Preserve strict paired raw/Phase2 detail semantics and legacy `final_checks_*`
+  compatibility.
+- Validate with focused publication-audit and shared-helper tests.
+- Keep this gate publication-audit report-contract scoped: no quality metric
+  math change, no default quality threshold, no star detector algorithm change,
+  no registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

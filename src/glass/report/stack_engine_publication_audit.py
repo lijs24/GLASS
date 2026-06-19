@@ -5,6 +5,9 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.release_quality_evidence import (
+    ensure_final_evidence_detail_ready as _release_quality_final_evidence_detail_ready,
+)
 
 
 def _read_json_object(path: str | Path) -> dict[str, Any]:
@@ -1311,56 +1314,78 @@ def _quality_compare_summaries_match(
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)
 
 
+_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS = (
+    "release_matrix_check",
+    "release_matrix_default_check",
+    "release_default_promotion_check",
+    "release_matrix_default_match_check",
+    "release_matrix_manifest_match_check",
+)
+
+_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS = (
+    "matrix_final_checks_ready",
+    "matrix_final_checks_match",
+    "matrix_raw_final_checks_ready",
+    "matrix_phase2_final_checks_ready",
+    "matrix_default_final_checks_ready",
+    "matrix_default_final_checks_match",
+    "matrix_default_raw_final_checks_ready",
+    "matrix_default_phase2_final_checks_ready",
+    "default_promotion_final_checks_ready",
+    "default_promotion_final_checks_match",
+    "default_promotion_raw_final_checks_ready",
+    "default_promotion_phase2_final_checks_ready",
+)
+
+_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS = (
+    "matrix_final_evidence_ready",
+    "matrix_final_evidence_match",
+    "matrix_raw_final_evidence_ready",
+    "matrix_phase2_final_evidence_ready",
+    "matrix_default_final_evidence_ready",
+    "matrix_default_final_evidence_match",
+    "matrix_default_raw_final_evidence_ready",
+    "matrix_default_phase2_final_evidence_ready",
+    "default_promotion_final_evidence_ready",
+    "default_promotion_final_evidence_match",
+    "default_promotion_raw_final_evidence_ready",
+    "default_promotion_phase2_final_evidence_ready",
+)
+
+_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS = (
+    *_RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS,
+    *_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
+)
+
+_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES = (
+    "matrix",
+    "matrix_default",
+    "default_promotion",
+)
+
+_RELEASE_QUALITY_PUBLICATION_GUARD_FIELDS = (
+    "matrix_present",
+    "matrix_ready",
+    "matrix_check_passed",
+    "matrix_layers_ready",
+    "matrix_raw_status",
+    "matrix_phase2_status",
+    "matrix_default_ready",
+    "matrix_default_raw_status",
+    "matrix_default_phase2_status",
+    "default_promotion_present",
+    "default_promotion_ready",
+    "default_promotion_check_passed",
+    "default_promotion_layers_ready",
+    "default_promotion_raw_status",
+    "default_promotion_phase2_status",
+    *_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS,
+    *_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS,
+)
+
+
 def _release_quality_publication_guard_present(summary: dict[str, Any]) -> bool:
-    return any(
-        summary.get(field) is not None
-        for field in (
-            "matrix_present",
-            "matrix_ready",
-            "matrix_check_passed",
-            "matrix_layers_ready",
-            "matrix_raw_status",
-            "matrix_phase2_status",
-            "matrix_default_ready",
-            "matrix_default_raw_status",
-            "matrix_default_phase2_status",
-            "default_promotion_present",
-            "default_promotion_ready",
-            "default_promotion_check_passed",
-            "default_promotion_layers_ready",
-            "default_promotion_raw_status",
-            "default_promotion_phase2_status",
-            "release_matrix_check",
-            "release_matrix_default_check",
-            "release_default_promotion_check",
-            "release_matrix_default_match_check",
-            "release_matrix_manifest_match_check",
-            "matrix_final_checks_ready",
-            "matrix_final_checks_match",
-            "matrix_raw_final_checks_ready",
-            "matrix_phase2_final_checks_ready",
-            "matrix_default_final_checks_ready",
-            "matrix_default_final_checks_match",
-            "matrix_default_raw_final_checks_ready",
-            "matrix_default_phase2_final_checks_ready",
-            "default_promotion_final_checks_ready",
-            "default_promotion_final_checks_match",
-            "default_promotion_raw_final_checks_ready",
-            "default_promotion_phase2_final_checks_ready",
-            "matrix_final_evidence_ready",
-            "matrix_final_evidence_match",
-            "matrix_raw_final_evidence_ready",
-            "matrix_phase2_final_evidence_ready",
-            "matrix_default_final_evidence_ready",
-            "matrix_default_final_evidence_match",
-            "matrix_default_raw_final_evidence_ready",
-            "matrix_default_phase2_final_evidence_ready",
-            "default_promotion_final_evidence_ready",
-            "default_promotion_final_evidence_match",
-            "default_promotion_raw_final_evidence_ready",
-            "default_promotion_phase2_final_evidence_ready",
-        )
-    )
+    return any(summary.get(field) is not None for field in _RELEASE_QUALITY_PUBLICATION_GUARD_FIELDS)
 
 
 def _release_quality_publication_guard_final_checks_present(
@@ -1368,13 +1393,7 @@ def _release_quality_publication_guard_final_checks_present(
 ) -> bool:
     return any(
         summary.get(field) is not None
-        for field in (
-            "release_matrix_check",
-            "release_matrix_default_check",
-            "release_default_promotion_check",
-            "release_matrix_default_match_check",
-            "release_matrix_manifest_match_check",
-        )
+        for field in _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS
     )
 
 
@@ -1399,32 +1418,7 @@ def _release_quality_publication_guard_final_evidence_present(
 ) -> bool:
     return any(
         summary.get(field) is not None
-        for field in (
-            "matrix_final_checks_ready",
-            "matrix_final_checks_match",
-            "matrix_raw_final_checks_ready",
-            "matrix_phase2_final_checks_ready",
-            "matrix_default_final_checks_ready",
-            "matrix_default_final_checks_match",
-            "matrix_default_raw_final_checks_ready",
-            "matrix_default_phase2_final_checks_ready",
-            "default_promotion_final_checks_ready",
-            "default_promotion_final_checks_match",
-            "default_promotion_raw_final_checks_ready",
-            "default_promotion_phase2_final_checks_ready",
-            "matrix_final_evidence_ready",
-            "matrix_final_evidence_match",
-            "matrix_raw_final_evidence_ready",
-            "matrix_phase2_final_evidence_ready",
-            "matrix_default_final_evidence_ready",
-            "matrix_default_final_evidence_match",
-            "matrix_default_raw_final_evidence_ready",
-            "matrix_default_phase2_final_evidence_ready",
-            "default_promotion_final_evidence_ready",
-            "default_promotion_final_evidence_match",
-            "default_promotion_raw_final_evidence_ready",
-            "default_promotion_phase2_final_evidence_ready",
-        )
+        for field in _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_FIELDS
     )
 
 
@@ -1433,20 +1427,7 @@ def _release_quality_publication_guard_final_evidence_detail_present(
 ) -> bool:
     return any(
         summary.get(field) is not None
-        for field in (
-            "matrix_final_evidence_ready",
-            "matrix_final_evidence_match",
-            "matrix_raw_final_evidence_ready",
-            "matrix_phase2_final_evidence_ready",
-            "matrix_default_final_evidence_ready",
-            "matrix_default_final_evidence_match",
-            "matrix_default_raw_final_evidence_ready",
-            "matrix_default_phase2_final_evidence_ready",
-            "default_promotion_final_evidence_ready",
-            "default_promotion_final_evidence_match",
-            "default_promotion_raw_final_evidence_ready",
-            "default_promotion_phase2_final_evidence_ready",
-        )
+        for field in _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS
     )
 
 
@@ -1455,20 +1436,7 @@ def _release_quality_publication_guard_legacy_final_evidence_present(
 ) -> bool:
     return any(
         summary.get(field) is not None
-        for field in (
-            "matrix_final_checks_ready",
-            "matrix_final_checks_match",
-            "matrix_raw_final_checks_ready",
-            "matrix_phase2_final_checks_ready",
-            "matrix_default_final_checks_ready",
-            "matrix_default_final_checks_match",
-            "matrix_default_raw_final_checks_ready",
-            "matrix_default_phase2_final_checks_ready",
-            "default_promotion_final_checks_ready",
-            "default_promotion_final_checks_match",
-            "default_promotion_raw_final_checks_ready",
-            "default_promotion_phase2_final_checks_ready",
-        )
+        for field in _RELEASE_QUALITY_PUBLICATION_GUARD_LEGACY_FINAL_EVIDENCE_FIELDS
     )
 
 
@@ -1521,21 +1489,6 @@ def _release_quality_publication_guard_legacy_final_evidence_layer_ready(
     )
 
 
-def _release_quality_publication_guard_final_evidence_detail_layer_ready(
-    summary: dict[str, Any],
-    *,
-    prefix: str,
-) -> bool:
-    return _release_quality_publication_guard_final_evidence_layer_ready(
-        summary,
-        prefix=prefix,
-        ready_suffix="final_evidence_ready",
-        match_suffix="final_evidence_match",
-        raw_ready_suffix="raw_final_evidence_ready",
-        phase2_ready_suffix="phase2_final_evidence_ready",
-    )
-
-
 def _release_quality_publication_guard_legacy_final_evidence_ready(
     summary: dict[str, Any],
 ) -> bool:
@@ -1553,14 +1506,17 @@ def _release_quality_publication_guard_legacy_final_evidence_ready(
 def _release_quality_publication_guard_final_evidence_detail_ready(
     summary: dict[str, Any],
 ) -> bool:
-    return _release_quality_publication_guard_final_evidence_detail_present(
-        summary
-    ) and all(
-        _release_quality_publication_guard_final_evidence_detail_layer_ready(
-            summary,
-            prefix=prefix,
-        )
-        for prefix in ("matrix", "matrix_default", "default_promotion")
+    if not _release_quality_publication_guard_final_evidence_detail_present(summary):
+        return False
+    detail_evidence = {
+        field: summary.get(field)
+        for field in _RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS
+    }
+    return _release_quality_final_evidence_detail_ready(
+        detail_evidence,
+        detail_fields=_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
+        prefixes=_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_EVIDENCE_PREFIXES,
+        allow_partial_layer_ready=False,
     )
 
 
