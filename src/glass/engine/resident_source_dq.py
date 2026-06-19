@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from glass.engine.contracts import DQFlag, DQMask
+from glass.io.fits_io import read_fits_data
 
 
 def _empty_flag_counts() -> dict[str, int]:
@@ -104,6 +106,114 @@ def source_invalid_mask_from_dq_mask(
     }
 
 
+def _dq_bits_from_sidecar_data(data: np.ndarray) -> np.ndarray:
+    array = np.asarray(data)
+    finite = np.isfinite(array)
+    bits = np.zeros(array.shape, dtype=np.uint32)
+    if np.any(finite):
+        bits[finite] = np.rint(array[finite]).astype(np.uint32, copy=False)
+    if np.any(~finite):
+        bits[~finite] |= np.uint32(int(DQFlag.NO_DATA))
+    return bits
+
+
+def source_invalid_mask_from_sidecar_path(
+    path: str | Path,
+    *,
+    height: int,
+    width: int,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    sidecar_path = Path(path)
+    if not sidecar_path.exists():
+        raise FileNotFoundError(f"source DQ sidecar does not exist: {sidecar_path}")
+    data = read_fits_data(sidecar_path, dtype=np.float32)
+    bits = _dq_bits_from_sidecar_data(data)
+    invalid_mask, info = source_invalid_mask_from_dq_mask(bits, height=height, width=width)
+    info.update(
+        {
+            "source_model": "dq_sidecar_fits",
+            "sidecar_path": str(sidecar_path),
+            "sidecar_format": sidecar_path.suffix.lower().lstrip(".") or "unknown",
+        }
+    )
+    return invalid_mask, info
+
+
+def combine_source_invalid_masks(
+    components: list[tuple[np.ndarray | None, dict[str, Any]]],
+    *,
+    height: int,
+    width: int,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    shape = (int(height), int(width))
+    supported = True
+    reasons: list[str] = []
+    masks: list[np.ndarray] = []
+    flag_counts = _empty_flag_counts()
+    flagged_samples = 0
+    nonfinite_samples = 0
+    source_models: list[str] = []
+    sidecar_paths: list[str] = []
+    component_summaries: list[dict[str, Any]] = []
+    for mask, info in components:
+        info = dict(info)
+        source_model = str(info.get("source_model") or "unknown")
+        source_models.append(source_model)
+        if info.get("sidecar_path"):
+            sidecar_paths.append(str(info["sidecar_path"]))
+        component_summaries.append(
+            {
+                "source_model": source_model,
+                "supported": bool(info.get("supported")),
+                "reason": str(info.get("reason") or ""),
+                "invalid_samples": int(info.get("invalid_samples") or 0),
+                "flagged_samples": int(info.get("flagged_samples") or 0),
+                "nonfinite_samples": int(info.get("nonfinite_samples") or 0),
+                "sidecar_path": info.get("sidecar_path"),
+            }
+        )
+        if not bool(info.get("supported")):
+            reason = str(info.get("reason") or f"unsupported:{source_model}")
+            if reason:
+                reasons.append(reason)
+            if int(info.get("invalid_samples") or 0) > 0:
+                supported = False
+            continue
+        flagged_samples += int(info.get("flagged_samples") or 0)
+        nonfinite_samples += int(info.get("nonfinite_samples") or 0)
+        for flag, count in dict(info.get("flag_counts") or {}).items():
+            flag_counts[str(flag)] = int(flag_counts.get(str(flag), 0)) + int(count or 0)
+        if mask is not None:
+            array = np.asarray(mask, dtype=np.uint8)
+            if array.shape != shape:
+                supported = False
+                reasons.append("source_invalid_mask_shape_not_image")
+            elif np.any(array != 0):
+                masks.append(array)
+
+    combined: np.ndarray | None = None
+    invalid_count = 0
+    if masks:
+        combined_bool = np.zeros(shape, dtype=bool)
+        for mask in masks:
+            combined_bool |= mask != 0
+        invalid_count = int(np.count_nonzero(combined_bool))
+        combined = combined_bool.astype(np.uint8, copy=False)
+
+    return combined, {
+        "supported": supported,
+        "reason": ";".join(reasons),
+        "shape": list(shape),
+        "invalid_samples": invalid_count,
+        "flagged_samples": int(flagged_samples),
+        "nonfinite_samples": int(nonfinite_samples),
+        "flag_counts": {key: value for key, value in sorted(flag_counts.items()) if value},
+        "source_model": "+".join(source_models) if source_models else "none",
+        "component_summaries": component_summaries,
+        "sidecar_paths": sidecar_paths,
+    }
+
+
 def apply_resident_source_invalid_mask(
     stack: Any,
     *,
@@ -130,6 +240,9 @@ def apply_resident_source_invalid_mask(
         "applied": False,
         "native_method": None,
     }
+    for key in ("component_summaries", "sidecar_paths", "sidecar_path", "sidecar_format"):
+        if key in mask_info:
+            row[key] = mask_info[key]
     if not row["supported"]:
         row["status"] = "unsupported_no_invalid_samples" if invalid_count == 0 else "unsupported"
         if invalid_count > 0 and require_native:

@@ -9,7 +9,7 @@ from astropy.io import fits
 from glass.cli import main
 from glass.cpu.integration import weighted_integrate_stack
 from glass.engine.contracts import DQFlag
-from glass.io.fits_io import read_fits_data
+from glass.io.fits_io import read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.engine.resident_cuda import (
     _load_frame_weight_proposal,
@@ -1328,6 +1328,89 @@ def test_cli_resident_cuda_run_simple_snr_weighting(tmp_path: Path):
     by_std = sorted(weighting["frame_results"], key=lambda item: item["source_std"])
     assert by_std[0]["weight"] > by_std[-1]["weight"]
     assert max(weights.values()) > min(weights.values())
+
+
+def test_cli_resident_cuda_run_applies_plan_source_dq_sidecar(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_weight_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_run_source_dq_sidecar"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+
+    sidecar = tmp_path / "source_dq" / "light_high_noise_dq.fits"
+    dq = np.zeros((16, 16), dtype=np.float32)
+    dq[4, 5] = float(int(DQFlag.HOT_PIXEL))
+    write_fits_data(sidecar, dq)
+    plan_payload = read_json(plan)
+    for frame in plan_payload["frames"]:
+        if frame.get("frame_type") == "light" and Path(str(frame["path"])).stem == "light_high_noise":
+            frame["source_dq_mask_path"] = str(sidecar.relative_to(tmp_path))
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-output-maps",
+            "audit",
+        ]
+    ) == 0
+
+    low = read_fits_data(dataset / "light" / "light_low_noise.fits", dtype=np.float32)
+    high = read_fits_data(dataset / "light" / "light_high_noise.fits", dtype=np.float32)
+    expected = ((low + high) / 2.0).astype(np.float32)
+    expected[4, 5] = low[4, 5]
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
+    weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
+    resident = read_json(run / "resident_artifacts.json")
+    source_dq = resident["artifacts"][0]["source_dq_summary"]
+
+    assert np.allclose(master, expected, rtol=2e-5, atol=2e-5)
+    assert weight[4, 5] == pytest.approx(1.0)
+    assert weight[0, 0] == pytest.approx(2.0)
+    assert output["dq_coverage_provenance"]["input_valid_samples_before_rejection"] == 511
+    assert source_dq["passed"] is True
+    assert source_dq["input_invalid_samples_before_rejection"] == 1
+    assert source_dq["input_flagged_samples"] == 1
+    assert source_dq["source_dq_flag_counts"] == {"hot_pixel": 1}
+    assert source_dq["status_counts"]["applied"] == 1
+    assert source_dq["status_counts"]["no_invalid_samples"] == 1
+    applied_rows = [row for row in source_dq["rows"] if row["status"] == "applied"]
+    assert applied_rows[0]["sidecar_paths"] == [str(sidecar)]
 
 
 def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):

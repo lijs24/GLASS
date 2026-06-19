@@ -8841,6 +8841,42 @@ Completed in Gate446:
   - `runs/checkpoints/s2_gate_447_perf/synthetic_source_dq_cpu_vs_resident.json`;
   - `runs/checkpoints/s2_gate_447_status.md`.
 
+### S2-Gate 448: Resident Input-DQ Sidecar Plumbing And File Regression
+
+- Route file/plan DQ sidecars into the resident CUDA source-DQ mask path
+  introduced in Gate447.
+- Required work:
+  - accept light-frame `source_dq_mask_path`, `dq_mask_path`,
+    `calibration_dq_mask_path`, or `input_dq_mask_path` fields from
+    `processing_plan.json`;
+  - read FITS DQ bitfields without changing the input image directory;
+  - combine sidecar DQ invalid samples with source-array nonfinite samples
+    before resident integration;
+  - prove a finite source bad pixel is removed from resident mean integration
+    and recorded in `source_dq_summary`;
+  - run focused CUDA resident tests plus full pytest before checkpoint/commit.
+- This is a substantive DQ/mask pipeline gate, not a release/default-promotion
+  or report-handoff gate.
+- Completed in S2-Gate448:
+  - resident CUDA now accepts `source_dq_mask_path`, `dq_mask_path`,
+    `calibration_dq_mask_path`, and `input_dq_mask_path` fields on light-frame
+    plan records;
+  - FITS DQ sidecar bitfields are read as source invalid masks and unioned
+    with source-array nonfinite samples before integration;
+  - resident source-DQ provenance now carries sidecar paths and component
+    summaries, while unsupported zero-invalid source-array probes do not block
+    valid sidecar masks;
+  - focused tests prove FITS sidecar bit counts, source-array/sidecar union
+    semantics, and resident CUDA exclusion of a finite hot pixel from master
+    and weight outputs;
+  - synthetic file-level validation on 8x64x64 light frames with 2 sidecar hot
+    pixels matched CPU expected master/weight exactly:
+    `master_max_abs=0`, `weight_max_abs=0`, resident run `0.1647 s`;
+  - full pytest passed: `1068 passed in 39.82 s`.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_448_perf/synthetic_file_sidecar_resident_cuda_vs_cpu_expected.json`;
+  - `runs/checkpoints/s2_gate_448_status.md`.
+
 ## Gate Rules
 
 Each gate requires:

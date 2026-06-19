@@ -43,7 +43,9 @@ from glass.engine.resident_master_cache import (
 from glass.engine.resident_source_dq import (
     apply_resident_source_invalid_mask,
     build_resident_source_dq_summary,
+    combine_source_invalid_masks,
     source_invalid_mask_from_array,
+    source_invalid_mask_from_sidecar_path,
 )
 from glass.engine.resident_registration_quality import (
     DEFAULT_RESIDENT_REGISTRATION_QUALITY_MIN_INLIERS,
@@ -1475,6 +1477,46 @@ def _resident_source_dq_provenance_fields(source_dq_summary: dict[str, Any] | No
         if key in source_dq_summary:
             fields[key] = source_dq_summary[key]
     return fields
+
+
+def _resident_source_dq_sidecar_path(frame: dict[str, Any], plan_root: Path) -> Path | None:
+    for key in (
+        "source_dq_mask_path",
+        "dq_mask_path",
+        "calibration_dq_mask_path",
+        "input_dq_mask_path",
+    ):
+        raw_path = frame.get(key)
+        if raw_path is None or str(raw_path) == "":
+            continue
+        sidecar = Path(str(raw_path))
+        if not sidecar.is_absolute():
+            sidecar = plan_root / sidecar
+        return sidecar
+    return None
+
+
+def _resident_source_invalid_mask_from_frame(
+    frame: dict[str, Any],
+    data: Any,
+    *,
+    height: int,
+    width: int,
+    plan_root: Path,
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    components: list[tuple[np.ndarray | None, dict[str, Any]]] = [
+        source_invalid_mask_from_array(data, height=height, width=width)
+    ]
+    sidecar_path = _resident_source_dq_sidecar_path(frame, plan_root)
+    if sidecar_path is not None:
+        components.append(
+            source_invalid_mask_from_sidecar_path(
+                sidecar_path,
+                height=height,
+                width=width,
+            )
+        )
+    return combine_source_invalid_masks(components, height=height, width=width)
 
 
 def _resident_dq_coverage_provenance(
@@ -3077,6 +3119,7 @@ def run_resident_calibration_integration(
 
     cuda_module = _cuda_module_required()
     plan = read_json(plan_path)
+    plan_root = Path(plan_path).parent
     run = Path(run_dir)
     run.mkdir(parents=True, exist_ok=True)
     shared_master_cache_dir = None if resident_master_cache_dir is None else Path(resident_master_cache_dir)
@@ -3524,10 +3567,12 @@ def run_resident_calibration_integration(
                             int, tuple[str, np.ndarray | None, dict[str, Any]]
                         ] = {}
                         for item_index, frame, light, _exposure in batch_items:
-                            invalid_mask, mask_info = source_invalid_mask_from_array(
+                            invalid_mask, mask_info = _resident_source_invalid_mask_from_frame(
+                                frame,
                                 light,
                                 height=height,
                                 width=width,
+                                plan_root=plan_root,
                             )
                             source_dq_pending_by_index[int(item_index)] = (
                                 str(frame["id"]),
@@ -3780,10 +3825,12 @@ def run_resident_calibration_integration(
                                 int(read_profile.get("fits_native_bytes_read", 0) or 0)
                             )
                         per_frame_read_s.append(read_wait_elapsed)
-                        invalid_mask, mask_info = source_invalid_mask_from_array(
+                        invalid_mask, mask_info = _resident_source_invalid_mask_from_frame(
+                            frame,
                             light,
                             height=height,
                             width=width,
+                            plan_root=plan_root,
                         )
                         calibrate_start = perf_counter()
                         try:
