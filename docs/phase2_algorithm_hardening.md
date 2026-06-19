@@ -7068,6 +7068,26 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 392: Windows Release Matrix Final Evidence Detail Handoff
+
+- Carry Gate391 default-promotion final release quality evidence detail into
+  `glass windows-release-matrix`.
+- Preserve legacy compatibility for release-decision/default-promotion
+  artifacts that only provide historical `final_checks_*` evidence names.
+- Block matrix readiness when direct release-decision detail evidence fails,
+  when default-promotion detail evidence fails, or when default-promotion drops
+  detail fields carried by direct release-decision evidence.
+- Surface final-evidence-detail readiness, preservation status, and raw/Phase2
+  matrix detail fields in release-matrix JSON evidence and Markdown.
+- Add focused tests for green detail surfacing, compatible-missing detail,
+  legacy-only compatibility, failed direct detail evidence, and promoted detail
+  loss.
+- Keep this gate Windows release-matrix scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

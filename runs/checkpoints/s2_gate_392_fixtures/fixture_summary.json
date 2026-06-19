@@ -1,0 +1,37 @@
+{
+  "cases": [
+    {
+      "case": "ready_final_evidence_detail",
+      "default_detail_preserved": true,
+      "direct_detail_ready": true,
+      "passed": true,
+      "phase2_matrix_final_evidence_ready": true,
+      "raw_matrix_final_evidence_ready": true
+    },
+    {
+      "case": "legacy_only_final_checks",
+      "default_detail_fields_present": false,
+      "default_detail_preserved": true,
+      "direct_detail_fields_present": false,
+      "passed": true,
+      "raw_matrix_final_checks_ready": true,
+      "raw_matrix_final_evidence_ready": null
+    },
+    {
+      "case": "failed_direct_raw_matrix_phase2_final_evidence_detail",
+      "direct_detail_ready": false,
+      "passed": false,
+      "raw_matrix_phase2_final_checks_ready": true,
+      "raw_matrix_phase2_final_evidence_ready": false
+    },
+    {
+      "case": "default_promotion_final_evidence_detail_loss",
+      "default_detail_fields_present": false,
+      "default_detail_preserved": false,
+      "direct_detail_fields_present": true,
+      "passed": false,
+      "raw_matrix_final_evidence_ready": null
+    }
+  ],
+  "gate": "S2-Gate 392"
+}
