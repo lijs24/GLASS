@@ -7928,20 +7928,86 @@ integration where applicable.
 ### S2-Gate 431: Resident Warp/Rejection Value Parity or Real 200-Light Regression
 
 - Continue from Gate430 with a substantive runtime gate only.
-- Choose the next action based on GPU availability and run time:
-  - either reduce the remaining strict same-pre-rejection delta by targeting
-    resident warp/rejection value parity;
-  - or run the real 200-light regression using the now-fast resident default
-    path to verify that the Gate430 speedup transfers beyond the 16-frame
-    harness.
+- Run the real M38 H 200-light regression from the preserved
+  `C:\glass_runs\final_m38_h_200\glass_current_20260514_154556\processing_plan.json`
+  plan:
+  - 200 light frames;
+  - 20 bias frames;
+  - 20 dark frames;
+  - 20 flat frames;
+  - image shape `9600x6422`;
+  - resident CUDA `similarity_cuda_triangle`;
+  - `winsorized_sigma`;
+  - `weighting=none`;
+  - `local_normalization=off`;
+  - `flat_floor=0.05`;
+  - `reference_frame_id=LIGHT_H_0136`;
+  - `resident_warp_interpolation=lanczos3`.
+- Validate the Gate430 default route by not supplying
+  `--resident-star-grid-cols`, `--resident-star-grid-rows`, or
+  `--resident-triangle-grid-top-per-cell`. The run records:
+  - `triangle_catalog_grid_auto=True`;
+  - `star_grid_cols=8`;
+  - `star_grid_rows=8`;
+  - `triangle_grid_top_per_cell=8`;
+  - `triangle_catalog_batch=True`.
+- Run a same-code explicit-grid control with the old-style `24x16` grid to
+  separate default-route effects from disk/cache/output-write variation.
+- Results:
+  - formal Gate431 auto-grid repeat run: `28.351825 s`;
+  - first auto-grid run: `41.933876 s`, with slower disk/upload and output-write
+    timing;
+  - same-code explicit 24x16 run: `34.812350 s`;
+  - historical current run from 2026-05-14: `31.516450 s`;
+  - historical WBPP black-box timing: `1092.541 s`;
+  - Gate431 auto-repeat speedup vs same-code explicit 24x16: `1.22787x`;
+  - Gate431 auto-repeat speedup vs historical current: `1.11162x`;
+  - Gate431 auto-repeat speedup vs historical WBPP black-box timing:
+    `38.53512x`;
+  - resident registration+warp fell to `1.640994 s`;
+  - triangle moving catalog fell to `0.983094 s`;
+  - resident integration was `0.310590 s`;
+  - estimated peak VRAM remained `47.311736 GiB`.
+- Registration outcome:
+  - Gate431 auto repeat: `199 ok`, `1 reference`, `0 failed`;
+  - same-code explicit 24x16: `199 ok`, `1 reference`, `0 failed`;
+  - historical current: `192 ok`, `7 excluded`, `1 reference`.
+- Numerical comparisons:
+  - auto-repeat vs explicit 24x16: shape match true, p50/p90/p99 absolute
+    delta `1.7867` / `4.5519` / `15.6943` ADU, relative RMS `0.04869`;
+  - auto-repeat vs historical current: shape match true, p50/p90/p99 absolute
+    delta `2.3856` / `5.9828` / `19.0665` ADU, relative RMS `0.07014`;
+  - direct WBPP XISF compare was not rerun because the historical WBPP
+    reference XISF path is not present on disk in this environment. Gate431
+    uses the previously recorded user-generated WBPP black-box time only.
+- Interpretation: Gate430's auto-grid default transfers to the real 200-light
+  dataset. The real run is faster than both the same-code explicit 24x16
+  control and the historical current run, and still produces a complete
+  200-frame resident CUDA integration with diagnostic maps. Remaining work is
+  not catalog throughput; it is strict warp/rejection parity, accepted-frame
+  policy parity, and direct WBPP output comparison when the reference XISF is
+  available again.
+- Keep this gate runtime-validation scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
+### S2-Gate 432: Resident Frame-Acceptance and Warp/Rejection Parity
+
+- Continue from Gate431 with a substantive runtime gate only.
+- Target the remaining scientific parity issues revealed by the real
+  regression:
+  - accepted-frame policy differs from historical current/WBPP-like behavior
+    (`199 ok` vs historical `192 ok` + `7 excluded`);
+  - direct WBPP output comparison cannot be refreshed until the black-box XISF
+    reference is restored;
+  - strict synthetic same-pre-rejection parity remains attention-required.
 - Acceptance for the next gate:
+  - either reproduce/justify the accepted-frame set on the real M38 200-light
+    data, or reduce strict synthetic warp/rejection deltas below Gate430;
   - focused resident CUDA tests pass;
   - `python -m pytest -q` passes;
-  - 16-frame warp/rejection audits remain no worse than Gate430 if code changes
-    affect registration, warp, or rejection;
-  - if the real 200-light regression is run, record timing, GPU/device info,
-    frame counts, calibration-frame counts, output artifacts, and numerical
-    compare summary;
+  - if real-data outputs are touched, record frame counts, accepted/excluded
+    frame IDs, timing, maps, and compare artifacts;
   - no release/default-promotion/report-only code is added unless it directly
     blocks this runtime validation.
 
