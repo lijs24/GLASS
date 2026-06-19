@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GLASS Compare</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; color: #202124; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9rem; }
+    th, td { border: 1px solid #d0d7de; padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+    code, pre { background: #f6f8fa; padding: 0.1rem 0.25rem; }
+    pre { overflow: auto; padding: 0.75rem; }
+    .diagnostic-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+    figure { margin: 0; border: 1px solid #d0d7de; padding: 0.5rem; }
+    img { display: block; max-width: 100%; height: auto; background: #111; }
+    figcaption { margin-top: 0.35rem; font-size: 0.9rem; color: #57606a; }
+  </style>
+</head>
+<body>
+  <h1>GLASS Compare</h1>
+  <h2>Summary</h2>
+  <table><tbody><tr><th>shape_match</th><td>True</td></tr><tr><th>glass_format</th><td>fits</td></tr><tr><th>reference_format</th><td>fits</td></tr><tr><th>ignore_border_px</th><td>8</td></tr><tr><th>compared_shape</th><td>496, 496</td></tr><tr><th>mean_diff</th><td>-0.00951077941801</td></tr><tr><th>rms_diff</th><td>40.9129122002</td></tr><tr><th>abs_diff_p50</th><td>1.79453277588</td></tr><tr><th>abs_diff_p90</th><td>4.45299530029</td></tr><tr><th>abs_diff_p99</th><td>8.44282150269</td></tr><tr><th>abs_diff_p999</th><td>713.152905655</td></tr><tr><th>max_abs_diff</th><td>1839.62774658</td></tr><tr><th>glass_time_seconds</th><td>None</td></tr><tr><th>reference_time_seconds</th><td>None</td></tr><tr><th>speedup_vs_reference</th><td>None</td></tr><tr><th>glass_faster</th><td>None</td></tr></tbody></table>
+  <h2>Candidate Transform</h2>
+  <pre>{
+  &quot;applied&quot;: false,
+  &quot;clip_high&quot;: null,
+  &quot;clip_low&quot;: null,
+  &quot;offset&quot;: 0.0,
+  &quot;scale&quot;: 1.0
+}</pre>
+  <h2>Diagnostic Images</h2>
+  <div class="diagnostic-grid"><figure><a href="s2_gate_414_runtime_validation_compare_hardened_diagnostics/glass_preview.png"><img src="s2_gate_414_runtime_validation_compare_hardened_diagnostics/glass_preview.png" alt="GLASS preview"></a><figcaption>GLASS preview</figcaption></figure><figure><a href="s2_gate_414_runtime_validation_compare_hardened_diagnostics/reference_preview.png"><img src="s2_gate_414_runtime_validation_compare_hardened_diagnostics/reference_preview.png" alt="Reference preview"></a><figcaption>Reference preview</figcaption></figure><figure><a href="s2_gate_414_runtime_validation_compare_hardened_diagnostics/abs_diff_preview.png"><img src="s2_gate_414_runtime_validation_compare_hardened_diagnostics/abs_diff_preview.png" alt="Absolute difference"></a><figcaption>Absolute difference</figcaption></figure><figure><a href="s2_gate_414_runtime_validation_compare_hardened_diagnostics/signed_diff_preview.png"><img src="s2_gate_414_runtime_validation_compare_hardened_diagnostics/signed_diff_preview.png" alt="Signed difference"></a><figcaption>Signed difference</figcaption></figure></div>
+  <h2>Residual Hotspots</h2>
+  <table><thead><tr><th>x0</th><th>x1</th><th>y0</th><th>y1</th><th>pixels</th><th>p99_abs_diff</th><th>rms_diff</th><th>mean_diff</th><th>max_abs_diff</th></tr></thead><tbody><tr><td>0</td><td>512</td><td>0</td><td>512</td><td>262144</td><td>8.44897949219</td><td>39.641595664</td><td>-0.00984661583789</td><td>1839.62768555</td></tr></tbody></table>
+  <h2>Linear Fit To Reference</h2>
+  <pre>{
+  &quot;available&quot;: true,
+  &quot;offset&quot;: 130.612290971233,
+  &quot;scale&quot;: 0.39733892729737647,
+  &quot;stats&quot;: {
+    &quot;abs_diff_p50&quot;: 4.448707647136644,
+    &quot;abs_diff_p90&quot;: 9.076529274243484,
+    &quot;abs_diff_p99&quot;: 13.453118065739103,
+    &quot;abs_diff_p999&quot;: 494.1782631750477,
+    &quot;max_abs_diff&quot;: 1958.5263723713817,
+    &quot;mean_diff&quot;: 1.8928089527012036e-15,
+    &quot;relative_rms_diff&quot;: 0.1568671993954966,
+    &quot;rms_diff&quot;: 34.49932448101965
+  }
+}</pre>
+  <h2>Robust Linear Fit To Reference</h2>
+  <pre>{
+  &quot;available&quot;: true,
+  &quot;fit_fraction&quot;: 0.9831758909989594,
+  &quot;fit_pixels&quot;: 241877,
+  &quot;offset&quot;: 8.86789003936218,
+  &quot;scale&quot;: 0.9588326467581761,
+  &quot;stats_all_pixels&quot;: {
+    &quot;abs_diff_p50&quot;: 1.7774463532587816,
+    &quot;abs_diff_p90&quot;: 4.422151140309168,
+    &quot;abs_diff_p99&quot;: 8.395633994524403,
+    &quot;abs_diff_p999&quot;: 695.990972772534,
+    &quot;max_abs_diff&quot;: 1847.8037714613993,
+    &quot;mean_diff&quot;: -0.06300463234803033,
+    &quot;relative_rms_diff&quot;: 0.1824488800893956,
+    &quot;rms_diff&quot;: 40.12542545324109
+  },
+  &quot;stats_fit_pixels&quot;: {
+    &quot;abs_diff_p50&quot;: 1.7511610069497578,
+    &quot;abs_diff_p90&quot;: 4.29541163532831,
+    &quot;abs_diff_p99&quot;: 6.835689693997179,
+    &quot;abs_diff_p999&quot;: 10.615809231803928,
+    &quot;max_abs_diff&quot;: 32.95791290286209,
+    &quot;mean_diff&quot;: -5.71543365716811e-15,
+    &quot;relative_rms_diff&quot;: 0.012369494281142526,
+    &quot;rms_diff&quot;: 2.6640506867349014
+  }
+}</pre>
+  <h2>Full Frame Stats</h2>
+  <pre>{
+  &quot;abs_diff_p50&quot;: 1.803924560546875,
+  &quot;abs_diff_p90&quot;: 4.483403015136722,
+  &quot;abs_diff_p99&quot;: 8.448979492187508,
+  &quot;abs_diff_p999&quot;: 690.3862211914961,
+  &quot;max_abs_diff&quot;: 1839.6277465820312,
+  &quot;mean_diff&quot;: -0.009846617351286113,
+  &quot;relative_rms_diff&quot;: 0.18047505369830005,
+  &quot;rms_diff&quot;: 39.64159566417524
+}</pre>
+  <h2>Clean-room Note</h2>
+  <p>This report compares GLASS output to a user-provided black-box reference artifact.
+  It does not use or claim access to PixInsight/WBPP implementation source.</p>
+</body>
+</html>

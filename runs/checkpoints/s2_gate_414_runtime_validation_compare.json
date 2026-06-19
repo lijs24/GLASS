@@ -1,0 +1,121 @@
+{
+  "abs_diff_p50": 1.787353515625,
+  "abs_diff_p90": 4.434944152832031,
+  "abs_diff_p99": 8.424288940429706,
+  "abs_diff_p999": 718.0596653747573,
+  "candidate_transform": {
+    "applied": false,
+    "clip_high": null,
+    "clip_low": null,
+    "offset": 0.0,
+    "scale": 1.0
+  },
+  "comparison_region": {
+    "compared_pixels": 246016,
+    "compared_shape": [
+      496,
+      496
+    ],
+    "coverage_fraction": 1.0,
+    "coverage_max": 16.0,
+    "coverage_median": 16.0,
+    "coverage_min": 15.0,
+    "coverage_p1": 15.0,
+    "coverage_valid_pixels": 246016,
+    "full_shape": [
+      512,
+      512
+    ],
+    "glass_coverage_map": "runs\\checkpoints\\s2_gate_414_runtime_validation_cuda\\integration\\resident_coverage_map_H.fits",
+    "ignore_border_px": 8,
+    "min_coverage": 1.0
+  },
+  "diagnostics": {
+    "abs_diff_preview_png": "runs\\checkpoints\\s2_gate_414_runtime_validation_compare_diagnostics\\abs_diff_preview.png",
+    "directory": "runs\\checkpoints\\s2_gate_414_runtime_validation_compare_diagnostics",
+    "glass_preview_png": "runs\\checkpoints\\s2_gate_414_runtime_validation_compare_diagnostics\\glass_preview.png",
+    "hotspot_tile_size": 512,
+    "hotspots": [
+      {
+        "max_abs_diff": 1846.781494140625,
+        "mean_diff": -0.010890674660913646,
+        "p99_abs_diff": 8.427926177978517,
+        "pixels": 262144,
+        "rms_diff": 39.7361264511812,
+        "x0": 0,
+        "x1": 512,
+        "y0": 0,
+        "y1": 512
+      }
+    ],
+    "hotspots_json": "runs\\checkpoints\\s2_gate_414_runtime_validation_compare_diagnostics\\hotspots.json",
+    "preview_max_size": 1024,
+    "reference_preview_png": "runs\\checkpoints\\s2_gate_414_runtime_validation_compare_diagnostics\\reference_preview.png",
+    "signed_diff_preview_png": "runs\\checkpoints\\s2_gate_414_runtime_validation_compare_diagnostics\\signed_diff_preview.png"
+  },
+  "full_frame_stats": {
+    "abs_diff_p50": 1.7964935302734375,
+    "abs_diff_p90": 4.464062500000001,
+    "abs_diff_p99": 8.427926177978517,
+    "abs_diff_p999": 692.1080746154881,
+    "max_abs_diff": 1846.7814331054688,
+    "mean_diff": -0.010890676581766456,
+    "relative_rms_diff": 0.18090542118346148,
+    "rms_diff": 39.73612647873478
+  },
+  "glass_format": "fits",
+  "linear_fit_to_reference": {
+    "available": true,
+    "offset": 131.24276764425147,
+    "scale": 0.3944308352644437,
+    "stats": {
+      "abs_diff_p50": 4.470581786449188,
+      "abs_diff_p90": 9.108015505538319,
+      "abs_diff_p99": 13.481930488498644,
+      "abs_diff_p999": 494.19809099837903,
+      "max_abs_diff": 1961.9215249021156,
+      "mean_diff": -1.041044923985662e-14,
+      "relative_rms_diff": 0.15705665683371478,
+      "rms_diff": 34.54099127727546
+    }
+  },
+  "max_abs_diff": 1846.7814331054688,
+  "mean_diff": -0.01017900870320204,
+  "reference_format": "fits",
+  "relative_rms_diff": 0.18647371196509926,
+  "rms_diff": 41.01059444584464,
+  "robust_linear_fit_to_reference": {
+    "available": true,
+    "fit_fraction": 0.9831474375650364,
+    "fit_pixels": 241870,
+    "offset": 8.697681533470217,
+    "scale": 0.9596257169055549,
+    "stats_all_pixels": {
+      "abs_diff_p50": 1.770213366854037,
+      "abs_diff_p90": 4.404397520022101,
+      "abs_diff_p99": 8.374353243884922,
+      "abs_diff_p999": 700.626507812783,
+      "max_abs_diff": 1854.5104983351525,
+      "mean_diff": -0.06198802616326068,
+      "relative_rms_diff": 0.1829478695650818,
+      "rms_diff": 40.23516668595673
+    },
+    "stats_fit_pixels": {
+      "abs_diff_p50": 1.744151814895062,
+      "abs_diff_p90": 4.277063424140843,
+      "abs_diff_p99": 6.813103841116369,
+      "abs_diff_p999": 10.58200145008738,
+      "max_abs_diff": 32.53853023535376,
+      "mean_diff": -2.517871800170144e-14,
+      "relative_rms_diff": 0.012315965600329359,
+      "rms_diff": 2.6525254133141134
+    }
+  },
+  "shape_match": true,
+  "timing": {
+    "glass_label": "cuda_resident",
+    "glass_time_seconds": null,
+    "reference_label": "cpu_tile",
+    "reference_time_seconds": null
+  }
+}

@@ -7454,6 +7454,30 @@ integration where applicable.
   semantics change, no CUDA kernel change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 414: Resident StackEngine Parity And Regression Harness
+
+- Stop the release/report-contract-only handoff chain and return to Phase 2
+  runtime substance.
+- Build or formalize a repeatable parity harness that runs the same dataset
+  through CPU tiled StackEngine and CUDA resident StackEngine, then compares
+  master output, coverage, DQ, low/high rejection maps, frame counts, reference
+  frame, registration transforms, rejection counts, and timing.
+- The first harness target is synthetic 16+ frame mono data with known shifts;
+  the promotion target is the Phase 1 200-light benchmark dataset.
+- The harness must separate causes of mismatch: registration/reference choice,
+  warp coverage/DQ semantics, winsorized rejection semantics, local
+  normalization, and output map policy.
+- Acceptance for this gate is not "CUDA faster on tiny synthetic data";
+  acceptance is a reproducible artifact that explains parity/performance status
+  and identifies which runtime contract must be fixed before the next
+  optimization gate.
+- If the current resident CUDA path is slower or numerically divergent on the
+  synthetic harness, record that as a blocking runtime finding rather than
+  hiding it behind release readiness artifacts.
+- Keep this gate runtime-validation scoped: no package upload, no GitHub
+  release creation, no default-promotion/report-only handoff work, and no
+  change to user input directories.
+
 ## Gate Rules
 
 Each gate requires:

@@ -19,3 +19,4 @@ runs/*
 !runs/.gitkeep
 !runs/checkpoints/
 !runs/checkpoints/.gitkeep
+runs/checkpoints/s2_gate_*_runtime_validation_*/
