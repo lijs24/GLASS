@@ -6751,6 +6751,27 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 377: StackEngine Publication-Audit Release Quality Publication Guard
+
+- Carry Gate375/Gate376 final release quality publication checks into
+  `glass stack-engine-publication-audit`.
+- Keep older publish-preflight and Phase2 status artifacts without the final
+  check names compatible when both sides omit them and the older guard chain is
+  passing.
+- Require all final matrix, matrix-default, default-promotion, and cross-artifact
+  checks to pass when present in raw publish-preflight or Phase2 status
+  evidence.
+- Extend raw-vs-Phase2 matching so publication audit blocks if Phase2 loses,
+  changes, or fails final release quality evidence that raw publish-preflight
+  carries.
+- Add focused tests for legacy-compatible omission, failed final checks,
+  Phase2 final-check mismatch, and missing Phase2 final-check handoff.
+- Keep this gate publication-audit scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

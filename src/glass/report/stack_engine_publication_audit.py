@@ -1330,7 +1330,43 @@ def _release_quality_publication_guard_present(summary: dict[str, Any]) -> bool:
             "default_promotion_layers_ready",
             "default_promotion_raw_status",
             "default_promotion_phase2_status",
+            "release_matrix_check",
+            "release_matrix_default_check",
+            "release_default_promotion_check",
+            "release_matrix_default_match_check",
+            "release_matrix_manifest_match_check",
         )
+    )
+
+
+def _release_quality_publication_guard_final_checks_present(
+    summary: dict[str, Any],
+) -> bool:
+    return any(
+        summary.get(field) is not None
+        for field in (
+            "release_matrix_check",
+            "release_matrix_default_check",
+            "release_default_promotion_check",
+            "release_matrix_default_match_check",
+            "release_matrix_manifest_match_check",
+        )
+    )
+
+
+def _release_quality_publication_guard_final_checks_ready(
+    summary: dict[str, Any],
+) -> bool:
+    if not _release_quality_publication_guard_final_checks_present(summary):
+        return True
+    return _all_true(
+        [
+            summary.get("release_matrix_check"),
+            summary.get("release_matrix_default_check"),
+            summary.get("release_default_promotion_check"),
+            summary.get("release_matrix_default_match_check"),
+            summary.get("release_matrix_manifest_match_check"),
+        ]
     )
 
 
@@ -1362,6 +1398,7 @@ def _release_quality_publication_guard_ready(summary: dict[str, Any]) -> bool:
                 summary.get("matrix_manifest_match_check"),
             ]
         )
+        and _release_quality_publication_guard_final_checks_ready(summary)
     )
 
 
@@ -1438,6 +1475,35 @@ def _publish_preflight_release_quality_publication_guard_summary(
             (
                 "matrix_default_promotion_release_decision_quality_publication_"
                 "guard_matches_manifest"
+            ),
+        ),
+        "release_matrix_check": _check_passed(
+            payload,
+            "matrix_release_decision_release_quality_publication_guard_passed",
+        ),
+        "release_matrix_default_check": _check_passed(
+            payload,
+            (
+                "matrix_default_promotion_release_decision_release_quality_"
+                "publication_guard_passed"
+            ),
+        ),
+        "release_default_promotion_check": _check_passed(
+            payload,
+            "default_promotion_release_decision_release_quality_publication_guard_passed",
+        ),
+        "release_matrix_default_match_check": _check_passed(
+            payload,
+            (
+                "matrix_release_decision_release_quality_publication_guard_"
+                "matches_default_promotion"
+            ),
+        ),
+        "release_matrix_manifest_match_check": _check_passed(
+            payload,
+            (
+                "matrix_default_promotion_release_decision_release_quality_"
+                "publication_guard_matches_manifest"
             ),
         ),
     }
@@ -1521,6 +1587,30 @@ def _phase2_publish_preflight_release_quality_publication_guard_summary(
                 "guard_matches_manifest"
             )
         ),
+        "release_matrix_check": preflight.get(
+            "matrix_release_decision_release_quality_publication_guard_passed"
+        ),
+        "release_matrix_default_check": preflight.get(
+            (
+                "matrix_default_promotion_release_decision_release_quality_"
+                "publication_guard_passed"
+            )
+        ),
+        "release_default_promotion_check": preflight.get(
+            "default_promotion_release_decision_release_quality_publication_guard_passed"
+        ),
+        "release_matrix_default_match_check": preflight.get(
+            (
+                "matrix_release_decision_release_quality_publication_guard_"
+                "matches_default_promotion"
+            )
+        ),
+        "release_matrix_manifest_match_check": preflight.get(
+            (
+                "matrix_default_promotion_release_decision_release_quality_"
+                "publication_guard_matches_manifest"
+            )
+        ),
         "phase2_check_passed": _check_passed(
             payload,
             "windows_publish_preflight_release_quality_publication_guard_passed",
@@ -1559,6 +1649,11 @@ def _release_quality_publication_guard_summaries_match(
         "default_promotion_check",
         "matrix_default_match_check",
         "matrix_manifest_match_check",
+        "release_matrix_check",
+        "release_matrix_default_check",
+        "release_default_promotion_check",
+        "release_matrix_default_match_check",
+        "release_matrix_manifest_match_check",
         "ready",
     )
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)

@@ -1,0 +1,15 @@
+{
+  "artifact_type": "default_promotion_manifest",
+  "stack_engine_contract": {
+    "adoption_recommendation": "stack_engine_default_ready",
+    "default_promotion_blocker_count": 0,
+    "default_promotion_blockers": [],
+    "default_promotion_phase2_stack_engine_default_gap_count": 0,
+    "passed": true,
+    "phase2_check_passed": true,
+    "present": true,
+    "ready": true,
+    "scope": "all",
+    "status": "passed"
+  }
+}
