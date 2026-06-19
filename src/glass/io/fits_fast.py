@@ -163,6 +163,46 @@ def simple_fits_image_spec(path: str | Path) -> SimpleFitsImageSpec:
     )
 
 
+def native_u16_gpu_fits_eligibility(
+    path: str | Path,
+    *,
+    expected_shape: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    """Return header-only eligibility for the compact u16 GPU decode path."""
+    try:
+        spec = simple_fits_image_spec(path)
+    except FastFitsUnsupported as exc:
+        return {
+            "path": str(path),
+            "eligible": False,
+            "reason": f"unsupported_fits:{exc}",
+        }
+
+    reason = ""
+    if expected_shape is not None and spec.shape != tuple(expected_shape):
+        reason = "shape_mismatch"
+    elif spec.bitpix != 16:
+        reason = f"bitpix_not_16:{spec.bitpix}"
+    elif spec.bscale != 1.0:
+        reason = f"bscale_not_1:{spec.bscale:g}"
+    elif spec.bzero != 32768.0:
+        reason = f"bzero_not_32768:{spec.bzero:g}"
+    elif spec.blank is not None:
+        reason = "blank_present"
+
+    return {
+        "path": str(spec.path),
+        "eligible": not bool(reason),
+        "reason": reason,
+        "bitpix": int(spec.bitpix),
+        "bscale": float(spec.bscale),
+        "bzero": float(spec.bzero),
+        "blank_present": spec.blank is not None,
+        "shape": {"height": int(spec.height), "width": int(spec.width)},
+        "data_offset": int(spec.data_offset),
+    }
+
+
 def _materialize_spec(spec: SimpleFitsImageSpec, dtype: Any, output: np.ndarray | None) -> np.ndarray:
     raw = np.memmap(spec.path, dtype=spec.dtype, mode="r", offset=spec.data_offset, shape=spec.shape)
     if output is None:

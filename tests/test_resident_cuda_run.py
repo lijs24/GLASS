@@ -3414,6 +3414,13 @@ def test_cli_resident_cuda_uses_planner_matching_master_sets(tmp_path: Path):
     assert {item["dark_count"] for item in master_stats["sets"].values()} == {1}
     assert len({item["dark_group"] for item in master_stats["sets"].values()}) == 2
     assert io_pipeline["fits_read_mode"] == "auto"
+    assert io_pipeline["fits_read_mode_requested"] == "auto"
+    assert io_pipeline["fits_read_mode_effective"] == "auto"
+    assert io_pipeline["resident_fits_auto_selection"]["raw_u16_gpu"]["selected"] is False
+    assert io_pipeline["resident_fits_auto_selection"]["raw_u16_gpu"]["eligible_frame_count"] == 0
+    assert io_pipeline["resident_fits_auto_selection"]["raw_u16_gpu"]["fallback_reason_counts"][
+        "bitpix_not_16:-32"
+    ] == 2
     assert io_pipeline["fits_backend_counts"]["fast_simple"] >= 1
     assert io_pipeline["fits_fast_fallback_reason_counts"] == {}
 
@@ -3520,6 +3527,67 @@ def test_cli_resident_cuda_records_native_u16_gpu_decode_backend(tmp_path: Path)
     assert io_pipeline["raw_gpu_float32_host_bytes_avoided"] == 2 * 24 * 24 * 4
     assert io_pipeline["calibration_batch_mode"] == "fits_u16be_bzero_gpu_decode_callback_release_batch"
     assert artifact["resident_frame_mask_contract"]["summary"]["unknown_zero_weight_frame_count"] == 0
+
+
+def test_cli_resident_cuda_auto_selects_native_u16_gpu_for_compatible_group(tmp_path: Path):
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed"):
+        pytest.skip("native u16 GPU decode resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_auto_u16_gpu"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "auto",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+    selection = io_pipeline["resident_fits_auto_selection"]
+
+    assert io_pipeline["fits_read_mode"] == "auto"
+    assert io_pipeline["fits_read_mode_requested"] == "auto"
+    assert io_pipeline["fits_read_mode_effective"] == "native_u16_gpu"
+    assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    assert io_pipeline["raw_gpu_decode_enabled"] is True
+    assert io_pipeline["raw_gpu_h2d_bytes"] == 2 * 24 * 24 * 2
+    assert selection["policy"] == "guarded_auto"
+    assert selection["raw_u16_gpu"]["checked"] is True
+    assert selection["raw_u16_gpu"]["runtime_eligible"] is True
+    assert selection["raw_u16_gpu"]["eligible"] is True
+    assert selection["raw_u16_gpu"]["selected"] is True
+    assert selection["raw_u16_gpu"]["eligible_frame_count"] == 2
+    assert selection["raw_u16_gpu"]["fallback_reason_counts"] == {}
+    assert artifact["resident_io_overlap"]["fits_read_mode_effective"] == "native_u16_gpu"
 
 
 def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path):

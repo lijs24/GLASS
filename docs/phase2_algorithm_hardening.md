@@ -8536,6 +8536,46 @@ Completed in Gate440:
     native-u16-GPU automatically, keeps zero output delta, and preserves DQ
     closure at `193 active`/`7 masked`.
 
+Completed in Gate441:
+
+- Added `native_u16_gpu_fits_eligibility`, a header-only compatibility probe for
+  the compact raw-u16 GPU decode path. It validates the guarded contract:
+  simple primary FITS, group shape match, `BITPIX=16`, `BSCALE=1`,
+  `BZERO=32768`, and no `BLANK`.
+- Changed resident `--resident-fits-read-mode auto` to make a per-light-group
+  selection before prefetch:
+  - if resident runtime supports callback-release batch calibration and every
+    light is compatible, effective mode becomes `native_u16_gpu`;
+  - otherwise `auto` keeps the previous bounded fast-reader plus astropy
+    fallback behavior.
+- Preserved conservative public default `--resident-fits-read-mode astropy`.
+- Added artifact fields to `resident_io_overlap`, `resident_io_pipeline`, and
+  the light pipeline profile input:
+  - `fits_read_mode_requested`;
+  - `fits_read_mode_effective`;
+  - `resident_fits_auto_selection` with runtime eligibility, checked frame
+    count, eligible frame count, reason counts, and sample ineligible frames.
+- Added focused tests:
+  - FITS eligibility helper over compatible, incompatible, and shape-mismatch
+    fixtures;
+  - auto fallback contract for float32 simple FITS lights;
+  - auto promotion contract for compatible u16/BZERO lights.
+
+### S2-Gate 442: Guarded Auto Real 200-Light Regression
+
+- Continue the runtime main line with no release/report-only handoff.
+- Run the real M38 H 200-light warm-cache benchmark with
+  `--resident-fits-read-mode auto` and verify that Gate441 selects
+  `native_u16_gpu` automatically.
+- Compare against the Gate440 explicit `native_u16_gpu` run and the Gate438
+  astropy control:
+  - output delta should remain zero or be explicitly explained;
+  - DQ/mask closure should remain `193 active`, `7 masked`,
+    `unknown_zero_weight=0`;
+  - timing should remain close to Gate440 and clearly faster than Gate438.
+- If the real auto path regresses, fix the Gate441 selection/contract before
+  moving on.
+
 ## Gate Rules
 
 Each gate requires:

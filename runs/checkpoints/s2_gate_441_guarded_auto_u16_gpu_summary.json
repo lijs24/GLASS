@@ -1,0 +1,301 @@
+{
+  "artifacts": {
+    "compare_vs_gate438": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate441_auto_u16_gpu_warm_20260619_225900\\gate441_auto_vs_gate438_astropy.html",
+    "compare_vs_gate440": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate441_auto_u16_gpu_warm_20260619_225900\\gate441_auto_vs_gate440_explicit.html",
+    "dq_closure": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate441_auto_u16_gpu_warm_20260619_225900\\resident_dq_pixel_closure.json",
+    "resident_artifacts": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate441_auto_u16_gpu_warm_20260619_225900\\resident_artifacts.json",
+    "run_report": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate441_auto_u16_gpu_warm_20260619_225900\\report.html"
+  },
+  "comparisons": {
+    "gate441_auto_vs_gate438_astropy": {
+      "abs_diff_p50": 0.0,
+      "abs_diff_p90": 0.0,
+      "abs_diff_p99": 0.0,
+      "abs_diff_p999": 0.0,
+      "candidate_transform": {
+        "applied": false,
+        "clip_high": null,
+        "clip_low": null,
+        "offset": 0.0,
+        "scale": 1.0
+      },
+      "comparison_region": {
+        "compared_pixels": 61651200,
+        "compared_shape": [
+          6422,
+          9600
+        ],
+        "full_shape": [
+          6422,
+          9600
+        ],
+        "ignore_border_px": 0
+      },
+      "glass_format": "fits",
+      "linear_fit_to_reference": {
+        "available": true,
+        "offset": 0.0,
+        "scale": 1.0,
+        "stats": {
+          "abs_diff_p50": 0.0,
+          "abs_diff_p90": 0.0,
+          "abs_diff_p99": 0.0,
+          "abs_diff_p999": 0.0,
+          "max_abs_diff": 0.0,
+          "mean_diff": 0.0,
+          "relative_rms_diff": 0.0,
+          "rms_diff": 0.0
+        }
+      },
+      "max_abs_diff": 0.0,
+      "mean_diff": 0.0,
+      "reference_format": "fits",
+      "relative_rms_diff": 0.0,
+      "rms_diff": 0.0,
+      "robust_linear_fit_to_reference": {
+        "available": true,
+        "fit_fraction": 0.99,
+        "fit_pixels": 61034688,
+        "offset": 0.0,
+        "scale": 1.0,
+        "stats_all_pixels": {
+          "abs_diff_p50": 0.0,
+          "abs_diff_p90": 0.0,
+          "abs_diff_p99": 0.0,
+          "abs_diff_p999": 0.0,
+          "max_abs_diff": 0.0,
+          "mean_diff": 0.0,
+          "relative_rms_diff": 0.0,
+          "rms_diff": 0.0
+        },
+        "stats_fit_pixels": {
+          "abs_diff_p50": 0.0,
+          "abs_diff_p90": 0.0,
+          "abs_diff_p99": 0.0,
+          "abs_diff_p999": 0.0,
+          "max_abs_diff": 0.0,
+          "mean_diff": 0.0,
+          "relative_rms_diff": 0.0,
+          "rms_diff": 0.0
+        }
+      },
+      "shape_match": true,
+      "timing": {
+        "glass_label": "GLASS",
+        "glass_time_seconds": null,
+        "reference_label": "reference",
+        "reference_time_seconds": null
+      }
+    },
+    "gate441_auto_vs_gate440_explicit": {
+      "abs_diff_p50": 0.0,
+      "abs_diff_p90": 0.0,
+      "abs_diff_p99": 0.0,
+      "abs_diff_p999": 0.0,
+      "candidate_transform": {
+        "applied": false,
+        "clip_high": null,
+        "clip_low": null,
+        "offset": 0.0,
+        "scale": 1.0
+      },
+      "comparison_region": {
+        "compared_pixels": 61651200,
+        "compared_shape": [
+          6422,
+          9600
+        ],
+        "full_shape": [
+          6422,
+          9600
+        ],
+        "ignore_border_px": 0
+      },
+      "glass_format": "fits",
+      "linear_fit_to_reference": {
+        "available": true,
+        "offset": 0.0,
+        "scale": 1.0,
+        "stats": {
+          "abs_diff_p50": 0.0,
+          "abs_diff_p90": 0.0,
+          "abs_diff_p99": 0.0,
+          "abs_diff_p999": 0.0,
+          "max_abs_diff": 0.0,
+          "mean_diff": 0.0,
+          "relative_rms_diff": 0.0,
+          "rms_diff": 0.0
+        }
+      },
+      "max_abs_diff": 0.0,
+      "mean_diff": 0.0,
+      "reference_format": "fits",
+      "relative_rms_diff": 0.0,
+      "rms_diff": 0.0,
+      "robust_linear_fit_to_reference": {
+        "available": true,
+        "fit_fraction": 0.99,
+        "fit_pixels": 61034688,
+        "offset": 0.0,
+        "scale": 1.0,
+        "stats_all_pixels": {
+          "abs_diff_p50": 0.0,
+          "abs_diff_p90": 0.0,
+          "abs_diff_p99": 0.0,
+          "abs_diff_p999": 0.0,
+          "max_abs_diff": 0.0,
+          "mean_diff": 0.0,
+          "relative_rms_diff": 0.0,
+          "rms_diff": 0.0
+        },
+        "stats_fit_pixels": {
+          "abs_diff_p50": 0.0,
+          "abs_diff_p90": 0.0,
+          "abs_diff_p99": 0.0,
+          "abs_diff_p999": 0.0,
+          "max_abs_diff": 0.0,
+          "mean_diff": 0.0,
+          "relative_rms_diff": 0.0,
+          "rms_diff": 0.0
+        }
+      },
+      "shape_match": true,
+      "timing": {
+        "glass_label": "GLASS",
+        "glass_time_seconds": null,
+        "reference_label": "reference",
+        "reference_time_seconds": null
+      }
+    }
+  },
+  "gate": "S2-Gate441",
+  "interpretation": {
+    "auto_selected_raw_gpu": true,
+    "default_changed": false,
+    "next_gate": "S2-Gate442 should decide whether the guarded auto path can become the recommended resident auto benchmark path after repeated real-data validation.",
+    "real_light_group_checked_count": 200,
+    "real_light_group_eligible_count": 200,
+    "zero_delta_vs_gate438": true,
+    "zero_delta_vs_gate440": true
+  },
+  "runs": {
+    "gate438_astropy_control": {
+      "calibration_batch_mode": "host_async_multistream_callback_release_batch",
+      "dq_passed": true,
+      "fits_auto_selection": null,
+      "fits_backend_counts": {
+        "astropy_scaled_memmap": 200
+      },
+      "fits_materialize_decode_cumulative_s": 33.797578599856934,
+      "fits_native_decode_cumulative_s": null,
+      "fits_native_file_read_cumulative_s": null,
+      "fits_read_mode": "astropy",
+      "fits_read_mode_effective": null,
+      "fits_read_mode_requested": null,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "passed": true,
+        "unknown_zero_weight": 0
+      },
+      "integration_s": 0.28844780000508763,
+      "light_read_upload_calibrate_s": 6.624953699996695,
+      "light_read_wait_wall_s": 3.9392954999930225,
+      "native_h2d_calibrate_store_s": 1.9668816000339575,
+      "output_write_s": 2.2511336999887135,
+      "raw_gpu_decode_enabled": null,
+      "raw_gpu_float32_host_bytes_avoided": null,
+      "raw_gpu_h2d_bytes": null,
+      "registration_accounted_s": 3.597217500693219,
+      "registration_warp_s": 1.6375085999607109,
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate438_astropy_control_warm_20260619_213148",
+      "run_elapsed_s": 17.28835899999831,
+      "worker_read_cumulative_s": 37.972014999977546
+    },
+    "gate440_explicit_u16_gpu": {
+      "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+      "dq_passed": true,
+      "fits_auto_selection": null,
+      "fits_backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "fits_materialize_decode_cumulative_s": 20.5230559,
+      "fits_native_decode_cumulative_s": 0.0,
+      "fits_native_file_read_cumulative_s": 20.5230559,
+      "fits_read_mode": "native_u16_gpu",
+      "fits_read_mode_effective": null,
+      "fits_read_mode_requested": null,
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "passed": true,
+        "unknown_zero_weight": 0
+      },
+      "integration_s": 0.29196670002420433,
+      "light_read_upload_calibrate_s": 3.501538000011351,
+      "light_read_wait_wall_s": 2.26776429975871,
+      "native_h2d_calibrate_store_s": 0.7384882999176625,
+      "output_write_s": 2.217506399989361,
+      "raw_gpu_decode_enabled": true,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "registration_accounted_s": 3.5971651000195908,
+      "registration_warp_s": 1.6356420999509282,
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129",
+      "run_elapsed_s": 13.938976600009482,
+      "worker_read_cumulative_s": 20.659492400154704
+    },
+    "gate441_auto_u16_gpu": {
+      "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+      "dq_passed": true,
+      "fits_auto_selection": {
+        "effective_mode": "native_u16_gpu",
+        "fallback_mode": null,
+        "fallback_reason": "",
+        "policy": "guarded_auto",
+        "raw_u16_gpu": {
+          "checked": true,
+          "checked_frame_count": 200,
+          "eligible": true,
+          "eligible_frame_count": 200,
+          "fallback_reason_counts": {},
+          "ineligible_samples": [],
+          "runtime_eligible": true,
+          "runtime_reason": "",
+          "selected": true
+        },
+        "requested_mode": "auto",
+        "schema_version": 1
+      },
+      "fits_backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "fits_materialize_decode_cumulative_s": 20.577845,
+      "fits_native_decode_cumulative_s": 0.0,
+      "fits_native_file_read_cumulative_s": 20.577845,
+      "fits_read_mode": "auto",
+      "fits_read_mode_effective": "native_u16_gpu",
+      "fits_read_mode_requested": "auto",
+      "frame_mask_summary": {
+        "active": 193,
+        "masked": 7,
+        "passed": true,
+        "unknown_zero_weight": 0
+      },
+      "integration_s": 0.2970774999994319,
+      "light_read_upload_calibrate_s": 3.545875600015279,
+      "light_read_wait_wall_s": 2.292921300191665,
+      "native_h2d_calibrate_store_s": 0.7508751999703236,
+      "output_write_s": 2.439092599990545,
+      "raw_gpu_decode_enabled": true,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "registration_accounted_s": 3.5990926002551413,
+      "registration_warp_s": 1.6384009999164846,
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate441_auto_u16_gpu_warm_20260619_225900",
+      "run_elapsed_s": 14.27159489999758,
+      "worker_read_cumulative_s": 20.71940519977943
+    }
+  },
+  "schema_version": 1
+}

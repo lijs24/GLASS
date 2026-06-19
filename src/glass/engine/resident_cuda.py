@@ -48,6 +48,7 @@ from glass.engine.resident_registration_quality import (
 )
 from glass.io.fits_fast import (
     FastFitsUnsupported,
+    native_u16_gpu_fits_eligibility,
     read_simple_fits_image_native_direct_timed,
     read_simple_fits_image_timed,
     read_simple_fits_u16be_raw_timed,
@@ -148,6 +149,85 @@ def _value_counts(values: list[str]) -> dict[str, int]:
     for value in values:
         counts[str(value)] = counts.get(str(value), 0) + 1
     return dict(sorted(counts.items()))
+
+
+def _resident_fits_read_mode_selection(
+    light_frames: list[dict[str, Any]],
+    *,
+    height: int,
+    width: int,
+    requested_mode: str,
+    raw_u16_runtime_reason: str,
+) -> tuple[str, dict[str, Any]]:
+    raw_selection: dict[str, Any] = {
+        "checked": False,
+        "runtime_eligible": raw_u16_runtime_reason == "",
+        "runtime_reason": raw_u16_runtime_reason,
+        "selected": False,
+        "eligible": False,
+        "checked_frame_count": 0,
+        "eligible_frame_count": 0,
+        "fallback_reason_counts": {},
+        "ineligible_samples": [],
+    }
+    selection: dict[str, Any] = {
+        "schema_version": 1,
+        "requested_mode": requested_mode,
+        "effective_mode": requested_mode,
+        "policy": "explicit" if requested_mode != "auto" else "guarded_auto",
+        "fallback_mode": None,
+        "fallback_reason": "",
+        "raw_u16_gpu": raw_selection,
+    }
+    if requested_mode != "auto":
+        raw_selection["selected"] = requested_mode == "native_u16_gpu"
+        return requested_mode, selection
+
+    if raw_u16_runtime_reason:
+        selection["effective_mode"] = "auto"
+        selection["fallback_mode"] = "auto"
+        selection["fallback_reason"] = raw_u16_runtime_reason
+        return "auto", selection
+
+    reason_counts: dict[str, int] = {}
+    ineligible_samples: list[dict[str, Any]] = []
+    eligible_count = 0
+    for frame in light_frames:
+        probe = native_u16_gpu_fits_eligibility(
+            frame["path"],
+            expected_shape=(int(height), int(width)),
+        )
+        if probe["eligible"]:
+            eligible_count += 1
+        else:
+            reason = str(probe.get("reason") or "unknown")
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            if len(ineligible_samples) < 8:
+                ineligible_samples.append(
+                    {
+                        "frame_id": str(frame.get("id", "")),
+                        "path": str(frame.get("path", "")),
+                        "reason": reason,
+                    }
+                )
+    raw_selection.update(
+        {
+            "checked": True,
+            "checked_frame_count": len(light_frames),
+            "eligible_frame_count": eligible_count,
+            "fallback_reason_counts": dict(sorted(reason_counts.items())),
+            "ineligible_samples": ineligible_samples,
+            "eligible": eligible_count == len(light_frames),
+        }
+    )
+    if eligible_count == len(light_frames):
+        raw_selection["selected"] = True
+        selection["effective_mode"] = "native_u16_gpu"
+        return "native_u16_gpu", selection
+    selection["effective_mode"] = "auto"
+    selection["fallback_mode"] = "auto"
+    selection["fallback_reason"] = "raw_u16_gpu_group_ineligible"
+    return "auto", selection
 
 
 def _read_light_timed(
@@ -3143,6 +3223,12 @@ def run_resident_calibration_integration(
             calibration_callback_release_supported = bool(
                 hasattr(stack, "calibrate_frames_host_async_multistream_callback_release_timed")
             )
+            raw_u16_gpu_decode_supported = bool(
+                hasattr(
+                    stack,
+                    "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed",
+                )
+            )
             calibration_batch_enabled = bool(
                 resident_h2d_mode == "pinned_ring"
                 and resident_registration != "translation_preview"
@@ -3213,11 +3299,26 @@ def run_resident_calibration_integration(
                 calibration_h2d_release_reason = "explicit_sync_requested"
             calibration_h2d_release_enabled = calibration_release_mode_effective == "h2d_event"
             calibration_callback_release_enabled = calibration_release_mode_effective == "callback_queue"
-            raw_u16_gpu_decode_enabled = resident_fits_read_mode == "native_u16_gpu"
-            if raw_u16_gpu_decode_enabled and not (calibration_batch_enabled and calibration_callback_release_enabled):
+            raw_u16_runtime_reason = ""
+            if not raw_u16_gpu_decode_supported:
+                raw_u16_runtime_reason = "native_u16_gpu_method_unavailable"
+            elif not calibration_batch_enabled:
+                raw_u16_runtime_reason = "raw_u16_gpu_requires_batch_calibration"
+            elif not calibration_callback_release_enabled:
+                raw_u16_runtime_reason = "raw_u16_gpu_requires_callback_release"
+            resident_fits_read_mode_effective, resident_fits_auto_selection = _resident_fits_read_mode_selection(
+                light_frames,
+                height=height,
+                width=width,
+                requested_mode=resident_fits_read_mode,
+                raw_u16_runtime_reason=raw_u16_runtime_reason,
+            )
+            raw_u16_gpu_decode_enabled = resident_fits_read_mode_effective == "native_u16_gpu"
+            if raw_u16_gpu_decode_enabled and raw_u16_runtime_reason:
                 raise ValueError(
-                    "resident-fits-read-mode native_u16_gpu requires resident batch calibration "
-                    "with callback_queue release, for example --resident-runtime-preset throughput-v1"
+                    "resident-fits-read-mode native_u16_gpu is unavailable: "
+                    f"{raw_u16_runtime_reason}; use --resident-runtime-preset throughput-v1 "
+                    "on a build with the native raw-u16 GPU decode method"
                 )
             calibration_fetch_batch_frames = (
                 int(resident_calibration_batch_frames)
@@ -3252,7 +3353,7 @@ def run_resident_calibration_integration(
                 height=height,
                 width=width,
                 release_refill_mode=resident_prefetch_refill_mode,
-                fits_read_mode=resident_fits_read_mode,
+                fits_read_mode=resident_fits_read_mode_effective,
             ) as light_prefetch:
                 prefetch_host_pinned_bytes = light_prefetch.host_pinned_bytes
                 if calibration_batch_enabled:
@@ -7243,6 +7344,9 @@ def run_resident_calibration_integration(
                 "prefetch_frames": int(resident_prefetch_frames),
                 "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
                 "fits_read_mode": resident_fits_read_mode,
+                "fits_read_mode_requested": resident_fits_read_mode,
+                "fits_read_mode_effective": resident_fits_read_mode_effective,
+                "resident_fits_auto_selection": resident_fits_auto_selection,
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                 "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],
@@ -7279,6 +7383,9 @@ def run_resident_calibration_integration(
                 "prefetch_refill_mode": resident_prefetch_refill_mode,
                 "h2d_mode": resident_h2d_mode,
                 "fits_read_mode": resident_fits_read_mode,
+                "fits_read_mode_requested": resident_fits_read_mode,
+                "fits_read_mode_effective": resident_fits_read_mode_effective,
+                "resident_fits_auto_selection": resident_fits_auto_selection,
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                 "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],
@@ -7511,6 +7618,9 @@ def run_resident_calibration_integration(
                         "prefetch_refill_mode": resident_prefetch_refill_mode,
                         "h2d_mode": resident_h2d_mode,
                         "fits_read_mode": resident_fits_read_mode,
+                        "fits_read_mode_requested": resident_fits_read_mode,
+                        "fits_read_mode_effective": resident_fits_read_mode_effective,
+                        "resident_fits_auto_selection": resident_fits_auto_selection,
                         "fits_backend_counts": fits_backend_counts,
                         "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
                         "fits_native_file_read_cumulative_s": fits_native_file_read_timing["total"],

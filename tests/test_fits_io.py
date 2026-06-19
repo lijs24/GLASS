@@ -6,6 +6,7 @@ from astropy.io import fits
 
 from glass.io.fits_fast import (
     FastFitsUnsupported,
+    native_u16_gpu_fits_eligibility,
     read_simple_fits_image,
     read_simple_fits_image_native_direct_timed,
     read_simple_fits_u16be_raw_timed,
@@ -132,6 +133,30 @@ def test_native_u16_raw_fits_reader_reads_into_pinned_output(tmp_path):
     assert profile["fits_native_bytes_read"] == physical.size * 2
     assert np.array_equal(physical_from_raw, physical)
     assert np.allclose(read_fits_data(path), physical.astype(np.float32))
+
+
+def test_native_u16_gpu_fits_eligibility_is_header_only(tmp_path):
+    compatible = tmp_path / "compatible_u16.fits"
+    incompatible = tmp_path / "incompatible_f32.fits"
+    physical = np.arange(12, dtype=np.uint16).reshape(3, 4) + np.uint16(100)
+    stored = (physical.astype(np.int32) - 32768).astype(np.int16)
+    hdu = fits.PrimaryHDU(stored)
+    hdu.header["BSCALE"] = 1.0
+    hdu.header["BZERO"] = 32768.0
+    hdu.writeto(compatible)
+    fits.PrimaryHDU(np.asarray(physical, dtype=np.float32)).writeto(incompatible)
+
+    compatible_probe = native_u16_gpu_fits_eligibility(compatible, expected_shape=(3, 4))
+    incompatible_probe = native_u16_gpu_fits_eligibility(incompatible, expected_shape=(3, 4))
+    shape_probe = native_u16_gpu_fits_eligibility(compatible, expected_shape=(4, 3))
+
+    assert compatible_probe["eligible"] is True
+    assert compatible_probe["reason"] == ""
+    assert compatible_probe["bitpix"] == 16
+    assert incompatible_probe["eligible"] is False
+    assert incompatible_probe["reason"] == "bitpix_not_16:-32"
+    assert shape_probe["eligible"] is False
+    assert shape_probe["reason"] == "shape_mismatch"
 
 
 def test_fits_image_reader_maps_blank_to_nan(tmp_path):
