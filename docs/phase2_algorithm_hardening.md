@@ -7350,6 +7350,30 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 409: Windows Publish-Preflight Benchmark Profile Handoff
+
+- Carry the Windows release matrix release-decision benchmark profile and
+  default-promotion `benchmark_contract_profile_handoff` into
+  `windows-publish-preflight`.
+- Require the matrix release-decision profile to pass with
+  `resident_cuda_dq_v1`.
+- Require both the matrix-carried default-promotion handoff and the standalone
+  default-promotion handoff to be ready, profile-agreeing, and aligned to
+  `resident_cuda_dq_v1`.
+- Require the matrix release-decision profile to match the matrix handoff
+  decision profile, and require the matrix-carried handoff to match the
+  standalone default-promotion manifest.
+- Surface the benchmark profile handoff in Windows publish-preflight Markdown.
+- Validate the ready path, matrix release-profile drift, matrix handoff drift,
+  and standalone default-promotion handoff drift with focused publish-preflight
+  tests.
+- Keep this gate publish-preflight-policy scoped: no runtime execution change,
+  no benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

@@ -5,6 +5,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.release_quality_evidence import (
     FINAL_EVIDENCE_FIELDS as _RELEASE_QUALITY_PUBLICATION_FINAL_EVIDENCE_FIELDS,
     ensure_final_evidence_detail_ready as _release_quality_final_evidence_detail_ready,
@@ -61,6 +62,228 @@ def _checks_by_name(rows: list[Any]) -> dict[str, dict[str, Any]]:
         if name:
             result[str(name)] = row
     return result
+
+
+def _release_benchmark_profile_fields(
+    source: dict[str, Any],
+    *,
+    output_prefix: str,
+) -> dict[str, Any]:
+    profile = (
+        source.get("release_decision_benchmark_contract_profile")
+        if isinstance(source.get("release_decision_benchmark_contract_profile"), dict)
+        else {}
+    )
+    return {
+        output_prefix: profile,
+        f"{output_prefix}_present": profile.get("present"),
+        f"{output_prefix}_ready": profile.get("ready"),
+        f"{output_prefix}_check_passed": profile.get("check_passed"),
+        f"{output_prefix}_required_profile": profile.get("required_profile"),
+        f"{output_prefix}_profile": profile.get("profile"),
+        f"{output_prefix}_source": profile.get("source"),
+        f"{output_prefix}_path": profile.get("path"),
+        f"{output_prefix}_name": profile.get("name"),
+        f"{output_prefix}_contract_schema_version": profile.get(
+            "contract_schema_version"
+        ),
+    }
+
+
+def _release_benchmark_profile_evidence(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> dict[str, Any]:
+    return {
+        "present": summary.get(f"{prefix}_present"),
+        "ready": summary.get(f"{prefix}_ready"),
+        "check_passed": summary.get(f"{prefix}_check_passed"),
+        "required_profile": summary.get(f"{prefix}_required_profile"),
+        "profile": summary.get(f"{prefix}_profile"),
+        "source": summary.get(f"{prefix}_source"),
+        "path": summary.get(f"{prefix}_path"),
+        "name": summary.get(f"{prefix}_name"),
+        "contract_schema_version": summary.get(f"{prefix}_contract_schema_version"),
+    }
+
+
+def _release_benchmark_profile_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    evidence = _release_benchmark_profile_evidence(summary, prefix=prefix)
+    return (
+        evidence.get("present") is True
+        and evidence.get("ready") is True
+        and evidence.get("check_passed") is True
+        and evidence.get("profile") == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and evidence.get("required_profile") == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+
+
+def _benchmark_profile_handoff_fields(
+    source: dict[str, Any],
+    *,
+    output_prefix: str,
+) -> dict[str, Any]:
+    handoff = (
+        source.get("benchmark_contract_profile_handoff")
+        if isinstance(source.get("benchmark_contract_profile_handoff"), dict)
+        else {}
+    )
+    decision = (
+        handoff.get("decision") if isinstance(handoff.get("decision"), dict) else {}
+    )
+    phase2 = (
+        handoff.get("phase2_acceptance")
+        if isinstance(handoff.get("phase2_acceptance"), dict)
+        else {}
+    )
+    default_route = (
+        handoff.get("default_route")
+        if isinstance(handoff.get("default_route"), dict)
+        else {}
+    )
+
+    def field(flat_name: str, handoff_name: str | None = None) -> Any:
+        flattened = source.get(f"{output_prefix}_{flat_name}")
+        if flattened is not None:
+            return flattened
+        return handoff.get(handoff_name or flat_name)
+
+    def nested(
+        flat_name: str,
+        section: dict[str, Any],
+        section_name: str,
+    ) -> Any:
+        flattened = source.get(f"{output_prefix}_{flat_name}")
+        if flattened is not None:
+            return flattened
+        return section.get(section_name)
+
+    return {
+        output_prefix: handoff,
+        f"{output_prefix}_ready": field("ready"),
+        f"{output_prefix}_required_profile": field("required_profile"),
+        f"{output_prefix}_profiles_agree": field("profiles_agree"),
+        f"{output_prefix}_decision_profile": nested(
+            "decision_profile",
+            decision,
+            "profile",
+        ),
+        f"{output_prefix}_phase2_profile": nested(
+            "phase2_profile",
+            phase2,
+            "profile",
+        ),
+        f"{output_prefix}_default_route_profile": nested(
+            "default_route_profile",
+            default_route,
+            "profile",
+        ),
+        f"{output_prefix}_decision_check_passed": nested(
+            "decision_check_passed",
+            decision,
+            "check_passed",
+        ),
+        f"{output_prefix}_decision_ready": nested(
+            "decision_ready",
+            decision,
+            "ready",
+        ),
+        f"{output_prefix}_phase2_ready": nested("phase2_ready", phase2, "ready"),
+        f"{output_prefix}_default_route_ready": nested(
+            "default_route_ready",
+            default_route,
+            "ready",
+        ),
+    }
+
+
+def _benchmark_profile_handoff_evidence(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> dict[str, Any]:
+    return {
+        "ready": summary.get(f"{prefix}_ready"),
+        "required_profile": summary.get(f"{prefix}_required_profile"),
+        "profiles_agree": summary.get(f"{prefix}_profiles_agree"),
+        "decision_profile": summary.get(f"{prefix}_decision_profile"),
+        "phase2_profile": summary.get(f"{prefix}_phase2_profile"),
+        "default_route_profile": summary.get(f"{prefix}_default_route_profile"),
+        "decision_check_passed": summary.get(f"{prefix}_decision_check_passed"),
+        "decision_ready": summary.get(f"{prefix}_decision_ready"),
+        "phase2_ready": summary.get(f"{prefix}_phase2_ready"),
+        "default_route_ready": summary.get(f"{prefix}_default_route_ready"),
+    }
+
+
+def _benchmark_profile_handoff_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    evidence = _benchmark_profile_handoff_evidence(summary, prefix=prefix)
+    return (
+        evidence.get("ready") is True
+        and evidence.get("required_profile") == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and evidence.get("profiles_agree") is True
+        and evidence.get("decision_profile") == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and evidence.get("phase2_profile") == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and evidence.get("default_route_profile") == RESIDENT_CUDA_DQ_PROFILE_NAME
+        and evidence.get("decision_check_passed") is True
+        and evidence.get("decision_ready") is True
+        and evidence.get("phase2_ready") is True
+        and evidence.get("default_route_ready") is True
+    )
+
+
+_BENCHMARK_PROFILE_HANDOFF_MATCH_FIELDS = (
+    "ready",
+    "required_profile",
+    "profiles_agree",
+    "decision_profile",
+    "phase2_profile",
+    "default_route_profile",
+    "decision_check_passed",
+    "decision_ready",
+    "phase2_ready",
+    "default_route_ready",
+)
+
+
+def _benchmark_profile_handoff_matches(
+    left: dict[str, Any],
+    *,
+    left_prefix: str,
+    right: dict[str, Any],
+    right_prefix: str,
+) -> bool:
+    left_evidence = _benchmark_profile_handoff_evidence(left, prefix=left_prefix)
+    right_evidence = _benchmark_profile_handoff_evidence(right, prefix=right_prefix)
+    return all(
+        left_evidence.get(field) == right_evidence.get(field)
+        for field in _BENCHMARK_PROFILE_HANDOFF_MATCH_FIELDS
+    )
+
+
+def _release_profile_matches_handoff(
+    summary: dict[str, Any],
+    *,
+    release_prefix: str,
+    handoff_prefix: str,
+) -> bool:
+    release = _release_benchmark_profile_evidence(summary, prefix=release_prefix)
+    handoff = _benchmark_profile_handoff_evidence(summary, prefix=handoff_prefix)
+    return (
+        release.get("profile") == handoff.get("decision_profile")
+        and release.get("required_profile") == handoff.get("required_profile")
+        and release.get("check_passed") == handoff.get("decision_check_passed")
+        and release.get("ready") == handoff.get("decision_ready")
+    )
 
 
 def _resident_winsorized_sweep_summary(source: dict[str, Any]) -> dict[str, Any]:
@@ -1650,6 +1873,14 @@ def _matrix_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "default_route_speedup_vs_reference": promotion.get(
             "default_route_speedup_vs_reference"
         ),
+        **_release_benchmark_profile_fields(
+            payload,
+            output_prefix="release_decision_benchmark_contract_profile",
+        ),
+        **_benchmark_profile_handoff_fields(
+            promotion,
+            output_prefix="benchmark_contract_profile_handoff",
+        ),
         "integration_rejection_sample_counts_match_maps": promotion.get(
             "integration_rejection_sample_counts_match_maps"
         ),
@@ -1907,6 +2138,10 @@ def _default_promotion_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "default_route_route_contract_passed": route.get("route_contract_passed"),
         "default_route_route_check_count": route.get("route_check_count"),
         "default_route_speedup_vs_reference": route.get("speedup_vs_reference"),
+        **_benchmark_profile_handoff_fields(
+            payload,
+            output_prefix="benchmark_contract_profile_handoff",
+        ),
         "pipeline_contract_status": pipeline.get("status"),
         "pipeline_contract_passed": pipeline.get("passed"),
         "integration_rejection_sample_counts_match_maps": pipeline.get(
@@ -2868,6 +3103,76 @@ def build_windows_publish_preflight(
             and matrix_info["default_route_route_check_count"]
             == promotion_info["default_route_route_check_count"],
             {"matrix": matrix_info, "default_promotion": promotion_info},
+        ),
+        _check(
+            "matrix_release_decision_benchmark_contract_profile_passed",
+            _release_benchmark_profile_ready(
+                matrix_info,
+                prefix="release_decision_benchmark_contract_profile",
+            ),
+            _release_benchmark_profile_evidence(
+                matrix_info,
+                prefix="release_decision_benchmark_contract_profile",
+            ),
+        ),
+        _check(
+            "matrix_benchmark_contract_profile_handoff_passed",
+            _benchmark_profile_handoff_ready(
+                matrix_info,
+                prefix="benchmark_contract_profile_handoff",
+            ),
+            _benchmark_profile_handoff_evidence(
+                matrix_info,
+                prefix="benchmark_contract_profile_handoff",
+            ),
+        ),
+        _check(
+            "default_promotion_benchmark_contract_profile_handoff_passed",
+            _benchmark_profile_handoff_ready(
+                promotion_info,
+                prefix="benchmark_contract_profile_handoff",
+            ),
+            _benchmark_profile_handoff_evidence(
+                promotion_info,
+                prefix="benchmark_contract_profile_handoff",
+            ),
+        ),
+        _check(
+            "matrix_release_decision_benchmark_profile_matches_handoff",
+            _release_profile_matches_handoff(
+                matrix_info,
+                release_prefix="release_decision_benchmark_contract_profile",
+                handoff_prefix="benchmark_contract_profile_handoff",
+            ),
+            {
+                "release_decision": _release_benchmark_profile_evidence(
+                    matrix_info,
+                    prefix="release_decision_benchmark_contract_profile",
+                ),
+                "handoff": _benchmark_profile_handoff_evidence(
+                    matrix_info,
+                    prefix="benchmark_contract_profile_handoff",
+                ),
+            },
+        ),
+        _check(
+            "matrix_benchmark_contract_profile_handoff_matches_default_promotion",
+            _benchmark_profile_handoff_matches(
+                matrix_info,
+                left_prefix="benchmark_contract_profile_handoff",
+                right=promotion_info,
+                right_prefix="benchmark_contract_profile_handoff",
+            ),
+            {
+                "windows_release_matrix": _benchmark_profile_handoff_evidence(
+                    matrix_info,
+                    prefix="benchmark_contract_profile_handoff",
+                ),
+                "default_promotion_manifest": _benchmark_profile_handoff_evidence(
+                    promotion_info,
+                    prefix="benchmark_contract_profile_handoff",
+                ),
+            },
         ),
         _check(
             "github_plan_phase2_rejection_sample_accounting_passed",
@@ -4446,6 +4751,57 @@ def build_windows_publish_preflight(
             "default_route_speedup_vs_reference": promotion_info[
                 "default_route_speedup_vs_reference"
             ],
+            "matrix_release_benchmark_profile": matrix_info.get(
+                "release_decision_benchmark_contract_profile_profile"
+            ),
+            "matrix_release_benchmark_profile_ready": matrix_info.get(
+                "release_decision_benchmark_contract_profile_ready"
+            ),
+            "matrix_release_benchmark_profile_check_passed": matrix_info.get(
+                "release_decision_benchmark_contract_profile_check_passed"
+            ),
+            "matrix_benchmark_profile_handoff_ready": matrix_info.get(
+                "benchmark_contract_profile_handoff_ready"
+            ),
+            "matrix_benchmark_profile_handoff_required_profile": matrix_info.get(
+                "benchmark_contract_profile_handoff_required_profile"
+            ),
+            "matrix_benchmark_profile_handoff_profiles_agree": matrix_info.get(
+                "benchmark_contract_profile_handoff_profiles_agree"
+            ),
+            "matrix_benchmark_profile_handoff_decision_profile": matrix_info.get(
+                "benchmark_contract_profile_handoff_decision_profile"
+            ),
+            "matrix_benchmark_profile_handoff_phase2_profile": matrix_info.get(
+                "benchmark_contract_profile_handoff_phase2_profile"
+            ),
+            "matrix_benchmark_profile_handoff_default_route_profile": (
+                matrix_info.get(
+                    "benchmark_contract_profile_handoff_default_route_profile"
+                )
+            ),
+            "default_promotion_benchmark_profile_handoff_ready": (
+                promotion_info.get("benchmark_contract_profile_handoff_ready")
+            ),
+            "default_promotion_benchmark_profile_handoff_required_profile": (
+                promotion_info.get(
+                    "benchmark_contract_profile_handoff_required_profile"
+                )
+            ),
+            "default_promotion_benchmark_profile_handoff_profiles_agree": (
+                promotion_info.get("benchmark_contract_profile_handoff_profiles_agree")
+            ),
+            "default_promotion_benchmark_profile_handoff_decision_profile": (
+                promotion_info.get("benchmark_contract_profile_handoff_decision_profile")
+            ),
+            "default_promotion_benchmark_profile_handoff_phase2_profile": (
+                promotion_info.get("benchmark_contract_profile_handoff_phase2_profile")
+            ),
+            "default_promotion_benchmark_profile_handoff_default_route_profile": (
+                promotion_info.get(
+                    "benchmark_contract_profile_handoff_default_route_profile"
+                )
+            ),
             "github_plan_phase2_rejection_sample_accounting_status": (
                 plan_rejection_sample.get("phase2_rejection_sample_accounting_status")
             ),
@@ -5162,6 +5518,32 @@ def _markdown(payload: dict[str, Any]) -> str:
             "- Default route checks/speedup: "
             f"`{summary.get('default_route_check_count')}`/"
             f"`{summary.get('default_route_speedup_vs_reference')}`"
+        ),
+        (
+            "- Benchmark profile handoff: "
+            "matrix-release "
+            f"`{summary.get('matrix_release_benchmark_profile')}`/"
+            f"`{summary.get('matrix_release_benchmark_profile_ready')}`/"
+            f"`{summary.get('matrix_release_benchmark_profile_check_passed')}`, "
+            "matrix-default "
+            f"`{summary.get('matrix_benchmark_profile_handoff_ready')}`/"
+            f"`{summary.get('matrix_benchmark_profile_handoff_required_profile')}`/"
+            f"`{summary.get('matrix_benchmark_profile_handoff_profiles_agree')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_benchmark_profile_handoff_ready')}`/"
+            f"`{summary.get('default_promotion_benchmark_profile_handoff_required_profile')}`/"
+            f"`{summary.get('default_promotion_benchmark_profile_handoff_profiles_agree')}`"
+        ),
+        (
+            "- Benchmark profile chain: "
+            "matrix "
+            f"`{summary.get('matrix_benchmark_profile_handoff_decision_profile')}`/"
+            f"`{summary.get('matrix_benchmark_profile_handoff_phase2_profile')}`/"
+            f"`{summary.get('matrix_benchmark_profile_handoff_default_route_profile')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_benchmark_profile_handoff_decision_profile')}`/"
+            f"`{summary.get('default_promotion_benchmark_profile_handoff_phase2_profile')}`/"
+            f"`{summary.get('default_promotion_benchmark_profile_handoff_default_route_profile')}`"
         ),
         (
             "- Rejection sample accounting: "

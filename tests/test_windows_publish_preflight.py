@@ -4,7 +4,68 @@ from pathlib import Path
 
 from glass.cli import main
 from glass.io.json_io import read_json, write_json
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.windows_publish_preflight import build_windows_publish_preflight
+
+
+def _benchmark_profile_handoff(
+    *,
+    ready: bool = True,
+    decision_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    phase2_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    default_route_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    decision_check_passed: bool = True,
+) -> dict[str, object]:
+    profiles_agree = (
+        decision_profile
+        == phase2_profile
+        == default_route_profile
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    handoff_ready = ready and profiles_agree and decision_check_passed
+    return {
+        "schema_version": 1,
+        "ready": handoff_ready,
+        "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+        "profiles_agree": profiles_agree,
+        "decision": {
+            "present": decision_profile is not None,
+            "ready": (
+                decision_profile == RESIDENT_CUDA_DQ_PROFILE_NAME
+                and decision_check_passed
+            ),
+            "check_passed": decision_check_passed,
+            "source": "profile",
+            "path": None,
+            "profile": decision_profile,
+            "name": "fixture_resident_cuda_dq_contract"
+            if decision_profile is not None
+            else None,
+            "schema_version": 1 if decision_profile is not None else None,
+        },
+        "phase2_acceptance": {
+            "present": phase2_profile is not None,
+            "ready": phase2_profile == RESIDENT_CUDA_DQ_PROFILE_NAME,
+            "source": "profile",
+            "path": None,
+            "profile": phase2_profile,
+            "name": "fixture_resident_cuda_dq_contract"
+            if phase2_profile is not None
+            else None,
+            "schema_version": 1 if phase2_profile is not None else None,
+        },
+        "default_route": {
+            "present": True,
+            "ready": default_route_profile == RESIDENT_CUDA_DQ_PROFILE_NAME,
+            "source": "profile",
+            "path": None,
+            "profile": default_route_profile,
+            "name": "fixture_resident_cuda_dq_contract"
+            if default_route_profile is not None
+            else None,
+            "schema_version": 1 if default_route_profile is not None else None,
+        },
+    }
 
 
 def _stack_engine_contract(*, ready: bool = True, gap_count: int = 0) -> dict[str, object]:
@@ -1160,6 +1221,14 @@ def _matrix(
     include_default_phase2_release_decision_release_quality_publication_final_checks: (
         bool
     ) = True,
+    release_benchmark_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    release_benchmark_profile_ready: bool = True,
+    release_benchmark_profile_check_passed: bool = True,
+    benchmark_profile_handoff_ready: bool = True,
+    benchmark_profile_decision_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_phase2_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_default_route_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_decision_check_passed: bool = True,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -1213,6 +1282,19 @@ def _matrix(
     )
     quality_compare = _quality_metrics_compare(ready=quality_metrics_compare_ready)
     quality_compare_ready = bool(quality_compare["quality_metrics_compare_ready"])
+    release_benchmark_ready = (
+        release_benchmark_profile_ready
+        and release_benchmark_profile_check_passed
+        and release_benchmark_profile == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    benchmark_profile_handoff = _benchmark_profile_handoff(
+        ready=benchmark_profile_handoff_ready,
+        decision_profile=benchmark_profile_decision_profile,
+        phase2_profile=benchmark_profile_phase2_profile,
+        default_route_profile=benchmark_profile_default_route_profile,
+        decision_check_passed=benchmark_profile_decision_check_passed,
+    )
+    benchmark_handoff_ready = bool(benchmark_profile_handoff["ready"])
     direct_evidence = _direct_runtime_evidence_flattened(
         ready=direct_runtime_evidence_ready,
         acceptance_ready=direct_acceptance_fastpath_ready,
@@ -1298,6 +1380,8 @@ def _matrix(
             else True
         )
         and (publication_audit_ready if include_stack_publication_audit else True)
+        and release_benchmark_ready
+        and benchmark_handoff_ready
         and (
             resident_fastpath_handoff_ready
             if include_resident_fastpath_handoff
@@ -1330,6 +1414,7 @@ def _matrix(
         "default_route_route_contract_passed": ready,
         "default_route_route_check_count": 4 if ready else 2,
         "default_route_speedup_vs_reference": 28.75,
+        "benchmark_contract_profile_handoff": benchmark_profile_handoff,
         "integration_rejection_sample_counts_match_maps": (
             rejection_sample_accounting_ready
         ),
@@ -1429,6 +1514,22 @@ def _matrix(
         payload["release_decision_direct_runtime_publication_guard"] = (
             release_direct_guard
         )
+    payload["release_decision_benchmark_contract_profile"] = {
+        "schema_version": 1,
+        "present": release_benchmark_profile is not None,
+        "ready": release_benchmark_ready,
+        "check_passed": release_benchmark_profile_check_passed,
+        "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+        "source": "profile",
+        "path": None,
+        "profile": release_benchmark_profile,
+        "name": "fixture_resident_cuda_dq_contract"
+        if release_benchmark_profile is not None
+        else None,
+        "contract_schema_version": 1
+        if release_benchmark_profile is not None
+        else None,
+    }
     if include_release_quality_publication_guard:
         payload["release_decision_quality_compare_publication_guard"] = (
             release_quality_guard
@@ -1497,6 +1598,11 @@ def _default_promotion(
     include_phase2_release_decision_release_quality_publication_final_checks: (
         bool
     ) = True,
+    benchmark_profile_handoff_ready: bool = True,
+    benchmark_profile_decision_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_phase2_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_default_route_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    benchmark_profile_decision_check_passed: bool = True,
 ) -> None:
     stack_contract = _stack_engine_contract(
         ready=stack_engine_ready,
@@ -1547,6 +1653,14 @@ def _default_promotion(
     )
     quality_compare = _quality_metrics_compare(ready=quality_metrics_compare_ready)
     quality_compare_ready = bool(quality_compare["quality_metrics_compare_ready"])
+    benchmark_profile_handoff = _benchmark_profile_handoff(
+        ready=benchmark_profile_handoff_ready,
+        decision_profile=benchmark_profile_decision_profile,
+        phase2_profile=benchmark_profile_phase2_profile,
+        default_route_profile=benchmark_profile_default_route_profile,
+        decision_check_passed=benchmark_profile_decision_check_passed,
+    )
+    benchmark_handoff_ready = bool(benchmark_profile_handoff["ready"])
     direct_evidence = _direct_runtime_evidence_manifest(
         ready=direct_runtime_evidence_ready,
         acceptance_ready=direct_acceptance_fastpath_ready,
@@ -1623,6 +1737,7 @@ def _default_promotion(
             else True
         )
         and (quality_compare_ready if include_quality_metrics_compare else True)
+        and benchmark_handoff_ready
     )
     payload = {
         "schema_version": 1,
@@ -1640,6 +1755,7 @@ def _default_promotion(
             "route_check_count": 4 if ready else 2,
             "speedup_vs_reference": 28.75,
         },
+        "benchmark_contract_profile_handoff": benchmark_profile_handoff,
         "pipeline_contract": {
             "status": "passed"
             if rejection_sample_accounting_ready and sample_accounting_closure_ready
@@ -2187,6 +2303,36 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert payload["passed"] is True
     assert payload["status"] == "publish_preflight_ready"
     assert payload["summary"]["primary_package"] == "cuda13"
+    assert (
+        payload["summary"]["matrix_release_benchmark_profile"]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert payload["summary"]["matrix_release_benchmark_profile_ready"] is True
+    assert (
+        payload["summary"]["matrix_release_benchmark_profile_check_passed"]
+        is True
+    )
+    assert payload["summary"]["matrix_benchmark_profile_handoff_ready"] is True
+    assert (
+        payload["summary"]["matrix_benchmark_profile_handoff_required_profile"]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert (
+        payload["summary"]["matrix_benchmark_profile_handoff_profiles_agree"]
+        is True
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_benchmark_profile_handoff_required_profile"
+        ]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert (
+        payload["summary"][
+            "default_promotion_benchmark_profile_handoff_profiles_agree"
+        ]
+        is True
+    )
     assert payload["summary"]["github_plan_phase2_rejection_sample_accounting_status"] == "passed"
     assert payload["summary"]["github_plan_matrix_rejection_sample_accounting_status"] == "passed"
     assert payload["summary"]["matrix_rejection_sample_accounting_status"] == "passed"
@@ -2766,9 +2912,144 @@ def test_windows_publish_preflight_passes_consistent_bundle(tmp_path: Path):
     assert (
         checks["matrix_quality_metrics_compare_matches_default_promotion"] is True
     )
+    assert (
+        checks["matrix_release_decision_benchmark_contract_profile_passed"]
+        is True
+    )
+    assert checks["matrix_benchmark_contract_profile_handoff_passed"] is True
+    assert (
+        checks["default_promotion_benchmark_contract_profile_handoff_passed"]
+        is True
+    )
+    assert (
+        checks["matrix_release_decision_benchmark_profile_matches_handoff"]
+        is True
+    )
+    assert (
+        checks[
+            "matrix_benchmark_contract_profile_handoff_matches_default_promotion"
+        ]
+        is True
+    )
     assert checks["manifest_assets_match_github_plan"] is True
     assert checks["matrix_packages_match_manifest"] is True
     assert checks["cpu_fallback_preserved"] is True
+
+
+def test_windows_publish_preflight_blocks_matrix_benchmark_profile_drift(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(
+        matrix,
+        labels=labels,
+        release_benchmark_profile="legacy_profile",
+        release_benchmark_profile_check_passed=False,
+    )
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["matrix_release_decision_benchmark_contract_profile_passed"][
+        "passed"
+    ] is False
+    assert "matrix_release_decision_benchmark_contract_profile_passed" in payload[
+        "failed_checks"
+    ]
+    assert checks["matrix_release_decision_benchmark_contract_profile_passed"][
+        "evidence"
+    ]["profile"] == "legacy_profile"
+
+
+def test_windows_publish_preflight_blocks_matrix_benchmark_handoff_drift(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(
+        matrix,
+        labels=labels,
+        benchmark_profile_decision_profile="legacy_profile",
+        benchmark_profile_decision_check_passed=False,
+    )
+    _default_promotion(promotion)
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["matrix_benchmark_contract_profile_handoff_passed"][
+        "passed"
+    ] is False
+    assert checks["matrix_release_decision_benchmark_profile_matches_handoff"][
+        "passed"
+    ] is False
+    assert checks[
+        "matrix_benchmark_contract_profile_handoff_matches_default_promotion"
+    ]["passed"] is False
+
+
+def test_windows_publish_preflight_blocks_default_benchmark_handoff_drift(
+    tmp_path: Path,
+):
+    labels = ["cuda13", "cpu"]
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "plan.json"
+    matrix = tmp_path / "matrix.json"
+    promotion = tmp_path / "promotion.json"
+    _matrix(matrix, labels=labels)
+    _default_promotion(
+        promotion,
+        benchmark_profile_decision_profile="legacy_profile",
+        benchmark_profile_decision_check_passed=False,
+    )
+    _manifest(manifest, matrix=matrix, labels=labels)
+    _github_plan(plan, manifest=manifest, matrix=matrix, labels=labels)
+
+    payload = build_windows_publish_preflight(
+        release_manifest=manifest,
+        github_release_plan=plan,
+        windows_release_matrix=matrix,
+        default_promotion_manifest=promotion,
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["passed"] is False
+    assert payload["status"] == "blocked"
+    assert checks["default_promotion_benchmark_contract_profile_handoff_passed"][
+        "passed"
+    ] is False
+    assert checks[
+        "matrix_benchmark_contract_profile_handoff_matches_default_promotion"
+    ]["passed"] is False
+    assert checks["default_promotion_benchmark_contract_profile_handoff_passed"][
+        "evidence"
+    ]["decision_profile"] == "legacy_profile"
 
 
 def test_windows_publish_preflight_blocks_asset_mismatch(tmp_path: Path):
@@ -5462,6 +5743,18 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     markdown_text = markdown.read_text(encoding="utf-8")
     assert "GLASS Windows Publish Preflight" in markdown_text
     assert "Default route checks/speedup: `4`/`28.75`" in markdown_text
+    assert (
+        "Benchmark profile handoff: matrix-release "
+        "`resident_cuda_dq_v1`/`True`/`True`, matrix-default "
+        "`True`/`resident_cuda_dq_v1`/`True`, default-promotion "
+        "`True`/`resident_cuda_dq_v1`/`True`"
+    ) in markdown_text
+    assert (
+        "Benchmark profile chain: matrix "
+        "`resident_cuda_dq_v1`/`resident_cuda_dq_v1`/`resident_cuda_dq_v1`, "
+        "default-promotion "
+        "`resident_cuda_dq_v1`/`resident_cuda_dq_v1`/`resident_cuda_dq_v1`"
+    ) in markdown_text
     assert "Rejection sample accounting: phase2 `passed`" in markdown_text
     assert "Sample accounting closure: phase2 `passed`" in markdown_text
     assert (
@@ -5515,6 +5808,19 @@ def test_windows_publish_preflight_cli_writes_outputs(tmp_path: Path):
     )
     assert (
         "matrix_release_decision_release_quality_publication_guard_passed"
+        in markdown_text
+    )
+    assert (
+        "matrix_release_decision_benchmark_contract_profile_passed"
+        in markdown_text
+    )
+    assert "matrix_benchmark_contract_profile_handoff_passed" in markdown_text
+    assert (
+        "default_promotion_benchmark_contract_profile_handoff_passed"
+        in markdown_text
+    )
+    assert (
+        "matrix_benchmark_contract_profile_handoff_matches_default_promotion"
         in markdown_text
     )
     assert "matrix_resident_winsorized_sweep_audit_passed" in markdown_text
