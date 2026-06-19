@@ -1650,6 +1650,103 @@ def test_cli_resident_cuda_run_consumes_two_phase_cosmetic_calibration_cache(tmp
     assert applied_rows[0]["sidecar_artifact_paths"] == [str(run / "calibration_artifacts.json")]
 
 
+def test_cli_resident_cuda_run_generates_source_dq_cache_route(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _two_light_cosmetic_cache_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "rdq_cache_route"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    plan_payload = read_json(plan)
+    policy = plan_payload["calibration_plan"]["calibration_policy"]
+    policy["cosmetic_correction_enabled"] = True
+    policy["cosmetic_hot_sigma"] = 2.0
+    policy["cosmetic_cold_sigma"] = 8.0
+    write_json(plan, plan_payload)
+
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-source-dq-cache",
+            "generate-calibration",
+            "--resident-runtime-preset",
+            "manual",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-prefetch-frames",
+            "2",
+            "--resident-prefetch-workers",
+            "2",
+            "--resident-h2d-mode",
+            "pinned_ring",
+            "--resident-calibration-batch-frames",
+            "2",
+            "--resident-calibration-streams",
+            "2",
+            "--resident-output-maps",
+            "audit",
+            "--tile-size",
+            "16",
+        ]
+    ) == 0
+
+    route = read_json(run / "resident_source_dq_cache_route.json")
+    timing = read_json(run / "run_timing.json")
+    state = read_json(run / "run_state.json")
+    integration = read_json(run / "integration_results.json")
+    output = integration["outputs"][0]
+    master = read_fits_data(Path(output["master_path"]), dtype=np.float32)
+    weight = read_fits_data(Path(output["weight_map_path"]), dtype=np.float32)
+    resident = read_json(run / "resident_artifacts.json")
+    artifact = resident["artifacts"][0]
+    source_dq = artifact["source_dq_summary"]
+
+    assert route["mode"] == "generate-calibration"
+    assert route["status"] == "ready"
+    assert route["calibrated_light_count"] == 2
+    assert route["dq_sidecar_count"] == 2
+    assert route["existing_dq_sidecar_count"] == 2
+    assert route["missing_dq_sidecar_count"] == 0
+    assert route["cosmetic_correction_enabled_frame_count"] == 2
+    assert route["dq_summary_totals"]["hot_pixel"] == 1
+    assert route["dq_summary_totals"]["cosmetic_corrected"] == 1
+    assert all(row["exists"] for row in route["dq_sidecars"])
+    assert timing["resident_source_dq_cache"] == "generate-calibration"
+    assert [row["stage"] for row in timing["stages"]] == [
+        "resident_source_dq_cache_calibration",
+        "resident_calibration_integration",
+    ]
+    assert "resident_source_dq_cache_calibration" in state["completed_stages"]
+    assert any(item["stage"] == "resident_source_dq_cache" for item in state["artifacts"])
+    assert master[4, 5] == pytest.approx(100.0)
+    assert weight[4, 5] == pytest.approx(1.0)
+    assert master[0, 0] == pytest.approx(100.0)
+    assert weight[0, 0] == pytest.approx(2.0)
+    assert source_dq["passed"] is True
+    assert source_dq["input_invalid_samples_before_rejection"] == 1
+    assert source_dq["sidecar_source_counts"] == {"calibration_artifacts": 2}
+    assert artifact["source_dq_calibration_artifact_index"]["available"] is True
+    assert artifact["source_dq_calibration_artifact_index"]["sidecar_frame_count"] == 2
+
+
 def test_cli_resident_cuda_batch_wave_releases_prefetch_slots(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_light_weight_dataset(tmp_path)

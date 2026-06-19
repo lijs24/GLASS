@@ -267,7 +267,7 @@ from glass.report.stack_engine_contract import (
 )
 from glass.report.wbpp_history import read_fastintegration_history
 from glass.synthetic.generator import generate_synthetic_dataset
-from glass.models import now_iso
+from glass.models import PipelineArtifact, now_iso
 
 console = Console()
 
@@ -538,6 +538,7 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     timing["backend"] = getattr(args, "backend", timing.get("backend"))
     timing["memory_mode"] = getattr(args, "memory_mode", timing.get("memory_mode"))
     timing["resident_runtime_preset"] = getattr(args, "resident_runtime_preset", None)
+    timing["resident_source_dq_cache"] = getattr(args, "resident_source_dq_cache", "off")
     preset = getattr(args, "_resident_runtime_preset_effective", None)
     if isinstance(preset, dict):
         timing["resident_runtime_preset_effective"] = preset
@@ -577,6 +578,75 @@ def _write_run_command(run: Path, args: argparse.Namespace) -> None:
     argv = list(getattr(args, "_glass_argv", []) or sys.argv[1:])
     command = subprocess.list2cmdline(["glass", *argv])
     (run / "run_command.txt").write_text(command, encoding="utf-8")
+
+
+def _resolve_route_sidecar_path(path: str | Path, *, artifact_root: Path) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return candidate
+    return candidate if candidate.exists() else artifact_root / candidate
+
+
+def _write_resident_source_dq_cache_route(run: Path, args: argparse.Namespace) -> Path:
+    artifact_path = run / "calibration_artifacts.json"
+    payload: dict[str, Any] = {}
+    if artifact_path.exists():
+        payload = read_json(artifact_path)
+    calibrated_lights = payload.get("calibrated_lights") if isinstance(payload, dict) else None
+    calibrated_lights = calibrated_lights if isinstance(calibrated_lights, list) else []
+    dq_sidecar_rows: list[dict[str, Any]] = []
+    dq_summary_totals: dict[str, int] = {}
+    cosmetic_enabled_count = 0
+    for item in calibrated_lights:
+        if not isinstance(item, dict):
+            continue
+        cosmetic = item.get("cosmetic_correction")
+        if isinstance(cosmetic, dict) and cosmetic.get("enabled"):
+            cosmetic_enabled_count += 1
+        dq_summary = item.get("dq_summary")
+        if isinstance(dq_summary, dict):
+            for key, value in dq_summary.items():
+                if isinstance(value, (int, float)):
+                    dq_summary_totals[key] = dq_summary_totals.get(key, 0) + int(value)
+        sidecar = item.get("dq_mask_path")
+        if not sidecar:
+            continue
+        sidecar_path = _resolve_route_sidecar_path(str(sidecar), artifact_root=artifact_path.parent)
+        dq_sidecar_rows.append(
+            {
+                "frame_id": item.get("frame_id"),
+                "dq_mask_path": str(sidecar_path),
+                "exists": sidecar_path.exists(),
+            }
+        )
+    audit = {
+        "schema_version": 1,
+        "artifact_type": "resident_source_dq_cache_route",
+        "created_at": now_iso(),
+        "mode": args.resident_source_dq_cache,
+        "status": "ready" if artifact_path.exists() else "missing_calibration_artifacts",
+        "generated": args.resident_source_dq_cache == "generate-calibration",
+        "calibration_backend": "cpu",
+        "tile_size": args.tile_size,
+        "flat_floor_override": args.flat_floor,
+        "calibration_artifacts_path": str(artifact_path),
+        "calibration_artifacts_exists": artifact_path.exists(),
+        "calibrated_light_count": len(calibrated_lights),
+        "dq_sidecar_count": len(dq_sidecar_rows),
+        "existing_dq_sidecar_count": sum(1 for row in dq_sidecar_rows if row["exists"]),
+        "missing_dq_sidecar_count": sum(1 for row in dq_sidecar_rows if not row["exists"]),
+        "cosmetic_correction_enabled_frame_count": cosmetic_enabled_count,
+        "dq_summary_totals": dq_summary_totals,
+        "dq_sidecars": dq_sidecar_rows,
+        "resident_consumption": {
+            "source": "calibration_artifacts.calibrated_lights.dq_mask_path",
+            "consumer": "resident CUDA source-DQ sidecar index",
+            "default_enabled": False,
+        },
+    }
+    route_path = run / "resident_source_dq_cache_route.json"
+    write_json(route_path, audit)
+    return route_path
 
 
 def _timed_stage(run: Path, timing: dict, stage: str, fn):
@@ -1171,6 +1241,21 @@ def cmd_run(args: argparse.Namespace) -> int:
         out = Path(args.out)
         timing = _new_timing("run", args.backend, None)
         _annotate_timing_execution_defaults(timing, args)
+        source_dq_cache_route_path: Path | None = None
+        if args.resident_source_dq_cache == "generate-calibration":
+            _timed_stage(
+                out,
+                timing,
+                "resident_source_dq_cache_calibration",
+                lambda: run_calibration_stages(
+                    args.plan,
+                    args.out,
+                    backend="cpu",
+                    tile_size=args.tile_size,
+                    flat_floor=args.flat_floor,
+                ),
+            )
+            source_dq_cache_route_path = _write_resident_source_dq_cache_route(out, args)
         state = _timed_stage(
             out,
             timing,
@@ -1244,6 +1329,18 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
             ),
         )
+        if source_dq_cache_route_path is not None:
+            if "resident_source_dq_cache_calibration" not in state.completed_stages:
+                state.completed_stages.insert(0, "resident_source_dq_cache_calibration")
+            state.artifacts.append(
+                PipelineArtifact(
+                    stage="resident_source_dq_cache",
+                    path=str(source_dq_cache_route_path),
+                    format="json",
+                    created_at=now_iso(),
+                    source_frames=[],
+                )
+            )
         write_run_state(args.out, state)
         console.print(f"Resident CUDA run complete through {state.current_stage}: {args.out}")
         return 0
@@ -4287,6 +4384,15 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resident-master-cache-dir",
         help="optional shared resident master-frame cache directory reused across output directories",
+    )
+    run.add_argument(
+        "--resident-source-dq-cache",
+        choices=["off", "generate-calibration"],
+        default="off",
+        help=(
+            "resident source-DQ cache route; generate-calibration runs CPU/tile calibration first so "
+            "resident CUDA can consume GLASS-generated DQ sidecars from calibration_artifacts.json"
+        ),
     )
     run.add_argument(
         "--resident-output-maps",

@@ -8950,6 +8950,30 @@ Completed in Gate446:
   - `runs/checkpoints/s2_gate_450_perf/two_phase_cpu_cosmetic_calibration_cache_to_resident_cuda.json`;
   - `runs/checkpoints/s2_gate_450_status.md`.
 
+### S2-Gate 451: Resident Source-DQ Cache Runtime Route
+
+- Convert the Gate450 two-phase DQ cache workflow into a first-class guarded
+  runtime route instead of a manual sequence.
+- Required work:
+  - add an explicit `glass run --resident-source-dq-cache generate-calibration`
+    route for resident CUDA runs;
+  - keep the route default off so the Phase 1 200-light resident fast path is
+    not slowed without a dedicated benchmark;
+  - run CPU/tile calibration first when the route is enabled, generating
+    `calibration_artifacts.json` and DQ sidecars from GLASS's own calibration
+    stage;
+  - write a `resident_source_dq_cache_route.json` audit artifact with
+    calibrated-light counts, DQ sidecar counts, DQ flag totals, selected
+    backend, tile size, and route status;
+  - preserve timing stage separation between DQ cache generation and resident
+    CUDA calibration/integration;
+  - prove on a synthetic cosmetic-DQ fixture that a single `glass run` command
+    excludes finite hot-pixel samples from resident integration and matches the
+    expected master/weight semantics.
+- This gate directly advances the Phase 2 DQ/mask pipeline contract and the
+  resident CUDA runtime path. It is not a release, publication, or report-only
+  gate.
+
 ## Gate Rules
 
 Each gate requires:
