@@ -83,6 +83,10 @@ from glass.report.resident_rejection_sample_audit import (
     build_resident_rejection_sample_audit,
     write_resident_rejection_sample_audit,
 )
+from glass.report.resident_rejection_input_audit import (
+    build_resident_rejection_input_audit,
+    write_resident_rejection_input_audit,
+)
 from glass.report.resident_winsorized_benchmark import (
     build_resident_winsorized_benchmark,
     write_resident_winsorized_benchmark,
@@ -2582,6 +2586,31 @@ def cmd_resident_rejection_sample_audit(args: argparse.Namespace) -> int:
         evaluation_region=args.evaluation_region,
     )
     write_resident_rejection_sample_audit(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "recommendation": payload.get("recommendation"),
+            "failed_checks": payload.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload.get("passed") else 0
+
+
+def cmd_resident_rejection_input_audit(args: argparse.Namespace) -> int:
+    payload = build_resident_rejection_input_audit(
+        cpu_run=args.cpu_run,
+        resident_run=args.resident_run,
+        compare_json=args.compare_json,
+        evaluation_region=args.evaluation_region,
+        run_cuda_exact_input=not args.skip_cuda_exact_input,
+        master_tolerance=args.master_tolerance,
+        max_same_pre_rejection_abs_delta=args.max_same_pre_rejection_abs_delta,
+    )
+    write_resident_rejection_input_audit(args.out, payload, markdown=args.markdown)
     console.print(
         {
             "artifact_type": payload.get("artifact_type"),
@@ -6389,6 +6418,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="return exit code 2 unless the audit passes all thresholds",
     )
     rejection_audit.set_defaults(func=cmd_resident_rejection_sample_audit)
+
+    rejection_input_audit = sub.add_parser(
+        "resident-rejection-input-audit",
+        help=(
+            "attribute resident rejection-map drift to the hardened winsorized kernel "
+            "or to upstream resident registration/warp input differences"
+        ),
+    )
+    rejection_input_audit.add_argument("--cpu-run", required=True, help="CPU tiled GLASS run directory")
+    rejection_input_audit.add_argument(
+        "--resident-run",
+        required=True,
+        help="CUDA resident GLASS run directory",
+    )
+    rejection_input_audit.add_argument(
+        "--compare-json",
+        help="GLASS compare JSON; required for --evaluation-region compare_region",
+    )
+    rejection_input_audit.add_argument("--out", required=True, help="output rejection input audit JSON")
+    rejection_input_audit.add_argument("--markdown", help="optional output Markdown summary")
+    rejection_input_audit.add_argument(
+        "--evaluation-region",
+        choices=["full_frame", "compare_region"],
+        default="compare_region",
+        help="evaluate resident output deltas globally or inside the declared compare common footprint",
+    )
+    rejection_input_audit.add_argument(
+        "--skip-cuda-exact-input",
+        action="store_true",
+        help="skip the exact-input ResidentCalibratedStack replay; useful for CPU-only smoke tests",
+    )
+    rejection_input_audit.add_argument("--master-tolerance", type=float, default=5.0e-4)
+    rejection_input_audit.add_argument("--max-same-pre-rejection-abs-delta", type=int, default=16)
+    rejection_input_audit.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 unless exact-input parity and resident output thresholds pass",
+    )
+    rejection_input_audit.set_defaults(func=cmd_resident_rejection_input_audit)
 
     resident_winsorized_benchmark = sub.add_parser(
         "resident-winsorized-benchmark",

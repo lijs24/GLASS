@@ -7671,6 +7671,31 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, and no user input
   directory modification.
 
+### S2-Gate 424: Resident Rejection Input Attribution
+
+- Continue the Phase 2 mainline by targeting the Gate 423 same-pre-rejection
+  blocker instead of release/report-only evidence.
+- Add an auditable `resident-rejection-input-audit` command that replays the
+  CPU registered stack through both:
+  - the CPU `winsorized_sigma` baseline using registered-frame coverage masks;
+  - the resident CUDA hardened winsorized kernel using the exact same
+    registered input samples uploaded to `ResidentCalibratedStack`.
+- Compare those exact-input results against the CPU output maps, then compare
+  the already-produced resident CUDA output maps inside the declared common
+  footprint.
+- Acceptance for this gate:
+  - CPU registered-cache replay exactly matches CPU integration coverage and
+    low/high rejection maps;
+  - CUDA exact-input hardened winsorized replay exactly matches CPU maps on a
+    CUDA-capable machine, or records an explicit CUDA skip on CPU-only systems;
+  - the resident output map delta remains attributed to upstream resident
+    registration/warp input parity when exact-input replay passes but
+    same-pre rejection map delta remains above threshold;
+  - focused tests and full pytest pass.
+- Keep this gate runtime-validation scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
 ## Gate Rules
 
 Each gate requires:
