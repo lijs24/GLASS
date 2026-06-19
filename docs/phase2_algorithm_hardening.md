@@ -7274,6 +7274,23 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 405: Phase2 Status Benchmark Profile Evidence
+
+- Surface acceptance-audit benchmark contract source, path, profile, name, and
+  schema version as first-class Phase2 status fields.
+- Include the benchmark contract source/profile in Phase2 status Markdown for
+  both primary acceptance and default-route acceptance.
+- Extend `phase2-status-compare` so a candidate cannot lose an acceptance
+  benchmark contract profile that was present in the baseline status.
+- Validate status summary extraction, Markdown visibility, non-regression
+  comparison, and profile-loss regression detection.
+- Keep this gate status/report-contract scoped: no runtime execution change, no
+  benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

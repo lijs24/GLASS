@@ -4,6 +4,7 @@ from pathlib import Path
 
 from glass.cli import main
 from glass.io.json_io import read_json, write_json
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.phase2_status import (
     build_phase2_status,
     build_phase2_status_compare,
@@ -63,7 +64,13 @@ def _write_acceptance(
         {
             "status": "passed" if acceptance_passed else "failed",
             "passed": acceptance_passed,
-            "benchmark_contract": {"name": "fixture_contract"},
+            "benchmark_contract": {
+                "source": "profile",
+                "path": None,
+                "profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+                "name": "fixture_contract",
+                "schema_version": 1,
+            },
             "frame_type_counts": {"light": 200, "bias": 20, "dark": 20, "flat": 20},
             "contract_bundle_schema": {"status": "passed"},
             "native_guardrails_bundle": {
@@ -208,7 +215,13 @@ def _write_default_route_acceptance(path: Path, *, route_passed: bool = True) ->
         {
             "status": "passed" if route_passed else "failed",
             "passed": route_passed,
-            "benchmark_contract": {"name": "default_route_fixture_contract"},
+            "benchmark_contract": {
+                "source": "profile",
+                "path": None,
+                "profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+                "name": "default_route_fixture_contract",
+                "schema_version": 1,
+            },
             "speedup_summary": {
                 "speedup_vs_wbpp": 28.75,
                 "glass": {"weighted_frame_count": 193},
@@ -2222,6 +2235,8 @@ def _status_payload(
     acceptance_pipeline_runtime_default_check_present: bool = True,
     acceptance_pipeline_runtime_default_check_passed: bool = True,
     acceptance_pipeline_runtime_default_legacy_master_count: int = 0,
+    acceptance_benchmark_contract_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
+    acceptance_benchmark_contract_source: str | None = "profile",
     fastpath_contract_status: str = "passed",
     fastpath_contract_check_count: int = 24,
     default_route_passed: bool = True,
@@ -2392,6 +2407,14 @@ def _status_payload(
         "acceptance_audit": {
             "status": acceptance_status,
             "passed": acceptance_passed,
+            "benchmark_contract_source": acceptance_benchmark_contract_source,
+            "benchmark_contract_profile": acceptance_benchmark_contract_profile,
+            "benchmark_contract_name": "fixture_contract"
+            if acceptance_benchmark_contract_profile is not None
+            else None,
+            "benchmark_contract_schema_version": 1
+            if acceptance_benchmark_contract_profile is not None
+            else None,
             "pipeline_integration_engine_policy_status": (
                 acceptance_pipeline_engine_policy_status
             ),
@@ -3391,6 +3414,9 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["status"] == "green"
     assert payload["latest_checkpoint"]["path"] == str(latest)
     assert payload["acceptance_audit"]["speedup_vs_reference"] == 58.0
+    assert payload["acceptance_audit"]["benchmark_contract_source"] == "profile"
+    assert payload["acceptance_audit"]["benchmark_contract_profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert payload["acceptance_audit"]["benchmark_contract_name"] == "fixture_contract"
     assert payload["acceptance_audit"]["native_guardrails_bundle_status"] == "present"
     assert payload["acceptance_audit"]["resident_result_contract_source"] == "run_default"
     assert payload["acceptance_audit"]["resident_result_contract_run_default"] is True
@@ -3429,6 +3455,7 @@ def test_phase2_status_summarizes_green_handoff(tmp_path: Path):
     assert payload["default_route_acceptance"]["status"] == "passed"
     assert payload["default_route_acceptance"]["passed"] is True
     assert payload["default_route_acceptance"]["route_contract_passed"] is True
+    assert payload["default_route_acceptance"]["benchmark_contract_profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
     assert payload["default_route_acceptance"]["route_check_count"] == 4
     assert payload["doctor"]["primary_gpu"] == "Fixture GPU"
     assert payload["release_manifest"]["package_count"] == 4
@@ -4381,6 +4408,7 @@ def test_cli_phase2_status_writes_outputs(tmp_path: Path):
     text = markdown.read_text(encoding="utf-8")
     assert "GLASS Phase 2 Status" in text
     assert "Acceptance" in text
+    assert "Benchmark contract: fixture_contract source=profile profile=resident_cuda_dq_v1" in text
     assert "Native resident result source: run_default" in text
     assert "Native calibrated lights: 200" in text
     assert "Registration fast path: present" in text
@@ -6080,6 +6108,7 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert payload["status"] == "passed"
     assert checks["latest_checkpoint_gate_not_decreased"] is True
     assert checks["acceptance_audit_passed_preserved"] is True
+    assert checks["acceptance_benchmark_contract_profile_preserved"] is True
     assert checks["default_route_acceptance_passed_preserved"] is True
     assert checks["default_route_acceptance_route_contract_preserved"] is True
     assert checks["resident_registration_fastpath_contract_passed_preserved"] is True
@@ -6196,6 +6225,41 @@ def test_phase2_status_compare_passes_non_regression(tmp_path: Path):
     assert checks["stack_engine_default_gap_count_not_increased"] is True
     assert checks["release_decision_default_change_ready_preserved"] is True
     assert checks["release_decision_promote_recommendation_preserved"] is True
+
+
+def test_phase2_status_compare_flags_acceptance_benchmark_profile_loss(tmp_path: Path):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=404))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=405,
+            acceptance_benchmark_contract_profile=None,
+            acceptance_benchmark_contract_source=None,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert payload["status"] == "regressed"
+    assert checks["acceptance_benchmark_contract_profile_preserved"]["passed"] is False
+    assert checks["acceptance_benchmark_contract_profile_preserved"]["evidence"] == {
+        "baseline": {
+            "source": "profile",
+            "profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+            "name": "fixture_contract",
+        },
+        "candidate": {
+            "source": None,
+            "profile": None,
+            "name": None,
+        },
+    }
 
 
 def test_phase2_status_compare_flags_handoff_regressions(tmp_path: Path):

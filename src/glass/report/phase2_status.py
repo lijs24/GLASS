@@ -110,12 +110,22 @@ def _acceptance_summary(path: str | Path | None) -> dict[str, Any] | None:
         if isinstance(payload.get("warp_quality_contract"), dict)
         else {}
     )
+    benchmark_contract = (
+        payload.get("benchmark_contract")
+        if isinstance(payload.get("benchmark_contract"), dict)
+        else {}
+    )
     return {
         "path": payload.get("_path"),
         "exists": True,
         "status": payload.get("status"),
         "passed": payload.get("passed"),
-        "benchmark_contract": payload.get("benchmark_contract"),
+        "benchmark_contract": benchmark_contract,
+        "benchmark_contract_source": benchmark_contract.get("source"),
+        "benchmark_contract_path": benchmark_contract.get("path"),
+        "benchmark_contract_profile": benchmark_contract.get("profile"),
+        "benchmark_contract_name": benchmark_contract.get("name"),
+        "benchmark_contract_schema_version": benchmark_contract.get("schema_version"),
         "frame_type_counts": payload.get("frame_type_counts"),
         "speedup_vs_reference": speedup.get("speedup_vs_wbpp"),
         "active_frames": speedup.get("glass", {}).get("weighted_frame_count")
@@ -677,6 +687,11 @@ def _default_route_acceptance_summary(path: str | Path | None) -> dict[str, Any]
             "evidence": check.get("evidence") if isinstance(check, dict) else None,
         }
     route_contract_passed = all(item["passed"] for item in route_checks.values())
+    benchmark_contract = (
+        payload.get("benchmark_contract")
+        if isinstance(payload.get("benchmark_contract"), dict)
+        else {}
+    )
     return {
         "schema_version": 1,
         "path": payload.get("_path"),
@@ -684,7 +699,12 @@ def _default_route_acceptance_summary(path: str | Path | None) -> dict[str, Any]
         "status": payload.get("status"),
         "passed": payload.get("passed") is True and route_contract_passed,
         "acceptance_passed": payload.get("passed"),
-        "benchmark_contract": payload.get("benchmark_contract"),
+        "benchmark_contract": benchmark_contract,
+        "benchmark_contract_source": benchmark_contract.get("source"),
+        "benchmark_contract_path": benchmark_contract.get("path"),
+        "benchmark_contract_profile": benchmark_contract.get("profile"),
+        "benchmark_contract_name": benchmark_contract.get("name"),
+        "benchmark_contract_schema_version": benchmark_contract.get("schema_version"),
         "speedup_vs_reference": speedup.get("speedup_vs_wbpp"),
         "active_frames": speedup.get("glass", {}).get("weighted_frame_count")
         if isinstance(speedup.get("glass"), dict)
@@ -5583,6 +5603,12 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Active frames: {acceptance.get('active_frames')}",
                 f"- RMS diff: {acceptance.get('rms_diff')}",
                 f"- Coverage fraction: {acceptance.get('coverage_fraction')}",
+                (
+                    "- Benchmark contract: "
+                    f"{acceptance.get('benchmark_contract_name')} "
+                    f"source={acceptance.get('benchmark_contract_source')} "
+                    f"profile={acceptance.get('benchmark_contract_profile')}"
+                ),
                 f"- Contract bundle schema: {acceptance.get('contract_bundle_schema_status')}",
                 f"- Resident calibration contract: {acceptance.get('resident_calibration_contract_passed')}",
                 f"- Resident result contract: {acceptance.get('resident_result_contract_passed')}",
@@ -5648,6 +5674,8 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                 f"- Passed: {default_route_acceptance.get('passed')}",
                 f"- Route contract passed: {default_route_acceptance.get('route_contract_passed')}",
                 f"- Contract: {contract.get('name')}",
+                f"- Contract source: {default_route_acceptance.get('benchmark_contract_source')}",
+                f"- Contract profile: {default_route_acceptance.get('benchmark_contract_profile')}",
                 f"- Speedup vs reference: {default_route_acceptance.get('speedup_vs_reference')}",
                 f"- Active frames: {default_route_acceptance.get('active_frames')}",
                 f"- Route check count: {default_route_acceptance.get('route_check_count')}",
@@ -8087,6 +8115,55 @@ def build_phase2_status_compare(
             or _status_value(candidate, "acceptance_audit", "status") == "passed",
             baseline=_status_value(baseline, "acceptance_audit", "status"),
             candidate=_status_value(candidate, "acceptance_audit", "status"),
+        ),
+        _compare_check(
+            "acceptance_benchmark_contract_profile_preserved",
+            _status_value(baseline, "acceptance_audit", "benchmark_contract_profile")
+            is None
+            or _status_value(
+                baseline,
+                "acceptance_audit",
+                "benchmark_contract_profile",
+            )
+            == _status_value(
+                candidate,
+                "acceptance_audit",
+                "benchmark_contract_profile",
+            ),
+            baseline={
+                "source": _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "benchmark_contract_source",
+                ),
+                "profile": _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "benchmark_contract_profile",
+                ),
+                "name": _status_value(
+                    baseline,
+                    "acceptance_audit",
+                    "benchmark_contract_name",
+                ),
+            },
+            candidate={
+                "source": _status_value(
+                    candidate,
+                    "acceptance_audit",
+                    "benchmark_contract_source",
+                ),
+                "profile": _status_value(
+                    candidate,
+                    "acceptance_audit",
+                    "benchmark_contract_profile",
+                ),
+                "name": _status_value(
+                    candidate,
+                    "acceptance_audit",
+                    "benchmark_contract_name",
+                ),
+            },
         ),
         _compare_check(
             "acceptance_pipeline_integration_engine_policy_preserved",
