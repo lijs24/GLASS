@@ -289,6 +289,7 @@ DEFAULT_RESIDENT_RUNTIME_PRESET = "throughput-v1"
 DEFAULT_MEMORY_MODE = "resident"
 FALLBACK_MEMORY_MODE = "tile"
 DEFAULT_UNTIL_STAGE = "integration"
+DEFAULT_RESIDENT_FITS_READ_MODE = "auto"
 
 RESIDENT_RUNTIME_PRESET_FLAGS = {
     "resident_prefetch_frames": "--resident-prefetch-frames",
@@ -401,6 +402,40 @@ def _apply_resident_runtime_preset(args: argparse.Namespace) -> None:
     }
 
 
+def _resolve_resident_fits_read_mode_default(args: argparse.Namespace, *, command: str) -> dict[str, object]:
+    requested = getattr(args, "resident_fits_read_mode", None)
+    explicit = _argv_has_option(args, "--resident-fits-read-mode")
+    effective = requested
+    source = "explicit" if explicit else "unused_non_resident"
+    reason = ""
+    if explicit:
+        effective = requested
+        reason = "user_explicit_resident_fits_read_mode"
+    elif getattr(args, "memory_mode", None) == "resident" and getattr(args, "backend", None) == "cuda":
+        effective = DEFAULT_RESIDENT_FITS_READ_MODE
+        setattr(args, "resident_fits_read_mode", effective)
+        source = "resident_cuda_guarded_auto_default"
+        reason = "resident_cuda_default_uses_guarded_auto_reader"
+    else:
+        effective = requested or "astropy"
+        setattr(args, "resident_fits_read_mode", effective)
+        reason = "non_resident_path_keeps_compatible_placeholder"
+    resolution = {
+        "schema_version": 1,
+        "command": command,
+        "requested": requested,
+        "effective": effective,
+        "explicit": explicit,
+        "source": source,
+        "reason": reason,
+        "default": DEFAULT_RESIDENT_FITS_READ_MODE,
+        "fallback": "astropy",
+        "escape_hatch": "--resident-fits-read-mode astropy",
+    }
+    args._resident_fits_read_mode_resolution = resolution
+    return resolution
+
+
 def _explicit_option(args: argparse.Namespace, flag: str) -> bool:
     return _argv_has_option(args, flag)
 
@@ -502,6 +537,9 @@ def _annotate_timing_execution_defaults(timing: dict, args: argparse.Namespace) 
     preset = getattr(args, "_resident_runtime_preset_effective", None)
     if isinstance(preset, dict):
         timing["resident_runtime_preset_effective"] = preset
+    fits_resolution = getattr(args, "_resident_fits_read_mode_resolution", None)
+    if isinstance(fits_resolution, dict):
+        timing["resident_fits_read_mode_resolution"] = fits_resolution
 
 
 def _safe_platform_label() -> str:
@@ -986,6 +1024,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     capabilities = capability_report()
     _resolve_execution_defaults(args, capabilities, command="audit")
     _apply_resident_runtime_preset(args)
+    _resolve_resident_fits_read_mode_default(args, command="audit")
     _write_run_command(out, args)
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but unavailable; use --backend auto or cpu.")
@@ -1071,6 +1110,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_output_maps=args.resident_output_maps,
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
+                resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
             ),
         )
     elif plan.executable:
@@ -1109,6 +1149,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.backend == "cuda" and not capabilities["cuda_available"]:
         raise SystemExit("CUDA backend requested but native CUDA backend is unavailable.")
     _apply_resident_runtime_preset(args)
+    _resolve_resident_fits_read_mode_default(args, command="run")
     _seed_run_inputs(Path(args.out), args.plan)
     _write_run_command(Path(args.out), args)
     if args.memory_mode == "resident":
@@ -1196,6 +1237,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_output_maps=args.resident_output_maps,
                 resident_winsorized_mode=args.resident_winsorized_mode,
                 resident_fits_read_mode=args.resident_fits_read_mode,
+                resident_fits_read_mode_resolution=args._resident_fits_read_mode_resolution,
             ),
         )
         write_run_state(args.out, state)
@@ -2577,6 +2619,7 @@ def cmd_resident_fits_auto_regression(args: argparse.Namespace) -> int:
         expected_requested_mode=args.expected_requested_mode,
         expected_effective_mode=args.expected_effective_mode,
         expected_backend=args.expected_backend,
+        expected_resolution_source=args.expected_resolution_source,
         max_rms_diff=args.max_rms_diff,
         max_abs_diff=args.max_abs_diff,
         max_total_vs_explicit_ratio=args.max_total_vs_explicit_ratio,
@@ -4239,9 +4282,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resident-fits-read-mode",
         choices=["auto", "fast", "astropy", "native_direct", "native_u16_gpu"],
-        default="astropy",
+        default=None,
         help=(
-            "resident light FITS reader: astropy is the conservative default; auto promotes compatible "
+            "resident light FITS reader: default resident CUDA runs use guarded auto; explicit astropy remains "
+            "the conservative compatibility escape hatch. auto promotes compatible "
             "BITPIX=16/BZERO=32768 light groups to guarded GPU raw decode when resident scheduling supports it, "
             "otherwise tries the bounded simple-primary fast path and falls back to astropy; fast requires the bounded path; "
             "native_direct decodes simple FITS directly into the resident host buffer; "
@@ -4646,9 +4690,10 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--resident-fits-read-mode",
         choices=["auto", "fast", "astropy", "native_direct", "native_u16_gpu"],
-        default="astropy",
+        default=None,
         help=(
-            "resident audit light FITS reader; astropy is the conservative default, auto promotes guarded "
+            "resident audit light FITS reader; default resident CUDA audits use guarded auto and explicit astropy "
+            "remains the compatibility escape hatch. auto promotes guarded "
             "BITPIX=16/BZERO=32768 groups to GPU raw decode when resident scheduling supports it and otherwise "
             "tries bounded fast primary-image reading with astropy fallback, native_direct decodes into the resident host buffer, "
             "and native_u16_gpu uploads compact BITPIX=16/BZERO=32768 payloads for GPU decode"
@@ -6528,6 +6573,7 @@ def build_parser() -> argparse.ArgumentParser:
     resident_fits_auto_regression.add_argument("--expected-requested-mode", default="auto")
     resident_fits_auto_regression.add_argument("--expected-effective-mode", default="native_u16_gpu")
     resident_fits_auto_regression.add_argument("--expected-backend", default="native_u16be_raw")
+    resident_fits_auto_regression.add_argument("--expected-resolution-source")
     resident_fits_auto_regression.add_argument("--max-rms-diff", type=float, default=0.0)
     resident_fits_auto_regression.add_argument("--max-abs-diff", type=float, default=0.0)
     resident_fits_auto_regression.add_argument("--max-total-vs-explicit-ratio", type=float, default=1.10)

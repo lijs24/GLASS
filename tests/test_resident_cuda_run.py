@@ -3590,6 +3590,118 @@ def test_cli_resident_cuda_auto_selects_native_u16_gpu_for_compatible_group(tmp_
     assert artifact["resident_io_overlap"]["fits_read_mode_effective"] == "native_u16_gpu"
 
 
+def test_cli_resident_cuda_default_fits_read_mode_is_guarded_auto(tmp_path: Path):
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "calibrate_frames_fits_u16be_bzero_host_async_multistream_callback_release_timed"):
+        pytest.skip("native u16 GPU decode resident path is not available")
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_default_guarded_auto_u16_gpu"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+    run_timing = read_json(run / "run_timing.json")
+    mode_resolution = io_pipeline["fits_read_mode_resolution"]
+
+    assert io_pipeline["fits_read_mode"] == "auto"
+    assert io_pipeline["fits_read_mode_requested"] == "auto"
+    assert io_pipeline["fits_read_mode_effective"] == "native_u16_gpu"
+    assert io_pipeline["fits_backend_counts"]["native_u16be_raw"] == 2
+    assert mode_resolution["source"] == "resident_cuda_guarded_auto_default"
+    assert mode_resolution["explicit"] is False
+    assert mode_resolution["requested"] is None
+    assert mode_resolution["effective"] == "auto"
+    assert artifact["resident_io_overlap"]["fits_read_mode_resolution"]["source"] == "resident_cuda_guarded_auto_default"
+    assert (
+        run_timing["resident_fits_read_mode_resolution"]["source"]
+        == "resident_cuda_guarded_auto_default"
+    )
+
+
+def test_cli_resident_cuda_explicit_astropy_fits_read_mode_is_preserved(tmp_path: Path):
+    cuda_module_or_skip()
+    dataset = _u16_gpu_decode_dataset(tmp_path)
+    manifest = tmp_path / "manifest.json"
+    plan = tmp_path / "processing_plan.json"
+    run = tmp_path / "resident_explicit_astropy"
+
+    assert main(["scan", "--root", str(dataset), "--out", str(manifest)]) == 0
+    assert main(["plan", "--manifest", str(manifest), "--out", str(plan)]) == 0
+    assert main(
+        [
+            "run",
+            "--plan",
+            str(plan),
+            "--out",
+            str(run),
+            "--backend",
+            "cuda",
+            "--memory-mode",
+            "resident",
+            "--resident-runtime-preset",
+            "throughput-v1",
+            "--until-stage",
+            "integration",
+            "--local-normalization",
+            "off",
+            "--integration-rejection",
+            "none",
+            "--integration-weighting",
+            "none",
+            "--resident-registration",
+            "off",
+            "--resident-fits-read-mode",
+            "astropy",
+            "--flat-floor",
+            "0.05",
+        ]
+    ) == 0
+
+    artifact = read_json(run / "resident_artifacts.json")["artifacts"][0]
+    io_pipeline = artifact["resident_io_pipeline"]
+    mode_resolution = io_pipeline["fits_read_mode_resolution"]
+
+    assert io_pipeline["fits_read_mode"] == "astropy"
+    assert io_pipeline["fits_read_mode_requested"] == "astropy"
+    assert io_pipeline["fits_read_mode_effective"] == "astropy"
+    assert io_pipeline["fits_backend_counts"]["astropy_scaled_memmap"] == 2
+    assert io_pipeline["raw_gpu_decode_enabled"] is False
+    assert mode_resolution["source"] == "explicit"
+    assert mode_resolution["explicit"] is True
+    assert mode_resolution["effective"] == "astropy"
+
+
 def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path):
     cuda_module_or_skip()
     dataset = _two_dark_group_dataset(tmp_path)

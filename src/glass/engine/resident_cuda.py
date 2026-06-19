@@ -2855,6 +2855,7 @@ def run_resident_calibration_integration(
     resident_output_maps: str = "audit",
     resident_winsorized_mode: str = RESIDENT_WINSORIZED_SIGMA_FAST_APPROX_MODE,
     resident_fits_read_mode: str = "astropy",
+    resident_fits_read_mode_resolution: dict[str, Any] | None = None,
 ) -> RunState:
     if integration_rejection not in {"auto", "none", "sigma_clip", "winsorized_sigma"}:
         raise ValueError("resident CUDA mode supports rejection=none, sigma_clip, or winsorized_sigma")
@@ -2866,6 +2867,18 @@ def run_resident_calibration_integration(
         raise ValueError("resident_winsorized_mode must be fast_approx or hardened_cpu_parity")
     if resident_fits_read_mode not in {"auto", "fast", "astropy", "native_direct", "native_u16_gpu"}:
         raise ValueError("resident_fits_read_mode must be auto, fast, astropy, native_direct, or native_u16_gpu")
+    resident_fits_read_mode_resolution_payload = (
+        copy.deepcopy(resident_fits_read_mode_resolution)
+        if isinstance(resident_fits_read_mode_resolution, dict)
+        else {
+            "schema_version": 1,
+            "requested": resident_fits_read_mode,
+            "effective": resident_fits_read_mode,
+            "explicit": True,
+            "source": "engine_direct_argument",
+            "reason": "resident engine called without CLI default-resolution metadata",
+        }
+    )
     if resident_registration not in {
         "off",
         "translation_preview",
@@ -7346,6 +7359,7 @@ def run_resident_calibration_integration(
                 "fits_read_mode": resident_fits_read_mode,
                 "fits_read_mode_requested": resident_fits_read_mode,
                 "fits_read_mode_effective": resident_fits_read_mode_effective,
+                "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                 "resident_fits_auto_selection": resident_fits_auto_selection,
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
@@ -7385,6 +7399,7 @@ def run_resident_calibration_integration(
                 "fits_read_mode": resident_fits_read_mode,
                 "fits_read_mode_requested": resident_fits_read_mode,
                 "fits_read_mode_effective": resident_fits_read_mode_effective,
+                "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                 "resident_fits_auto_selection": resident_fits_auto_selection,
                 "fits_backend_counts": fits_backend_counts,
                 "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,
@@ -7620,6 +7635,7 @@ def run_resident_calibration_integration(
                         "fits_read_mode": resident_fits_read_mode,
                         "fits_read_mode_requested": resident_fits_read_mode,
                         "fits_read_mode_effective": resident_fits_read_mode_effective,
+                        "fits_read_mode_resolution": resident_fits_read_mode_resolution_payload,
                         "resident_fits_auto_selection": resident_fits_auto_selection,
                         "fits_backend_counts": fits_backend_counts,
                         "fits_fast_fallback_reason_counts": fits_fallback_reason_counts,

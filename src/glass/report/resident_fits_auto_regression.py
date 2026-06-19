@@ -191,6 +191,7 @@ def build_resident_fits_auto_regression(
     expected_requested_mode: str = "auto",
     expected_effective_mode: str = "native_u16_gpu",
     expected_backend: str = "native_u16be_raw",
+    expected_resolution_source: str | None = None,
     max_rms_diff: float = 0.0,
     max_abs_diff: float = 0.0,
     max_total_vs_explicit_ratio: float = 1.10,
@@ -203,6 +204,7 @@ def build_resident_fits_auto_regression(
     compare_explicit_payload = _load_json_object(compare_explicit)
     compare_control_payload = _load_json_object(compare_control)
     io = run_payload["io"]
+    mode_resolution = io.get("fits_read_mode_resolution") if isinstance(io.get("fits_read_mode_resolution"), dict) else {}
     raw = run_payload["raw_selection"]
     mask = run_payload["mask_summary"]
     dq = run_payload["dq_summary"]
@@ -266,6 +268,14 @@ def build_resident_fits_auto_regression(
             dq,
         ),
     ]
+    if expected_resolution_source is not None:
+        checks.append(
+            _check(
+                "fits_read_mode_resolution_source_matches",
+                mode_resolution.get("source") == expected_resolution_source,
+                {"actual": mode_resolution.get("source"), "expected": expected_resolution_source},
+            )
+        )
     if expected_active is not None:
         checks.append(
             _check(
@@ -370,6 +380,7 @@ def build_resident_fits_auto_regression(
             "expected_requested_mode": expected_requested_mode,
             "expected_effective_mode": expected_effective_mode,
             "expected_backend": expected_backend,
+            "expected_resolution_source": expected_resolution_source,
             "max_rms_diff": float(max_rms_diff),
             "max_abs_diff": float(max_abs_diff),
             "max_total_vs_explicit_ratio": float(max_total_vs_explicit_ratio),
@@ -380,6 +391,7 @@ def build_resident_fits_auto_regression(
         "failed_checks": [item["name"] for item in failed],
         "summary": {
             "effective_mode": io.get("fits_read_mode_effective"),
+            "resolution_source": mode_resolution.get("source"),
             "backend_counts": backend_counts,
             "checked_frame_count": raw["checked_frame_count"],
             "eligible_frame_count": raw["eligible_frame_count"],
@@ -410,6 +422,7 @@ def write_resident_fits_auto_regression(
         f"- Status: {payload.get('status')}",
         f"- Passed: {payload.get('passed')}",
         f"- Effective mode: {summary.get('effective_mode')}",
+        f"- Resolution source: {summary.get('resolution_source')}",
         f"- Checked/eligible frames: {summary.get('checked_frame_count')} / {summary.get('eligible_frame_count')}",
         f"- Active/masked/unknown zero-weight: {summary.get('active_frame_count')} / {summary.get('masked_frame_count')} / {summary.get('unknown_zero_weight_frame_count')}",
         f"- Run elapsed s: {summary.get('run_elapsed_s')}",

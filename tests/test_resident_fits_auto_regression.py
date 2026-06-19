@@ -20,6 +20,7 @@ def _write_run(
     checked: int = 4,
     eligible: int = 4,
     selected: bool = True,
+    resolution_source: str = "resident_cuda_guarded_auto_default",
     active: int = 3,
     masked: int = 1,
     unknown_zero_weight: int = 0,
@@ -47,6 +48,15 @@ def _write_run(
                         if backend_count
                         else {"astropy_scaled_memmap": checked},
                         "raw_gpu_decode_enabled": effective == "native_u16_gpu",
+                        "fits_read_mode_resolution": {
+                            "schema_version": 1,
+                            "requested": None
+                            if resolution_source == "resident_cuda_guarded_auto_default"
+                            else requested,
+                            "effective": requested,
+                            "explicit": resolution_source == "explicit",
+                            "source": resolution_source,
+                        },
                         "resident_fits_auto_selection": {
                             "requested_mode": requested,
                             "effective_mode": effective,
@@ -124,6 +134,7 @@ def _build(paths: dict[str, Path]) -> dict:
         expected_active=3,
         expected_masked=1,
         expected_unknown_zero_weight=0,
+        expected_resolution_source="resident_cuda_guarded_auto_default",
     )
 
 
@@ -156,6 +167,16 @@ def test_resident_fits_auto_regression_detects_auto_fallback(tmp_path: Path) -> 
     assert payload["passed"] is False
     assert "fits_read_mode_effective_matches" in payload["failed_checks"]
     assert "raw_gpu_all_checked_frames_eligible" in payload["failed_checks"]
+
+
+def test_resident_fits_auto_regression_detects_non_default_source(tmp_path: Path) -> None:
+    paths = _fixture(tmp_path)
+    _write_run(paths["run"], resolution_source="explicit")
+
+    payload = _build(paths)
+
+    assert payload["passed"] is False
+    assert "fits_read_mode_resolution_source_matches" in payload["failed_checks"]
 
 
 def test_resident_fits_auto_regression_detects_compare_drift(tmp_path: Path) -> None:

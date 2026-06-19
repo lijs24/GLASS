@@ -8626,6 +8626,64 @@ Completed in Gate442:
   - re-run synthetic fallback tests and the 200-light benchmark to ensure no
     numerical or unexplained performance regression.
 
+Completed in Gate443:
+
+- Changed resident CUDA CLI default resolution so `glass run` and `glass audit`
+  use guarded `auto` FITS reading when the user does not explicitly pass
+  `--resident-fits-read-mode`.
+- Preserved explicit escape hatches:
+  - `--resident-fits-read-mode astropy`;
+  - `fast`;
+  - `native_direct`;
+  - `native_u16_gpu`.
+- Added default-resolution provenance to `run_timing.json`,
+  `resident_io_overlap`, and `resident_io_pipeline`:
+  - `source=resident_cuda_guarded_auto_default`;
+  - `requested=null`;
+  - `effective=auto`;
+  - `escape_hatch=--resident-fits-read-mode astropy`.
+- Extended `glass resident-fits-auto-regression` with
+  `--expected-resolution-source` so the benchmark can prove the default route,
+  not only explicit `auto`.
+- Added focused tests proving:
+  - omitted `--resident-fits-read-mode` defaults to guarded auto on compatible
+    u16/BZERO data;
+  - explicit `astropy` remains preserved and disables raw GPU decode;
+  - the regression audit fails when default provenance is wrong.
+- Real M38 H 200-light default-path run:
+  `C:\glass_runs\final_m38_h_200\glass_s2_gate443_default_guarded_auto_warm_20260619_235200`.
+- Real default-path audit:
+  `runs/checkpoints/s2_gate_443_default_guarded_auto_regression.json`, passed
+  with no failed checks.
+- Real timing and correctness:
+  - total runtime: `14.196302 s`;
+  - light read/upload/calibrate: `3.529007 s`;
+  - default source: `resident_cuda_guarded_auto_default`;
+  - effective backend: `native_u16be_raw=200`;
+  - compare vs Gate440 explicit raw-u16 GPU:
+    `rms_diff=0`, `max_abs_diff=0`;
+  - compare vs Gate438 astropy control:
+    `rms_diff=0`, `max_abs_diff=0`;
+  - DQ/mask closure remained `193 active`, `7 masked`,
+    `unknown_zero_weight=0`.
+
+### S2-Gate 444: Default Fallback Compatibility Matrix
+
+- Keep working on runtime mainline compatibility after the default read-mode
+  change.
+- Validate that the new default remains safe for unsupported/mixed inputs:
+  - default resident CUDA should choose guarded `auto`;
+  - compatible u16/BZERO groups should select `native_u16_gpu`;
+  - incompatible simple FITS groups should fall back to the bounded fast/astropy
+    path with recorded fallback reasons;
+  - explicit `astropy` should preserve compatibility behavior;
+  - CPU/tile paths must remain unaffected.
+- Add a compact machine-readable fallback matrix artifact or test fixture so
+  future default changes cannot silently remove the conservative path.
+- Run focused tests, full pytest, and use a small synthetic dataset rather than
+  another full 200-light benchmark unless the fallback implementation changes
+  resident image math.
+
 ## Gate Rules
 
 Each gate requires:
