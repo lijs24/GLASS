@@ -1335,6 +1335,18 @@ def _release_quality_publication_guard_present(summary: dict[str, Any]) -> bool:
             "release_default_promotion_check",
             "release_matrix_default_match_check",
             "release_matrix_manifest_match_check",
+            "matrix_final_checks_ready",
+            "matrix_final_checks_match",
+            "matrix_raw_final_checks_ready",
+            "matrix_phase2_final_checks_ready",
+            "matrix_default_final_checks_ready",
+            "matrix_default_final_checks_match",
+            "matrix_default_raw_final_checks_ready",
+            "matrix_default_phase2_final_checks_ready",
+            "default_promotion_final_checks_ready",
+            "default_promotion_final_checks_match",
+            "default_promotion_raw_final_checks_ready",
+            "default_promotion_phase2_final_checks_ready",
         )
     )
 
@@ -1370,6 +1382,72 @@ def _release_quality_publication_guard_final_checks_ready(
     )
 
 
+def _release_quality_publication_guard_final_evidence_present(
+    summary: dict[str, Any],
+) -> bool:
+    return any(
+        summary.get(field) is not None
+        for field in (
+            "matrix_final_checks_ready",
+            "matrix_final_checks_match",
+            "matrix_raw_final_checks_ready",
+            "matrix_phase2_final_checks_ready",
+            "matrix_default_final_checks_ready",
+            "matrix_default_final_checks_match",
+            "matrix_default_raw_final_checks_ready",
+            "matrix_default_phase2_final_checks_ready",
+            "default_promotion_final_checks_ready",
+            "default_promotion_final_checks_match",
+            "default_promotion_raw_final_checks_ready",
+            "default_promotion_phase2_final_checks_ready",
+        )
+    )
+
+
+def _release_quality_publication_guard_final_evidence_layer_ready(
+    summary: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    final_ready = summary.get(f"{prefix}_final_checks_ready")
+    final_match = summary.get(f"{prefix}_final_checks_match")
+    raw_ready = summary.get(f"{prefix}_raw_final_checks_ready")
+    phase2_ready = summary.get(f"{prefix}_phase2_final_checks_ready")
+    if (
+        final_ready is None
+        and final_match is None
+        and raw_ready is None
+        and phase2_ready is None
+    ):
+        return False
+    compatible_missing = (
+        final_ready is True
+        and final_match is True
+        and raw_ready is None
+        and phase2_ready is None
+    )
+    return compatible_missing or (
+        final_ready is True
+        and final_match is True
+        and raw_ready is True
+        and phase2_ready is True
+    )
+
+
+def _release_quality_publication_guard_final_evidence_ready(
+    summary: dict[str, Any],
+) -> bool:
+    if not _release_quality_publication_guard_final_evidence_present(summary):
+        return True
+    return all(
+        _release_quality_publication_guard_final_evidence_layer_ready(
+            summary,
+            prefix=prefix,
+        )
+        for prefix in ("matrix", "matrix_default", "default_promotion")
+    )
+
+
 def _release_quality_publication_guard_ready(summary: dict[str, Any]) -> bool:
     if not _release_quality_publication_guard_present(summary):
         return True
@@ -1399,6 +1477,7 @@ def _release_quality_publication_guard_ready(summary: dict[str, Any]) -> bool:
             ]
         )
         and _release_quality_publication_guard_final_checks_ready(summary)
+        and _release_quality_publication_guard_final_evidence_ready(summary)
     )
 
 
@@ -1506,6 +1585,42 @@ def _publish_preflight_release_quality_publication_guard_summary(
                 "publication_guard_matches_manifest"
             ),
         ),
+        "matrix_final_checks_ready": summary.get(
+            "matrix_release_decision_release_quality_publication_guard_final_checks_ready"
+        ),
+        "matrix_final_checks_match": summary.get(
+            "matrix_release_decision_release_quality_publication_guard_final_checks_match"
+        ),
+        "matrix_raw_final_checks_ready": summary.get(
+            "matrix_release_decision_release_quality_publication_guard_raw_final_checks_ready"
+        ),
+        "matrix_phase2_final_checks_ready": summary.get(
+            "matrix_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+        ),
+        "matrix_default_final_checks_ready": summary.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_ready"
+        ),
+        "matrix_default_final_checks_match": summary.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_match"
+        ),
+        "matrix_default_raw_final_checks_ready": summary.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready"
+        ),
+        "matrix_default_phase2_final_checks_ready": summary.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+        ),
+        "default_promotion_final_checks_ready": summary.get(
+            "default_promotion_release_decision_release_quality_publication_guard_final_checks_ready"
+        ),
+        "default_promotion_final_checks_match": summary.get(
+            "default_promotion_release_decision_release_quality_publication_guard_final_checks_match"
+        ),
+        "default_promotion_raw_final_checks_ready": summary.get(
+            "default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready"
+        ),
+        "default_promotion_phase2_final_checks_ready": summary.get(
+            "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+        ),
     }
     result["present"] = _release_quality_publication_guard_present(result)
     result["ready"] = _release_quality_publication_guard_ready(result)
@@ -1611,6 +1726,42 @@ def _phase2_publish_preflight_release_quality_publication_guard_summary(
                 "publication_guard_matches_manifest"
             )
         ),
+        "matrix_final_checks_ready": preflight.get(
+            "matrix_release_decision_release_quality_publication_guard_final_checks_ready"
+        ),
+        "matrix_final_checks_match": preflight.get(
+            "matrix_release_decision_release_quality_publication_guard_final_checks_match"
+        ),
+        "matrix_raw_final_checks_ready": preflight.get(
+            "matrix_release_decision_release_quality_publication_guard_raw_final_checks_ready"
+        ),
+        "matrix_phase2_final_checks_ready": preflight.get(
+            "matrix_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+        ),
+        "matrix_default_final_checks_ready": preflight.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_ready"
+        ),
+        "matrix_default_final_checks_match": preflight.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_match"
+        ),
+        "matrix_default_raw_final_checks_ready": preflight.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready"
+        ),
+        "matrix_default_phase2_final_checks_ready": preflight.get(
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+        ),
+        "default_promotion_final_checks_ready": preflight.get(
+            "default_promotion_release_decision_release_quality_publication_guard_final_checks_ready"
+        ),
+        "default_promotion_final_checks_match": preflight.get(
+            "default_promotion_release_decision_release_quality_publication_guard_final_checks_match"
+        ),
+        "default_promotion_raw_final_checks_ready": preflight.get(
+            "default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready"
+        ),
+        "default_promotion_phase2_final_checks_ready": preflight.get(
+            "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+        ),
         "phase2_check_passed": _check_passed(
             payload,
             "windows_publish_preflight_release_quality_publication_guard_passed",
@@ -1654,6 +1805,18 @@ def _release_quality_publication_guard_summaries_match(
         "release_default_promotion_check",
         "release_matrix_default_match_check",
         "release_matrix_manifest_match_check",
+        "matrix_final_checks_ready",
+        "matrix_final_checks_match",
+        "matrix_raw_final_checks_ready",
+        "matrix_phase2_final_checks_ready",
+        "matrix_default_final_checks_ready",
+        "matrix_default_final_checks_match",
+        "matrix_default_raw_final_checks_ready",
+        "matrix_default_phase2_final_checks_ready",
+        "default_promotion_final_checks_ready",
+        "default_promotion_final_checks_match",
+        "default_promotion_raw_final_checks_ready",
+        "default_promotion_phase2_final_checks_ready",
         "ready",
     )
     return all(phase2_summary.get(field) == preflight_summary.get(field) for field in fields)

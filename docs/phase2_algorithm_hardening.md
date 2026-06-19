@@ -6872,6 +6872,27 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 383: StackEngine Publication-Audit Release Quality Final Evidence
+
+- Carry Gate382 Phase2 publish-preflight final release quality evidence into
+  `glass stack-engine-publication-audit`.
+- Preserve legacy compatibility when both raw publish-preflight and Phase2
+  status omit the new final evidence fields, while requiring
+  ready/match/raw/Phase2 final evidence to pass once present.
+- Block StackEngine publication-audit readiness when raw publish-preflight final
+  evidence fails, Phase2 final evidence fails, or Phase2 drops final evidence
+  that raw publish-preflight carried.
+- Surface matrix, matrix-default, and default-promotion final evidence in
+  publication-audit JSON layers and release-quality guard checks.
+- Add focused tests for green evidence surfacing, compatible-missing final
+  evidence, failed raw evidence, failed Phase2 evidence, and Phase2 evidence
+  loss.
+- Keep this gate StackEngine publication-audit scoped: no quality metric math
+  change, no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA kernel
+  change, no runtime default change, no package upload, no GitHub release
+  creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

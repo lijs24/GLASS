@@ -29,6 +29,23 @@ def _stack_fields(*, ready: bool = True, gap_count: int = 0) -> dict[str, object
     }
 
 
+def _release_quality_final_evidence_fields(
+    prefix: str,
+    *,
+    ready: bool,
+    compatible_missing: bool = False,
+) -> dict[str, object]:
+    final_ready = True if compatible_missing else ready
+    raw_ready = None if compatible_missing else ready
+    phase2_ready = None if compatible_missing else ready
+    return {
+        f"{prefix}_final_checks_ready": final_ready,
+        f"{prefix}_final_checks_match": True,
+        f"{prefix}_raw_final_checks_ready": raw_ready,
+        f"{prefix}_phase2_final_checks_ready": phase2_ready,
+    }
+
+
 def _write_chain(
     tmp_path: Path,
     *,
@@ -69,6 +86,12 @@ def _write_chain(
     phase2_release_quality_publication_guard_final_checks_ready: bool | None = None,
     include_release_quality_publication_guard_final_checks: bool = True,
     include_phase2_release_quality_publication_guard_final_checks: bool = True,
+    release_quality_publication_guard_final_evidence_ready: bool | None = None,
+    phase2_release_quality_publication_guard_final_evidence_ready: bool | None = None,
+    include_release_quality_publication_guard_final_evidence: bool = True,
+    include_phase2_release_quality_publication_guard_final_evidence: bool = True,
+    release_quality_publication_guard_final_evidence_compatible_missing: bool = False,
+    phase2_release_quality_publication_guard_final_evidence_compatible_missing: bool = False,
 ) -> dict[str, Path]:
     source_fields = _stack_fields(ready=source_ready)
     matrix_fields = _stack_fields(ready=matrix_ready, gap_count=matrix_gap_count)
@@ -122,13 +145,43 @@ def _write_chain(
         if phase2_release_quality_publication_guard_final_checks_ready is None
         else phase2_release_quality_publication_guard_final_checks_ready
     )
-    release_quality_guard_chain_ready = release_quality_publication_guard_ready and (
+    release_quality_final_evidence_ready = (
+        release_quality_final_checks_ready
+        if release_quality_publication_guard_final_evidence_ready is None
+        else release_quality_publication_guard_final_evidence_ready
+    )
+    phase2_release_quality_final_evidence_ready = (
+        phase2_release_quality_final_checks_ready
+        if phase2_release_quality_publication_guard_final_evidence_ready is None
+        else phase2_release_quality_publication_guard_final_evidence_ready
+    )
+    release_quality_final_checks_passed = (
         release_quality_final_checks_ready
         or not include_release_quality_publication_guard_final_checks
     )
-    phase2_release_quality_guard_chain_ready = phase2_release_quality_guard_ready and (
+    phase2_release_quality_final_checks_passed = (
         phase2_release_quality_final_checks_ready
         or not include_phase2_release_quality_publication_guard_final_checks
+    )
+    release_quality_final_evidence_passed = (
+        release_quality_final_evidence_ready
+        or release_quality_publication_guard_final_evidence_compatible_missing
+        or not include_release_quality_publication_guard_final_evidence
+    )
+    phase2_release_quality_final_evidence_passed = (
+        phase2_release_quality_final_evidence_ready
+        or phase2_release_quality_publication_guard_final_evidence_compatible_missing
+        or not include_phase2_release_quality_publication_guard_final_evidence
+    )
+    release_quality_guard_chain_ready = (
+        release_quality_publication_guard_ready
+        and release_quality_final_checks_passed
+        and release_quality_final_evidence_passed
+    )
+    phase2_release_quality_guard_chain_ready = (
+        phase2_release_quality_guard_ready
+        and phase2_release_quality_final_checks_passed
+        and phase2_release_quality_final_evidence_passed
     )
     resident_status = "passed" if resident_winsorized_ready else "failed"
     phase2_resident_status = "passed" if phase2_winsorized_ready else "failed"
@@ -727,6 +780,31 @@ def _write_chain(
                         phase2_release_quality_final_checks_ready
                     ),
                 }
+            )
+        if include_phase2_release_quality_publication_guard_final_evidence:
+            phase2_payload["publish_preflight"].update(
+                _release_quality_final_evidence_fields(
+                    "matrix_release_decision_release_quality_publication_guard",
+                    ready=phase2_release_quality_final_evidence_ready,
+                    compatible_missing=phase2_release_quality_publication_guard_final_evidence_compatible_missing,
+                )
+            )
+            phase2_payload["publish_preflight"].update(
+                _release_quality_final_evidence_fields(
+                    (
+                        "matrix_default_promotion_release_decision_release_quality_"
+                        "publication_guard"
+                    ),
+                    ready=phase2_release_quality_final_evidence_ready,
+                    compatible_missing=phase2_release_quality_publication_guard_final_evidence_compatible_missing,
+                )
+            )
+            phase2_payload["publish_preflight"].update(
+                _release_quality_final_evidence_fields(
+                    "default_promotion_release_decision_release_quality_publication_guard",
+                    ready=phase2_release_quality_final_evidence_ready,
+                    compatible_missing=phase2_release_quality_publication_guard_final_evidence_compatible_missing,
+                )
             )
         phase2_payload["checks"].append(
             {
@@ -1416,6 +1494,37 @@ def _write_chain(
                     },
                 ]
             )
+        if include_release_quality_publication_guard_final_evidence:
+            preflight_payload["summary"].update(
+                _release_quality_final_evidence_fields(
+                    "matrix_release_decision_release_quality_publication_guard",
+                    ready=release_quality_final_evidence_ready,
+                    compatible_missing=release_quality_publication_guard_final_evidence_compatible_missing,
+                )
+            )
+            preflight_payload["summary"].update(
+                _release_quality_final_evidence_fields(
+                    (
+                        "matrix_default_promotion_release_decision_release_quality_"
+                        "publication_guard"
+                    ),
+                    ready=release_quality_final_evidence_ready,
+                    compatible_missing=release_quality_publication_guard_final_evidence_compatible_missing,
+                )
+            )
+            preflight_payload["summary"].update(
+                _release_quality_final_evidence_fields(
+                    "default_promotion_release_decision_release_quality_publication_guard",
+                    ready=release_quality_final_evidence_ready,
+                    compatible_missing=release_quality_publication_guard_final_evidence_compatible_missing,
+                )
+            )
+            preflight_payload["checks"].append(
+                {
+                    "name": "release_quality_publication_guard_final_evidence_ready",
+                    "passed": release_quality_final_evidence_passed,
+                }
+            )
         write_json(paths["preflight"], preflight_payload)
     return paths
 
@@ -1485,6 +1594,18 @@ def test_stack_engine_publication_audit_passes_ready_chain(tmp_path: Path):
         ]
         is True
     )
+    release_quality_guard = payload["layers"][
+        "publish_preflight_release_quality_publication_guard"
+    ]
+    phase2_release_quality_guard = payload["layers"][
+        "phase2_publish_preflight_release_quality_publication_guard"
+    ]
+    assert release_quality_guard["matrix_final_checks_ready"] is True
+    assert release_quality_guard["matrix_final_checks_match"] is True
+    assert release_quality_guard["matrix_raw_final_checks_ready"] is True
+    assert release_quality_guard["matrix_phase2_final_checks_ready"] is True
+    assert phase2_release_quality_guard["matrix_raw_final_checks_ready"] is True
+    assert phase2_release_quality_guard["matrix_phase2_final_checks_ready"] is True
     assert (
         checks[
             "phase2_publish_preflight_integration_engine_policy_matches_publish_preflight"
@@ -1786,6 +1907,165 @@ def test_stack_engine_publication_audit_allows_legacy_release_quality_guard_with
     )
     assert (
         match_check["evidence"]["phase2_publish_preflight"]["release_matrix_check"]
+        is None
+    )
+
+
+def test_stack_engine_publication_audit_allows_compatible_missing_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        release_quality_publication_guard_final_evidence_compatible_missing=True,
+        phase2_release_quality_publication_guard_final_evidence_compatible_missing=True,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "passed"
+    assert (
+        checks["publish_preflight_release_quality_publication_guard_ready"][
+            "passed"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "phase2_publish_preflight_release_quality_publication_guard_ready"
+        ]["passed"]
+        is True
+    )
+    match_check = checks[
+        "phase2_publish_preflight_release_quality_publication_guard_matches_publish_preflight"
+    ]
+    assert match_check["passed"] is True
+    evidence = match_check["evidence"]["publish_preflight"]
+    assert evidence["matrix_final_checks_ready"] is True
+    assert evidence["matrix_final_checks_match"] is True
+    assert evidence["matrix_raw_final_checks_ready"] is None
+    assert evidence["matrix_phase2_final_checks_ready"] is None
+
+
+def test_stack_engine_publication_audit_blocks_failed_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        release_quality_publication_guard_final_checks_ready=True,
+        release_quality_publication_guard_final_evidence_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    release_check = checks[
+        "publish_preflight_release_quality_publication_guard_ready"
+    ]
+    assert release_check["passed"] is False
+    evidence = release_check["evidence"]
+    assert evidence["matrix_ready"] is True
+    assert evidence["release_matrix_check"] is True
+    assert evidence["matrix_final_checks_ready"] is False
+    assert evidence["matrix_raw_final_checks_ready"] is False
+    assert evidence["matrix_phase2_final_checks_ready"] is False
+
+
+def test_stack_engine_publication_audit_blocks_failed_phase2_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        phase2_release_quality_publication_guard_final_checks_ready=True,
+        phase2_release_quality_publication_guard_final_evidence_ready=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert (
+        checks["publish_preflight_release_quality_publication_guard_ready"][
+            "passed"
+        ]
+        is True
+    )
+    phase2_check = checks[
+        "phase2_publish_preflight_release_quality_publication_guard_ready"
+    ]
+    assert phase2_check["passed"] is False
+    assert phase2_check["evidence"]["matrix_final_checks_ready"] is False
+    match_check = checks[
+        "phase2_publish_preflight_release_quality_publication_guard_matches_publish_preflight"
+    ]
+    assert match_check["passed"] is False
+
+
+def test_stack_engine_publication_audit_blocks_phase2_release_quality_final_evidence_loss(
+    tmp_path: Path,
+):
+    paths = _write_chain(
+        tmp_path,
+        include_phase2_release_quality_publication_guard_final_evidence=False,
+    )
+
+    payload = build_stack_engine_publication_audit(
+        stack_engine_contract=paths["stack"],
+        phase2_status=paths["phase2"],
+        default_promotion_manifest=paths["promotion"],
+        windows_release_matrix=paths["matrix"],
+        github_release_plan=paths["github"],
+        publish_preflight=paths["preflight"],
+    )
+
+    checks = {str(item["name"]): item for item in payload["checks"]}
+    assert payload["status"] == "blocked"
+    assert (
+        checks["publish_preflight_release_quality_publication_guard_ready"][
+            "passed"
+        ]
+        is True
+    )
+    assert (
+        checks[
+            "phase2_publish_preflight_release_quality_publication_guard_ready"
+        ]["passed"]
+        is True
+    )
+    match_check = checks[
+        "phase2_publish_preflight_release_quality_publication_guard_matches_publish_preflight"
+    ]
+    assert match_check["passed"] is False
+    assert (
+        match_check["evidence"]["publish_preflight"]["matrix_final_checks_ready"]
+        is True
+    )
+    assert (
+        match_check["evidence"]["phase2_publish_preflight"][
+            "matrix_final_checks_ready"
+        ]
         is None
     )
 
