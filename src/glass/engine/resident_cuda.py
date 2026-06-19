@@ -34,6 +34,11 @@ from glass.engine.resident_frame_mask import (
     summarize_resident_frame_mask_contracts,
     validate_resident_frame_mask_contract,
 )
+from glass.engine.resident_master_cache import (
+    build_resident_master_cache_group,
+    summarize_resident_master_cache_groups,
+    validate_resident_master_cache_payload,
+)
 from glass.engine.resident_registration_quality import (
     DEFAULT_RESIDENT_REGISTRATION_QUALITY_MIN_INLIERS,
     evaluate_resident_registration_quality,
@@ -2952,6 +2957,7 @@ def run_resident_calibration_integration(
     registration_quality_decisions_by_frame: dict[str, dict[str, Any]] = {}
     resident_frame_mask_contract_groups: list[dict[str, Any]] = []
     resident_dq_pixel_closure_groups: list[dict[str, Any]] = []
+    resident_master_cache_groups: list[dict[str, Any]] = []
     local_norm_groups: list[dict[str, Any]] = []
     tile_local_policy_any_enabled = False
     tile_local_policy_any_applied = False
@@ -7033,6 +7039,11 @@ def run_resident_calibration_integration(
                 "flat_count": first_master_stats.get("flat_count"),
                 "sets": master_stats_sets,
             }
+            group_master_cache = build_resident_master_cache_group(
+                filter_name=filter_name,
+                master_stats=master_stats,
+            )
+            resident_master_cache_groups.append(group_master_cache)
             memory_estimate = _memory_estimate(len(light_frames), height, width)
             read_timing = _timing_summary(per_frame_read_s)
             read_worker_timing = _timing_summary(per_frame_read_worker_s)
@@ -7210,6 +7221,18 @@ def run_resident_calibration_integration(
                             "geometric_warp_coverage_frame_count": group_dq_pixel_closure[
                                 "geometric_warp_coverage_frame_count"
                             ],
+                        },
+                    },
+                    "resident_master_cache": {
+                        "path": str(run / "resident_master_cache.json"),
+                        "summary": {
+                            "passed": group_master_cache["passed"],
+                            "status": group_master_cache["status"],
+                            "set_count": group_master_cache["set_count"],
+                            "cache_hit_count": group_master_cache["cache_hit_count"],
+                            "cache_miss_count": group_master_cache["cache_miss_count"],
+                            "cache_scope_counts": group_master_cache["cache_scope_counts"],
+                            "total_required_bytes": group_master_cache["total_required_bytes"],
                         },
                     },
                     "memory_estimate": memory_estimate,
@@ -8228,6 +8251,18 @@ def run_resident_calibration_integration(
                             ],
                         },
                     },
+                    "resident_master_cache": {
+                        "path": str(run / "resident_master_cache.json"),
+                        "summary": {
+                            "passed": group_master_cache["passed"],
+                            "status": group_master_cache["status"],
+                            "set_count": group_master_cache["set_count"],
+                            "cache_hit_count": group_master_cache["cache_hit_count"],
+                            "cache_miss_count": group_master_cache["cache_miss_count"],
+                            "cache_scope_counts": group_master_cache["cache_scope_counts"],
+                            "total_required_bytes": group_master_cache["total_required_bytes"],
+                        },
+                    },
                     "hardened_winsorized_timing_s": hardened_winsorized_timing,
                     "resident_local_normalization": local_norm_mode,
                     "estimated_peak_gib": memory_estimate["estimated_peak_gib"],
@@ -8255,6 +8290,7 @@ def run_resident_calibration_integration(
         registration_quality_path = run / "resident_registration_quality.json"
         resident_frame_masks_path = run / "resident_frame_masks.json"
         resident_dq_pixel_closure_path = run / "resident_dq_pixel_closure.json"
+        resident_master_cache_path = run / "resident_master_cache.json"
         resident_frame_mask_payload = {
             "schema_version": 1,
             "artifact": "resident_frame_mask_contract",
@@ -8283,6 +8319,16 @@ def run_resident_calibration_integration(
             failed = ", ".join(resident_dq_pixel_closure_payload["summary"].get("failed_groups") or [])
             raise RuntimeError(f"resident DQ pixel closure failed for group(s): {failed}")
         write_json(resident_dq_pixel_closure_path, resident_dq_pixel_closure_payload)
+        resident_master_cache_payload = {
+            "schema_version": 1,
+            "artifact": "resident_master_cache",
+            "source_stage": "resident_calibrated_stack",
+            "backend": "cuda_resident_stack",
+            "summary": summarize_resident_master_cache_groups(resident_master_cache_groups),
+            "groups": resident_master_cache_groups,
+        }
+        validate_resident_master_cache_payload(resident_master_cache_payload)
+        write_json(resident_master_cache_path, resident_master_cache_payload)
         registration_quality_decisions = list(registration_quality_decisions_by_frame.values())
         registration_quality_payload = {
             "schema_version": 1,
@@ -8420,6 +8466,8 @@ def run_resident_calibration_integration(
                 "resident_frame_mask_contract_summary": resident_frame_mask_payload["summary"],
                 "resident_dq_pixel_closure_path": str(resident_dq_pixel_closure_path),
                 "resident_dq_pixel_closure_summary": resident_dq_pixel_closure_payload["summary"],
+                "resident_master_cache_path": str(resident_master_cache_path),
+                "resident_master_cache_summary": resident_master_cache_payload["summary"],
                 "warnings": integration_warnings,
             },
         )
@@ -8478,6 +8526,15 @@ def run_resident_calibration_integration(
             PipelineArtifact(
                 stage="resident_dq_pixel_closure",
                 path=str(resident_dq_pixel_closure_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_master_cache",
+                path=str(resident_master_cache_path),
                 format="json",
                 created_at=now_iso(),
                 source_frames=list(frames.keys()),

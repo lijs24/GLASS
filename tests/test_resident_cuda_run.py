@@ -3406,8 +3406,13 @@ def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path
     assert main([*base_args, "--out", str(run_a)]) == 0
     assert main([*base_args, "--out", str(run_b)]) == 0
 
-    first_sets = read_json(run_a / "resident_artifacts.json")["artifacts"][0]["master_stats"]["sets"]
-    second_artifact = read_json(run_b / "resident_artifacts.json")["artifacts"][0]
+    first_resident = read_json(run_a / "resident_artifacts.json")
+    second_resident = read_json(run_b / "resident_artifacts.json")
+    first_cache = read_json(run_a / "resident_master_cache.json")
+    second_cache = read_json(run_b / "resident_master_cache.json")
+    second_integration = read_json(run_b / "integration_results.json")
+    first_sets = first_resident["artifacts"][0]["master_stats"]["sets"]
+    second_artifact = second_resident["artifacts"][0]
     second_sets = second_artifact["master_stats"]["sets"]
 
     assert cache.exists()
@@ -3418,6 +3423,17 @@ def test_cli_resident_cuda_shared_master_cache_reuses_across_runs(tmp_path: Path
     assert {item["cache_hit"] for item in second_sets.values()} == {True}
     assert second_artifact["resident_io_pipeline"]["master_cache_scope"] == "shared"
     assert second_artifact["resident_io_pipeline"]["master_cache_dir"] == str(cache)
+    assert first_cache["summary"]["cache_miss_count"] == len(first_sets)
+    assert first_cache["summary"]["cache_hit_count"] == 0
+    assert second_cache["summary"]["cache_hit_count"] == len(second_sets)
+    assert second_cache["summary"]["cache_miss_count"] == 0
+    assert second_cache["summary"]["passed"] is True
+    assert second_cache["summary"]["cache_scope_counts"] == {"shared": len(second_sets)}
+    assert all(entry["complete"] for group in second_cache["groups"] for entry in group["entries"])
+    assert second_artifact["resident_master_cache"]["path"] == str(run_b / "resident_master_cache.json")
+    assert second_artifact["resident_master_cache"]["summary"]["cache_hit_count"] == len(second_sets)
+    assert second_integration["resident_master_cache_path"] == str(run_b / "resident_master_cache.json")
+    assert second_integration["resident_master_cache_summary"]["cache_hit_count"] == len(second_sets)
     assert "--resident-master-cache-dir" in (run_b / "run_command.txt").read_text(encoding="utf-8")
 
 

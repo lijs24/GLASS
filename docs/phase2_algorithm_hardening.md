@@ -8213,20 +8213,79 @@ integration where applicable.
 
 - Continue from Gate435 with a substantive runtime gate only. No release,
   default-promotion, package upload, or report-contract-only work.
-- Optimize the two largest remaining real-run buckets:
-  - `master_build_or_load` at about `11.4 s`;
-  - `light_read_upload_calibrate` at about `17.5 s`, with decode work already
-    heavily overlapped but still dominating wall time.
+- Added a first-class resident master-cache manifest:
+  - new helper: `src/glass/engine/resident_master_cache.py`;
+  - resident CUDA writes `resident_master_cache.json`;
+  - each manifest entry records cache key, fingerprint, scope, hit/miss state,
+    required `.npy` and stats files, byte totals, and completeness;
+  - `resident_artifacts.json` and `integration_results.json` link to the cache
+    manifest summary.
+- Real M38 H 200-light cold/warm validation used a new shared cache directory:
+  `C:\glass_runs\final_m38_h_200\glass_s2_gate436_shared_master_cache_20260619_204953`.
+- Cold shared-cache run:
+  - run directory:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate436_cold_shared_cache_20260619_204953`;
+  - total elapsed time: `29.058186 s`;
+  - `master_build_or_load`: `11.177422 s`;
+  - `light_read_upload_calibrate`: `17.337112 s`;
+  - `resident_registration_warp`: `1.636686 s`;
+  - `resident_integration`: `0.299385 s`;
+  - output write: `2.557732 s`;
+  - cache summary: `1 miss`, `0 hits`, `1 complete shared set`,
+    `739,816,130` required cache bytes.
+- Warm shared-cache run:
+  - run directory:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate436_warm_shared_cache_20260619_204953`;
+  - total elapsed time: `17.406804 s`;
+  - `master_build_or_load`: `0.396202 s`;
+  - `light_read_upload_calibrate`: `6.636808 s`;
+  - `resident_registration_warp`: `1.638581 s`;
+  - `resident_integration`: `0.294612 s`;
+  - output write: `2.379084 s`;
+  - cache summary: `1 hit`, `0 misses`, `1 complete shared set`,
+    `739,816,130` required cache bytes.
+- Performance result:
+  - warm total speedup vs cold: `1.669358x`;
+  - warm `master_build_or_load` speedup vs cold: `28.211388x`;
+  - estimated peak VRAM remained `47.311736 GiB`.
+- Scientific and contract invariants:
+  - no explicit `--exclude-frame-id` masks were used;
+  - registration status remained `192 ok`, `7 excluded`, `1 reference`;
+  - frame-mask summary remained `193 active`, `7 masked`,
+    `0 unaudited zero-weight`;
+  - DQ pixel closure passed on both cold and warm runs;
+  - cold vs Gate435 and warm vs Gate435 both produced shape-match true,
+    p50/p90/p99/p999 absolute delta `0.0` / `0.0` / `0.0` / `0.0`,
+    RMS delta `0.0`, relative RMS `0.0`, robust fit scale `1.0`,
+    offset `0.0`.
+- Focused tests:
+  `tests/test_resident_master_cache.py`,
+  `tests/test_resident_dq_pixel_closure.py`,
+  `tests/test_resident_frame_mask_contract.py`,
+  `tests/test_resident_cuda_run.py`, `tests/test_resident_result_contract.py`,
+  and `tests/test_cli_smoke.py` passed together.
+- Full test suite passed: `1024 passed`.
+- Interpretation: Gate436 converts the existing shared resident master-cache
+  mechanism into an auditable default-safe performance path. The cache removes
+  the cold master-build bottleneck for repeated same-calibration runs without
+  changing output pixels. The next warm-cache bottleneck is now
+  `light_read_upload_calibrate`.
+
+### S2-Gate 437: Warm-Cache Light Read/Upload/Calibration Pipeline
+
+- Continue from Gate436 with a substantive runtime gate only.
+- Target the warm-cache `light_read_upload_calibrate` bucket, currently about
+  `6.64 s` on the 200-light M38 H run after master cache reuse.
 - Required work:
-  - add or harden a persistent content-addressed resident master cache path for
-    repeated same-calibration runs without weakening run-local auditability;
-  - benchmark cold and warm 200-light runs with the Gate435 recipe;
-  - preserve `193 active`, `7 masked`, DQ pixel closure pass, and zero output
-    delta against Gate435 unless a documented algorithmic change explains it;
-  - record per-stage timing, overlap efficiency, output write timing, peak VRAM,
-    and cache-hit evidence in checkpoint artifacts.
-- Do not promote fused warp/matrix or new registration defaults in this gate
-  unless the numerical effect is quantified against Gate435 first.
+  - profile whether the remaining warm bucket is dominated by FITS decode,
+    pinned-memory copy, H2D transfer, CUDA calibration store, or orchestration;
+  - improve the prefetch/pinned-ring/calibration-batch path only when the change
+    preserves Gate436 output parity and DQ/master-cache artifacts;
+  - benchmark a controlled warm-cache 200-light run against Gate436 warm;
+  - preserve `193 active`, `7 masked`, DQ pixel closure pass, master-cache hit,
+    and zero output delta unless an algorithmic change is explicitly justified.
+- Do not change resident registration defaults, fused warp promotion, rejection
+  semantics, or package/release evidence in this gate.
 
 ## Gate Rules
 

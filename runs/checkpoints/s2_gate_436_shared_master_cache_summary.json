@@ -1,0 +1,140 @@
+{
+  "gate": "S2-Gate 436",
+  "title": "Resident Cold/Warm Throughput Optimization",
+  "status": "passed",
+  "shared_cache_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_shared_master_cache_20260619_204953",
+  "cold_run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_cold_shared_cache_20260619_204953",
+  "warm_run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_warm_shared_cache_20260619_204953",
+  "baseline_run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate435_dq_pixel_closure_20260619_203306",
+  "cold_compare_report": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_cold_vs_gate435_compare.html",
+  "cold_compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_cold_vs_gate435_compare.json",
+  "warm_compare_report": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_warm_vs_gate435_compare.html",
+  "warm_compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_warm_vs_gate435_compare.json",
+  "cuda": {
+    "available": true,
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21",
+    "doctor_report": "runs/checkpoints/s2_gate_436_cuda_doctor.json"
+  },
+  "real_200_light": {
+    "plan": "C:\\glass_runs\\final_m38_h_200\\glass_current_20260514_154556\\processing_plan.json",
+    "frame_count": 200,
+    "active_frame_count": 193,
+    "masked_frame_count": 7,
+    "reference_frame_count": 1,
+    "registration_status_counts": {
+      "ok": 192,
+      "excluded": 7,
+      "reference": 1
+    },
+    "masked_frame_ids": [
+      "F000160",
+      "F000213",
+      "F000214",
+      "F000215",
+      "F000216",
+      "F000217",
+      "F000218"
+    ],
+    "output_map_policy": "audit"
+  },
+  "cold_timing_s": {
+    "total_elapsed": 29.058186499984004,
+    "master_build_or_load": 11.177422399981879,
+    "light_read_upload_calibrate": 17.337112099980004,
+    "light_read_overlap_saved": 34.03276009959518,
+    "resident_registration_warp": 1.6366860001289751,
+    "resident_integration": 0.299385499994969,
+    "output_write": 2.557731699984288
+  },
+  "warm_timing_s": {
+    "total_elapsed": 17.40680379999685,
+    "master_build_or_load": 0.3962024999782443,
+    "light_read_upload_calibrate": 6.636807500006398,
+    "light_read_overlap_saved": 34.41714089969173,
+    "resident_registration_warp": 1.6385811002983246,
+    "resident_integration": 0.2946123000001535,
+    "output_write": 2.3790835999825504
+  },
+  "performance": {
+    "warm_speedup_vs_cold": 1.669358,
+    "warm_master_build_or_load_speedup_vs_cold": 28.211388,
+    "estimated_peak_gib": 47.3117358982563
+  },
+  "master_cache": {
+    "artifact": "resident_master_cache.json",
+    "cold": {
+      "passed": true,
+      "set_count": 1,
+      "cache_hit_count": 0,
+      "cache_miss_count": 1,
+      "complete_set_count": 1,
+      "incomplete_set_count": 0,
+      "cache_scope_counts": {
+        "shared": 1
+      },
+      "total_required_bytes": 739816130
+    },
+    "warm": {
+      "passed": true,
+      "set_count": 1,
+      "cache_hit_count": 1,
+      "cache_miss_count": 0,
+      "complete_set_count": 1,
+      "incomplete_set_count": 0,
+      "cache_scope_counts": {
+        "shared": 1
+      },
+      "total_required_bytes": 739816130
+    }
+  },
+  "dq_pixel_closure": {
+    "cold_passed": true,
+    "warm_passed": true,
+    "group_count": 1,
+    "failed_group_count": 0
+  },
+  "gate436_vs_gate435_compare": {
+    "cold": {
+      "shape_match": true,
+      "compared_pixels": 61651200,
+      "abs_diff_p50": 0.0,
+      "abs_diff_p90": 0.0,
+      "abs_diff_p99": 0.0,
+      "abs_diff_p999": 0.0,
+      "rms_diff": 0.0,
+      "relative_rms_diff": 0.0,
+      "robust_fit_scale": 1.0,
+      "robust_fit_offset": 0.0
+    },
+    "warm": {
+      "shape_match": true,
+      "compared_pixels": 61651200,
+      "abs_diff_p50": 0.0,
+      "abs_diff_p90": 0.0,
+      "abs_diff_p99": 0.0,
+      "abs_diff_p999": 0.0,
+      "rms_diff": 0.0,
+      "relative_rms_diff": 0.0,
+      "robust_fit_scale": 1.0,
+      "robust_fit_offset": 0.0
+    }
+  },
+  "tests": {
+    "focused": {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_master_cache.py tests\\test_resident_dq_pixel_closure.py tests\\test_resident_frame_mask_contract.py tests\\test_resident_cuda_run.py tests\\test_resident_result_contract.py tests\\test_cli_smoke.py",
+      "result": "105 passed in 9.52s"
+    },
+    "full": {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+      "result": "1024 passed in 38.04s"
+    }
+  },
+  "clean_room": {
+    "compliant": true,
+    "note": "Gate436 used GLASS-owned cache artifacts, GLASS-generated run outputs, user-provided image data, and generic file/completeness accounting only. No external proprietary implementation source was inspected."
+  },
+  "next_gate": "S2-Gate 437: warm-cache light read/upload/calibration pipeline optimization."
+}
