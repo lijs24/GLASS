@@ -6893,6 +6893,27 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 384: Release Promotion Decision Final Evidence Guard
+
+- Carry Gate383 StackEngine publication-audit final release quality evidence
+  into `glass release-promotion-decision`.
+- Preserve legacy compatibility when publication-audit artifacts omit the new
+  final evidence fields on both raw and Phase2 sides, while requiring
+  ready/match/raw/Phase2 final evidence to pass once present.
+- Block release-candidate/default-change readiness when raw publication-audit
+  final evidence fails, Phase2 final evidence fails, or Phase2 drops final
+  evidence that raw publication-audit carried.
+- Surface final evidence readiness, match status, raw fields, and Phase2 fields
+  in release-promotion JSON and Markdown.
+- Add focused tests for green evidence surfacing, compatible-missing final
+  evidence, legacy absent final evidence, failed raw evidence, failed Phase2
+  evidence, and Phase2 evidence loss.
+- Keep this gate release-decision scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

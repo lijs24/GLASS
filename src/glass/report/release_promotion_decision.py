@@ -825,9 +825,83 @@ _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_FIELDS = (
     "release_matrix_manifest_match_check",
 )
 
+_PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_FIELDS = (
+    "matrix_final_checks_ready",
+    "matrix_final_checks_match",
+    "matrix_raw_final_checks_ready",
+    "matrix_phase2_final_checks_ready",
+    "matrix_default_final_checks_ready",
+    "matrix_default_final_checks_match",
+    "matrix_default_raw_final_checks_ready",
+    "matrix_default_phase2_final_checks_ready",
+    "default_promotion_final_checks_ready",
+    "default_promotion_final_checks_match",
+    "default_promotion_raw_final_checks_ready",
+    "default_promotion_phase2_final_checks_ready",
+)
+
+_PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_PREFIXES = (
+    "matrix",
+    "matrix_default",
+    "default_promotion",
+)
+
 _DIRECT_RUNTIME_ACCEPTANCE_SOURCE = "explicit_resident_artifacts_json"
 _DIRECT_RUNTIME_PIPELINE_CALIBRATION_SOURCE = "resident_artifacts_json_fallback"
 _DIRECT_RUNTIME_MIN_RESIDENT_LIGHTS = 200
+
+
+def _publication_release_quality_final_evidence_present(
+    layer: dict[str, Any],
+) -> bool:
+    return any(
+        layer.get(field) is not None
+        for field in _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_FIELDS
+    )
+
+
+def _publication_release_quality_final_evidence_prefix_ready(
+    layer: dict[str, Any],
+    *,
+    prefix: str,
+) -> bool:
+    final_ready = layer.get(f"{prefix}_final_checks_ready")
+    final_match = layer.get(f"{prefix}_final_checks_match")
+    raw_ready = layer.get(f"{prefix}_raw_final_checks_ready")
+    phase2_ready = layer.get(f"{prefix}_phase2_final_checks_ready")
+    if (
+        final_ready is None
+        and final_match is None
+        and raw_ready is None
+        and phase2_ready is None
+    ):
+        return False
+    compatible_missing = (
+        final_ready is True
+        and final_match is True
+        and raw_ready is None
+        and phase2_ready is None
+    )
+    return compatible_missing or (
+        final_ready is True
+        and final_match is True
+        and raw_ready is True
+        and phase2_ready is True
+    )
+
+
+def _publication_release_quality_final_evidence_ready(
+    layer: dict[str, Any],
+) -> bool:
+    if not _publication_release_quality_final_evidence_present(layer):
+        return True
+    return all(
+        _publication_release_quality_final_evidence_prefix_ready(
+            layer,
+            prefix=prefix,
+        )
+        for prefix in _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_PREFIXES
+    )
 
 
 def _publication_audit_runtime_default_evidence(
@@ -1237,6 +1311,40 @@ def _publication_audit_release_quality_guard_evidence(
             and final_checks_match
         )
     )
+    raw_final_evidence_present = _publication_release_quality_final_evidence_present(
+        raw_layer
+    )
+    phase2_final_evidence_present = (
+        _publication_release_quality_final_evidence_present(phase2_layer)
+    )
+    final_evidence_compatible_missing = (
+        not raw_final_evidence_present and not phase2_final_evidence_present
+    )
+    raw_final_evidence_ready = (
+        not raw_final_evidence_present
+        or _publication_release_quality_final_evidence_ready(raw_layer)
+    )
+    phase2_final_evidence_ready = (
+        not phase2_final_evidence_present
+        or _publication_release_quality_final_evidence_ready(phase2_layer)
+    )
+    final_evidence_match = (
+        raw_final_evidence_present == phase2_final_evidence_present
+        and all(
+            raw_layer.get(field) == phase2_layer.get(field)
+            for field in _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_FIELDS
+        )
+    )
+    final_evidence_ready = (
+        final_evidence_compatible_missing
+        or (
+            raw_final_evidence_present
+            and phase2_final_evidence_present
+            and raw_final_evidence_ready
+            and phase2_final_evidence_ready
+            and final_evidence_match
+        )
+    )
     layers_ready = (
         compatible_missing
         or (guard_absent and raw_ready and phase2_ready)
@@ -1246,6 +1354,7 @@ def _publication_audit_release_quality_guard_evidence(
             and raw_ready
             and phase2_ready
             and final_checks_ready
+            and final_evidence_ready
         )
     )
     ready = compatible_missing or (
@@ -1273,6 +1382,13 @@ def _publication_audit_release_quality_guard_evidence(
         "raw_final_checks_ready": raw_final_checks_ready,
         "phase2_final_checks_present": phase2_final_present,
         "phase2_final_checks_ready": phase2_final_checks_ready,
+        "final_evidence_compatible_missing": final_evidence_compatible_missing,
+        "final_evidence_ready": final_evidence_ready,
+        "final_evidence_match": final_evidence_match,
+        "raw_final_evidence_present": raw_final_evidence_present,
+        "raw_final_evidence_ready": raw_final_evidence_ready,
+        "phase2_final_evidence_present": phase2_final_evidence_present,
+        "phase2_final_evidence_ready": phase2_final_evidence_ready,
         "raw_present": raw_present,
         "raw_ready": raw_layer.get("ready"),
         "raw_matrix_present": raw_layer.get("matrix_present"),
@@ -1380,6 +1496,14 @@ def _publication_audit_release_quality_guard_evidence(
         "phase2_release_matrix_manifest_match_check": phase2_layer.get(
             "release_matrix_manifest_match_check"
         ),
+        **{
+            f"raw_{field}": raw_layer.get(field)
+            for field in _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_FIELDS
+        },
+        **{
+            f"phase2_{field}": phase2_layer.get(field)
+            for field in _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_FIELDS
+        },
     }
 
 
@@ -1863,8 +1987,12 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"- Release quality guard present: `{publication_release_quality.get('release_quality_guard_present')}`",
             f"- Release quality final checks ready: `{publication_release_quality.get('final_checks_ready')}`",
             f"- Release quality final checks match: `{publication_release_quality.get('final_checks_match')}`",
+            f"- Release quality final evidence ready: `{publication_release_quality.get('final_evidence_ready')}`",
+            f"- Release quality final evidence match: `{publication_release_quality.get('final_evidence_match')}`",
             f"- Release quality raw final: present=`{publication_release_quality.get('raw_final_checks_present')}` matrix=`{publication_release_quality.get('raw_release_matrix_check')}` manifest=`{publication_release_quality.get('raw_release_matrix_manifest_match_check')}`",
             f"- Release quality Phase2 final: present=`{publication_release_quality.get('phase2_final_checks_present')}` matrix=`{publication_release_quality.get('phase2_release_matrix_check')}` manifest=`{publication_release_quality.get('phase2_release_matrix_manifest_match_check')}`",
+            f"- Release quality raw final evidence: present=`{publication_release_quality.get('raw_final_evidence_present')}` matrix=`{publication_release_quality.get('raw_matrix_final_checks_ready')}` phase2=`{publication_release_quality.get('raw_matrix_phase2_final_checks_ready')}`",
+            f"- Release quality Phase2 final evidence: present=`{publication_release_quality.get('phase2_final_evidence_present')}` matrix=`{publication_release_quality.get('phase2_matrix_final_checks_ready')}` phase2=`{publication_release_quality.get('phase2_matrix_phase2_final_checks_ready')}`",
             "",
         ]
     )
