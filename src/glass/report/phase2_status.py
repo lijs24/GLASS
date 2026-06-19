@@ -1739,6 +1739,36 @@ def _publish_preflight_summary(path: str | Path | None) -> dict[str, Any] | None
                 "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest",
             )
         ),
+        "matrix_release_decision_release_quality_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_release_quality_publication_guard_passed",
+            )
+        ),
+        "matrix_default_promotion_release_decision_release_quality_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_passed",
+            )
+        ),
+        "default_promotion_release_decision_release_quality_publication_guard_passed": (
+            _check_passed(
+                payload,
+                "default_promotion_release_decision_release_quality_publication_guard_passed",
+            )
+        ),
+        "matrix_release_decision_release_quality_publication_guard_matches_default_promotion": (
+            _check_passed(
+                payload,
+                "matrix_release_decision_release_quality_publication_guard_matches_default_promotion",
+            )
+        ),
+        "matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest": (
+            _check_passed(
+                payload,
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest",
+            )
+        ),
         "github_plan_matrix_resident_fastpath_handoff_ready": summary.get(
             "github_plan_matrix_resident_fastpath_handoff_ready"
         ),
@@ -3990,6 +4020,10 @@ def build_phase2_status(
             )
             is not None
         )
+        release_quality_guard_final_checks_present = any(
+            preflight.get(field) is not None
+            for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS
+        )
         checks.append(
             {
                 "name": "windows_publish_preflight_release_quality_publication_guard_passed",
@@ -4016,6 +4050,13 @@ def build_phase2_status(
                             "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
                         )
                         is True
+                        and (
+                            not release_quality_guard_final_checks_present
+                            or all(
+                                preflight.get(field) is True
+                                for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS
+                            )
+                        )
                         and preflight.get(
                             "matrix_release_quality_publication_guard_present"
                         )
@@ -4139,6 +4180,24 @@ def build_phase2_status(
                     ),
                     "matrix_manifest_match_check": preflight.get(
                         "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest"
+                    ),
+                    "final_checks_present": (
+                        release_quality_guard_final_checks_present
+                    ),
+                    "release_matrix_check": preflight.get(
+                        "matrix_release_decision_release_quality_publication_guard_passed"
+                    ),
+                    "release_matrix_default_check": preflight.get(
+                        "matrix_default_promotion_release_decision_release_quality_publication_guard_passed"
+                    ),
+                    "release_default_promotion_check": preflight.get(
+                        "default_promotion_release_decision_release_quality_publication_guard_passed"
+                    ),
+                    "release_matrix_default_match_check": preflight.get(
+                        "matrix_release_decision_release_quality_publication_guard_matches_default_promotion"
+                    ),
+                    "release_matrix_manifest_match_check": preflight.get(
+                        "matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest"
                     ),
                     "failed_checks": preflight.get("failed_checks"),
                 },
@@ -5786,6 +5845,19 @@ def write_phase2_status_markdown(path: str | Path, payload: dict[str, Any]) -> N
                     f"{preflight.get('matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest')}"
                 ),
                 (
+                    "- Release quality publication guard final checks: "
+                    "matrix="
+                    f"{preflight.get('matrix_release_decision_release_quality_publication_guard_passed')}, "
+                    "matrix-default="
+                    f"{preflight.get('matrix_default_promotion_release_decision_release_quality_publication_guard_passed')}, "
+                    "default="
+                    f"{preflight.get('default_promotion_release_decision_release_quality_publication_guard_passed')}, "
+                    "matrix-default-match="
+                    f"{preflight.get('matrix_release_decision_release_quality_publication_guard_matches_default_promotion')}, "
+                    "matrix-manifest-match="
+                    f"{preflight.get('matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest')}"
+                ),
+                (
                     "- Resident winsorized sweep statuses: "
                     f"matrix={preflight.get('matrix_resident_winsorized_sweep_status')}, "
                     "default-promotion="
@@ -6483,6 +6555,14 @@ _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_CHECK_FIELDS = (
     "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest",
 )
 
+_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS = (
+    "matrix_release_decision_release_quality_publication_guard_passed",
+    "matrix_default_promotion_release_decision_release_quality_publication_guard_passed",
+    "default_promotion_release_decision_release_quality_publication_guard_passed",
+    "matrix_release_decision_release_quality_publication_guard_matches_default_promotion",
+    "matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest",
+)
+
 _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_STATUS_FIELDS = (
     "matrix_release_quality_publication_guard_present",
     "matrix_release_quality_publication_guard_ready",
@@ -6499,6 +6579,7 @@ _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_STATUS_FIELDS = (
     "default_promotion_release_quality_publication_guard_layers_ready",
     "default_promotion_release_quality_publication_guard_raw_status",
     "default_promotion_release_quality_publication_guard_phase2_status",
+    *_PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS,
 )
 
 _PUBLISH_PREFLIGHT_RESIDENT_WINSORIZED_CHECK_FIELDS = (
@@ -6911,14 +6992,51 @@ def _publish_preflight_release_quality_publication_guard_present(
     )
 
 
-def _publish_preflight_release_quality_publication_guard_checks_passed(
+def _publish_preflight_release_quality_publication_guard_final_checks_present(
     payload: dict[str, Any],
 ) -> bool:
-    return _publish_preflight_release_quality_publication_guard_present(
+    return any(
+        _status_value(payload, "publish_preflight", field) is not None
+        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_final_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return _publish_preflight_release_quality_publication_guard_final_checks_present(
         payload
     ) and all(
         _status_value(payload, "publish_preflight", field) is True
-        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_CHECK_FIELDS
+        for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_FINAL_CHECK_FIELDS
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_optional_final_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return (
+        not _publish_preflight_release_quality_publication_guard_final_checks_present(
+            payload
+        )
+        or _publish_preflight_release_quality_publication_guard_final_checks_passed(
+            payload
+        )
+    )
+
+
+def _publish_preflight_release_quality_publication_guard_checks_passed(
+    payload: dict[str, Any],
+) -> bool:
+    return (
+        _publish_preflight_release_quality_publication_guard_present(payload)
+        and all(
+            _status_value(payload, "publish_preflight", field) is True
+            for field in _PUBLISH_PREFLIGHT_RELEASE_QUALITY_PUBLICATION_GUARD_CHECK_FIELDS
+        )
+        and _publish_preflight_release_quality_publication_guard_optional_final_checks_passed(
+            payload
+        )
     )
 
 
@@ -8106,6 +8224,49 @@ def build_phase2_status_compare(
             candidate={
                 "checks_passed": (
                     _publish_preflight_release_quality_publication_guard_checks_passed(
+                        candidate
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_quality_publication_guard_statuses(
+                        candidate
+                    )
+                ),
+            },
+        ),
+        _compare_check(
+            "windows_publish_preflight_release_quality_publication_guard_final_checks_preserved",
+            not _publish_preflight_release_quality_publication_guard_final_checks_passed(
+                baseline
+            )
+            or _publish_preflight_release_quality_publication_guard_final_checks_passed(
+                candidate
+            ),
+            baseline={
+                "final_checks_present": (
+                    _publish_preflight_release_quality_publication_guard_final_checks_present(
+                        baseline
+                    )
+                ),
+                "final_checks_passed": (
+                    _publish_preflight_release_quality_publication_guard_final_checks_passed(
+                        baseline
+                    )
+                ),
+                "statuses": (
+                    _publish_preflight_release_quality_publication_guard_statuses(
+                        baseline
+                    )
+                ),
+            },
+            candidate={
+                "final_checks_present": (
+                    _publish_preflight_release_quality_publication_guard_final_checks_present(
+                        candidate
+                    )
+                ),
+                "final_checks_passed": (
+                    _publish_preflight_release_quality_publication_guard_final_checks_passed(
                         candidate
                     )
                 ),

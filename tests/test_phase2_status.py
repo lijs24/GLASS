@@ -940,6 +940,8 @@ def _write_publish_preflight(
     release_quality_publication_guard_raw_status: str = "passed",
     release_quality_publication_guard_phase2_status: str = "passed",
     include_release_quality_publication_guard: bool = True,
+    release_quality_publication_guard_final_checks_ready: bool | None = None,
+    include_release_quality_publication_guard_final_checks: bool = True,
     resident_fastpath_handoff_ready: bool = True,
     include_resident_fastpath_handoff: bool = True,
     resident_result_contract_ready: bool = True,
@@ -980,6 +982,17 @@ def _write_publish_preflight(
         and release_quality_publication_guard_raw_status == "passed"
         and release_quality_publication_guard_phase2_status == "passed"
     )
+    if release_quality_publication_guard_final_checks_ready is None:
+        release_quality_publication_guard_final_checks_ready = (
+            release_quality_publication_guard_passed
+        )
+    release_quality_publication_guard_preflight_passed = (
+        release_quality_publication_guard_passed
+        and (
+            release_quality_publication_guard_final_checks_ready
+            or not include_release_quality_publication_guard_final_checks
+        )
+    )
     artifact_ready = ready and (
         rejection_sample_accounting_ready or not include_rejection_sample_accounting
     ) and (
@@ -997,7 +1010,7 @@ def _write_publish_preflight(
     ) and (
         direct_publication_guard_passed or not include_direct_publication_guard
     ) and (
-        release_quality_publication_guard_passed
+        release_quality_publication_guard_preflight_passed
         or not include_release_quality_publication_guard
     ) and (
         resident_fastpath_handoff_ready or not include_resident_fastpath_handoff
@@ -1529,6 +1542,41 @@ def _write_publish_preflight(
                 },
             ]
         )
+        if include_release_quality_publication_guard_final_checks:
+            checks.extend(
+                [
+                    {
+                        "name": "matrix_release_decision_release_quality_publication_guard_passed",
+                        "passed": (
+                            release_quality_publication_guard_final_checks_ready
+                        ),
+                    },
+                    {
+                        "name": "matrix_default_promotion_release_decision_release_quality_publication_guard_passed",
+                        "passed": (
+                            release_quality_publication_guard_final_checks_ready
+                        ),
+                    },
+                    {
+                        "name": "default_promotion_release_decision_release_quality_publication_guard_passed",
+                        "passed": (
+                            release_quality_publication_guard_final_checks_ready
+                        ),
+                    },
+                    {
+                        "name": "matrix_release_decision_release_quality_publication_guard_matches_default_promotion",
+                        "passed": (
+                            release_quality_publication_guard_final_checks_ready
+                        ),
+                    },
+                    {
+                        "name": "matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest",
+                        "passed": (
+                            release_quality_publication_guard_final_checks_ready
+                        ),
+                    },
+                ]
+            )
         if not release_quality_publication_guard_passed:
             failed_checks = [
                 *failed_checks,
@@ -1537,6 +1585,18 @@ def _write_publish_preflight(
                 "default_promotion_release_decision_quality_compare_publication_guard_passed",
                 "matrix_release_decision_quality_publication_guard_matches_default_promotion",
                 "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest",
+            ]
+        if (
+            include_release_quality_publication_guard_final_checks
+            and not release_quality_publication_guard_final_checks_ready
+        ):
+            failed_checks = [
+                *failed_checks,
+                "matrix_release_decision_release_quality_publication_guard_passed",
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_passed",
+                "default_promotion_release_decision_release_quality_publication_guard_passed",
+                "matrix_release_decision_release_quality_publication_guard_matches_default_promotion",
+                "matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest",
             ]
     if include_resident_fastpath_handoff:
         raw_status = "passed" if resident_fastpath_handoff_ready else "failed"
@@ -2127,6 +2187,8 @@ def _status_payload(
     publish_preflight_release_quality_publication_guard_layers_ready: bool = True,
     publish_preflight_release_quality_publication_guard_raw_status: str = "passed",
     publish_preflight_release_quality_publication_guard_phase2_status: str = "passed",
+    publish_preflight_release_quality_publication_guard_final_checks_present: bool = True,
+    publish_preflight_release_quality_publication_guard_final_checks_passed: bool | None = None,
     publish_preflight_resident_fastpath_handoff_ready: bool = True,
     publish_preflight_resident_fastpath_handoff_raw_status: str = "passed",
     publish_preflight_resident_fastpath_handoff_phase2_status: str = "passed",
@@ -2197,6 +2259,10 @@ def _status_payload(
         and publish_preflight_release_quality_publication_guard_phase2_status
         == "passed"
     )
+    if publish_preflight_release_quality_publication_guard_final_checks_passed is None:
+        publish_preflight_release_quality_publication_guard_final_checks_passed = (
+            publish_preflight_release_quality_publication_guard_passed
+        )
     if publish_preflight_release_quality_publication_guard_present:
         release_quality_present = True
         release_quality_ready = publish_preflight_release_quality_publication_guard_ready
@@ -2684,6 +2750,31 @@ def _status_payload(
             ),
             "matrix_default_promotion_release_decision_quality_publication_guard_matches_manifest": (
                 release_quality_passed
+            ),
+            "matrix_release_decision_release_quality_publication_guard_passed": (
+                publish_preflight_release_quality_publication_guard_final_checks_passed
+                if publish_preflight_release_quality_publication_guard_final_checks_present
+                else None
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_passed": (
+                publish_preflight_release_quality_publication_guard_final_checks_passed
+                if publish_preflight_release_quality_publication_guard_final_checks_present
+                else None
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_passed": (
+                publish_preflight_release_quality_publication_guard_final_checks_passed
+                if publish_preflight_release_quality_publication_guard_final_checks_present
+                else None
+            ),
+            "matrix_release_decision_release_quality_publication_guard_matches_default_promotion": (
+                publish_preflight_release_quality_publication_guard_final_checks_passed
+                if publish_preflight_release_quality_publication_guard_final_checks_present
+                else None
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_matches_manifest": (
+                publish_preflight_release_quality_publication_guard_final_checks_passed
+                if publish_preflight_release_quality_publication_guard_final_checks_present
+                else None
             ),
             "github_plan_matrix_resident_fastpath_handoff_ready": (
                 publish_preflight_resident_fastpath_handoff_ready
@@ -4451,8 +4542,11 @@ def test_phase2_status_surfaces_publish_preflight_release_quality_publication_gu
     assert guard_check["evidence"]["present"] is True
     assert guard_check["evidence"]["matrix_ready"] is True
     assert guard_check["evidence"]["matrix_raw_status"] == "passed"
+    assert guard_check["evidence"]["final_checks_present"] is True
+    assert guard_check["evidence"]["release_matrix_check"] is True
     assert "Release quality publication guard evidence" in text
     assert "Release quality publication guard checks" in text
+    assert "Release quality publication guard final checks" in text
 
 
 def test_phase2_status_allows_missing_publish_preflight_release_quality_publication_guard(
@@ -4519,6 +4613,44 @@ def test_phase2_status_blocks_failed_publish_preflight_release_quality_publicati
     assert guard_check["evidence"]["matrix_raw_status"] == "failed"
     assert guard_check["evidence"]["matrix_phase2_status"] == "attention_required"
     assert guard_check["evidence"]["matrix_check"] is False
+
+
+def test_phase2_status_blocks_failed_publish_preflight_release_quality_final_checks(
+    tmp_path: Path,
+):
+    checkpoints = tmp_path / "checkpoints"
+    checkpoints.mkdir()
+    _write_checkpoint(checkpoints, gate=376)
+    publish_preflight = tmp_path / "publish_preflight.json"
+    _write_publish_preflight(
+        publish_preflight,
+        release_quality_publication_guard_final_checks_ready=False,
+    )
+
+    status = build_phase2_status(
+        checkpoint_dir=checkpoints,
+        publish_preflight=publish_preflight,
+        doctor_payload=_doctor_payload(),
+    )
+
+    checks = {item["name"]: item for item in status["checks"]}
+    guard_check = checks[
+        "windows_publish_preflight_release_quality_publication_guard_passed"
+    ]
+
+    assert status["status"] == "attention_required"
+    assert status["publish_preflight"]["status"] == "blocked"
+    assert checks["windows_publish_preflight_ready"]["passed"] is False
+    assert guard_check["passed"] is False
+    assert guard_check["evidence"]["matrix_ready"] is True
+    assert guard_check["evidence"]["matrix_check"] is True
+    assert guard_check["evidence"]["final_checks_present"] is True
+    assert guard_check["evidence"]["release_matrix_check"] is False
+    assert guard_check["evidence"]["release_matrix_manifest_match_check"] is False
+    assert (
+        "matrix_release_decision_release_quality_publication_guard_passed"
+        in guard_check["evidence"]["failed_checks"]
+    )
 
 
 def test_phase2_status_blocks_failed_stack_publication_policy_handoff(
@@ -6967,6 +7099,43 @@ def test_phase2_status_compare_flags_publish_preflight_release_quality_guard_reg
             "matrix_release_quality_publication_guard_raw_status"
         ]
         == "failed"
+    )
+
+
+def test_phase2_status_compare_flags_missing_publish_preflight_release_quality_final_checks(
+    tmp_path: Path,
+):
+    baseline = tmp_path / "baseline.json"
+    candidate = tmp_path / "candidate.json"
+    write_json(baseline, _status_payload(gate=376))
+    write_json(
+        candidate,
+        _status_payload(
+            gate=376,
+            publish_preflight_release_quality_publication_guard_final_checks_present=False,
+        ),
+    )
+
+    payload = build_phase2_status_compare(
+        baseline_status=baseline,
+        candidate_status=candidate,
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    final_check = checks[
+        "windows_publish_preflight_release_quality_publication_guard_final_checks_preserved"
+    ]
+
+    assert payload["status"] == "regressed"
+    assert final_check["passed"] is False
+    assert final_check["evidence"]["baseline"]["final_checks_present"] is True
+    assert final_check["evidence"]["candidate"]["final_checks_present"] is False
+    assert final_check["evidence"]["candidate"]["final_checks_passed"] is False
+    assert (
+        payload["candidate"]["publish_preflight_release_quality_publication_guard"][
+            "matrix_release_decision_release_quality_publication_guard_passed"
+        ]
+        is None
     )
 
 
