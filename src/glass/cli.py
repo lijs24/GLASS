@@ -1777,6 +1777,7 @@ def cmd_candidate_runtime_sweep_plan(args: argparse.Namespace) -> int:
         manifest=args.manifest,
         wbpp_result=args.wbpp_result,
         benchmark_contract=args.benchmark_contract,
+        benchmark_contract_profile=args.benchmark_contract_profile,
         glass_scale=args.glass_scale,
         glass_offset=args.glass_offset,
         min_coverage=args.min_coverage,
@@ -5187,6 +5188,12 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_runtime_sweep_plan.add_argument("--out", required=True, help="output runtime sweep plan JSON")
     candidate_runtime_sweep_plan.add_argument("--markdown", help="optional output Markdown plan")
     candidate_runtime_sweep_plan.add_argument("--benchmark-contract", help="optional benchmark contract")
+    candidate_runtime_sweep_plan.add_argument(
+        "--benchmark-contract-profile",
+        choices=[RESIDENT_CUDA_DQ_PROFILE_NAME],
+        default=RESIDENT_CUDA_DQ_PROFILE_NAME,
+        help="benchmark contract profile used for planned acceptance-audit commands when --benchmark-contract is absent",
+    )
     candidate_runtime_sweep_plan.add_argument("--glass-scale", type=float)
     candidate_runtime_sweep_plan.add_argument("--glass-offset", type=float)
     candidate_runtime_sweep_plan.add_argument("--min-coverage", type=float)

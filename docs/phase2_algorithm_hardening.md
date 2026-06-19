@@ -7257,6 +7257,23 @@ integration where applicable.
   no runtime default change, no package upload, no GitHub release creation, and
   no real-data benchmark rerun.
 
+### S2-Gate 404: Runtime Sweep Acceptance Profile Handoff
+
+- Make candidate runtime sweep plans hand off
+  `--benchmark-contract-profile resident_cuda_dq_v1` to planned
+  `acceptance-audit` commands when no explicit benchmark contract file is
+  supplied.
+- Preserve explicit `--benchmark-contract` behavior and record the effective
+  benchmark contract source/profile in plan-level and per-variant artifacts.
+- Validate generated runtime sweep commands for both explicit contract-file and
+  default profile paths.
+- Keep this gate planning-workflow scoped: no runtime execution change, no
+  benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:

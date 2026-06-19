@@ -7,6 +7,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 
 
 DEFAULT_RUNTIME_VARIANTS: list[dict[str, Any]] = [
@@ -294,6 +295,7 @@ def _acceptance_command(
     compare_json: Path,
     out: Path,
     benchmark_contract: str | Path | None,
+    benchmark_contract_profile: str | None,
     pipeline_contract_json: str | Path | None,
     stack_engine_contract_json: str | Path | None,
     contract_bundle_json: str | Path | None = None,
@@ -314,6 +316,8 @@ def _acceptance_command(
     ]
     if benchmark_contract is not None:
         tokens.extend(["--benchmark-contract", benchmark_contract])
+    elif benchmark_contract_profile is not None:
+        tokens.extend(["--benchmark-contract-profile", benchmark_contract_profile])
     if contract_bundle_json is not None:
         tokens.extend(["--contract-bundle", contract_bundle_json])
     if pipeline_contract_json is not None:
@@ -374,6 +378,7 @@ def build_candidate_runtime_sweep_plan(
     manifest: str | Path,
     wbpp_result: str | Path,
     benchmark_contract: str | Path | None = None,
+    benchmark_contract_profile: str | None = RESIDENT_CUDA_DQ_PROFILE_NAME,
     glass_scale: float | None = None,
     glass_offset: float | None = None,
     min_coverage: float | None = None,
@@ -389,6 +394,7 @@ def build_candidate_runtime_sweep_plan(
     template = _read_command_template(base_run_command)
     selected = _runtime_variants(variants, prefetch_frames=prefetch_frames, prefetch_workers=prefetch_workers)
     baseline_master, _baseline_coverage = _baseline_master_paths(baseline_run)
+    effective_benchmark_contract_profile = None if benchmark_contract is not None else benchmark_contract_profile
 
     planned: list[dict[str, Any]] = []
     for spec in selected:
@@ -442,6 +448,7 @@ def build_candidate_runtime_sweep_plan(
                 compare_json=compare_reference_html.with_suffix(".json"),
                 out=acceptance_json,
                 benchmark_contract=benchmark_contract,
+                benchmark_contract_profile=effective_benchmark_contract_profile,
                 pipeline_contract_json=None,
                 stack_engine_contract_json=None,
                 contract_bundle_json=acceptance_contract_bundle_json,
@@ -491,6 +498,8 @@ def build_candidate_runtime_sweep_plan(
                     "pipeline_contract_json": str(pipeline_contract_json),
                     "acceptance_json": str(acceptance_json),
                     "candidate_comparison_json": str(comparison_json),
+                    "benchmark_contract": None if benchmark_contract is None else str(benchmark_contract),
+                    "benchmark_contract_profile": effective_benchmark_contract_profile,
                 },
                 "commands": commands,
             }
@@ -524,6 +533,8 @@ def build_candidate_runtime_sweep_plan(
         "base_run_command": str(base_run_command),
         "baseline_run": str(baseline_run),
         "baseline_compare_json": str(baseline_compare_json),
+        "benchmark_contract": None if benchmark_contract is None else str(benchmark_contract),
+        "benchmark_contract_profile": effective_benchmark_contract_profile,
         "variant_count": len(planned),
         "variants": planned,
         "sweep_command": sweep_command,

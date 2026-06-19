@@ -5,6 +5,7 @@ from pathlib import Path
 from glass.cli import main
 from glass.io.json_io import read_json, write_json
 from glass.report.candidate_runtime_sweep_plan import build_candidate_runtime_sweep_plan
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 
 
 def _write_source_comparison(path: Path) -> None:
@@ -90,8 +91,14 @@ def test_candidate_runtime_sweep_plan_generates_runtime_only_variants(tmp_path: 
     assert "guardrails" in payload["variants"][1]["commands"]["guardrails"]
     assert "--resident-result-contract-json" not in payload["variants"][1]["commands"]["guardrails"]
     assert "--contract-bundle" in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert "--benchmark-contract " in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert "--benchmark-contract-profile" not in payload["variants"][1]["commands"]["acceptance_audit"]
     assert "--pipeline-contract-json" not in payload["variants"][1]["commands"]["acceptance_audit"]
     assert "--stack-engine-contract-json" not in payload["variants"][1]["commands"]["acceptance_audit"]
+    assert payload["benchmark_contract"] == str(tmp_path / "contract.json")
+    assert payload["benchmark_contract_profile"] is None
+    assert payload["variants"][1]["artifacts"]["benchmark_contract"] == str(tmp_path / "contract.json")
+    assert payload["variants"][1]["artifacts"]["benchmark_contract_profile"] is None
     assert payload["variants"][1]["artifacts"]["resident_calibration_artifacts_json"].endswith(
         str(Path("runs") / "prefetch12_workers6" / "calibration_artifacts.json")
     )
@@ -143,6 +150,13 @@ def test_candidate_runtime_sweep_plan_generates_prefetch_matrix(tmp_path: Path) 
     last_command = payload["variants"][-1]["commands"]["run"]
     assert "--resident-prefetch-frames 12" in last_command
     assert "--resident-prefetch-workers 6" in last_command
+    acceptance_command = payload["variants"][-1]["commands"]["acceptance_audit"]
+    assert "--benchmark-contract-profile resident_cuda_dq_v1" in acceptance_command
+    assert "--benchmark-contract " not in acceptance_command
+    assert payload["benchmark_contract"] is None
+    assert payload["benchmark_contract_profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert payload["variants"][-1]["artifacts"]["benchmark_contract"] is None
+    assert payload["variants"][-1]["artifacts"]["benchmark_contract_profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
 
 
 def test_cli_candidate_runtime_sweep_plan_writes_outputs(tmp_path: Path) -> None:
@@ -193,4 +207,6 @@ def test_cli_candidate_runtime_sweep_plan_writes_outputs(tmp_path: Path) -> None
     payload = read_json(out)
     assert payload["variant_count"] == 2
     assert payload["variants"][1]["variant_id"] == "prefetch10_workers5"
+    assert payload["benchmark_contract_profile"] == RESIDENT_CUDA_DQ_PROFILE_NAME
+    assert "--benchmark-contract-profile resident_cuda_dq_v1" in payload["variants"][1]["commands"]["acceptance_audit"]
     assert "Candidate Runtime Sweep Plan" in markdown.read_text(encoding="utf-8")
