@@ -187,25 +187,39 @@ def dq_provenance_summary_from_resident(
     summary = dq_summary or {}
     finite_pre = source.get("finite_pre_rejection_coverage") or {}
     post_rejection = source.get("post_rejection_coverage") or {}
+    input_samples = _optional_int(source.get("input_samples"))
     input_valid = _coverage_sample_sum(finite_pre)
+    if input_valid is None:
+        input_valid = _optional_int(source.get("input_valid_samples_before_rejection"))
+    input_invalid = _optional_int(source.get("input_invalid_samples_before_rejection"))
+    active_frame_count = _optional_int(source.get("active_frame_count"))
+    coverage_pixel_count = _optional_int(finite_pre.get("total_pixels"))
+    if input_valid is not None and active_frame_count is not None and coverage_pixel_count is not None:
+        input_samples = active_frame_count * coverage_pixel_count
+        input_invalid = max(0, input_samples - input_valid)
+    input_flagged = _optional_int(source.get("input_flagged_samples"))
+    input_nonfinite = _optional_int(source.get("input_nonfinite_samples"))
     valid_after = _coverage_sample_sum(post_rejection)
+    if valid_after is None:
+        valid_after = _optional_int(source.get("valid_samples_after_rejection"))
     rejected_samples = _optional_int(source.get("rejected_sample_count"))
+    source_dq_flag_counts = source.get("source_dq_flag_counts")
+    if not isinstance(source_dq_flag_counts, dict):
+        source_dq_flag_counts = {}
     return {
         "schema_version": 1,
         "source_schema": "resident_dq_coverage_provenance",
         "stage": stage,
         "item": item,
         "engine": engine,
-        "active_frame_count": _optional_int(source.get("active_frame_count")),
+        "active_frame_count": active_frame_count,
         "source_terms": list(source.get("source_terms") or []),
-        "input_samples": None,
+        "input_samples": input_samples,
         "input_valid_samples_before_rejection": input_valid,
-        "input_invalid_samples_before_rejection": _optional_int(
-            source.get("input_invalid_samples_before_rejection")
-        ),
-        "input_flagged_samples": None,
-        "input_nonfinite_samples": None,
-        "source_dq_flag_counts": {},
+        "input_invalid_samples_before_rejection": input_invalid,
+        "input_flagged_samples": input_flagged,
+        "input_nonfinite_samples": input_nonfinite,
+        "source_dq_flag_counts": dict(source_dq_flag_counts),
         "finite_pre_rejection_pixels": _optional_int(finite_pre.get("finite_pixels")),
         "post_rejection_pixels": _optional_int(post_rejection.get("finite_pixels")),
         "valid_samples_after_rejection": valid_after,
@@ -228,9 +242,9 @@ def dq_provenance_summary_from_resident(
         "warp_edge_pixels": _summary_count(summary, "warp_edge"),
         "output_dq_summary": dict(summary),
         "sample_accounting_closure": _sample_accounting_closure(
-            input_samples=None,
+            input_samples=input_samples,
             input_valid_before_rejection=input_valid,
-            input_invalid_before_rejection=None,
+            input_invalid_before_rejection=input_invalid,
             valid_after_rejection=valid_after,
             rejected_samples=rejected_samples,
         ),

@@ -40,6 +40,11 @@ from glass.engine.resident_master_cache import (
     summarize_resident_master_cache_groups,
     validate_resident_master_cache_payload,
 )
+from glass.engine.resident_source_dq import (
+    apply_resident_source_invalid_mask,
+    build_resident_source_dq_summary,
+    source_invalid_mask_from_array,
+)
 from glass.engine.resident_registration_quality import (
     DEFAULT_RESIDENT_REGISTRATION_QUALITY_MIN_INLIERS,
     evaluate_resident_registration_quality,
@@ -1403,10 +1408,12 @@ def _resident_dq_map(
 
 def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
     values = np.asarray(data, dtype=np.float32)
+    total_pixels = int(values.size)
     finite_mask = np.isfinite(values)
     finite_count = int(np.count_nonzero(finite_mask))
     if finite_count == 0:
         return {
+            "total_pixels": total_pixels,
             "finite_pixels": 0,
             "rounded_sum": 0,
             "min": 0.0,
@@ -1416,6 +1423,7 @@ def _resident_coverage_array_stats(data: np.ndarray) -> dict[str, float | int]:
     finite_values = values[finite_mask]
     rounded = np.rint(finite_values)
     return {
+        "total_pixels": total_pixels,
         "finite_pixels": finite_count,
         "rounded_sum": int(round(float(np.sum(rounded, dtype=np.float64)))),
         "min": float(np.nanmin(values)),
@@ -1441,6 +1449,34 @@ def _resident_rejection_map_sample_count(
     return total
 
 
+def _resident_source_dq_provenance_fields(source_dq_summary: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(source_dq_summary, dict) or not source_dq_summary:
+        return {}
+    fields: dict[str, Any] = {
+        "source_dq_application": {
+            "source_model": source_dq_summary.get("source_model"),
+            "native_method": source_dq_summary.get("native_method"),
+            "frame_count": source_dq_summary.get("frame_count"),
+            "frame_with_invalid_count": source_dq_summary.get("frame_with_invalid_count"),
+            "applied_frame_count": source_dq_summary.get("applied_frame_count"),
+            "applied_invalid_samples": source_dq_summary.get("applied_invalid_samples"),
+            "unsupported_frame_count": source_dq_summary.get("unsupported_frame_count"),
+            "passed": source_dq_summary.get("passed"),
+        },
+    }
+    for key in (
+        "input_samples",
+        "input_valid_samples_before_rejection",
+        "input_invalid_samples_before_rejection",
+        "input_flagged_samples",
+        "input_nonfinite_samples",
+        "source_dq_flag_counts",
+    ):
+        if key in source_dq_summary:
+            fields[key] = source_dq_summary[key]
+    return fields
+
+
 def _resident_dq_coverage_provenance(
     coverage_map: np.ndarray | None,
     low_rejection_map: np.ndarray | None,
@@ -1448,14 +1484,20 @@ def _resident_dq_coverage_provenance(
     active_frame_count: int,
     geometric_warp_coverage_map: np.ndarray | None = None,
     geometric_warp_coverage_frame_count: int | None = None,
+    source_dq_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     active_count = max(0, int(active_frame_count))
+    source_dq_fields = _resident_source_dq_provenance_fields(source_dq_summary)
     if coverage_map is None:
         provenance = {
             "available": False,
             "active_frame_count": active_count,
             "reason": "resident integration did not emit a coverage map",
+            **source_dq_fields,
         }
+        source_terms: list[str] = []
+        if source_dq_fields:
+            source_terms.append("source_dq")
         if geometric_warp_coverage_map is not None:
             geometric = np.asarray(geometric_warp_coverage_map, dtype=np.float32)
             geometric_count = (
@@ -1481,6 +1523,9 @@ def _resident_dq_coverage_provenance(
                     "partial_edge_inference": "available_from_geometric_warp_coverage",
                 }
             )
+            source_terms.append("geometric_warp_coverage")
+        if source_terms:
+            provenance["source_terms"] = source_terms
         return provenance
 
     post_rejection = np.asarray(coverage_map, dtype=np.float32)
@@ -1492,6 +1537,8 @@ def _resident_dq_coverage_provenance(
     if high_rejection_map is not None:
         finite_pre_rejection += np.nan_to_num(np.asarray(high_rejection_map, dtype=np.float32), nan=0.0)
         source_terms.append("high_rejection")
+    if source_dq_fields:
+        source_terms.append("source_dq")
     geometric = None
     geometric_count = 0
     if geometric_warp_coverage_map is not None:
@@ -1542,6 +1589,7 @@ def _resident_dq_coverage_provenance(
             "It separates rejection loss from finite contributing samples but is not yet "
             "a pure geometric warp-footprint map."
         ),
+        **source_dq_fields,
     }
     if geometric is not None:
         finite_geometric = np.isfinite(geometric)
@@ -3236,6 +3284,7 @@ def run_resident_calibration_integration(
             calibration_event_modes: list[str] = []
             per_frame_registration_s = []
             registration_component_s: dict[str, float] = {}
+            source_dq_rows: list[dict[str, Any]] = []
             registration_during_load_elapsed = 0.0
             gc_elapsed = 0.0
             frame_weight_values: list[float] = []
@@ -3471,6 +3520,20 @@ def run_resident_calibration_integration(
                         batch_calibrate_start = perf_counter()
                         batch_indices = [item[0] for item in batch_items]
                         batch_lights = [item[2] for item in batch_items]
+                        source_dq_pending_by_index: dict[
+                            int, tuple[str, np.ndarray | None, dict[str, Any]]
+                        ] = {}
+                        for item_index, frame, light, _exposure in batch_items:
+                            invalid_mask, mask_info = source_invalid_mask_from_array(
+                                light,
+                                height=height,
+                                width=width,
+                            )
+                            source_dq_pending_by_index[int(item_index)] = (
+                                str(frame["id"]),
+                                invalid_mask,
+                                mask_info,
+                            )
                         batch_light_exposures = [item[3] for item in batch_items]
                         batch_dark_exposures = [
                             np.nan if current_dark_exposure is None else float(current_dark_exposure)
@@ -3620,8 +3683,21 @@ def run_resident_calibration_integration(
                         )
                         frame_share = 1.0 / float(len(batch_items))
                         for position, (item_index, frame, _light, _exposure) in enumerate(batch_items):
+                            pending = source_dq_pending_by_index.get(int(item_index))
+                            if pending is not None:
+                                pending_frame_id, invalid_mask, mask_info = pending
+                                source_dq_rows.append(
+                                    apply_resident_source_invalid_mask(
+                                        stack,
+                                        frame_index=int(item_index),
+                                        frame_id=pending_frame_id,
+                                        invalid_mask=invalid_mask,
+                                        mask_info=mask_info,
+                                        source="resident_calibrated_batch_input",
+                                    )
+                                )
                             frame_weight = 0.0 if _matches_any_token(frame, excluded_tokens) else 1.0
-                            frame_weights[frame["id"]] = frame_weight
+                            frame_weights[str(frame["id"])] = frame_weight
                             frame_weight_values.append(frame_weight)
                             per_frame_calibrate_s.append(batch_calibrate_elapsed * frame_share)
                             per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)) * frame_share)
@@ -3704,6 +3780,11 @@ def run_resident_calibration_integration(
                                 int(read_profile.get("fits_native_bytes_read", 0) or 0)
                             )
                         per_frame_read_s.append(read_wait_elapsed)
+                        invalid_mask, mask_info = source_invalid_mask_from_array(
+                            light,
+                            height=height,
+                            width=width,
+                        )
                         calibrate_start = perf_counter()
                         try:
                             if resident_h2d_mode == "pinned_async":
@@ -3732,6 +3813,16 @@ def run_resident_calibration_integration(
                                 )
                         finally:
                             light_prefetch.release(index)
+                        source_dq_rows.append(
+                            apply_resident_source_invalid_mask(
+                                stack,
+                                frame_index=int(index),
+                                frame_id=str(frame["id"]),
+                                invalid_mask=invalid_mask,
+                                mask_info=mask_info,
+                                source="resident_calibrated_input",
+                            )
+                        )
                         per_frame_calibrate_s.append(perf_counter() - calibrate_start)
                         per_frame_host_copy_s.append(float(calibration_timing.get("host_copy_s", 0.0)))
                         per_frame_h2d_s.append(float(calibration_timing.get("h2d_s", 0.0)))
@@ -6972,6 +7063,12 @@ def run_resident_calibration_integration(
             weights_array = np.asarray(frame_weight_values, dtype=np.float32)
             weights_arg = None if np.all(weights_array == 1.0) else weights_array
             active_frame_count = int(np.count_nonzero(np.isfinite(weights_array) & (weights_array > 0.0)))
+            source_dq_summary = build_resident_source_dq_summary(
+                source_dq_rows,
+                frame_count=len(light_frames),
+                height=height,
+                width=width,
+            )
             tile_local_apply_enabled = False
             tile_local_target_mask = None
             tile_local_extents = None
@@ -7192,6 +7289,7 @@ def run_resident_calibration_integration(
                 active_frame_count,
                 geometric_warp_coverage_map=geometric_warp_coverage_map,
                 geometric_warp_coverage_frame_count=geometric_warp_coverage_frame_count,
+                source_dq_summary=source_dq_summary,
             )
             dq_provenance_summary = dq_provenance_summary_from_resident(
                 dq_coverage_provenance,
@@ -7206,6 +7304,7 @@ def run_resident_calibration_integration(
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
+                    "source_dq_summary": source_dq_summary,
                     "geometric_warp_coverage": {
                         "available": bool(geometric_warp_coverage_map is not None),
                         "frame_count": geometric_warp_coverage_frame_count,
@@ -7567,6 +7666,7 @@ def run_resident_calibration_integration(
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
+                    "source_dq_summary": source_dq_summary,
                     "stack_engine_surface_contract": stack_surface_contract,
                     "dq_flag_bits": {
                         "no_data": int(DQFlag.NO_DATA),
@@ -8603,6 +8703,7 @@ def run_resident_calibration_integration(
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
+                    "source_dq_summary": source_dq_summary,
                     "stack_engine_surface_contract": stack_surface_contract,
                     "geometric_warp_coverage": {
                         "available": bool(geometric_warp_coverage_map is not None),

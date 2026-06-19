@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import numpy as np
 
 from glass.cpu.calibration import calibrate_light
 from glass.cpu.integration import weighted_integrate_stack
 from glass.cpu.warp import warp_translation
+from glass.engine.contracts import DQFlag, DQMask, OutputMapPolicy, StackRequest, TileWindow
 from glass.engine.resident_cuda import _output_diagnostics
+from glass.engine.resident_source_dq import (
+    apply_resident_source_invalid_mask,
+    build_resident_source_dq_summary,
+    source_invalid_mask_from_dq_mask,
+)
+from glass.engine.stack_engine import CPUStackEngine
 from glass.models import CalibrationPolicy
 from tests.conftest import cuda_module_or_skip
 
@@ -43,6 +51,37 @@ def _resident_star_field() -> np.ndarray:
         image += flux * np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * 1.4**2)))
     image += 10.0 + 0.01 * xx + 0.02 * yy
     return image.astype(np.float32)
+
+
+@dataclass(slots=True)
+class _ArrayImageSource:
+    data: np.ndarray
+    dq: np.ndarray | None = None
+    path: Path | None = None
+
+    @property
+    def width(self) -> int:
+        return int(self.data.shape[1])
+
+    @property
+    def height(self) -> int:
+        return int(self.data.shape[0])
+
+    channels: int = 1
+    dtype: str = "float32"
+    metadata: dict[str, object] | None = None
+
+    def __post_init__(self) -> None:
+        if self.dq is None:
+            self.dq = np.zeros(self.data.shape, dtype=np.uint32)
+        if self.metadata is None:
+            self.metadata = {}
+
+    def read_tile(self, window: TileWindow, dtype: object = np.float32) -> np.ndarray:
+        return np.asarray(self.data[window.as_slices()], dtype=dtype)
+
+    def read_mask_tile(self, window: TileWindow) -> DQMask:
+        return DQMask(np.asarray(self.dq[window.as_slices()], dtype=np.uint32).copy())
 
 
 def test_resident_output_diagnostics_reports_range_and_clipping():
@@ -1263,6 +1302,97 @@ def test_resident_stack_weighted_mean_skips_zero_weight_and_nan_frames():
 
     assert np.allclose(master, np.array([[2, 1], [2, 2]], dtype=np.float32))
     assert np.allclose(weight_map, np.array([[2, 1], [2, 2]], dtype=np.float32))
+
+
+def test_resident_stack_apply_invalid_mask_frame_excludes_finite_source_dq_samples():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_invalid_mask_frame"):
+        raise AssertionError("ResidentCalibratedStack.apply_invalid_mask_frame is missing")
+
+    frames = [
+        np.array([[1, 1], [1, 1]], dtype=np.float32),
+        np.array([[100, 100], [100, 100]], dtype=np.float32),
+        np.array([[3, 3], [3, 3]], dtype=np.float32),
+    ]
+    invalid_mask = np.array([[0, 1], [0, 0]], dtype=np.uint8)
+
+    stack = module.ResidentCalibratedStack(len(frames), 2, 2)
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+    result = stack.apply_invalid_mask_frame(1, invalid_mask)
+    master, weight_map = stack.integrate_mean()
+
+    assert result["native_method"] == "ResidentCalibratedStack.apply_invalid_mask_frame"
+    assert result["invalid_samples"] == 1
+    assert result["applied"] is True
+    assert np.allclose(master, np.array([[104 / 3, 2], [104 / 3, 104 / 3]], dtype=np.float32))
+    assert np.allclose(weight_map, np.array([[3, 2], [3, 3]], dtype=np.float32))
+
+
+def test_resident_stack_source_dq_mask_matches_cpu_stack_engine_for_finite_flags():
+    module = cuda_module_or_skip()
+    if not hasattr(module.ResidentCalibratedStack, "apply_invalid_mask_frame"):
+        raise AssertionError("ResidentCalibratedStack.apply_invalid_mask_frame is missing")
+
+    frames = [
+        np.array([[10, 10, 10], [10, 10, 10]], dtype=np.float32),
+        np.array([[20, 999, 20], [20, 20, 20]], dtype=np.float32),
+        np.array([[30, 30, 30], [777, 30, 30]], dtype=np.float32),
+    ]
+    dq0 = np.zeros((2, 3), dtype=np.uint32)
+    dq1 = np.zeros((2, 3), dtype=np.uint32)
+    dq2 = np.zeros((2, 3), dtype=np.uint32)
+    dq1[0, 1] = np.uint32(int(DQFlag.HOT_PIXEL))
+    dq2[1, 0] = np.uint32(int(DQFlag.NO_DATA))
+
+    request = StackRequest(
+        frame_ids=("f0", "f1", "f2"),
+        source_kind="light",
+        output_maps=OutputMapPolicy(coverage=True, weight=True, dq=True),
+    )
+    sources = {
+        "f0": _ArrayImageSource(frames[0], dq0),
+        "f1": _ArrayImageSource(frames[1], dq1),
+        "f2": _ArrayImageSource(frames[2], dq2),
+    }
+    cpu = CPUStackEngine(tile_size=1).stack(request, sources)
+
+    stack = module.ResidentCalibratedStack(len(frames), 2, 3)
+    rows = []
+    for index, frame in enumerate(frames):
+        stack.upload_calibrated_frame(index, frame)
+        mask, info = source_invalid_mask_from_dq_mask(
+            [dq0, dq1, dq2][index],
+            height=2,
+            width=3,
+        )
+        rows.append(
+            apply_resident_source_invalid_mask(
+                stack,
+                frame_index=index,
+                frame_id=f"f{index}",
+                invalid_mask=mask,
+                mask_info=info,
+                source="test_dq_bitmask",
+            )
+        )
+    resident_master, resident_weight = stack.integrate_mean()
+    summary = build_resident_source_dq_summary(rows, frame_count=len(frames), height=2, width=3)
+
+    assert np.allclose(resident_master, cpu.master, rtol=1e-6, atol=1e-6)
+    assert np.allclose(resident_weight, cpu.weight_map, rtol=1e-6, atol=1e-6)
+    assert np.allclose(resident_weight, cpu.coverage_map, rtol=1e-6, atol=1e-6)
+    assert summary["input_samples"] == cpu.dq_provenance["input_samples"]
+    assert summary["input_valid_samples_before_rejection"] == cpu.dq_provenance[
+        "input_valid_samples_before_rejection"
+    ]
+    assert summary["input_invalid_samples_before_rejection"] == cpu.dq_provenance[
+        "input_invalid_samples_before_rejection"
+    ]
+    assert summary["input_flagged_samples"] == cpu.dq_provenance["input_flagged_samples"]
+    assert summary["source_dq_flag_counts"]["hot_pixel"] == 1
+    assert summary["source_dq_flag_counts"]["no_data"] == 1
+    assert summary["passed"] is True
 
 
 def _mean_std_sigma_reference(

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "gate": "S2-Gate447",
+  "validation": "synthetic_cpu_stackengine_vs_cuda_resident_source_dq",
+  "device": {
+    "device_id": 0,
+    "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "memory_total_mib": 97886,
+    "multi_processor_count": 188,
+    "native_backend": true,
+    "available_to_glass": true
+  },
+  "shape": {
+    "frame_count": 48,
+    "height": 384,
+    "width": 384
+  },
+  "input_samples": 7077888,
+  "flagged_samples": 8588,
+  "cpu_stackengine_s": 0.14663480001036078,
+  "resident_total_s": 0.0940110000083223,
+  "resident_upload_s": 0.0027641998312901706,
+  "resident_apply_source_dq_s": 0.007922699936898425,
+  "resident_integration_s": 0.00032599997939541936,
+  "speedup_cpu_over_resident_total": 1.559762155464573,
+  "speedup_cpu_over_resident_integration_only": 449.80002846104827,
+  "master_max_abs": 0.0,
+  "master_rms": 0.0,
+  "weight_max_abs": 0.0,
+  "cpu_dq_provenance": {
+    "input_samples": 7077888,
+    "input_valid_samples_before_rejection": 7069300,
+    "input_invalid_samples_before_rejection": 8588,
+    "input_flagged_samples": 8588
+  },
+  "resident_source_dq_summary": {
+    "input_samples": 7077888,
+    "input_valid_samples_before_rejection": 7069300,
+    "input_invalid_samples_before_rejection": 8588,
+    "input_flagged_samples": 8588,
+    "source_dq_flag_counts": {
+      "hot_pixel": 5764,
+      "no_data": 2825
+    },
+    "passed": true
+  },
+  "passed": true
+}

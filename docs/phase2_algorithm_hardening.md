@@ -8819,6 +8819,27 @@ Completed in Gate446:
   - if the fix changes real resident output semantics, rerun the M38 H
     200-light regression and record timing/result deltas against Gate443.
 - Do not add release/default-promotion/report-handoff gates under this number.
+- Completed in S2-Gate447:
+  - added a native resident CUDA invalid-mask application kernel and Python
+    wrapper so finite source-DQ pixels are converted to NaN inside the resident
+    stack before integration;
+  - added `resident_source_dq` helpers for source-array nonfinite samples and
+    explicit `DQMask` bitmaps, preserving `no_data`, `hot_pixel`, and other DQ
+    flag counts in provenance;
+  - carried source-DQ input sample counts into resident DQ provenance without
+    confusing raw source invalid samples with post-warp coverage closure;
+  - added focused CPU StackEngine vs resident CUDA tests proving finite DQ
+    samples are admitted identically;
+  - ran synthetic performance/result validation on 48x384x384 frames:
+    CPU StackEngine `0.1466 s`, resident total `0.0940 s`, resident integration
+    `0.000326 s`, `master_max_abs=0`, `weight_max_abs=0`;
+  - did not rerun the 200-light M38 regression because this gate changes source
+    DQ/invalid-sample handling and the known M38 resident path does not carry
+    explicit source DQ sidecar invalid samples; a future real-data gate should
+    rerun 200-light once default StackEngine/DQ routing changes output math.
+- Artifacts:
+  - `runs/checkpoints/s2_gate_447_perf/synthetic_source_dq_cpu_vs_resident.json`;
+  - `runs/checkpoints/s2_gate_447_status.md`.
 
 ## Gate Rules
 

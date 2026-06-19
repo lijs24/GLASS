@@ -87,7 +87,8 @@ def build_resident_dq_pixel_closure_group(
     output_frame_count = _optional_int(output.get("frame_count"))
     source_terms = {str(item) for item in (provenance.get("source_terms") or coverage.get("source_terms") or [])}
     rejection = str(output.get("rejection") or "none")
-    coverage_available = bool(coverage.get("available")) or bool(source_terms)
+    pixel_coverage_terms = {"post_rejection_coverage", "low_rejection", "high_rejection"}
+    coverage_available = bool(coverage.get("available")) or bool(source_terms & pixel_coverage_terms)
     geometric_available = (
         bool(geometric.get("available"))
         or (coverage_geometric_count is not None and coverage_geometric_count > 0)

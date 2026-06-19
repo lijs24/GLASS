@@ -2524,6 +2524,13 @@ class ResidentCalibratedStack:
     def upload_calibrated_frame(self, index: int, frame: Any) -> None:
         self._impl.upload_calibrated_frame(int(index), _as_f32_c(frame))
 
+    def apply_invalid_mask_frame(self, index: int, invalid_mask: Any) -> dict[str, Any]:
+        if not hasattr(self._impl, "apply_invalid_mask_frame"):
+            raise RuntimeError("native ResidentCalibratedStack.apply_invalid_mask_frame is not available")
+        mask = np.ascontiguousarray(np.asarray(invalid_mask, dtype=np.uint8))
+        result = self._impl.apply_invalid_mask_frame(int(index), mask)
+        return dict(result)
+
     def calibrate_frame(
         self,
         index: int,

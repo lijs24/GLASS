@@ -390,6 +390,8 @@ void glass_pair_grid_sum_stats_f32_launch(
     int grid_rows);
 void glass_integrate_accumulate_mean_tile_f32_launch(
     const float* frame, const float* weight, float* sum, float* weight_sum, std::size_t n);
+void glass_apply_invalid_mask_f32_launch(
+    float* frame, const unsigned char* invalid_mask, std::size_t n);
 void glass_integrate_resident_weighted_mean_f32_launch(
     const float* stack,
     const float* weights,
@@ -1963,6 +1965,75 @@ class ResidentCalibratedStack {
             cudaMemcpyHostToDevice),
         "cudaMemcpy(resident calibrated frame)");
     mark_loaded(index);
+  }
+
+  py::dict apply_invalid_mask_frame(
+      std::size_t index,
+      py::array_t<unsigned char, py::array::c_style | py::array::forcecast> invalid_mask) {
+    require_loaded(index, "resident source DQ mask application");
+    const py::buffer_info info = invalid_mask.request();
+    if (info.ndim == 1) {
+      if (static_cast<std::size_t>(info.shape[0]) != pixels_per_frame_) {
+        throw std::invalid_argument("invalid_mask must have length height*width");
+      }
+    } else if (info.ndim == 2) {
+      require_frame_shape(info, height_, width_);
+    } else {
+      throw std::invalid_argument("invalid_mask must have shape (height, width) or (height*width,)");
+    }
+
+    const auto total_start = Clock::now();
+    const auto* mask_ptr = static_cast<const unsigned char*>(info.ptr);
+    std::vector<unsigned char> host_mask(mask_ptr, mask_ptr + pixels_per_frame_);
+    std::size_t invalid_count = 0;
+    for (const unsigned char value : host_mask) {
+      if (value != 0) {
+        ++invalid_count;
+      }
+    }
+
+    unsigned char* d_mask = nullptr;
+    double upload_s = 0.0;
+    double kernel_s = 0.0;
+    double sync_s = 0.0;
+    if (invalid_count > 0) {
+      try {
+        check_cuda(cudaMalloc(&d_mask, pixels_per_frame_ * sizeof(unsigned char)), "cudaMalloc(resident invalid mask)");
+        const auto upload_start = Clock::now();
+        check_cuda(
+            cudaMemcpy(d_mask, host_mask.data(), pixels_per_frame_ * sizeof(unsigned char), cudaMemcpyHostToDevice),
+            "cudaMemcpy(resident invalid mask)");
+        upload_s = seconds_since(upload_start);
+
+        const auto kernel_start = Clock::now();
+        glass_apply_invalid_mask_f32_launch(
+            d_stack_ + index * pixels_per_frame_,
+            d_mask,
+            pixels_per_frame_);
+        check_cuda(cudaGetLastError(), "ResidentCalibratedStack.apply_invalid_mask_frame kernel launch");
+        kernel_s = seconds_since(kernel_start);
+        const auto sync_start = Clock::now();
+        check_cuda(cudaDeviceSynchronize(), "ResidentCalibratedStack.apply_invalid_mask_frame synchronize");
+        sync_s = seconds_since(sync_start);
+      } catch (...) {
+        cudaFree(d_mask);
+        throw;
+      }
+      cudaFree(d_mask);
+    }
+
+    py::dict result;
+    result["schema_version"] = 1;
+    result["native_method"] = "ResidentCalibratedStack.apply_invalid_mask_frame";
+    result["frame_index"] = static_cast<unsigned long long>(index);
+    result["total_pixels"] = static_cast<unsigned long long>(pixels_per_frame_);
+    result["invalid_samples"] = static_cast<unsigned long long>(invalid_count);
+    result["applied"] = invalid_count > 0;
+    result["mask_upload_s"] = upload_s;
+    result["kernel_enqueue_s"] = kernel_s;
+    result["sync_s"] = sync_s;
+    result["total_s"] = seconds_since(total_start);
+    return result;
   }
 
   void calibrate_frame(
@@ -11797,6 +11868,11 @@ PYBIND11_MODULE(_glass_cuda_native, m) {
           py::arg("x1"),
           py::arg("y1"))
       .def("upload_calibrated_frame", &ResidentCalibratedStack::upload_calibrated_frame)
+      .def(
+          "apply_invalid_mask_frame",
+          &ResidentCalibratedStack::apply_invalid_mask_frame,
+          py::arg("index"),
+          py::arg("invalid_mask"))
       .def(
           "calibrate_frame",
           &ResidentCalibratedStack::calibrate_frame,
