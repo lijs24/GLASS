@@ -4,6 +4,7 @@ from pathlib import Path
 
 from glass.cli import main
 from glass.io.json_io import read_json, write_json
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.release_promotion_decision import build_release_promotion_decision
 
 
@@ -61,6 +62,13 @@ def _write_acceptance(
         "schema_version": 1,
         "status": "passed" if passed else "failed",
         "passed": passed,
+        "benchmark_contract": {
+            "source": "profile",
+            "path": None,
+            "profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
+            "name": "fixture_resident_cuda_dq_contract",
+            "schema_version": 1,
+        },
         "speedup_summary": {
             "speedup_vs_wbpp": 46.8,
             "min_speedup": 2.0,
@@ -1188,10 +1196,40 @@ def test_release_promotion_decision_requires_repeat_for_default_change(tmp_path:
     assert payload["release_candidate_ready"] is True
     assert payload["default_change_ready"] is False
     assert payload["recommendation"] == "repeat_benchmark_before_default_change"
+    assert (
+        payload["acceptance_benchmark_contract"]["profile"]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
+    assert payload["acceptance_benchmark_contract"]["ready"] is True
     assert payload["pipeline_handoff"]["source"] == "explicit_pipeline_contract"
     assert payload["pipeline_handoff"]["pixel_verification_enabled"] is True
-    failed = {item["name"] for item in payload["checks"] if not item["passed"]}
+    checks = {item["name"]: item for item in payload["checks"]}
+    assert checks["acceptance_benchmark_contract_profile"]["passed"] is True
+    failed = {name for name, item in checks.items() if not item["passed"]}
     assert failed == {"runtime_repeat_evidence_ready"}
+
+
+def test_release_promotion_decision_blocks_missing_acceptance_benchmark_profile(
+    tmp_path: Path,
+) -> None:
+    acceptance = tmp_path / "acceptance.json"
+    _write_acceptance(acceptance)
+    payload = read_json(acceptance)
+    payload["benchmark_contract"] = {"name": "legacy_contract"}
+    write_json(acceptance, payload)
+
+    decision = build_release_promotion_decision(acceptance_audit=acceptance)
+
+    checks = {item["name"]: item for item in decision["checks"]}
+    assert decision["status"] == "blocked"
+    assert decision["release_candidate_ready"] is False
+    assert checks["acceptance_benchmark_contract_profile"]["passed"] is False
+    assert (
+        checks["acceptance_benchmark_contract_profile"]["evidence"][
+            "required_profile"
+        ]
+        == RESIDENT_CUDA_DQ_PROFILE_NAME
+    )
 
 
 def test_release_promotion_decision_accepts_stable_runtime_compare(tmp_path: Path) -> None:
@@ -2474,6 +2512,8 @@ def test_release_promotion_decision_cli_writes_outputs_and_strict_status(tmp_pat
     markdown_text = markdown.read_text(encoding="utf-8")
     assert "Release Promotion Decision" in markdown_text
     assert "Pipeline DQ Handoff" in markdown_text
+    assert "Acceptance benchmark contract" in markdown_text
+    assert "profile=`resident_cuda_dq_v1`" in markdown_text
     assert "Warp Quality Handoff" in markdown_text
     assert "Resident Registration Fastpath Handoff" in markdown_text
     assert "StackEngine Publication Runtime Default" in markdown_text

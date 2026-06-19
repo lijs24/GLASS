@@ -5,6 +5,7 @@ from typing import Any
 
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
+from glass.report.benchmark_contract_profile import RESIDENT_CUDA_DQ_PROFILE_NAME
 from glass.report.release_quality_evidence import (
     PUBLICATION_FINAL_EVIDENCE_DETAIL_FIELDS as _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_DETAIL_FIELDS,
     PUBLICATION_FINAL_EVIDENCE_DETAIL_PREFIXES as _PUBLICATION_RELEASE_QUALITY_GUARD_FINAL_EVIDENCE_PREFIXES,
@@ -285,6 +286,28 @@ def _resident_registration_fastpath_handoff_evidence(
         "acceptance_check_count": check_summary["check_count"],
         "failed_acceptance_checks": check_summary["failed_checks"],
         "acceptance_checks": check_summary["checks"],
+    }
+
+
+def _acceptance_benchmark_contract_evidence(
+    acceptance: dict[str, Any],
+) -> dict[str, Any]:
+    contract = (
+        acceptance.get("benchmark_contract")
+        if isinstance(acceptance.get("benchmark_contract"), dict)
+        else {}
+    )
+    profile = contract.get("profile")
+    return {
+        "schema_version": 1,
+        "present": bool(contract),
+        "ready": profile == RESIDENT_CUDA_DQ_PROFILE_NAME,
+        "source": contract.get("source"),
+        "path": contract.get("path"),
+        "profile": profile,
+        "name": contract.get("name"),
+        "contract_schema_version": contract.get("schema_version"),
+        "required_profile": RESIDENT_CUDA_DQ_PROFILE_NAME,
     }
 
 
@@ -1614,6 +1637,7 @@ def build_release_promotion_decision(
     resident_fastpath_handoff = _resident_registration_fastpath_handoff_evidence(
         acceptance
     )
+    benchmark_contract_handoff = _acceptance_benchmark_contract_evidence(acceptance)
 
     checks = [
         _check(
@@ -1625,6 +1649,12 @@ def build_release_promotion_decision(
             "speedup_threshold",
             speedup is not None and speedup >= required_speedup,
             {"actual": speedup, "required_min": required_speedup},
+        ),
+        _check(
+            "acceptance_benchmark_contract_profile",
+            benchmark_contract_handoff.get("ready") is True,
+            benchmark_contract_handoff,
+            "Release requires acceptance evidence to use the resident CUDA DQ benchmark contract profile.",
         ),
         _check(
             "pipeline_release_evidence_passed",
@@ -1791,6 +1821,7 @@ def build_release_promotion_decision(
     release_blocking_names = {
         "acceptance_audit_passed",
         "speedup_threshold",
+        "acceptance_benchmark_contract_profile",
         "pipeline_release_evidence_passed",
         "pipeline_handoff_evidence_present",
         "pipeline_integration_dq_contract_passed",
@@ -1857,6 +1888,7 @@ def build_release_promotion_decision(
             else str(stack_engine_publication_audit),
         },
         "speedup": {"actual": speedup, "required_min": required_speedup},
+        "acceptance_benchmark_contract": benchmark_contract_handoff,
         "pipeline_handoff": pipeline_handoff,
         "pipeline_rejection_sample_release": rejection_sample_release,
         "pipeline_sample_closure_release": sample_closure_release,
@@ -1898,6 +1930,11 @@ def _markdown(payload: dict[str, Any]) -> str:
         lines.append(f"- {marker}: `{item.get('name')}` - {item.get('evidence')}")
     runtime = payload.get("runtime_repeat") if isinstance(payload.get("runtime_repeat"), dict) else {}
     pipeline = payload.get("pipeline_handoff") if isinstance(payload.get("pipeline_handoff"), dict) else {}
+    benchmark_contract = (
+        payload.get("acceptance_benchmark_contract")
+        if isinstance(payload.get("acceptance_benchmark_contract"), dict)
+        else {}
+    )
     rejection_sample = (
         payload.get("pipeline_rejection_sample_release")
         if isinstance(payload.get("pipeline_rejection_sample_release"), dict)
@@ -1957,6 +1994,8 @@ def _markdown(payload: dict[str, Any]) -> str:
             "",
             "## Pipeline DQ Handoff",
             "",
+            f"- Acceptance benchmark contract: `{benchmark_contract.get('name')}` source=`{benchmark_contract.get('source')}` profile=`{benchmark_contract.get('profile')}` ready=`{benchmark_contract.get('ready')}`",
+            f"- Required benchmark profile: `{benchmark_contract.get('required_profile')}`",
             f"- Source: `{pipeline.get('source')}`",
             f"- Status: `{pipeline.get('status')}`",
             f"- Passed: `{pipeline.get('passed')}`",

@@ -7291,6 +7291,24 @@ integration where applicable.
   change, no CUDA kernel change, no package upload, no GitHub release creation,
   and no real-data benchmark rerun.
 
+### S2-Gate 406: Release Promotion Benchmark Profile Evidence
+
+- Carry acceptance-audit benchmark contract source, path, profile, name, schema
+  version, and required profile into `release-promotion-decision` artifacts.
+- Add the release-blocking `acceptance_benchmark_contract_profile` check so a
+  release candidate must prove it was accepted under
+  `resident_cuda_dq_v1`.
+- Surface the acceptance benchmark contract and required profile in release
+  promotion Markdown.
+- Validate the ready path and a missing/wrong-profile blocker with focused
+  release-promotion tests.
+- Keep this gate release-policy scoped: no runtime execution change, no
+  benchmark contract check semantic change, no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no DQ pixel semantics
+  change, no CUDA kernel change, no package upload, no GitHub release creation,
+  and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
