@@ -8061,27 +8061,79 @@ integration where applicable.
 ### S2-Gate 433: Automatic Resident Frame-Quality Gate and DQ Decision Contract
 
 - Continue from Gate432 with a substantive runtime gate only.
-- Implement or validate an automatic resident registration-quality decision
-  path that can reject low-confidence frames without explicit
-  `--exclude-frame-id` masks.
-- The decision contract must record per-frame reasons and thresholds, including
-  at least matched stars, inliers, RMS when finite, transform/refine status,
-  and whether the frame is accepted, warning-only, or excluded.
+- Add an automatic resident registration admission policy for the
+  `similarity_cuda_triangle` path:
+  - `--resident-registration-quality-gate auto|off|warn|exclude`;
+  - default `auto` resolves to `exclude` for resident triangle registration and
+    `off` for non-triangle modes;
+  - default minimum inliers: `4`;
+  - optional maximum RMS threshold is available, but disabled by default because
+    Gate431/Gate432 retained some real frames slightly above 2 px RMS;
+  - capacity-limited synthetic catalogs are protected: when either reference or
+    moving catalog has fewer than the minimum star count, the inlier rule records
+    diagnostics but does not hard-reject the frame.
+- Write a first-class run artifact:
+  `resident_registration_quality.json`.
+  It records per-frame requested/effective action, original/final status,
+  inliers, RMS, thresholds, transform/refine diagnostics, reasons, and summary
+  counts. The resident artifact also links this contract under
+  `resident_registration.quality_gate`.
+- Integrate the decision before accepted resident triangle frames enter warp or
+  fused integration. Automatically rejected frames are assigned zero integration
+  weight and appear as `excluded` in `registration_results.json`; they are not
+  silently integrated.
+- Validate on the real M38 H 200-light run without any explicit
+  `--exclude-frame-id` masks:
+  - run directory:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate433_auto_quality_20260619`;
+  - status counts exactly match Gate432 explicit-mask parity:
+    `192 ok`, `7 excluded`, `1 reference`;
+  - automatically rejected frame IDs:
+    `F000160`, `F000213`, `F000214`, `F000215`, `F000216`, `F000217`,
+    `F000218`;
+  - all rejected frames have 2-3 inliers, 48 reference stars, 48 moving stars,
+    and `triangle_translation_refine_status=insufficient_inliers`;
+  - total elapsed time: `28.397278 s`;
+  - `light_read_upload_calibrate`: `17.485519 s`;
+  - `resident_registration_warp`: `1.633846 s`;
+  - `resident_integration`: `0.291435 s`;
+  - output write: `2.577477 s`;
+  - estimated peak VRAM: `47.311736 GiB`.
+- Compare Gate433 auto-quality output against Gate432 explicit-mask output:
+  shape match true, p50/p90/p99 absolute delta `0.0` / `0.0` / `0.0`, RMS
+  delta `0.0`, relative RMS `0.0`. The automatic gate reproduces the manual
+  mask result exactly for this dataset.
+- Focused tests:
+  `tests/test_resident_registration_quality.py`,
+  `tests/test_resident_cuda_run.py`, `tests/test_resident_result_contract.py`,
+  and `tests/test_cli_smoke.py` passed together.
+- Full pytest: `1013 passed in 38.12 s`.
+- Keep this gate runtime-algorithm scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
+### S2-Gate 434: Resident Quality Contract Reporting and Frame Accounting
+
+- Continue from Gate433 with a substantive pipeline-contract gate only if it
+  directly improves runtime auditability.
+- Promote `resident_registration_quality.json` into the same operational
+  surfaces that users inspect after a run:
+  - frame accounting should expose resident registration quality decision
+    status/reasons distinctly from manual excludes and generic registration
+    failures;
+  - HTML report should include a compact registration-quality/admission table;
+  - resident result/benchmark contracts should preserve the rejected-frame list
+    and decision summary when present.
 - Acceptance for the next gate:
-  - the real M38 H 200-light run without explicit frame excludes either
-    reproduces the Gate432 accepted-frame set (`192 ok`, `7 excluded`,
-    `1 reference`) or produces a documented, data-backed reason for any
-    difference;
-  - rejected/excluded frames are not silently sent into integration;
-  - DQ/coverage/rejection map accounting remains present in the resident
-    artifacts;
-  - total runtime remains explainably close to Gate432, with
-    `resident_registration_warp` still near the auto-grid path instead of the
-    old 24x16 default-route cost;
-  - numerical comparison against Gate432 masked output is generated;
+  - synthetic or fixture tests prove quality-gate rejected frames are reported
+    as registration-quality exclusions, not as anonymous zero-weight frames;
+  - a report generated from the Gate433 real run includes the
+    quality-gate summary and rejected frame IDs;
+  - no extra 200-light compute rerun is required unless report/contract work
+    touches resident execution behavior;
   - focused tests plus `python -m pytest -q` pass;
-  - no release/default-promotion/report-only code is added unless it directly
-    blocks this runtime validation.
+  - no release/default-promotion/report-only evidence handoff is added unless it
+    directly blocks this runtime auditability target.
 
 ## Gate Rules
 

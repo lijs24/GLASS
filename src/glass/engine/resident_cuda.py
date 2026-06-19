@@ -24,6 +24,12 @@ from glass.engine.rejection import (
     resident_rejection_descriptor,
 )
 from glass.engine.resident_calibration_artifacts import write_resident_calibration_artifacts
+from glass.engine.resident_registration_quality import (
+    DEFAULT_RESIDENT_REGISTRATION_QUALITY_MIN_INLIERS,
+    evaluate_resident_registration_quality,
+    resident_registration_quality_warning_fields,
+    summarize_resident_registration_quality,
+)
 from glass.io.fits_io import FitsImageReader, read_fits_data, write_fits_data
 from glass.io.json_io import read_json, write_json
 from glass.models import CalibrationPolicy, PipelineArtifact, RegistrationResult, RunState, now_iso
@@ -501,6 +507,36 @@ def _registration_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if rows is None:
         rows = payload.get("results", [])
     return [dict(row) for row in rows]
+
+
+def _resident_registration_quality_decision(
+    *,
+    decisions_by_frame: dict[str, dict[str, Any]],
+    frame_id: str,
+    registration_mode: str,
+    requested_action: str,
+    status: str,
+    matched_stars: int,
+    inliers: int,
+    rms_px: float,
+    min_inliers: int,
+    max_rms_px: float | None,
+    diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    decision = evaluate_resident_registration_quality(
+        frame_id=str(frame_id),
+        registration_mode=registration_mode,
+        requested_action=requested_action,
+        status=status,
+        matched_stars=int(matched_stars),
+        inliers=int(inliers),
+        rms_px=rms_px,
+        min_inliers=int(min_inliers),
+        max_rms_px=max_rms_px,
+        diagnostics=diagnostics,
+    )
+    decisions_by_frame[str(frame_id)] = decision
+    return decision
 
 
 def _registration_matrix(row: dict[str, Any]) -> list[list[float]]:
@@ -2632,6 +2668,9 @@ def run_resident_calibration_integration(
     resident_registration_motion_min_weight: float = 0.05,
     resident_registration_motion_power: float = 2.0,
     resident_registration_motion_scale_floor_px: float = 1.0,
+    resident_registration_quality_gate: str = "auto",
+    resident_registration_quality_min_inliers: int = DEFAULT_RESIDENT_REGISTRATION_QUALITY_MIN_INLIERS,
+    resident_registration_quality_max_rms_px: float | None = None,
     resident_frame_weight_proposal: str | Path | None = None,
     resident_tile_local_policy_replay: str | Path | None = None,
     resident_tile_local_policy_mode: str = "record",
@@ -2755,6 +2794,12 @@ def run_resident_calibration_integration(
         raise ValueError("resident_registration_motion_power must be positive")
     if resident_registration_motion_scale_floor_px <= 0.0:
         raise ValueError("resident_registration_motion_scale_floor_px must be positive")
+    if resident_registration_quality_gate not in {"auto", "off", "warn", "exclude"}:
+        raise ValueError("resident_registration_quality_gate must be auto, off, warn, or exclude")
+    if resident_registration_quality_min_inliers < 0:
+        raise ValueError("resident_registration_quality_min_inliers must be non-negative")
+    if resident_registration_quality_max_rms_px is not None and resident_registration_quality_max_rms_px <= 0.0:
+        raise ValueError("resident_registration_quality_max_rms_px must be positive when provided")
     frame_weight_proposal = _load_frame_weight_proposal(resident_frame_weight_proposal)
     tile_local_policy_replay = _load_tile_local_policy_replay(resident_tile_local_policy_replay)
     if resident_tile_local_policy_mode not in {"record", "apply_mean", "apply"}:
@@ -2894,6 +2939,7 @@ def run_resident_calibration_integration(
     outputs: list[dict[str, Any]] = []
     frame_weights: dict[str, float] = {}
     registration_results: list[RegistrationResult] = []
+    registration_quality_decisions_by_frame: dict[str, dict[str, Any]] = {}
     local_norm_groups: list[dict[str, Any]] = []
     tile_local_policy_any_enabled = False
     tile_local_policy_any_applied = False
@@ -5276,6 +5322,8 @@ def run_resident_calibration_integration(
                     inliers = 0
                     rms_px = float("nan")
                     deferred_triangle_refine: dict[str, Any] | None = None
+                    quality_decision: dict[str, Any] | None = None
+                    triangle_quality_diagnostics: dict[str, Any] = {}
                     try:
                         if status == "excluded":
                             frame_weight_values[index] = 0.0
@@ -5589,6 +5637,53 @@ def run_resident_calibration_integration(
                                     )
                                 if deferred_triangle_refine is None and agreement_policy["hard_failure"]:
                                     quality_failures.append(str(agreement_policy["failure_message"]))
+                                if not quality_failures:
+                                    triangle_quality_diagnostics = {
+                                        "triangle_translation_refine_status": (
+                                            str(translation_refine.get("status"))
+                                            if translation_refine is not None
+                                            else "disabled"
+                                        ),
+                                        "triangle_translation_refine_inliers": (
+                                            int(translation_refine.get("inliers", 0) or 0)
+                                            if translation_refine is not None
+                                            else 0
+                                        ),
+                                        "triangle_translation_refine_rms_px": (
+                                            _finite_float_or_none(translation_refine.get("rms_px"))
+                                            if translation_refine is not None
+                                            else None
+                                        ),
+                                        "triangle_translation_refine_correction_px": (
+                                            _finite_float_or_none(translation_refine.get("correction_px"))
+                                            if translation_refine is not None
+                                            else None
+                                        ),
+                                        "reference_stars": int(selected_reference_catalog["stored_count"]),
+                                        "moving_stars": int(selected_moving_catalog["stored_count"]),
+                                        "reference_descriptors": int(selected_reference_descriptors["count"]),
+                                        "moving_descriptors": int(selected_moving_descriptors["count"]),
+                                        "triangle_scale": _finite_float_or_none(selected_fit.get("scale")),
+                                        "triangle_rotation_rad": _finite_float_or_none(
+                                            selected_fit.get("rotation_rad")
+                                        ),
+                                        "triangle_threshold": selected_threshold,
+                                        "triangle_pixel_refine_deferred": bool(deferred_triangle_refine is not None),
+                                    }
+                                    quality_decision = _resident_registration_quality_decision(
+                                        decisions_by_frame=registration_quality_decisions_by_frame,
+                                        frame_id=str(frame["id"]),
+                                        registration_mode=resident_registration,
+                                        requested_action=resident_registration_quality_gate,
+                                        status=status,
+                                        matched_stars=matched,
+                                        inliers=inliers,
+                                        rms_px=rms_px,
+                                        min_inliers=resident_registration_quality_min_inliers,
+                                        max_rms_px=resident_registration_quality_max_rms_px,
+                                        diagnostics=triangle_quality_diagnostics,
+                                    )
+                                    warnings.extend(resident_registration_quality_warning_fields(quality_decision))
                                 if quality_failures:
                                     status = "failed"
                                     frame_weight_values[index] = 0.0
@@ -5596,6 +5691,14 @@ def run_resident_calibration_integration(
                                     warnings.append(
                                         "resident triangle descriptor registration failed quality gate: "
                                         + "; ".join(quality_failures)
+                                    )
+                                elif quality_decision is not None and quality_decision["action_applied"] == "exclude":
+                                    status = str(quality_decision["final_status"])
+                                    frame_weight_values[index] = 0.0
+                                    frame_weights[frame["id"]] = 0.0
+                                    warnings.append(
+                                        "resident registration quality gate excluded frame: "
+                                        + "; ".join(str(item) for item in quality_decision.get("reasons", []))
                                     )
                                 elif (
                                     deferred_triangle_refine is None
@@ -5802,6 +5905,21 @@ def run_resident_calibration_integration(
                         frame_weight_values[index] = 0.0
                         frame_weights[frame["id"]] = 0.0
                         warnings.append(str(exc))
+                    if quality_decision is None:
+                        quality_decision = _resident_registration_quality_decision(
+                            decisions_by_frame=registration_quality_decisions_by_frame,
+                            frame_id=str(frame["id"]),
+                            registration_mode=resident_registration,
+                            requested_action=resident_registration_quality_gate,
+                            status=status,
+                            matched_stars=matched,
+                            inliers=inliers,
+                            rms_px=rms_px,
+                            min_inliers=resident_registration_quality_min_inliers,
+                            max_rms_px=resident_registration_quality_max_rms_px,
+                            diagnostics=triangle_quality_diagnostics,
+                        )
+                        warnings.extend(resident_registration_quality_warning_fields(quality_decision))
                     registration_elapsed = perf_counter() - registration_frame_start
                     if resident_registration == "similarity_cuda_triangle":
                         _add_elapsed(registration_component_s, "triangle_frame_total", registration_elapsed)
@@ -6973,6 +7091,14 @@ def run_resident_calibration_integration(
                 high_sigma,
                 resident_winsorized_mode=resident_winsorized_mode,
             )
+            group_registration_quality_decisions = [
+                registration_quality_decisions_by_frame[str(frame["id"])]
+                for frame in light_frames
+                if str(frame["id"]) in registration_quality_decisions_by_frame
+            ]
+            group_registration_quality_summary = summarize_resident_registration_quality(
+                group_registration_quality_decisions
+            )
             resident_artifacts.append(
                 {
                     "filter": filter_name,
@@ -7207,6 +7333,20 @@ def run_resident_calibration_integration(
                         "warp_clamping_threshold": resident_warp_clamping_threshold,
                         "warp_batch_dispatch": resident_warp_batch_dispatch,
                         "max_shift": resident_registration_max_shift,
+                        "quality_gate": {
+                            "requested_action": resident_registration_quality_gate,
+                            "effective_action": (
+                                ("exclude" if resident_registration == "similarity_cuda_triangle" else "off")
+                                if resident_registration_quality_gate == "auto"
+                                else resident_registration_quality_gate
+                            ),
+                            "min_inliers": int(resident_registration_quality_min_inliers),
+                            "max_rms_px": None
+                            if resident_registration_quality_max_rms_px is None
+                            else float(resident_registration_quality_max_rms_px),
+                            "summary": group_registration_quality_summary,
+                            "decisions_path": str(run / "resident_registration_quality.json"),
+                        },
                         "ncc_sample_stride": resident_ncc_sample_stride,
                         "ncc_fallback_score_threshold": resident_ncc_fallback_score_threshold,
                         "subpixel_radius_steps": resident_subpixel_radius_steps,
@@ -8014,6 +8154,21 @@ def run_resident_calibration_integration(
             raise ValueError("resident mode found no executable light plans")
 
         resident_path = run / "resident_artifacts.json"
+        registration_quality_path = run / "resident_registration_quality.json"
+        registration_quality_decisions = list(registration_quality_decisions_by_frame.values())
+        registration_quality_payload = {
+            "schema_version": 1,
+            "source_stage": "resident_calibrated_stack",
+            "registration_mode": resident_registration,
+            "requested_action": resident_registration_quality_gate,
+            "min_inliers": int(resident_registration_quality_min_inliers),
+            "max_rms_px": None
+            if resident_registration_quality_max_rms_px is None
+            else float(resident_registration_quality_max_rms_px),
+            "summary": summarize_resident_registration_quality(registration_quality_decisions),
+            "decisions": registration_quality_decisions,
+        }
+        write_json(registration_quality_path, registration_quality_payload)
         resident_payload = {
             "schema_version": 1,
             "backend": "cuda_resident_stack",
@@ -8164,6 +8319,15 @@ def run_resident_calibration_integration(
             PipelineArtifact(
                 stage="resident_result_contract",
                 path=str(resident_result_contract_path),
+                format="json",
+                created_at=now_iso(),
+                source_frames=list(frames.keys()),
+            )
+        )
+        state.artifacts.append(
+            PipelineArtifact(
+                stage="resident_registration_quality",
+                path=str(registration_quality_path),
                 format="json",
                 created_at=now_iso(),
                 source_frames=list(frames.keys()),

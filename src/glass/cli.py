@@ -1039,6 +1039,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 resident_registration_motion_min_weight=args.resident_registration_motion_min_weight,
                 resident_registration_motion_power=args.resident_registration_motion_power,
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
+                resident_registration_quality_gate=args.resident_registration_quality_gate,
+                resident_registration_quality_min_inliers=args.resident_registration_quality_min_inliers,
+                resident_registration_quality_max_rms_px=args.resident_registration_quality_max_rms_px,
                 resident_frame_weight_proposal=args.resident_frame_weight_proposal,
                 resident_tile_local_policy_replay=args.resident_tile_local_policy_replay,
                 resident_tile_local_policy_mode=args.resident_tile_local_policy_mode,
@@ -1160,6 +1163,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 resident_registration_motion_min_weight=args.resident_registration_motion_min_weight,
                 resident_registration_motion_power=args.resident_registration_motion_power,
                 resident_registration_motion_scale_floor_px=args.resident_registration_motion_scale_floor_px,
+                resident_registration_quality_gate=args.resident_registration_quality_gate,
+                resident_registration_quality_min_inliers=args.resident_registration_quality_min_inliers,
+                resident_registration_quality_max_rms_px=args.resident_registration_quality_max_rms_px,
                 resident_frame_weight_proposal=args.resident_frame_weight_proposal,
                 resident_tile_local_policy_replay=args.resident_tile_local_policy_replay,
                 resident_tile_local_policy_mode=args.resident_tile_local_policy_mode,
@@ -4421,6 +4427,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="minimum robust motion scale in pixels to avoid divide-by-zero on tight dithers",
     )
     run.add_argument(
+        "--resident-registration-quality-gate",
+        choices=["auto", "off", "warn", "exclude"],
+        default="auto",
+        help=(
+            "resident registration admission action; auto excludes low-confidence triangle fits, "
+            "warn records decisions without changing weights, off disables the gate"
+        ),
+    )
+    run.add_argument(
+        "--resident-registration-quality-min-inliers",
+        type=int,
+        default=4,
+        help="minimum inlier count for resident registration admission; Gate433 default is 4",
+    )
+    run.add_argument(
+        "--resident-registration-quality-max-rms-px",
+        type=float,
+        help="optional maximum registration RMS for resident admission; omitted records RMS without gating on it",
+    )
+    run.add_argument(
         "--resident-frame-weight-proposal",
         help="optional frame-weight proposal JSON produced by frame-weight-proposal; default disabled",
     )
@@ -4743,6 +4769,14 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--resident-registration-motion-min-weight", type=float, default=0.05)
     audit.add_argument("--resident-registration-motion-power", type=float, default=2.0)
     audit.add_argument("--resident-registration-motion-scale-floor-px", type=float, default=1.0)
+    audit.add_argument(
+        "--resident-registration-quality-gate",
+        choices=["auto", "off", "warn", "exclude"],
+        default="auto",
+        help="resident registration admission action for resident audit runs",
+    )
+    audit.add_argument("--resident-registration-quality-min-inliers", type=int, default=4)
+    audit.add_argument("--resident-registration-quality-max-rms-px", type=float)
     audit.add_argument(
         "--resident-frame-weight-proposal",
         help="optional frame-weight proposal JSON produced by frame-weight-proposal for resident audit",

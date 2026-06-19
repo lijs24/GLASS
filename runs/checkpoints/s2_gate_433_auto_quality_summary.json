@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "artifact_type": "s2_gate_433_auto_quality_summary",
+  "run": {
+    "run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate433_auto_quality_20260619",
+    "frame_count": 200,
+    "status_counts": {
+      "excluded": 7,
+      "ok": 192,
+      "reference": 1
+    },
+    "total_elapsed_s": 28.39727759998641,
+    "light_read_upload_calibrate_s": 17.48551889997907,
+    "resident_registration_warp_s": 1.633846400101902,
+    "resident_integration_s": 0.2914351999934297,
+    "output_write_s": 2.5774766000104137,
+    "estimated_peak_gib": 47.3117358982563,
+    "master_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate433_auto_quality_20260619\\integration\\resident_master_H.fits",
+    "quality_contract_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate433_auto_quality_20260619\\resident_registration_quality.json"
+  },
+  "quality_gate": {
+    "requested_action": "auto",
+    "min_inliers": 4,
+    "max_rms_px": null,
+    "summary": {
+      "action_counts": {
+        "exclude": 7,
+        "none": 193
+      },
+      "decision_status_counts": {
+        "accepted": 192,
+        "reference": 1,
+        "rejected": 7
+      },
+      "final_status_counts": {
+        "excluded": 7,
+        "ok": 192,
+        "reference": 1
+      },
+      "frame_count": 200,
+      "rejected_frame_ids": [
+        "F000160",
+        "F000213",
+        "F000214",
+        "F000215",
+        "F000216",
+        "F000217",
+        "F000218"
+      ],
+      "warning_frame_ids": []
+    }
+  },
+  "gate432_parity": {
+    "expected_rejected_frame_ids": [
+      "F000160",
+      "F000213",
+      "F000214",
+      "F000215",
+      "F000216",
+      "F000217",
+      "F000218"
+    ],
+    "matches_gate432_rejected_frames": true,
+    "compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate433_auto_quality_vs_gate432_masked_compare.json",
+    "shape_match": true,
+    "abs_diff_p50": 0.0,
+    "abs_diff_p90": 0.0,
+    "abs_diff_p99": 0.0,
+    "rms_diff": 0.0,
+    "relative_rms_diff": 0.0
+  },
+  "rejected_frame_details": [
+    {
+      "frame_id": "F000160",
+      "inliers": 2,
+      "rms_px": 2.3910679817199707,
+      "reasons": [
+        "registration_inliers_below_min:2<4"
+      ],
+      "translation_refine_status": "insufficient_inliers",
+      "reference_stars": 48,
+      "moving_stars": 48
+    },
+    {
+      "frame_id": "F000213",
+      "inliers": 3,
+      "rms_px": 1.4262175559997559,
+      "reasons": [
+        "registration_inliers_below_min:3<4"
+      ],
+      "translation_refine_status": "insufficient_inliers",
+      "reference_stars": 48,
+      "moving_stars": 48
+    },
+    {
+      "frame_id": "F000214",
+      "inliers": 3,
+      "rms_px": 1.1768157482147217,
+      "reasons": [
+        "registration_inliers_below_min:3<4"
+      ],
+      "translation_refine_status": "insufficient_inliers",
+      "reference_stars": 48,
+      "moving_stars": 48
+    },
+    {
+      "frame_id": "F000215",
+      "inliers": 3,
+      "rms_px": 0.9095922112464905,
+      "reasons": [
+        "registration_inliers_below_min:3<4"
+      ],
+      "translation_refine_status": "insufficient_inliers",
+      "reference_stars": 48,
+      "moving_stars": 48
+    },
+    {
+      "frame_id": "F000216",
+      "inliers": 3,
+      "rms_px": 0.3238076865673065,
+      "reasons": [
+        "registration_inliers_below_min:3<4"
+      ],
+      "translation_refine_status": "insufficient_inliers",
+      "reference_stars": 48,
+      "moving_stars": 48
+    },
+    {
+      "frame_id": "F000217",
+      "inliers": 3,
+      "rms_px": 1.0599052906036377,
+      "reasons": [
+        "registration_inliers_below_min:3<4"
+      ],
+      "translation_refine_status": "insufficient_inliers",
+      "reference_stars": 48,
+      "moving_stars": 48
+    },
+    {
+      "frame_id": "F000218",
+      "inliers": 3,
+      "rms_px": 1.3140949010849,
+      "reasons": [
+        "registration_inliers_below_min:3<4"
+      ],
+      "translation_refine_status": "insufficient_inliers",
+      "reference_stars": 48,
+      "moving_stars": 48
+    }
+  ]
+}
