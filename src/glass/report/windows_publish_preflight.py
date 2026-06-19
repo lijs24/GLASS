@@ -735,6 +735,38 @@ def _release_quality_guard_publication_fields(
             "release_quality_present",
             "release_quality_guard_present",
         ),
+        f"{output_prefix}_final_fields_present": field(
+            "final_fields_present",
+            "final_fields_present",
+        ),
+        f"{output_prefix}_final_checks_compatible_missing": field(
+            "final_checks_compatible_missing",
+            "final_checks_compatible_missing",
+        ),
+        f"{output_prefix}_final_checks_ready": field(
+            "final_checks_ready",
+            "final_checks_ready",
+        ),
+        f"{output_prefix}_final_checks_match": field(
+            "final_checks_match",
+            "final_checks_match",
+        ),
+        f"{output_prefix}_raw_final_checks_present": field(
+            "raw_final_checks_present",
+            "raw_final_checks_present",
+        ),
+        f"{output_prefix}_raw_final_checks_ready": field(
+            "raw_final_checks_ready",
+            "raw_final_checks_ready",
+        ),
+        f"{output_prefix}_phase2_final_checks_present": field(
+            "phase2_final_checks_present",
+            "phase2_final_checks_present",
+        ),
+        f"{output_prefix}_phase2_final_checks_ready": field(
+            "phase2_final_checks_ready",
+            "phase2_final_checks_ready",
+        ),
         f"{output_prefix}_decision_check_ready": field(
             "decision_check_ready",
             "decision_check_ready",
@@ -765,6 +797,26 @@ def _release_quality_guard_publication_fields(
             "raw_matrix_manifest_match_check",
             "raw_matrix_manifest_match_check",
         ),
+        f"{output_prefix}_raw_release_matrix_check": field(
+            "raw_release_matrix_check",
+            "raw_release_matrix_check",
+        ),
+        f"{output_prefix}_raw_release_matrix_default_check": field(
+            "raw_release_matrix_default_check",
+            "raw_release_matrix_default_check",
+        ),
+        f"{output_prefix}_raw_release_default_promotion_check": field(
+            "raw_release_default_promotion_check",
+            "raw_release_default_promotion_check",
+        ),
+        f"{output_prefix}_raw_release_matrix_default_match_check": field(
+            "raw_release_matrix_default_match_check",
+            "raw_release_matrix_default_match_check",
+        ),
+        f"{output_prefix}_raw_release_matrix_manifest_match_check": field(
+            "raw_release_matrix_manifest_match_check",
+            "raw_release_matrix_manifest_match_check",
+        ),
         f"{output_prefix}_phase2_matrix_raw_status": field(
             "phase2_matrix_raw_status",
             "phase2_matrix_raw_status",
@@ -789,6 +841,26 @@ def _release_quality_guard_publication_fields(
             "phase2_matrix_manifest_match_check",
             "phase2_matrix_manifest_match_check",
         ),
+        f"{output_prefix}_phase2_release_matrix_check": field(
+            "phase2_release_matrix_check",
+            "phase2_release_matrix_check",
+        ),
+        f"{output_prefix}_phase2_release_matrix_default_check": field(
+            "phase2_release_matrix_default_check",
+            "phase2_release_matrix_default_check",
+        ),
+        f"{output_prefix}_phase2_release_default_promotion_check": field(
+            "phase2_release_default_promotion_check",
+            "phase2_release_default_promotion_check",
+        ),
+        f"{output_prefix}_phase2_release_matrix_default_match_check": field(
+            "phase2_release_matrix_default_match_check",
+            "phase2_release_matrix_default_match_check",
+        ),
+        f"{output_prefix}_phase2_release_matrix_manifest_match_check": field(
+            "phase2_release_matrix_manifest_match_check",
+            "phase2_release_matrix_manifest_match_check",
+        ),
         f"{output_prefix}_failed_checks": field("failed_checks", "failed_checks")
         or [],
     }
@@ -810,6 +882,22 @@ def _release_quality_guard_publication_evidence(
         "release_quality_present": summary.get(
             f"{prefix}_release_quality_present"
         ),
+        "final_fields_present": summary.get(f"{prefix}_final_fields_present"),
+        "final_checks_compatible_missing": summary.get(
+            f"{prefix}_final_checks_compatible_missing"
+        ),
+        "final_checks_ready": summary.get(f"{prefix}_final_checks_ready"),
+        "final_checks_match": summary.get(f"{prefix}_final_checks_match"),
+        "raw_final_checks_present": summary.get(
+            f"{prefix}_raw_final_checks_present"
+        ),
+        "raw_final_checks_ready": summary.get(f"{prefix}_raw_final_checks_ready"),
+        "phase2_final_checks_present": summary.get(
+            f"{prefix}_phase2_final_checks_present"
+        ),
+        "phase2_final_checks_ready": summary.get(
+            f"{prefix}_phase2_final_checks_ready"
+        ),
         "decision_check_ready": summary.get(f"{prefix}_decision_check_ready"),
         "checks_ready": summary.get(f"{prefix}_checks_ready"),
         "layers_ready": summary.get(f"{prefix}_layers_ready"),
@@ -829,6 +917,19 @@ def _release_quality_guard_publication_evidence(
         "raw_matrix_manifest_match_check": summary.get(
             f"{prefix}_raw_matrix_manifest_match_check"
         ),
+        "raw_release_matrix_check": summary.get(f"{prefix}_raw_release_matrix_check"),
+        "raw_release_matrix_default_check": summary.get(
+            f"{prefix}_raw_release_matrix_default_check"
+        ),
+        "raw_release_default_promotion_check": summary.get(
+            f"{prefix}_raw_release_default_promotion_check"
+        ),
+        "raw_release_matrix_default_match_check": summary.get(
+            f"{prefix}_raw_release_matrix_default_match_check"
+        ),
+        "raw_release_matrix_manifest_match_check": summary.get(
+            f"{prefix}_raw_release_matrix_manifest_match_check"
+        ),
         "phase2_matrix_raw_status": summary.get(
             f"{prefix}_phase2_matrix_raw_status"
         ),
@@ -847,6 +948,21 @@ def _release_quality_guard_publication_evidence(
         "phase2_matrix_manifest_match_check": summary.get(
             f"{prefix}_phase2_matrix_manifest_match_check"
         ),
+        "phase2_release_matrix_check": summary.get(
+            f"{prefix}_phase2_release_matrix_check"
+        ),
+        "phase2_release_matrix_default_check": summary.get(
+            f"{prefix}_phase2_release_matrix_default_check"
+        ),
+        "phase2_release_default_promotion_check": summary.get(
+            f"{prefix}_phase2_release_default_promotion_check"
+        ),
+        "phase2_release_matrix_default_match_check": summary.get(
+            f"{prefix}_phase2_release_matrix_default_match_check"
+        ),
+        "phase2_release_matrix_manifest_match_check": summary.get(
+            f"{prefix}_phase2_release_matrix_manifest_match_check"
+        ),
         "failed_checks": summary.get(f"{prefix}_failed_checks") or [],
     }
 
@@ -862,12 +978,34 @@ def _release_quality_guard_publication_optional_ready(
     )
     if evidence.get("present") is not True:
         return True
-    return (
+    base_ready = (
         evidence.get("ready") is True
         and evidence.get("decision_check_ready") is True
         and evidence.get("checks_ready") is True
         and evidence.get("layers_ready") is True
         and not evidence.get("failed_checks")
+    )
+    if not base_ready:
+        return False
+    compatible_missing_final_checks = (
+        evidence.get("final_checks_compatible_missing") is True
+        and evidence.get("raw_final_checks_present") is not True
+        and evidence.get("phase2_final_checks_present") is not True
+    )
+    if (
+        compatible_missing_final_checks
+        or (
+            evidence.get("final_fields_present") is not True
+            and evidence.get("raw_final_checks_present") is not True
+            and evidence.get("phase2_final_checks_present") is not True
+        )
+    ):
+        return True
+    return (
+        evidence.get("final_checks_ready") is True
+        and evidence.get("final_checks_match") is True
+        and evidence.get("raw_final_checks_ready") is True
+        and evidence.get("phase2_final_checks_ready") is True
     )
 
 
@@ -880,6 +1018,13 @@ _RELEASE_QUALITY_GUARD_PUBLICATION_MATCH_FIELDS = (
     "checks_passed",
     "compatible_missing",
     "release_quality_present",
+    "final_checks_compatible_missing",
+    "final_checks_ready",
+    "final_checks_match",
+    "raw_final_checks_present",
+    "raw_final_checks_ready",
+    "phase2_final_checks_present",
+    "phase2_final_checks_ready",
     "decision_check_ready",
     "checks_ready",
     "layers_ready",
@@ -889,12 +1034,22 @@ _RELEASE_QUALITY_GUARD_PUBLICATION_MATCH_FIELDS = (
     "raw_default_promotion_check_passed",
     "raw_matrix_default_match_check",
     "raw_matrix_manifest_match_check",
+    "raw_release_matrix_check",
+    "raw_release_matrix_default_check",
+    "raw_release_default_promotion_check",
+    "raw_release_matrix_default_match_check",
+    "raw_release_matrix_manifest_match_check",
     "phase2_matrix_raw_status",
     "phase2_matrix_phase2_status",
     "phase2_matrix_check_passed",
     "phase2_default_promotion_check_passed",
     "phase2_matrix_default_match_check",
     "phase2_matrix_manifest_match_check",
+    "phase2_release_matrix_check",
+    "phase2_release_matrix_default_check",
+    "phase2_release_default_promotion_check",
+    "phase2_release_matrix_default_match_check",
+    "phase2_release_matrix_manifest_match_check",
     "failed_checks",
 )
 
@@ -4478,6 +4633,26 @@ def build_windows_publish_preflight(
                     "release_decision_release_quality_publication_guard_phase2_matrix_raw_status"
                 )
             ),
+            "matrix_release_decision_release_quality_publication_guard_final_checks_ready": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_final_checks_ready"
+                )
+            ),
+            "matrix_release_decision_release_quality_publication_guard_final_checks_match": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_final_checks_match"
+                )
+            ),
+            "matrix_release_decision_release_quality_publication_guard_raw_final_checks_ready": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_raw_final_checks_ready"
+                )
+            ),
+            "matrix_release_decision_release_quality_publication_guard_phase2_final_checks_ready": (
+                matrix_info.get(
+                    "release_decision_release_quality_publication_guard_phase2_final_checks_ready"
+                )
+            ),
             "matrix_default_promotion_release_decision_release_quality_publication_guard_ready": (
                 matrix_info.get(
                     "default_promotion_release_decision_release_quality_publication_guard_ready"
@@ -4491,6 +4666,26 @@ def build_windows_publish_preflight(
             "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_status": (
                 matrix_info.get(
                     "default_promotion_release_decision_release_quality_publication_guard_phase2_matrix_raw_status"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_ready": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_final_checks_ready"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_match": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_final_checks_match"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready"
+                )
+            ),
+            "matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready": (
+                matrix_info.get(
+                    "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready"
                 )
             ),
             "default_promotion_release_decision_release_quality_publication_guard_present": (
@@ -4521,6 +4716,26 @@ def build_windows_publish_preflight(
             "default_promotion_release_decision_release_quality_publication_guard_phase2_status": (
                 promotion_info.get(
                     "release_decision_release_quality_publication_guard_phase2_matrix_raw_status"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_final_checks_ready": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_final_checks_ready"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_final_checks_match": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_final_checks_match"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_raw_final_checks_ready"
+                )
+            ),
+            "default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready": (
+                promotion_info.get(
+                    "release_decision_release_quality_publication_guard_phase2_final_checks_ready"
                 )
             ),
             "github_plan_matrix_resident_fastpath_handoff_ready": (
@@ -4876,6 +5091,24 @@ def _markdown(payload: dict[str, Any]) -> str:
             f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_layers_ready')}`/"
             f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_raw_status')}`/"
             f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_phase2_status')}`"
+        ),
+        (
+            "- Release-quality publication final checks: "
+            "matrix "
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_final_checks_ready')}`/"
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_final_checks_match')}`/"
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_raw_final_checks_ready')}`/"
+            f"`{summary.get('matrix_release_decision_release_quality_publication_guard_phase2_final_checks_ready')}`, "
+            "matrix-default "
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_ready')}`/"
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_final_checks_match')}`/"
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready')}`/"
+            f"`{summary.get('matrix_default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready')}`, "
+            "default-promotion "
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_final_checks_ready')}`/"
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_final_checks_match')}`/"
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_raw_final_checks_ready')}`/"
+            f"`{summary.get('default_promotion_release_decision_release_quality_publication_guard_phase2_final_checks_ready')}`"
         ),
         (
             "- Resident fastpath release handoff: "

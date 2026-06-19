@@ -6831,6 +6831,27 @@ integration where applicable.
   change, no runtime default change, no package upload, no GitHub release
   creation, and no real-data benchmark rerun.
 
+### S2-Gate 381: Windows Publish Preflight Release Quality Final Guard
+
+- Carry Gate380 Windows release-matrix final release quality publication
+  evidence into `glass windows-publish-preflight`.
+- Preserve legacy compatibility when release-matrix and default-promotion
+  artifacts explicitly omit raw/Phase2 final-check evidence, while requiring
+  both artifacts to carry final checks once the matrix supplies them.
+- Block local Windows publication readiness when matrix final checks fail,
+  default-promotion final checks fail, or default-promotion manifest evidence
+  drops final checks carried by the release matrix.
+- Surface final-check ready, match, raw, and Phase2 evidence in publish-preflight
+  JSON, summary, and Markdown.
+- Add focused tests for ready evidence, compatible missing final checks, failed
+  matrix final checks, failed default-promotion final checks, and missing
+  default-promotion final-check handoff.
+- Keep this gate publish-preflight scoped: no quality metric math change, no
+  default quality threshold, no star detector algorithm change, no registration
+  transform math change, no integration math change, no CUDA kernel change, no
+  runtime default change, no package upload, no GitHub release creation, and no
+  real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
