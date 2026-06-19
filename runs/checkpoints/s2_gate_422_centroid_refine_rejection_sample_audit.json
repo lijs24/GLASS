@@ -1,0 +1,617 @@
+{
+  "artifact_type": "resident_rejection_sample_audit",
+  "checks": [
+    {
+      "evidence": {
+        "maps": {
+          "coverage": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\coverage_map_H.fits",
+            "path_key": "coverage_map_path"
+          },
+          "dq": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\dq_map_H.fits",
+            "path_key": "dq_map_path"
+          },
+          "high_rejection": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\high_rejection_H.fits",
+            "path_key": "high_rejection_map_path"
+          },
+          "low_rejection": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\low_rejection_H.fits",
+            "path_key": "low_rejection_map_path"
+          }
+        }
+      },
+      "name": "cpu_maps_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "maps": {
+          "coverage": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+            "path_key": "coverage_map_path"
+          },
+          "dq": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_dq_map_H.fits",
+            "path_key": "dq_map_path"
+          },
+          "high_rejection": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_high_rejection_map_H.fits",
+            "path_key": "high_rejection_map_path"
+          },
+          "low_rejection": {
+            "exists": true,
+            "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_low_rejection_map_H.fits",
+            "path_key": "low_rejection_map_path"
+          }
+        }
+      },
+      "name": "resident_maps_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "shape": [
+          512,
+          512
+        ],
+        "shape_match": true,
+        "shapes": {
+          "cpu_coverage": [
+            512,
+            512
+          ],
+          "cpu_dq": [
+            512,
+            512
+          ],
+          "cpu_high_rejection": [
+            512,
+            512
+          ],
+          "cpu_low_rejection": [
+            512,
+            512
+          ],
+          "resident_coverage": [
+            512,
+            512
+          ],
+          "resident_dq": [
+            512,
+            512
+          ],
+          "resident_high_rejection": [
+            512,
+            512
+          ],
+          "resident_low_rejection": [
+            512,
+            512
+          ]
+        }
+      },
+      "name": "map_shapes_match",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "delta": 15,
+        "max_abs_delta": 64
+      },
+      "name": "rejected_sample_delta_within_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "delta": 504,
+        "max_abs_delta": 0,
+        "note": "pre-rejection sample delta compares coverage+low+high maps and identifies geometric/warp/DQ input-sample drift before rejection."
+      },
+      "name": "pre_rejection_sample_delta_within_limit",
+      "note": "",
+      "passed": false
+    },
+    {
+      "evidence": {
+        "abs_delta": 832,
+        "max_abs_delta": 16
+      },
+      "name": "same_pre_rejection_semantic_delta_within_limit",
+      "note": "",
+      "passed": false
+    }
+  ],
+  "compare_json": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_compare.json",
+  "comparison_region": {
+    "compared_pixels": 246016,
+    "compared_shape": [
+      496,
+      496
+    ],
+    "coverage_fraction": 1.0,
+    "coverage_max": 16.0,
+    "coverage_median": 16.0,
+    "coverage_min": 10.0,
+    "coverage_p1": 15.0,
+    "coverage_valid_pixels": 246016,
+    "full_shape": [
+      512,
+      512
+    ],
+    "glass_coverage_map": "runs\\checkpoints\\s2_gate_420_no_pixel_refine_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+    "ignore_border_px": 8,
+    "min_coverage": 1.0
+  },
+  "cpu": {
+    "backend": "cpu",
+    "dq_provenance_summary": {
+      "engine": "stack_engine_cpu",
+      "high_rejected_pixels": 7100,
+      "high_rejected_samples": 7352,
+      "input_flagged_samples": 32187,
+      "input_invalid_samples_before_rejection": 32187,
+      "input_nonfinite_samples": 0,
+      "input_samples": 4194304,
+      "input_valid_samples_before_rejection": 4162117,
+      "item": "H",
+      "low_rejected_pixels": 7200,
+      "low_rejected_samples": 7444,
+      "no_data_pixels": null,
+      "output_dq_summary": {
+        "high_rejected": 7100,
+        "low_rejected": 7200,
+        "valid": 248399
+      },
+      "partial_coverage_pixels": null,
+      "rejected_samples": 14796,
+      "sample_accounting_closure": {
+        "input_invalid_samples_before_rejection": 32187,
+        "input_samples": 4194304,
+        "input_total_match": true,
+        "input_valid_samples_before_rejection": 4162117,
+        "rejected_samples": 14796,
+        "semantics": "Initial valid input samples close over final valid samples plus low/high rejected samples. Invalid input samples are not rejection samples.",
+        "status": "passed",
+        "valid_rejection_match": true,
+        "valid_samples_after_rejection": 4147321
+      },
+      "schema_version": 1,
+      "semantics": "StackEngine consumes source DQ flags and non-finite samples as invalid samples; output DQ records zero-coverage and rejection-touched pixels; rejected sample counts are separate from invalid input sample counts.",
+      "source_dq_flag_counts": {
+        "cold_pixel": 0,
+        "cosmetic_corrected": 0,
+        "dead_pixel": 0,
+        "high_rejected": 0,
+        "hot_pixel": 0,
+        "local_normalization_excluded": 0,
+        "low_rejected": 0,
+        "no_data": 32187,
+        "saturated": 0,
+        "warp_edge": 0
+      },
+      "source_schema": "stack_engine_dq_provenance",
+      "stage": "integration",
+      "valid_pixels": 248399,
+      "valid_samples_after_rejection": 4147321,
+      "warp_edge_pixels": null,
+      "zero_coverage_pixels": 0
+    },
+    "exists": true,
+    "filter": "H",
+    "frame_count": 16,
+    "integration_results_exists": true,
+    "integration_results_path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration_results.json",
+    "maps": {
+      "coverage": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\coverage_map_H.fits",
+        "path_key": "coverage_map_path"
+      },
+      "dq": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\dq_map_H.fits",
+        "path_key": "dq_map_path"
+      },
+      "high_rejection": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\high_rejection_H.fits",
+        "path_key": "high_rejection_map_path"
+      },
+      "low_rejection": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_414_runtime_validation_cpu\\integration\\low_rejection_H.fits",
+        "path_key": "low_rejection_map_path"
+      }
+    },
+    "path": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu",
+    "pixel_summary": {
+      "coverage_max": 16,
+      "coverage_min": 1,
+      "coverage_positive_pixels": 262144,
+      "coverage_sample_sum": 4147321,
+      "coverage_zero_pixels": 0,
+      "dq_high_rejected_pixels": 7100,
+      "dq_low_rejected_pixels": 7200,
+      "dq_no_data_pixels": 0,
+      "dq_valid_pixels": 248399,
+      "dq_warp_edge_pixels": 0,
+      "high_rejected_pixels": 7100,
+      "high_rejected_samples": 7352,
+      "low_rejected_pixels": 7200,
+      "low_rejected_samples": 7444,
+      "pre_rejection_sample_sum": 4162117,
+      "rejected_pixels": 13745,
+      "rejected_samples": 14796
+    }
+  },
+  "created_at": "2026-06-19T08:16:03+00:00",
+  "deltas": {
+    "abs_coverage_sample_delta": 7433,
+    "abs_high_rejected_sample_delta": 567,
+    "abs_low_rejected_sample_delta": 566,
+    "abs_pre_rejection_sample_delta": 6616,
+    "abs_rejected_sample_delta": 1131,
+    "coverage_mismatch_pixels": 5791,
+    "coverage_sample_delta": 489,
+    "cpu_warp_edge_rejection_mismatch_pixels": 0,
+    "dq_mismatch_pixels": 5388,
+    "high_rejected_sample_delta": 1,
+    "high_rejection_mismatch_pixels": 562,
+    "low_rejected_sample_delta": 14,
+    "low_rejection_mismatch_pixels": 562,
+    "pre_rejection_mismatch_pixels": 5086,
+    "pre_rejection_sample_delta": 504,
+    "rejected_sample_delta": 15,
+    "rejection_mismatch_pixels": 1089,
+    "rejection_mismatch_with_coverage_mismatch_pixels": 976,
+    "rejection_mismatch_with_pre_rejection_mismatch_pixels": 271,
+    "resident_warp_edge_rejection_mismatch_pixels": 242,
+    "same_post_coverage_abs_rejected_sample_delta": 114,
+    "same_post_coverage_rejection_mismatch_pixels": 113,
+    "same_pre_rejection_abs_rejected_sample_delta": 832,
+    "same_pre_rejection_rejection_mismatch_pixels": 818
+  },
+  "failed_checks": [
+    "pre_rejection_sample_delta_within_limit",
+    "same_pre_rejection_semantic_delta_within_limit"
+  ],
+  "passed": false,
+  "recommendation": "fix_resident_geometric_coverage_or_transform",
+  "region_deltas": {
+    "inside_compare_region": {
+      "abs_coverage_sample_delta": 798,
+      "abs_high_rejected_sample_delta": 396,
+      "abs_low_rejected_sample_delta": 402,
+      "abs_pre_rejection_sample_delta": 0,
+      "abs_rejected_sample_delta": 798,
+      "coverage_mismatch_pixels": 786,
+      "coverage_sample_delta": 38,
+      "cpu_warp_edge_rejection_mismatch_pixels": 0,
+      "dq_mismatch_pixels": 741,
+      "high_rejected_sample_delta": -22,
+      "high_rejection_mismatch_pixels": 396,
+      "low_rejected_sample_delta": -16,
+      "low_rejection_mismatch_pixels": 400,
+      "pre_rejection_mismatch_pixels": 0,
+      "pre_rejection_sample_delta": 0,
+      "rejected_sample_delta": -38,
+      "rejection_mismatch_pixels": 786,
+      "rejection_mismatch_with_coverage_mismatch_pixels": 786,
+      "rejection_mismatch_with_pre_rejection_mismatch_pixels": 0,
+      "resident_warp_edge_rejection_mismatch_pixels": 0,
+      "same_post_coverage_abs_rejected_sample_delta": 0,
+      "same_post_coverage_rejection_mismatch_pixels": 0,
+      "same_pre_rejection_abs_rejected_sample_delta": 798,
+      "same_pre_rejection_rejection_mismatch_pixels": 786
+    },
+    "outside_compare_region": {
+      "abs_coverage_sample_delta": 6635,
+      "abs_high_rejected_sample_delta": 171,
+      "abs_low_rejected_sample_delta": 164,
+      "abs_pre_rejection_sample_delta": 6616,
+      "abs_rejected_sample_delta": 333,
+      "coverage_mismatch_pixels": 5005,
+      "coverage_sample_delta": 451,
+      "cpu_warp_edge_rejection_mismatch_pixels": 0,
+      "dq_mismatch_pixels": 4647,
+      "high_rejected_sample_delta": 23,
+      "high_rejection_mismatch_pixels": 166,
+      "low_rejected_sample_delta": 30,
+      "low_rejection_mismatch_pixels": 162,
+      "pre_rejection_mismatch_pixels": 5086,
+      "pre_rejection_sample_delta": 504,
+      "rejected_sample_delta": 53,
+      "rejection_mismatch_pixels": 303,
+      "rejection_mismatch_with_coverage_mismatch_pixels": 190,
+      "rejection_mismatch_with_pre_rejection_mismatch_pixels": 271,
+      "resident_warp_edge_rejection_mismatch_pixels": 242,
+      "same_post_coverage_abs_rejected_sample_delta": 114,
+      "same_post_coverage_rejection_mismatch_pixels": 113,
+      "same_pre_rejection_abs_rejected_sample_delta": 34,
+      "same_pre_rejection_rejection_mismatch_pixels": 32
+    }
+  },
+  "resident": {
+    "backend": "cuda_resident_stack",
+    "dq_provenance_summary": {
+      "active_frame_count": 16,
+      "engine": "cuda_resident_stack",
+      "finite_pre_rejection_pixels": 262144,
+      "high_rejected_pixels": 7098,
+      "input_flagged_samples": null,
+      "input_invalid_samples_before_rejection": null,
+      "input_nonfinite_samples": null,
+      "input_samples": null,
+      "input_valid_samples_before_rejection": 4162621,
+      "item": "H",
+      "low_rejected_pixels": 7223,
+      "no_data_pixels": null,
+      "output_dq_summary": {
+        "high_rejected": 7098,
+        "low_rejected": 7223,
+        "valid": 244065,
+        "warp_edge": 4588
+      },
+      "partial_coverage_pixels": 4588,
+      "post_rejection_pixels": 262144,
+      "rejected_samples": 14811,
+      "sample_accounting_closure": {
+        "input_invalid_samples_before_rejection": null,
+        "input_samples": null,
+        "input_total_match": null,
+        "input_valid_samples_before_rejection": 4162621,
+        "rejected_samples": 14811,
+        "semantics": "Initial valid input samples close over final valid samples plus low/high rejected samples. Invalid input samples are not rejection samples.",
+        "status": "passed",
+        "valid_rejection_match": true,
+        "valid_samples_after_rejection": 4147810
+      },
+      "schema_version": 1,
+      "semantics": "Resident CUDA provenance summarizes post-rejection coverage, rejection counts, and optional geometric warp coverage from resident output maps. When coverage sample sums are available, rejected samples are checked against pre/post rejection coverage closure.",
+      "source_dq_flag_counts": {},
+      "source_schema": "resident_dq_coverage_provenance",
+      "source_terms": [
+        "post_rejection_coverage",
+        "low_rejection",
+        "high_rejection",
+        "geometric_warp_coverage"
+      ],
+      "stage": "integration",
+      "valid_pixels": 244065,
+      "valid_samples_after_rejection": 4147810,
+      "warp_edge_pixels": 4588,
+      "zero_coverage_pixels": 0
+    },
+    "exists": true,
+    "filter": "H",
+    "frame_count": 16,
+    "integration_results_exists": true,
+    "integration_results_path": "runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration_results.json",
+    "maps": {
+      "coverage": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+        "path_key": "coverage_map_path"
+      },
+      "dq": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_dq_map_H.fits",
+        "path_key": "dq_map_path"
+      },
+      "high_rejection": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_high_rejection_map_H.fits",
+        "path_key": "high_rejection_map_path"
+      },
+      "low_rejection": {
+        "exists": true,
+        "path": "C:\\Users\\ljs\\WORK\\astro\\gpuwbpp\\runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened\\integration\\resident_low_rejection_map_H.fits",
+        "path_key": "low_rejection_map_path"
+      }
+    },
+    "path": "runs\\checkpoints\\s2_gate_422_centroid_refine_refF16_cuda_hardened",
+    "pixel_summary": {
+      "coverage_max": 16,
+      "coverage_min": 2,
+      "coverage_positive_pixels": 262144,
+      "coverage_sample_sum": 4147810,
+      "coverage_zero_pixels": 0,
+      "dq_high_rejected_pixels": 7098,
+      "dq_low_rejected_pixels": 7223,
+      "dq_no_data_pixels": 0,
+      "dq_valid_pixels": 244065,
+      "dq_warp_edge_pixels": 4588,
+      "high_rejected_pixels": 7098,
+      "high_rejected_samples": 7353,
+      "low_rejected_pixels": 7223,
+      "low_rejected_samples": 7458,
+      "pre_rejection_sample_sum": 4162621,
+      "rejected_pixels": 13768,
+      "rejected_samples": 14811
+    }
+  },
+  "schema_version": 1,
+  "shape_summary": {
+    "shape": [
+      512,
+      512
+    ],
+    "shape_match": true,
+    "shapes": {
+      "cpu_coverage": [
+        512,
+        512
+      ],
+      "cpu_dq": [
+        512,
+        512
+      ],
+      "cpu_high_rejection": [
+        512,
+        512
+      ],
+      "cpu_low_rejection": [
+        512,
+        512
+      ],
+      "resident_coverage": [
+        512,
+        512
+      ],
+      "resident_dq": [
+        512,
+        512
+      ],
+      "resident_high_rejection": [
+        512,
+        512
+      ],
+      "resident_low_rejection": [
+        512,
+        512
+      ]
+    }
+  },
+  "status": "attention_required",
+  "thresholds": {
+    "max_pre_rejection_sample_delta": 0,
+    "max_rejected_sample_delta": 64,
+    "max_same_pre_rejection_abs_delta": 16
+  },
+  "tile_size": 64,
+  "top_tiles": [
+    {
+      "abs_coverage_sample_delta": 615,
+      "abs_pre_rejection_sample_delta": 613,
+      "abs_rejected_sample_delta": 46,
+      "coverage_mismatch_pixels": 429,
+      "coverage_sample_delta": 97,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": 117,
+      "rejected_sample_delta": 20,
+      "rejection_mismatch_pixels": 44,
+      "x0": 0,
+      "x1": 64,
+      "y0": 448,
+      "y1": 512
+    },
+    {
+      "abs_coverage_sample_delta": 335,
+      "abs_pre_rejection_sample_delta": 320,
+      "abs_rejected_sample_delta": 43,
+      "coverage_mismatch_pixels": 206,
+      "coverage_sample_delta": -207,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": -192,
+      "rejected_sample_delta": 15,
+      "rejection_mismatch_pixels": 41,
+      "x0": 0,
+      "x1": 64,
+      "y0": 384,
+      "y1": 448
+    },
+    {
+      "abs_coverage_sample_delta": 463,
+      "abs_pre_rejection_sample_delta": 441,
+      "abs_rejected_sample_delta": 36,
+      "coverage_mismatch_pixels": 381,
+      "coverage_sample_delta": 323,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": 321,
+      "rejected_sample_delta": -2,
+      "rejection_mismatch_pixels": 34,
+      "x0": 448,
+      "x1": 512,
+      "y0": 448,
+      "y1": 512
+    },
+    {
+      "abs_coverage_sample_delta": 349,
+      "abs_pre_rejection_sample_delta": 320,
+      "abs_rejected_sample_delta": 33,
+      "coverage_mismatch_pixels": 272,
+      "coverage_sample_delta": 333,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": 320,
+      "rejected_sample_delta": -13,
+      "rejection_mismatch_pixels": 30,
+      "x0": 128,
+      "x1": 192,
+      "y0": 448,
+      "y1": 512
+    },
+    {
+      "abs_coverage_sample_delta": 336,
+      "abs_pre_rejection_sample_delta": 320,
+      "abs_rejected_sample_delta": 32,
+      "coverage_mismatch_pixels": 198,
+      "coverage_sample_delta": -198,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": -192,
+      "rejected_sample_delta": 6,
+      "rejection_mismatch_pixels": 27,
+      "x0": 0,
+      "x1": 64,
+      "y0": 320,
+      "y1": 384
+    },
+    {
+      "abs_coverage_sample_delta": 338,
+      "abs_pre_rejection_sample_delta": 320,
+      "abs_rejected_sample_delta": 30,
+      "coverage_mismatch_pixels": 207,
+      "coverage_sample_delta": -198,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": -192,
+      "rejected_sample_delta": 6,
+      "rejection_mismatch_pixels": 28,
+      "x0": 0,
+      "x1": 64,
+      "y0": 128,
+      "y1": 192
+    },
+    {
+      "abs_coverage_sample_delta": 337,
+      "abs_pre_rejection_sample_delta": 320,
+      "abs_rejected_sample_delta": 29,
+      "coverage_mismatch_pixels": 267,
+      "coverage_sample_delta": 325,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": 320,
+      "rejected_sample_delta": -5,
+      "rejection_mismatch_pixels": 28,
+      "x0": 384,
+      "x1": 448,
+      "y0": 448,
+      "y1": 512
+    },
+    {
+      "abs_coverage_sample_delta": 331,
+      "abs_pre_rejection_sample_delta": 320,
+      "abs_rejected_sample_delta": 27,
+      "coverage_mismatch_pixels": 200,
+      "coverage_sample_delta": -199,
+      "pixels": 4096,
+      "pre_rejection_sample_delta": -192,
+      "rejected_sample_delta": 7,
+      "rejection_mismatch_pixels": 26,
+      "x0": 0,
+      "x1": 64,
+      "y0": 64,
+      "y1": 128
+    }
+  ]
+}

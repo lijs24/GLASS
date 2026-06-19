@@ -520,6 +520,188 @@ def _matrix_is_translation(matrix: list[list[float]], atol: float = 1.0e-6) -> b
     )
 
 
+def _resident_triangle_translation_refine(
+    reference_catalog: dict[str, Any] | None,
+    moving_catalog: dict[str, Any] | None,
+    seed_matrix: Any,
+    *,
+    tolerance_px: float,
+    min_inliers: int,
+    max_correction_px: float,
+) -> dict[str, Any]:
+    seed = np.asarray(seed_matrix, dtype=np.float64).reshape(3, 3)
+    if reference_catalog is None or moving_catalog is None:
+        return {"applied": False, "status": "missing_catalog", "matrix": seed.tolist()}
+    reference_count = int(reference_catalog.get("stored_count", len(reference_catalog.get("x", []))) or 0)
+    moving_count = int(moving_catalog.get("stored_count", len(moving_catalog.get("x", []))) or 0)
+    if reference_count <= 0 or moving_count <= 0:
+        return {"applied": False, "status": "empty_catalog", "matrix": seed.tolist()}
+
+    reference = np.column_stack(
+        [
+            np.asarray(reference_catalog.get("x", []), dtype=np.float64)[:reference_count],
+            np.asarray(reference_catalog.get("y", []), dtype=np.float64)[:reference_count],
+        ]
+    )
+    moving = np.column_stack(
+        [
+            np.asarray(moving_catalog.get("x", []), dtype=np.float64)[:moving_count],
+            np.asarray(moving_catalog.get("y", []), dtype=np.float64)[:moving_count],
+        ]
+    )
+    if reference.shape[0] <= 0 or moving.shape[0] <= 0:
+        return {"applied": False, "status": "empty_catalog", "matrix": seed.tolist()}
+
+    ones = np.ones((moving.shape[0], 1), dtype=np.float64)
+    projected_h = np.hstack([moving, ones]) @ seed.T
+    scale = projected_h[:, 2:3]
+    projected = np.divide(
+        projected_h[:, :2],
+        scale,
+        out=projected_h[:, :2].copy(),
+        where=np.abs(scale) > 1.0e-12,
+    )
+
+    tolerance = max(0.0, float(tolerance_px))
+    distances = np.sqrt(np.sum((projected[:, None, :] - reference[None, :, :]) ** 2, axis=2))
+    candidate_indices = np.argwhere(distances <= tolerance)
+    if candidate_indices.size == 0:
+        return {
+            "applied": False,
+            "status": "no_pairs",
+            "matrix": seed.tolist(),
+            "inliers": 0,
+            "rms_px": float("nan"),
+        }
+    candidates = sorted(
+        (
+            (float(distances[int(moving_i), int(reference_i)]), int(moving_i), int(reference_i))
+            for moving_i, reference_i in candidate_indices
+        ),
+        key=lambda item: item[0],
+    )
+    used_moving: set[int] = set()
+    used_reference: set[int] = set()
+    pairs: list[tuple[int, int]] = []
+    for _distance, moving_i, reference_i in candidates:
+        if moving_i in used_moving or reference_i in used_reference:
+            continue
+        used_moving.add(moving_i)
+        used_reference.add(reference_i)
+        pairs.append((moving_i, reference_i))
+
+    inliers = len(pairs)
+    if inliers < int(min_inliers):
+        return {
+            "applied": False,
+            "status": "insufficient_inliers",
+            "matrix": seed.tolist(),
+            "inliers": inliers,
+            "rms_px": float("nan"),
+        }
+
+    moving_pairs = moving[[moving_i for moving_i, _reference_i in pairs]]
+    reference_pairs = reference[[reference_i for _moving_i, reference_i in pairs]]
+    translations = reference_pairs - moving_pairs
+    dx, dy = np.median(translations, axis=0)
+    refined = np.asarray([[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]], dtype=np.float64)
+    correction_dx = float(dx - seed[0, 2])
+    correction_dy = float(dy - seed[1, 2])
+    correction_px = float(np.hypot(correction_dx, correction_dy))
+    if correction_px > float(max_correction_px):
+        return {
+            "applied": False,
+            "status": "correction_exceeds_limit",
+            "matrix": seed.tolist(),
+            "candidate_matrix": refined.tolist(),
+            "inliers": inliers,
+            "rms_px": float("nan"),
+            "correction_dx": correction_dx,
+            "correction_dy": correction_dy,
+            "correction_px": correction_px,
+        }
+
+    residuals = moving_pairs + np.asarray([dx, dy], dtype=np.float64) - reference_pairs
+    rms_px = float(np.sqrt(np.mean(np.sum(residuals * residuals, axis=1)))) if inliers else float("nan")
+    return {
+        "applied": True,
+        "status": "applied",
+        "matrix": refined.tolist(),
+        "inliers": inliers,
+        "rms_px": rms_px,
+        "correction_dx": correction_dx,
+        "correction_dy": correction_dy,
+        "correction_px": correction_px,
+    }
+
+
+def _resident_refine_catalog_centroids_from_stack(
+    stack: Any,
+    frame_index: int,
+    catalog: dict[str, Any] | None,
+    *,
+    radius: int = 4,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    if catalog is None:
+        return None, {"enabled": False, "status": "missing_catalog", "refined_count": 0}
+    stored_count = int(catalog.get("stored_count", len(catalog.get("x", []))) or 0)
+    if stored_count <= 0:
+        return catalog, {"enabled": True, "status": "empty_catalog", "refined_count": 0}
+    output = dict(catalog)
+    xs = np.asarray(catalog.get("x", []), dtype=np.float32).copy()
+    ys = np.asarray(catalog.get("y", []), dtype=np.float32).copy()
+    if xs.size < stored_count or ys.size < stored_count:
+        return catalog, {"enabled": True, "status": "invalid_catalog_shape", "refined_count": 0}
+
+    refined_count = 0
+    failed_count = 0
+    max_shift = 0.0
+    window_radius = max(1, int(radius))
+    for i in range(stored_count):
+        x_center = int(round(float(xs[i])))
+        y_center = int(round(float(ys[i])))
+        x0 = max(0, x_center - window_radius)
+        y0 = max(0, y_center - window_radius)
+        x1 = min(int(stack.width), x_center + window_radius + 1)
+        y1 = min(int(stack.height), y_center + window_radius + 1)
+        if x0 >= x1 or y0 >= y1:
+            failed_count += 1
+            continue
+        tile = np.asarray(stack.download_frame_tile(int(frame_index), x0, y0, x1, y1), dtype=np.float32)
+        finite = np.isfinite(tile)
+        if not np.any(finite):
+            failed_count += 1
+            continue
+        background = float(np.median(tile[finite]))
+        weights = np.where(finite, np.maximum(tile - np.float32(background), 0.0), 0.0)
+        flux = float(np.sum(weights, dtype=np.float64))
+        if flux <= 0.0:
+            failed_count += 1
+            continue
+        yy, xx = np.mgrid[y0:y1, x0:x1]
+        refined_x = float(np.sum(xx * weights, dtype=np.float64) / flux)
+        refined_y = float(np.sum(yy * weights, dtype=np.float64) / flux)
+        max_shift = max(max_shift, float(np.hypot(refined_x - float(xs[i]), refined_y - float(ys[i]))))
+        xs[i] = refined_x
+        ys[i] = refined_y
+        refined_count += 1
+
+    output["x"] = xs[:stored_count]
+    output["y"] = ys[:stored_count]
+    output["centroid_refine"] = {
+        "enabled": True,
+        "status": "ok" if refined_count > 0 else "no_refined_centroids",
+        "frame_index": int(frame_index),
+        "radius": int(window_radius),
+        "stored_count": int(stored_count),
+        "refined_count": int(refined_count),
+        "failed_count": int(failed_count),
+        "max_shift_px": float(max_shift),
+        "mode": "resident_tile_download_cpu_centroid",
+    }
+    return output, dict(output["centroid_refine"])
+
+
 def _float_or_nan(value: Any) -> float:
     if value is None:
         return float("nan")
@@ -4220,6 +4402,45 @@ def run_resident_calibration_integration(
                     "cuda_triangle_pixel_refine",
                     _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE,
                 )
+                plan_transform_model = str(registration_policy.get("transform_model") or "translation")
+                triangle_translation_refine_enabled = _policy_bool(
+                    registration_policy,
+                    "cuda_triangle_translation_refine",
+                    plan_transform_model == "translation",
+                )
+                triangle_translation_refine_tolerance_px = _policy_float(
+                    registration_policy,
+                    "cuda_triangle_translation_refine_tolerance_px",
+                    tolerance_px,
+                )
+                triangle_translation_refine_min_inliers = _policy_int(
+                    registration_policy,
+                    "cuda_triangle_translation_refine_min_inliers",
+                    _policy_int(registration_policy, "min_inliers", 6),
+                )
+                triangle_translation_refine_max_correction_px = _policy_float(
+                    registration_policy,
+                    "cuda_triangle_translation_refine_max_correction_px",
+                    0.25,
+                )
+                triangle_centroid_refine_enabled = _policy_bool(
+                    registration_policy,
+                    "cuda_triangle_centroid_refine",
+                    triangle_translation_refine_enabled,
+                )
+                triangle_centroid_refine_radius = _policy_int(
+                    registration_policy,
+                    "cuda_triangle_centroid_refine_radius",
+                    4,
+                )
+                if triangle_translation_refine_tolerance_px <= 0.0:
+                    raise ValueError("cuda_triangle_translation_refine_tolerance_px must be positive")
+                if triangle_translation_refine_min_inliers <= 0:
+                    raise ValueError("cuda_triangle_translation_refine_min_inliers must be positive")
+                if triangle_translation_refine_max_correction_px <= 0.0:
+                    raise ValueError("cuda_triangle_translation_refine_max_correction_px must be positive")
+                if triangle_centroid_refine_radius <= 0:
+                    raise ValueError("cuda_triangle_centroid_refine_radius must be positive")
                 native_stack = getattr(stack, "_impl", stack)
                 has_top_nms_catalog = hasattr(native_stack, "star_top_nms_candidates")
                 has_grid_nms_catalog = hasattr(native_stack, "star_grid_top_nms_candidates")
@@ -4280,6 +4501,15 @@ def run_resident_calibration_integration(
                 triangle_pixel_refine_fine_metric_megasamples_per_s = 0.0
                 triangle_pixel_refine_native_coarse_s = 0.0
                 triangle_pixel_refine_native_fine_s = 0.0
+                triangle_translation_refine_applied_count = 0
+                triangle_translation_refine_skipped_count = 0
+                triangle_translation_refine_rejected_count = 0
+                triangle_translation_refine_max_correction_px_observed = 0.0
+                triangle_translation_refine_max_rms_px = 0.0
+                triangle_centroid_refine_catalog_count = 0
+                triangle_centroid_refine_star_count = 0
+                triangle_centroid_refine_failed_star_count = 0
+                triangle_centroid_refine_max_shift_px = 0.0
                 triangle_descriptor_fit_batch_enabled = bool(
                     triangle_catalog_batch_enabled
                     and hasattr(cuda_module, "estimate_similarity_from_triangle_descriptors_batch_f32")
@@ -4401,6 +4631,7 @@ def run_resident_calibration_integration(
                 moving_catalog_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
                 moving_descriptor_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
                 descriptor_fit_batch_cache: dict[float, dict[int, dict[str, Any]]] = {}
+                centroid_refine_cache: dict[tuple[int, float], tuple[dict[str, Any] | None, dict[str, Any]]] = {}
                 pending_triangle_pixel_refines: list[dict[str, Any]] = []
                 triangle_determinism_signatures: dict[str, Any] = {
                     "schema_version": 1,
@@ -4528,6 +4759,49 @@ def run_resident_calibration_integration(
                     )
                     moving_descriptor_batch_cache.setdefault(threshold_key, {})[frame_index] = descriptor
                     return descriptor
+
+                def centroid_refined_catalog(
+                    frame_index: int,
+                    threshold_key: float,
+                    catalog: dict[str, Any] | None,
+                ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+                    nonlocal triangle_centroid_refine_catalog_count
+                    nonlocal triangle_centroid_refine_failed_star_count
+                    nonlocal triangle_centroid_refine_max_shift_px
+                    nonlocal triangle_centroid_refine_star_count
+                    if not triangle_centroid_refine_enabled:
+                        return catalog, {
+                            "enabled": False,
+                            "status": "disabled",
+                            "refined_count": 0,
+                            "failed_count": 0,
+                            "max_shift_px": 0.0,
+                        }
+                    cache_key = (int(frame_index), round(float(threshold_key), 6))
+                    cached = centroid_refine_cache.get(cache_key)
+                    if cached is not None:
+                        return cached
+                    centroid_start = perf_counter()
+                    refined, summary = _resident_refine_catalog_centroids_from_stack(
+                        stack,
+                        frame_index,
+                        catalog,
+                        radius=triangle_centroid_refine_radius,
+                    )
+                    _add_elapsed(
+                        registration_component_s,
+                        "triangle_centroid_refine",
+                        perf_counter() - centroid_start,
+                    )
+                    triangle_centroid_refine_catalog_count += 1
+                    triangle_centroid_refine_star_count += int(summary.get("refined_count", 0) or 0)
+                    triangle_centroid_refine_failed_star_count += int(summary.get("failed_count", 0) or 0)
+                    triangle_centroid_refine_max_shift_px = max(
+                        triangle_centroid_refine_max_shift_px,
+                        _float_or_nan(summary.get("max_shift_px")),
+                    )
+                    centroid_refine_cache[cache_key] = (refined, summary)
+                    return refined, summary
 
                 def triangle_descriptor_fit(
                     frame_index: int,
@@ -4930,6 +5204,57 @@ def run_resident_calibration_integration(
                                         )
                                         matrix_array = np.asarray(refinement["matrix"], dtype=np.float32).reshape(3, 3)
                                         pixel_metrics = dict(refinement.get("metrics", {}))
+                                translation_refine: dict[str, Any] | None = None
+                                reference_centroid_summary: dict[str, Any] | None = None
+                                moving_centroid_summary: dict[str, Any] | None = None
+                                if triangle_translation_refine_enabled and deferred_triangle_refine is None:
+                                    threshold_key = round(float(selected_threshold or 0.0), 6)
+                                    translation_reference_catalog, reference_centroid_summary = centroid_refined_catalog(
+                                        reference_index,
+                                        threshold_key,
+                                        selected_reference_catalog,
+                                    )
+                                    translation_moving_catalog, moving_centroid_summary = centroid_refined_catalog(
+                                        index,
+                                        threshold_key,
+                                        selected_moving_catalog,
+                                    )
+                                    translation_refine_start = perf_counter()
+                                    translation_refine = _resident_triangle_translation_refine(
+                                        translation_reference_catalog,
+                                        translation_moving_catalog,
+                                        matrix_array,
+                                        tolerance_px=triangle_translation_refine_tolerance_px,
+                                        min_inliers=triangle_translation_refine_min_inliers,
+                                        max_correction_px=triangle_translation_refine_max_correction_px,
+                                    )
+                                    _add_elapsed(
+                                        registration_component_s,
+                                        "triangle_translation_refine",
+                                        perf_counter() - translation_refine_start,
+                                    )
+                                    correction_px = _float_or_nan(translation_refine.get("correction_px"))
+                                    if np.isfinite(correction_px):
+                                        triangle_translation_refine_max_correction_px_observed = max(
+                                            triangle_translation_refine_max_correction_px_observed,
+                                            float(correction_px),
+                                        )
+                                    refine_rms = _float_or_nan(translation_refine.get("rms_px"))
+                                    if np.isfinite(refine_rms):
+                                        triangle_translation_refine_max_rms_px = max(
+                                            triangle_translation_refine_max_rms_px,
+                                            float(refine_rms),
+                                        )
+                                    if bool(translation_refine.get("applied", False)):
+                                        triangle_translation_refine_applied_count += 1
+                                        matrix_array = np.asarray(
+                                            translation_refine["matrix"],
+                                            dtype=np.float32,
+                                        ).reshape(3, 3)
+                                    elif str(translation_refine.get("status")) == "correction_exceeds_limit":
+                                        triangle_translation_refine_rejected_count += 1
+                                    else:
+                                        triangle_translation_refine_skipped_count += 1
                                 matrix = matrix_array.tolist()
                                 matched = int(selected_fit.get("inliers", 0))
                                 inliers = matched
@@ -5102,6 +5427,50 @@ def run_resident_calibration_integration(
                                         + str(int(triangle_pixel_refine_requested_final_stride)),
                                         f"triangle_pixel_rms_adu={selected_pixel_rms:.6g}",
                                         f"triangle_pixel_ncc={selected_pixel_ncc:.6g}",
+                                        "triangle_translation_refine_enabled="
+                                        + str(bool(triangle_translation_refine_enabled)).lower(),
+                                        "triangle_translation_refine_status="
+                                        + (
+                                            str(translation_refine.get("status"))
+                                            if translation_refine is not None
+                                            else "disabled"
+                                        ),
+                                        "triangle_translation_refine_inliers="
+                                        + (
+                                            str(int(translation_refine.get("inliers", 0) or 0))
+                                            if translation_refine is not None
+                                            else "0"
+                                        ),
+                                        "triangle_translation_refine_rms_px="
+                                        + (
+                                            f"{_float_or_nan(translation_refine.get('rms_px')):.6g}"
+                                            if translation_refine is not None
+                                            else "nan"
+                                        ),
+                                        "triangle_translation_refine_correction_px="
+                                        + (
+                                            f"{_float_or_nan(translation_refine.get('correction_px')):.6g}"
+                                            if translation_refine is not None
+                                            else "nan"
+                                        ),
+                                        "triangle_centroid_refine_enabled="
+                                        + str(bool(triangle_centroid_refine_enabled)).lower(),
+                                        "triangle_centroid_refine_mode="
+                                        + (
+                                            str((moving_centroid_summary or {}).get("mode", "disabled"))
+                                            if triangle_centroid_refine_enabled
+                                            else "disabled"
+                                        ),
+                                        "triangle_centroid_refine_reference_status="
+                                        + str((reference_centroid_summary or {}).get("status", "disabled")),
+                                        "triangle_centroid_refine_moving_status="
+                                        + str((moving_centroid_summary or {}).get("status", "disabled")),
+                                        "triangle_centroid_refine_reference_count="
+                                        + str(int((reference_centroid_summary or {}).get("refined_count", 0) or 0)),
+                                        "triangle_centroid_refine_moving_count="
+                                        + str(int((moving_centroid_summary or {}).get("refined_count", 0) or 0)),
+                                        "triangle_centroid_refine_moving_max_shift_px="
+                                        + f"{_float_or_nan((moving_centroid_summary or {}).get('max_shift_px')):.6g}",
                                         "triangle_quality_gate_status="
                                         + ("failed" if quality_failures else "ok"),
                                         f"triangle_min_pixel_ncc={min_pixel_ncc}",
@@ -6622,6 +6991,80 @@ def run_resident_calibration_integration(
                             "cuda_triangle_pixel_refine",
                             _DEFAULT_CUDA_TRIANGLE_PIXEL_REFINE,
                         ),
+                        "triangle_translation_refine": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_translation_refine_enabled
+                        ),
+                        "triangle_translation_refine_plan_transform_model": plan_transform_model
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_translation_refine_tolerance_px": float(
+                            triangle_translation_refine_tolerance_px
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_translation_refine_min_inliers": int(
+                            triangle_translation_refine_min_inliers
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_translation_refine_max_correction_px": float(
+                            triangle_translation_refine_max_correction_px
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_translation_refine_applied_count": int(
+                            triangle_translation_refine_applied_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_translation_refine_skipped_count": int(
+                            triangle_translation_refine_skipped_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_translation_refine_rejected_count": int(
+                            triangle_translation_refine_rejected_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_translation_refine_max_correction_px_observed": float(
+                            triangle_translation_refine_max_correction_px_observed
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_translation_refine_max_rms_px": float(
+                            triangle_translation_refine_max_rms_px
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
+                        "triangle_centroid_refine": bool(
+                            resident_registration == "similarity_cuda_triangle"
+                            and triangle_centroid_refine_enabled
+                        ),
+                        "triangle_centroid_refine_mode": (
+                            "resident_tile_download_cpu_centroid"
+                            if resident_registration == "similarity_cuda_triangle"
+                            and triangle_centroid_refine_enabled
+                            else "off"
+                        ),
+                        "triangle_centroid_refine_radius": int(triangle_centroid_refine_radius)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_centroid_refine_catalog_count": int(triangle_centroid_refine_catalog_count)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_centroid_refine_star_count": int(triangle_centroid_refine_star_count)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_centroid_refine_failed_star_count": int(
+                            triangle_centroid_refine_failed_star_count
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
+                        "triangle_centroid_refine_max_shift_px": float(triangle_centroid_refine_max_shift_px)
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0.0,
                         "triangle_catalog_batch": bool(
                             resident_registration == "similarity_cuda_triangle"
                             and triangle_catalog_batch_enabled

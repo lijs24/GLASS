@@ -21,10 +21,12 @@ from glass.engine.resident_cuda import (
     _resident_descriptor_signature,
     _resident_fit_signature,
     _resident_output_map_selection,
+    _resident_refine_catalog_centroids_from_stack,
     _resident_registration_motion_weighting,
     _resident_triangle_agreement_policy,
     _resident_triangle_agreement_quality,
     _resident_triangle_determinism_summary,
+    _resident_triangle_translation_refine,
     _resident_similarity_frame_dispatch,
     _resident_winsorized_runtime_contract,
     _select_star_core_preselected_seed_indices,
@@ -496,6 +498,93 @@ def test_resident_registration_motion_weighting_off_preserves_weights():
     assert summary["enabled"] is False
     assert summary["multipliers"] == [1.0, 1.0]
     assert summary["downweighted_frame_count"] == 0
+
+
+def test_resident_triangle_translation_refine_uses_catalog_median_translation():
+    reference = {
+        "stored_count": 4,
+        "x": np.asarray([10.0, 20.0, 30.0, 40.0], dtype=np.float32),
+        "y": np.asarray([11.0, 22.0, 33.0, 44.0], dtype=np.float32),
+    }
+    moving = {
+        "stored_count": 4,
+        "x": np.asarray([7.0001, 17.0002, 27.0003, 37.0004], dtype=np.float32),
+        "y": np.asarray([11.008, 22.010, 33.012, 44.014], dtype=np.float32),
+    }
+    seed = [[1.0, 0.0, 3.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+    result = _resident_triangle_translation_refine(
+        reference,
+        moving,
+        seed,
+        tolerance_px=0.1,
+        min_inliers=3,
+        max_correction_px=0.05,
+    )
+
+    assert result["applied"] is True
+    assert result["status"] == "applied"
+    assert result["inliers"] == 4
+    assert abs(result["matrix"][0][2] - 2.99975) < 1e-4
+    assert abs(result["matrix"][1][2] + 0.011) < 1e-4
+    assert 0.010 < result["correction_px"] < 0.012
+    assert result["rms_px"] < 0.003
+
+
+def test_resident_triangle_translation_refine_rejects_large_correction():
+    reference = {
+        "stored_count": 3,
+        "x": np.asarray([10.0, 20.0, 30.0], dtype=np.float32),
+        "y": np.asarray([10.0, 20.0, 30.0], dtype=np.float32),
+    }
+    moving = {
+        "stored_count": 3,
+        "x": np.asarray([6.8, 16.8, 26.8], dtype=np.float32),
+        "y": np.asarray([10.0, 20.0, 30.0], dtype=np.float32),
+    }
+    seed = [[1.0, 0.0, 3.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+    result = _resident_triangle_translation_refine(
+        reference,
+        moving,
+        seed,
+        tolerance_px=0.5,
+        min_inliers=3,
+        max_correction_px=0.05,
+    )
+
+    assert result["applied"] is False
+    assert result["status"] == "correction_exceeds_limit"
+    assert result["matrix"] == seed
+    assert abs(result["correction_px"] - 0.2) < 1e-5
+
+
+def test_resident_refine_catalog_centroids_uses_resident_tiles():
+    yy, xx = np.mgrid[0:21, 0:21]
+    image = np.full((21, 21), 10.0, dtype=np.float32)
+    image += 100.0 * np.exp(-(((xx - 9.35) ** 2 + (yy - 11.65) ** 2) / (2.0 * 1.2**2))).astype(np.float32)
+
+    class FakeStack:
+        width = image.shape[1]
+        height = image.shape[0]
+
+        def download_frame_tile(self, _index, x0, y0, x1, y1):
+            return image[y0:y1, x0:x1]
+
+    catalog = {
+        "stored_count": 1,
+        "x": np.asarray([9.0], dtype=np.float32),
+        "y": np.asarray([12.0], dtype=np.float32),
+        "flux": np.asarray([110.0], dtype=np.float32),
+    }
+
+    refined, summary = _resident_refine_catalog_centroids_from_stack(FakeStack(), 0, catalog, radius=4)
+
+    assert summary["status"] == "ok"
+    assert summary["refined_count"] == 1
+    assert abs(float(refined["x"][0]) - 9.35) < 0.05
+    assert abs(float(refined["y"][0]) - 11.65) < 0.05
+    assert summary["max_shift_px"] > 0.4
 
 
 def test_frame_weight_proposal_loader_accepts_list_and_object(tmp_path: Path):
