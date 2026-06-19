@@ -1704,6 +1704,19 @@ def test_cli_resident_cuda_science_output_maps_skip_rejection_count_files(tmp_pa
     assert dq_closure["summary"]["group_count"] == 1
     assert dq_closure["groups"][0]["frame_mask_active_frame_count"] == 2
     assert dq_closure["groups"][0]["geometric_warp_coverage_frame_count"] == 2
+    assert output["resident_light_pipeline_profile"] == artifact["resident_light_pipeline_profile"]
+    assert output["resident_light_pipeline_profile"]["stage"] == "resident_light_read_upload_calibrate"
+    assert (
+        output["resident_light_pipeline_profile"]["knobs"]["prefetch_frames"]
+        == artifact["resident_io_pipeline"]["prefetch_frames"]
+    )
+    assert output["resident_light_pipeline_profile"]["dominant_component"] in {
+        "consumer_read_wait",
+        "native_h2d_calibrate_store",
+        "native_calibrate_store",
+        "native_sync",
+        "python_orchestration_unaccounted",
+    }
     assert output["dq_provenance_summary"]["source_schema"] == "resident_dq_coverage_provenance"
     assert output["dq_provenance_summary"]["engine"] == "cuda_resident_stack"
     assert output["dq_provenance_summary"]["active_frame_count"] == 2

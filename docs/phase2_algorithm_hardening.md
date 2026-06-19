@@ -8274,18 +8274,95 @@ integration where applicable.
 ### S2-Gate 437: Warm-Cache Light Read/Upload/Calibration Pipeline
 
 - Continue from Gate436 with a substantive runtime gate only.
-- Target the warm-cache `light_read_upload_calibrate` bucket, currently about
-  `6.64 s` on the 200-light M38 H run after master cache reuse.
+- Added a resident light-pipeline profile contract:
+  - new helper: `src/glass/engine/resident_light_pipeline_profile.py`;
+  - resident CUDA now records `resident_light_pipeline_profile` in both
+    `resident_artifacts.json` and `integration_results.json`;
+  - the profile decomposes `light_read_upload_calibrate` into consumer
+    read/decode wait, native H2D+calibrate/store, native sync, and remaining
+    Python orchestration;
+  - the profile records prefetch/H2D/calibration knobs and a recommendation.
+- Formal profiled warm-cache control run:
+  - run directory:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate437_profiled_warm_v1_20260619_210732`;
+  - shared master cache:
+    `C:\glass_runs\final_m38_h_200\glass_s2_gate436_shared_master_cache_20260619_204953`;
+  - runtime preset: `throughput-v1`;
+  - total elapsed time: `17.340157 s`;
+  - `master_build_or_load`: `0.436499 s`;
+  - `light_read_upload_calibrate`: `6.557069 s`;
+  - `light_read_wait_wall`: `3.834345 s`;
+  - native H2D+calibrate/store: `1.974900 s`;
+  - light-loop unaccounted/orchestration: `0.734282 s`;
+  - `resident_registration_warp`: `1.637722 s`;
+  - `resident_integration`: `0.292218 s`;
+  - output write: `2.509335 s`.
+- Formal profile result:
+  - dominant component: `consumer_read_wait`;
+  - read-wait fraction of light pipeline: `0.584765`;
+  - native H2D+calibrate/store fraction: `0.301186`;
+  - unaccounted/orchestration fraction: `0.111983`;
+  - overlap efficiency: `0.897575`;
+  - recommendation:
+    `increase_prefetch_supply_or_reduce_decode_cost`.
+- Gate437 prefetch experiment:
+  - same-window throughput-v1 control:
+    `17.159549 s` total, `6.584007 s` light pipeline,
+    `3.839804 s` read wait, `2.031307 s` native;
+  - `prefetch=16`, `workers=10`:
+    `17.629256 s` total, `6.017314 s` light pipeline,
+    `2.209576 s` read wait, `2.934051 s` native;
+  - `prefetch=20`, `workers=12`:
+    `17.433144 s` total, `5.903872 s` light pipeline,
+    `1.406851 s` read wait, `3.430158 s` native;
+  - `prefetch=16`, `workers=7`:
+    `17.950673 s` total, `6.413986 s` light pipeline,
+    `3.120490 s` read wait, `2.434696 s` native;
+  - `prefetch=20`, `workers=7`:
+    `18.103363 s` total, `6.537904 s` light pipeline,
+    `3.112725 s` read wait, `2.465972 s` native.
+- Interpretation:
+  - increasing prefetch depth/workers can reduce read wait and lower the light
+    pipeline bucket by up to about `10.3%` in the `prefetch=20`, `workers=12`
+    run versus same-window throughput-v1 control;
+  - the same variants increase native H2D+calibrate/store and memory/CPU
+    contention enough that total runtime does not improve;
+  - therefore Gate437 does not promote a new default or new runtime preset.
+    `throughput-v1` remains the best same-window total-runtime setting.
+- Scientific and contract invariants:
+  - all profiled variants kept shared master-cache hits;
+  - DQ pixel closure passed;
+  - registration status remained `192 ok`, `7 excluded`, `1 reference`;
+  - frame-mask summary remained `193 active`, `7 masked`,
+    `0 unaudited zero-weight`;
+  - Gate437 profiled warm vs Gate436 warm produced shape-match true,
+    p50/p90/p99/p999 absolute delta `0.0` / `0.0` / `0.0` / `0.0`,
+    RMS delta `0.0`, relative RMS `0.0`;
+  - the `prefetch=20`, `workers=12` best-light-bucket variant also matched
+    Gate436 warm with zero pixel delta.
+- Focused tests:
+  `tests/test_resident_light_pipeline_profile.py`,
+  `tests/test_resident_master_cache.py`,
+  `tests/test_resident_dq_pixel_closure.py`,
+  `tests/test_resident_frame_mask_contract.py`,
+  `tests/test_resident_cuda_run.py`, `tests/test_resident_result_contract.py`,
+  and `tests/test_cli_smoke.py` passed together.
+- Full test suite passed: `1026 passed`.
+
+### S2-Gate 438: FITS Decode Cost Reduction Probe
+
+- Continue from Gate437 with a substantive runtime gate only.
+- Target the profiled dominant component: warm-cache consumer read/decode wait,
+  not blind prefetch growth.
 - Required work:
-  - profile whether the remaining warm bucket is dominated by FITS decode,
-    pinned-memory copy, H2D transfer, CUDA calibration store, or orchestration;
-  - improve the prefetch/pinned-ring/calibration-batch path only when the change
-    preserves Gate436 output parity and DQ/master-cache artifacts;
-  - benchmark a controlled warm-cache 200-light run against Gate436 warm;
-  - preserve `193 active`, `7 masked`, DQ pixel closure pass, master-cache hit,
-    and zero output delta unless an algorithmic change is explicitly justified.
-- Do not change resident registration defaults, fused warp promotion, rejection
-  semantics, or package/release evidence in this gate.
+  - inspect the FITS read path used by resident prefetch workers;
+  - add a bounded alternative or diagnostic probe that reduces per-frame
+    materialize/decode overhead without changing calibrated pixels;
+  - compare the alternative against Gate437 throughput-v1 warm with shared
+    master-cache hit, DQ closure pass, `193 active`/`7 masked`, and zero output
+    delta;
+  - avoid changing registration defaults, fused warp, rejection semantics, or
+    package/release evidence.
 
 ## Gate Rules
 

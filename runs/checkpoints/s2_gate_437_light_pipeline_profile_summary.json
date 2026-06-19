@@ -1,0 +1,157 @@
+{
+  "gate": "S2-Gate 437",
+  "title": "Warm-Cache Light Read/Upload/Calibration Pipeline",
+  "status": "passed",
+  "shared_cache_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_shared_master_cache_20260619_204953",
+  "final_run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_profiled_warm_v1_20260619_210732",
+  "baseline_run_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_warm_shared_cache_20260619_204953",
+  "compare_report": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_profiled_warm_vs_gate436.html",
+  "compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_profiled_warm_vs_gate436.json",
+  "best_light_variant_compare_report": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_pf20_w12_vs_gate436.html",
+  "best_light_variant_compare_json": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_pf20_w12_vs_gate436.json",
+  "cuda": {
+    "available": true,
+    "device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+    "compute_capability": "12.0",
+    "vram_mib": 97886,
+    "driver": "596.21",
+    "doctor_report": "runs/checkpoints/s2_gate_437_cuda_doctor.json"
+  },
+  "final_timing_s": {
+    "total_elapsed": 17.34015720000025,
+    "master_build_or_load": 0.43649910000385717,
+    "light_read_upload_calibrate": 6.557068900001468,
+    "light_read_wait_wall": 3.8343446999497246,
+    "light_calibration_batch_native_total": 1.9749003000000005,
+    "light_loop_unaccounted": 0.7342822000791784,
+    "resident_registration_warp": 1.6377223001618404,
+    "resident_integration": 0.2922178999870084,
+    "output_write": 2.5093351999821607
+  },
+  "light_pipeline_profile": {
+    "dominant_component": "consumer_read_wait",
+    "recommendation": "increase_prefetch_supply_or_reduce_decode_cost",
+    "consumer_read_wait_fraction": 0.5847650464598391,
+    "native_h2d_calibrate_store_fraction": 0.3011864493294494,
+    "python_orchestration_unaccounted_fraction": 0.11198329791517274,
+    "overlap_efficiency": 0.8975745135275555,
+    "prefetch_frames": 12,
+    "prefetch_workers": 7,
+    "h2d_mode": "pinned_ring",
+    "calibration_batch_requested_frames": 8,
+    "calibration_batch_requested_streams": 4,
+    "calibration_release_mode_effective": "callback_queue"
+  },
+  "prefetch_experiment": {
+    "same_window_control": {
+      "name": "gate437_control_v1",
+      "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_control_v1_20260619_210230",
+      "prefetch_frames": 12,
+      "prefetch_workers": 7,
+      "total_elapsed": 17.159548600000562,
+      "light_read_upload_calibrate": 6.584007099998416,
+      "light_read_wait_wall": 3.83980400004657,
+      "light_calibration_batch_native_total": 2.0313068000000003
+    },
+    "variants": [
+      {
+        "name": "pf16_w10",
+        "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_pf16_w10_20260619_205936",
+        "prefetch_frames": 16,
+        "prefetch_workers": 10,
+        "total_elapsed": 17.629255500010913,
+        "light_read_upload_calibrate": 6.017314400000032,
+        "light_read_wait_wall": 2.209576299850596,
+        "light_calibration_batch_native_total": 2.9340511999999994
+      },
+      {
+        "name": "pf20_w12",
+        "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_pf20_w12_20260619_205936",
+        "prefetch_frames": 20,
+        "prefetch_workers": 12,
+        "total_elapsed": 17.43314370000735,
+        "light_read_upload_calibrate": 5.903871699993033,
+        "light_read_wait_wall": 1.4068506999174133,
+        "light_calibration_batch_native_total": 3.4301578
+      },
+      {
+        "name": "pf16_w7",
+        "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_pf16_w7_20260619_210106",
+        "prefetch_frames": 16,
+        "prefetch_workers": 7,
+        "total_elapsed": 17.950672700011637,
+        "light_read_upload_calibrate": 6.413985899998806,
+        "light_read_wait_wall": 3.1204896996787284,
+        "light_calibration_batch_native_total": 2.4346958
+      },
+      {
+        "name": "pf20_w7",
+        "run": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate437_pf20_w7_20260619_210106",
+        "prefetch_frames": 20,
+        "prefetch_workers": 7,
+        "total_elapsed": 18.103363100002753,
+        "light_read_upload_calibrate": 6.537903599994024,
+        "light_read_wait_wall": 3.112725100130774,
+        "light_calibration_batch_native_total": 2.4659723
+      }
+    ],
+    "best_total": "gate437_control_v1",
+    "best_light_bucket": "pf20_w12",
+    "best_light_bucket_reduction_vs_control": 0.103291,
+    "decision": "do_not_promote_higher_prefetch_default",
+    "reason": "Higher prefetch lowers read wait but increases native H2D/calibration and memory/CPU contention enough that total runtime is not better than throughput-v1."
+  },
+  "real_200_light": {
+    "frame_count": 200,
+    "active_frame_count": 193,
+    "masked_frame_count": 7,
+    "reference_frame_count": 1,
+    "registration_status_counts": {
+      "ok": 192,
+      "excluded": 7,
+      "reference": 1
+    },
+    "master_cache_hit_count": 1,
+    "master_cache_miss_count": 0,
+    "dq_pixel_closure_passed": true
+  },
+  "gate437_vs_gate436_compare": {
+    "shape_match": true,
+    "compared_pixels": 61651200,
+    "abs_diff_p50": 0.0,
+    "abs_diff_p90": 0.0,
+    "abs_diff_p99": 0.0,
+    "abs_diff_p999": 0.0,
+    "rms_diff": 0.0,
+    "relative_rms_diff": 0.0,
+    "robust_fit_scale": 1.0,
+    "robust_fit_offset": 0.0
+  },
+  "pf20_w12_vs_gate436_compare": {
+    "shape_match": true,
+    "compared_pixels": 61651200,
+    "abs_diff_p50": 0.0,
+    "abs_diff_p90": 0.0,
+    "abs_diff_p99": 0.0,
+    "abs_diff_p999": 0.0,
+    "rms_diff": 0.0,
+    "relative_rms_diff": 0.0,
+    "robust_fit_scale": 1.0,
+    "robust_fit_offset": 0.0
+  },
+  "tests": {
+    "focused": {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q tests\\test_resident_light_pipeline_profile.py tests\\test_resident_master_cache.py tests\\test_resident_dq_pixel_closure.py tests\\test_resident_frame_mask_contract.py tests\\test_resident_cuda_run.py tests\\test_resident_result_contract.py tests\\test_cli_smoke.py",
+      "result": "107 passed in 9.58s"
+    },
+    "full": {
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+      "result": "1026 passed in 38.30s"
+    }
+  },
+  "clean_room": {
+    "compliant": true,
+    "note": "Gate437 used GLASS-owned timing artifacts, cache artifacts, DQ artifacts, and user-provided image data. No external proprietary implementation source was inspected."
+  },
+  "next_gate": "S2-Gate 438: FITS decode cost reduction probe."
+}

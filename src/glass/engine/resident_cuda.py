@@ -34,6 +34,7 @@ from glass.engine.resident_frame_mask import (
     summarize_resident_frame_mask_contracts,
     validate_resident_frame_mask_contract,
 )
+from glass.engine.resident_light_pipeline_profile import build_resident_light_pipeline_profile
 from glass.engine.resident_master_cache import (
     build_resident_master_cache_group,
     summarize_resident_master_cache_groups,
@@ -7108,6 +7109,34 @@ def run_resident_calibration_integration(
                 + gc_elapsed
             )
             light_loop_unaccounted = max(0.0, load_calibrate_elapsed - light_loop_accounted)
+            light_pipeline_timing = {
+                "light_read_upload_calibrate": load_calibrate_elapsed,
+                "light_read_wait_wall": read_wait_total,
+                "light_calibration_batch_native_total": float(calibration_batch_native_total_s),
+                "light_calibrate_store": calibrate_store_timing["total"],
+                "light_calibration_batch_sync": float(calibration_batch_sync_s),
+                "light_loop_unaccounted": light_loop_unaccounted,
+                "light_read_overlap_saved": read_overlap_saved,
+            }
+            light_pipeline_io = {
+                "prefetch_frames": int(resident_prefetch_frames),
+                "prefetch_workers": int(resident_prefetch_workers) if resident_prefetch_frames > 0 else 0,
+                "prefetch_refill_mode": resident_prefetch_refill_mode,
+                "h2d_mode": resident_h2d_mode,
+                "calibration_batch_requested_frames": int(resident_calibration_batch_frames),
+                "calibration_batch_requested_streams": int(resident_calibration_streams),
+                "calibration_wave_requested_frames": int(resident_calibration_wave_frames),
+                "calibration_release_mode_effective": calibration_release_mode_effective,
+                "prefetch_fill_blocked_no_slot_count": int(prefetch_fill_blocked_no_slot_count),
+                "host_pinned_bytes": int(
+                    max(prefetch_host_pinned_bytes, int(getattr(stack, "host_pinned_bytes", 0)))
+                ),
+            }
+            resident_light_pipeline_profile = build_resident_light_pipeline_profile(
+                timing_s=light_pipeline_timing,
+                resident_io_pipeline=light_pipeline_io,
+                resident_io_overlap=resident_io_overlap,
+            )
             fine_timing = {
                 "schema_version": 1,
                 "seconds": {
@@ -7299,6 +7328,7 @@ def run_resident_calibration_integration(
                         "storage": write_storage,
                     },
                     "output_write_storage": write_storage,
+                    "resident_light_pipeline_profile": resident_light_pipeline_profile,
                     "fine_timing": fine_timing,
                     "resident_io_overlap": resident_io_overlap,
                     "resident_io_pipeline": {
@@ -8269,6 +8299,7 @@ def run_resident_calibration_integration(
                     "resident_integration_s": integrate_elapsed,
                     "output_write_storage": write_storage,
                     "output_diagnostics": output_diagnostics,
+                    "resident_light_pipeline_profile": resident_light_pipeline_profile,
                 }
             )
             del (
