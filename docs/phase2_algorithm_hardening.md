@@ -7795,6 +7795,37 @@ integration where applicable.
   promotion, no package upload, no GitHub release creation, and no user input
   directory modification.
 
+### S2-Gate 428: Guarded Resident Translation Refinement
+
+- Continue from Gate427 by touching the resident registration path itself, not
+  release/default-promotion/report-only evidence.
+- Preserve the Gate426 default behavior that converts resident triangle
+  similarity seeds into pure median-translation matrices after catalog matching.
+  This avoids silently falling back to a general similarity matrix when the
+  first median translation has higher catalog RMS but better warp/rejection
+  behavior.
+- Add auditable resident translation-refine fields:
+  - requested iteration count;
+  - maximum allowed post-median iteration step in pixels;
+  - observed accepted iteration count;
+  - initial seed-pair RMS.
+- Add a guarded optional second refinement pass, limited to a small subpixel
+  polishing step, so future experiments cannot jump to a different star-pair
+  solution without being visible in artifacts.
+- Validate on the Gate414/Gate426 16-frame CUDA harness:
+  - unguarded multi-iteration refinement is recorded as a failed experiment
+    because it worsened resident output deltas;
+  - guarded median refinement preserves the Gate426 output-map and matrix
+    numbers while adding the refinement guard contract;
+  - exact-input rejection parity and warp-kernel attribution still pass;
+  - remaining blocker remains resident registration matrix precision.
+- Next substantive gate should improve the resident star catalog or transform
+  estimator itself, then rerun the same 16-frame warp/rejection audits before
+  spending GPU time on the 200-light real-data regression.
+- Keep this gate runtime-algorithm scoped: no release handoff, no default
+  promotion, no package upload, no GitHub release creation, and no user input
+  directory modification.
+
 ## Gate Rules
 
 Each gate requires:

@@ -1,0 +1,378 @@
+{
+  "artifact_type": "resident_rejection_input_audit",
+  "checks": [
+    {
+      "evidence": {
+        "coverage": {
+          "abs_delta_sum": 0.0,
+          "finite_pixels": 262144,
+          "max_abs_delta": 0.0,
+          "mismatch_pixels": 0,
+          "passed": true,
+          "pixels": 262144,
+          "shape_match": true,
+          "signed_delta_sum": 0.0
+        },
+        "high_rejection": {
+          "abs_delta_sum": 0.0,
+          "finite_pixels": 262144,
+          "max_abs_delta": 0.0,
+          "mismatch_pixels": 0,
+          "passed": true,
+          "pixels": 262144,
+          "shape_match": true,
+          "signed_delta_sum": 0.0
+        },
+        "low_rejection": {
+          "abs_delta_sum": 0.0,
+          "finite_pixels": 262144,
+          "max_abs_delta": 0.0,
+          "mismatch_pixels": 0,
+          "passed": true,
+          "pixels": 262144,
+          "shape_match": true,
+          "signed_delta_sum": 0.0
+        },
+        "master": {
+          "abs_delta_sum": 2.5394287109375,
+          "finite_pixels": 262144,
+          "max_abs_delta": 0.000244140625,
+          "mismatch_pixels": 0,
+          "passed": true,
+          "pixels": 262144,
+          "shape_match": true,
+          "signed_delta_sum": 0.003692626953125
+        },
+        "passed": true
+      },
+      "name": "cpu_registered_replay_matches_cpu_outputs",
+      "note": "Replays CPU registered_cache and coverage_cache through the CPU winsorized baseline.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "available": true,
+        "delta_vs_cpu_output": {
+          "coverage": {
+            "abs_delta_sum": 0.0,
+            "finite_pixels": 262144,
+            "max_abs_delta": 0.0,
+            "mismatch_pixels": 0,
+            "passed": true,
+            "pixels": 262144,
+            "shape_match": true,
+            "signed_delta_sum": 0.0
+          },
+          "high_rejection": {
+            "abs_delta_sum": 0.0,
+            "finite_pixels": 262144,
+            "max_abs_delta": 0.0,
+            "mismatch_pixels": 0,
+            "passed": true,
+            "pixels": 262144,
+            "shape_match": true,
+            "signed_delta_sum": 0.0
+          },
+          "low_rejection": {
+            "abs_delta_sum": 0.0,
+            "finite_pixels": 262144,
+            "max_abs_delta": 0.0,
+            "mismatch_pixels": 0,
+            "passed": true,
+            "pixels": 262144,
+            "shape_match": true,
+            "signed_delta_sum": 0.0
+          },
+          "master": {
+            "abs_delta_sum": 0.0,
+            "finite_pixels": 262144,
+            "max_abs_delta": 0.0,
+            "mismatch_pixels": 0,
+            "passed": true,
+            "pixels": 262144,
+            "shape_match": true,
+            "signed_delta_sum": 0.0
+          },
+          "passed": true
+        },
+        "ran": true,
+        "status": "completed"
+      },
+      "name": "cuda_exact_input_matches_cpu_outputs",
+      "note": "Uploads the same CPU registered stack to resident CUDA and runs hardened winsorized sigma.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "attribution_status": "resident_registration_warp_input_delta",
+        "evaluation_region": "compare_region",
+        "max_same_pre_rejection_abs_delta": 16,
+        "recommendation": "target_resident_registration_warp_input_parity",
+        "resident_output_parity_passed": false,
+        "same_pre_rejection_abs_rejected_sample_delta": 798
+      },
+      "name": "resident_rejection_delta_attributed",
+      "note": "The audit passes when exact-input CUDA matches CPU and any remaining resident output delta is attributed to the upstream resident registration/warp input path.",
+      "passed": true
+    }
+  ],
+  "compare_json": "runs\\checkpoints\\s2_gate_423_common_footprint_compare.json",
+  "cpu_replay": {
+    "delta_vs_cpu_output": {
+      "coverage": {
+        "abs_delta_sum": 0.0,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.0,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.0
+      },
+      "high_rejection": {
+        "abs_delta_sum": 0.0,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.0,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.0
+      },
+      "low_rejection": {
+        "abs_delta_sum": 0.0,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.0,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.0
+      },
+      "master": {
+        "abs_delta_sum": 2.5394287109375,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.000244140625,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.003692626953125
+      },
+      "passed": true
+    },
+    "source": "cpu_registered_cache_plus_coverage_cache"
+  },
+  "cpu_run": "runs\\checkpoints\\s2_gate_414_runtime_validation_cpu",
+  "created_at": "2026-06-19T10:23:02+00:00",
+  "cuda_exact_input": {
+    "available": true,
+    "delta_vs_cpu_output": {
+      "coverage": {
+        "abs_delta_sum": 0.0,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.0,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.0
+      },
+      "high_rejection": {
+        "abs_delta_sum": 0.0,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.0,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.0
+      },
+      "low_rejection": {
+        "abs_delta_sum": 0.0,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.0,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.0
+      },
+      "master": {
+        "abs_delta_sum": 0.0,
+        "finite_pixels": 262144,
+        "max_abs_delta": 0.0,
+        "mismatch_pixels": 0,
+        "passed": true,
+        "pixels": 262144,
+        "shape_match": true,
+        "signed_delta_sum": 0.0
+      },
+      "passed": true
+    },
+    "passed": true,
+    "ran": true,
+    "status": "completed",
+    "timing_s": {
+      "frame_count": 16,
+      "height": 512,
+      "high_sigma": 3.0,
+      "includes_device_sync_and_download": true,
+      "low_sigma": 3.0,
+      "native_method": "ResidentCalibratedStack.integrate_hardened_winsorized_sigma",
+      "pixel_count": 262144,
+      "rejection": "winsorized_sigma",
+      "resident_winsorized_mode": "hardened_cpu_parity",
+      "schema_version": 1,
+      "timing_model": "python_native_resident_hardened_winsorized_sigma_one_sync",
+      "total_s": 0.001950700010638684,
+      "width": 512
+    }
+  },
+  "evaluation": {
+    "comparison_region": {
+      "compared_pixels": 246016,
+      "compared_shape": [
+        496,
+        496
+      ],
+      "coverage_fraction": 1.0,
+      "coverage_max": 16.0,
+      "coverage_median": 16.0,
+      "coverage_min": 10.0,
+      "coverage_p1": 15.0,
+      "coverage_valid_pixels": 246016,
+      "full_shape": [
+        512,
+        512
+      ],
+      "glass_coverage_map": "runs\\checkpoints\\s2_gate_423_common_footprint_refF16_cuda_hardened\\integration\\resident_coverage_map_H.fits",
+      "ignore_border_px": 8,
+      "min_coverage": 1.0
+    },
+    "evaluated_pixels": 246016,
+    "evaluation_region": "compare_region"
+  },
+  "failed_checks": [],
+  "frame_count": 16,
+  "frame_ids": [
+    "F000013",
+    "F000014",
+    "F000015",
+    "F000016",
+    "F000017",
+    "F000018",
+    "F000019",
+    "F000020",
+    "F000021",
+    "F000022",
+    "F000023",
+    "F000024",
+    "F000025",
+    "F000026",
+    "F000027",
+    "F000028"
+  ],
+  "high_sigma": 3.0,
+  "low_sigma": 3.0,
+  "passed": true,
+  "recommendation": "target_resident_registration_warp_input_parity",
+  "resident_output_delta_vs_cpu": {
+    "coverage": {
+      "abs_delta_sum": 798.0,
+      "finite_pixels": 246016,
+      "max_abs_delta": 3.0,
+      "mismatch_pixels": 786,
+      "passed": false,
+      "pixels": 246016,
+      "shape_match": true,
+      "signed_delta_sum": 38.0
+    },
+    "high_rejection": {
+      "abs_delta_sum": 396.0,
+      "finite_pixels": 246016,
+      "max_abs_delta": 1.0,
+      "mismatch_pixels": 396,
+      "passed": false,
+      "pixels": 246016,
+      "shape_match": true,
+      "signed_delta_sum": -22.0
+    },
+    "low_rejection": {
+      "abs_delta_sum": 402.0,
+      "finite_pixels": 246016,
+      "max_abs_delta": 2.0,
+      "mismatch_pixels": 400,
+      "passed": false,
+      "pixels": 246016,
+      "shape_match": true,
+      "signed_delta_sum": -16.0
+    },
+    "master": {
+      "abs_delta_sum": 7488.013198852539,
+      "finite_pixels": 246016,
+      "max_abs_delta": 3.214599609375,
+      "mismatch_pixels": 239764,
+      "passed": false,
+      "pixels": 246016,
+      "shape_match": true,
+      "signed_delta_sum": -391.51573181152344
+    },
+    "passed": false
+  },
+  "resident_output_parity": {
+    "attribution_status": "resident_registration_warp_input_delta",
+    "max_same_pre_rejection_abs_delta": 16,
+    "passed": false,
+    "pre_rejection_abs_delta": 0,
+    "same_pre_rejection_abs_rejected_sample_delta": 798
+  },
+  "resident_rejection_sample_audit": {
+    "evaluation_deltas": {
+      "abs_coverage_sample_delta": 798,
+      "abs_high_rejected_sample_delta": 396,
+      "abs_low_rejected_sample_delta": 402,
+      "abs_pre_rejection_sample_delta": 0,
+      "abs_rejected_sample_delta": 798,
+      "coverage_mismatch_pixels": 786,
+      "coverage_sample_delta": 38,
+      "cpu_warp_edge_rejection_mismatch_pixels": 0,
+      "dq_mismatch_pixels": 741,
+      "high_rejected_sample_delta": -22,
+      "high_rejection_mismatch_pixels": 396,
+      "low_rejected_sample_delta": -16,
+      "low_rejection_mismatch_pixels": 400,
+      "pre_rejection_mismatch_pixels": 0,
+      "pre_rejection_sample_delta": 0,
+      "rejected_sample_delta": -38,
+      "rejection_mismatch_pixels": 786,
+      "rejection_mismatch_with_coverage_mismatch_pixels": 786,
+      "rejection_mismatch_with_pre_rejection_mismatch_pixels": 0,
+      "resident_warp_edge_rejection_mismatch_pixels": 0,
+      "same_post_coverage_abs_rejected_sample_delta": 0,
+      "same_post_coverage_rejection_mismatch_pixels": 0,
+      "same_pre_rejection_abs_rejected_sample_delta": 798,
+      "same_pre_rejection_rejection_mismatch_pixels": 786
+    },
+    "evaluation_region": "compare_region",
+    "failed_checks": [
+      "same_pre_rejection_semantic_delta_within_limit"
+    ],
+    "passed": false,
+    "raw_recommendation": "fix_resident_winsorized_rejection_semantics",
+    "recommendation": "target_resident_registration_warp_input_parity",
+    "status": "attention_required"
+  },
+  "resident_run": "runs\\checkpoints\\s2_gate_428_guarded_median_refine_refF16_cuda_hardened",
+  "schema_version": 1,
+  "shape": {
+    "frames": 16,
+    "height": 512,
+    "width": 512
+  },
+  "status": "passed",
+  "thresholds": {
+    "master_tolerance": 0.0005,
+    "max_same_pre_rejection_abs_delta": 16
+  }
+}

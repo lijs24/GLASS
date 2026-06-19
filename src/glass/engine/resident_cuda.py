@@ -528,6 +528,8 @@ def _resident_triangle_translation_refine(
     tolerance_px: float,
     min_inliers: int,
     max_correction_px: float,
+    iterations: int = 2,
+    iteration_max_step_px: float | None = 0.005,
 ) -> dict[str, Any]:
     seed = np.asarray(seed_matrix, dtype=np.float64).reshape(3, 3)
     if reference_catalog is None or moving_catalog is None:
@@ -552,59 +554,143 @@ def _resident_triangle_translation_refine(
     if reference.shape[0] <= 0 or moving.shape[0] <= 0:
         return {"applied": False, "status": "empty_catalog", "matrix": seed.tolist()}
 
-    ones = np.ones((moving.shape[0], 1), dtype=np.float64)
-    projected_h = np.hstack([moving, ones]) @ seed.T
-    scale = projected_h[:, 2:3]
-    projected = np.divide(
-        projected_h[:, :2],
-        scale,
-        out=projected_h[:, :2].copy(),
-        where=np.abs(scale) > 1.0e-12,
-    )
-
     tolerance = max(0.0, float(tolerance_px))
-    distances = np.sqrt(np.sum((projected[:, None, :] - reference[None, :, :]) ** 2, axis=2))
-    candidate_indices = np.argwhere(distances <= tolerance)
-    if candidate_indices.size == 0:
+    max_iterations = max(0, int(iterations))
+    max_iteration_step = None
+    if iteration_max_step_px is not None:
+        max_iteration_step = max(0.0, float(iteration_max_step_px))
+
+    def project_points(matrix: np.ndarray) -> np.ndarray:
+        ones = np.ones((moving.shape[0], 1), dtype=np.float64)
+        projected_h = np.hstack([moving, ones]) @ matrix.T
+        scale = projected_h[:, 2:3]
+        return np.divide(
+            projected_h[:, :2],
+            scale,
+            out=projected_h[:, :2].copy(),
+            where=np.abs(scale) > 1.0e-12,
+        )
+
+    def score_matrix(matrix: np.ndarray) -> tuple[list[tuple[int, int]], float]:
+        projected = project_points(matrix)
+        distances = np.sqrt(np.sum((projected[:, None, :] - reference[None, :, :]) ** 2, axis=2))
+        candidate_indices = np.argwhere(distances <= tolerance)
+        if candidate_indices.size == 0:
+            return [], float("inf")
+        candidates = sorted(
+            (
+                (float(distances[int(moving_i), int(reference_i)]), int(moving_i), int(reference_i))
+                for moving_i, reference_i in candidate_indices
+            ),
+            key=lambda item: item[0],
+        )
+        used_moving: set[int] = set()
+        used_reference: set[int] = set()
+        pairs: list[tuple[int, int]] = []
+        residuals: list[float] = []
+        for distance, moving_i, reference_i in candidates:
+            if moving_i in used_moving or reference_i in used_reference:
+                continue
+            used_moving.add(moving_i)
+            used_reference.add(reference_i)
+            pairs.append((moving_i, reference_i))
+            residuals.append(distance)
+        rms = float(np.sqrt(np.mean(np.square(residuals)))) if residuals else float("inf")
+        return pairs, rms
+
+    def fit_translation(pairs: list[tuple[int, int]]) -> np.ndarray:
+        moving_pairs = moving[[moving_i for moving_i, _reference_i in pairs]]
+        reference_pairs = reference[[reference_i for _moving_i, reference_i in pairs]]
+        dx, dy = np.median(reference_pairs - moving_pairs, axis=0)
+        return np.asarray([[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]], dtype=np.float64)
+
+    def pair_rms(matrix: np.ndarray, pairs: list[tuple[int, int]]) -> float:
+        if not pairs:
+            return float("inf")
+        moving_pairs = moving[[moving_i for moving_i, _reference_i in pairs]]
+        reference_pairs = reference[[reference_i for _moving_i, reference_i in pairs]]
+        projected = np.column_stack([moving_pairs, np.ones(len(moving_pairs), dtype=np.float64)]) @ matrix.T
+        scale = projected[:, 2:3]
+        projected_xy = np.divide(
+            projected[:, :2],
+            scale,
+            out=projected[:, :2].copy(),
+            where=np.abs(scale) > 1.0e-12,
+        )
+        residuals = projected_xy - reference_pairs
+        return float(np.sqrt(np.mean(np.sum(residuals * residuals, axis=1))))
+
+    seed_pairs, seed_rms = score_matrix(seed)
+    best_pairs = seed_pairs
+    initial_inliers = len(best_pairs)
+    initial_rms_px = float(seed_rms) if np.isfinite(seed_rms) else float("nan")
+    if not best_pairs:
         return {
             "applied": False,
             "status": "no_pairs",
             "matrix": seed.tolist(),
             "inliers": 0,
             "rms_px": float("nan"),
+            "initial_inliers": 0,
+            "initial_rms_px": float("nan"),
+            "iterations": 0,
         }
-    candidates = sorted(
-        (
-            (float(distances[int(moving_i), int(reference_i)]), int(moving_i), int(reference_i))
-            for moving_i, reference_i in candidate_indices
-        ),
-        key=lambda item: item[0],
-    )
-    used_moving: set[int] = set()
-    used_reference: set[int] = set()
-    pairs: list[tuple[int, int]] = []
-    for _distance, moving_i, reference_i in candidates:
-        if moving_i in used_moving or reference_i in used_reference:
-            continue
-        used_moving.add(moving_i)
-        used_reference.add(reference_i)
-        pairs.append((moving_i, reference_i))
 
-    inliers = len(pairs)
+    inliers = len(best_pairs)
     if inliers < int(min_inliers):
         return {
             "applied": False,
             "status": "insufficient_inliers",
             "matrix": seed.tolist(),
+            "candidate_matrix": seed.tolist(),
             "inliers": inliers,
             "rms_px": float("nan"),
+            "initial_inliers": initial_inliers,
+            "initial_rms_px": initial_rms_px,
+            "iterations": 0,
+        }
+    if max_iterations <= 0:
+        return {
+            "applied": False,
+            "status": "iterations_disabled",
+            "matrix": seed.tolist(),
+            "inliers": inliers,
+            "rms_px": float("nan"),
+            "initial_inliers": initial_inliers,
+            "initial_rms_px": initial_rms_px,
+            "iterations": 0,
         }
 
-    moving_pairs = moving[[moving_i for moving_i, _reference_i in pairs]]
-    reference_pairs = reference[[reference_i for _moving_i, reference_i in pairs]]
-    translations = reference_pairs - moving_pairs
-    dx, dy = np.median(translations, axis=0)
-    refined = np.asarray([[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]], dtype=np.float64)
+    best_matrix = fit_translation(best_pairs)
+    best_rms = pair_rms(best_matrix, best_pairs)
+    accepted_iterations = 1 if max_iterations > 0 else 0
+
+    for _iteration in range(1, max_iterations):
+        if not best_pairs:
+            break
+        scored_pairs, _scored_rms = score_matrix(best_matrix)
+        if not scored_pairs:
+            break
+        candidate = fit_translation(scored_pairs)
+        iteration_step_px = float(
+            np.hypot(candidate[0, 2] - best_matrix[0, 2], candidate[1, 2] - best_matrix[1, 2])
+        )
+        if max_iteration_step is not None and iteration_step_px > max_iteration_step:
+            break
+        candidate_pairs, candidate_rms = score_matrix(candidate)
+        if len(candidate_pairs) > len(best_pairs) or (
+            len(candidate_pairs) == len(best_pairs) and candidate_rms <= best_rms
+        ):
+            best_matrix = candidate
+            best_pairs = candidate_pairs
+            best_rms = candidate_rms
+            accepted_iterations += 1
+        else:
+            break
+
+    inliers = len(best_pairs)
+    dx = float(best_matrix[0, 2])
+    dy = float(best_matrix[1, 2])
     correction_dx = float(dx - seed[0, 2])
     correction_dy = float(dy - seed[1, 2])
     correction_px = float(np.hypot(correction_dx, correction_dy))
@@ -613,25 +699,30 @@ def _resident_triangle_translation_refine(
             "applied": False,
             "status": "correction_exceeds_limit",
             "matrix": seed.tolist(),
-            "candidate_matrix": refined.tolist(),
+            "candidate_matrix": best_matrix.tolist(),
             "inliers": inliers,
             "rms_px": float("nan"),
             "correction_dx": correction_dx,
             "correction_dy": correction_dy,
             "correction_px": correction_px,
+            "initial_inliers": initial_inliers,
+            "initial_rms_px": initial_rms_px,
+            "iterations": accepted_iterations,
         }
 
-    residuals = moving_pairs + np.asarray([dx, dy], dtype=np.float64) - reference_pairs
-    rms_px = float(np.sqrt(np.mean(np.sum(residuals * residuals, axis=1)))) if inliers else float("nan")
+    rms_px = float(best_rms) if np.isfinite(best_rms) else float("nan")
     return {
         "applied": True,
         "status": "applied",
-        "matrix": refined.tolist(),
+        "matrix": best_matrix.tolist(),
         "inliers": inliers,
         "rms_px": rms_px,
         "correction_dx": correction_dx,
         "correction_dy": correction_dy,
         "correction_px": correction_px,
+        "initial_inliers": initial_inliers,
+        "initial_rms_px": initial_rms_px,
+        "iterations": accepted_iterations,
     }
 
 
@@ -2833,6 +2924,7 @@ def run_resident_calibration_integration(
 
             allocate_start = perf_counter()
             stack = cuda_module.ResidentCalibratedStack(len(light_frames), height, width)
+            resident_stack = stack
             allocate_elapsed = perf_counter() - allocate_start
             coverage_native_stack = getattr(stack, "_impl", stack)
             resident_warp_coverage_supported = all(
@@ -4433,6 +4525,16 @@ def run_resident_calibration_integration(
                     "cuda_triangle_translation_refine_max_correction_px",
                     0.25,
                 )
+                triangle_translation_refine_iterations = _policy_int(
+                    registration_policy,
+                    "cuda_triangle_translation_refine_iterations",
+                    2,
+                )
+                triangle_translation_refine_iteration_max_step_px = _policy_float(
+                    registration_policy,
+                    "cuda_triangle_translation_refine_iteration_max_step_px",
+                    0.005,
+                )
                 triangle_centroid_refine_enabled = _policy_bool(
                     registration_policy,
                     "cuda_triangle_centroid_refine",
@@ -4449,6 +4551,10 @@ def run_resident_calibration_integration(
                     raise ValueError("cuda_triangle_translation_refine_min_inliers must be positive")
                 if triangle_translation_refine_max_correction_px <= 0.0:
                     raise ValueError("cuda_triangle_translation_refine_max_correction_px must be positive")
+                if triangle_translation_refine_iterations < 0:
+                    raise ValueError("cuda_triangle_translation_refine_iterations must be non-negative")
+                if triangle_translation_refine_iteration_max_step_px < 0.0:
+                    raise ValueError("cuda_triangle_translation_refine_iteration_max_step_px must be non-negative")
                 if triangle_centroid_refine_radius <= 0:
                     raise ValueError("cuda_triangle_centroid_refine_radius must be positive")
                 native_stack = getattr(stack, "_impl", stack)
@@ -4538,6 +4644,7 @@ def run_resident_calibration_integration(
                 triangle_translation_refine_rejected_count = 0
                 triangle_translation_refine_max_correction_px_observed = 0.0
                 triangle_translation_refine_max_rms_px = 0.0
+                triangle_translation_refine_max_iterations_observed = 0
                 triangle_centroid_refine_catalog_count = 0
                 triangle_centroid_refine_star_count = 0
                 triangle_centroid_refine_failed_star_count = 0
@@ -4889,7 +4996,7 @@ def run_resident_calibration_integration(
                         return cached
                     centroid_start = perf_counter()
                     refined, summary = _resident_refine_catalog_centroids_from_stack(
-                        stack,
+                        resident_stack,
                         frame_index,
                         catalog,
                         radius=triangle_centroid_refine_radius,
@@ -5333,6 +5440,8 @@ def run_resident_calibration_integration(
                                         tolerance_px=triangle_translation_refine_tolerance_px,
                                         min_inliers=triangle_translation_refine_min_inliers,
                                         max_correction_px=triangle_translation_refine_max_correction_px,
+                                        iterations=triangle_translation_refine_iterations,
+                                        iteration_max_step_px=triangle_translation_refine_iteration_max_step_px,
                                     )
                                     _add_elapsed(
                                         registration_component_s,
@@ -5351,6 +5460,11 @@ def run_resident_calibration_integration(
                                             triangle_translation_refine_max_rms_px,
                                             float(refine_rms),
                                         )
+                                    refine_iterations = int(translation_refine.get("iterations", 0) or 0)
+                                    triangle_translation_refine_max_iterations_observed = max(
+                                        triangle_translation_refine_max_iterations_observed,
+                                        refine_iterations,
+                                    )
                                     if bool(translation_refine.get("applied", False)):
                                         triangle_translation_refine_applied_count += 1
                                         matrix_array = np.asarray(
@@ -5556,6 +5670,20 @@ def run_resident_calibration_integration(
                                         "triangle_translation_refine_correction_px="
                                         + (
                                             f"{_float_or_nan(translation_refine.get('correction_px')):.6g}"
+                                            if translation_refine is not None
+                                            else "nan"
+                                        ),
+                                        "triangle_translation_refine_iterations="
+                                        + (
+                                            str(int(translation_refine.get("iterations", 0) or 0))
+                                            if translation_refine is not None
+                                            else "0"
+                                        ),
+                                        "triangle_translation_refine_iteration_max_step_px="
+                                        + f"{float(triangle_translation_refine_iteration_max_step_px):.6g}",
+                                        "triangle_translation_refine_initial_rms_px="
+                                        + (
+                                            f"{_float_or_nan(translation_refine.get('initial_rms_px')):.6g}"
                                             if translation_refine is not None
                                             else "nan"
                                         ),
@@ -7119,6 +7247,16 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else None,
+                        "triangle_translation_refine_iterations": int(
+                            triangle_translation_refine_iterations
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
+                        "triangle_translation_refine_iteration_max_step_px": float(
+                            triangle_translation_refine_iteration_max_step_px
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else None,
                         "triangle_translation_refine_applied_count": int(
                             triangle_translation_refine_applied_count
                         )
@@ -7144,6 +7282,11 @@ def run_resident_calibration_integration(
                         )
                         if resident_registration == "similarity_cuda_triangle"
                         else 0.0,
+                        "triangle_translation_refine_max_iterations_observed": int(
+                            triangle_translation_refine_max_iterations_observed
+                        )
+                        if resident_registration == "similarity_cuda_triangle"
+                        else 0,
                         "triangle_centroid_refine": bool(
                             resident_registration == "similarity_cuda_triangle"
                             and triangle_centroid_refine_enabled

@@ -529,6 +529,39 @@ def test_resident_triangle_translation_refine_uses_catalog_median_translation():
     assert abs(result["matrix"][1][2] + 0.011) < 1e-4
     assert 0.010 < result["correction_px"] < 0.012
     assert result["rms_px"] < 0.003
+    assert result["iterations"] >= 1
+    assert result["initial_rms_px"] > result["rms_px"]
+
+
+def test_resident_triangle_translation_refine_iterates_to_reduce_seed_rms():
+    reference = {
+        "stored_count": 4,
+        "x": np.asarray([10.0, 20.0, 30.0, 40.0], dtype=np.float32),
+        "y": np.asarray([12.0, 24.0, 36.0, 48.0], dtype=np.float32),
+    }
+    moving = {
+        "stored_count": 4,
+        "x": np.asarray([9.0, 19.0, 29.0, 39.0], dtype=np.float32),
+        "y": np.asarray([12.0, 24.0, 36.0, 48.0], dtype=np.float32),
+    }
+    seed = [[1.0, 0.0, 0.72], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+    result = _resident_triangle_translation_refine(
+        reference,
+        moving,
+        seed,
+        tolerance_px=0.31,
+        min_inliers=4,
+        max_correction_px=0.5,
+        iterations=2,
+    )
+
+    assert result["applied"] is True
+    assert result["inliers"] == 4
+    assert result["iterations"] >= 1
+    assert abs(result["matrix"][0][2] - 1.0) < 1e-6
+    assert result["initial_rms_px"] > 0.25
+    assert result["rms_px"] < 1e-6
 
 
 def test_resident_triangle_translation_refine_rejects_large_correction():
