@@ -1,0 +1,690 @@
+{
+  "artifact_type": "resident_fits_auto_regression",
+  "checks": [
+    {
+      "evidence": {
+        "actual": 200,
+        "required_min": 200
+      },
+      "name": "minimum_light_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "auto",
+        "expected": "auto"
+      },
+      "name": "fits_read_mode_requested_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": "native_u16_gpu",
+        "expected": "native_u16_gpu"
+      },
+      "name": "fits_read_mode_effective_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "checked_all_groups": true,
+        "checked_frame_count": 200,
+        "eligible_frame_count": 200,
+        "fallback_reason_counts": {},
+        "ineligible_samples": [],
+        "runtime_eligible_all_groups": true,
+        "selected_all_groups": true
+      },
+      "name": "raw_gpu_selected_for_all_groups",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "checked_all_groups": true,
+        "checked_frame_count": 200,
+        "eligible_frame_count": 200,
+        "fallback_reason_counts": {},
+        "ineligible_samples": [],
+        "runtime_eligible_all_groups": true,
+        "selected_all_groups": true
+      },
+      "name": "raw_gpu_all_checked_frames_eligible",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "checked_all_groups": true,
+        "checked_frame_count": 200,
+        "eligible_frame_count": 200,
+        "fallback_reason_counts": {},
+        "ineligible_samples": [],
+        "runtime_eligible_all_groups": true,
+        "selected_all_groups": true
+      },
+      "name": "raw_gpu_runtime_eligible",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "raw_gpu_decode_enabled",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "backend_counts": {
+          "native_u16be_raw": 200
+        },
+        "expected_backend": "native_u16be_raw",
+        "required_min": 200
+      },
+      "name": "expected_backend_count",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "active_frame_count": 193,
+        "masked_frame_count": 7,
+        "passed_all_groups": true,
+        "unknown_zero_weight_frame_count": 0
+      },
+      "name": "frame_mask_contract_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "check_counts": {
+          "active_frame_count_matches_provenance": 1,
+          "active_not_greater_than_input_frame_count": 1,
+          "dq_summary_matches_provenance": 1,
+          "frame_mask_active_matches_output_link": 1,
+          "frame_mask_contract_passed": 1,
+          "geometric_coverage_count_matches_active": 1,
+          "geometric_coverage_present": 1,
+          "post_rejection_coverage_present": 1,
+          "rejection_sample_count_matches": 1,
+          "rejection_sample_count_recorded": 1,
+          "sample_accounting_closure_passed": 1
+        },
+        "failed_check_counts": {},
+        "failed_group_count": 0,
+        "failed_groups": [],
+        "group_count": 1,
+        "passed": true,
+        "passed_group_count": 1
+      },
+      "name": "dq_pixel_closure_passed",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 193,
+        "expected": 193
+      },
+      "name": "active_frame_count_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 7,
+        "expected": 7
+      },
+      "name": "masked_frame_count_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0,
+        "expected": 0
+      },
+      "name": "unknown_zero_weight_count_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "auto_vs_explicit_shape_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0
+      },
+      "name": "auto_vs_explicit_rms_within_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0
+      },
+      "name": "auto_vs_explicit_max_abs_within_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": true
+      },
+      "name": "auto_vs_control_shape_matches",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0
+      },
+      "name": "auto_vs_control_rms_within_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 0.0,
+        "required_max": 0.0
+      },
+      "name": "auto_vs_control_max_abs_within_limit",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 14.171341699984623
+      },
+      "name": "run_total_timing_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 14.171341699984623,
+        "explicit_s": 13.938976600009482,
+        "required_ratio_max": 1.1
+      },
+      "name": "run_total_close_to_explicit_raw_gpu",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 14.171341699984623,
+        "control_s": 17.28835899999831,
+        "required_ratio_max": 0.9
+      },
+      "name": "run_total_faster_than_control",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual_s": 3.5191777999862097,
+        "control_s": 6.624953699996695,
+        "required_ratio_max": 0.7
+      },
+      "name": "light_bucket_faster_than_control",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "compare_control_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate442_auto_u16_gpu_warm_20260619_232000\\gate442_auto_vs_gate438_astropy.json",
+  "compare_explicit_path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate442_auto_u16_gpu_warm_20260619_232000\\gate442_auto_vs_gate440_explicit.json",
+  "control_run": {
+    "backend_counts": {
+      "astropy_scaled_memmap": 200
+    },
+    "dq_summary": {
+      "check_counts": {
+        "active_frame_count_matches_provenance": 1,
+        "active_not_greater_than_input_frame_count": 1,
+        "dq_summary_matches_provenance": 1,
+        "frame_mask_active_matches_output_link": 1,
+        "frame_mask_contract_passed": 1,
+        "geometric_coverage_count_matches_active": 1,
+        "geometric_coverage_present": 1,
+        "post_rejection_coverage_present": 1,
+        "rejection_sample_count_matches": 1,
+        "rejection_sample_count_recorded": 1,
+        "sample_accounting_closure_passed": 1
+      },
+      "failed_check_counts": {},
+      "failed_group_count": 0,
+      "failed_groups": [],
+      "group_count": 1,
+      "passed": true,
+      "passed_group_count": 1
+    },
+    "frame_count": 200,
+    "io": {
+      "calibration_batch_actual_stream_count": 2,
+      "calibration_batch_count": 25,
+      "calibration_batch_enabled": true,
+      "calibration_batch_frame_count": 200,
+      "calibration_batch_lane_buffer_bytes": 493209600,
+      "calibration_batch_mode": "host_async_multistream_callback_release_batch",
+      "calibration_batch_multistream_enabled": true,
+      "calibration_batch_multistream_supported": true,
+      "calibration_batch_native_total_s": 1.9584481999999999,
+      "calibration_batch_requested_frames": 8,
+      "calibration_batch_requested_streams": 4,
+      "calibration_batch_stream_h2d_calibrate_store_s": 1.940817882537842,
+      "calibration_batch_supported": true,
+      "calibration_batch_sync_s": 0.015862,
+      "calibration_batch_timing_model": "multi_stream_callback_release_waves_one_final_sync",
+      "calibration_callback_release_capable": true,
+      "calibration_callback_release_count": 200,
+      "calibration_callback_release_enabled": true,
+      "calibration_callback_release_recommended": false,
+      "calibration_callback_release_s": 0.005344399999999999,
+      "calibration_callback_release_supported": true,
+      "calibration_callback_wave_count": 100,
+      "calibration_event_mode": "reused_stack_lane_h2d_callback_events",
+      "calibration_event_modes": [
+        "reused_stack_lane_h2d_callback_events"
+      ],
+      "calibration_event_reuse": true,
+      "calibration_fetch_batch_frames": 8,
+      "calibration_h2d_event_elapsed_s": 0.5548607950210572,
+      "calibration_h2d_event_sync_s": 1.9075651000000002,
+      "calibration_h2d_release_capable": true,
+      "calibration_h2d_release_count": 200,
+      "calibration_h2d_release_enabled": false,
+      "calibration_h2d_release_policy": "auto enables h2d_event only when wave_effective_frames equals stream_count; callback_queue is an explicit native multi-wave experiment",
+      "calibration_h2d_release_reason": "explicit_callback_queue_requested",
+      "calibration_h2d_release_recommended": false,
+      "calibration_h2d_release_s": 1.9416374,
+      "calibration_h2d_release_supported": true,
+      "calibration_pending_wait_sync_s": 0.0,
+      "calibration_release_mode_effective": "callback_queue",
+      "calibration_release_mode_requested": "callback_queue",
+      "calibration_wave_effective_frames": 2,
+      "calibration_wave_enabled": true,
+      "calibration_wave_release_mode": "callback_after_h2d_event",
+      "calibration_wave_requested_frames": 2,
+      "fits_backend_counts": {
+        "astropy_scaled_memmap": 200
+      },
+      "fits_fast_fallback_reason_counts": {},
+      "fits_read_mode": "astropy",
+      "h2d_mode": "pinned_ring",
+      "host_pinned_bytes": 2959257600,
+      "master_cache_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_shared_master_cache_20260619_204953",
+      "master_cache_scope": "shared",
+      "prefetch_fill_blocked_no_slot_count": 70,
+      "prefetch_fill_call_count": 101,
+      "prefetch_fill_submit_count": 200,
+      "prefetch_frames": 12,
+      "prefetch_host_pinned_bytes": 2959257600,
+      "prefetch_max_inflight_slots": 12,
+      "prefetch_refill_mode": "queued",
+      "prefetch_release_batch_count": 100,
+      "prefetch_release_count": 200,
+      "prefetch_release_fill_model": "queued_release_refill",
+      "prefetch_release_refill_queued_coalesced_count": 0,
+      "prefetch_release_refill_queued_execute_count": 100,
+      "prefetch_release_refill_queued_submit_count": 100,
+      "prefetch_release_refill_request_count": 100,
+      "prefetch_release_refill_wait_s": 1.5999830793589354e-06,
+      "prefetch_workers": 7,
+      "stack_host_pinned_bytes": 0,
+      "warp_copy_mode": "default_stream_async_device_to_device",
+      "warp_scratch_bytes": 493209636
+    },
+    "mask_summary": {
+      "active_frame_count": 193,
+      "masked_frame_count": 7,
+      "passed_all_groups": true,
+      "unknown_zero_weight_frame_count": 0
+    },
+    "path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate438_astropy_control_warm_20260619_213148",
+    "raw_selection": {
+      "checked_all_groups": false,
+      "checked_frame_count": 0,
+      "eligible_frame_count": 0,
+      "fallback_reason_counts": {},
+      "ineligible_samples": [],
+      "runtime_eligible_all_groups": false,
+      "selected_all_groups": false
+    },
+    "timing": {
+      "light_h2d_calibrate_store_s": 1.9668816000339575,
+      "light_read_upload_calibrate_s": 6.624953699996695,
+      "output_write_s": 2.2511336999887135,
+      "run_elapsed_s": 17.28835899999831
+    }
+  },
+  "created_at": "2026-06-19T15:14:06+00:00",
+  "explicit_run": {
+    "backend_counts": {
+      "native_u16be_raw": 200
+    },
+    "dq_summary": {
+      "check_counts": {
+        "active_frame_count_matches_provenance": 1,
+        "active_not_greater_than_input_frame_count": 1,
+        "dq_summary_matches_provenance": 1,
+        "frame_mask_active_matches_output_link": 1,
+        "frame_mask_contract_passed": 1,
+        "geometric_coverage_count_matches_active": 1,
+        "geometric_coverage_present": 1,
+        "post_rejection_coverage_present": 1,
+        "rejection_sample_count_matches": 1,
+        "rejection_sample_count_recorded": 1,
+        "sample_accounting_closure_passed": 1
+      },
+      "failed_check_counts": {},
+      "failed_group_count": 0,
+      "failed_groups": [],
+      "group_count": 1,
+      "passed": true,
+      "passed_group_count": 1
+    },
+    "frame_count": 200,
+    "io": {
+      "calibration_batch_actual_stream_count": 2,
+      "calibration_batch_count": 25,
+      "calibration_batch_enabled": true,
+      "calibration_batch_frame_count": 200,
+      "calibration_batch_lane_buffer_bytes": 493209600,
+      "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+      "calibration_batch_multistream_enabled": true,
+      "calibration_batch_multistream_supported": true,
+      "calibration_batch_native_total_s": 0.7318365,
+      "calibration_batch_requested_frames": 8,
+      "calibration_batch_requested_streams": 4,
+      "calibration_batch_stream_h2d_calibrate_store_s": 0.7220411777496337,
+      "calibration_batch_supported": true,
+      "calibration_batch_sync_s": 0.013561700000000001,
+      "calibration_batch_timing_model": "multi_stream_callback_release_waves_one_final_sync",
+      "calibration_callback_release_capable": true,
+      "calibration_callback_release_count": 200,
+      "calibration_callback_release_enabled": true,
+      "calibration_callback_release_recommended": false,
+      "calibration_callback_release_s": 0.003244999999999999,
+      "calibration_callback_release_supported": true,
+      "calibration_callback_wave_count": 100,
+      "calibration_event_mode": "reused_stack_lane_h2d_callback_events",
+      "calibration_event_modes": [
+        "reused_stack_lane_h2d_callback_events"
+      ],
+      "calibration_event_reuse": true,
+      "calibration_fetch_batch_frames": 8,
+      "calibration_h2d_event_elapsed_s": 0.17152969646453858,
+      "calibration_h2d_event_sync_s": 0.6980818,
+      "calibration_h2d_release_capable": true,
+      "calibration_h2d_release_count": 200,
+      "calibration_h2d_release_enabled": false,
+      "calibration_h2d_release_policy": "auto enables h2d_event only when wave_effective_frames equals stream_count; callback_queue is an explicit native multi-wave experiment",
+      "calibration_h2d_release_reason": "explicit_callback_queue_requested",
+      "calibration_h2d_release_recommended": false,
+      "calibration_h2d_release_s": 0.7181259,
+      "calibration_h2d_release_supported": true,
+      "calibration_pending_wait_sync_s": 0.0,
+      "calibration_release_mode_effective": "callback_queue",
+      "calibration_release_mode_requested": "callback_queue",
+      "calibration_wave_effective_frames": 2,
+      "calibration_wave_enabled": true,
+      "calibration_wave_release_mode": "callback_after_h2d_event",
+      "calibration_wave_requested_frames": 2,
+      "fits_backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "fits_fast_fallback_reason_counts": {},
+      "fits_native_bytes_read": 24660480000,
+      "fits_native_decode_cumulative_s": 0.0,
+      "fits_native_file_read_cumulative_s": 20.5230559,
+      "fits_native_total_cumulative_s": 20.533117600000004,
+      "fits_read_mode": "native_u16_gpu",
+      "h2d_mode": "pinned_ring",
+      "host_pinned_bytes": 1479628800,
+      "master_cache_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_shared_master_cache_20260619_204953",
+      "master_cache_scope": "shared",
+      "prefetch_fill_blocked_no_slot_count": 70,
+      "prefetch_fill_call_count": 101,
+      "prefetch_fill_submit_count": 200,
+      "prefetch_frames": 12,
+      "prefetch_host_pinned_bytes": 1479628800,
+      "prefetch_max_inflight_slots": 12,
+      "prefetch_refill_mode": "queued",
+      "prefetch_release_batch_count": 100,
+      "prefetch_release_count": 200,
+      "prefetch_release_fill_model": "queued_release_refill",
+      "prefetch_release_refill_queued_coalesced_count": 0,
+      "prefetch_release_refill_queued_execute_count": 100,
+      "prefetch_release_refill_queued_submit_count": 100,
+      "prefetch_release_refill_request_count": 100,
+      "prefetch_release_refill_wait_s": 1.500011421740055e-06,
+      "prefetch_workers": 7,
+      "raw_gpu_decode_enabled": true,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "stack_host_pinned_bytes": 0,
+      "warp_copy_mode": "default_stream_async_device_to_device",
+      "warp_scratch_bytes": 493209636
+    },
+    "mask_summary": {
+      "active_frame_count": 193,
+      "masked_frame_count": 7,
+      "passed_all_groups": true,
+      "unknown_zero_weight_frame_count": 0
+    },
+    "path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate440_native_u16_gpu_warm_20260619_223129",
+    "raw_selection": {
+      "checked_all_groups": false,
+      "checked_frame_count": 0,
+      "eligible_frame_count": 0,
+      "fallback_reason_counts": {},
+      "ineligible_samples": [],
+      "runtime_eligible_all_groups": false,
+      "selected_all_groups": false
+    },
+    "timing": {
+      "light_h2d_calibrate_store_s": 0.7384882999176625,
+      "light_read_upload_calibrate_s": 3.501538000011351,
+      "output_write_s": 2.217506399989361,
+      "run_elapsed_s": 13.938976600009482
+    }
+  },
+  "failed_checks": [],
+  "passed": true,
+  "run": {
+    "backend_counts": {
+      "native_u16be_raw": 200
+    },
+    "dq_summary": {
+      "check_counts": {
+        "active_frame_count_matches_provenance": 1,
+        "active_not_greater_than_input_frame_count": 1,
+        "dq_summary_matches_provenance": 1,
+        "frame_mask_active_matches_output_link": 1,
+        "frame_mask_contract_passed": 1,
+        "geometric_coverage_count_matches_active": 1,
+        "geometric_coverage_present": 1,
+        "post_rejection_coverage_present": 1,
+        "rejection_sample_count_matches": 1,
+        "rejection_sample_count_recorded": 1,
+        "sample_accounting_closure_passed": 1
+      },
+      "failed_check_counts": {},
+      "failed_group_count": 0,
+      "failed_groups": [],
+      "group_count": 1,
+      "passed": true,
+      "passed_group_count": 1
+    },
+    "frame_count": 200,
+    "io": {
+      "calibration_batch_actual_stream_count": 2,
+      "calibration_batch_count": 25,
+      "calibration_batch_enabled": true,
+      "calibration_batch_frame_count": 200,
+      "calibration_batch_lane_buffer_bytes": 493209600,
+      "calibration_batch_mode": "fits_u16be_bzero_gpu_decode_callback_release_batch",
+      "calibration_batch_multistream_enabled": true,
+      "calibration_batch_multistream_supported": true,
+      "calibration_batch_native_total_s": 0.7380322,
+      "calibration_batch_requested_frames": 8,
+      "calibration_batch_requested_streams": 4,
+      "calibration_batch_stream_h2d_calibrate_store_s": 0.7281239356994629,
+      "calibration_batch_supported": true,
+      "calibration_batch_sync_s": 0.015052699999999999,
+      "calibration_batch_timing_model": "multi_stream_callback_release_waves_one_final_sync",
+      "calibration_callback_release_capable": true,
+      "calibration_callback_release_count": 200,
+      "calibration_callback_release_enabled": true,
+      "calibration_callback_release_recommended": false,
+      "calibration_callback_release_s": 0.0034392000000000003,
+      "calibration_callback_release_supported": true,
+      "calibration_callback_wave_count": 100,
+      "calibration_event_mode": "reused_stack_lane_h2d_callback_events",
+      "calibration_event_modes": [
+        "reused_stack_lane_h2d_callback_events"
+      ],
+      "calibration_event_reuse": true,
+      "calibration_fetch_batch_frames": 8,
+      "calibration_h2d_event_elapsed_s": 0.17345801544189454,
+      "calibration_h2d_event_sync_s": 0.7022786,
+      "calibration_h2d_release_capable": true,
+      "calibration_h2d_release_count": 200,
+      "calibration_h2d_release_enabled": false,
+      "calibration_h2d_release_policy": "auto enables h2d_event only when wave_effective_frames equals stream_count; callback_queue is an explicit native multi-wave experiment",
+      "calibration_h2d_release_reason": "explicit_callback_queue_requested",
+      "calibration_h2d_release_recommended": false,
+      "calibration_h2d_release_s": 0.7227360000000002,
+      "calibration_h2d_release_supported": true,
+      "calibration_pending_wait_sync_s": 0.0,
+      "calibration_release_mode_effective": "callback_queue",
+      "calibration_release_mode_requested": "callback_queue",
+      "calibration_wave_effective_frames": 2,
+      "calibration_wave_enabled": true,
+      "calibration_wave_release_mode": "callback_after_h2d_event",
+      "calibration_wave_requested_frames": 2,
+      "fits_backend_counts": {
+        "native_u16be_raw": 200
+      },
+      "fits_fast_fallback_reason_counts": {},
+      "fits_native_bytes_read": 24660480000,
+      "fits_native_decode_cumulative_s": 0.0,
+      "fits_native_file_read_cumulative_s": 20.5663009,
+      "fits_native_total_cumulative_s": 20.5758891,
+      "fits_read_mode": "auto",
+      "fits_read_mode_effective": "native_u16_gpu",
+      "fits_read_mode_requested": "auto",
+      "h2d_mode": "pinned_ring",
+      "host_pinned_bytes": 1479628800,
+      "master_cache_dir": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate436_shared_master_cache_20260619_204953",
+      "master_cache_scope": "shared",
+      "prefetch_fill_blocked_no_slot_count": 70,
+      "prefetch_fill_call_count": 101,
+      "prefetch_fill_submit_count": 200,
+      "prefetch_frames": 12,
+      "prefetch_host_pinned_bytes": 1479628800,
+      "prefetch_max_inflight_slots": 12,
+      "prefetch_refill_mode": "queued",
+      "prefetch_release_batch_count": 100,
+      "prefetch_release_count": 200,
+      "prefetch_release_fill_model": "queued_release_refill",
+      "prefetch_release_refill_queued_coalesced_count": 0,
+      "prefetch_release_refill_queued_execute_count": 100,
+      "prefetch_release_refill_queued_submit_count": 100,
+      "prefetch_release_refill_request_count": 100,
+      "prefetch_release_refill_wait_s": 1.500011421740055e-06,
+      "prefetch_workers": 7,
+      "raw_gpu_decode_enabled": true,
+      "raw_gpu_float32_host_bytes_avoided": 49320960000,
+      "raw_gpu_h2d_bytes": 24660480000,
+      "resident_fits_auto_selection": {
+        "effective_mode": "native_u16_gpu",
+        "fallback_mode": null,
+        "fallback_reason": "",
+        "policy": "guarded_auto",
+        "raw_u16_gpu": {
+          "checked": true,
+          "checked_frame_count": 200,
+          "eligible": true,
+          "eligible_frame_count": 200,
+          "fallback_reason_counts": {},
+          "ineligible_samples": [],
+          "runtime_eligible": true,
+          "runtime_reason": "",
+          "selected": true
+        },
+        "requested_mode": "auto",
+        "schema_version": 1
+      },
+      "stack_host_pinned_bytes": 0,
+      "warp_copy_mode": "default_stream_async_device_to_device",
+      "warp_scratch_bytes": 493209636
+    },
+    "mask_summary": {
+      "active_frame_count": 193,
+      "masked_frame_count": 7,
+      "passed_all_groups": true,
+      "unknown_zero_weight_frame_count": 0
+    },
+    "path": "C:\\glass_runs\\final_m38_h_200\\glass_s2_gate442_auto_u16_gpu_warm_20260619_232000",
+    "raw_selection": {
+      "checked_all_groups": true,
+      "checked_frame_count": 200,
+      "eligible_frame_count": 200,
+      "fallback_reason_counts": {},
+      "ineligible_samples": [],
+      "runtime_eligible_all_groups": true,
+      "selected_all_groups": true
+    },
+    "timing": {
+      "light_h2d_calibrate_store_s": 0.7448142999783158,
+      "light_read_upload_calibrate_s": 3.5191777999862097,
+      "output_write_s": 2.4055825999821536,
+      "run_elapsed_s": 14.171341699984623
+    }
+  },
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "active_frame_count": 193,
+    "backend_counts": {
+      "native_u16be_raw": 200
+    },
+    "checked_frame_count": 200,
+    "effective_mode": "native_u16_gpu",
+    "eligible_frame_count": 200,
+    "failed_check_count": 0,
+    "light_read_upload_calibrate_s": 3.5191777999862097,
+    "masked_frame_count": 7,
+    "run_elapsed_s": 14.171341699984623,
+    "unknown_zero_weight_frame_count": 0
+  },
+  "thresholds": {
+    "expected_active": 193,
+    "expected_backend": "native_u16be_raw",
+    "expected_effective_mode": "native_u16_gpu",
+    "expected_masked": 7,
+    "expected_requested_mode": "auto",
+    "expected_unknown_zero_weight": 0,
+    "max_abs_diff": 0.0,
+    "max_light_bucket_vs_control_ratio": 0.7,
+    "max_rms_diff": 0.0,
+    "max_total_vs_control_ratio": 0.9,
+    "max_total_vs_explicit_ratio": 1.1,
+    "min_lights": 200
+  }
+}

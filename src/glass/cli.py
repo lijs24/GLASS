@@ -75,6 +75,10 @@ from glass.report.resident_runtime_compare import (
     build_resident_runtime_compare,
     write_resident_runtime_compare,
 )
+from glass.report.resident_fits_auto_regression import (
+    build_resident_fits_auto_regression,
+    write_resident_fits_auto_regression,
+)
 from glass.report.resident_parity_summary import (
     build_resident_parity_summary,
     write_resident_parity_summary,
@@ -2557,6 +2561,40 @@ def cmd_resident_runtime_compare(args: argparse.Namespace) -> int:
         }
     )
     return 0
+
+
+def cmd_resident_fits_auto_regression(args: argparse.Namespace) -> int:
+    payload = build_resident_fits_auto_regression(
+        args.run,
+        compare_explicit=args.compare_explicit,
+        compare_control=args.compare_control,
+        explicit_run=args.explicit_run,
+        control_run=args.control_run,
+        min_lights=args.min_lights,
+        expected_active=args.expected_active,
+        expected_masked=args.expected_masked,
+        expected_unknown_zero_weight=args.expected_unknown_zero_weight,
+        expected_requested_mode=args.expected_requested_mode,
+        expected_effective_mode=args.expected_effective_mode,
+        expected_backend=args.expected_backend,
+        max_rms_diff=args.max_rms_diff,
+        max_abs_diff=args.max_abs_diff,
+        max_total_vs_explicit_ratio=args.max_total_vs_explicit_ratio,
+        max_total_vs_control_ratio=args.max_total_vs_control_ratio,
+        max_light_bucket_vs_control_ratio=args.max_light_bucket_vs_control_ratio,
+    )
+    write_resident_fits_auto_regression(args.out, payload, markdown=args.markdown)
+    console.print(
+        {
+            "artifact_type": payload.get("artifact_type"),
+            "status": payload.get("status"),
+            "passed": payload.get("passed"),
+            "failed_checks": payload.get("failed_checks"),
+            "out": args.out,
+            "markdown": args.markdown,
+        }
+    )
+    return 2 if args.fail_on_failure and not payload.get("passed") else 0
 
 
 def cmd_resident_parity_summary(args: argparse.Namespace) -> int:
@@ -6457,6 +6495,50 @@ def build_parser() -> argparse.ArgumentParser:
     resident_runtime_compare.add_argument("--out", required=True, help="output runtime comparison JSON")
     resident_runtime_compare.add_argument("--markdown", help="optional output Markdown summary")
     resident_runtime_compare.set_defaults(func=cmd_resident_runtime_compare)
+
+    resident_fits_auto_regression = sub.add_parser(
+        "resident-fits-auto-regression",
+        help="audit a resident auto FITS run against raw-u16 GPU selection, DQ, compare, and timing constraints",
+    )
+    resident_fits_auto_regression.add_argument("--run", required=True, help="candidate GLASS run directory")
+    resident_fits_auto_regression.add_argument(
+        "--explicit-run",
+        help="explicit native_u16_gpu baseline run directory used for timing closeness",
+    )
+    resident_fits_auto_regression.add_argument(
+        "--control-run",
+        help="astropy/control baseline run directory used for timing speedup",
+    )
+    resident_fits_auto_regression.add_argument(
+        "--compare-explicit",
+        required=True,
+        help="compare JSON for candidate auto run against explicit native_u16_gpu output",
+    )
+    resident_fits_auto_regression.add_argument(
+        "--compare-control",
+        required=True,
+        help="compare JSON for candidate auto run against astropy/control output",
+    )
+    resident_fits_auto_regression.add_argument("--out", required=True, help="output regression audit JSON")
+    resident_fits_auto_regression.add_argument("--markdown", help="optional Markdown summary")
+    resident_fits_auto_regression.add_argument("--min-lights", type=int, default=200)
+    resident_fits_auto_regression.add_argument("--expected-active", type=int, default=193)
+    resident_fits_auto_regression.add_argument("--expected-masked", type=int, default=7)
+    resident_fits_auto_regression.add_argument("--expected-unknown-zero-weight", type=int, default=0)
+    resident_fits_auto_regression.add_argument("--expected-requested-mode", default="auto")
+    resident_fits_auto_regression.add_argument("--expected-effective-mode", default="native_u16_gpu")
+    resident_fits_auto_regression.add_argument("--expected-backend", default="native_u16be_raw")
+    resident_fits_auto_regression.add_argument("--max-rms-diff", type=float, default=0.0)
+    resident_fits_auto_regression.add_argument("--max-abs-diff", type=float, default=0.0)
+    resident_fits_auto_regression.add_argument("--max-total-vs-explicit-ratio", type=float, default=1.10)
+    resident_fits_auto_regression.add_argument("--max-total-vs-control-ratio", type=float, default=0.90)
+    resident_fits_auto_regression.add_argument("--max-light-bucket-vs-control-ratio", type=float, default=0.70)
+    resident_fits_auto_regression.add_argument(
+        "--fail-on-failure",
+        action="store_true",
+        help="return exit code 2 when the guarded-auto regression contract fails",
+    )
+    resident_fits_auto_regression.set_defaults(func=cmd_resident_fits_auto_regression)
 
     resident_parity = sub.add_parser(
         "resident-parity-summary",

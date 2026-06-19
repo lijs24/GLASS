@@ -564,6 +564,7 @@ def test_cli_help_commands():
         "resident-calibration-contract",
         "resident-result-contract",
         "resident-runtime-compare",
+        "resident-fits-auto-regression",
         "resident-winsorized-benchmark",
         "resident-winsorized-benchmark-audit",
         "resident-winsorized-sweep",

@@ -8576,6 +8576,56 @@ Completed in Gate441:
 - If the real auto path regresses, fix the Gate441 selection/contract before
   moving on.
 
+Completed in Gate442:
+
+- Added `glass resident-fits-auto-regression`, a runtime regression contract
+  for the guarded resident FITS auto path. The audit reads resident artifacts,
+  DQ closure, compare JSON, and optional explicit/control baseline run timings.
+- The contract verifies:
+  - requested mode is `auto`;
+  - effective mode is `native_u16_gpu`;
+  - every checked light frame is eligible for raw-u16 GPU decode;
+  - resident backend counts include the expected raw backend;
+  - DQ/frame-mask closure matches the 200-light benchmark expectation;
+  - auto output is zero-delta against both explicit raw-u16 GPU and astropy
+    control outputs;
+  - total runtime remains close to explicit raw-u16 GPU and faster than astropy
+    control, with the light read/upload/calibrate bucket still substantially
+    faster than control.
+- Added synthetic/fixture tests for pass, fallback failure, compare drift,
+  timing drift, Markdown output, and CLI `--fail-on-failure`.
+- Real M38 H 200-light Gate442 run:
+  `C:\glass_runs\final_m38_h_200\glass_s2_gate442_auto_u16_gpu_warm_20260619_232000`.
+- Real guarded-auto audit:
+  `runs/checkpoints/s2_gate_442_guarded_auto_regression.json`, passed with no
+  failed checks.
+- Real timing and correctness:
+  - total runtime: `14.171342 s`;
+  - light read/upload/calibrate: `3.519178 s`;
+  - effective backend: `native_u16be_raw=200`;
+  - raw H2D bytes: `24,660,480,000`;
+  - avoided float32 host staging bytes: `49,320,960,000`;
+  - compare vs Gate440 explicit raw-u16 GPU:
+    `rms_diff=0`, `max_abs_diff=0`;
+  - compare vs Gate438 astropy control:
+    `rms_diff=0`, `max_abs_diff=0`;
+  - DQ/mask closure remained `193 active`, `7 masked`,
+    `unknown_zero_weight=0`.
+
+### S2-Gate 443: Resident Guarded-Auto Default Path
+
+- Move from proven benchmark mode toward default runtime behavior without
+  removing the conservative escape hatch.
+- Candidate scope:
+  - make resident CUDA runs use guarded `auto` FITS read mode by default when
+    the user does not explicitly choose a read mode;
+  - preserve explicit `astropy`, `fast`, `native_direct`, and `native_u16_gpu`;
+  - record the default-resolution source in run timing/artifacts so default
+    changes are auditable;
+  - prove CPU-only and unsupported CUDA paths still install and test;
+  - re-run synthetic fallback tests and the 200-light benchmark to ensure no
+    numerical or unexplained performance regression.
+
 ## Gate Rules
 
 Each gate requires:
