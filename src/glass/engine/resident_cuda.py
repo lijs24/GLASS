@@ -46,6 +46,7 @@ from glass.engine.resident_registration_quality import (
     resident_registration_quality_warning_fields,
     summarize_resident_registration_quality,
 )
+from glass.engine.resident_stack_surface import build_resident_integration_stack_surface_contract
 from glass.io.fits_fast import (
     FastFitsUnsupported,
     native_u16_gpu_fits_eligibility,
@@ -2639,6 +2640,12 @@ def _load_or_build_matching_masters(
     flat_group_record = groups.get(flat_group or "")
     flat_bias_group = _find_matching_bias_for_group(flat_group_record, groups)
     flat_bias_records = [] if flat_bias_group == bias_group else _records_for_group(flat_bias_group, frames, groups)
+    source_frame_ids = {
+        "bias_frame_ids": [str(record.get("id")) for record in bias_records],
+        "dark_frame_ids": [str(record.get("id")) for record in dark_records],
+        "flat_frame_ids": [str(record.get("id")) for record in flat_records],
+        "flat_bias_frame_ids": [str(record.get("id")) for record in flat_bias_records],
+    }
     fingerprint = _master_cache_fingerprint(
         filter_name=filter_name,
         height=height,
@@ -2659,7 +2666,13 @@ def _load_or_build_matching_masters(
     if stats_path.exists():
         stats = read_json(stats_path)
         if stats.get("cache_fingerprint") == fingerprint and _cached_master_files_complete(paths, stats):
-            stats = {**stats, "cache_hit": True, "cache_scope": cache_scope, "cache_dir": str(cache)}
+            stats = {
+                **stats,
+                **source_frame_ids,
+                "cache_hit": True,
+                "cache_scope": cache_scope,
+                "cache_dir": str(cache),
+            }
             master_bias = np.load(paths["bias"]) if paths["bias"].exists() else None
             master_dark = np.load(paths["dark"]) if paths["dark"].exists() else None
             master_flat = np.load(paths["flat"]) if paths["flat"].exists() else None
@@ -2705,6 +2718,7 @@ def _load_or_build_matching_masters(
         "bias_count": len(bias_paths),
         "dark_count": len(dark_paths),
         "flat_count": len(flat_paths),
+        **source_frame_ids,
         "dark_exposure_s": dark_exposure,
         "bias": None if master_bias is None else image_stats(master_bias),
         "dark": None if master_dark is None else image_stats(master_dark),
@@ -2774,6 +2788,10 @@ def _load_or_build_aggregate_masters(
         "bias_count": len(bias_paths),
         "dark_count": len(dark_paths),
         "flat_count": len(flat_paths),
+        "bias_frame_ids": [str(record.get("id")) for record in bias_records],
+        "dark_frame_ids": [str(record.get("id")) for record in dark_records],
+        "flat_frame_ids": [str(record.get("id")) for record in flat_records],
+        "flat_bias_frame_ids": [],
         "bias": None if master_bias is None else image_stats(master_bias),
         "dark": None if master_dark is None else image_stats(master_dark),
         "flat": None if master_flat is None else image_stats(master_flat),
@@ -7487,6 +7505,43 @@ def run_resident_calibration_integration(
                 high_sigma,
                 resident_winsorized_mode=resident_winsorized_mode,
             )
+            resident_output_map_policy = {
+                "mode": resident_output_maps,
+                "available": available_output_maps,
+                "written": written_output_maps,
+                "skipped": skipped_output_maps,
+                "description": (
+                    "audit writes all available diagnostic maps; science writes master, "
+                    "weight, coverage, and DQ maps; minimal writes only master."
+                ),
+            }
+            stack_surface_contract = build_resident_integration_stack_surface_contract(
+                filter_name=filter_name,
+                frame_ids=[str(frame["id"]) for frame in light_frames],
+                master=master,
+                weight_map=weight_map,
+                coverage_map=coverage_map,
+                low_rejection_map=low_rejection_map,
+                high_rejection_map=high_rejection_map,
+                dq_map=dq_map,
+                dq_summary=dq_summary,
+                dq_provenance_summary=dq_provenance_summary,
+                output_map_policy=resident_output_map_policy,
+                rejection=rejection_mode,
+                low_sigma=low_sigma,
+                high_sigma=high_sigma,
+                weights=weights_array.tolist(),
+                grouping_key=filter_name,
+                dispatch=resident_integration_dispatch,
+                map_paths={
+                    "master": str(master_path),
+                    "weight": None if weight_path is None else str(weight_path),
+                    "coverage": None if coverage_path is None else str(coverage_path),
+                    "low_rejection": None if low_rejection_path is None else str(low_rejection_path),
+                    "high_rejection": None if high_rejection_path is None else str(high_rejection_path),
+                    "dq": None if dq_path is None else str(dq_path),
+                },
+            )
             group_registration_quality_decisions = [
                 registration_quality_decisions_by_frame[str(frame["id"])]
                 for frame in light_frames
@@ -7502,16 +7557,7 @@ def run_resident_calibration_integration(
                     "shape": {"height": height, "width": width},
                     "master_stats": master_stats,
                     "output_diagnostics": output_diagnostics,
-                    "output_map_policy": {
-                        "mode": resident_output_maps,
-                        "available": available_output_maps,
-                        "written": written_output_maps,
-                        "skipped": skipped_output_maps,
-                        "description": (
-                            "audit writes all available diagnostic maps; science writes master, "
-                            "weight, coverage, and DQ maps; minimal writes only master."
-                        ),
-                    },
+                    "output_map_policy": resident_output_map_policy,
                     "master_path": str(master_path),
                     "weight_map_path": None if weight_path is None else str(weight_path),
                     "coverage_map_path": None if coverage_path is None else str(coverage_path),
@@ -7521,6 +7567,7 @@ def run_resident_calibration_integration(
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
+                    "stack_engine_surface_contract": stack_surface_contract,
                     "dq_flag_bits": {
                         "no_data": int(DQFlag.NO_DATA),
                         "warp_edge": int(DQFlag.WARP_EDGE),
@@ -8556,17 +8603,13 @@ def run_resident_calibration_integration(
                     "dq_summary": dq_summary,
                     "dq_coverage_provenance": dq_coverage_provenance,
                     "dq_provenance_summary": dq_provenance_summary,
+                    "stack_engine_surface_contract": stack_surface_contract,
                     "geometric_warp_coverage": {
                         "available": bool(geometric_warp_coverage_map is not None),
                         "frame_count": geometric_warp_coverage_frame_count,
                         "frame_count_matches_active": geometric_warp_coverage_frame_count == active_frame_count,
                     },
-                    "output_map_policy": {
-                        "mode": resident_output_maps,
-                        "available": available_output_maps,
-                        "written": written_output_maps,
-                        "skipped": skipped_output_maps,
-                    },
+                    "output_map_policy": resident_output_map_policy,
                     "backend": "cuda_resident_stack",
                     "memory_mode": "resident",
                     "rejection": rejection_mode,

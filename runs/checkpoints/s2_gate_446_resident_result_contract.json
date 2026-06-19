@@ -1,0 +1,452 @@
+{
+  "artifact_type": "resident_cuda_result_contract",
+  "checks": [
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "output_count": 1,
+        "resident_output_count": 1
+      },
+      "name": "resident_outputs_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": []
+      },
+      "name": "resident_outputs_pass_contract",
+      "note": "",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-19T16:24:31+00:00",
+  "integration_path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration_results.json",
+  "outputs": [
+    {
+      "active_frame_count": 4,
+      "backend": "cuda_resident_stack",
+      "checks": [
+        {
+          "evidence": {
+            "backend": "cuda_resident_stack",
+            "memory_mode": "resident"
+          },
+          "name": "resident_identity",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "failed": [],
+            "map_count": 6
+          },
+          "name": "required_maps_exist",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "keys": [
+              "valid"
+            ]
+          },
+          "name": "dq_summary_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "engine": "cuda_resident_stack",
+            "source_schema": "resident_dq_coverage_provenance",
+            "stage": "integration"
+          },
+          "name": "resident_provenance_summary",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "dq_summary": {
+              "valid": 1024
+            },
+            "mismatches": {},
+            "provenance_output_dq_summary": {
+              "valid": 1024
+            }
+          },
+          "name": "dq_summary_matches_provenance",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "active_frame_count": 4,
+            "frame_count": 4
+          },
+          "name": "active_frame_count_valid",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "coverage_required": false,
+            "keys": [
+              "active_frame_count",
+              "available",
+              "geometric_partial_pixels",
+              "geometric_warp_coverage",
+              "geometric_warp_coverage_frame_count",
+              "geometric_zero_pixels",
+              "partial_edge_inference",
+              "reason"
+            ]
+          },
+          "name": "coverage_provenance_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "required": false,
+            "source_terms": []
+          },
+          "name": "source_terms_present",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "coverage_provenance": null,
+            "output": true
+          },
+          "name": "geometric_frame_count_matches_active",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "coverage_provenance_rejected_samples": null,
+            "provenance_summary_rejected_samples": null,
+            "rejection": "none",
+            "required": false,
+            "source_terms": []
+          },
+          "name": "rejection_sample_count_recorded",
+          "note": "Resident rejection provenance records rejected samples separately from DQ pixels.",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "actual": null,
+            "delta": null,
+            "expected": null,
+            "passed": false
+          },
+          "name": "rejection_sample_count_summary_matches_coverage",
+          "note": "",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "descriptor": {
+              "algorithm": "none",
+              "approximation": false,
+              "cpu_baseline_parity": true,
+              "cpu_baseline_scale_estimator": "none",
+              "high_sigma": 3.0,
+              "low_sigma": 3.0,
+              "mode": "none",
+              "parity_status": "not_applicable",
+              "scale_estimator": "none"
+            },
+            "descriptor_source": "integration_results.output.integration_rejection",
+            "expected": null,
+            "integration_results_descriptor_present": true,
+            "legacy_completion_applied": false,
+            "legacy_completion_source": null,
+            "passed": true,
+            "present": true,
+            "raw_descriptor": {
+              "algorithm": "none",
+              "approximation": false,
+              "cpu_baseline_parity": true,
+              "cpu_baseline_scale_estimator": "none",
+              "high_sigma": 3.0,
+              "low_sigma": 3.0,
+              "mode": "none",
+              "parity_status": "not_applicable",
+              "scale_estimator": "none"
+            },
+            "rejection": "none",
+            "required": false,
+            "resident_artifacts_descriptor_present": true,
+            "status": "not_required"
+          },
+          "name": "resident_winsorized_rejection_semantics_disclosed",
+          "note": "Resident winsorized rejection must disclose approximation and CPU-baseline parity status.",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "input_total_match": null,
+            "input_valid_samples_before_rejection": null,
+            "passed": true,
+            "present": false,
+            "rejected_samples": null,
+            "required": false,
+            "status": "missing",
+            "valid_rejection_match": null,
+            "valid_samples_after_rejection": null
+          },
+          "name": "sample_accounting_closure_valid",
+          "note": "Optional resident sample closure verifies pre-rejection valid samples against post-rejection valid plus rejected samples.",
+          "passed": true
+        },
+        {
+          "evidence": {
+            "count_maps": {
+              "coverage": true,
+              "high_rejection": true,
+              "low_rejection": true
+            },
+            "dq_ok": true
+          },
+          "name": "pixel_maps_match_summaries",
+          "note": "",
+          "passed": true
+        }
+      ],
+      "contract_type": "resident_cuda_result_contract",
+      "filter": "H",
+      "frame_count": 4,
+      "index": 0,
+      "maps": [
+        {
+          "exists": true,
+          "map": "master",
+          "ok": true,
+          "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration\\resident_master_H.fits",
+          "path_key": "master_path",
+          "policy_skipped": false,
+          "required": true
+        },
+        {
+          "exists": true,
+          "map": "weight",
+          "ok": true,
+          "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration\\resident_weight_map_H.fits",
+          "path_key": "weight_map_path",
+          "policy_skipped": false,
+          "required": true
+        },
+        {
+          "exists": false,
+          "map": "coverage",
+          "ok": true,
+          "path": null,
+          "path_key": "coverage_map_path",
+          "policy_skipped": false,
+          "required": false
+        },
+        {
+          "exists": true,
+          "map": "dq",
+          "ok": true,
+          "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration\\resident_dq_map_H.fits",
+          "path_key": "dq_map_path",
+          "policy_skipped": false,
+          "required": true
+        },
+        {
+          "exists": false,
+          "map": "low_rejection",
+          "ok": true,
+          "path": null,
+          "path_key": "low_rejection_map_path",
+          "policy_skipped": false,
+          "required": false
+        },
+        {
+          "exists": false,
+          "map": "high_rejection",
+          "ok": true,
+          "path": null,
+          "path_key": "high_rejection_map_path",
+          "policy_skipped": false,
+          "required": false
+        }
+      ],
+      "memory_mode": "resident",
+      "passed": true,
+      "pixel_verification": {
+        "count_maps": {
+          "coverage": {
+            "ok": true,
+            "required": false,
+            "status": "missing_path"
+          },
+          "high_rejection": {
+            "ok": true,
+            "required": false,
+            "status": "missing_path"
+          },
+          "low_rejection": {
+            "ok": true,
+            "required": false,
+            "status": "missing_path"
+          }
+        },
+        "dq": {
+          "matches": {
+            "high_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "low_rejected": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "no_data": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            },
+            "valid": {
+              "actual": 1024,
+              "delta": 0,
+              "passed": true,
+              "summary": 1024
+            },
+            "warp_edge": {
+              "actual": 0,
+              "delta": 0,
+              "passed": true,
+              "summary": 0
+            }
+          },
+          "ok": true,
+          "result": {
+            "counts": {
+              "high_rejected": 0,
+              "low_rejected": 0,
+              "no_data": 0,
+              "valid": 1024,
+              "warp_edge": 0
+            },
+            "flag_bits": {
+              "high_rejected": 512,
+              "low_rejected": 256,
+              "no_data": 1,
+              "valid": 0,
+              "warp_edge": 64
+            },
+            "height": 32,
+            "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration\\resident_dq_map_H.fits",
+            "schema_version": 1,
+            "tile_size": 2048,
+            "total_pixels": 1024,
+            "unknown_flags": [],
+            "width": 32
+          }
+        },
+        "enabled": true,
+        "ok": true,
+        "rejection_sample_accounting": {
+          "coverage_provenance_rejected_samples": null,
+          "coverage_vs_summary": {
+            "actual": null,
+            "delta": null,
+            "expected": null,
+            "passed": false
+          },
+          "expected": false,
+          "map_rejected_sample_sum": null,
+          "map_vs_coverage": {
+            "actual": 0,
+            "delta": null,
+            "expected": null,
+            "passed": false
+          },
+          "map_vs_summary": {
+            "actual": 0,
+            "delta": null,
+            "expected": null,
+            "passed": false
+          },
+          "ok": true,
+          "provenance_summary_rejected_samples": null,
+          "semantics": "Low/high rejection count maps store rejected-sample counts; DQ low/high flags store pixels touched by rejection."
+        },
+        "tile_size": 2048,
+        "tolerance_pixels": 0
+      },
+      "rejection": "none",
+      "rejection_semantics": {
+        "descriptor": {
+          "algorithm": "none",
+          "approximation": false,
+          "cpu_baseline_parity": true,
+          "cpu_baseline_scale_estimator": "none",
+          "high_sigma": 3.0,
+          "low_sigma": 3.0,
+          "mode": "none",
+          "parity_status": "not_applicable",
+          "scale_estimator": "none"
+        },
+        "descriptor_source": "integration_results.output.integration_rejection",
+        "expected": null,
+        "integration_results_descriptor_present": true,
+        "legacy_completion_applied": false,
+        "legacy_completion_source": null,
+        "passed": true,
+        "present": true,
+        "raw_descriptor": {
+          "algorithm": "none",
+          "approximation": false,
+          "cpu_baseline_parity": true,
+          "cpu_baseline_scale_estimator": "none",
+          "high_sigma": 3.0,
+          "low_sigma": 3.0,
+          "mode": "none",
+          "parity_status": "not_applicable",
+          "scale_estimator": "none"
+        },
+        "rejection": "none",
+        "required": false,
+        "resident_artifacts_descriptor_present": true,
+        "status": "not_required"
+      },
+      "sample_accounting_closure": {
+        "input_total_match": null,
+        "input_valid_samples_before_rejection": null,
+        "passed": true,
+        "present": false,
+        "rejected_samples": null,
+        "required": false,
+        "status": "missing",
+        "valid_rejection_match": null,
+        "valid_samples_after_rejection": null
+      },
+      "schema_version": 1,
+      "status": "passed"
+    }
+  ],
+  "passed": true,
+  "pixel_verify": true,
+  "run_dir": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run",
+  "schema_version": 1,
+  "status": "passed"
+}

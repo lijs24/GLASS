@@ -8768,22 +8768,56 @@ Completed in Gate445:
 - This gate did not change image math, frame admission, resident kernels, or
   output pixels. The 200-light benchmark was not rerun.
 
-### S2-Gate 446: Resident CUDA StackEngine Surface Closure Plan
+Completed in Gate446:
 
-- Start closing the strict resident gap exposed by Gate445.
-- Define the minimal resident CUDA StackEngine surface contract needed for the
-  production resident path to become a true StackEngine backend rather than a
-  contract-emulation surface.
+- Added `resident_stack_surface` contracts emitted from the resident CUDA
+  execution path rather than from a report-only post-process.
+- Resident integration outputs now carry a StackRequest/StackResult-shaped
+  surface contract while the resident result arrays are still in memory:
+  - frame ids and weights;
+  - combine/rejection/output-map policy;
+  - master/weight/coverage/DQ/rejection map presence and shape checks;
+  - DQ-summary, coverage, and rejection-count checks when maps are available.
+- Resident master-calibration artifacts now carry StackRequest-shaped surface
+  contracts for bias, dark, and flat masters.
+- Resident master cache stats now record real source frame ids for bias, dark,
+  flat, and flat-bias inputs so master surfaces are not count-only.
+- `glass stack-engine-contract` now distinguishes resident CUDA surfaces with
+  a passed StackEngine-shaped surface contract from older resident
+  contract-emulation surfaces:
+  - `default_path.status=resident_cuda_stack_engine_surface`;
+  - strict native CPU StackEngine default readiness remains false until the
+    resident backend is promoted as a native StackEngine implementation.
+- Small clean-star CPU-vs-resident validation:
+  - dataset: 4 light frames, 3 bias, 3 dark, 3 flat, 32x32, no source DQ;
+  - CPU StackEngine master and resident CUDA master matched exactly:
+    `max_abs=0.0`, `mean_abs=0.0`, `rms=0.0`.
+- Dirty synthetic validation note:
+  - the default synthetic fixture with source invalid/DQ samples still differs
+    between CPU StackEngine and resident CUDA because resident integration does
+    not yet consume the same source-DQ invalid sample model;
+  - this is the next substantive DQ/mask gap rather than a reporting gap.
+- Validation artifacts:
+  - `runs/checkpoints/s2_gate_446_cpu_vs_resident_metrics.json`;
+  - `runs/checkpoints/s2_gate_446_cpu_vs_resident_compare.html`;
+  - `runs/checkpoints/s2_gate_446_stack_engine_contract.json`;
+  - `runs/checkpoints/s2_gate_446_resident_result_contract.json`;
+  - `runs/checkpoints/s2_gate_446_resident_calibration_contract.json`.
+- This gate changed resident artifact semantics and contract generation, not
+  CUDA math kernels or the 200-light benchmark output.
+
+### S2-Gate 447: Resident Source-DQ Parity And 200-Light Regression
+
+- Close the DQ/mask gap exposed by Gate446 dirty synthetic validation.
 - Required work:
-  - map resident master-calibration surfaces to the same StackRequest,
-    StackResult, DQ, coverage, weight, and rejection semantics used by CPU
-    StackEngine;
-  - map resident light integration outputs to the same surface schema without
-    losing the current resident performance path;
-  - add small CPU-vs-resident fixture comparisons for master maps and final
-    maps;
-  - keep the 200-light baseline unchanged unless resident math or frame
-    admission changes.
+  - make resident CUDA integration consume the same source invalid/DQ sample
+    semantics as CPU StackEngine, or explicitly record a bounded unsupported
+    case with a hard contract failure;
+  - add a dirty synthetic CPU-vs-resident test where bad/hot/no-data samples
+    are admitted identically;
+  - rerun a small resident performance validation after the DQ fix;
+  - if the fix changes real resident output semantics, rerun the M38 H
+    200-light regression and record timing/result deltas against Gate443.
 - Do not add release/default-promotion/report-handoff gates under this number.
 
 ## Gate Rules

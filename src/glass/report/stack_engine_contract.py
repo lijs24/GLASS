@@ -330,6 +330,7 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
     provenance = payload.get("stack_engine_dq_provenance")
     summary = payload.get("dq_provenance_summary")
     resident_contract = payload.get("resident_calibration_contract")
+    surface_contract = payload.get("stack_engine_surface_contract")
     science_contract = _master_science_contract(payload, path_exists=exists)
     science_ok = bool(science_contract.get("passed"))
     stack_result_contract_passed = _result_contract_passed(provenance)
@@ -337,6 +338,11 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
         isinstance(resident_contract, dict)
         and resident_contract.get("artifact_type") == "resident_cuda_calibration_master_contract"
         and bool(resident_contract.get("passed"))
+    )
+    resident_surface_contract_passed = (
+        isinstance(surface_contract, dict)
+        and surface_contract.get("contract_type") == "resident_stack_engine_surface_contract"
+        and bool(surface_contract.get("passed"))
     )
     stack_engine_ok = (
         bool(payload.get("stack_engine_enabled"))
@@ -372,9 +378,18 @@ def _master_record(name: str, payload: dict[str, Any], run_root: Path) -> dict[s
         "fallback_reason": payload.get("stack_engine_fallback_reason"),
         "has_dq_provenance": isinstance(provenance, dict),
         "input_samples": provenance.get("input_samples") if isinstance(provenance, dict) else None,
-        "result_contract_passed": stack_result_contract_passed or resident_contract_passed,
+        "result_contract_passed": (
+            stack_result_contract_passed or resident_contract_passed or resident_surface_contract_passed
+        ),
         "stack_result_contract_passed": stack_result_contract_passed,
         "resident_calibration_contract_passed": resident_contract_passed,
+        "resident_stack_surface_contract_passed": resident_surface_contract_passed,
+        "resident_stack_surface_contract_status": surface_contract.get("status")
+        if isinstance(surface_contract, dict)
+        else None,
+        "resident_stack_surface_contract_type": surface_contract.get("contract_type")
+        if isinstance(surface_contract, dict)
+        else None,
         "resident_calibration_contract_status": resident_contract.get("status")
         if isinstance(resident_contract, dict)
         else None,
@@ -397,8 +412,14 @@ def _integration_record(
     provenance = payload.get("stack_engine_dq_provenance")
     summary = payload.get("dq_provenance_summary")
     resident_contract = _resident_contract_for_output(index, payload, resident_contracts)
+    surface_contract = payload.get("stack_engine_surface_contract")
     stack_result_contract_passed = _result_contract_passed(provenance)
     resident_result_contract_passed = bool((resident_contract or {}).get("passed"))
+    resident_surface_contract_passed = (
+        isinstance(surface_contract, dict)
+        and surface_contract.get("contract_type") == "resident_stack_engine_surface_contract"
+        and bool(surface_contract.get("passed"))
+    )
     stack_engine_ok = (
         bool(payload.get("stack_engine_enabled"))
         and payload.get("tile_stack_mode") == "stack_engine_cpu"
@@ -423,9 +444,18 @@ def _integration_record(
         "stack_engine_enabled": bool(payload.get("stack_engine_enabled")),
         "has_stack_engine_dq_provenance": isinstance(provenance, dict),
         "input_samples": provenance.get("input_samples") if isinstance(provenance, dict) else None,
-        "result_contract_passed": stack_result_contract_passed or resident_result_contract_passed,
+        "result_contract_passed": (
+            stack_result_contract_passed or resident_result_contract_passed or resident_surface_contract_passed
+        ),
         "stack_result_contract_passed": stack_result_contract_passed,
         "resident_result_contract_passed": resident_result_contract_passed,
+        "resident_stack_surface_contract_passed": resident_surface_contract_passed,
+        "resident_stack_surface_contract_status": surface_contract.get("status")
+        if isinstance(surface_contract, dict)
+        else None,
+        "resident_stack_surface_contract_type": surface_contract.get("contract_type")
+        if isinstance(surface_contract, dict)
+        else None,
         "resident_result_contract_status": (resident_contract or {}).get("status"),
         "resident_result_contract_check_count": (resident_contract or {}).get("check_count"),
         "resident_result_contract_active_frame_count": (resident_contract or {}).get("active_frame_count"),
@@ -484,6 +514,8 @@ def _adoption_surface_record(surface: str, record: dict[str, Any]) -> dict[str, 
         "stack_result_contract_passed": record.get("stack_result_contract_passed"),
         "resident_result_contract_passed": record.get("resident_result_contract_passed"),
         "resident_calibration_contract_passed": record.get("resident_calibration_contract_passed"),
+        "resident_stack_surface_contract_passed": record.get("resident_stack_surface_contract_passed"),
+        "resident_stack_surface_contract_status": record.get("resident_stack_surface_contract_status"),
         "science_contract_ok": record.get("science_contract_ok"),
         "contract_ok": record.get("contract_ok"),
         "fallback_reason": fallback,
@@ -551,9 +583,13 @@ def _default_path_surface(surface: dict[str, Any]) -> dict[str, Any]:
         strict_gap = not contract_ready
         gap_reason = "" if contract_ready else surface.get("gap_reason") or "stack_engine_contract_not_ready"
     elif family == "cuda_resident_stack":
-        role = "resident_cuda_contract_emulation"
+        if surface.get("resident_stack_surface_contract_passed"):
+            role = "resident_cuda_stack_engine_surface"
+            gap_reason = "resident_cuda_not_native_stack_engine_default"
+        else:
+            role = "resident_cuda_contract_emulation"
+            gap_reason = "resident_cuda_contract_emulation"
         strict_gap = True
-        gap_reason = "resident_cuda_contract_emulation"
     else:
         role = "legacy_or_unknown_engine"
         strict_gap = True
@@ -571,6 +607,8 @@ def _default_path_surface(surface: dict[str, Any]) -> dict[str, Any]:
         "stack_result_contract_passed": surface.get("stack_result_contract_passed"),
         "resident_result_contract_passed": surface.get("resident_result_contract_passed"),
         "resident_calibration_contract_passed": surface.get("resident_calibration_contract_passed"),
+        "resident_stack_surface_contract_passed": surface.get("resident_stack_surface_contract_passed"),
+        "resident_stack_surface_contract_status": surface.get("resident_stack_surface_contract_status"),
         "science_contract_ok": surface.get("science_contract_ok"),
         "fallback_reason": surface.get("fallback_reason"),
     }
@@ -581,6 +619,9 @@ def _build_default_path_audit(adoption: dict[str, Any]) -> dict[str, Any]:
     rows = [_default_path_surface(surface) for surface in surfaces if isinstance(surface, dict)]
     strict_gaps = [row for row in rows if row["strict_native_stack_engine_gap"]]
     resident_emulation = [row for row in rows if row["default_path_role"] == "resident_cuda_contract_emulation"]
+    resident_stack_surfaces = [
+        row for row in rows if row["default_path_role"] == "resident_cuda_stack_engine_surface"
+    ]
     contract_gaps = [row for row in rows if not row["contract_ready"]]
     if not rows:
         status = "no_surfaces_to_audit"
@@ -588,6 +629,8 @@ def _build_default_path_audit(adoption: dict[str, Any]) -> dict[str, Any]:
         status = "default_path_contract_gaps"
     elif not strict_gaps:
         status = "native_stack_engine_ready"
+    elif resident_stack_surfaces and len(resident_stack_surfaces) == len(strict_gaps):
+        status = "resident_cuda_stack_engine_surface"
     elif resident_emulation and len(resident_emulation) == len(strict_gaps):
         status = "resident_cuda_contract_emulation"
     else:
@@ -601,6 +644,7 @@ def _build_default_path_audit(adoption: dict[str, Any]) -> dict[str, Any]:
             1 for row in rows if row["default_path_role"] == "native_stack_engine_default"
         ),
         "resident_cuda_contract_emulation_count": len(resident_emulation),
+        "resident_cuda_stack_engine_surface_count": len(resident_stack_surfaces),
         "legacy_or_unknown_surface_count": sum(
             1 for row in rows if row["default_path_role"] == "legacy_or_unknown_engine"
         ),
@@ -913,6 +957,9 @@ def write_stack_engine_contract_markdown(path: str | Path, audit: dict[str, Any]
         lines.append(f"- Native StackEngine surfaces: `{default_path.get('native_stack_engine_surface_count')}`")
         lines.append(
             f"- Resident CUDA contract-emulation surfaces: `{default_path.get('resident_cuda_contract_emulation_count')}`"
+        )
+        lines.append(
+            f"- Resident CUDA StackEngine-shaped surfaces: `{default_path.get('resident_cuda_stack_engine_surface_count')}`"
         )
         lines.append(f"- Strict gap count: `{default_path.get('strict_native_stack_engine_gap_count')}`")
         for surface in default_path.get("surfaces") or []:

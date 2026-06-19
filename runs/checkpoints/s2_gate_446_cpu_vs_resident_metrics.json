@@ -1,0 +1,13 @@
+{
+  "allclose_atol_1e_5": true,
+  "cpu_mean": 230.45682448148727,
+  "dataset": "clean_star_4x32x32",
+  "max_abs": 0.0,
+  "mean_abs": 0.0,
+  "resident_mean": 230.45682448148727,
+  "rms": 0.0,
+  "shape": [
+    32,
+    32
+  ]
+}

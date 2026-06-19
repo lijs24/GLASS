@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from glass.engine.resident_stack_surface import build_resident_master_stack_surface_contract
 from glass.io.json_io import read_json, write_json
 from glass.models import now_iso
 
@@ -118,6 +119,9 @@ def _resident_master_record(
     component = _MASTER_COMPONENTS[master_type]
     path = _cache_component_path(calibration_set, component)
     source_count = calibration_set.get(f"{master_type}_count")
+    source_frame_ids = [
+        str(frame_id) for frame_id in calibration_set.get(f"{master_type}_frame_ids") or []
+    ]
     shape = calibration_set.get("shape") if isinstance(calibration_set.get("shape"), dict) else {}
     safe_filter = _safe_name(output_filter)
     safe_set = _safe_name(set_key)
@@ -128,6 +132,16 @@ def _resident_master_record(
         stats=stats,
         frame_count=source_count,
         set_key=set_key,
+    )
+    stack_surface_contract = build_resident_master_stack_surface_contract(
+        name=name,
+        master_type=master_type,
+        path=path,
+        stats=stats,
+        frame_ids=source_frame_ids,
+        frame_count=source_count,
+        shape=shape,
+        policy=policy,
     )
     record: dict[str, Any] = {
         "type": master_type,
@@ -152,6 +166,7 @@ def _resident_master_record(
         "dark_group": calibration_set.get("dark_group"),
         "flat_group": calibration_set.get("flat_group"),
         "resident_calibration_contract": contract,
+        "stack_engine_surface_contract": stack_surface_contract,
         "stack_engine_dq_provenance": {
             "source_schema": "resident_calibration_provenance",
             "engine": "cuda_resident_stack",

@@ -296,6 +296,54 @@ def test_stack_engine_contract_accepts_resident_result_contract_parity(tmp_path:
     assert "missing_calibration_surface" in promotion_blockers
 
 
+def test_stack_engine_contract_classifies_resident_stack_surface_contract(tmp_path: Path):
+    run = tmp_path / "run"
+    run.mkdir()
+    write_json(
+        run / "integration_results.json",
+        {
+            "outputs": [
+                {
+                    "filter": "H",
+                    "backend": "cuda_resident_stack",
+                    "memory_mode": "resident",
+                    "dq_provenance_summary": {
+                        "source_schema": "resident_dq_coverage_provenance",
+                        "engine": "cuda_resident_stack",
+                        "stage": "integration",
+                    },
+                    "stack_engine_surface_contract": {
+                        "contract_type": "resident_stack_engine_surface_contract",
+                        "surface": "integration",
+                        "engine_family": "cuda_resident_stack",
+                        "passed": True,
+                        "status": "passed",
+                        "stack_request": {"frame_ids": ["light_001"], "source_kind": "light"},
+                    },
+                }
+            ]
+        },
+    )
+
+    audit = build_stack_engine_contract_audit(
+        run,
+        scope="integration",
+        expected_integration_engine="cuda_resident_stack",
+    )
+
+    assert audit["passed"] is True
+    surface = audit["adoption"]["surfaces"][0]
+    assert surface["resident_stack_surface_contract_passed"] is True
+    default_path = audit["default_path"]
+    assert default_path["status"] == "resident_cuda_stack_engine_surface"
+    assert default_path["resident_cuda_stack_engine_surface_count"] == 1
+    assert default_path["resident_cuda_contract_emulation_count"] == 0
+    assert default_path["strict_native_stack_engine_ready"] is False
+    assert default_path["strict_gap_surfaces"][0]["strict_gap_reason"] == (
+        "resident_cuda_not_native_stack_engine_default"
+    )
+
+
 def test_stack_engine_contract_auto_discovers_native_resident_result_contract(tmp_path: Path):
     run = tmp_path / "run"
     run.mkdir()

@@ -1157,6 +1157,13 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert integration["outputs"][0]["coverage_map_path"] == resident["artifacts"][0]["coverage_map_path"]
     assert integration["outputs"][0]["low_rejection_map_path"] == resident["artifacts"][0]["low_rejection_map_path"]
     assert integration["outputs"][0]["high_rejection_map_path"] == resident["artifacts"][0]["high_rejection_map_path"]
+    assert integration["outputs"][0]["stack_engine_surface_contract"]["passed"] is True
+    assert integration["outputs"][0]["stack_engine_surface_contract"] == resident["artifacts"][0][
+        "stack_engine_surface_contract"
+    ]
+    assert integration["outputs"][0]["stack_engine_surface_contract"]["stack_request"]["frame_ids"] == resident[
+        "artifacts"
+    ][0]["frame_ids"]
     dq_data = read_fits_data(integration["outputs"][0]["dq_map_path"])
     shape = resident["artifacts"][0]["shape"]
     assert dq_data.shape == (shape["height"], shape["width"])
@@ -1182,6 +1189,8 @@ def test_cli_resident_cuda_run_smoke(small_fits_dataset, tmp_path: Path):
     assert len(calibration["calibrated_lights"]) == len(resident["artifacts"][0]["frame_ids"])
     assert all(item["status"] == "resident_in_vram" for item in calibration["calibrated_lights"])
     assert all(item["resident_calibration_contract"]["passed"] for item in calibration["masters"].values())
+    assert all(item["stack_engine_surface_contract"]["passed"] for item in calibration["masters"].values())
+    assert all(item["stack_engine_surface_contract"]["stack_request"]["frame_ids"] for item in calibration["masters"].values())
     assert resident_result_contract["artifact_type"] == "resident_cuda_result_contract"
     assert resident_result_contract["passed"] is True
     assert resident_result_contract["outputs"][0]["filter"] == "H"

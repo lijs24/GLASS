@@ -1,0 +1,950 @@
+{
+  "adoption": {
+    "contract_ready_count": 4,
+    "cuda_resident_surface_count": 4,
+    "engine_counts": {
+      "cuda_resident_stack": 4
+    },
+    "fallback_count": 0,
+    "gap_surfaces": [],
+    "other_surface_count": 0,
+    "phase2_stack_engine_default_gap_count": 0,
+    "recommendation": "stack_engine_default_ready",
+    "result_contract_passed_count": 4,
+    "schema_version": 1,
+    "stack_engine_surface_count": 0,
+    "surface_count": 4,
+    "surfaces": [
+      {
+        "contract_ok": true,
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "resident_bias_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": true,
+        "resident_result_contract_passed": null,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "summary_engine": "cuda_resident_stack",
+        "surface": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "bias"
+      },
+      {
+        "contract_ok": true,
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "resident_dark_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": true,
+        "resident_result_contract_passed": null,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "summary_engine": "cuda_resident_stack",
+        "surface": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "dark"
+      },
+      {
+        "contract_ok": true,
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "resident_flat_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": true,
+        "resident_result_contract_passed": null,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": true,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "summary_engine": "cuda_resident_stack",
+        "surface": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "flat"
+      },
+      {
+        "contract_ok": true,
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "gap_reason": "",
+        "item": "H",
+        "phase2_stack_engine_default_gap": false,
+        "resident_calibration_contract_passed": null,
+        "resident_result_contract_passed": true,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": null,
+        "stack_engine_contract_ready": true,
+        "stack_engine_enabled": false,
+        "stack_result_contract_passed": false,
+        "summary_engine": "cuda_resident_stack",
+        "surface": "integration",
+        "tile_stack_mode": null,
+        "type": "light"
+      }
+    ],
+    "target_engine": "stack_engine_cpu"
+  },
+  "audit_type": "stack_engine_default_contract",
+  "calibration": {
+    "artifact_path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calibration_artifacts.json",
+    "master_count": 3,
+    "masters": [
+      {
+        "backend": "cuda_resident_stack",
+        "contract_ok": true,
+        "fallback_reason": null,
+        "has_dq_provenance": true,
+        "input_samples": 3,
+        "name": "resident_bias_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calib_cache\\resident_masters\\H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef_965762482fd6af0d_master_bias.npy",
+        "path_exists": true,
+        "resident_calibration_contract_check_count": 3,
+        "resident_calibration_contract_passed": true,
+        "resident_calibration_contract_status": "passed",
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "resident_stack_surface_contract_type": "resident_stack_engine_surface_contract",
+        "result_contract_passed": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calib_cache\\resident_masters\\H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef_965762482fd6af0d_master_bias.npy"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "std": 0.0
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "bias"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 32
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "bias",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "bias"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 32
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "bias",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 0.0,
+              "mean": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "std": 0.0
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "science_contract_ok": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "stats_present": true,
+        "summary_engine": "cuda_resident_stack",
+        "summary_source_schema": "resident_calibration_artifact",
+        "summary_stage": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "bias"
+      },
+      {
+        "backend": "cuda_resident_stack",
+        "contract_ok": true,
+        "fallback_reason": null,
+        "has_dq_provenance": true,
+        "input_samples": 3,
+        "name": "resident_dark_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calib_cache\\resident_masters\\H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef_965762482fd6af0d_master_dark.npy",
+        "path_exists": true,
+        "resident_calibration_contract_check_count": 3,
+        "resident_calibration_contract_passed": true,
+        "resident_calibration_contract_status": "passed",
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "resident_stack_surface_contract_type": "resident_stack_engine_surface_contract",
+        "result_contract_passed": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calib_cache\\resident_masters\\H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef_965762482fd6af0d_master_dark.npy"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 0.0,
+                  "mean": 0.0,
+                  "median": 0.0,
+                  "min": 0.0,
+                  "std": 0.0
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "dark"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 32
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_dark_includes_bias": true
+                    },
+                    "name": "dark_bias_semantics_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "bias_subtracted_from_source": false
+                    },
+                    "name": "dark_source_bias_subtraction_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "dark",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "dark"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 32
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_dark_includes_bias": true
+                },
+                "name": "dark_bias_semantics_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "bias_subtracted_from_source": false
+                },
+                "name": "dark_source_bias_subtraction_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "dark",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 0.0,
+              "mean": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "std": 0.0
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "science_contract_ok": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "stats_present": true,
+        "summary_engine": "cuda_resident_stack",
+        "summary_source_schema": "resident_calibration_artifact",
+        "summary_stage": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "dark"
+      },
+      {
+        "backend": "cuda_resident_stack",
+        "contract_ok": true,
+        "fallback_reason": null,
+        "has_dq_provenance": true,
+        "input_samples": 3,
+        "name": "resident_flat_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calib_cache\\resident_masters\\H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef_965762482fd6af0d_master_flat.npy",
+        "path_exists": true,
+        "resident_calibration_contract_check_count": 3,
+        "resident_calibration_contract_passed": true,
+        "resident_calibration_contract_status": "passed",
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "resident_stack_surface_contract_type": "resident_stack_engine_surface_contract",
+        "result_contract_passed": true,
+        "science_contract": {
+          "checks": [
+            {
+              "evidence": {
+                "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calib_cache\\resident_masters\\H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef_965762482fd6af0d_master_flat.npy"
+              },
+              "name": "master_path_exists",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "bounds_ok": true,
+                "missing_keys": [],
+                "nonfinite_keys": [],
+                "passed": true,
+                "required_keys": [
+                  "min",
+                  "max",
+                  "mean",
+                  "median",
+                  "std"
+                ],
+                "stats": {
+                  "max": 1.0,
+                  "mean": 1.0,
+                  "median": 1.0,
+                  "min": 1.0,
+                  "std": 0.0
+                },
+                "std_nonnegative": true
+              },
+              "name": "master_stats_contract",
+              "note": "",
+              "passed": true
+            },
+            {
+              "evidence": {
+                "checks": [
+                  {
+                    "evidence": {
+                      "allowed": [
+                        "bias",
+                        "dark",
+                        "flat"
+                      ],
+                      "type": "flat"
+                    },
+                    "name": "type_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "tile_size": 32
+                    },
+                    "name": "tile_size_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "master_rejection": "winsorized_sigma"
+                    },
+                    "name": "master_rejection_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "normalization": "median"
+                    },
+                    "name": "flat_normalization_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "normalization_stage": "per_flat"
+                    },
+                    "name": "flat_normalization_stage_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "flat_floor": 1e-06
+                    },
+                    "name": "flat_floor_recorded",
+                    "note": "",
+                    "passed": true
+                  },
+                  {
+                    "evidence": {
+                      "count": 1
+                    },
+                    "name": "per_flat_normalization_recorded",
+                    "note": "",
+                    "passed": true
+                  }
+                ],
+                "failed_checks": [],
+                "master_type": "flat",
+                "passed": true
+              },
+              "name": "master_semantics_contract",
+              "note": "",
+              "passed": true
+            }
+          ],
+          "contract_type": "master_calibration_surface_contract",
+          "passed": true,
+          "schema_version": 1,
+          "semantics": {
+            "checks": [
+              {
+                "evidence": {
+                  "allowed": [
+                    "bias",
+                    "dark",
+                    "flat"
+                  ],
+                  "type": "flat"
+                },
+                "name": "type_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "tile_size": 32
+                },
+                "name": "tile_size_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "master_rejection": "winsorized_sigma"
+                },
+                "name": "master_rejection_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "normalization": "median"
+                },
+                "name": "flat_normalization_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "normalization_stage": "per_flat"
+                },
+                "name": "flat_normalization_stage_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "flat_floor": 1e-06
+                },
+                "name": "flat_floor_recorded",
+                "note": "",
+                "passed": true
+              },
+              {
+                "evidence": {
+                  "count": 1
+                },
+                "name": "per_flat_normalization_recorded",
+                "note": "",
+                "passed": true
+              }
+            ],
+            "failed_checks": [],
+            "master_type": "flat",
+            "passed": true
+          },
+          "stats": {
+            "bounds_ok": true,
+            "missing_keys": [],
+            "nonfinite_keys": [],
+            "passed": true,
+            "required_keys": [
+              "min",
+              "max",
+              "mean",
+              "median",
+              "std"
+            ],
+            "stats": {
+              "max": 1.0,
+              "mean": 1.0,
+              "median": 1.0,
+              "min": 1.0,
+              "std": 0.0
+            },
+            "std_nonnegative": true
+          },
+          "status": "passed"
+        },
+        "science_contract_ok": true,
+        "stack_engine_enabled": true,
+        "stack_result_contract_passed": true,
+        "stats_present": true,
+        "summary_engine": "cuda_resident_stack",
+        "summary_source_schema": "resident_calibration_artifact",
+        "summary_stage": "master_calibration",
+        "tile_stack_mode": "cuda_resident_stack",
+        "type": "flat"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "evidence": {
+        "exists": true,
+        "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\calibration_artifacts.json",
+        "resident_calibration_contract_attached": true
+      },
+      "name": "calibration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 3,
+        "required_min": 1
+      },
+      "name": "calibration_master_records_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 3
+      },
+      "name": "calibration_masters_use_stack_engine",
+      "note": "All master bias/dark/flat records must use StackEngine without fallback.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "master_count": 3
+      },
+      "name": "calibration_masters_science_auditable",
+      "note": "Master calibration records must include output stats and calibration semantics.",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration_results.json"
+      },
+      "name": "integration_artifact_exists",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "actual": 1,
+        "required_min": 1
+      },
+      "name": "integration_output_records_present",
+      "note": "",
+      "passed": true
+    },
+    {
+      "evidence": {
+        "failed": [],
+        "output_count": 1
+      },
+      "name": "integration_outputs_use:cuda_resident_stack",
+      "note": "Tile/CPU light integration must use StackEngine by default; resident CUDA is explicit.",
+      "passed": true
+    }
+  ],
+  "created_at": "2026-06-19T16:24:31+00:00",
+  "default_path": {
+    "all_surfaces_contract_ready": true,
+    "contract_gap_count": 0,
+    "contract_gap_surfaces": [],
+    "legacy_or_unknown_surface_count": 0,
+    "native_stack_engine_surface_count": 0,
+    "resident_cuda_contract_emulation_count": 0,
+    "resident_cuda_stack_engine_surface_count": 4,
+    "schema_version": 1,
+    "status": "resident_cuda_stack_engine_surface",
+    "strict_gap_surfaces": [
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "item": "resident_bias_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "surface": "master_calibration"
+      },
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "item": "resident_dark_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "surface": "master_calibration"
+      },
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "item": "resident_flat_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "surface": "master_calibration"
+      },
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "item": "H",
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "surface": "integration"
+      }
+    ],
+    "strict_native_stack_engine_gap_count": 4,
+    "strict_native_stack_engine_ready": false,
+    "surface_count": 4,
+    "surfaces": [
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "item": "resident_bias_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "resident_calibration_contract_passed": true,
+        "resident_result_contract_passed": null,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": true,
+        "stack_result_contract_passed": true,
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "strict_native_stack_engine_gap": true,
+        "surface": "master_calibration",
+        "type": "bias"
+      },
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "item": "resident_dark_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "resident_calibration_contract_passed": true,
+        "resident_result_contract_passed": null,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": true,
+        "stack_result_contract_passed": true,
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "strict_native_stack_engine_gap": true,
+        "surface": "master_calibration",
+        "type": "dark"
+      },
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "item": "resident_flat_H_H_32x32_bias-Ga10b6dd84a_dark-G132fda1914_flat-G493eaa9fef",
+        "resident_calibration_contract_passed": true,
+        "resident_result_contract_passed": null,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": true,
+        "stack_result_contract_passed": true,
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "strict_native_stack_engine_gap": true,
+        "surface": "master_calibration",
+        "type": "flat"
+      },
+      {
+        "contract_ready": true,
+        "default_path_role": "resident_cuda_stack_engine_surface",
+        "engine_family": "cuda_resident_stack",
+        "fallback_reason": null,
+        "item": "H",
+        "resident_calibration_contract_passed": null,
+        "resident_result_contract_passed": true,
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "result_contract_passed": true,
+        "science_contract_ok": null,
+        "stack_result_contract_passed": false,
+        "strict_gap_reason": "resident_cuda_not_native_stack_engine_default",
+        "strict_native_stack_engine_gap": true,
+        "surface": "integration",
+        "type": "light"
+      }
+    ],
+    "target_engine": "stack_engine_cpu"
+  },
+  "default_promotion": {
+    "actual_scope": "all",
+    "blocker_count": 0,
+    "blockers": [],
+    "calibration_surface_count": 3,
+    "integration_surface_count": 1,
+    "phase2_stack_engine_default_gap_count": 0,
+    "ready": true,
+    "recommendation": "stack_engine_default_ready",
+    "required_scope": "all",
+    "schema_version": 1,
+    "status": "ready",
+    "surface_count": 4,
+    "target_engine": "stack_engine_cpu"
+  },
+  "expected_integration_engine": "cuda_resident_stack",
+  "integration": {
+    "artifact_path": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run\\integration_results.json",
+    "output_count": 1,
+    "outputs": [
+      {
+        "backend": "cuda_resident_stack",
+        "contract_ok": true,
+        "expected_engine": "cuda_resident_stack",
+        "filter": "H",
+        "has_stack_engine_dq_provenance": false,
+        "index": 0,
+        "input_samples": null,
+        "resident_result_contract_active_frame_count": 4,
+        "resident_result_contract_check_count": 14,
+        "resident_result_contract_passed": true,
+        "resident_result_contract_status": "passed",
+        "resident_stack_surface_contract_passed": true,
+        "resident_stack_surface_contract_status": "passed",
+        "resident_stack_surface_contract_type": "resident_stack_engine_surface_contract",
+        "result_contract_passed": true,
+        "source_stage": null,
+        "stack_engine_enabled": false,
+        "stack_result_contract_passed": false,
+        "summary_engine": "cuda_resident_stack",
+        "summary_source_schema": "resident_dq_coverage_provenance",
+        "summary_stage": "integration",
+        "tile_stack_mode": null
+      }
+    ]
+  },
+  "passed": true,
+  "resident_calibration_contract_attached": true,
+  "resident_result_contract_attached": true,
+  "resident_result_contract_path": null,
+  "resident_result_contract_source": "provided",
+  "run_dir": "runs\\checkpoints\\s2_gate_446_clean_surface_work\\resident_run",
+  "schema_version": 1,
+  "scope": "all",
+  "status": "passed"
+}
