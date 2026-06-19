@@ -61,6 +61,76 @@ def _cpu_only_doctor(path: Path) -> None:
     )
 
 
+def _release_quality_final_evidence(
+    *,
+    ready: bool = True,
+    raw_ready: bool | None = None,
+    phase2_ready: bool | None = None,
+    include_raw: bool = True,
+    include_phase2: bool = True,
+    compatible_missing: bool = False,
+) -> dict[str, object]:
+    raw_ready = ready if raw_ready is None else raw_ready
+    phase2_ready = ready if phase2_ready is None else phase2_ready
+    match = include_raw == include_phase2 and (
+        compatible_missing or raw_ready == phase2_ready
+    )
+    final_ready = compatible_missing or (
+        include_raw and include_phase2 and raw_ready and phase2_ready and match
+    )
+    fields: dict[str, object] = {
+        "final_evidence_fields_present": True,
+        "final_evidence_compatible_missing": compatible_missing,
+        "final_evidence_ready": final_ready,
+        "final_evidence_match": match,
+        "raw_final_evidence_present": include_raw,
+        "raw_final_evidence_ready": raw_ready if include_raw else None,
+        "phase2_final_evidence_present": include_phase2,
+        "phase2_final_evidence_ready": phase2_ready if include_phase2 else None,
+    }
+    raw_value = raw_ready if include_raw and not compatible_missing else None
+    phase2_value = (
+        phase2_ready if include_phase2 and not compatible_missing else None
+    )
+    for prefix, value in (
+        ("raw_matrix", raw_value),
+        ("raw_matrix_default", raw_value),
+        ("raw_default_promotion", raw_value),
+        ("phase2_matrix", phase2_value),
+        ("phase2_matrix_default", phase2_value),
+        ("phase2_default_promotion", phase2_value),
+    ):
+        fields[f"{prefix}_final_checks_ready"] = (
+            final_ready if compatible_missing else value
+        )
+        fields[f"{prefix}_final_checks_match"] = (
+            match if compatible_missing else value
+        )
+        fields[f"{prefix}_raw_final_checks_ready"] = raw_value
+        fields[f"{prefix}_phase2_final_checks_ready"] = phase2_value
+    return fields
+
+
+def _mark_release_decision_final_evidence(
+    path: Path,
+    **kwargs: object,
+) -> None:
+    payload = read_json(path)
+    guard = payload["stack_engine_publication_release_quality_guard"]
+    guard.update(_release_quality_final_evidence(**kwargs))
+    write_json(path, payload)
+
+
+def _mark_default_promotion_final_evidence(
+    path: Path,
+    **kwargs: object,
+) -> None:
+    payload = read_json(path)
+    guard = payload["release_decision_release_quality_publication_guard"]
+    guard.update(_release_quality_final_evidence(**kwargs))
+    write_json(path, payload)
+
+
 def _release_decision(
     path: Path,
     *,
@@ -1620,6 +1690,139 @@ def test_windows_release_matrix_allows_compatible_missing_release_quality_final_
     assert evidence["phase2_final_checks_present"] is False
 
 
+def test_windows_release_matrix_carries_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion)
+    _mark_release_decision_final_evidence(decision)
+    _mark_default_promotion_final_evidence(default_promotion)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    default_summary = payload["default_promotion_manifest"]
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is True
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is True
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is True
+    assert guard["final_evidence_fields_present"] is True
+    assert guard["final_evidence_ready"] is True
+    assert guard["final_evidence_match"] is True
+    assert guard["raw_matrix_final_checks_ready"] is True
+    assert guard["phase2_matrix_final_checks_ready"] is True
+    assert default_summary[
+        "release_decision_release_quality_publication_guard_final_evidence_fields_present"
+    ] is True
+    assert default_summary[
+        "release_decision_release_quality_publication_guard_final_evidence_ready"
+    ] is True
+    assert evidence["direct_final_evidence_fields_present"] is True
+    assert evidence["final_evidence_ready"] is True
+    assert evidence["raw_matrix_final_checks_ready"] is True
+    assert evidence["phase2_matrix_final_checks_ready"] is True
+
+
+def test_windows_release_matrix_allows_compatible_missing_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion)
+    _mark_release_decision_final_evidence(
+        decision,
+        compatible_missing=True,
+        include_raw=False,
+        include_phase2=False,
+    )
+    _mark_default_promotion_final_evidence(
+        default_promotion,
+        compatible_missing=True,
+        include_raw=False,
+        include_phase2=False,
+    )
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is True
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is True
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is True
+    assert guard["final_evidence_compatible_missing"] is True
+    assert guard["raw_final_evidence_present"] is False
+    assert guard["phase2_final_evidence_present"] is False
+    assert evidence["final_evidence_compatible_missing"] is True
+    assert evidence["raw_final_evidence_present"] is False
+    assert evidence["phase2_final_evidence_present"] is False
+
+
+def test_windows_release_matrix_allows_legacy_release_quality_without_final_evidence(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is True
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is True
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is True
+    assert guard["final_evidence_fields_present"] is False
+    assert guard["final_evidence_compatible_missing"] is True
+    assert evidence["direct_final_evidence_fields_present"] is False
+    assert evidence["final_evidence_fields_present"] is None
+
+
 def test_windows_release_matrix_blocks_failed_release_quality_guard(
     tmp_path: Path,
 ):
@@ -1714,6 +1917,70 @@ def test_windows_release_matrix_blocks_failed_release_quality_final_checks(
     assert guard["final_checks_ready"] is False
     assert guard["raw_final_checks_ready"] is False
     assert guard["phase2_final_checks_ready"] is False
+
+
+def test_windows_release_matrix_blocks_failed_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion)
+    _mark_release_decision_final_evidence(decision, raw_ready=False)
+    _mark_default_promotion_final_evidence(default_promotion)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    assert payload["passed"] is False
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert guard["ready"] is False
+    assert guard["layers_ready"] is False
+    assert guard["final_evidence_ready"] is False
+    assert guard["final_evidence_match"] is False
+    assert guard["raw_final_evidence_ready"] is False
+
+
+def test_windows_release_matrix_blocks_missing_phase2_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion)
+    _mark_release_decision_final_evidence(decision, include_phase2=False)
+    _mark_default_promotion_final_evidence(default_promotion)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    guard = payload["release_decision_release_quality_publication_guard"]
+    assert payload["passed"] is False
+    assert checks["release_decision_release_quality_publication_guard_passed"][
+        "passed"
+    ] is False
+    assert guard["ready"] is False
+    assert guard["layers_ready"] is False
+    assert guard["final_evidence_ready"] is False
+    assert guard["final_evidence_match"] is False
+    assert guard["phase2_final_evidence_present"] is False
 
 
 def test_windows_release_matrix_blocks_failed_default_promotion_quality_guard(
@@ -1916,6 +2183,72 @@ def test_windows_release_matrix_blocks_failed_default_promotion_release_quality_
     assert evidence["final_checks_ready"] is False
     assert evidence["raw_final_checks_ready"] is False
     assert evidence["phase2_final_checks_ready"] is False
+
+
+def test_windows_release_matrix_blocks_failed_default_promotion_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion)
+    _mark_release_decision_final_evidence(decision)
+    _mark_default_promotion_final_evidence(default_promotion, raw_ready=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is False
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is False
+    assert evidence["direct_final_evidence_fields_present"] is True
+    assert evidence["final_evidence_ready"] is False
+    assert evidence["final_evidence_match"] is False
+    assert evidence["raw_final_evidence_ready"] is False
+
+
+def test_windows_release_matrix_blocks_missing_default_promotion_release_quality_final_evidence(
+    tmp_path: Path,
+):
+    doctor = tmp_path / "doctor.json"
+    decision = tmp_path / "decision.json"
+    default_promotion = tmp_path / "default_promotion.json"
+    _blackwell_doctor(doctor)
+    _release_decision(decision)
+    _default_promotion(default_promotion)
+    _mark_release_decision_final_evidence(decision)
+    _mark_default_promotion_final_evidence(default_promotion, include_phase2=False)
+
+    payload = build_windows_release_matrix(
+        doctor_json=doctor,
+        release_decision_json=decision,
+        default_promotion_manifest_json=default_promotion,
+        expected_primary_package="cuda13",
+    )
+
+    checks = {item["name"]: item for item in payload["checks"]}
+    evidence = checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["evidence"]
+    assert payload["passed"] is False
+    assert checks[
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+    ]["passed"] is False
+    assert evidence["direct_final_evidence_fields_present"] is True
+    assert evidence["final_evidence_ready"] is False
+    assert evidence["final_evidence_match"] is False
+    assert evidence["phase2_final_evidence_present"] is False
 
 
 def test_windows_release_matrix_blocks_default_promotion_release_quality_mismatch(

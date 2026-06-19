@@ -1,0 +1,68 @@
+{
+  "cases": [
+    {
+      "case": "ready_final_evidence",
+      "failed_checks": [],
+      "matrix_json": "runs\\checkpoints\\s2_gate_386_fixtures\\ready_final_evidence\\windows_release_matrix.json",
+      "matrix_markdown": "runs\\checkpoints\\s2_gate_386_fixtures\\ready_final_evidence\\windows_release_matrix.md",
+      "passed": true,
+      "status": "release_matrix_ready"
+    },
+    {
+      "case": "compatible_missing_final_evidence",
+      "failed_checks": [],
+      "matrix_json": "runs\\checkpoints\\s2_gate_386_fixtures\\compatible_missing_final_evidence\\windows_release_matrix.json",
+      "matrix_markdown": "runs\\checkpoints\\s2_gate_386_fixtures\\compatible_missing_final_evidence\\windows_release_matrix.md",
+      "passed": true,
+      "status": "release_matrix_ready"
+    },
+    {
+      "case": "legacy_absent_final_evidence",
+      "failed_checks": [],
+      "matrix_json": "runs\\checkpoints\\s2_gate_386_fixtures\\legacy_absent_final_evidence\\windows_release_matrix.json",
+      "matrix_markdown": "runs\\checkpoints\\s2_gate_386_fixtures\\legacy_absent_final_evidence\\windows_release_matrix.md",
+      "passed": true,
+      "status": "release_matrix_ready"
+    },
+    {
+      "case": "failed_direct_raw_final_evidence",
+      "failed_checks": [
+        "release_decision_release_quality_publication_guard_passed"
+      ],
+      "matrix_json": "runs\\checkpoints\\s2_gate_386_fixtures\\failed_direct_raw_final_evidence\\windows_release_matrix.json",
+      "matrix_markdown": "runs\\checkpoints\\s2_gate_386_fixtures\\failed_direct_raw_final_evidence\\windows_release_matrix.md",
+      "passed": false,
+      "status": "blocked"
+    },
+    {
+      "case": "lost_direct_phase2_final_evidence",
+      "failed_checks": [
+        "release_decision_release_quality_publication_guard_passed"
+      ],
+      "matrix_json": "runs\\checkpoints\\s2_gate_386_fixtures\\lost_direct_phase2_final_evidence\\windows_release_matrix.json",
+      "matrix_markdown": "runs\\checkpoints\\s2_gate_386_fixtures\\lost_direct_phase2_final_evidence\\windows_release_matrix.md",
+      "passed": false,
+      "status": "blocked"
+    },
+    {
+      "case": "failed_default_promotion_final_evidence",
+      "failed_checks": [
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+      ],
+      "matrix_json": "runs\\checkpoints\\s2_gate_386_fixtures\\failed_default_promotion_final_evidence\\windows_release_matrix.json",
+      "matrix_markdown": "runs\\checkpoints\\s2_gate_386_fixtures\\failed_default_promotion_final_evidence\\windows_release_matrix.md",
+      "passed": false,
+      "status": "blocked"
+    },
+    {
+      "case": "lost_default_promotion_phase2_final_evidence",
+      "failed_checks": [
+        "default_promotion_release_decision_release_quality_publication_guard_passed"
+      ],
+      "matrix_json": "runs\\checkpoints\\s2_gate_386_fixtures\\lost_default_promotion_phase2_final_evidence\\windows_release_matrix.json",
+      "matrix_markdown": "runs\\checkpoints\\s2_gate_386_fixtures\\lost_default_promotion_phase2_final_evidence\\windows_release_matrix.md",
+      "passed": false,
+      "status": "blocked"
+    }
+  ]
+}

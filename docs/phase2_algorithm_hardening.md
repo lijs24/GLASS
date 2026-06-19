@@ -6935,6 +6935,29 @@ integration where applicable.
   runtime default change, no package upload, no GitHub release creation, and no
   real-data benchmark rerun.
 
+### S2-Gate 386: Windows Release Matrix Final Evidence Guard
+
+- Carry Gate385 default-promotion final release quality evidence into
+  `glass windows-release-matrix`.
+- Preserve legacy compatibility when release-decision and default-promotion
+  artifacts omit the new final-evidence fields on both raw and Phase2 sides,
+  while requiring ready/match/raw/Phase2 final evidence to pass once present.
+- Block Windows release readiness when direct release-decision final evidence
+  fails, default-promotion final evidence fails, or default promotion drops
+  raw/Phase2 final-evidence fields that release decision carried.
+- Surface final evidence readiness, match status, raw fields, Phase2 fields,
+  and matrix/default-promotion final-check details in release-matrix JSON and
+  Markdown.
+- Add focused tests for green evidence surfacing, compatible-missing final
+  evidence, legacy absent final evidence, failed direct evidence, lost direct
+  Phase2 evidence, failed default-promotion evidence, and lost
+  default-promotion Phase2 evidence.
+- Keep this gate Windows release-matrix scoped: no quality metric math change,
+  no default quality threshold, no star detector algorithm change, no
+  registration transform math change, no integration math change, no CUDA
+  kernel change, no runtime default change, no package upload, no GitHub
+  release creation, and no real-data benchmark rerun.
+
 ## Gate Rules
 
 Each gate requires:
